@@ -7,9 +7,6 @@
   </a>
 </p>
 
-<p align="center">
-  <img alt="VectorCraft app icon: an engraved dragon on VectorCraft red" src="assets/app-icon/vectorcraft-1024.png" width="128">
-</p>
 
 <h1 align="center">VectorCraft</h1>
 
@@ -187,13 +184,13 @@ stand on its own.
 
 | App | What it's for | Code | Learn more |
 |---|---|---|---|
-| <img src="https://img.shields.io/badge/PhotoCraft-2f7bf5?style=for-the-badge" alt="PhotoCraft" height="24"> | Image editing: layers, masks, type and real PSD files | [GitHub](https://github.com/storytold/photocraft) | [getartcraft.com](https://getartcraft.com/apps/photocraft) |
-| <img src="https://img.shields.io/badge/VectorCraft-e8573f?style=for-the-badge" alt="VectorCraft" height="24"> | **Vector illustration (formerly DrawCraft)** · **you are here** | [**GitHub**](https://github.com/storytold/vectorcraft) | [**getartcraft.com**](https://getartcraft.com/apps/drawcraft) |
-| <img src="https://img.shields.io/badge/FilmCraft-8b5cf6?style=for-the-badge" alt="FilmCraft" height="24"> | Video editing, color and sound | [GitHub](https://github.com/storytold/filmcraft) | [getartcraft.com](https://getartcraft.com/apps/filmcraft) |
-| <img src="https://img.shields.io/badge/LightCraft-f2a516?style=for-the-badge" alt="LightCraft" height="24"> | Photo library and raw development | [GitHub](https://github.com/storytold/lightcraft) | [getartcraft.com](https://getartcraft.com/apps/lightcraft) |
-| <img src="https://img.shields.io/badge/PrintCraft-12a58a?style=for-the-badge" alt="PrintCraft" height="24"> | Reading, organizing and protecting PDFs | [GitHub](https://github.com/storytold/printcraft) | [getartcraft.com](https://getartcraft.com/apps/printcraft) |
-| <img src="https://img.shields.io/badge/EffectCraft-e0368f?style=for-the-badge" alt="EffectCraft" height="24"> | Motion graphics and visual effects | [GitHub](https://github.com/storytold/effectcraft) | [getartcraft.com](https://getartcraft.com/apps/effectcraft) |
-| <img src="https://img.shields.io/badge/DesignCraft-7bb51c?style=for-the-badge" alt="DesignCraft" height="24"> | Page layout and publishing | [GitHub](https://github.com/storytold/designcraft) | [getartcraft.com](https://getartcraft.com/apps/designcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/photocraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.photocraft.png" alt="" width="32" height="32" align="absmiddle"> **PhotoCraft** | Image editing: layers, masks, type and real PSD files | [GitHub](https://github.com/storytold/photocraft) | [getartcraft.com](https://getartcraft.com/apps/photocraft) |
+| <img src="https://raw.githubusercontent.com/storytold/vectorcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.vectorcraft.png" alt="" width="32" height="32" align="absmiddle"> **VectorCraft** | **Vector illustration (formerly DrawCraft) · you are here** | [GitHub](https://github.com/storytold/vectorcraft) | [getartcraft.com](https://getartcraft.com/apps/drawcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/filmcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.filmcraft.png" alt="" width="32" height="32" align="absmiddle"> **FilmCraft** | Video editing, color and sound | [GitHub](https://github.com/storytold/filmcraft) | [getartcraft.com](https://getartcraft.com/apps/filmcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/lightcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.lightcraft.png" alt="" width="32" height="32" align="absmiddle"> **LightCraft** | Photo library and raw development | [GitHub](https://github.com/storytold/lightcraft) | [getartcraft.com](https://getartcraft.com/apps/lightcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/printcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.printcraft.png" alt="" width="32" height="32" align="absmiddle"> **PrintCraft** | Reading, organizing and protecting PDFs | [GitHub](https://github.com/storytold/printcraft) | [getartcraft.com](https://getartcraft.com/apps/printcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/effectcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.effectcraft.png" alt="" width="32" height="32" align="absmiddle"> **EffectCraft** | Motion graphics and visual effects | [GitHub](https://github.com/storytold/effectcraft) | [getartcraft.com](https://getartcraft.com/apps/effectcraft) |
+| <img src="https://raw.githubusercontent.com/storytold/designcraft/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.designcraft.png" alt="" width="32" height="32" align="absmiddle"> **DesignCraft** | Page layout and publishing | [GitHub](https://github.com/storytold/designcraft) | [getartcraft.com](https://getartcraft.com/apps/designcraft) |
 
 And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video studio for artists who want real control.
 
