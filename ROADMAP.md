@@ -28,14 +28,16 @@ _Last updated: 2026-10-02._
 - **UI:** Illustrator 2026 layout restyled to measured values:
   - Medium Dark theme, categorized and Advanced toolbars, 35 pt document tabs, 33 pt panel tabs.
   - Hint bar, contextual task bar, 19 dock panels with ≡ menus.
-  - Native macOS menu bar, vector tool cursors, a ⌘K command palette.
+  - Native macOS menu bar, vector tool cursors, a ⌘K command palette, middle-button panning with any tool.
+  - Save / Don't Save / Cancel before closing or quitting with unsaved documents (tabs, Close, Close All, Quit, window close).
   - Four brightness themes, persistent preferences.
 - **Tools:**
   - **Selection:** Selection, Direct/Group Selection, Magic Wand, Lasso.
   - **Drawing:** Pen, Curvature, anchor tools, Pencil, Paintbrush, Blob Brush, Smooth, Path Eraser, Join.
   - **Shapes:** all shape tools (including Flare) and the line, arc, spiral and grid tools.
   - **Cutting:** Eraser, Scissors, Knife.
-  - **Transform:** Rotate, Reflect, Scale, Shear, Reshape, Free Transform (distort/perspective).
+  - **Transform:** Rotate, Reflect, Scale, Shear (click or Alt-click snaps the reference point to anchors and centres), Reshape, Free Transform (distort/perspective).
+  - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout.
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
 - **Drawing aids:** Smart Guides and snapping, and Draw Normal / Behind / Inside modes.
@@ -57,17 +59,17 @@ _Last updated: 2026-10-02._
 | # | Milestone | Status | Est. remaining, one agent (h) |
 |---|---|---|---|
 | M0 | Skeleton + vertical slice | ✅ done | — |
-| M1 | Selection, transform, layers, MCP | ✅ mostly done (rotated persistent bbox pending) | 4–6 |
-| M2 | Drawing tools + smart guides | ✅ mostly done (Flare, Reshape landed; Shaper, Pen modifier nuances) | 15–20 |
+| M1 | Selection, transform, layers, MCP | ✅ mostly done (transform reference point snaps to anchors/centres; rotated persistent bbox pending) | 4–6 |
+| M2 | Drawing tools + smart guides | ✅ mostly done (Flare, Reshape, Live Corners widget dragging landed; Shaper, Pen modifier nuances) | 15–20 |
 | M3 | Paint & appearance (swatches, color, gradient, stroke, appearance, transparency, styles) | 🟡 panels done; opacity masks done (make/release, clip, invert, disable, link; render + SVG `<mask>` in/out + PDF soft mask); mask-editing mode (click the mask thumbnail; live update) done; freeform gradients pending | 18–27 |
-| M4 | Files (native, SVG, PDF, raster, Export for Screens, clipboard interop) | 🟡 Export for Screens (PNG/JPG/WebP/SVG/PDF × scales) done; headless CLI/MCP export every format; system clipboard: copy puts SVG markup on it, paste takes SVG from other apps (Ctrl/Cmd+C/X/V now also work off macOS); live effects now survive SVG/PDF/clipboard export (geometry baked, SVG filters for shadows/glows/blur/feather); PDF raster effects, PNG/PDF clipboard flavours, EPS/DXF pending | 52–73 |
+| M4 | Files (native, SVG, PDF, raster, Export for Screens, clipboard interop) | 🟡 Export for Screens (PNG/JPG/WebP/SVG/PDF × scales) done; headless CLI/MCP export every format; system clipboard: copy puts SVG markup on it, paste takes SVG from other apps (Ctrl/Cmd+C/X/V now also work off macOS); live effects now survive SVG/PDF/clipboard export (geometry baked, SVG filters for shadows/glows/blur/feather); Save / Don't Save / Cancel before closing modified documents; PDF raster effects, PNG/PDF clipboard flavours, EPS/DXF pending | 52–73 |
 | M5 | Performance | 🟡 background render + caches + MT done; `vectorcraft-cli bench` and `vectorcraft-cli perf` (budget suite); file format v2 opens 3× faster (50k paths: 722 → 244 ms); raster effects (glows, shadows, blur, feather) no longer force the whole frame single-threaded (filtered offscreen per effect, verified equal to the single-threaded reference); effect-heavy demos need a clean-machine benchmark; dirty-region rendering, GPU backend spike pending | 15–25 |
 | M6 | Path operations (Pathfinder, Shape Builder, offset…) | ✅ mostly done (Shape Builder edge erase, large-offset bug open) | 3–6 |
 | M7 | Type (point/area/path, editing, styles, OpenType, threading, glyphs) | 🟡 Character/Paragraph Styles, Area Type Options, threaded text, Fit Headline, Glyphs, OpenType panel, Find Font, Text Wrap (offset, invert, both sides of an object; follows edits), Type on a Path effects, tab stops + Tabs panel done; tab leaders, spell check, vertical type pending | 45–60 |
 | M8 | Transform & distort (Puppet Warp, Liquify tools, Envelopes, Blends, Perspective Grid) | 🟡 live Blends, Envelopes (warp/mesh/top object), Width tool, Liquify tools, Puppet Warp and Perspective Grid landed; fidelity pass pending | 8–12 |
 | M9 | Live effects (+ 3D & Materials) | 🟡 2D effects done incl. Effect → Pathfinder; SVG Filters, Document Raster Effects Settings, 3D pending | 86–135 |
 | M10 | Brushes, symbols, patterns, Repeat | 🟡 pattern swatches (5 tile types, Pattern Options, editing mode, SVG `<pattern>`/PDF export) and live Repeat (radial/grid/mirror) done; brushes/symbols in progress | 23–37 |
-| M11 | Artboards & views (artboard panel/tool done, Trim View; print tiling, multiple windows, presentation polish) | 🟡 | 20–33 |
+| M11 | Artboards & views (artboard panel/tool done, Trim View, middle-button pan; print tiling, multiple windows, presentation polish) | 🟡 | 20–33 |
 | M12 | Advanced color & art (CMYK/ICC, separations, Gradient Mesh, Live Paint, Image Trace, Graphs) | 🟡 Gradient Mesh, Live Paint, Image Trace (12 presets, 18 ms/1k² image), Recolor Artwork, colour management (ICC, soft proofing, separations preview), Graphs (all 9 tools, Graph Data/Type, regenerate in place) done; graph Design/Column/Marker designs pending | 6–10 |
 | M13 | Automation (Actions ✅ record/playback, persisted; variables, scripting, batch) | 🟡 | 18–27 |
 | M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, shortcut editor, workspaces done; accessibility, Windows/Linux packaging pending | 20–30 |

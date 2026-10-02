@@ -3,7 +3,9 @@
 //! The reference point defaults to the centre of the selection. A click sets it (shown as a cyan
 //! target); a drag transforms about it with a live preview (Shift constrains to 45° / uniform, Alt
 //! at release makes a copy). Alt-click sets the point and opens the tool's dialog; double-click
-//! or Return opens the dialog too.
+//! or Return opens the dialog too. A clicked or Alt-clicked point snaps to the nearest anchor or
+//! centre (Snap to Point / Smart Guides), labelled while hovering, so transforms pivot exactly
+//! on a corner.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -11,6 +13,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::target_overlays;
 use crate::bbox::rotate_for_drag;
+use crate::guides::snap_pick;
 use crate::select::{matrix_json, selection_bounds};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -54,6 +57,8 @@ impl TransformKind {
 #[derive(Clone, Copy, Debug)]
 struct Drag {
     start: Point,
+    /// The pressed point snapped to an anchor or centre (becomes the reference point on a click).
+    pick: Point,
     origin: Point,
     began: bool,
     bounds: Rect,
@@ -66,6 +71,8 @@ pub struct TransformTool {
     origin: Option<(Point, Vec<NodeId>)>,
     drag: Option<Drag>,
     measure: Option<(Point, String)>,
+    /// Snap feedback while hovering ("anchor" / "center" label).
+    hover: Vec<Overlay>,
 }
 
 fn about(o: Point, a: Affine) -> Affine {
@@ -79,7 +86,7 @@ pub fn reflect_matrix(o: Point, theta: f64) -> Affine {
 
 impl TransformTool {
     pub fn new(kind: TransformKind) -> Self {
-        Self { kind, origin: None, drag: None, measure: None }
+        Self { kind, origin: None, drag: None, measure: None, hover: vec![] }
     }
 
     /// The effective reference point: the custom one if it belongs to the current selection,
@@ -160,13 +167,15 @@ impl Tool for TransformTool {
         match ev.kind {
             PointerKind::Down => {
                 let Some(bounds) = selection_bounds(cx) else { return vec![] };
+                self.hover.clear();
+                let (pick, _) = snap_pick(cx, p);
                 if ev.mods.alt {
-                    self.origin = Some((p, cx.selection.objects.clone()));
+                    self.origin = Some((pick, cx.selection.objects.clone()));
                     self.drag = None;
-                    return vec![self.dialog(p)];
+                    return vec![self.dialog(pick)];
                 }
                 let origin = self.reference_point(cx).unwrap_or(bounds.center());
-                self.drag = Some(Drag { start: p, origin, began: false, bounds, last: Affine::IDENTITY });
+                self.drag = Some(Drag { start: p, pick, origin, began: false, bounds, last: Affine::IDENTITY });
                 vec![]
             }
             PointerKind::Drag => {
@@ -194,7 +203,7 @@ impl Tool for TransformTool {
                     vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(d.last), "copy": ev.mods.alt })), Action::Commit]
                 } else {
                     // A click sets the reference point.
-                    self.origin = Some((d.start, cx.selection.objects.clone()));
+                    self.origin = Some((d.pick, cx.selection.objects.clone()));
                     vec![]
                 }
             }
@@ -205,7 +214,10 @@ impl Tool for TransformTool {
                     None => vec![],
                 }
             }
-            PointerKind::Move => vec![],
+            PointerKind::Move => {
+                self.hover = if self.drag.is_none() && !cx.selection.is_empty() { snap_pick(cx, p).1 } else { vec![] };
+                vec![]
+            }
         }
     }
 
@@ -230,6 +242,7 @@ impl Tool for TransformTool {
         if let Some(r) = reference {
             o.extend(target_overlays(r, cx.tol(8.0)));
         }
+        o.extend(self.hover.iter().cloned());
         if let (Some(d), TransformKind::Reflect | TransformKind::Rotate) = (self.drag, self.kind)
             && d.began
             && let Some((p, _)) = &self.measure
@@ -358,6 +371,37 @@ mod tests {
         );
         let mut t = TransformTool::new(TransformKind::Rotate);
         assert!(matches!(&t.key(&cx, ToolKey::Enter, Mods::default())[0], Action::Dialog(k, v) if k == "rotate" && v["angle"] == 0));
+    }
+
+    #[test]
+    fn alt_click_and_click_snap_the_reference_point_to_anchors_and_centres() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        // Alt-click 3 px from the top-left corner: the reflect pivots exactly on the corner.
+        let mut t = TransformTool::new(TransformKind::Reflect);
+        let a = t.pointer(&c, &ev(PointerKind::Down, 102.0, 98.0).with_mods(alt()));
+        assert_eq!(a, vec![Action::Dialog("reflect".into(), json!({"axis": "vertical", "origin": [100.0, 100.0]}))]);
+        // A plain click near the bottom-right corner, then near the centre.
+        let mut t = TransformTool::new(TransformKind::Rotate);
+        t.pointer(&c, &ev(PointerKind::Down, 198.0, 203.0));
+        t.pointer(&c, &ev(PointerKind::Up, 198.0, 203.0));
+        assert_eq!(t.reference_point(&c), Some(Point::new(200.0, 200.0)));
+        t.pointer(&c, &ev(PointerKind::Down, 151.0, 148.0));
+        t.pointer(&c, &ev(PointerKind::Up, 151.0, 148.0));
+        assert_eq!(t.reference_point(&c), Some(Point::new(150.0, 150.0)));
+        // Hovering a corner labels it before the click.
+        t.pointer(&c, &ev(PointerKind::Move, 199.0, 101.0));
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { text, p, .. } if text == "anchor" && *p == Point::new(200.0, 100.0))));
+        t.pointer(&c, &ev(PointerKind::Move, 175.0, 120.0));
+        assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { .. })));
+        // Snapping off: the point stays where it was clicked.
+        c.snap_to_point = false;
+        c.smart_guides = false;
+        let a = t.pointer(&c, &ev(PointerKind::Down, 102.0, 98.0).with_mods(alt()));
+        assert!(matches!(&a[0], Action::Dialog(_, v) if v["origin"] == json!([102.0, 98.0])));
     }
 
     #[test]

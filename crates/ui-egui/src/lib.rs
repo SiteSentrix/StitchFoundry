@@ -27,6 +27,7 @@ pub mod shortcuts;
 pub mod state;
 pub mod theme;
 pub mod toolbar;
+pub mod unsaved;
 pub mod widgets;
 pub mod workspaces;
 
@@ -212,6 +213,8 @@ impl VectorcraftApp {
             snap_to_grid: self.ui.view.snap_to_grid,
             snap_to_pixel: self.ui.view.snap_to_pixel,
             show_bbox: self.ui.view.bounding_box,
+            snap_to_point: self.ui.view.snap_to_point,
+            corner_widgets: self.ui.view.corner_widgets,
         }
     }
 
@@ -418,6 +421,13 @@ impl VectorcraftApp {
         }
         self.last_time = now;
         self.sync_views();
+        // The window's close button (or the system quitting the app) asks about unsaved documents.
+        if ctx.input(|i| i.viewport().close_requested()) && unsaved::any_dirty(self) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if let Err(e) = unsaved::close_all(self, "quit") {
+                self.status(e);
+            }
+        }
         shortcut_editor::sync(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
         self.drain_control(ctx);

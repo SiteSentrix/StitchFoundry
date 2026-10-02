@@ -467,10 +467,13 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.ui.palette_query.clear();
             Ok(Value::Null)
         }
-        "app.quit" => {
-            app.ui.status = "quit".into();
-            Ok(Value::Null)
-        }
+        // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
+        "file.close" => match p.get("index").and_then(Value::as_u64).map(|i| i as usize).or(app.session.active_index()) {
+            Some(i) => crate::unsaved::close(app, i),
+            None => return None,
+        },
+        "file.closeAll" => crate::unsaved::close_all(app, "closeAll"),
+        "app.quit" => crate::unsaved::close_all(app, "quit"),
         _ => return None,
     };
     Some(r)

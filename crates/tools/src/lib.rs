@@ -10,6 +10,7 @@
 pub mod bbox;
 pub mod builder;
 pub mod catalog;
+pub mod corners;
 pub mod direct;
 pub mod distort;
 pub mod draw2;
@@ -150,6 +151,10 @@ pub struct ToolContext<'a> {
     pub show_bbox: bool,
     /// View → Snap to Pixel.
     pub snap_to_pixel: bool,
+    /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
+    pub snap_to_point: bool,
+    /// View → Show Corner Widget: live rectangles show draggable Live Corners widgets.
+    pub corner_widgets: bool,
 }
 
 impl ToolContext<'_> {
@@ -195,6 +200,8 @@ pub enum Cursor {
     ResizeNwSe,
     ResizeNeSw,
     Rotate,
+    /// Over a Live Corners widget (drag to round the corners).
+    CornerRadius,
     Pen,
     PenAdd,
     PenDelete,
@@ -315,6 +322,8 @@ pub(crate) mod testutil {
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,
+            snap_to_point: true,
+            corner_widgets: true,
         }
     }
 }

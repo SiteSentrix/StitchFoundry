@@ -16,6 +16,8 @@
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?}`
 //! - `ui.render {path?, scale?}`: render the active artboard headlessly (PNG)
 //! - `app.open {path}` / `app.save {path?}` / `app.export {format, path, scale?}` / `app.quit`
+//!   (`file.close`, `file.closeAll` and `app.quit` first open a `saveChanges` dialog for each
+//!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
 
 use std::sync::mpsc::Sender;
 

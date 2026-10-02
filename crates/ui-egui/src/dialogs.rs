@@ -138,6 +138,7 @@ fn title(kind: &str) -> &'static str {
         "allTools" => "All Tools",
         "exportForScreens" => "Export for Screens",
         "recolor" => "Recolor Artwork",
+        crate::unsaved::KIND => "Save Changes",
         _ => "Dialog",
     }
 }
@@ -150,6 +151,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
         "shortcuts" => return crate::shortcut_editor::confirm(app),
         "newWorkspace" | "manageWorkspaces" => return crate::workspaces::confirm(app),
         "findFont" => return crate::find_font::confirm(app),
+        crate::unsaved::KIND => return crate::unsaved::confirm(app),
         _ => {}
     }
     let copy = d.bool("copy");
@@ -308,6 +310,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let mut ok = false;
     let mut cancel = false;
+    let mut discard = false;
     egui::Area::new(egui::Id::new("modal-dim")).order(egui::Order::Middle).fixed_pos(egui::pos2(0.0, 0.0)).show(ctx, |ui| {
         // Illustrator's dialogs are modal but don't dim the canvas (previews stay readable).
         ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
@@ -322,10 +325,21 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(22)))
         .show(ctx, |ui| {
             ui.set_min_width(if d.kind == "newDocument" { 560.0 } else { 320.0 });
-            let heading = if d.kind == "effect" || d.kind == "command" { d.str("__label") } else { title(&d.kind).to_string() };
+            if d.kind == crate::unsaved::KIND {
+                // Long document names wrap instead of widening the dialog.
+                ui.set_max_width(420.0);
+            }
+            let heading = match d.kind.as_str() {
+                "effect" | "command" => d.str("__label"),
+                crate::unsaved::KIND => format!("Do you want to save the changes you made to “{}”?", d.str("name")),
+                k => title(k).to_string(),
+            };
             ui.label(egui::RichText::new(heading).font(theme::semibold(16.0)).color(t.text));
             ui.add_space(12.0);
             match d.kind.as_str() {
+                crate::unsaved::KIND => {
+                    ui.label(egui::RichText::new("Your changes will be lost if you don't save them.").color(t.text_dim));
+                }
                 "exportForScreens" => export_for_screens_ui(app, ui, &mut d),
                 "recolor" => {
                     if recolor_ui(ui, &mut d) || !app.session.in_interaction() {
@@ -387,6 +401,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let label = match d.kind.as_str() {
                     "newDocument" => "Create",
                     "exportForScreens" => "Export Artboard",
+                    crate::unsaved::KIND => "Save",
                     _ => "OK",
                 };
                 if d.kind != "allTools" && widgets::primary_button(ui, label).clicked() {
@@ -396,9 +411,17 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 if widgets::secondary_button(ui, if d.kind == "allTools" { "Close" } else { "Cancel" }).clicked() {
                     cancel = true;
                 }
+                if d.kind == crate::unsaved::KIND {
+                    ui.add_space(28.0);
+                    discard = widgets::secondary_button(ui, "Don't Save").clicked();
+                }
             });
         });
     if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && d.kind != "allTools" {
+        ok = true;
+    }
+    if discard {
+        d.fields.insert("discard".into(), json!(true));
         ok = true;
     }
     let is_effect = d.kind == "effect" || d.kind == "recolor";

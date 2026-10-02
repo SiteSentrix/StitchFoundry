@@ -63,9 +63,11 @@ impl Xf {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Drag {
     Tool,
+    /// Hand tool / Space drag, or a middle-button drag with any tool (`middle`).
     Pan {
         start: Pos2,
         center: Point,
+        middle: bool,
     },
     ZoomBox {
         start: Pos2,
@@ -291,8 +293,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if resp.hovered() {
         let m = ui.input(|i| i.modifiers);
         let space = ui.input(|i| i.key_down(egui::Key::Space));
-        let cur = if space || app.session.tool_id() == "hand" {
-            if ui.input(|i| i.pointer.primary_down()) { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab }
+        let panning = matches!(ui.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Pan { .. }));
+        let cur = if panning {
+            egui::CursorIcon::Grabbing
+        } else if space || app.session.tool_id() == "hand" {
+            egui::CursorIcon::Grab
         } else if app.session.tool_id() == "zoom" {
             if m.alt { egui::CursorIcon::ZoomOut } else { egui::CursorIcon::ZoomIn }
         } else if let Some(p) = app.hover_doc {
@@ -314,8 +319,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn cursor_icon(c: Cursor) -> egui::CursorIcon {
     use egui::CursorIcon as C;
     match c {
-        Cursor::Arrow => C::Default,
-        Cursor::ArrowHollow => C::Default,
+        Cursor::Arrow | Cursor::ArrowHollow | Cursor::CornerRadius => C::Default,
         Cursor::Move => C::Move,
         Cursor::Crosshair => C::Crosshair,
         Cursor::ResizeH => C::ResizeHorizontal,
@@ -369,12 +373,13 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
 
     let tool = app.session.tool_id();
     let pan_mode = space || tool == "hand";
-    if pointer.primary_pressed() && resp.hovered() {
+    let middle_pan = matches!(drag, Some(Drag::Pan { middle: true, .. }));
+    if pointer.primary_pressed() && resp.hovered() && !middle_pan {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
         let p = hover.unwrap_or(rect.center());
         let d = if pan_mode {
-            Drag::Pan { start: p, center: v.center }
+            Drag::Pan { start: p, center: v.center, middle: false }
         } else if tool == "zoom" {
             Drag::ZoomBox { start: p }
         } else if tool == "rotateView" {
@@ -393,11 +398,16 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
             kind
         };
         ui.data_mut(|dd| dd.insert_temp(drag_id(), d));
+    } else if drag.is_none() && resp.hovered() && pointer.button_pressed(egui::PointerButton::Middle) {
+        // Middle-button drag pans the view whatever the tool.
+        let start = hover.unwrap_or(rect.center());
+        ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Pan { start, center: v.center, middle: true }));
     } else if let Some(d) = drag {
         let p = pointer.interact_pos().unwrap_or(rect.center());
-        if pointer.primary_down() {
+        let held = if middle_pan { pointer.button_down(egui::PointerButton::Middle) } else { pointer.primary_down() };
+        if held {
             match d {
-                Drag::Pan { start, center } => {
+                Drag::Pan { start, center, .. } => {
                     let d = xf.delta_to_doc(p - start);
                     if let Some(vm) = app.view_mut() {
                         vm.center = center - d;
@@ -795,23 +805,19 @@ fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             p.circle_filled(o, 2.5, color);
         }
     }
-    // Bounding box with handles (Selection tool).
-    // Live corner widgets (Direct Selection on a single live rectangle).
-    if tool == "directSelection"
+    // Live Corners widgets (Selection / Direct Selection on a single live rectangle).
+    if matches!(tool, "selection" | "directSelection")
         && app.ui.view.corner_widgets
-        && st.selection.len() == 1
-        && let Some(NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Rectangle { w, h, radii, xf: lxf }), .. }) =
-            st.doc.node(st.selection.objects[0]).map(|n| &n.kind)
+        && let Some(w) = vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, xf.zoom)
     {
-        let color = c32(st.doc.layer_color(st.selection.objects[0]));
-        let inset = (radii[0].max(10.0 / xf.zoom)).min(w.min(*h) / 2.0);
-        for (cx, cy) in [(inset, inset), (w - inset, inset), (w - inset, h - inset), (inset, h - inset)] {
-            let sp = xf.to_screen(*lxf * Point::new(cx, cy));
+        let color = c32(st.doc.layer_color(w.id));
+        for sp in w.points.map(|q| xf.to_screen(q)) {
             p.circle_filled(sp, 3.0, Color32::WHITE);
             p.circle_stroke(sp, 3.0, Stroke::new(1.0, color));
             p.circle_filled(sp, 1.0, color);
         }
     }
+    // Bounding box with handles (Selection tool).
     if tool == "selection" && app.ui.view.bounding_box && !st.selection.is_empty() && st.selection.anchors.is_empty() {
         let Some(b) = st.doc.bounds_of(&st.selection.objects, false) else { return };
         let color = c32(st.doc.layer_color(st.selection.objects[0]));
@@ -1022,5 +1028,44 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     });
     if let Some(c) = run {
         crate::menus::invoke(app, &c, json!({}));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_engine::Session;
+
+    /// One headless canvas frame on an 800 × 600 window.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    }
+
+    fn middle(pos: Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() }
+    }
+
+    #[test]
+    fn middle_drag_pans_the_view_with_any_tool() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // A drawing tool: the middle button must pan, never draw.
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(400.0, 300.0))]);
+        let before = *app.view().unwrap();
+        frame(&mut app, &ctx, vec![middle(pos2(400.0, 300.0), true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(450.0, 330.0))]);
+        frame(&mut app, &ctx, vec![middle(pos2(450.0, 330.0), false)]);
+        let after = *app.view().unwrap();
+        assert_eq!(after.zoom, before.zoom);
+        assert!((after.center.x - (before.center.x - 50.0 / before.zoom)).abs() < 1e-6);
+        assert!((after.center.y - (before.center.y - 30.0 / before.zoom)).abs() < 1e-6);
+        // Released: moving no longer pans, and nothing was drawn.
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(300.0, 200.0))]);
+        assert_eq!(app.view().unwrap().center, after.center);
+        assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
     }
 }

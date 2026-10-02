@@ -16,11 +16,24 @@ pub struct ViewInfo {
     pub show_bbox: bool,
     /// View → Snap to Pixel: drawing and moving land on whole pixels (points at 72 ppi).
     pub snap_to_pixel: bool,
+    /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
+    pub snap_to_point: bool,
+    /// View → Show Corner Widget.
+    pub corner_widgets: bool,
 }
 
 impl Default for ViewInfo {
     fn default() -> Self {
-        Self { zoom: 1.0, outline: false, smart_guides: true, snap_to_grid: false, show_bbox: true, snap_to_pixel: false }
+        Self {
+            zoom: 1.0,
+            outline: false,
+            smart_guides: true,
+            snap_to_grid: false,
+            show_bbox: true,
+            snap_to_pixel: false,
+            snap_to_point: true,
+            corner_widgets: true,
+        }
     }
 }
 
@@ -63,6 +76,8 @@ impl Session {
             snap_to_grid: view.snap_to_grid,
             show_bbox: view.show_bbox,
             snap_to_pixel: view.snap_to_pixel,
+            snap_to_point: view.snap_to_point,
+            corner_widgets: view.corner_widgets,
         };
         f(self.tool.as_mut(), &cx)
     }

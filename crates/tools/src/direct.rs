@@ -2,8 +2,8 @@
 //!
 //! Direct Selection: click an anchor to select it (Shift toggles), click a segment to select the
 //! path's anchors on that segment, drag to move selected anchors, drag a direction handle to
-//! reshape, marquee to select anchors. Group Selection: click selects the leaf; each further click
-//! on it adds the next enclosing group.
+//! reshape, marquee to select anchors, drag a live rectangle's corner widget to round its corners.
+//! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
@@ -11,6 +11,7 @@ use vectorcraft_doc::{AnchorRef, NodeId, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
 use crate::bbox::move_delta;
+use crate::corners::{CornerDrag, over_widget};
 use crate::select::matrix_json;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
@@ -21,6 +22,7 @@ enum State {
     MoveObject { start: Point, began: bool },
     Handle { id: NodeId, si: usize, ai: usize, out: bool },
     Marquee { start: Point, cur: Point, add: bool },
+    Corner(CornerDrag),
 }
 
 pub struct DirectSelectionTool {
@@ -117,6 +119,10 @@ impl Tool for DirectSelectionTool {
                 }
             }
             (PointerKind::Down, _) => {
+                if let Some(c) = CornerDrag::hit(cx, p) {
+                    self.state = State::Corner(c);
+                    return vec![];
+                }
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, tol) {
                     self.state = State::Handle { id, si, ai, out };
                     return vec![Action::Begin("Reshape".into())];
@@ -185,6 +191,15 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Marquee { start, cur: p, add };
                 vec![]
             }
+            (PointerKind::Drag, State::Corner(mut c)) => {
+                let out = c.drag(cx, p);
+                self.state = State::Corner(c);
+                out
+            }
+            (PointerKind::Up, State::Corner(c)) => {
+                self.state = State::Idle;
+                c.finish()
+            }
             (PointerKind::Up, State::MoveAnchors { began, .. } | State::MoveObject { began, .. }) => {
                 self.state = State::Idle;
                 if began { vec![Action::Commit] } else { vec![] }
@@ -217,12 +232,16 @@ impl Tool for DirectSelectionTool {
         }
     }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        match self.state {
-            State::Marquee { start, cur, .. } => vec![Overlay::Marquee(Rect::from_points(start, cur))],
+        match &self.state {
+            State::Marquee { start, cur, .. } => vec![Overlay::Marquee(Rect::from_points(*start, *cur))],
+            State::Corner(c) => c.overlays(),
             _ => vec![],
         }
     }
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
+    fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
+        if !self.group && (matches!(self.state, State::Corner(_)) || over_widget(cx, p)) {
+            return Cursor::CornerRadius;
+        }
         Cursor::ArrowHollow
     }
 }

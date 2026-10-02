@@ -219,11 +219,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         x += w;
     }
     if let Some(i) = close {
-        app.session.close_document(i);
-        if i < app.views.len() {
-            app.views.remove(i);
+        if let Err(e) = crate::unsaved::close(app, i) {
+            app.status(e);
         }
-        app.sync_views();
     } else if let Some(i) = activate {
         app.session.set_active(i);
     }

@@ -1,6 +1,7 @@
 //! Smart Guides: snapping to anchors, object bounds (edges/centres), artboards, with the magenta
 //! construction lines and labels Illustrator users expect.
 
+use vectorcraft_doc::hit::{HitOptions, hit_test};
 use vectorcraft_doc::{Document, NodeId, NodeKind};
 use vectorcraft_geom::{Point, Rect, Vec2};
 
@@ -75,6 +76,28 @@ impl Targets {
         t
     }
 
+    /// Anchors and centres of the visible leaves under `roots` (the roots included) whose bounds
+    /// reach into `near`.
+    fn points_near(doc: &Document, roots: &[NodeId], near: Rect) -> Self {
+        let mut t = Targets::default();
+        for n in roots.iter().filter_map(|id| doc.node(*id)) {
+            n.walk(&mut |c| {
+                if c.is_container() || !c.visible {
+                    return;
+                }
+                let Some(b) = c.geometric_bounds() else { return };
+                if b.x0 > near.x1 || b.x1 < near.x0 || b.y0 > near.y1 || b.y1 < near.y0 {
+                    return;
+                }
+                if let NodeKind::Path { path, .. } = &c.kind {
+                    t.points.extend(path.anchors().map(|(_, _, a)| (a.p, Kind::Anchor)));
+                }
+                t.points.push((b.center(), Kind::Center));
+            });
+        }
+        t
+    }
+
     /// Snap a single point. Returns the snapped point and guide overlays.
     pub fn snap_point(&self, p: Point, tol: f64) -> (Point, Vec<Overlay>) {
         if let Some((q, k)) = self.points.iter().filter(|(q, _)| q.distance(p) <= tol).min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p))) {
@@ -146,6 +169,19 @@ pub fn snap_draw(cx: &ToolContext, p: Point, exclude: &[NodeId]) -> (Point, Vec<
         return (p, vec![]);
     }
     Targets::collect(cx.doc, exclude, None).snap_point(p, cx.tol(5.0))
+}
+
+/// Snap a picked point (a transform tool's reference point) to the nearest anchor or centre of the
+/// selection or of the object under the pointer, when Snap to Point or Smart Guides is on.
+pub fn snap_pick(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
+    if !(cx.snap_to_point || cx.smart_guides) {
+        return (p, vec![]);
+    }
+    let tol = cx.tol(5.0);
+    let mut roots = cx.selection.objects.clone();
+    roots.extend(hit_test(cx.doc, p, HitOptions { tol, ..cx.hit_options() }).map(|h| h.leaf));
+    let near = Rect::new(p.x - tol, p.y - tol, p.x + tol, p.y + tol);
+    Targets::points_near(cx.doc, &roots, near).snap_point(p, tol)
 }
 
 #[cfg(test)]

@@ -93,6 +93,20 @@ fn rotate(p: &Painter, o: Pos2) {
     }
 }
 
+/// Live Corners: the hollow arrow with a rounded-corner badge.
+fn corner_radius(p: &Painter, o: Pos2) {
+    arrow(p, o, true);
+    let b = o + vec2(12.0, 13.0);
+    let mut pts = vec![b + vec2(0.0, 10.0)];
+    pts.extend((0..=8).map(|i| {
+        let a = std::f32::consts::PI * (1.0 + 0.5 * i as f32 / 8.0);
+        b + vec2(4.0 + 4.0 * a.cos(), 4.0 + 4.0 * a.sin())
+    }));
+    pts.push(b + vec2(10.0, 0.0));
+    p.add(Shape::line(pts.clone(), Stroke::new(3.0, HALO)));
+    p.add(Shape::line(pts, Stroke::new(1.2, INK)));
+}
+
 fn ibeam(p: &Painter, o: Pos2) {
     line(p, o + vec2(0.0, -8.0), o + vec2(0.0, 8.0));
     line(p, o + vec2(-3.0, -8.0), o + vec2(3.0, -8.0));
@@ -116,6 +130,7 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
         Cursor::ResizeNwSe => double_arrow(painter, p, vec2(1.0, 1.0)),
         Cursor::ResizeNeSw => double_arrow(painter, p, vec2(1.0, -1.0)),
         Cursor::Rotate => rotate(painter, p),
+        Cursor::CornerRadius => corner_radius(painter, p),
         Cursor::Pen => pen(painter, p, "*"),
         Cursor::PenAdd => pen(painter, p, "+"),
         Cursor::PenDelete => pen(painter, p, "-"),

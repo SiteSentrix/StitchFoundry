@@ -1,6 +1,6 @@
 //! The Selection tool (V): click/shift-click, marquee, move (Alt copies, Shift constrains),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
-//! double-click to enter isolation mode.
+//! drag a live rectangle's corner widget to round its corners, double-click to enter isolation mode.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -8,6 +8,7 @@ use vectorcraft_doc::hit::{hit_test, marquee};
 use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
+use crate::corners::{CornerDrag, over_widget};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
 
 #[derive(Clone, Debug, Default)]
@@ -32,6 +33,8 @@ enum State {
         cur: Point,
         add: bool,
     },
+    /// Dragging a Live Corners widget.
+    Corner(CornerDrag),
 }
 
 #[derive(Default)]
@@ -89,7 +92,11 @@ impl Tool for SelectionTool {
                 vec![]
             }
             (PointerKind::Down, _) => {
-                // 1. Bounding-box handles of the current selection.
+                // 1. Live Corners widgets, then the bounding-box handles of the current selection.
+                if let Some(c) = CornerDrag::hit(cx, p) {
+                    self.state = State::Corner(c);
+                    return vec![];
+                }
                 if cx.show_bbox
                     && let Some(r) = selection_bounds(cx)
                 {
@@ -173,6 +180,15 @@ impl Tool for SelectionTool {
                 self.state = State::Marquee { start, cur: p, add };
                 vec![]
             }
+            (PointerKind::Drag, State::Corner(mut c)) => {
+                let out = c.drag(cx, p);
+                self.state = State::Corner(c);
+                out
+            }
+            (PointerKind::Up, State::Corner(c)) => {
+                self.state = State::Idle;
+                c.finish()
+            }
             (PointerKind::Up, State::Moving { began, .. }) => {
                 self.state = State::Idle;
                 self.measure = None;
@@ -204,8 +220,10 @@ impl Tool for SelectionTool {
 
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         let mut o = vec![];
-        if let State::Marquee { start, cur, .. } = self.state {
-            o.push(Overlay::Marquee(Rect::from_points(start, cur)));
+        match &self.state {
+            State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
+            State::Corner(c) => o.extend(c.overlays()),
+            _ => {}
         }
         o.extend(self.guides.iter().cloned());
         if let Some((p, t)) = &self.measure {
@@ -219,7 +237,11 @@ impl Tool for SelectionTool {
             State::Rotating { .. } => return Cursor::Rotate,
             State::Scaling { handle, .. } => return handle_cursor(handle),
             State::Moving { began: true, .. } => return Cursor::Arrow,
+            State::Corner(_) => return Cursor::CornerRadius,
             _ => {}
+        }
+        if over_widget(cx, p) {
+            return Cursor::CornerRadius;
         }
         if cx.show_bbox
             && let Some(r) = selection_bounds(cx)
