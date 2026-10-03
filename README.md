@@ -127,7 +127,10 @@ exposes to agents, and exported by VectorCraft's own renderer. The source files 
 ## Why VectorCraft
 
 - **Familiar.** Illustrator's layout, tools, menus, panels and shortcuts: the Pen, Direct Selection,
-  Pathfinder, Smart Guides, Appearance, Swatches, Layers and more. You already know how to use it.
+  Pathfinder, Smart Guides, Appearance, Swatches, Layers and more. You already know how to use it,
+  down to the habits: drag a rectangle's corner widgets to round it, Alt-click an anchor with Rotate
+  or Reflect to pivot exactly there, pan with the middle mouse button, and get asked before closing
+  unsaved work.
 - **Fast.** Multithreaded SIMD rendering off the UI thread. 20,000 shapes render in about 27 ms at
   full retina resolution while the interface stays at 120 fps.
 - **Robust.** Exact curve booleans (no "cannot perform operation"), unlimited undo via structural
