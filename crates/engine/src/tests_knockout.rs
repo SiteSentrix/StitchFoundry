@@ -1,4 +1,4 @@
-//! Knockout groups (M3.46): commands, undo, files
+//! Knockout groups and the knockout shape (M3.46–M3.47): commands, undo, files
 //! (old bools load) and the PDF and SVG output.
 
 use serde_json::{Value, json};
@@ -51,7 +51,7 @@ fn knockout_takes_three_states_names_and_bools() {
     }
     run(&mut s, "transparency.set", json!({"knockout": "off"}));
     let info = run(&mut s, "transparency.info", json!({}));
-    assert_eq!(info["knockout"], json!("off"));
+    assert_eq!((info["knockout"].clone(), info["knockoutShape"].clone()), (json!("off"), json!(false)));
     // A bad state changes nothing, also next to an opacity (which would go to an appearance item).
     let before = steps(&s);
     assert!(s.execute("transparency.set", &json!({"knockout": "maybe"})).is_err());
@@ -66,16 +66,31 @@ fn knockout_takes_three_states_names_and_bools() {
 }
 
 #[test]
+fn knockout_shape_is_an_object_option() {
+    let mut s = session();
+    let g = knockout_group(&mut s);
+    let child = node(&s, g).children().unwrap()[1].id.0;
+    run(&mut s, "transparency.set", json!({"ids": [child], "knockoutShape": true}));
+    assert!(node(&s, child).knockout_shape && !node(&s, child).has_default_transparency());
+    let info = run(&mut s, "transparency.info", json!({"id": child}));
+    assert_eq!(info["knockoutShape"], true);
+    let mixed = run(&mut s, "transparency.info", json!({"ids": [child, g]}));
+    assert_eq!(mixed["knockoutShape"], Value::Null);
+    run(&mut s, "edit.undo", json!({}));
+    assert!(!node(&s, child).knockout_shape);
+}
+
+#[test]
 fn knockout_settings_round_trip_and_old_bools_load() {
     let mut s = session();
     let g = knockout_group(&mut s);
     let child = node(&s, g).children().unwrap()[0].id.0;
     run(&mut s, "transparency.set", json!({"ids": [g], "knockout": "off"}));
-    run(&mut s, "transparency.set", json!({"ids": [child], "knockout": "on"}));
+    run(&mut s, "transparency.set", json!({"ids": [child], "knockout": "on", "knockoutShape": true}));
     let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, false);
     let back = vectorcraft_format::load(&bytes).unwrap();
     let (bg, bc) = (back.node(NodeId(g)).unwrap(), back.node(NodeId(child)).unwrap());
-    assert_eq!((bg.knockout, bc.knockout), (Knockout::Off, Knockout::On));
+    assert_eq!((bg.knockout, bc.knockout, bc.knockout_shape), (Knockout::Off, Knockout::On, true));
     // Defaults are not written.
     let text = String::from_utf8(vectorcraft_format::save(&session().doc().unwrap().doc, false)).unwrap();
     assert!(!text.contains("knockout"), "{text}");

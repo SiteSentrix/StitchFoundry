@@ -130,6 +130,7 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
                 blend: Default::default(),
                 isolate: false,
                 knockout: Default::default(),
+                knockout_shape: false,
                 mask: None,
                 trace: None,
                 wrap: None,

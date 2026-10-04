@@ -1,6 +1,7 @@
 //! Transparency panel: blend mode, opacity (field + slider popup), object/mask thumbnails with the
 //! opacity-mask controls (make/release, link, clip, invert; Shift-click the mask to disable it),
-//! Isolate Blending and the three-state Knockout Group (on → neutral → off).
+//! Isolate Blending, the three-state Knockout Group (on → neutral → off) and Opacity & Mask Define
+//! Knockout Shape.
 
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
@@ -40,7 +41,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing = app.session.active().and_then(|d| d.doc.mask_edit);
     let (info, n) = state(app, ui.ctx());
     let has = n.is_some();
-    let isolate = info.isolate.unwrap_or(false);
+    let (isolate, knockout_shape) = (info.isolate.unwrap_or(false), info.knockout_shape.unwrap_or(false));
     // Opacity and blend of the Appearance panel's active item (not while a mask is edited: the
     // panel then shows the masked object), else of the targets, blank where they differ; with no
     // target, the defaults for new art.
@@ -162,7 +163,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let next = info.knockout.map_or(Knockout::On, Knockout::cycle);
             app.run("transparency.set", json!({"knockout": next.label()})).ok();
         }
-        widgets::check(ui, "Opacity & Mask Define Knockout Shape", false, false);
+        if widgets::check(ui, "Opacity & Mask Define Knockout Shape", knockout_shape, has) {
+            app.run("transparency.set", json!({"knockoutShape": !knockout_shape})).ok();
+        }
     }
     if !has {
         widgets::dim_label(ui, if selection_len(app) == 0 { "No Selection" } else { "" });
@@ -360,7 +363,7 @@ mod tests {
         run(&mut app, "file.new", json!({"width": 100, "height": 100}));
         run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
         for k in ["on", "off", "neutral"] {
-            run(&mut app, "transparency.set", json!({"knockout": k}));
+            run(&mut app, "transparency.set", json!({"knockout": k, "knockoutShape": k == "on"}));
             let texts = frame(&mut app);
             assert!(texts.iter().any(|t| t == "Knockout Group") && texts.iter().any(|t| t == "Opacity & Mask Define Knockout Shape"));
         }

@@ -652,14 +652,15 @@ impl Renderer {
 
     /// The children of a knockout group ([`Node::knockout_elements`]). Each element first erases
     /// what the elements below it drew wherever it paints (its knockout shape: its coverage at full
-    /// object opacity without its opacity mask), then adds itself: it composites against the
-    /// group's backdrop instead of over the elements below it.
+    /// object opacity without its opacity mask, or as drawn when its opacity and mask define the
+    /// knockout shape), then adds itself: it composites against the group's backdrop instead of
+    /// over the elements below it.
     fn draw_knockout(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>]) {
         for c in Node::knockout_elements(children) {
             if self.skipped(f, c) {
                 continue;
             }
-            for (compose, shape) in [(Compose::DestOut, true), (Compose::Plus, false)] {
+            for (compose, shape) in [(Compose::DestOut, !c.knockout_shape), (Compose::Plus, false)] {
                 ctx.set_transform(Affine::IDENTITY);
                 ctx.push_layer(None, Some(BlendMode::new(Mix::Normal, compose)), None, None, None);
                 self.shape_of = if shape { Arc::as_ptr(c) as usize } else { 0 };

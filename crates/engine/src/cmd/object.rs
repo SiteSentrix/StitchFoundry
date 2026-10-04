@@ -131,7 +131,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Object Properties",
             [],
             None,
-            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral)}",
+            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool}",
             has_doc,
             set_props
         ),
@@ -674,6 +674,9 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(k) = knockout {
                 n.knockout = k;
+            }
+            if let Some(v) = p.get("knockoutShape").and_then(Value::as_bool) {
+                n.knockout_shape = v;
             }
         }
         Ok(())

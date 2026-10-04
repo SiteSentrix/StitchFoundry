@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency Info",
             [],
             None,
-            "{id?|ids?} → {ids, opacity: 0..100, blend, isolate, knockout: \"on\"|\"off\"|\"neutral\", editingMask} the Transparency panel's values for `ids`, the selection, or the object whose mask is being edited. A value is null where those objects differ (or there are none); editingMask is the id of the object whose mask is being edited, or null",
+            "{id?|ids?} → {ids, opacity: 0..100, blend, isolate, knockout: \"on\"|\"off\"|\"neutral\", knockoutShape, editingMask} the Transparency panel's values for `ids`, the selection, or the object whose mask is being edited. A value is null where those objects differ (or there are none); editingMask is the id of the object whose mask is being edited, or null",
             has_doc,
             info
         ),
@@ -265,6 +265,7 @@ pub struct TransparencyInfo {
     pub blend: Option<BlendMode>,
     pub isolate: Option<bool>,
     pub knockout: Option<Knockout>,
+    pub knockout_shape: Option<bool>,
 }
 
 impl TransparencyInfo {
@@ -280,6 +281,7 @@ impl TransparencyInfo {
             blend: same(&nodes, |n| n.blend),
             isolate: same(&nodes, |n| n.isolate),
             knockout: same(&nodes, |n| n.knockout),
+            knockout_shape: same(&nodes, |n| n.knockout_shape),
             ids,
         }
     }
@@ -325,6 +327,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "blend": i.blend.map(BlendMode::label),
         "isolate": i.isolate,
         "knockout": i.knockout.map(Knockout::label),
+        "knockoutShape": i.knockout_shape,
         "editingMask": st.doc.mask_edit.map(|me| me.object.0),
     }))
 }

@@ -634,7 +634,7 @@ impl Writer<'_> {
     }
 
     /// A mask that is 1 − the knockout shape of `c`: white, then `c` painted black (at full object
-    /// opacity without its own mask). Returns the mask id.
+    /// opacity without its own mask, unless those define its shape). Returns the mask id.
     fn knockout_mask(&mut self, c: &Node) -> String {
         let filter = match &self.knockout_filter {
             Some(f) => f.clone(),
@@ -647,7 +647,7 @@ impl Writer<'_> {
                 f
             }
         };
-        let shape = Node { opacity: 1.0, mask: None, ..c.clone() };
+        let shape = if c.knockout_shape { c.clone() } else { Node { opacity: 1.0, mask: None, ..c.clone() } };
         let anonymous = std::mem::replace(&mut self.anonymous, true);
         let art = self.detached(3, |w| w.node(&shape));
         self.anonymous = anonymous;

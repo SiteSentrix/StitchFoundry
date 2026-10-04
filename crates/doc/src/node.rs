@@ -256,6 +256,10 @@ pub struct Node {
     /// Knockout Group: whether a container's children knock each other out (see [`Knockout`]).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub knockout: Knockout,
+    /// Opacity & Mask Define Knockout Shape: inside a knockout group, this object's opacity and
+    /// opacity mask scale how much of the objects below it in the group it knocks out.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub knockout_shape: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub appearance: Appearance,
     /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
@@ -309,6 +313,7 @@ impl Node {
             blend: BlendMode::Normal,
             isolate: false,
             knockout: Knockout::Neutral,
+            knockout_shape: false,
             appearance: Appearance::default(),
             mask: None,
             trace: None,
@@ -361,7 +366,12 @@ impl Node {
     /// Full opacity, Normal blending, no isolation, knockout or opacity mask (the Layers panel
     /// fills an object's target circle otherwise).
     pub fn has_default_transparency(&self) -> bool {
-        self.opacity >= 1.0 && self.blend == BlendMode::Normal && !self.isolate && self.knockout == Knockout::Neutral && self.mask.is_none()
+        self.opacity >= 1.0
+            && self.blend == BlendMode::Normal
+            && !self.isolate
+            && self.knockout == Knockout::Neutral
+            && !self.knockout_shape
+            && self.mask.is_none()
     }
     /// Kind name as the Layers panel / Properties panel shows it.
     pub fn kind_label(&self) -> &'static str {
@@ -761,12 +771,13 @@ mod tests {
     fn default_transparency() {
         let p = || Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         assert!(p().has_default_transparency());
-        let tweaks: [fn(&mut Node); 6] = [
+        let tweaks: [fn(&mut Node); 7] = [
             |n| n.opacity = 0.5,
             |n| n.blend = BlendMode::Multiply,
             |n| n.isolate = true,
             |n| n.knockout = Knockout::On,
             |n| n.knockout = Knockout::Off,
+            |n| n.knockout_shape = true,
             |n| n.mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
         ];
         for tweak in tweaks {

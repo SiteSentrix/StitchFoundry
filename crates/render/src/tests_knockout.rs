@@ -1,4 +1,4 @@
-//! Knockout groups (Transparency panel).
+//! Knockout groups and the knockout shape (Transparency panel).
 
 use super::*;
 use vectorcraft_color::{Color, Paint};
@@ -42,6 +42,9 @@ fn close(a: [u8; 4], b: [u8; 4]) -> bool {
 const BLUE_OVER_WHITE: [u8; 4] = [128, 128, 255, 255];
 /// 50% blue over 50% red over white.
 const BLUE_OVER_RED: [u8; 4] = [128, 64, 191, 255];
+/// The overlap with half of the red knocked out by an opaque blue: 0.5 · (50% red over white) +
+/// 0.5 · blue (for Normal blending, the same as 50% blue over the red).
+const HALF_KNOCKED: [u8; 4] = [128, 64, 191, 255];
 
 #[test]
 fn knockout_group_shows_the_top_object_over_the_backdrop() {
@@ -51,6 +54,35 @@ fn knockout_group_shows_the_top_object_over_the_backdrop() {
     for k in [Knockout::Off, Knockout::Neutral] {
         let r = render(&doc(k, |_, _| {}));
         assert!(close(r.pixel(50, 50), BLUE_OVER_RED), "{k:?}: {:?}", r.pixel(50, 50));
+    }
+}
+
+#[test]
+fn opacity_defines_the_knockout_shape() {
+    // The blue object's 50% opacity knocks out only half of the red below it.
+    let r = render(&doc(Knockout::On, |_, g| {
+        let blue = Arc::make_mut(&mut g.children_mut().unwrap()[1]);
+        blue.knockout_shape = true;
+    }));
+    assert!(close(r.pixel(50, 50), HALF_KNOCKED), "{:?}", r.pixel(50, 50));
+    // Its opacity mask counts too when it defines the shape, and is ignored otherwise.
+    for shape in [false, true] {
+        let r = render(&doc(Knockout::On, |d, g| {
+            let id = d.alloc_id();
+            let white = Node::path(
+                id,
+                shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
+                Appearance::basic(Paint::solid(Color::rgb(0.5, 0.5, 0.5)), Paint::None, 0.0),
+            );
+            let blue = Arc::make_mut(&mut g.children_mut().unwrap()[1]);
+            blue.opacity = 1.0;
+            blue.knockout_shape = shape;
+            blue.mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(white, true)));
+        }));
+        let want = if shape { HALF_KNOCKED } else { BLUE_OVER_WHITE };
+        // A mid-grey mask is ~50% (luminance 0.5, not gamma-corrected): allow a little more slack.
+        let px = r.pixel(50, 50);
+        assert!(px.iter().zip(want).all(|(a, b)| (*a as i32 - b as i32).abs() <= 6), "shape {shape}: {px:?}");
     }
 }
 
