@@ -100,6 +100,27 @@ pub fn save_file(doc: &Document) -> Vec<u8> {
 }
 
 pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
+    load_info(bytes).map(|(doc, _)| doc)
+}
+
+/// What a native file says about itself besides its document.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileInfo {
+    /// The file's format version (see [`VERSION`]).
+    pub version: u32,
+    /// Written under the project's former name (`"format": "drawcraft"`).
+    pub legacy: bool,
+}
+
+impl FileInfo {
+    /// Written by an older version or under the former name: saving rewrites it in today's format.
+    pub fn is_old(&self) -> bool {
+        self.legacy || self.version < VERSION
+    }
+}
+
+/// [`load`], also telling the file's version and name.
+pub fn load_info(bytes: &[u8]) -> Result<(Document, FileInfo), FormatError> {
     let f: File = serde_json::from_slice(bytes).map_err(|e| FormatError::NotVectorcraft(e.to_string()))?;
     if f.format != EXTENSION && f.format != LEGACY_EXTENSION {
         return Err(FormatError::NotVectorcraft(format!("format is `{}`", f.format)));
@@ -122,7 +143,7 @@ pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
     // Saved before per-fill/stroke overprint: the Overprint Black list becomes overprint flags.
     doc.migrate_overprint_black();
     doc.fix_next_id();
-    Ok(doc)
+    Ok((doc, FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }))
 }
 
 /// Does this look like a `.vectorcraft` file?
@@ -187,6 +208,20 @@ mod tests {
         assert_eq!(load(legacy.as_bytes()).unwrap().artboards[0].rect, d.artboards[0].rect);
         assert!(is_native_name("old/Poster.DrawCraft") && is_native_name("new.vectorcraft") && !is_native_name("x.svg"));
         assert!(load(br#"{"format":"other","version":1,"document":{}}"#).is_err());
+    }
+
+    #[test]
+    fn file_info_tells_old_files() {
+        let d = Document::new(10.0, 10.0);
+        let current = save(&d, false);
+        assert_eq!(load_info(&current).unwrap().1, FileInfo { version: VERSION, legacy: false });
+        assert!(!load_info(&current).unwrap().1.is_old());
+        let text = String::from_utf8(current).unwrap();
+        let legacy = text.replacen("\"format\":\"vectorcraft\"", "\"format\":\"drawcraft\"", 1);
+        assert!(load_info(legacy.as_bytes()).unwrap().1.is_old());
+        let v1 = text.replacen(&format!("\"version\":{VERSION}"), "\"version\":1", 1);
+        assert_eq!(load_info(v1.as_bytes()).unwrap().1, FileInfo { version: 1, legacy: false });
+        assert!(load_info(v1.as_bytes()).unwrap().1.is_old());
     }
     use vectorcraft_doc::{Appearance, Node};
     use vectorcraft_geom::{Rect, shapes};

@@ -1,9 +1,11 @@
-//! The save pipeline: Save writes a document's own format, Save As / a Copy / as Template, Revert
-//! and templates.
+//! The save pipeline: Save writes a document's own format, Save As / a Copy / as Template, Revert,
+//! templates, converted legacy files, the saved view and the single Document Color Mode command.
 
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
+use vectorcraft_doc::SavedView;
+use vectorcraft_geom::Point;
 
 use super::*;
 use crate::cmd::fileio::{SaveMode, save_plan};
@@ -195,6 +197,69 @@ fn templates_suggest_a_name_in_the_templates_folder_and_open_untitled() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// A native file as an older version wrote it: under the former name, or format version 1.
+fn old_file(legacy: bool) -> Vec<u8> {
+    let text = String::from_utf8(vectorcraft_format::save(&vectorcraft_doc::Document::new(50.0, 50.0), false)).unwrap();
+    let text = if legacy {
+        text.replacen("\"format\":\"vectorcraft\"", "\"format\":\"drawcraft\"", 1)
+    } else {
+        text.replacen(&format!("\"version\":{}", vectorcraft_format::VERSION), "\"version\":1", 1)
+    };
+    text.into_bytes()
+}
+
+#[test]
+fn older_native_files_open_converted_and_save_under_a_new_name() {
+    let d = dir("converted");
+    let legacy = path(&d, "logo.drawcraft");
+    std::fs::write(&legacy, old_file(true)).unwrap();
+    let v1 = path(&d, "badge.vectorcraft");
+    std::fs::write(&v1, old_file(false)).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": legacy})).unwrap();
+    assert_eq!(s.doc().unwrap().title(), "logo [Converted]");
+    // Save doesn't overwrite the old file: it asks for a .vectorcraft name.
+    let r = s.execute("document.save", &json!({})).unwrap();
+    assert_eq!((r["name"].as_str(), r.get("path")), (Some("logo.vectorcraft"), None));
+    assert_eq!(std::fs::read(&legacy).unwrap(), old_file(true));
+    let r = s.execute("document.open", &json!({"path": v1})).unwrap();
+    assert_eq!(r["title"], "badge [Converted]");
+    let saved = path(&d, "badge2.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": saved})).unwrap();
+    assert_eq!(s.doc().unwrap().title(), "badge2.vectorcraft");
+    assert!(!s.doc().unwrap().converted);
+    // A current file isn't converted; with the preference off old files open as they are.
+    s.execute("document.open", &json!({"path": saved})).unwrap();
+    assert_eq!(s.doc().unwrap().title(), "badge2.vectorcraft");
+    s.prefs.append_converted = false;
+    s.execute("document.open", &json!({"path": legacy})).unwrap();
+    assert_eq!(s.doc().unwrap().title(), "logo.drawcraft");
+    assert_eq!(s.execute("document.save", &json!({})).unwrap()["path"].as_str(), Some(legacy.as_str()));
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn the_saved_view_round_trips_without_dirtying() {
+    let d = dir("view");
+    let mut s = session();
+    let view = SavedView { name: String::new(), center: Point::new(40.0, 25.0), zoom: 3.0, rotation: 15.0 };
+    s.doc_mut().unwrap().view = Some(view.clone());
+    assert!(!s.doc().unwrap().is_dirty(), "the view isn't an edit");
+    let native = path(&d, "v.vectorcraft");
+    s.execute("document.save", &json!({"path": native})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.last_view, None, "only the written file carries it");
+    s.execute("document.open", &json!({"path": native})).unwrap();
+    assert_eq!(s.doc().unwrap().view.as_ref(), Some(&view));
+    // Files without a view (older ones) open with none; SVG doesn't carry it.
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&vectorcraft_doc::Document::new(5.0, 5.0), false)).unwrap();
+    assert_eq!(doc.last_view, None);
+    let svg = path(&d, "v.svg");
+    s.execute("document.save", &json!({"path": svg})).unwrap();
+    s.execute("document.open", &json!({"path": svg})).unwrap();
+    assert_eq!(s.doc().unwrap().view, None);
+    let _ = std::fs::remove_dir_all(d);
+}
+
 #[test]
 fn save_plans_suggest_names_and_folders() {
     let mut s = session();
@@ -206,6 +271,39 @@ fn save_plans_suggest_names_and_folders() {
     assert_eq!(plan(&s, SaveMode::Template, json!({"format": "svg"})).format.id, "template", "a template is always native");
     assert_eq!(SaveMode::of("file.saveCopy"), Some(SaveMode::Copy));
     assert_eq!(crate::cmd::fileio::save_filters("svg")[0], ("SVG", &["svg"][..]));
+}
+
+#[test]
+fn document_color_mode_is_one_command_with_a_hidden_alias() {
+    let mut s = session();
+    let ids: Vec<&str> = s.commands().iter().filter(|c| c.menu.first() == Some(&"File") && c.label.contains("Color Mode")).map(|c| c.id).collect();
+    assert_eq!(ids, ["file.documentColorMode"], "one File menu entry");
+    assert!(crate::cmd::is_alias("object.convertDocumentColorMode") && !crate::cmd::is_alias("file.documentColorMode"));
+    // Both ids run the same conversion; `convert: false` only switches the mode.
+    rect(&mut s);
+    assert!(s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap()["changed"].as_u64().unwrap() >= 1);
+    let before = s.doc().unwrap().doc.clone();
+    let r = s.execute("file.documentColorMode", &json!({"mode": "rgb", "convert": false})).unwrap();
+    assert_eq!(r["changed"], 0);
+    assert_eq!(s.doc().unwrap().doc.color_mode, vectorcraft_doc::ColorMode::Rgb);
+    assert_eq!(s.doc().unwrap().doc.layers, before.layers, "colours untouched");
+    let e = s.execute("file.documentColorMode", &json!({"mode": "lab"})).unwrap_err().to_string();
+    assert!(e.contains("file.documentColorMode"), "{e}");
+}
+
+#[test]
+fn choosing_the_current_color_mode_is_not_an_edit() {
+    let mut s = session();
+    rect(&mut s);
+    let st = s.doc_mut().unwrap();
+    st.mark_saved();
+    let undo = st.history.undo.len();
+    for id in ["file.documentColorMode", "object.convertDocumentColorMode"] {
+        assert_eq!(s.execute(id, &json!({"mode": "rgb"})).unwrap()["changed"], 0);
+    }
+    let st = s.doc().unwrap();
+    assert!(!st.is_dirty(), "the document stays saved");
+    assert_eq!(st.history.undo.len(), undo, "no empty undo step");
 }
 
 #[test]

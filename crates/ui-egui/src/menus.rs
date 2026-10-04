@@ -54,7 +54,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.save",
         "Save",
         "Cmd+S",
-        "{path?, format?, options?, svg?: {…SVG options}} = document.save, written through the app (a document saved as SVG, PDF or .ai, or opened from one Save can write back, saves as that again, with the same options); with no path known (never saved) the Save As panel asks first",
+        "{path?, format?, options?, svg?: {…SVG options}} = document.save, written through the app (a document saved as SVG, PDF or .ai, or opened from one Save can write back, saves as that again, with the same options); with no path known (never saved, converted) the Save As panel asks first",
     ),
     (
         "file.place",
@@ -404,6 +404,27 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name?: a saved preset to edit | preset?: the preset a new one starts from (default VectorCraft Default)} open the preset editor (dialog `pdfPreset`: the Save PDF dialog's option fields plus `name` and `description`); OK runs pdf.preset.save and returns to PDF Presets",
     ),
+    ("file.openRecent11", "Open Recent File 11", "", "{}"),
+    ("file.openRecent12", "Open Recent File 12", "", "{}"),
+    ("file.openRecent13", "Open Recent File 13", "", "{}"),
+    ("file.openRecent14", "Open Recent File 14", "", "{}"),
+    ("file.openRecent15", "Open Recent File 15", "", "{}"),
+    ("file.openRecent16", "Open Recent File 16", "", "{}"),
+    ("file.openRecent17", "Open Recent File 17", "", "{}"),
+    ("file.openRecent18", "Open Recent File 18", "", "{}"),
+    ("file.openRecent19", "Open Recent File 19", "", "{}"),
+    ("file.openRecent20", "Open Recent File 20", "", "{}"),
+    ("file.openRecent21", "Open Recent File 21", "", "{}"),
+    ("file.openRecent22", "Open Recent File 22", "", "{}"),
+    ("file.openRecent23", "Open Recent File 23", "", "{}"),
+    ("file.openRecent24", "Open Recent File 24", "", "{}"),
+    ("file.openRecent25", "Open Recent File 25", "", "{}"),
+    ("file.openRecent26", "Open Recent File 26", "", "{}"),
+    ("file.openRecent27", "Open Recent File 27", "", "{}"),
+    ("file.openRecent28", "Open Recent File 28", "", "{}"),
+    ("file.openRecent29", "Open Recent File 29", "", "{}"),
+    ("file.openRecent30", "Open Recent File 30", "", "{}"),
+    ("file.reveal", "Show in Folder", "", "{} show the document's file in the system file manager (desktop) → {path}"),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -440,13 +461,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         // Bytes sent by an agent go straight to the engine; a path or nothing opens it here.
         "file.newFromTemplate" if p.get("dataBase64").is_none() => io::new_from_template(app, s("path")),
         "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
-        id if id.starts_with("file.openRecent") => {
-            let n: usize = id["file.openRecent".len()..].parse().unwrap_or(0);
-            match n.checked_sub(1).and_then(|i| app.ui.recent_files.get(i)).cloned() {
-                Some(path) => io::open_path(app, &path).map(|_| Value::Null),
-                None => Err("no such recent file".into()),
-            }
-        }
+        "file.reveal" => io::reveal(app),
+        id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
+            Some(path) => io::open_path(app, &path).map(|_| Value::Null),
+            None => Err("no such recent file".into()),
+        },
         "type.findFont" => {
             crate::find_font::open(app);
             Ok(Value::Null)
@@ -455,7 +474,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.ui.recent_files.clear();
             Ok(Value::Null)
         }
-        "file.recentFiles" => Ok(json!(app.ui.recent_files)),
+        "file.recentFiles" => Ok(json!(io::recent_files(app))),
         "file.place" => crate::place::run(app, p),
         "file.place.queue" => crate::place::queue(app, p),
         "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
@@ -856,13 +875,9 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "view.guides" => if v.guides { "Hide Guides" } else { "Show Guides" }.into(),
         "view.grid" => if v.grid { "Hide Grid" } else { "Show Grid" }.into(),
         "view.guides.lock" => if app.session.guides_locked() { "Unlock Guides" } else { "Lock Guides" }.into(),
-        id if id.starts_with("file.openRecent") => {
-            let n: usize = id["file.openRecent".len()..].parse().unwrap_or(0);
-            n.checked_sub(1)
-                .and_then(|i| app.ui.recent_files.get(i))
-                .map(|p| std::path::Path::new(p).file_name().map_or(p.clone(), |f| f.to_string_lossy().to_string()))
-                .unwrap_or_else(|| "—".into())
-        }
+        id if id.starts_with("file.openRecent") => recent_slot(app, id)
+            .map(|p| std::path::Path::new(p).file_name().map_or(p.clone(), |f| f.to_string_lossy().to_string()))
+            .unwrap_or_else(|| "—".into()),
         "edit.undo" => app.session.active().and_then(|d| d.history.undo.last()).map(|h| format!("Undo {}", h.label)).unwrap_or_else(|| "Undo".into()),
         "edit.redo" => app.session.active().and_then(|d| d.history.redo.last()).map(|h| format!("Redo {}", h.label)).unwrap_or_else(|| "Redo".into()),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => {
@@ -875,14 +890,17 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
     }
 }
 
-/// Menu slots that are left out while they have nothing to show (unused saved views, User
-/// Defined swatch and graphic style libraries).
+/// Menu slots that are left out while they have nothing to show (unused saved views, recent files,
+/// User Defined swatch and graphic style libraries).
 fn hidden_when_disabled(id: &str) -> bool {
-    id.starts_with("view.goto") || id.starts_with(crate::panels::swatches::USER_SLOT) || id.starts_with(crate::panels::graphic_styles::USER_SLOT)
+    id.starts_with("view.goto")
+        || id.starts_with("file.openRecent")
+        || id.starts_with(crate::panels::swatches::USER_SLOT)
+        || id.starts_with(crate::panels::graphic_styles::USER_SLOT)
 }
 
-/// File → Open Recent Files slots.
-const RECENT_IDS: [&str; 10] = [
+/// File → Open Recent Files slots (Preferences → File Handling shows 0–30 of them).
+const RECENT_IDS: [&str; io::MAX_RECENT_FILES] = [
     "file.openRecent1",
     "file.openRecent2",
     "file.openRecent3",
@@ -893,7 +911,48 @@ const RECENT_IDS: [&str; 10] = [
     "file.openRecent8",
     "file.openRecent9",
     "file.openRecent10",
+    "file.openRecent11",
+    "file.openRecent12",
+    "file.openRecent13",
+    "file.openRecent14",
+    "file.openRecent15",
+    "file.openRecent16",
+    "file.openRecent17",
+    "file.openRecent18",
+    "file.openRecent19",
+    "file.openRecent20",
+    "file.openRecent21",
+    "file.openRecent22",
+    "file.openRecent23",
+    "file.openRecent24",
+    "file.openRecent25",
+    "file.openRecent26",
+    "file.openRecent27",
+    "file.openRecent28",
+    "file.openRecent29",
+    "file.openRecent30",
 ];
+
+/// The recent file a `file.openRecentN` slot names (none past the preference's count).
+fn recent_slot<'a>(app: &'a VectorcraftApp, id: &str) -> Option<&'a String> {
+    let n: usize = id.strip_prefix("file.openRecent")?.parse().ok()?;
+    io::recent_files(app).get(n.checked_sub(1)?)
+}
+
+/// A menu slot hidden while it is empty ([`hidden_when_disabled`]) rather than shown disabled (the
+/// native menu leaves it out).
+pub fn hidden_slot(app: &VectorcraftApp, id: &str) -> bool {
+    hidden_when_disabled(id) && !enabled(app, id)
+}
+
+/// How many saved-view, recent-file and User Defined library slots are listed: a menu that can't
+/// hide items (the native one) is rebuilt when this changes.
+pub fn listed_slots(app: &VectorcraftApp) -> usize {
+    use vectorcraft_engine::cmd::{stylelib, swatchlib};
+    let user = |libs: Vec<swatchlib::LibraryInfo>| libs.iter().filter(|l| l.category == "user").count().min(10);
+    let views = app.session.active().map_or(0, |d| d.doc.views.len().min(10));
+    views + io::recent_files(app).len().min(RECENT_IDS.len()) + user(swatchlib::libraries(&app.session)) + user(stylelib::libraries(&app.session))
+}
 
 /// Type → Recent Fonts slots.
 const RECENT_FONT_IDS: [&str; 10] = [
@@ -922,7 +981,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     }
     match id {
         // Save is off for a clean document that already has its own file.
-        "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.is_dirty()),
+        "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
+        "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.place"
         | "file.export.svg"
         | "file.export.png"
@@ -934,9 +994,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.fitArtboard"
         | "view.fitAll"
         | "view.actualSize" => app.session.active().is_some(),
-        id if id.starts_with("file.openRecent") => {
-            id["file.openRecent".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.ui.recent_files.len())
-        }
+        id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
         id if id.starts_with("type.recentFont") => {
             id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.ui.recent_fonts.len()) && app.session.active().is_some()
@@ -990,6 +1048,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     v.push(c("Clear Recent Files", "file.clearRecent"));
                     v
                 }),
+                c("Show in Folder", "file.reveal"),
                 Sep,
                 c("Close", "file.close"),
                 c("Close All", "file.closeAll"),
@@ -1021,8 +1080,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 sub(
                     "Document Color Mode",
                     vec![
-                        cp("CMYK Color", "object.convertDocumentColorMode", json!({"mode": "cmyk"})),
-                        cp("RGB Color", "object.convertDocumentColorMode", json!({"mode": "rgb"})),
+                        cp("CMYK Color", "file.documentColorMode", json!({"mode": "cmyk"})),
+                        cp("RGB Color", "file.documentColorMode", json!({"mode": "rgb"})),
                     ],
                 ),
                 c("File Info…", "file.info"),
@@ -1635,7 +1694,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             }
             Item::Cmd(label, id, p) => {
                 let en = enabled(app, id);
-                // Unused saved-view slots are hidden (Illustrator lists only the saved views).
+                // Unused saved-view and recent-file slots are hidden (only the real ones are listed).
                 if !en && hidden_when_disabled(id) {
                     continue;
                 }

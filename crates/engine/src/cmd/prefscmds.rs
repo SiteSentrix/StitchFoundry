@@ -317,6 +317,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("newArtBasic", "General", "Appearance Panel", "New Art Has Basic Appearance", bool),
     // File Handling (continued)
     p!("templatesFolder", "File Handling", "Files", "Templates Folder", text),
+    p!("appendConverted", "File Handling", "Files", "Mark Older Files as [Converted] When Opened", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

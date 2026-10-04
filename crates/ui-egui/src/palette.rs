@@ -5,14 +5,11 @@ use serde_json::json;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, menus};
 
-pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    if !app.ui.palette_open {
-        return;
-    }
-    let t = Tokens::get(ctx);
-    let q = app.ui.palette_query.to_lowercase();
-    let mut items: Vec<(String, String, String)> = vec![]; // (label, kind/id, shortcut)
-    for c in vectorcraft_engine::command_specs() {
+/// Everything the palette searches: (label, command id or `tool:<id>`, shortcut).
+pub fn items() -> Vec<(String, String, String)> {
+    let mut items = vec![];
+    // Aliases kept for older scripts run a command that is listed already.
+    for c in vectorcraft_engine::command_specs().iter().filter(|c| !vectorcraft_engine::cmd::is_alias(c.id)) {
         let path = c.menu.join(" › ");
         let label = if path.is_empty() { c.label.to_string() } else { format!("{path} › {}", c.label) };
         items.push((label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("").to_string()));
@@ -23,6 +20,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     for tool in vectorcraft_tools::catalog::all_tools() {
         items.push((tool.label.to_string(), format!("tool:{}", tool.id), crate::shortcut_editor::tool_shortcut(tool.id).unwrap_or("").to_string()));
     }
+    items
+}
+
+pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if !app.ui.palette_open {
+        return;
+    }
+    let t = Tokens::get(ctx);
+    let q = app.ui.palette_query.to_lowercase();
+    let items = items();
     let matches: Vec<&(String, String, String)> = items
         .iter()
         .filter(|(l, id, _)| q.is_empty() || q.split_whitespace().all(|w| l.to_lowercase().contains(w) || id.to_lowercase().contains(w)))

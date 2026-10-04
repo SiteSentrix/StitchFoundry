@@ -6,9 +6,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, ColorMode, Guide, Node, NodeId, NodeKind, TextKind};
+use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, TextKind};
 
-use super::colorcmds::{Recolor, Scope, to_cmyk};
 use super::edit::selected_roots;
 use super::*;
 
@@ -149,9 +148,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every colour and swatch to the mode)}",
+            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every colour of the art, symbols and swatches through the colour settings; swatch links kept; greys stay greys), intent?} → {changed}",
             has_doc,
-            color_mode
+            super::colormgmt::convert_mode
         ),
         cmd!(
             "file.info",
@@ -443,44 +442,4 @@ fn close_all(s: &mut Session, _: &Value) -> Result<Value> {
         s.close_document(s.documents().len() - 1);
     }
     Ok(json!({ "closed": n }))
-}
-
-fn color_mode(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "file.documentColorMode";
-    let mode = match str_param(p, "mode").map(str::to_ascii_lowercase).as_deref() {
-        Some("cmyk") => ColorMode::Cmyk,
-        Some("rgb") => ColorMode::Rgb,
-        _ => return Err(bad(C, "mode must be \"cmyk\" or \"rgb\"")),
-    };
-    let convert = bool_or(p, "convert", true);
-    if s.doc()?.doc.color_mode == mode {
-        return ok();
-    }
-    s.edit("Document Color Mode", |d, _| {
-        set_color_mode(d, mode, convert);
-        Ok(())
-    })?;
-    ok()
-}
-
-/// Put `d` in colour `mode`; with `convert`, every colour of its art and swatches too.
-pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode, convert: bool) {
-    d.color_mode = mode;
-    if !convert {
-        return;
-    }
-    let f = move |c: vectorcraft_color::Color| match mode {
-        ColorMode::Cmyk => to_cmyk(c),
-        ColorMode::Rgb => {
-            let [r, g, b] = c.to_rgb();
-            vectorcraft_color::Color::rgb(r, g, b)
-        }
-    };
-    let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
-    Recolor::new(Scope { fill: true, stroke: true, images: false, patterns: false }, &f).run(d, &layers);
-    for sw in d.swatches_iter_mut() {
-        if let vectorcraft_color::Paint::Solid { color, .. } = &mut sw.paint {
-            *color = f(*color);
-        }
-    }
 }

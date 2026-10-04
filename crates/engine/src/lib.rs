@@ -118,13 +118,21 @@ pub struct DocState {
     /// That format's options as last saved (SVG options for SVG, the Save PDF settings for PDF;
     /// empty for native files): Save reuses them and `file.formatOptions` reads them back.
     pub save_options: serde_json::Map<String, Value>,
+    /// Opened from an older native file (former name or format version): the title says
+    /// "[Converted]" and Save asks for a new name instead of overwriting it.
+    pub converted: bool,
+    /// The view saved into native files (`Document::last_view`); the UI keeps it current before a
+    /// save and restores it when the document opens.
+    pub view: Option<vectorcraft_doc::SavedView>,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl DocState {
-    pub fn new(doc: Document, path: Option<String>) -> Self {
+    pub fn new(mut doc: Document, path: Option<String>) -> Self {
         let active_layer = doc.default_layer();
+        // The saved view lives here while the document is open (saves write it back).
+        let view = doc.last_view.take();
         let doc = Arc::new(doc);
         Self {
             saved_doc: doc.clone(),
@@ -143,6 +151,8 @@ impl DocState {
             transparency_grid: false,
             format: "vectorcraft",
             save_options: Default::default(),
+            converted: false,
+            view,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -154,11 +164,13 @@ impl DocState {
         self.saved_doc = self.doc.clone();
     }
     pub fn title(&self) -> String {
-        self.path
+        let name = self
+            .path
             .as_deref()
             .and_then(|p| std::path::Path::new(p).file_name())
             .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| self.doc.title.clone())
+            .unwrap_or_else(|| self.doc.title.clone());
+        if self.converted { format!("{} [Converted]", cmd::fileio::file_stem(&name)) } else { name }
     }
     /// Where new art is inserted: the isolation container, else the active layer.
     /// The current layer, if the remembered id still names a layer (ids are reused after undo).
@@ -375,6 +387,8 @@ pub struct Prefs {
     // File Handling (continued)
     /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
     pub templates_folder: String,
+    /// Open older native files as "<name> [Converted]" so Save asks for a new name.
+    pub append_converted: bool,
 }
 
 impl Default for Prefs {
@@ -502,6 +516,7 @@ impl Default for Prefs {
             recent_new_docs: vec![],
             pdf_presets: vec![],
             templates_folder: String::new(),
+            append_converted: true,
         }
     }
 }
@@ -676,7 +691,7 @@ impl Session {
         i
     }
     /// Replace the document in tab `index` (File → Revert): new content, cleared history and
-    /// selection, saved state. The tab keeps its place, path and format.
+    /// selection, saved state. The tab keeps its place, path, format and view.
     pub fn replace_document(&mut self, index: usize, mut doc: Document) -> bool {
         if index >= self.docs.len() {
             return false;
@@ -694,6 +709,8 @@ impl Session {
         st.revision = old.revision + 1;
         st.format = old.format;
         st.save_options = old.save_options.clone();
+        st.converted = old.converted;
+        st.view = old.view.clone();
         self.docs[index] = st;
         true
     }

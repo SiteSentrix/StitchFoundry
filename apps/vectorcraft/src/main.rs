@@ -107,6 +107,36 @@ fn file_dialog(pick: &FilePick) -> rfd::FileDialog {
     if pick.name.is_empty() { d } else { d.set_file_name(&pick.name) }
 }
 
+/// File → Show in Folder: select `path` in Finder / Explorer, or open its folder elsewhere.
+fn reveal(path: &str) -> Result<(), String> {
+    reveal_command(path).spawn().map(|_| ()).map_err(|e| format!("can't show {path}: {e}"))
+}
+
+#[cfg(target_os = "macos")]
+fn reveal_command(path: &str) -> std::process::Command {
+    let mut c = std::process::Command::new("open");
+    c.args(["-R", path]);
+    c
+}
+
+#[cfg(windows)]
+fn reveal_command(path: &str) -> std::process::Command {
+    use std::os::windows::process::CommandExt as _;
+    // Explorer reads `/select,"path"` itself (the usual argument quoting breaks paths with spaces)
+    // and needs backslashes.
+    let mut c = std::process::Command::new("explorer");
+    c.raw_arg(format!("/select,\"{}\"", path.replace('/', "\\")));
+    c
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn reveal_command(path: &str) -> std::process::Command {
+    let folder = std::path::Path::new(path).parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+    let mut c = std::process::Command::new("xdg-open");
+    c.arg(folder);
+    c
+}
+
 fn services() -> Services {
     Services {
         pick_open: Some(Box::new(|pick: &FilePick| file_dialog(pick).pick_file().map(|p| p.to_string_lossy().to_string()))),
@@ -134,6 +164,7 @@ fn services() -> Services {
         open_url: Some(Box::new(|url: &str| {
             let _ = webbrowser::open(url);
         })),
+        reveal: Some(Box::new(reveal)),
         ..Default::default()
     }
 }

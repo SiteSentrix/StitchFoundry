@@ -6,6 +6,8 @@
 //! the caller's writer (the file system here; a save panel or a browser download in the apps) and
 //! makes the file the document's own (path, format, options, saved state) for Save and Save As.
 
+use std::borrow::Cow;
+
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 
@@ -62,8 +64,8 @@ impl SaveMode {
 #[derive(Clone, Debug)]
 pub struct SavePlan {
     pub mode: SaveMode,
-    /// Where to write. `None` when no path is known (never saved, or a format other than the
-    /// document's own): the caller asks for one or takes the bytes.
+    /// Where to write. `None` when no path is known (never saved, converted from an older version,
+    /// or a format other than the document's own): the caller asks for one or takes the bytes.
     pub path: Option<String>,
     pub format: &'static Format,
     /// The format's options (only those its encoder reads).
@@ -159,7 +161,7 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     // None given: the ones the document was last saved with in this format.
     let options = if given.is_empty() && format.id == st.format { st.save_options.clone() } else { given };
     // Save writes the document's own file; the other modes only where they are told to.
-    let path = path.or_else(|| (mode == SaveMode::Save && format.id == st.format).then(|| st.path.clone()).flatten());
+    let path = path.or_else(|| (mode == SaveMode::Save && !st.converted && format.id == st.format).then(|| st.path.clone()).flatten());
     let stem = file_stem(st.path.as_deref().unwrap_or(&st.doc.title));
     let ext = format.extensions[0];
     let name = match mode {
@@ -197,6 +199,17 @@ fn is_svg(f: &Format) -> bool {
     matches!(f.id, "svg" | "svgz")
 }
 
+/// The document as written: native files carry the view to reopen at.
+fn doc_to_save<'a>(st: &'a DocState, f: &Format) -> Cow<'a, Document> {
+    if is_native(f) && st.doc.last_view != st.view {
+        let mut d = (*st.doc).clone();
+        d.last_view = st.view.clone();
+        Cow::Owned(d)
+    } else {
+        Cow::Borrowed(&st.doc)
+    }
+}
+
 /// What a format loses against a native file (reported whenever a save writes it).
 fn fidelity_warning(f: &Format) -> Option<String> {
     (!is_native(f)).then(|| {
@@ -218,10 +231,10 @@ pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[
     if plan.path.is_some() && retargets {
         stamp_save_dates(s.doc_mut()?);
     }
-    let own: &Document = &s.doc()?.doc;
+    let own = doc_to_save(s.doc()?, plan.format);
     // A native file records its links' paths relative to where it is written.
-    let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(own, p));
-    let doc = relative.as_ref().unwrap_or(own);
+    let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(&own, p));
+    let doc: &Document = relative.as_ref().unwrap_or(&own);
     let mut params = plan.options.clone();
     if is_svg(plan.format) {
         // A save keeps hidden layers (not displayed) unless told otherwise; exports leave them out.
@@ -269,6 +282,7 @@ pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[
         st.path = Some(path.clone());
         st.format = plan.format.id;
         st.save_options = plan.options;
+        st.converted = false;
         st.mark_saved();
     }
     Ok(out)
@@ -325,7 +339,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),

@@ -18,6 +18,9 @@ pub struct Loaded {
     pub warnings: Vec<String>,
     /// The document is the native one the file carries (SVG or PDF saved with Preserve Editing).
     pub restored: bool,
+    /// An older native file (the former `.drawcraft` name or format version): saving it again
+    /// rewrites it in today's format.
+    pub converted: bool,
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
@@ -113,8 +116,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     }
     let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")))?;
     let title = file_name(name);
+    let mut converted = false;
     let (mut doc, warnings, restored) = match format.id {
-        "vectorcraft" | "template" => (vectorcraft_format::load(bytes).map_err(err)?, vec![], false),
+        "vectorcraft" | "template" => {
+            let (d, info) = vectorcraft_format::load_info(bytes).map_err(err)?;
+            converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
+            (d, vec![], false)
+        }
         "svg" | "svgz" => {
             let text = vectorcraft_svg::text_of(bytes).map_err(err)?;
             let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
@@ -129,14 +137,14 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
-        super::super::docmenu::set_color_mode(&mut doc, mode, true);
+        super::super::colormgmt::set_color_mode(&mut doc, mode, true, None);
     }
     // Imports are named after the file; a native document keeps its own title (the tab shows the
     // file name once it has a path).
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
         doc.title = title;
     }
-    Ok(Loaded { doc, format, warnings, restored })
+    Ok(Loaded { doc, format, warnings, restored, converted })
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →
@@ -162,7 +170,7 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 
 /// Make a loaded file the new active document; `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored } = loaded;
+    let Loaded { mut doc, format, warnings, restored, converted } = loaded;
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.
@@ -178,10 +186,13 @@ fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &Loa
     let lossy_ai = format.id == "ai" && !restored;
     let path = path.filter(|_| !template && !partial && !lossy_ai && SAVE_FORMATS.contains(&format.id));
     let saves_back = path.is_some();
+    let converted = saves_back && converted && s.prefs.append_converted;
     let index = s.add_document(doc, path);
+    let st = s.doc_mut()?;
     if saves_back {
-        s.doc_mut()?.format = format.id;
+        st.format = format.id;
     }
+    st.converted = converted;
     let title = s.documents()[index].title();
     Ok(super::merge(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings, "restored": restored }), links.to_json()))
 }

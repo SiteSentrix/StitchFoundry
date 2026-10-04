@@ -1,7 +1,8 @@
-//! File I/O through the injected services (pick, read, write, download); the engine's
+//! File I/O through the injected services (pick, read, write, download, reveal); the engine's
 //! `fileio` decodes, encodes and saves every format.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::SavedView;
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, SavePlan};
 
@@ -141,6 +142,14 @@ pub(crate) fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &
     pick_path(app, &FilePick { name, folder, filters })
 }
 
+/// Keep the active document's saved view current before a save (native files reopen at it).
+pub fn remember_view(app: &mut VectorcraftApp) {
+    let Some(v) = app.view().copied().filter(|v| v.fitted) else { return };
+    if let Some(st) = app.session.active_mut() {
+        st.view = Some(SavedView { name: String::new(), center: v.center, zoom: v.zoom, rotation: v.rotation });
+    }
+}
+
 /// A path typed in a save panel: kept when its extension names a save format (the panel's file
 /// type), else `f`'s extension is added.
 fn with_save_extension(path: &str, f: &Format) -> String {
@@ -174,6 +183,7 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
 /// to a given SVG path. → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
 /// path?}` while a dialog is open.
 pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool) -> Result<Value, String> {
+    remember_view(app);
     let first = plan(app, mode, p)?;
     let ask = ask_options && !has_options(p);
     if let Some(path) = first.path.clone() {
@@ -288,12 +298,22 @@ fn open_options(app: &mut VectorcraftApp, action: &str, f: &Format, path: &str, 
     json!({ "pending": dialogs::save_options::KIND })
 }
 
-/// Put `path` at the top of File → Open Recent Files (capped by Preferences → Recent Files).
+/// The most recent files remembered: Preferences → File Handling → Number of Recent Files to Display
+/// shows 0 to this many of them.
+pub const MAX_RECENT_FILES: usize = 30;
+
+/// Put `path` at the top of File → Open Recent Files.
 pub fn note_recent(app: &mut VectorcraftApp, path: &str) {
     let r = &mut app.ui.recent_files;
     r.retain(|p| p != path);
     r.insert(0, path.to_string());
-    r.truncate((app.session.prefs.recent_files_count as usize).clamp(1, 10));
+    r.truncate(MAX_RECENT_FILES);
+}
+
+/// The recent files File → Open Recent Files lists.
+pub fn recent_files(app: &VectorcraftApp) -> &[String] {
+    let r = &app.ui.recent_files;
+    &r[..r.len().min(app.session.prefs.recent_files_count as usize)]
 }
 
 /// Export the active document in `format` (default: the path's extension, else PNG) with the
@@ -405,6 +425,13 @@ pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
     let message = format!("Revert to the saved version of “{name}”?");
     dialogs::confirm::ask(app, &message, "Changes made since it was last saved will be lost.", "file.revert", json!({ "confirmed": true }));
     Ok(json!({ "pending": dialogs::confirm::KIND }))
+}
+
+/// File → Show in Folder: the document's file in the system file manager.
+pub fn reveal(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let path = app.session.active().and_then(|d| d.path.clone()).ok_or("the document has never been saved")?;
+    app.services.reveal.as_mut().ok_or("no file manager here")?(&path)?;
+    Ok(json!({ "path": path }))
 }
 
 /// Place a file's bytes (no path, so embedded) centred in the view: `file.place`.

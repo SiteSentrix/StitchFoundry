@@ -493,6 +493,10 @@ pub struct Document {
     /// ([`Document::raster_effects_ppi`]).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub raster_effects: RasterEffectsSettings,
+    /// The view (zoom, centre, rotation) the document was saved with; it reopens there. Written at
+    /// save time only, so changing the view never marks the document modified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_view: Option<SavedView>,
 }
 
 fn ppi72() -> f64 {
@@ -552,6 +556,7 @@ impl Document {
             paste_remembers_layers: false,
             metadata: DocMetadata::default(),
             raster_effects: RasterEffectsSettings::default(),
+            last_view: None,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));

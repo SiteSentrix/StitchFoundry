@@ -51,9 +51,9 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(
             "object.convertDocumentColorMode",
             "Convert Document Color Mode",
-            ["File", "Document Color Mode"],
+            [],
             None,
-            "{mode: \"cmyk\"|\"rgb\", intent?} set the document colour mode and convert every colour (art, symbols, swatches; swatch links kept; Gray and Lab colours stay) through the colour settings → {changed}",
+            "same as file.documentColorMode: {mode: \"cmyk\"|\"rgb\", convert?: true, intent?} → {changed} (an alias kept for older scripts; the command palette leaves it out)",
             has_doc,
             convert_mode
         ),
@@ -235,52 +235,73 @@ fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"rgb": rgb, "cmyk": cmyk}))
 }
 
-fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "object.convertDocumentColorMode";
+/// File → Document Color Mode (`file.documentColorMode` and its alias
+/// `object.convertDocumentColorMode`): set the mode and, unless `convert: false`, convert every
+/// colour through the colour settings.
+pub(crate) fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "file.documentColorMode";
     let mode = match str_param(p, "mode").map(str::to_ascii_lowercase).as_deref() {
         Some("cmyk") => ColorMode::Cmyk,
         Some("rgb") => ColorMode::Rgb,
         _ => return Err(bad(C, "mode must be \"cmyk\" or \"rgb\"")),
     };
-    let c = cms::active();
-    let intent = intent_param(p, C)?.unwrap_or(c.settings().intent);
-    let model = if mode == ColorMode::Cmyk { Model::Cmyk } else { Model::Rgb };
-    // Greys stay greys (they print on the black plate in either mode); Lab colours (spot colour
-    // definitions) are device independent and fit either mode.
-    let conv = |col: &Color| if matches!(col, Color::Gray { .. } | Color::Lab { .. }) { *col } else { c.convert(col, model, intent) };
+    let intent = intent_param(p, C)?;
+    // Choosing the mode the document already has (the checked menu item) is not an edit.
+    if s.doc()?.doc.color_mode == mode {
+        return Ok(json!({ "changed": 0 }));
+    }
+    let convert = bool_or(p, "convert", true);
     let mut changed = 0usize;
     s.edit("Document Color Mode", |d, _| {
-        d.color_mode = mode;
-        proof::map_document_colors(d, &mut |col, _| {
-            let n = conv(col);
-            if n != *col {
-                changed += 1;
-            }
-            n
-        });
-        for sw in d.swatches_iter_mut() {
-            match &mut sw.paint {
-                Paint::Solid { color, .. } => *color = conv(color),
-                Paint::Gradient(g) => {
-                    for st in &mut g.gradient.stops {
-                        st.color = conv(&st.color);
-                    }
-                }
-                _ => {}
-            }
-        }
-        // Tints are their converted swatch's colour at their tint (exact ink percentages).
-        let bases: Vec<(String, Color)> = d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect();
-        d.map_solid_paints(&mut |c, link, tint| match bases.iter().find(|(n, _)| Some(n) == link.as_ref()) {
-            Some((_, base)) if *tint < 1.0 => {
-                *c = base.tinted(*tint);
-                true
-            }
-            _ => false,
-        });
+        changed = set_color_mode(d, mode, convert, intent);
         Ok(())
     })?;
     Ok(json!({ "changed": changed }))
+}
+
+/// Put `d` in colour `mode` and, with `convert`, convert every colour of its art, symbols and
+/// swatches through the colour settings (`intent`, default: theirs) → how many colours changed.
+/// Greys stay greys (they print on the black plate in either mode); Lab colours (spot colour
+/// definitions) are device independent and fit either mode. Document Color Mode and
+/// `document.open {colorMode}` both convert this way.
+pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode, convert: bool, intent: Option<Intent>) -> usize {
+    d.color_mode = mode;
+    if !convert {
+        return 0;
+    }
+    let c = cms::active();
+    let intent = intent.unwrap_or(c.settings().intent);
+    let model = if mode == ColorMode::Cmyk { Model::Cmyk } else { Model::Rgb };
+    let conv = |col: &Color| if matches!(col, Color::Gray { .. } | Color::Lab { .. }) { *col } else { c.convert(col, model, intent) };
+    let mut changed = 0usize;
+    proof::map_document_colors(d, &mut |col, _| {
+        let n = conv(col);
+        if n != *col {
+            changed += 1;
+        }
+        n
+    });
+    for sw in d.swatches_iter_mut() {
+        match &mut sw.paint {
+            Paint::Solid { color, .. } => *color = conv(color),
+            Paint::Gradient(g) => {
+                for st in &mut g.gradient.stops {
+                    st.color = conv(&st.color);
+                }
+            }
+            _ => {}
+        }
+    }
+    // Tints are their converted swatch's colour at their tint (exact ink percentages).
+    let bases: Vec<(String, Color)> = d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect();
+    d.map_solid_paints(&mut |c, link, tint| match bases.iter().find(|(n, _)| Some(n) == link.as_ref()) {
+        Some((_, base)) if *tint < 1.0 => {
+            *c = base.tinted(*tint);
+            true
+        }
+        _ => false,
+    });
+    changed
 }
 
 fn values(c: &Color) -> Vec<f32> {

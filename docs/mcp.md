@@ -146,6 +146,8 @@ without a path), `file.newFromTemplate {path}`, `file.revert` and `file.formatOp
 with the values a save would use). Without a path the save commands return `{dataBase64, name, folder?, warnings}`. A document saved as SVG or PDF
 remembers its options, so the next save reuses them. A PDF opened with `pages`, `cropTo` or `password` is only part
 of the file, so Save asks for a new name instead of writing it back.
+`file.documentColorMode {mode, convert?, intent?}` switches the document colour mode, converting its colours
+through the colour settings (`object.convertDocumentColorMode` is an alias kept for older scripts).
 
 ## Resources
 

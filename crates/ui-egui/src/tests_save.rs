@@ -1,9 +1,14 @@
-//! The File menu around saving, in the app: Revert's confirmation.
+//! The File menu around saving, in the app: Revert's confirmation, recent files, Show in Folder,
+//! the single Document Color Mode entry and documents reopening at their saved view.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use serde_json::json;
 use vectorcraft_engine::Session;
+use vectorcraft_geom::Point;
 
-use crate::{Services, VectorcraftApp, dialogs, menus, theme};
+use crate::{Services, VectorcraftApp, dialogs, io, menus, palette, theme};
 
 /// An app that reads and writes real files.
 fn app() -> VectorcraftApp {
@@ -84,4 +89,80 @@ fn new_from_template_takes_bytes_from_agents() {
     assert!(r["title"].as_str().is_some_and(|t| t.starts_with("Untitled-")), "{r}");
     assert_eq!((app.session.documents().len(), app.views.len()), (2, 2));
     assert_eq!(app.session.active().unwrap().path, None);
+}
+
+#[test]
+fn recent_files_show_as_many_as_the_preference_keeps() {
+    let mut app = app();
+    for i in 0..35 {
+        io::note_recent(&mut app, &format!("/art/{i}.svg"));
+    }
+    let listed = |app: &VectorcraftApp| {
+        menus::menu_entries(app).iter().filter(|e| e.command.as_deref().is_some_and(|c| c.starts_with("file.openRecent"))).count()
+    };
+    assert_eq!((io::recent_files(&app).len(), listed(&app)), (20, 20), "the default");
+    assert_eq!(menus::dynamic_label(&app, "file.openRecent1", ""), "34.svg");
+    app.session.prefs.recent_files_count = 30;
+    assert_eq!((io::recent_files(&app).len(), listed(&app)), (30, 30));
+    assert!(menus::enabled(&app, "file.openRecent30"));
+    app.session.prefs.recent_files_count = 0;
+    assert_eq!((io::recent_files(&app).len(), listed(&app)), (0, 0), "0 hides the list");
+    assert_eq!(menus::listed_slots(&app), 0, "the native menu rebuilds without them");
+    assert!(app.run("file.openRecent1", json!({})).is_err());
+    app.session.prefs.recent_files_count = 5;
+    assert_eq!(io::recent_files(&app)[0], "/art/34.svg", "hiding them didn't forget them");
+}
+
+#[test]
+fn show_in_folder_needs_a_saved_document_and_a_file_manager() {
+    let shown = Rc::new(RefCell::new(vec![]));
+    let s = shown.clone();
+    let mut app = app();
+    app.run("file.new", json!({})).unwrap();
+    assert!(!menus::enabled(&app, "file.reveal"));
+    app.session.doc_mut().unwrap().path = Some("/art/a.vectorcraft".into());
+    assert!(!menus::enabled(&app, "file.reveal"), "no file manager (web)");
+    app.services.reveal = Some(Box::new(move |p: &str| {
+        s.borrow_mut().push(p.to_string());
+        Ok(())
+    }));
+    assert!(menus::enabled(&app, "file.reveal"));
+    assert_eq!(app.run("file.reveal", json!({})).unwrap()["path"], "/art/a.vectorcraft");
+    assert_eq!(*shown.borrow(), ["/art/a.vectorcraft"]);
+}
+
+#[test]
+fn the_palette_lists_document_color_mode_once() {
+    let items = palette::items();
+    let ids: Vec<&str> = items.iter().map(|(_, id, _)| id.as_str()).filter(|id| id.to_ascii_lowercase().contains("documentcolormode")).collect();
+    assert_eq!(ids, ["file.documentColorMode"]);
+    let mut app = app();
+    app.run("file.new", json!({})).unwrap();
+    let entries = menus::menu_entries(&app);
+    let modes: Vec<&str> =
+        entries.iter().filter(|e| e.path.last().is_some_and(|p| p == "Document Color Mode")).filter_map(|e| e.command.as_deref()).collect();
+    assert_eq!(modes, ["file.documentColorMode", "file.documentColorMode"], "CMYK and RGB run the one command");
+}
+
+#[test]
+fn a_document_reopens_at_its_saved_view() {
+    let d = dir("view");
+    let path = d.join("v.vectorcraft").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    {
+        let v = app.view_mut().unwrap();
+        (v.zoom, v.center, v.rotation, v.fitted) = (3.0, Point::new(70.0, 40.0), 30.0, true);
+    }
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    // Moving around afterwards isn't an edit.
+    app.view_mut().unwrap().zoom = 0.5;
+    assert!(!app.session.active().unwrap().is_dirty());
+    io::open_path(&mut app, &path).unwrap();
+    let v = *app.view().unwrap();
+    assert_eq!((v.zoom, v.center, v.rotation, v.fitted), (3.0, Point::new(70.0, 40.0), 30.0, true));
+    // A document without a saved view is fitted on first display.
+    app.run("file.new", json!({})).unwrap();
+    assert!(!app.view().unwrap().fitted);
+    let _ = std::fs::remove_dir_all(d);
 }

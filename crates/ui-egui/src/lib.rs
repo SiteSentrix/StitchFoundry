@@ -65,6 +65,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse};
@@ -98,6 +99,9 @@ pub type DownloadFn = Box<dyn FnMut(&str, &[u8])>;
 /// Opens a URL in the system browser.
 pub type OpenUrlFn = Box<dyn FnMut(&str)>;
 
+/// Shows a file in the system file manager.
+pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
+
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]
 pub struct Services {
@@ -129,6 +133,8 @@ pub struct Services {
     /// Paste takes SVG, PDF, text and bitmaps from other apps. Without it, SVG text only (through
     /// egui and `clipboard_read`).
     pub system_clipboard: Option<Box<dyn SystemClipboard>>,
+    /// File → Show in Folder: select a file in the system file manager (desktop).
+    pub reveal: Option<RevealFn>,
 }
 
 /// Cached canvas raster.
@@ -221,7 +227,7 @@ const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
     pub fn new(session: Session, services: Services) -> Self {
-        let views = session.documents().iter().map(|_| View::default()).collect();
+        let views = session.documents().iter().map(View::of).collect();
         Self {
             session,
             ui: UiState::default(),
@@ -268,13 +274,11 @@ impl VectorcraftApp {
         self
     }
 
-    /// Keep `views` aligned with the session's documents.
+    /// Keep `views` aligned with the session's documents (a new one starts at its saved view).
     pub fn sync_views(&mut self) {
-        let n = self.session.documents().len();
-        while self.views.len() < n {
-            self.views.push(View::default());
-        }
-        self.views.truncate(n);
+        let docs = self.session.documents();
+        self.views.truncate(docs.len());
+        self.views.extend(docs.iter().skip(self.views.len()).map(View::of));
     }
 
     pub fn view(&self) -> Option<&View> {
@@ -321,6 +325,10 @@ impl VectorcraftApp {
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
             }
+        }
+        // Native files carry the view they reopen at.
+        if fileio::SaveMode::of(id).is_some() {
+            io::remember_view(self);
         }
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") {
