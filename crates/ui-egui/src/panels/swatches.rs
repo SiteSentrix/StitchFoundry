@@ -386,8 +386,12 @@ fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String
             .collect();
         egui::DragAndDrop::set_payload(ui.ctx(), SwatchDrag { grabbed: name.to_string(), names, groups: e.is_folder() });
     }
-    let moving = resp.dnd_hover_payload::<SwatchDrag>().filter(|d| !d.names.iter().any(|n| n == name));
-    if moving.is_some() || resp.dnd_hover_payload::<Paint>().is_some() {
+    let moving = resp.dnd_hover_payload::<SwatchDrag>();
+    // Swatches dropped on one of themselves stay where they are.
+    if moving.as_ref().is_some_and(|d| d.names.iter().any(|n| n == name)) {
+        ev.over = true;
+        released::<SwatchDrag>(&resp);
+    } else if moving.is_some() || resp.dnd_hover_payload::<Paint>().is_some() {
         ev.over = true;
         let t = Tokens::get(ui.ctx());
         let r = resp.rect;
@@ -1165,6 +1169,13 @@ mod tests {
         drag(&mut app, &ctx, tile_center(&ctx, "Lime"), tile_center(&ctx, "Bright Red") - vec2(4.0, 0.0), 5.0);
         assert_eq!(names_of(&app, Some("Brights"))[..3], ["Orange", "Lime", "Bright Red"]);
         assert!(names_of(&app, None).contains(&"Sunset".to_string()));
+        // Dropped back on itself: nothing moves.
+        let (before, undo) = (names_of(&app, None), app.session.doc().unwrap().history.undo.len());
+        frame(&mut app, &ctx, vec![], 6.0, show);
+        frame(&mut app, &ctx, vec![], 6.5, show);
+        let white = tile_center(&ctx, "White");
+        drag(&mut app, &ctx, white, white + vec2(2.0, 0.0), 7.0);
+        assert_eq!((names_of(&app, None), app.session.doc().unwrap().history.undo.len()), (before, undo));
     }
 
     #[test]

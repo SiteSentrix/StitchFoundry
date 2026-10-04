@@ -1106,6 +1106,7 @@ mod tests {
         assert_eq!(app.view().unwrap().center, after.center);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
     }
+
     #[test]
     fn swatches_and_proxy_paints_dropped_on_art_fill_the_object_hit() {
         use crate::panels::swatches::SwatchDrag;
