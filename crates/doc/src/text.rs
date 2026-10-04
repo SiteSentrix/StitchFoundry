@@ -414,6 +414,16 @@ impl TextObject {
     pub fn transform(&mut self, a: Affine) {
         self.xf = a * self.xf;
     }
+    /// Scale the character strokes' weights and dashes by `s` (they are drawn in text space, so
+    /// `1 / scale` keeps their weight through a transform that scales the type).
+    pub fn scale_char_strokes(&mut self, s: f64) {
+        for r in &mut self.runs {
+            r.style.stroke_width *= s;
+            if let Some(d) = &mut r.style.stroke_dash {
+                d.scale(s);
+            }
+        }
+    }
     /// Layout bounds in text space (the layout cache, else the estimate): the box an unplaced run
     /// gradient fits, as the renderers lay it out.
     pub fn local_bounds(&self) -> Rect {

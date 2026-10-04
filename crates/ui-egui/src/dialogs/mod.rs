@@ -39,6 +39,7 @@ pub mod swatch_options;
 pub mod tile_edge_color;
 mod tools;
 mod transform;
+pub mod transform_each;
 
 use serde_json::{Value, json};
 
@@ -166,6 +167,7 @@ registry! {
     SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
     Expand: [expand::KIND] => expand::SPEC,
     SpotColors: [spot_colors::KIND] => spot_colors::SPEC,
+    TransformEach: [transform_each::KIND] => transform_each::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

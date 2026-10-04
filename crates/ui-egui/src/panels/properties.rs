@@ -190,7 +190,7 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let mut ss = app.session.prefs.scale_strokes;
     if ui.checkbox(&mut ss, "Scale Strokes & Effects").changed() {
-        app.session.prefs.scale_strokes = ss;
+        super::transform::set_pref(app, "scaleStrokes", ss);
     }
     divider(ui);
     section_header(ui, "Quick Actions");

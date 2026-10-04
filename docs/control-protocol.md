@@ -152,3 +152,12 @@ Attributes panel: `window.panel {panel: "attributes"}` (Cmd+F11) shows it; its c
 Spot Colors: the Swatches panel menu's Spot Colors… (`ui.spotColors`) opens the `spotColors` dialog (field `useLab`:
 true shows and separates spot colours defined in Lab from their Lab values, false from their working-CMYK
 equivalents); `ui.dialog.confirm` runs `swatch.spotOptions {useLab}` as one undo step.
+
+Scale options: `ui.menuDialog {command}` opens the dialog a command's menu item opens (`object.scale` → `scale`,
+`object.transformEach` → `transformEach`, also Move, Rotate, Reflect, Shear and the Path dialogs). The Scale dialog
+(`scale`) and Object → Transform → Transform Each… (dialog `transformEach`: `scaleH`,
+`scaleV` %, `moveH`, `moveV` pt, `rotate` °, `reflectX`, `reflectY`, `random`, `reference` 0–8, `copy`, `preview`)
+have the fields `corners` (Scale Corners) and `strokes` (Scale Strokes & Effects). They start from the preferences
+`scaleCorners` and `scaleStrokes`, and `ui.dialog.confirm` keeps them as the preferences (`prefs.set`) before running
+`object.scale` / `object.transformEach` with them. The Transform panel's checkboxes and flyout item and the Properties
+panel's checkbox set the same preferences through `prefs.set`.

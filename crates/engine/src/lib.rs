@@ -512,6 +512,9 @@ pub struct Session {
     pub style_libraries: cmd::stylelib::Libraries,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
+    /// Parameters the running top-level command resolved from the preferences, added to its
+    /// journal entry so a replay does the same ([`Session::note_journal`]).
+    journal_note: serde_json::Map<String, Value>,
 }
 
 impl Default for Session {
@@ -547,6 +550,7 @@ impl Session {
             freeform_point: None,
             style_libraries: Default::default(),
             recent_urls: vec![],
+            journal_note: Default::default(),
         }
     }
 
@@ -638,14 +642,40 @@ impl Session {
         }
         // Only top-level commands are journaled (commands that call other commands would otherwise
         // be recorded twice and replay differently).
+        if self.depth == 0 {
+            self.journal_note.clear();
+        }
         self.depth += 1;
         let r = (spec.run)(self, params);
         self.depth -= 1;
         let r = r?;
         if spec.journal && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
-            self.journal.push((id.to_string(), params.clone()));
+            let p = self.noted(params);
+            self.journal.push((id.to_string(), p));
         }
         Ok(r)
+    }
+
+    /// Record `key: value` in the running top-level command's journal entry (or its interaction's
+    /// preview) unless its params give `key`: a value it resolved from the preferences.
+    pub fn note_journal(&mut self, key: &str, value: Value) {
+        if self.depth == 1 {
+            self.journal_note.insert(key.to_string(), value);
+        }
+    }
+
+    /// `params` with the noted values added (see [`Session::note_journal`]).
+    fn noted(&mut self, params: &Value) -> Value {
+        let mut note = std::mem::take(&mut self.journal_note);
+        match params {
+            // The params' own values win.
+            Value::Object(m) if !note.is_empty() => {
+                note.extend(m.clone());
+                Value::Object(note)
+            }
+            Value::Null if !note.is_empty() => Value::Object(note),
+            _ => params.clone(),
+        }
     }
 
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
@@ -735,9 +765,10 @@ impl Session {
         let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params);
         let (cmd, params) = rw.as_ref().map_or((cmd, params), |(c, p)| (c.as_str(), p));
         let r = self.execute(cmd, params);
+        let params = self.noted(params);
         let st = self.doc_mut()?;
         if let Some(it) = &mut st.interaction {
-            it.preview = Some((cmd.to_string(), params.clone()));
+            it.preview = Some((cmd.to_string(), params));
         }
         r
     }
@@ -876,6 +907,8 @@ mod tests_prefs;
 mod tests_proxyitems;
 #[cfg(test)]
 mod tests_registration;
+#[cfg(test)]
+mod tests_scalestrokes;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]

@@ -327,6 +327,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Spot Colors (dialog `spotColors`, field `useLab`: true shows and separates Lab spot colours from their Lab values, false from their CMYK equivalents); OK runs swatch.spotOptions as one undo step",
     ),
+    (
+        "ui.menuDialog",
+        "Menu Dialog",
+        "",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -696,6 +702,13 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.expandDialog" => crate::dialogs::expand::open(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
+        "ui.menuDialog" => match s("command").as_deref().and_then(menu_dialog) {
+            Some((kind, fields)) => {
+                app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+                Ok(Value::Null)
+            }
+            None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
+        },
         _ => return None,
     };
     Some(r)
@@ -882,6 +895,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => crate::panels::graphic_styles::user_library(app, id).is_some(),
         "ui.expandDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.spotColors" => app.session.active().is_some(),
+        "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         _ => true,
     }
 }
@@ -1020,11 +1034,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Scale…", "object.scale"),
                         c("Shear…", "object.shear"),
                         Sep,
-                        cp(
-                            "Transform Each…",
-                            "object.transformEach",
-                            json!({"scaleH": 100, "scaleV": 100, "moveH": 0, "moveV": 0, "rotate": 0, "reflectX": false, "reflectY": false, "random": false, "reference": 4}),
-                        ),
+                        c("Transform Each…", "object.transformEach"),
                         Sep,
                         c("Reset Bounding Box", "object.resetBoundingBox"),
                     ],
@@ -1592,22 +1602,26 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     (id.to_string(), if p.is_null() { json!({}) } else { p.clone() })
 }
 
+/// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
+fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
+    Some(match id {
+        "object.move" => ("move", json!({"dx": "0 pt", "dy": "0 pt"})),
+        "object.rotate" => ("rotate", json!({"angle": 0})),
+        "object.scale" => ("scale", json!({"sx": 100, "sy": 100, "uniform": true})),
+        "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::fields()),
+        "object.reflect" => ("reflect", json!({"axis": "vertical"})),
+        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
+        "path.average" => ("average", json!({"axis": "both"})),
+        "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
+        "object.path.simplify" => ("simplify", json!({"tolerance": "1 pt"})),
+        "object.path.splitIntoGrid" => ("splitIntoGrid", json!({"rows": 2, "columns": 2, "gutter": "12 pt"})),
+        _ => return None,
+    })
+}
+
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
-    // Commands whose menu item opens a dialog in Illustrator.
-    let dialog = match id {
-        "object.move" => Some(("move", json!({"dx": "0 pt", "dy": "0 pt"}))),
-        "object.rotate" => Some(("rotate", json!({"angle": 0}))),
-        "object.scale" => Some(("scale", json!({"sx": 100, "sy": 100, "uniform": true}))),
-        "object.reflect" => Some(("reflect", json!({"axis": "vertical"}))),
-        "object.shear" => Some(("shear", json!({"angle": 0, "axis": "horizontal"}))),
-        "path.average" => Some(("average", json!({"axis": "both"}))),
-        "object.path.offsetPath" => Some(("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4}))),
-        "object.path.simplify" => Some(("simplify", json!({"tolerance": "1 pt"}))),
-        "object.path.splitIntoGrid" => Some(("splitIntoGrid", json!({"rows": 2, "columns": 2, "gutter": "12 pt"}))),
-        _ => None,
-    };
-    if let Some((kind, fields)) = dialog
+    if let Some((kind, fields)) = menu_dialog(id)
         && p.as_object().is_none_or(|o| o.is_empty())
     {
         app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));

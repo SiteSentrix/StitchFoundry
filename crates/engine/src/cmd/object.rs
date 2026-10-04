@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, FillRule, Point, Rect, Vec2};
 
 use super::edit::{duplicate_in, selected_roots};
@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform",
             [],
             None,
-            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?} apply an affine to the selection (or ids)",
+            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool} apply an affine to the selection (or ids); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences)",
             has_doc,
             transform
         ),
@@ -34,7 +34,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             rotate
         ),
-        cmd!("object.scale", "Scale…", ["Object", "Transform"], None, "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool}", has_selection, scale),
+        cmd!(
+            "object.scale",
+            "Scale…",
+            ["Object", "Transform"],
+            None,
+            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale)} (strokes/corners default to the preferences)",
+            has_selection,
+            scale
+        ),
         cmd!(
             "object.reflect",
             "Reflect…",
@@ -183,14 +191,27 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     s.doc()?.doc.bounds_of(ids, false).map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
 }
 
-/// Apply `xf` to `ids` (copy = duplicate first). Records Transform Again.
-pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, copy: bool) -> Result<Value> {
-    let scale_strokes = s.prefs.scale_strokes;
+/// What a transform command scales besides geometry: Scale Strokes & Effects and Scale Corners from
+/// its `strokes` and `corners` params, else the preferences. The values join the command's journal
+/// entry, so replaying it scales the same way whatever the preferences are then.
+pub(crate) fn scaling(s: &mut Session, p: &Value) -> Scaling {
+    let strokes = bool_or(p, "strokes", s.prefs.scale_strokes);
+    let corners = bool_or(p, "corners", s.prefs.scale_corners);
+    s.note_journal("strokes", json!(strokes));
+    s.note_journal("corners", json!(corners));
+    Scaling { strokes, effects: strokes.then_some(vectorcraft_render::effects::scale_effect), keep_type_strokes: !strokes, keep_corners: !corners }
+}
+
+/// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`]).
+/// Records Transform Again.
+pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value) -> Result<Value> {
+    let copy = bool_or(p, "copy", false);
+    let sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
     let ids = s.edit(label, |d, sel| {
         let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
         for id in &targets {
             if let Some(n) = d.node_mut(*id) {
-                n.transform(xf, scale_strokes);
+                n.transform(xf, sc);
             }
         }
         Ok(targets)
@@ -208,12 +229,12 @@ fn transform(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => v,
         None => selected_roots(s)?,
     };
-    apply_transform(s, "Transform", ids, m, bool_or(p, "copy", false))
+    apply_transform(s, "Transform", ids, m, p)
 }
 
 fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), bool_or(p, "copy", false))
+    apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p)
 }
 
 fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
@@ -224,7 +245,7 @@ fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         return super::path::move_anchors(s, &json!({ "dx": dx, "dy": dy }));
     }
     let ids = selected_roots(s)?;
-    apply_transform(s, "Move", ids, Affine::translate((dx, dy)), bool_or(p, "copy", false))
+    apply_transform(s, "Move", ids, Affine::translate((dx, dy)), p)
 }
 
 fn about(o: Point, a: Affine) -> Affine {
@@ -236,7 +257,7 @@ fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
     let o = origin_of(s, p, &ids)?;
     // Illustrator angles are counter-clockwise; y is down, so negate.
     let a = about(o, Affine::rotate(-f64_or(p, "angle", 0.0).to_radians()));
-    apply_transform(s, "Rotate", ids, a, bool_or(p, "copy", false))
+    apply_transform(s, "Rotate", ids, a, p)
 }
 
 fn scale(s: &mut Session, p: &Value) -> Result<Value> {
@@ -247,13 +268,7 @@ fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     if sx == 0.0 || sy == 0.0 {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
-    let prev = s.prefs.scale_strokes;
-    if let Some(b) = p.get("strokes").and_then(Value::as_bool) {
-        s.prefs.scale_strokes = b;
-    }
-    let r = apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), bool_or(p, "copy", false));
-    s.prefs.scale_strokes = prev;
-    r
+    apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p)
 }
 
 fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
@@ -267,7 +282,7 @@ fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => Affine::scale_non_uniform(-1.0, 1.0),
     };
-    apply_transform(s, "Reflect", ids, about(o, m), bool_or(p, "copy", false))
+    apply_transform(s, "Reflect", ids, about(o, m), p)
 }
 
 fn shear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -276,13 +291,13 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
     let m =
         if str_param(p, "axis") == Some("vertical") { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
-    apply_transform(s, "Shear", ids, about(o, m), bool_or(p, "copy", false))
+    apply_transform(s, "Shear", ids, about(o, m), p)
 }
 
 fn transform_again(s: &mut Session, _: &Value) -> Result<Value> {
     let (m, copy) = s.doc()?.last_transform.ok_or_else(|| EngineError::Other("no previous transform".into()))?;
     let ids = selected_roots(s)?;
-    apply_transform(s, "Transform Again", ids, m, copy)
+    apply_transform(s, "Transform Again", ids, m, &json!({ "copy": copy }))
 }
 
 enum Arrange {
@@ -854,7 +869,7 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let new_rp = scale * rp;
     let tx = f64_or(p, "x", new_rp.x) - new_rp.x;
     let ty = f64_or(p, "y", new_rp.y) - new_rp.y;
-    apply_transform(s, "Transform", ids, Affine::translate((tx, ty)) * scale, false)
+    apply_transform(s, "Transform", ids, Affine::translate((tx, ty)) * scale, p)
 }
 
 fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {

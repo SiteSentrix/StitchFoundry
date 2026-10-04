@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Effects",
             [],
             None,
-            "{} → {catalog: [{id, label, menu, params, defaults, raster}], applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
+            "{} → {catalog: [{id, label, menu, params, defaults, raster, lengths: {always, absolute (while relative is false)} (distance params Scale Strokes & Effects scales)}], applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
             always,
             list
         ),
@@ -145,7 +145,10 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
 fn list(s: &mut Session, p: &Value) -> Result<Value> {
     let catalog: Vec<Value> = effects::effect_catalog()
         .into_iter()
-        .map(|e| json!({"id": e.id, "label": e.label, "menu": e.menu, "params": e.params, "defaults": e.defaults, "raster": e.raster}))
+        .map(|e| {
+            json!({"id": e.id, "label": e.label, "menu": e.menu, "params": e.params, "defaults": e.defaults, "raster": e.raster,
+            "lengths": {"always": e.lengths.always, "absolute": e.lengths.absolute}})
+        })
         .collect();
     let mut applied = vec![];
     if s.active().is_some() {

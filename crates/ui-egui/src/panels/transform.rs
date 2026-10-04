@@ -126,10 +126,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     widgets::divider(ui);
-    widgets::check(ui, "Scale Corners", false, false);
-    let ss = app.session.prefs.scale_strokes;
+    let (sc, ss) = (app.session.prefs.scale_corners, app.session.prefs.scale_strokes);
+    if widgets::check(ui, "Scale Corners", sc, true) {
+        set_pref(app, "scaleCorners", !sc);
+    }
     if widgets::check(ui, "Scale Strokes & Effects", ss, true) {
-        app.session.prefs.scale_strokes = !ss;
+        set_pref(app, "scaleStrokes", !ss);
+    }
+}
+
+/// Toggle a boolean preference (through `prefs.set`, as agents do).
+pub fn set_pref(app: &mut VectorcraftApp, key: &str, on: bool) {
+    if let Err(e) = app.run("prefs.set", json!({ "key": key, "value": on })) {
+        app.status(e);
     }
 }
 
@@ -149,7 +158,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     let ss = app.session.prefs.scale_strokes;
     if menu_item(ui, "Scale Strokes & Effects", true, ss) {
-        app.session.prefs.scale_strokes = !ss;
+        set_pref(app, "scaleStrokes", !ss);
     }
     ui.separator();
     menu_item(ui, "Transform Object Only", false, true);
