@@ -239,7 +239,10 @@ like the mask view: the grid shows behind the artboards of the documents that tu
 `object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a
 text object (it loses its paint). Compound holes, even-odd fills, glyph outlines and the union of a group's members
 clip alike on screen, in raster export and in SVG and PDF. `object.clippingMask.release` turns the clip group into a
-plain group and keeps the clipping path, unpainted.
+plain group and keeps the clipping path with whatever paint it has.
+
+A clipping path can be painted after Make (`paint.setFill`, `paint.setStroke`, `stroke.set` with its `ids`): its fill
+paints behind the clipped art and its stroke over it, not clipped, on screen and in SVG and PDF.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.set","params":{"ids":[12,15]}}}

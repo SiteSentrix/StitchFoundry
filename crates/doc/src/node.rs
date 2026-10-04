@@ -478,7 +478,13 @@ impl Node {
     pub fn visual_bounds(&self) -> Option<Rect> {
         match &self.kind {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                children.first().and_then(|c| c.geometric_bounds())
+                // A clipping path that paints (see `clip_paint`) strokes over the clip edge.
+                let clip = children.first()?;
+                if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
+                    clip.visual_bounds()
+                } else {
+                    clip.geometric_bounds()
+                }
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
                 // The container's own strokes paint around its members.
@@ -705,6 +711,54 @@ impl Node {
             _ => Some((unite(&shapes), FillRule::NonZero)),
         }
     }
+
+    /// What this object paints as the clipping path of a clip group, shared by the renderer and
+    /// the SVG and PDF writers: its fills, painted behind the clipped art, and its strokes, painted
+    /// over it (unclipped). Each part is this object keeping only those appearance items (type:
+    /// also only its characters' fills or strokes); `None` where it paints nothing, as right after
+    /// Make Clipping Mask. Only paths, compound paths and type paint as clipping paths.
+    pub fn clip_paint(&self) -> ClipPaint {
+        use crate::appearance::AppearanceItem;
+        let runs = match &self.kind {
+            NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => None,
+            NodeKind::Text(t) => Some(&t.runs),
+            _ => return ClipPaint::default(),
+        };
+        let paints = |fill: bool| {
+            let item = |i: &AppearanceItem| match i {
+                AppearanceItem::Fill(f) => fill && f.visible && !f.paint.is_none(),
+                AppearanceItem::Stroke(s) => !fill && s.visible && !s.paint.is_none() && s.width > 0.0,
+            };
+            let run = |r: &crate::text::TextRun| if fill { !r.style.fill.is_none() } else { !r.style.stroke.is_none() && r.style.stroke_width > 0.0 };
+            self.appearance.items.iter().any(item) || runs.is_some_and(|rs| rs.iter().any(run))
+        };
+        let part = |fill: bool| {
+            paints(fill).then(|| {
+                let mut n = self.clone();
+                for i in (0..n.appearance.items.len()).rev() {
+                    if matches!(n.appearance.items[i], AppearanceItem::Fill(_)) != fill {
+                        n.appearance.remove_item(i);
+                    }
+                }
+                if let NodeKind::Text(t) = &mut n.kind {
+                    for r in &mut t.runs {
+                        *(if fill { &mut r.style.stroke } else { &mut r.style.fill }) = vectorcraft_color::Paint::None;
+                    }
+                }
+                n
+            })
+        };
+        ClipPaint { fill: part(true), stroke: part(false) }
+    }
+}
+
+/// What a clipping path paints ([`Node::clip_paint`]).
+#[derive(Clone, Debug, Default)]
+pub struct ClipPaint {
+    /// The clipping path with only its fills: painted behind the clipped art (inside the clip).
+    pub fill: Option<Node>,
+    /// The clipping path with only its strokes: painted over the clipped art, not clipped.
+    pub stroke: Option<Node>,
 }
 
 /// Knockout Group state of a container (the Transparency panel's three-state checkbox). In a

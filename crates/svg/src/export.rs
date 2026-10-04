@@ -806,11 +806,32 @@ impl Writer<'_> {
                 self.def(1, "</clipPath>");
                 let id = self.id_attr(n);
                 let a = self.attrs(&self.group_props(n));
-                self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
+                // The clipping path's fill paints behind the clipped art and its stroke over it,
+                // outside the clip (the group then wraps both).
+                let paint = clip.clip_paint();
+                if paint.stroke.is_some() {
+                    self.line(&format!("<g{id}{a}>"));
+                    self.depth += 1;
+                    self.line(&format!("<g clip-path=\"url(#{cid})\">"));
+                } else {
+                    self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
+                }
                 self.depth += 1;
+                if let Some(fill) = &paint.fill {
+                    self.node(fill);
+                }
                 self.group_children(n, rest);
                 self.depth -= 1;
                 self.line("</g>");
+                if let Some(stroke) = &paint.stroke {
+                    // One element keeps the clipping path's id.
+                    let anonymous = self.anonymous;
+                    self.anonymous |= paint.fill.is_some();
+                    self.node(stroke);
+                    self.anonymous = anonymous;
+                    self.depth -= 1;
+                    self.line("</g>");
+                }
             }
             NodeKind::Path { guide: true, .. } => {}
             NodeKind::Path { path, rule, .. } => {

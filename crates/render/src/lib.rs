@@ -212,6 +212,8 @@ struct GeomEntry {
 
 /// A clipping path (kept alive so its address can't be reused) and the region it clips to.
 type ClipEntry = (Arc<Node>, Option<Arc<(BezPath, FillRule)>>);
+/// A clipping path (kept alive) and what it paints: its fills and its strokes ([`Node::clip_paint`]).
+type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
 
 /// Reusable renderer (keeps the render context, decoded images and glyph caches between frames).
 pub struct Renderer {
@@ -260,6 +262,8 @@ pub struct Renderer {
     /// Clip paths pushed on the current context (path, rule, transform): starting the context
     /// again from a picture of it pushes them again (see [`Self::group`]).
     clip_paths: Vec<(BezPath, FillRule, Affine)>,
+    /// What clipping paths paint, per clipping path (see [`Self::clip_paint_of`]).
+    clip_paints: PtrMap<usize, ClipPaintEntry>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -314,6 +318,7 @@ impl Renderer {
             backdrop: None,
             blends: PtrMap::default(),
             clip_paths: vec![],
+            clip_paints: PtrMap::default(),
         }
     }
 
@@ -503,6 +508,24 @@ impl Renderer {
         region
     }
 
+    /// Cached fills and strokes of clipping path `a` ([`Node::clip_paint`]): the parts keep their
+    /// allocations between frames, so their own geometry stays cached.
+    fn clip_paint_of(&mut self, a: &Arc<Node>) -> (Option<Arc<Node>>, Option<Arc<Node>>) {
+        let key = Arc::as_ptr(a) as usize;
+        if let Some((node, fill, stroke)) = self.clip_paints.get(&key)
+            && Arc::ptr_eq(node, a)
+        {
+            return (fill.clone(), stroke.clone());
+        }
+        let paint = a.clip_paint();
+        let (fill, stroke) = (paint.fill.map(Arc::new), paint.stroke.map(Arc::new));
+        if self.clip_paints.len() > 1024 {
+            self.clip_paints.clear();
+        }
+        self.clip_paints.insert(key, (a.clone(), fill.clone(), stroke.clone()));
+        (fill, stroke)
+    }
+
     /// Cached BezPath of a path node.
     fn path_of(&mut self, a: &Arc<Node>) -> Option<Arc<BezPath>> {
         let key = Arc::as_ptr(a) as usize;
@@ -672,14 +695,24 @@ impl Renderer {
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // Nothing to clip by hides the clipped art (as in the SVG and PDF output). A clip
-                // group doesn't isolate: blending inside it reaches the art below.
+                // group doesn't isolate: blending inside it reaches the art below. The clipping
+                // path's fill paints behind the clipped art and its stroke over it, unclipped.
                 if let Some((clip, rest)) = children.split_first()
                     && let Some(region) = self.clip_of(clip)
                 {
+                    let (fill, stroke) = self.clip_paint_of(clip);
                     let blends = self.blends_through(n);
                     let bounds = if blends { Some(region.0.bounding_box()) } else { None };
                     let comp = Composite { clip: Some((&region.0, region.1)), blends, bounds, ..Default::default() };
-                    self.group(ctx, f, comp, &mut |r, c, fr| r.draw_children(c, fr, rest, knockout));
+                    self.group(ctx, f, comp, &mut |r, c, fr| {
+                        if let Some(fill) = &fill {
+                            r.draw_arc(c, fr, fill);
+                        }
+                        r.draw_children(c, fr, rest, knockout)
+                    });
+                    if let Some(stroke) = &stroke {
+                        self.draw_arc(ctx, f, stroke);
+                    }
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {

@@ -795,6 +795,8 @@ mod tests_charstroke;
 #[cfg(test)]
 mod tests_clip;
 #[cfg(test)]
+mod tests_clippaint;
+#[cfg(test)]
 mod tests_cmdsplit;
 #[cfg(test)]
 mod tests_colorguide;
