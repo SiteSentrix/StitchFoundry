@@ -103,7 +103,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
-    ("file.export.png", "Export As PNG…", "", "{path?, scale?: 1, artboard?} (document.export options)"),
+    ("file.export.png", "Export As PNG…", "", "{path?, …document.export options}; no path: pick the file, then PNG Options"),
     ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{} opens the dialog; with params = document.exportForScreens"),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
@@ -456,6 +456,14 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "file.exportForScreens" => app.run("document.exportForScreens", p.clone()),
+        "file.export.png" if s("path").is_none() => io::target_path(app, None, "png").and_then(|path| {
+            let f = vectorcraft_engine::cmd::fileio::format("png").ok_or("no PNG encoder")?;
+            let mut params = if p.is_object() { p.clone() } else { json!({}) };
+            params["format"] = json!("png");
+            params["path"] = json!(path);
+            crate::dialogs::open_raster_options(app, f, params);
+            Ok(Value::Null)
+        }),
         "file.export.png" => io::export(app, Some("png"), s("path"), p).map(|p| json!({"path": p})),
         "file.documentSetup" => crate::dialogs::open_document_setup(app),
         "edit.preferences" => {
@@ -1112,7 +1120,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Expand…", "ui.expandDialog"),
                 c("Expand Appearance", "effect.expandAppearance"),
                 c("Crop Image", "object.cropImage"),
-                cp("Rasterize…", "object.rasterize", json!({"ppi": 72, "background": "transparent"})),
+                cp("Rasterize…", "object.rasterize", json!({"ppi": 72, "background": "transparent", "antiAlias": "art"})),
                 cp("Create Gradient Mesh…", "object.mesh.create", json!({"rows": 4, "cols": 4, "appearance": "flat", "highlight": 100})),
                 cp(
                     "Create Object Mosaic…",

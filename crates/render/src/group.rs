@@ -11,7 +11,7 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
 use vello_cpu::{Pixmap, RenderContext};
 
-use crate::{Frame, Renderer, blend_mode, fill_rule, single_threaded_context};
+use crate::{Frame, Renderer, blend_mode, fill_rule};
 
 /// How a group composites onto what is below it.
 pub(crate) struct Composite<'a> {
@@ -162,7 +162,7 @@ impl Renderer {
 
     /// `draw` rendered into a new context of region `r` (frame `sub`), over `backdrop` if any.
     fn offscreen(&mut self, r: Region, sub: &Frame, backdrop: Option<Arc<Pixmap>>, draw: &mut Content) -> Pixmap {
-        let mut ctx = single_threaded_context(r.w, r.h);
+        let mut ctx = sub.offscreen_context(r.w, r.h);
         if let Some(b) = &backdrop {
             draw_pixmap(&mut ctx, b.clone(), (0.0, 0.0));
         }

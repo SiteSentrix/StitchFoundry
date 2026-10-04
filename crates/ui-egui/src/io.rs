@@ -68,7 +68,7 @@ fn suggested(app: &VectorcraftApp, ext: &str) -> String {
 }
 
 /// `path`, else a suggested name (web download) or one picked in a save dialog.
-fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &str) -> Result<String, String> {
+pub(crate) fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &str) -> Result<String, String> {
     match path {
         Some(p) => Ok(p),
         None if app.services.download.is_some() => Ok(suggested(app, ext)),

@@ -102,7 +102,12 @@ fn screen_format(row: &Value) -> Result<ScreenFormat> {
     }
     // Vector formats have no pixel size: scale doesn't apply and adds no @Nx suffix (not even one
     // left over from a raster row switched to SVG or PDF).
-    let scale = if format.raster { f64_or(row, "scale", 1.0) } else { 1.0 };
+    // A raster row's `ppi` wins over its `scale` (the encoder does the same), so it names the suffix.
+    let scale = match row.get("ppi").and_then(Value::as_f64) {
+        _ if !format.raster => 1.0,
+        Some(ppi) => ppi / 72.0,
+        None => f64_or(row, "scale", 1.0),
+    };
     let suffix = match str_param(row, "suffix") {
         Some(s) if !format.raster && is_scale_suffix(s) => String::new(),
         Some(s) => s.to_string(),
@@ -129,10 +134,18 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
     let n = doc.artboards.len();
     let pick = if p.is_object() { ArtboardPick::deserialize(p).map_err(|e| bad(C, e.to_string()))? } else { ArtboardPick::default() };
     let boards = pick.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect());
-    let formats: Vec<ScreenFormat> = match p.get("formats").and_then(Value::as_array) {
+    let mut formats: Vec<ScreenFormat> = match p.get("formats").and_then(Value::as_array) {
         Some(rows) => rows.iter().map(screen_format).collect::<Result<_>>()?,
         None => vec![screen_format(&json!({}))?],
     };
+    // A top-level anti-aliasing mode applies to every row that doesn't name its own.
+    if let Some(aa) = p.get("antiAlias") {
+        for sf in &mut formats {
+            if let Some(o) = sf.options.as_object_mut() {
+                o.entry("antiAlias").or_insert_with(|| aa.clone());
+            }
+        }
+    }
     let prefix = str_param(p, "prefix").unwrap_or("");
     let folder = str_param(p, "folder");
     if let Some(dir) = folder {

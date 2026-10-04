@@ -156,7 +156,12 @@ Draw, look, export:
 {"name":"draw_path","arguments":{"d":"M72 400 C 150 300 250 500 330 400","stroke":"#e53935","strokeWidth":4,"fill":"none"}}
 {"name":"screenshot","arguments":{"scale":0.5}}
 {"name":"export","arguments":{"path":"/tmp/art.svg"}}
+{"name":"export","arguments":{"path":"/tmp/art.png","options":{"ppi":144,"background":"white","antiAlias":"type"}}}
 ```
+
+Raster exports take more options in `options`: `ppi` (72, 150, 300…; stored in the file), `background`
+(`transparent`, `white`, `black` or `"#rrggbb"`), `antiAlias` (`none`, `art`, `type`: text snapped to pixels) and,
+for PNG, `interlaced`.
 
 Long-tail commands:
 

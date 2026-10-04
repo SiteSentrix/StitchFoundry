@@ -23,6 +23,7 @@ mod svg;
 use serde_json::{Value, json};
 
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
+pub(crate) use encode::{anti_alias, background};
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, open_bytes, raster_image};
 pub use save::{save_encoding, save_format};
@@ -65,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), quality?: 90 (jpg); SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -92,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export for Screens",
             ["File", "Export"],
             None,
-            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|svgz|pdf, scale?: 1 (raster only), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes)}], prefix?} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
+            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|svgz|pdf, scale?: 1 (raster only), ppi?: (raster: wins over scale, scale = ppi / 72), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes), …the format's options (antiAlias, background…)}], prefix?, antiAlias?: none|art|type (raster rows without their own)} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
             has_doc,
             export::export_for_screens
         ),
@@ -177,6 +178,26 @@ const RANGE: FormatOption = FormatOption {
 };
 const SCALE: FormatOption = FormatOption { name: "scale", ty: "number", default: "1", description: "pixels per point (0.01–64)" };
 const QUALITY: FormatOption = FormatOption { name: "quality", ty: "integer", default: "90", description: "JPEG quality 1–100" };
+const PPI: FormatOption = FormatOption {
+    name: "ppi",
+    ty: "number",
+    default: "72",
+    description: "resolution in pixels per inch (72 = one pixel per point; 150, 300…), stored in the file; wins over scale",
+};
+const BACKGROUND: FormatOption = FormatOption {
+    name: "background",
+    ty: "string",
+    default: "\"transparent\"",
+    description: "transparent, white, black or a colour such as \"#ff8800\" (JPEG: white when transparent)",
+};
+const ANTI_ALIAS: FormatOption = FormatOption {
+    name: "antiAlias",
+    ty: "string",
+    default: "\"art\"",
+    description: "none (hard pixel edges), art (smooth edges) or type (smooth, text snapped to whole pixels)",
+};
+const INTERLACED: FormatOption =
+    FormatOption { name: "interlaced", ty: "boolean", default: "false", description: "Adam7 interlacing (the image builds up while it loads)" };
 
 /// A format `document.open` reads but nothing writes yet.
 const fn reader(id: &'static str, label: &'static str, extensions: &'static [&'static str], mime: &'static str, raster: bool) -> Format {
@@ -209,7 +230,16 @@ pub const FORMATS: &[Format] = &[
     Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: pdf::OPTIONS },
     reader("ai", "PDF-compatible .ai", &["ai"], "application/pdf", false),
     reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),
-    Format { id: "png", label: "PNG", extensions: &["png"], mime: "image/png", read: true, write: true, raster: true, options: &[ARTBOARD, SCALE] },
+    Format {
+        id: "png",
+        label: "PNG",
+        extensions: &["png"],
+        mime: "image/png",
+        read: true,
+        write: true,
+        raster: true,
+        options: &[ARTBOARD, PPI, SCALE, BACKGROUND, ANTI_ALIAS, INTERLACED],
+    },
     Format {
         id: "jpg",
         label: "JPEG",
@@ -218,7 +248,7 @@ pub const FORMATS: &[Format] = &[
         read: true,
         write: true,
         raster: true,
-        options: &[ARTBOARD, SCALE, QUALITY],
+        options: &[ARTBOARD, PPI, SCALE, BACKGROUND, ANTI_ALIAS, QUALITY],
     },
     reader("gif", "GIF", &["gif"], "image/gif", true),
     Format {
@@ -229,7 +259,7 @@ pub const FORMATS: &[Format] = &[
         read: true,
         write: true,
         raster: true,
-        options: &[ARTBOARD, SCALE],
+        options: &[ARTBOARD, PPI, SCALE, BACKGROUND, ANTI_ALIAS],
     },
     reader("tiff", "TIFF", &["tif", "tiff"], "image/tiff", true),
     reader("bmp", "BMP", &["bmp"], "image/bmp", true),
@@ -418,3 +448,6 @@ mod tests_pdf;
 mod tests_svg;
 #[cfg(test)]
 mod tests_svgedit;
+
+#[cfg(test)]
+mod tests_raster;

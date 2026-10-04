@@ -29,6 +29,7 @@ mod new_document;
 pub mod new_swatch;
 mod path_ops;
 pub mod place;
+mod png_options;
 pub mod recolor;
 pub mod saturate;
 mod save_changes;
@@ -51,6 +52,7 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub use new_document::{open as open_new_document, preset_card};
+pub use png_options::open as open_raster_options;
 pub use save_pdf::open as open_save_pdf;
 pub use tools::open_tool_dialog;
 
@@ -180,6 +182,7 @@ registry! {
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
+    RasterOptions: ["pngOptions", "jpgOptions", "webpOptions"] => png_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -278,3 +281,5 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_export;

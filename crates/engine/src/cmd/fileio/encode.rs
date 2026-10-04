@@ -5,6 +5,8 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use vectorcraft_doc::Document;
+use vectorcraft_render::AntiAlias;
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::super::*;
 use super::Format;
@@ -109,12 +111,60 @@ impl Encoded {
 }
 
 #[derive(Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 struct RasterOptions {
     #[serde(flatten)]
     boards: ArtboardPick,
     scale: Option<f64>,
+    /// Pixels per inch (wins over `scale`).
+    ppi: Option<f64>,
     quality: Option<u8>,
+    background: Option<Value>,
+    anti_alias: Option<String>,
+    interlaced: Option<bool>,
+}
+
+impl RasterOptions {
+    /// The render and encoder settings: `ppi`, else 72 × `scale`, within 0.01–64 pixels per point;
+    /// `background`, else `page` (the document's background).
+    fn settings(&self, page: Option<[u8; 3]>) -> Result<RasterExportOptions> {
+        if let Some(ppi) = self.ppi.filter(|p| !(p.is_finite() && *p > 0.0)) {
+            return Err(bad(C, format!("ppi must be a positive number, not {ppi}")));
+        }
+        let ppi = self.ppi.unwrap_or(72.0 * self.scale.unwrap_or(1.0));
+        Ok(RasterExportOptions {
+            ppi: (ppi / 72.0).clamp(0.01, 64.0) * 72.0,
+            background: match &self.background {
+                Some(v) => background(v).map_err(|e| bad(C, e))?,
+                None => page,
+            },
+            anti_alias: self.anti_alias.as_deref().map(anti_alias).transpose().map_err(|e| bad(C, e))?.unwrap_or_default(),
+            interlaced: self.interlaced.unwrap_or(false),
+            quality: self.quality.unwrap_or(90),
+        })
+    }
+}
+
+/// A raster background: `transparent` (also `none` or null), `white`, `black` or a colour
+/// (`"#rrggbb"`, `[r, g, b]` 0–1, `{c, m, y, k}`, `{gray}`) → opaque RGB, `None` = transparent.
+pub(crate) fn background(v: &Value) -> std::result::Result<Option<[u8; 3]>, String> {
+    match v {
+        Value::Null => Ok(None),
+        Value::String(s) if s.eq_ignore_ascii_case("transparent") || s.eq_ignore_ascii_case("none") => Ok(None),
+        Value::String(s) if s.eq_ignore_ascii_case("white") => Ok(Some([255; 3])),
+        Value::String(s) if s.eq_ignore_ascii_case("black") => Ok(Some([0; 3])),
+        other => color_value(other)
+            .map(|c| {
+                let [r, g, b, _] = c.to_rgba8(1.0);
+                Some([r, g, b])
+            })
+            .ok_or_else(|| format!("background {other}: transparent, white, black or a colour such as \"#ff8800\"")),
+    }
+}
+
+/// An anti-aliasing mode by id: `none`, `art` or `type`.
+pub(crate) fn anti_alias(id: &str) -> std::result::Result<AntiAlias, String> {
+    AntiAlias::from_id(id).ok_or_else(|| format!("antiAlias `{id}`: none, art or type"))
 }
 
 fn boards<T>(r: std::result::Result<T, String>) -> Result<T> {
@@ -173,18 +223,19 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
         "png" | "jpg" | "webp" => {
             let o: RasterOptions = options(f, p)?;
             let region = doc.artboards[boards(o.boards.one(n))?].rect;
-            let scale = o.scale.unwrap_or(1.0).clamp(0.01, 64.0);
+            // New Document → Background Contents: White makes the export opaque, unless `background`
+            // says otherwise (JPEG has no alpha: white either way).
+            let page = (doc.setup.background == vectorcraft_doc::Background::White).then_some([255; 3]);
+            let settings = o.settings(page)?;
+            let scale = settings.scale();
             check_format_size(f, region.width() * scale, region.height() * scale)?;
             vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
-            // JPEG has no alpha; New Document → Background Contents: White fills the artboard too.
-            let white = f.id == "jpg" || doc.setup.background == vectorcraft_doc::Background::White;
-            let img = vectorcraft_render::Renderer::new().render_region(doc, region, scale, white);
-            match f.id {
-                "png" => img.to_png(),
-                "webp" => img.to_webp(),
-                _ => img.to_jpeg(o.quality.unwrap_or(90)),
-            }
-            .map_err(EngineError::Other)?
+            let format = match f.id {
+                "png" => RasterFormat::Png,
+                "jpg" => RasterFormat::Jpeg,
+                _ => RasterFormat::WebP,
+            };
+            vectorcraft_render::Renderer::new().export_region(doc, region, format, &settings).map_err(EngineError::Other)?
         }
         _ => return Err(bad(C, format!("no encoder for {} yet", f.label))),
     };

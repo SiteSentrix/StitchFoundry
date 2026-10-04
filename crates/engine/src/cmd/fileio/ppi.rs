@@ -159,16 +159,7 @@ fn bmp(b: &[u8]) -> Option<(f64, f64)> {
 /// `png` with a `pHYs` chunk declaring `ppi` right after the header (any existing one is replaced).
 pub fn with_png_resolution(png: &[u8], (x, y): (f64, f64)) -> Vec<u8> {
     let Some(head) = be32(png, 8).and_then(|len| slice(png, 0, 20usize.checked_add(len as usize)?)) else { return png.to_vec() };
-    let ppm = |v: f64| ((v / INCH_M).round() as u32).to_be_bytes();
-    let mut chunk = Vec::with_capacity(21);
-    chunk.extend_from_slice(&9u32.to_be_bytes());
-    chunk.extend_from_slice(b"pHYs");
-    chunk.extend_from_slice(&ppm(x));
-    chunk.extend_from_slice(&ppm(y));
-    chunk.push(1);
-    let mut crc = flate2::Crc::new();
-    crc.update(&chunk[4..]);
-    chunk.extend_from_slice(&crc.sum().to_be_bytes());
+    let chunk = vectorcraft_render::encode::png::phys_chunk(x, y);
     let mut out = Vec::with_capacity(png.len() + chunk.len());
     out.extend_from_slice(head);
     out.extend_from_slice(&chunk);

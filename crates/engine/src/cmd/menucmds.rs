@@ -9,6 +9,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::marks::{MarkStyle, TrimMarks};
 use vectorcraft_doc::{Appearance, ImageObject, LiveShape, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, Vec2};
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::edit::{duplicate_in, selected_roots};
 use super::*;
@@ -89,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?: (document raster effects resolution), background?: \"transparent\"|\"white\", padding?: pt} replace the selection with an embedded PNG image → {id, width, height}",
+            "{ppi?: (document raster effects resolution), background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art (default)|type (text snapped to pixels), padding?: pt} replace the selection with an embedded PNG image → {id, width, height}",
             has_selection,
             rasterize
         ),
@@ -317,12 +318,12 @@ pub(crate) fn unique_key(d: &vectorcraft_doc::Document, stem: &str) -> String {
     }
 }
 
-fn render_png(doc: &vectorcraft_doc::Document, region: Rect, scale: f64, white: bool) -> Result<(Vec<u8>, u32, u32)> {
+fn render_png(doc: &vectorcraft_doc::Document, region: Rect, scale: f64, opts: &vectorcraft_render::RenderOptions) -> Result<(Vec<u8>, u32, u32)> {
     if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > 65535.0 || region.height() * scale > 65535.0 {
         return Err(EngineError::Other("image would be too large; lower the resolution".into()));
     }
     let mut r = vectorcraft_render::Renderer::new();
-    let img = r.render_region(doc, region, scale, white);
+    let img = r.render_region_with(doc, region, scale, opts);
     Ok((img.to_png().map_err(EngineError::Other)?, img.width, img.height))
 }
 
@@ -335,7 +336,12 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "ppi must be between 1 and 2400"));
     }
     let pad = f64_or(p, "padding", 0.0).max(0.0);
-    let white = str_param(p, "background") == Some("white");
+    let raster = RasterExportOptions {
+        ppi,
+        background: fileio::background(p.get("background").unwrap_or(&Value::Null)).map_err(|e| bad(C, e))?,
+        anti_alias: str_param(p, "antiAlias").map(fileio::anti_alias).transpose().map_err(|e| bad(C, e))?.unwrap_or_default(),
+        ..Default::default()
+    };
     let b = st.doc.bounds_of(&roots, true).ok_or_else(|| bad(C, "selection has no bounds"))?.inflate(pad, pad);
     let scale = ppi / 72.0;
     // Snap to whole pixels.
@@ -349,7 +355,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
         })
         .collect();
     let tmp = isolated_doc(&st.doc, nodes);
-    let (png, w, h) = render_png(&tmp, region, scale, white)?;
+    let (png, w, h) = render_png(&tmp, region, scale, &raster.render_options(RasterFormat::Png))?;
     let top = *roots.last().ok_or_else(|| bad(C, "nothing selected"))?;
     let id = s.edit("Rasterize", |d, sel| {
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
@@ -499,7 +505,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     bare.visible = true;
     let tmp = isolated_doc(&st.doc, vec![bare]);
     let region = Rect::new(r.x0, r.y0, r.x0 + (r.width() * scale).round().max(1.0) / scale, r.y0 + (r.height() * scale).round().max(1.0) / scale);
-    let (png, w, h) = render_png(&tmp, region, scale, false)?;
+    let (png, w, h) = render_png(&tmp, region, scale, &RasterExportOptions::default().render_options(RasterFormat::Png))?;
     s.edit("Crop Image", |d, _| {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
