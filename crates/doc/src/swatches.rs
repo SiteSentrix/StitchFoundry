@@ -119,7 +119,7 @@ pub fn color_name(c: Color) -> String {
 }
 
 /// Every colour in the subtree of `n` with the swatch it links to: solid fills, strokes and text
-/// runs (with their link) and gradient stops (unlinked), in paint order.
+/// runs (with their link), then gradient stops and mesh points (unlinked), in paint order.
 pub fn node_colors(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
     n.walk(&mut |m| {
         for p in node_paints(m) {
@@ -128,6 +128,9 @@ pub fn node_colors(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
                 Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, None)),
                 _ => {}
             }
+        }
+        if let NodeKind::Mesh(mesh) = &m.kind {
+            mesh.points.iter().for_each(|p| f(&p.color, None));
         }
     });
 }

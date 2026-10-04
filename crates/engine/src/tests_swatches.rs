@@ -324,3 +324,27 @@ fn tints_of_global_swatches_get_swatches_only_when_asked() {
     assert_eq!(with["swatches"], json!(["Brand", "R=255 G=0 B=0", "R=0 G=255 B=0", "R=149 G=183 B=216"]));
     assert_eq!(doc(&s).node(b).unwrap().appearance.stroke_paint(), Paint::Solid { color: tint, swatch: Some("Brand".into()) }, "tints stay linked");
 }
+
+#[test]
+fn group_names_are_never_blank_and_never_shared_with_their_swatches() {
+    let mut s = session();
+    art(&mut s);
+    // A blank name falls back to the default; a swatch never takes its own group's name.
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "  ", "colors": ["#0000ff"]}));
+    assert_eq!(r["name"], "Color Group");
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "R=255 G=0 B=0", "fromArtwork": true}));
+    assert_eq!(r["name"], "R=255 G=0 B=0");
+    assert_eq!(r["swatches"], json!(["Brand", "R=255 G=0 B=0 2", "R=0 G=255 B=0"]));
+}
+
+#[test]
+fn a_group_from_a_mesh_holds_its_point_colours() {
+    let mut s = session();
+    let a = rect(&mut s);
+    run(&mut s, "paint.setFill", json!({"ids": [a.0], "color": "#ff0000"}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "object.mesh.create", json!({"rows": 2, "cols": 2, "appearance": "center", "highlight": 100}));
+    let r = run(&mut s, "swatch.newGroup", json!({"fromArtwork": true}));
+    let names = r["swatches"].as_array().unwrap();
+    assert!(names.contains(&json!("R=255 G=0 B=0")) && names.contains(&json!("R=255 G=255 B=255")), "{r}");
+}

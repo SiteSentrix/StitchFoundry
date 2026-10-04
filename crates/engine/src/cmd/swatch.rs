@@ -35,7 +35,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Color Group",
             ["Window", "Swatches"],
             None,
-            "{name?, swatches?: [names] (solid colours move into the group; gradients, patterns and None stay), colors?: [colour] (added as new swatches), fromArtwork?: false (add the unique colours of the selected art: fills, strokes, text and gradient stops; a colour linked to a global swatch moves that swatch into the group), toGlobal?: true (with fromArtwork: the new swatches are global and the selected art's matching unlinked colours link to them), includeTints?: false (with fromArtwork: tints of global swatches also get swatches of their own)} → {name, swatches: [names in the group], linked: paints linked}",
+            "{name?, swatches?: [names] (solid colours move into the group; gradients, patterns and None stay), colors?: [colour] (added as new swatches), fromArtwork?: false (add the unique colours of the selected art: fills, strokes, text, gradient stops and mesh points; a colour linked to a global swatch moves that swatch into the group), toGlobal?: true (with fromArtwork: the new swatches are global and the selected art's matching unlinked colours link to them), includeTints?: false (with fromArtwork: tints of global swatches also get swatches of their own)} → {name, swatches: [names in the group], linked: paints linked}",
             has_doc,
             swatch_new_group
         ),
@@ -168,7 +168,7 @@ fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
     let from_art = bool_or(p, "fromArtwork", false);
     let to_global = from_art && bool_or(p, "toGlobal", true);
     let tints = bool_or(p, "includeTints", false);
-    let requested = str_param(p, "name").map(str::to_string);
+    let requested = name_param(p, "name");
     let (name, members, linked) = s.edit("New Color Group", |d, sel| {
         // New swatches: (colour, global).
         let mut new: Vec<(Color, bool)> = colors.iter().map(|c| (*c, false)).collect();
@@ -193,7 +193,7 @@ fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
         // The global swatches made from the art's colours, which its unlinked paints link to.
         let mut links: Vec<(Color, String)> = vec![];
         for (c, global) in new {
-            let nm = unique_name(&color_name(c), |n| d.swatch_name_taken(n) || group.swatches.iter().any(|sw| sw.name == n));
+            let nm = unique_name(&color_name(c), |n| n == name || d.swatch_name_taken(n) || group.swatches.iter().any(|sw| sw.name == n));
             if global {
                 links.push((c, nm.clone()));
             }
