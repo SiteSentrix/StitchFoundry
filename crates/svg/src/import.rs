@@ -685,13 +685,34 @@ fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, layer_mode: bool)
         if rb.runs.is_empty() {
             continue;
         }
+        // Type on a path: a <textPath> naming a <path> (in the text's user space) by href.
+        let on_path = t.children().find(|c| c.is_element() && c.tag_name().name() == "textPath").and_then(|tp| {
+            let href = tp.attribute("href").or_else(|| tp.attribute(("http://www.w3.org/1999/xlink", "href")))?;
+            let id = href.strip_prefix('#')?;
+            let el = xml.descendants().find(|n| n.is_element() && n.tag_name().name() == "path" && n.attribute("id") == Some(id))?;
+            let mut bp = BezPath::from_svg(el.attribute("d")?).ok()?;
+            bp.apply_affine(acc * parse_transform(el.attribute("transform")));
+            let start = match tp.attribute("startOffset").map(str::trim) {
+                Some(o) if o.ends_with('%') => first_number(o.strip_suffix('%')) / 100.0,
+                Some(o) => {
+                    let len: f64 = bp.segments().map(|s| kurbo::ParamCurveArclen::arclen(&s, 1e-3)).sum();
+                    if len > 0.0 { first_number(Some(o)) / len } else { 0.0 }
+                }
+                None => 0.0,
+            };
+            Some((PathData::from_bezpath(&bp), start.clamp(0.0, 1.0)))
+        });
         let justify = match ctx.prop(t, "text-anchor").as_deref() {
             Some("middle") => Justify::Center,
             Some("end") => Justify::Right,
             _ => Justify::Left,
         };
+        let (kind, xf) = match on_path {
+            Some((path, start)) => (TextKind::OnPath { path, start }, Affine::IDENTITY),
+            None => (TextKind::Point, xf),
+        };
         let mut obj = TextObject {
-            kind: TextKind::Point,
+            kind,
             xf,
             runs: rb.runs,
             para: Default::default(),
