@@ -185,6 +185,11 @@ until `transparency.stopEditingOpacityMask`. Saves and exports never include the
 {"name":"run_command","arguments":{"command":"transparency.info","params":{"ids":[12,20]}}}
 ```
 
+Knockout Group has three states: `transparency.set {knockout: "on"|"off"|"neutral"}` (`true` = on, `false` =
+neutral, the default). In a knockout group each child hides what it covers of the children below it; neutral groups
+pass the enclosing group's setting to their children, off groups never knock out. Knockout groups render as isolated groups;
+PDF and SVG write them as soft-masked groups with the same look (the PDF export reports a warning).
+
 ## Clipping masks
 
 `object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a

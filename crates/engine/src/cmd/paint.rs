@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?, item?: appearance item index|null} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), item?: appearance item index|null} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
             has_doc,
             transparency
         ),
@@ -460,6 +460,11 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
         && b.as_str().and_then(BlendMode::parse).is_none()
     {
         return Err(bad(C, format!("unknown blend mode {b}")));
+    }
+    if let Some(k) = q.get("knockout")
+        && vectorcraft_doc::Knockout::from_value(k).is_none()
+    {
+        return Err(bad(C, format!("unknown knockout state {k}")));
     }
     if opacity.is_some() || blend.is_some() {
         let ids: Vec<u64> = item_ids.iter().map(|id| id.0).collect();

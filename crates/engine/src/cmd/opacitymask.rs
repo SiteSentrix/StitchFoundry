@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{Document, Node, NodeId, OpacityMask, Selection};
+use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask, Selection};
 
 use super::edit::selected_roots;
 use super::maskedit::{begin, finish, mask_group, mask_parts, show_editing};
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency Info",
             [],
             None,
-            "{id?|ids?} → {ids, opacity: 0..100, blend, isolate, knockout, editingMask} the Transparency panel's values for `ids`, the selection, or the object whose mask is being edited. A value is null where those objects differ (or there are none); editingMask is the id of the object whose mask is being edited, or null",
+            "{id?|ids?} → {ids, opacity: 0..100, blend, isolate, knockout: \"on\"|\"off\"|\"neutral\", editingMask} the Transparency panel's values for `ids`, the selection, or the object whose mask is being edited. A value is null where those objects differ (or there are none); editingMask is the id of the object whose mask is being edited, or null",
             has_doc,
             info
         ),
@@ -264,7 +264,7 @@ pub struct TransparencyInfo {
     pub opacity: Option<f64>,
     pub blend: Option<BlendMode>,
     pub isolate: Option<bool>,
-    pub knockout: Option<bool>,
+    pub knockout: Option<Knockout>,
 }
 
 impl TransparencyInfo {
@@ -324,7 +324,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "opacity": i.opacity,
         "blend": i.blend.map(BlendMode::label),
         "isolate": i.isolate,
-        "knockout": i.knockout,
+        "knockout": i.knockout.map(Knockout::label),
         "editingMask": st.doc.mask_edit.map(|me| me.object.0),
     }))
 }
