@@ -849,6 +849,8 @@ mod tests_cmykflatten;
 #[cfg(test)]
 mod tests_colorguide;
 #[cfg(test)]
+mod tests_colorguidelib;
+#[cfg(test)]
 mod tests_colormgmt;
 #[cfg(test)]
 mod tests_containers;

@@ -985,6 +985,38 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+fn library_refs(libs: Vec<swatchlib::LibraryInfo>) -> Vec<LibraryRef> {
+    libs.into_iter().map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
+}
+
+/// The swatch libraries with solid colours (not the gradient-only ones), for Limit to Library.
+pub(crate) fn colour_libraries(app: &VectorcraftApp) -> Vec<LibraryRef> {
+    let has_colours = |id: &str| swatchlib::library(&app.session, id).is_some_and(|(_, lib)| lib.iter().any(|w| w.paint.color().is_some()));
+    library_refs(swatchlib::libraries(&app.session).into_iter().filter(|l| l.category != "gradients" && has_colours(&l.id)).collect())
+}
+
+/// What Limit to Library menus call the document's own swatches ([`swatchlib::DOCUMENT_SWATCHES`]).
+pub(crate) const DOCUMENT_SWATCHES: &str = "Document Swatches";
+
+/// The name of Limit to Library choice `key` (a library id or [`swatchlib::DOCUMENT_SWATCHES`]);
+/// `None` for no limit or a library that is gone.
+pub(crate) fn limit_name(app: &VectorcraftApp, key: &str) -> Option<String> {
+    match key {
+        "" => None,
+        swatchlib::DOCUMENT_SWATCHES => Some(DOCUMENT_SWATCHES.into()),
+        _ => swatchlib::library(&app.session, key).map(|(info, _)| info.name),
+    }
+}
+
+/// The Limit to Library key for `l`: a library's id (from its id or name), or
+/// [`swatchlib::DOCUMENT_SWATCHES`] as it is.
+pub(crate) fn limit_key(app: &VectorcraftApp, l: &str) -> Result<String, String> {
+    if l == swatchlib::DOCUMENT_SWATCHES {
+        return Ok(l.into());
+    }
+    swatchlib::library(&app.session, l).map(|(info, _)| info.id).ok_or_else(|| format!("no swatch library `{l}` (see swatch.library.list)"))
+}
+
 /// Swatch libraries in the library panel (engine: `swatch.library.*`).
 pub(crate) struct SwatchLibraries;
 
@@ -997,8 +1029,7 @@ impl LibraryKind for SwatchLibraries {
     type Item = Swatch;
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
-        let libs = swatchlib::libraries(&app.session).into_iter();
-        libs.map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
+        library_refs(swatchlib::libraries(&app.session))
     }
     fn get(app: &VectorcraftApp, id: &str) -> Option<(String, Self::Lib)> {
         swatchlib::library(&app.session, id).map(|(info, lib)| (info.name, lib))

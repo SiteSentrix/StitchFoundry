@@ -9,6 +9,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES, builtin_library};
 use vectorcraft_color::palette_io::{self, PaletteFormat};
+use vectorcraft_color::recolor::Palette;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 
 use super::fileio::{create_dir, read_file, write_file};
@@ -265,6 +266,31 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary
     }
     let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
     library(s, &id)
+}
+
+/// The Limit to Library key for the active document's own swatches.
+pub const DOCUMENT_SWATCHES: &str = "document";
+
+/// The colours Limit to Library snaps to: the solid colours of library `key` (an id or name) or, for
+/// [`DOCUMENT_SWATCHES`], of the active document's swatches and colour groups. `None` when there is
+/// no such library (or document).
+pub fn limit_palette(s: &Session, key: &str) -> Option<Palette> {
+    let colors = |sw: &Swatch| sw.paint.color();
+    if key == DOCUMENT_SWATCHES {
+        return Some(Palette::new(s.active()?.doc.swatches_iter().filter_map(colors)));
+    }
+    Some(Palette::new(library(s, key)?.1.iter().filter_map(colors)))
+}
+
+/// The `limitTo` parameter's palette ([`limit_palette`]); `None` without one (or for "").
+pub(crate) fn limit_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Palette>> {
+    let Some(key) = str_param(p, "limitTo").filter(|k| !k.is_empty()) else { return Ok(None) };
+    let palette = limit_palette(s, key)
+        .ok_or_else(|| bad(cmd, format!("no swatch library `{key}` (see swatch.library.list; \"{DOCUMENT_SWATCHES}\": the document's swatches)")))?;
+    if palette.is_empty() {
+        return Err(bad(cmd, format!("`{key}` has no colours")));
+    }
+    Ok(Some(palette))
 }
 
 fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<SwatchLibrary>)> {

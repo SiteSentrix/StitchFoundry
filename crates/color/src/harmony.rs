@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::recolor::Palette;
 use crate::{Color, keep_model};
 
 /// A harmony rule: a group of colours built from a base colour, base first.
@@ -293,6 +294,23 @@ impl Guide {
     pub fn centre(&self) -> usize {
         self.grid.first().map_or(0, |r| r.len() / 2)
     }
+
+    /// The guide limited to `palette` (Limit to Library): every harmony colour and variation snaps
+    /// to the palette's nearest colour (CIEDE2000), in that colour's own model.
+    pub fn limited(mut self, palette: &Palette) -> Self {
+        if palette.is_empty() {
+            return self;
+        }
+        let centre = self.centre();
+        for (row, c) in self.grid.iter_mut().zip(&mut self.colors) {
+            for v in row.iter_mut() {
+                *v = palette.nearest(*v);
+            }
+            // The centre column is the harmony colour itself.
+            *c = row[centre];
+        }
+        self
+    }
 }
 
 #[cfg(test)]
@@ -381,5 +399,26 @@ mod tests {
         // Steps are clamped to 1..=20.
         let g = Guide::new(base, Harmony::Triad, &GuideOptions { steps: 99, ..Default::default() });
         assert_eq!(g.grid[0].len(), 41);
+    }
+
+    #[test]
+    fn a_limited_guide_only_holds_palette_colours() {
+        let lib =
+            [Color::rgb(1.0, 0.0, 0.0), Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::gray(0.5), Color::rgb8(250, 240, 200), Color::lab(30.0, 10.0, -40.0)];
+        let palette = Palette::new(lib);
+        for rule in Harmony::ALL {
+            let g = Guide::new(Color::rgb8(200, 60, 40), rule, &GuideOptions::default()).limited(&palette);
+            assert!(g.grid.iter().flatten().chain(&g.colors).all(|c| lib.contains(c)), "{}", rule.label());
+            for (row, c) in g.grid.iter().zip(&g.colors) {
+                assert_eq!(row[g.centre()], *c, "{}: the harmony colour stays in the centre", rule.label());
+            }
+        }
+        // The nearest colour wins: a pale yellow snaps to the cream and its darkest shade to the grey.
+        let g = Guide::new(Color::rgb(0.95, 0.9, 0.75), Harmony::Complementary, &GuideOptions::default()).limited(&palette);
+        assert_eq!(g.colors[0], lib[3]);
+        assert_eq!(g.grid[0][0], lib[2]);
+        // An empty palette limits nothing.
+        let free = Guide::new(Color::rgb(0.8, 0.1, 0.1), Harmony::Triad, &GuideOptions::default());
+        assert_eq!(free.clone().limited(&Palette::default()), free);
     }
 }

@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Guide",
             [],
             None,
-            "{color, rule: complementary|complementary2|splitComplementary|leftComplement|rightComplement|analogous|analogous2|monochromatic|shades|triad|triad2|triad3|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast2|highContrast3|pentagram (or its label), steps?: 1..20 (4), variation?: \"tintsShades\"|\"warmCool\"|\"vividMuted\", amount?: 0..100 (50; how far the outermost steps go)} the Color Guide for a base colour → {rule, colors: [\"#rrggbb\", the base first], grid: [per colour, 2·steps+1 variations from shades/cool/muted to tints/warm/vivid with the colour itself in the centre]}",
+            "{color, rule: complementary|complementary2|splitComplementary|leftComplement|rightComplement|analogous|analogous2|monochromatic|shades|triad|triad2|triad3|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast2|highContrast3|pentagram (or its label), steps?: 1..20 (4), variation?: \"tintsShades\"|\"warmCool\"|\"vividMuted\", amount?: 0..100 (50; how far the outermost steps go), limitTo?: swatch library id or name, or \"document\" (the document's swatches): every colour snaps to its nearest colour there (ΔE 2000)} the Color Guide for a base colour → {rule, colors: [\"#rrggbb\", the base first], grid: [per colour, 2·steps+1 variations from shades/cool/muted to tints/warm/vivid with the colour itself in the centre]}",
             always,
             harmony
         ),
@@ -539,7 +539,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
     Ok(json!({ "changed": changed }))
 }
 
-fn harmony(_: &mut Session, p: &Value) -> Result<Value> {
+fn harmony(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "color.harmony";
     let base = p.get("color").and_then(color_value).ok_or_else(|| bad(C, "missing or invalid `color`"))?;
     let rule = str_param(p, "rule").ok_or_else(|| bad(C, "missing `rule`"))?;
@@ -557,7 +557,10 @@ fn harmony(_: &mut Session, p: &Value) -> Result<Value> {
     if let Some(a) = p.get("amount").and_then(Value::as_f64) {
         opts.amount = a as f32;
     }
-    let g = Guide::new(base, rule, &opts);
+    let mut g = Guide::new(base, rule, &opts);
+    if let Some(palette) = super::swatchlib::limit_param(s, p, C)? {
+        g = g.limited(&palette);
+    }
     let hex = |cs: &[Color]| cs.iter().map(Color::to_hex).collect::<Vec<_>>();
     Ok(json!({ "rule": rule.id(), "colors": hex(&g.colors), "grid": g.grid.iter().map(|r| hex(r)).collect::<Vec<_>>() }))
 }

@@ -106,7 +106,9 @@ Gray stays Gray, and `keepModel: true` keeps a colour as given. RGB documents ke
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
 `swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
 Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
-(shades, cool or muted on the left, tints, warm or vivid on the right).
+(shades, cool or muted on the left, tints, warm or vivid on the right). With `limitTo` (a swatch library id or name,
+or `"document"` for the document's swatches) every colour snaps to the library's nearest colour (ΔE 2000), as the
+panel's Limit to Library does (`ui.colorGuideLimit`); Recolor Artwork's `limitTo` takes the same values.
 
 ## Resources
 

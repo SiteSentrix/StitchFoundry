@@ -9,22 +9,26 @@
 //! scale together), a brightness slider and the harmony rules. The preset menu sets up a 1, 2 or 3
 //! colour job or a library. Opened on a colour group (Edit or Apply Color Group), OK also rewrites
 //! the group with the new colours (renamed by `groupName`); without art only the group changes.
+//! Opened on colours alone (the Color Guide's Edit or Apply Colors without art), OK saves the new
+//! colours as a colour group named `groupName`.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?}]), `colors` (null: Auto, or a
-//! count), `method`, `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo` (library id, "" for
-//! none), `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`,
-//! `preview`. Changing `colors`, a preserve flag or `limitTo` reduces the rows again.
+//! count), `method`, `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo` (library id,
+//! "document" for the document's swatches, "" for none), `group`, `groupName`, `tab` (`assign` or
+//! `edit`), `rule` (harmony id), `linked`, `preview`. Changing `colors`, a preserve flag or
+//! `limitTo` reduces the rows again.
 
 use egui::{Pos2, Rect, Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::harmony::Harmony;
-use vectorcraft_color::recolor::{ColorKey, Method, Palette};
+use vectorcraft_color::recolor::{ColorKey, Method};
 use vectorcraft_color::{Color, keep_model};
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::swatchlib;
 
 use super::{DialogSpec, form};
 use crate::panels::c32;
+use crate::panels::swatches::{colour_libraries, limit_key, limit_name};
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
@@ -48,8 +52,9 @@ const PRESETS: [&str; 5] = ["Custom", "1 Color Job", "2 Color Job", "3 Color Job
 /// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?}`) on the selected art and,
 /// with `group`, on that colour group: art is reduced to as many rows as the group has colours,
 /// which become their new colours; without art the rows are the group's colours. `colors` is a
-/// count (an n-colour job) or the new colours to assign; `library` limits to a library ("" picks
-/// the first).
+/// count (an n-colour job) or the new colours to assign (without art or a group they are the
+/// rows, which OK saves as a new colour group); `library` limits to a library or "document" (""
+/// picks the first library).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
@@ -61,14 +66,16 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
         None => None,
     };
-    if !art && group.is_none() {
-        return Err("select artwork (or a colour group) to recolor".into());
-    }
     let assign: Vec<Value> = match (&group_colors, p.get("colors")) {
         (Some(cs), _) => cs.iter().map(key).collect(),
         (None, Some(Value::Array(cs))) => cs.iter().filter_map(color_value).map(|c| key(&c)).collect(),
         _ => vec![],
     };
+    // Colours alone (no art, no group) become a new colour group.
+    let new_group = !art && group.is_none();
+    if new_group && assign.is_empty() {
+        return Err("select artwork (or a colour group) to recolor".into());
+    }
     let count = match p.get("colors").and_then(Value::as_u64) {
         Some(n) => json!(n.max(1)),
         None if !assign.is_empty() => json!(assign.len()),
@@ -76,18 +83,23 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let limit = match p.get("library").and_then(Value::as_str) {
         Some("") => first_library(app).unwrap_or_default(),
-        Some(l) => swatchlib::library(&app.session, l).map(|(info, _)| info.id).ok_or_else(|| format!("no swatch library `{l}`"))?,
+        Some(l) => limit_key(app, l)?,
         None => String::new(),
     };
     // Without art the rows are the group's colours, as they are.
-    let rows: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
+    let start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
     let fields = json!({
-        "rows": rows, "colors": count, "method": Method::ScaleTints.id(),
+        "rows": start, "colors": count, "method": Method::ScaleTints.id(),
         "preserveWhite": true, "preserveBlack": true, "preserveGrays": false, "limitTo": limit,
-        "group": group, "groupName": group, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
-        "preview": true, "__art": art, "__assign": assign,
+        "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
+        "preview": true, "__art": art, "__assign": assign, "__newGroup": new_group,
     });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let mut d = Dialog::new(KIND, fields);
+    // Without art the rows are there from the start: limit them now (art's rows snap as they reduce).
+    let mut rs = rows(&d);
+    snap(app, &d, &mut rs);
+    d.fields.insert("rows".into(), Value::Array(rs));
+    app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
 
@@ -95,13 +107,11 @@ fn key(c: &Color) -> Value {
     json!(ColorKey::of(c).to_string())
 }
 
-/// The libraries with colours, for Limit to Library: (id, name).
-fn colour_libraries(app: &VectorcraftApp) -> Vec<(String, String)> {
-    swatchlib::libraries(&app.session).into_iter().filter(|l| l.category != "gradients").map(|l| (l.id, l.name)).collect()
-}
+/// The name a new colour group (opened on colours alone) starts with.
+const NEW_GROUP: &str = "Color Group";
 
 fn first_library(app: &VectorcraftApp) -> Option<String> {
-    colour_libraries(app).into_iter().next().map(|l| l.0)
+    colour_libraries(app).into_iter().next().map(|l| l.id)
 }
 
 /// `recolor.reduce` parameters (Method only picks each row's colour, so changing it keeps the rows).
@@ -141,8 +151,7 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
 
 /// With Limit to Library, the rows' new colours snap to the library's nearest colours.
 fn snap(app: &VectorcraftApp, d: &Dialog, rows: &mut [Value]) {
-    let Some((_, lib)) = Some(d.str("limitTo")).filter(|l| !l.is_empty()).and_then(|l| swatchlib::library(&app.session, &l)) else { return };
-    let palette = Palette::new(lib.iter().filter_map(|w| w.paint.color()));
+    let Some(palette) = Some(d.str("limitTo")).filter(|l| !l.is_empty()).and_then(|l| swatchlib::limit_palette(&app.session, &l)) else { return };
     for r in rows {
         if let Some(c) = to_color(r) {
             r["to"] = key(&palette.nearest(c));
@@ -216,7 +225,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         snap(app, d, &mut rs);
         d.fields.insert("rows".into(), Value::Array(rs));
     }
-    if d.fields.get("group").is_some_and(Value::is_string) {
+    if d.fields.get("group").is_some_and(Value::is_string) || d.bool("__newGroup") {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Color Group:").color(t.text_dim));
@@ -230,10 +239,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: keep the previewed recolour as one undo step (or apply it, e.g. to a colour group only).
+/// OK: keep the previewed recolour as one undo step (or apply it, e.g. to a colour group only; or
+/// save colours opened alone as a new colour group).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     sync(app, &mut d);
+    if d.bool("__newGroup") {
+        let colors: Vec<Value> = rows(&d).into_iter().filter(|r| !excluded(r)).map(|r| r["to"].clone()).collect();
+        return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors}));
+    }
     form::commit_preview(app, CMD, apply_params(&d))
 }
 
@@ -407,12 +421,15 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         }
         ui.end_row();
         ui.label(egui::RichText::new("Limit to Library:").color(t.text_dim));
+        // None, the document's swatches, then the colour libraries.
         let libs = colour_libraries(app);
+        let keys: Vec<&str> = ["", swatchlib::DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.id.as_str())).collect();
+        let labels: Vec<String> = keys.iter().map(|k| limit_name(app, k).unwrap_or_else(|| "None".into())).collect();
         let cur = d.str("limitTo");
-        let name = libs.iter().find(|l| l.0 == cur).map_or("None", |l| l.1.as_str());
-        let labels: Vec<&str> = std::iter::once("None").chain(libs.iter().map(|l| l.1.as_str())).collect();
+        let name = keys.iter().position(|k| *k == cur).map_or("None", |i| labels[i].as_str());
+        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
         if let Some(i) = widgets::dropdown(ui, "recolor-library", name, &labels, 180.0) {
-            d.fields.insert("limitTo".into(), json!(if i == 0 { String::new() } else { libs[i - 1].0.clone() }));
+            d.fields.insert("limitTo".into(), json!(keys[i]));
         }
         ui.end_row();
     });
