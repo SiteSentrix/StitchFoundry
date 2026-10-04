@@ -1,4 +1,5 @@
-//! Colour harmony rules and the variation grid of the Color Guide panel (our own colour math).
+//! Colour harmony rules, the variation grid of the Color Guide panel and the five-colour themes of
+//! the Color Themes panel (our own colour math).
 
 use serde::{Deserialize, Serialize};
 
@@ -185,6 +186,47 @@ impl Harmony {
                 keep_model(base, Color::from_hsb(h + tone.turn, (s * tone.sat).clamp(0.0, 1.0), b.clamp(0.0, 1.0)))
             }))
             .collect()
+    }
+
+    /// A [`THEME_SIZE`]-colour theme from `base`: the rule's colours, each followed by the lighter or
+    /// darker variations of it that fill the remaining places (the rule's first colours get them
+    /// first). The base colour comes first, every colour in its model.
+    pub fn theme(self, base: Color) -> Vec<Color> {
+        let colors = self.apply(base);
+        let n = colors.len();
+        let mut rows: Vec<Vec<Color>> = colors.iter().map(|c| vec![*c]).collect();
+        let opts = GuideOptions::default();
+        for k in 0..THEME_SIZE.saturating_sub(n) {
+            let (i, pass) = (k % n, k / n);
+            // Alternate lighter and darker along the rule and from one pass to the next.
+            let step = if (i + pass) % 2 == 0 { 3 } else { -3 };
+            rows[i].push(variation(colors[i], &opts, step));
+        }
+        rows.into_iter().flatten().take(THEME_SIZE).collect()
+    }
+}
+
+/// The number of colours in a colour theme.
+pub const THEME_SIZE: usize = 5;
+
+/// Move colour `i` of a harmony on the hue and saturation wheel to `hsb` (hue in degrees,
+/// saturation and brightness 0..1), keeping its model. With `linked` the other colours keep their
+/// relation to it: they turn by the same hue, scale their saturation alike and shift their
+/// brightness by as much.
+pub fn move_on_wheel(colors: &mut [Color], i: usize, hsb: [f32; 3], linked: bool) {
+    let Some(&old) = colors.get(i) else { return };
+    let [h0, s0, v0] = old.to_hsb();
+    let (dh, ratio, dv) = (hsb[0] - h0, if s0 > 0.01 { hsb[1] / s0 } else { 1.0 }, hsb[2] - v0);
+    for (j, c) in colors.iter_mut().enumerate() {
+        let new = if j == i {
+            hsb
+        } else if linked {
+            let [h, s, v] = c.to_hsb();
+            [h + dh, (s * ratio).clamp(0.0, 1.0), (v + dv).clamp(0.0, 1.0)]
+        } else {
+            continue;
+        };
+        *c = keep_model(*c, Color::from_hsb(new[0], new[1], new[2]));
     }
 }
 
@@ -420,5 +462,46 @@ mod tests {
         // An empty palette limits nothing.
         let free = Guide::new(Color::rgb(0.8, 0.1, 0.1), Harmony::Triad, &GuideOptions::default());
         assert_eq!(free.clone().limited(&Palette::default()), free);
+    }
+
+    #[test]
+    fn themes_have_five_colours_base_first() {
+        for base in [Color::rgb8(230, 120, 40), Color::cmyk(0.1, 0.8, 0.3, 0.05)] {
+            for rule in Harmony::ALL {
+                let t = rule.theme(base);
+                assert_eq!(t.len(), THEME_SIZE, "{}", rule.label());
+                assert_eq!(t[0], base, "{}", rule.label());
+                assert!(t.iter().all(|c| c.model() == base.model()), "{}: colours keep the base model", rule.label());
+            }
+        }
+        // A two-colour rule fills in variations next to the colour they vary.
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let t = Harmony::Complementary.theme(red);
+        assert_eq!(t[3].to_hex(), "#00ffff", "the complement follows the base's variations");
+        let l = |c: &Color| c.to_lab().l;
+        assert!(l(&t[1]) > l(&t[0]) && l(&t[2]) < l(&t[0]), "the base, a lighter and a darker red");
+        assert!(l(&t[4]) < l(&t[3]));
+        for (i, a) in t.iter().enumerate() {
+            assert!(t[i + 1..].iter().all(|b| b.to_hex() != a.to_hex()), "{} repeats", a.to_hex());
+        }
+        // Five-colour rules are themes as they are.
+        assert_eq!(Harmony::Pentagram.theme(red), Harmony::Pentagram.apply(red));
+    }
+
+    #[test]
+    fn moving_a_linked_colour_moves_the_others_alike() {
+        let mut c = [Color::rgb(1.0, 0.0, 0.0), Color::rgb(1.0, 1.0, 0.0), Color::cmyk(0.0, 1.0, 0.0, 0.0)];
+        move_on_wheel(&mut c, 0, [120.0, 1.0, 1.0], false);
+        assert_eq!(c[0].to_hex(), "#00ff00");
+        assert_eq!(c[1].to_hex(), "#ffff00", "unlinked: only that colour moves");
+        move_on_wheel(&mut c, 0, [240.0, 0.5, 1.0], true);
+        assert_eq!(c[0].to_hex(), "#8080ff");
+        let [h, s, v] = c[1].to_hsb();
+        assert!((h - 180.0).abs() < 0.5 && (s - 0.5).abs() < 0.01 && v > 0.99, "it turned and paled as much: {h} {s} {v}");
+        assert!(matches!(c[2], Color::Cmyk { .. }), "colours keep their model");
+        // An index past the end moves nothing.
+        let before = c;
+        move_on_wheel(&mut c, 5, [0.0, 0.0, 0.0], true);
+        assert_eq!(c, before);
     }
 }

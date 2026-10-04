@@ -343,6 +343,10 @@ pub struct Prefs {
     /// Appearance panel → New Art Has Basic Appearance (on): new art takes one fill and stroke;
     /// off, the whole appearance of the last selection (`appearance.setNewArtBasic`).
     pub new_art_basic: bool,
+    /// The Color Themes panel's saved themes (`colorTheme.*`): a local library, not a Preferences
+    /// dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row and resetting keeps it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub color_themes: Vec<cmd::colortheme::ColorTheme>,
 }
 
 impl Default for Prefs {
@@ -465,6 +469,7 @@ impl Default for Prefs {
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,
+            color_themes: vec![],
         }
     }
 }
@@ -852,6 +857,8 @@ mod tests_colorguide;
 mod tests_colorguidelib;
 #[cfg(test)]
 mod tests_colormgmt;
+#[cfg(test)]
+mod tests_colorthemes;
 #[cfg(test)]
 mod tests_containers;
 #[cfg(test)]

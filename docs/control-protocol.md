@@ -86,6 +86,10 @@ Edit or Apply Colors runs `ui.recolorDialog {colors, library?}` with the harmony
 recolours as usual; with nothing selected the colours themselves are the rows and `ui.dialog.confirm` saves them as a
 new colour group (`swatch.newGroup`, named by the `groupName` field).
 
+Color Themes panel (`window.panel {panel: "colorThemes"}`): its Create tab makes a theme on a harmony wheel and its
+My Themes tab lists the saved themes; every action runs a command (`colorTheme.save`, `colorTheme.delete`,
+`colorTheme.addToSwatches`, `swatch.newGroup` for the theme being made), and `colorTheme.list` reads the library.
+
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
 `preview`) and `ui.saturateDialog` opens Saturate (`saturate`: `intensity` −100..100, `preview`). Both preview on the

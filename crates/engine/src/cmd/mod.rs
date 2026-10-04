@@ -7,6 +7,7 @@ mod buildcmds;
 pub mod clipboard;
 mod colorcmds;
 pub mod colormgmt;
+pub mod colortheme;
 mod create;
 pub(crate) mod distortcmds;
 mod docinfo;
@@ -208,6 +209,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(expand::specs());
         v.extend(attributes::specs());
         v.extend(newart::specs());
+        v.extend(colortheme::specs());
         v
     })
 }

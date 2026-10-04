@@ -1467,6 +1467,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Brushes", "brushes"),
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
+                panel("Color Themes", "colorThemes"),
                 panel("Document Info", "docInfo"),
                 panel("Flattener Preview", crate::panels::flattener_preview::ID),
                 panel("Gradient", "gradient"),
