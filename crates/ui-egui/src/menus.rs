@@ -277,6 +277,39 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{highlight?: none|rasterizedRegions|transparentObjects|allAffected|expandedPatterns|outlinedStrokes|outlinedText|allRasterized, overprints?: preserve|simulate|discard, preset?: name (loads its options), options?: {option keys, over the preset's}, showOptions?} set the Flattener Preview panel (ui.inspect: ui.flattener_preview), show it and refresh its snapshot → what flattener.preview answers for it",
     ),
+    (
+        "window.graphicStyleLibrary",
+        "Graphic Style Library",
+        "",
+        "{library: id or name (see graphicStyle.libraries) | null (close)} open the read-only library panel on a graphic style library (UI state `library_panel`, kind graphicStyles); clicking a style there runs graphicStyle.addFromLibrary with apply (Alt: add) → {open, name, count}",
+    ),
+    (
+        "window.graphicStyleLibrary.other",
+        "Other Library…",
+        "",
+        "{path?} (default: pick a file) load a .vcstyles library, or another document's graphic styles (engine: graphicStyle.loadLibrary), and open it in the library panel",
+    ),
+    (
+        "ui.saveGraphicStyleLibrary",
+        "Save Graphic Style Library…",
+        "",
+        "{names?: [the styles selected in the Graphic Styles panel]} open Save Graphic Style Library (dialog `saveGraphicStyleLibrary`: name, user: save to the user library folder, selectedOnly); OK runs graphicStyle.saveLibrary",
+    ),
+    (
+        "window.userGraphicStyleLibrary1",
+        "User Graphic Style Library 1",
+        "",
+        "{} open the 1. User Defined graphic style library (graphicStyle.libraries, category user)",
+    ),
+    ("window.userGraphicStyleLibrary2", "User Graphic Style Library 2", "", "{} open the 2. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary3", "User Graphic Style Library 3", "", "{} open the 3. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary4", "User Graphic Style Library 4", "", "{} open the 4. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary5", "User Graphic Style Library 5", "", "{} open the 5. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary6", "User Graphic Style Library 6", "", "{} open the 6. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary7", "User Graphic Style Library 7", "", "{} open the 7. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary8", "User Graphic Style Library 8", "", "{} open the 8. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary9", "User Graphic Style Library 9", "", "{} open the 9. User Defined graphic style library"),
+    ("window.userGraphicStyleLibrary10", "User Graphic Style Library 10", "", "{} open the 10. User Defined graphic style library"),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -634,6 +667,16 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
+        "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),
+        "window.graphicStyleLibrary.other" => crate::panels::graphic_styles::other_library(app, s("path")),
+        "ui.saveGraphicStyleLibrary" => {
+            let names = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            crate::dialogs::save_style_library::open(app, names.unwrap_or_default())
+        }
+        id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => match crate::panels::graphic_styles::user_library(app, id) {
+            Some(l) => crate::panels::graphic_styles::open_library(app, &json!({ "library": l.id })),
+            None => Err("no such user library".into()),
+        },
         _ => return None,
     };
     Some(r)
@@ -729,14 +772,17 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => {
             crate::panels::swatches::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
         }
+        id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => {
+            crate::panels::graphic_styles::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
+        }
         _ => label.into(),
     }
 }
 
 /// Menu slots that are left out while they have nothing to show (unused saved views, User
-/// Defined swatch libraries).
+/// Defined swatch and graphic style libraries).
 fn hidden_when_disabled(id: &str) -> bool {
-    id.starts_with("view.goto") || id.starts_with(crate::panels::swatches::USER_SLOT)
+    id.starts_with("view.goto") || id.starts_with(crate::panels::swatches::USER_SLOT) || id.starts_with(crate::panels::graphic_styles::USER_SLOT)
 }
 
 /// File → Open Recent Files slots.
@@ -811,6 +857,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
         "ui.flattenTransparencyDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.saveGraphicStyleLibrary" => app.session.active().is_some(),
+        id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => crate::panels::graphic_styles::user_library(app, id).is_some(),
         _ => true,
     }
 }
@@ -1402,7 +1450,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 todo("Variables"),
                 Sep,
                 sub("Brush Libraries", library_placeholders()),
-                sub("Graphic Style Libraries", library_placeholders()),
+                sub("Graphic Style Libraries", crate::panels::graphic_styles::window_menu()),
                 sub("Swatch Libraries", crate::panels::swatches::window_menu()),
                 sub("Symbol Libraries", library_placeholders()),
             ],

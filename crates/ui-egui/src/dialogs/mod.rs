@@ -30,6 +30,7 @@ mod path_ops;
 mod recolor;
 pub mod saturate;
 mod save_changes;
+pub mod save_style_library;
 pub mod save_swatch_library;
 mod shapes;
 pub mod swatch_options;
@@ -160,6 +161,7 @@ registry! {
     EyedropperOptions: [eyedropper::KIND] => eyedropper::SPEC,
     FlattenTransparency: [flatten::KIND] => flatten::SPEC,
     FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
+    SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

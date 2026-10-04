@@ -444,3 +444,5 @@ mod tests_stroke;
 mod tests_strokedepth;
 #[cfg(test)]
 mod tests_strokeux;
+#[cfg(test)]
+mod tests_style_libraries;

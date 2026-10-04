@@ -486,6 +486,12 @@ impl AppearanceItem {
             AppearanceItem::Stroke(s) => &s.paint,
         }
     }
+    pub fn paint_mut(&mut self) -> &mut Paint {
+        match self {
+            AppearanceItem::Fill(f) => &mut f.paint,
+            AppearanceItem::Stroke(s) => &mut s.paint,
+        }
+    }
     pub fn visible(&self) -> bool {
         match self {
             AppearanceItem::Fill(f) => f.visible,

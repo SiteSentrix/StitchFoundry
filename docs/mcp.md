@@ -347,6 +347,29 @@ CSS writes custom properties); without `path` it returns `{data}`, and `user: tr
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
 dataBase64?, name?}` loads a `.vcswatches` or `.gpl` file, or another document's swatches, as a library to add from.
 
+## Graphic style libraries
+
+Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
+Rules, Hand-Drawn, Gradient Finishes, Shape Effects, Blends and Transparency). `graphicStyle.libraries` lists them
+(`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and `graphicStyle.library {library}` returns one's
+styles in the `graphicStyle.list` shape (`library` is an id or a name). `graphicStyle.addFromLibrary {library, name? |
+names?}` copies styles into the document's Graphic Styles as one undo step (no names: the whole library); styles the
+document already has (same name and look) are reported under `existing`, a name another look has gets a number, and
+the patterns the styles paint with come along. `apply: true` also applies the first one to `ids` or the selection
+(`add: true` adds its appearance on top instead), in the same undo step: what clicking a style in the library panel
+does. Library styles keep placed gradients in unit-box space, so each object gets them at the same place relative to
+its bounds.
+
+```json
+{"name":"run_command","arguments":{"command":"graphicStyle.library","params":{"library":"hand-drawn"}}}
+{"name":"run_command","arguments":{"command":"graphicStyle.addFromLibrary","params":{"library":"hand-drawn","name":"Crosshatch","apply":true}}}
+```
+`graphicStyle.saveLibrary {path?, names?, name?, user?}` writes the document's styles as a `.vcstyles` library (JSON:
+the styles unlinked from swatches, with their opacity, blend mode, isolate and knockout, and the patterns they paint
+with); without `path` it returns `{data}`, and `user: true` saves into the user library folder of the desktop app
+(category `user`, User Defined). `graphicStyle.loadLibrary {path? | data? | dataBase64?, name?}` loads a `.vcstyles`
+file, or another document's graphic styles, as a library to add from.
+
 ## Strokes on type
 
 `stroke.set` without an `item` gives type its characters' stroke: weight, cap, join, miter limit and the dash

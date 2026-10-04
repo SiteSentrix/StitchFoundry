@@ -38,6 +38,7 @@ mod recolor;
 mod select;
 mod stroke;
 mod style;
+pub mod stylelib;
 mod swatch;
 pub mod swatchlib;
 pub(crate) mod tabs;
@@ -200,6 +201,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(swatchlib::specs());
         v.extend(freeform::specs());
         v.extend(flatten::specs());
+        v.extend(stylelib::specs());
         v
     })
 }
