@@ -155,6 +155,21 @@ delete it, hold Alt to copy it), dragging the end handle changes the vector. The
 {"name":"press_key","arguments":{"key":"Delete"}}
 ```
 
+Freeform gradients: `paint.editGradient {kind: "freeform"}` places four or more colour points inside each selected
+object (coloured along the stops; `mode: "points"|"lines"` is the Draw toggle). `paint.freeform.get` lists the points
+(document coordinates), lines and the selected point; `paint.freeform.addPoint {at, color?, opacity?, spread?,
+line?}`, `setPoint {index?, …}`, `deletePoint {index?}`, `addLine {points}`, `splitLine {line, segment, t?}` and
+`selectPoint {index|null}` edit them (`index` defaults to the selected point; each edit is one undo step). With the
+Gradient tool on a freeform gradient a click on a point selects it (drag to move it), a click on a line adds a point
+on it, a click elsewhere on the art adds a point (in Lines mode joined to the selected one), and Delete removes the
+selected point:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"kind":"freeform","mode":"lines"}}}
+{"name":"run_command","arguments":{"command":"paint.freeform.addPoint","params":{"at":[150,150],"color":"#ff3366","spread":20}}}
+{"name":"pointer_gesture","arguments":{"tool":"gradient","events":[{"kind":"down","x":180,"y":170},{"kind":"up","x":180,"y":170}]}}
+```
+
 Raw protocol (for debugging):
 
 ```sh

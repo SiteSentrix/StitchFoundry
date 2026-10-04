@@ -165,6 +165,9 @@ pub struct ToolContext<'a> {
     pub appearance_item: Option<usize>,
     /// General → Constrain Angle (degrees): Shift constrains drags to 45° steps from it.
     pub constrain_angle: f64,
+    /// The selected freeform gradient point (`paint.freeform.selectPoint`), marked on the
+    /// freeform annotator.
+    pub freeform_point: Option<usize>,
 }
 
 impl ToolContext<'_> {
@@ -349,6 +352,7 @@ pub(crate) mod testutil {
             gradient_stop: None,
             appearance_item: None,
             constrain_angle: 0.0,
+            freeform_point: None,
         }
     }
 }

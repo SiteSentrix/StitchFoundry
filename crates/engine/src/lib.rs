@@ -464,6 +464,9 @@ pub struct Session {
     pub eyedropper: EyedropperOptions,
     /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
     pub swatch_libraries: cmd::swatchlib::Libraries,
+    /// The selected freeform gradient point (`paint.freeform.selectPoint`) and whose gradient it
+    /// was selected on: read it with [`Session::selected_freeform_point`].
+    pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
 }
 
 impl Default for Session {
@@ -497,6 +500,7 @@ impl Session {
             pending_paint: None,
             eyedropper: Default::default(),
             swatch_libraries: Default::default(),
+            freeform_point: None,
         }
     }
 
@@ -770,6 +774,8 @@ mod tests_editcolors;
 mod tests_effectedit;
 #[cfg(test)]
 mod tests_file;
+#[cfg(test)]
+mod tests_freeform;
 #[cfg(test)]
 mod tests_gradient;
 #[cfg(test)]

@@ -7,13 +7,17 @@
 //! for the stop popover, and drag a diamond to move a midpoint (a selected diamond's midpoint
 //! shows in Location). Dropping a colour swatch on the ramp adds a stop of that colour, or
 //! recolours the stop it lands on. Hide Options leaves the thumbnail, the proxy and the slider.
+//!
+//! A freeform gradient shows its section instead of the angle, aspect and slider: the Draw
+//! toggle (Points or Lines: how the Gradient tool adds points) and the selected point's colour
+//! (edited in the Color panel), opacity and spread, with Delete Point.
 
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::{
     MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
 };
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::NodeId;
 
 use super::{active_paint, live_run, pstate, set_pstate};
@@ -180,9 +184,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
+    let freeform = is_grad && kind == GradientKind::Freeform;
     if hidden {
-        ui.add_space(6.0);
-        ramp(app, ui, &g.gradient, is_grad);
+        if !freeform {
+            ui.add_space(6.0);
+            ramp(app, ui, &g.gradient, is_grad);
+        }
         return;
     }
     ui.add_space(4.0);
@@ -196,6 +203,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             widgets::icon_button_enabled(ui, icon, tip, icon == "dc-stroke-center" && !app.session.fill_active, false, 22.0);
         }
     });
+    if freeform {
+        freeform_section(app, ui, &g);
+        return;
+    }
     // The proxy beside the angle and aspect ratio fields.
     ui.horizontal(|ui| {
         super::proxy(app, ui, 36.0);
@@ -228,6 +239,74 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     stop_fields(app, ui, &g.gradient, is_grad);
     if !is_grad {
         widgets::dim_label(ui, "Click the ramp or a type button to apply a gradient.");
+    }
+}
+
+/// The freeform points shown: the gradient's own, else (unplaced) as many as it places, coloured
+/// along the stops.
+pub(crate) fn shown_points(g: &GradientPaint) -> std::borrow::Cow<'_, Freeform> {
+    g.freeform_on(vectorcraft_geom::Rect::new(0.0, 0.0, 1.0, 1.0))
+}
+
+/// Run a `paint.freeform.*` command on the paint behind the active proxy.
+fn edit_point(app: &mut VectorcraftApp, cmd: &str, mut params: Value) {
+    params["stroke"] = json!(!app.session.fill_active);
+    live_run(app, "Gradient", cmd, params, Live::Released);
+}
+
+/// The freeform section: the proxy beside the Draw toggle, then the selected point's colour,
+/// opacity and spread, and Delete Point.
+fn freeform_section(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint) {
+    let f = shown_points(g);
+    let mode = f.mode;
+    ui.horizontal(|ui| {
+        super::proxy(app, ui, 36.0);
+        ui.add_space(4.0);
+        widgets::dim_label(ui, "Draw:");
+        for (m, icon, tip) in [
+            (FreeformMode::Points, "circle", "Points: clicks add free points"),
+            (FreeformMode::Lines, "spline", "Lines: clicks add points joined by a line"),
+        ] {
+            if widgets::icon_button(ui, icon, tip, mode == m, 24.0).clicked() && mode != m {
+                edit(app, json!({ "mode": m.label().to_lowercase() }), Live::Released);
+            }
+        }
+    });
+    ui.add_space(6.0);
+    let sel = app.session.selected_freeform_point().filter(|i| *i < f.points.len());
+    let point = sel.map(|i| f.points[i]);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, "Color:");
+        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+        let paint = point.map_or(Paint::None, |p| Paint::solid(p.color));
+        widgets::swatch_tile(ui, r, &paint, false, resp.hovered());
+        resp.on_hover_text("Edit the selected point's colour in the Color panel");
+        if let Some(p) = point {
+            widgets::dim_label(ui, &p.color.to_hex().to_uppercase());
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.add_enabled_ui(sel.is_some(), |ui| {
+            for (label, key, value) in [("Opacity:", "opacity", point.map(|p| p.opacity)), ("Spread:", "spread", point.map(|p| p.spread))] {
+                widgets::dim_label(ui, label);
+                // Blank while no point is selected.
+                let shown = value.map(|v| (v as f64 * 1000.0).round() / 10.0);
+                if let Some(v) = widgets::mixed_field(ui, ("freeform", key), shown, "%", 1, 54.0)
+                    && let Some(i) = sel
+                {
+                    edit_point(app, "paint.freeform.setPoint", json!({ "index": i, key: v.clamp(0.0, 100.0) / 100.0 }));
+                }
+            }
+        });
+        let can_del = sel.is_some() && f.points.len() > 1;
+        if widgets::icon_button_enabled(ui, "trash-2", "Delete Point", false, can_del, 22.0).clicked()
+            && let Some(i) = sel
+        {
+            edit_point(app, "paint.freeform.deletePoint", json!({ "index": i }));
+        }
+    });
+    if sel.is_none() {
+        widgets::dim_label(ui, "Click the art with the Gradient tool to add or select points.");
     }
 }
 

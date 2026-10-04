@@ -285,7 +285,13 @@ impl Importer {
                 .collect::<Vec<_>>()
         };
         let gp = |kind, stops, geom: GradientGeom| {
-            Paint::Gradient(Box::new(GradientPaint { gradient: Gradient { kind, stops }, geom: Some(geom), angle: geom.angle_deg(), swatch: None }))
+            Paint::Gradient(Box::new(GradientPaint {
+                gradient: Gradient { kind, stops },
+                geom: Some(geom),
+                angle: geom.angle_deg(),
+                swatch: None,
+                freeform: None,
+            }))
         };
         match p {
             usvg::Paint::Color(c) => Paint::solid(Color::rgb8(c.red, c.green, c.blue)),

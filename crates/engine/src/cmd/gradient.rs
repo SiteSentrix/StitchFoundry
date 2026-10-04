@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; a freeform gradient's points are recoloured along them), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -82,7 +82,7 @@ pub(crate) struct StopOwner {
 }
 
 impl StopOwner {
-    fn of(s: &Session) -> Self {
+    pub(crate) fn of(s: &Session) -> Self {
         Self { doc: s.active, object: s.active().and_then(|d| d.selection.objects.first().copied()), fill: s.fill_active, item: s.appearance_item() }
     }
 }
@@ -153,6 +153,9 @@ pub(crate) fn parse_gradient(g: &Value) -> Parsed<GradientPaint> {
         (None, None) => {}
         _ => return Err("give both `start` and `end` (or neither)".into()),
     }
+    if let Some(f) = g.get("freeform") {
+        gp.freeform = Some(super::freeform::parse_freeform(f)?);
+    }
     Ok(gp)
 }
 
@@ -164,10 +167,13 @@ fn aspect_param(p: &Value) -> Parsed<Option<f64>> {
 }
 
 /// `paint` without the placement it had on the art it came from (a swatch, or the default paint
-/// for new art): a placed gradient keeps its angle and fits each object it lands on.
+/// for new art): a placed gradient keeps its angle and fits each object it lands on (freeform
+/// points are placed afresh, coloured along the stops, which follow the points' colours).
 pub(crate) fn unplaced(paint: &Paint) -> Paint {
     match paint {
-        Paint::Gradient(g) if g.geom.is_some() => Paint::Gradient(Box::new(GradientPaint { geom: None, ..(**g).clone() })),
+        Paint::Gradient(g) if g.geom.is_some() || g.freeform.is_some() => {
+            Paint::Gradient(Box::new(GradientPaint { geom: None, freeform: None, ..(**g).clone() }))
+        }
         _ => paint.clone(),
     }
 }
@@ -184,6 +190,8 @@ pub(crate) fn place_paint(paint: &Paint, p: &Value, bounds: Option<Rect>) -> Pai
     let Paint::Gradient(g) = paint else { return paint.clone() };
     let aspect = match g.geom {
         Some(geom) if applies_swatch(p) => (geom.aspect != 1.0).then(|| json!(geom.aspect * 100.0)),
+        // Freeform points given with the paint stay where they were put.
+        _ if g.freeform.is_some() && !applies_swatch(p) => return paint.clone(),
         None => p.get("gradient").and_then(|g| g.get("aspect")).cloned(),
         Some(_) => return paint.clone(),
     };
@@ -196,17 +204,32 @@ pub(crate) fn place_paint(paint: &Paint, p: &Value, bounds: Option<Rect>) -> Pai
 
 /// Apply the gradient edits in `p` to `paint` (pure; unit-tested).
 pub(crate) fn apply_gradient_edit(paint: &Paint, p: &Value, bounds: Option<Rect>) -> std::result::Result<Paint, String> {
+    apply_gradient_edit_in(paint, p, bounds, &|_| true)
+}
+
+/// [`apply_gradient_edit`] on a shape that contains the points `inside` does: a gradient turned
+/// freeform gets its first points there.
+pub(crate) fn apply_gradient_edit_in(
+    paint: &Paint,
+    p: &Value,
+    bounds: Option<Rect>,
+    inside: &dyn Fn(Point) -> bool,
+) -> std::result::Result<Paint, String> {
     let mut gp = match paint {
         Paint::Gradient(g) => (**g).clone(),
         _ => GradientPaint::new(Gradient::default()),
     };
+    let mut switched = false;
     if let Some(k) = str_param(p, "kind") {
         let kind = parse_kind(k)?;
         if kind != gp.gradient.kind {
             gp.gradient.kind = kind;
             gp.geom = None;
+            gp.freeform = None;
+            switched = true;
         }
     }
+    let recolor = p.get("stops").is_some() || bool_or(p, "reverse", false);
     if let Some(stops) = p.get("stops") {
         gp.gradient.stops = parse_stops(stops)?;
         gp.swatch = None;
@@ -246,6 +269,27 @@ pub(crate) fn apply_gradient_edit(paint: &Paint, p: &Value, bounds: Option<Rect>
             g.aspect = asp;
         }
     }
+    if gp.gradient.kind == GradientKind::Freeform {
+        // Points already shown (automatic ones fitted to the box) stay put; a fresh freeform
+        // gradient gets its points inside the shape.
+        if let Some(b) = bounds {
+            gp.seed_freeform(b, if switched { inside } else { &|_| true });
+        }
+        if recolor
+            && !switched
+            && let Some(f) = &mut gp.freeform
+        {
+            f.recolor(&gp.gradient);
+            gp.gradient.stops = f.stops();
+        }
+    }
+    if let Some(m) = str_param(p, "mode") {
+        let mode = super::freeform::parse_mode(m)?;
+        if gp.gradient.kind != GradientKind::Freeform {
+            return Err("`mode` applies to freeform gradients".into());
+        }
+        gp.freeform.get_or_insert_with(Default::default).mode = mode;
+    }
     Ok(Paint::Gradient(Box::new(gp)))
 }
 
@@ -258,6 +302,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     // Validate against the defaults first so bad params fail without touching the document.
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
     let new_default = apply_gradient_edit(&default_paint, p, None).map_err(|e| bad(C, e))?;
+    let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
     edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
@@ -270,7 +315,13 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok(());
         }
         let b = item_paint_bounds(n, index, !stroke);
-        let np = apply_gradient_edit(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), p, b).map_err(|e| bad(C, e))?;
+        // Only a gradient turning freeform needs the shape (its first points go inside it).
+        let inside = (freeform && b.is_some()).then(|| super::freeform::inside_fn(n));
+        let inside: &dyn Fn(Point) -> bool = match &inside {
+            Some(f) => f,
+            None => &|_| true,
+        };
+        let np = apply_gradient_edit_in(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), p, b, inside).map_err(|e| bad(C, e))?;
         n.appearance.set_paint_at(index, !stroke, np);
         Ok(())
     })?;
@@ -321,7 +372,7 @@ pub(crate) fn item_paint_bounds(n: &Node, index: Option<usize>, fill: bool) -> O
 pub(crate) fn place_run_paint(paint: &Paint, p: &Value, xf: Affine, bounds: Rect) -> Paint {
     let mut out = place_paint(paint, p, Some(bounds));
     if let (Paint::Gradient(src), Paint::Gradient(g)) = (paint, &mut out)
-        && src.geom.is_some()
+        && (src.geom.is_some() || src.freeform.is_some())
         && !applies_swatch(p)
         && let Some(inv) = invert(xf)
     {

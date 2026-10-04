@@ -1,6 +1,7 @@
 //! Color panel: Grayscale / RGB / HSB / CMYK / Web Safe RGB sliders with colour-gradient tracks,
 //! value fields, hex field, None/Black/White chips, spectrum ramp and the Fill/Stroke proxy.
-//! When the active paint is a gradient, the sliders edit the Gradient panel's selected stop.
+//! When the active paint is a gradient, the sliders edit the Gradient panel's selected stop (on a
+//! freeform gradient, its selected point).
 //!
 //! The mode follows the colour's own model (the last mode picked comes back for colours in its
 //! model). Alt-clicking the spectrum or a chip paints the inactive proxy; Shift-clicking the
@@ -9,7 +10,7 @@
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{Color, GradientKind, Paint};
 
 use super::{active_paint, color_json, live_run, pstate, set_pstate};
 use crate::theme::Tokens;
@@ -258,17 +259,19 @@ fn to32(c: &Color) -> Color32 {
     super::c32(c)
 }
 
-/// What the panel is editing: the active proxy's solid colour, or a selected gradient stop.
+/// What the panel is editing: the active proxy's solid colour, a selected gradient stop or a
+/// selected freeform point.
 enum Target {
     Paint(Option<Color>),
     Stop { paint: Paint, index: usize, color: Color },
+    Point { index: usize, color: Color },
 }
 
 impl Target {
     fn color(&self) -> Option<Color> {
         match self {
             Target::Paint(c) => *c,
-            Target::Stop { color, .. } => Some(*color),
+            Target::Stop { color, .. } | Target::Point { color, .. } => Some(*color),
         }
     }
 }
@@ -280,6 +283,12 @@ fn target(app: &VectorcraftApp, ui: &Ui) -> Target {
     }
     let p = active_paint(app);
     match &p {
+        Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => {
+            // Like stops: without a selected point, the first.
+            let f = super::gradient::shown_points(g);
+            let index = app.session.selected_freeform_point().filter(|i| *i < f.points.len()).unwrap_or(0);
+            Target::Point { index, color: f.points.get(index).map_or(Color::BLACK, |p| p.color) }
+        }
         Paint::Gradient(g) => {
             let i = app.session.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
             let color = g.gradient.stops.get(i).map(|s| s.color).unwrap_or(Color::BLACK);
@@ -300,6 +309,10 @@ fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: 
                 s.color = c;
             }
             super::gradient::set_stops(app, &stops, None, phase);
+        }
+        Target::Point { index, .. } if !behind => {
+            let p = json!({"index": index, "color": color_json(&c), "stroke": !app.session.fill_active});
+            live_run(app, "Color", "paint.freeform.setPoint", p, phase);
         }
         _ => {
             let cmd = super::proxy_cmd(app, behind);
@@ -507,7 +520,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ] {
         if menu_item(ui, label, recolor, false) {
             match (&tgt, color) {
-                (Target::Stop { .. }, Some(c)) => apply(app, &tgt, f(&c), Live::Released, false),
+                (Target::Stop { .. } | Target::Point { .. }, Some(c)) => apply(app, &tgt, f(&c), Live::Released, false),
                 _ => {
                     app.run(cmd, json!({})).ok();
                 }

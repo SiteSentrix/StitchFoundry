@@ -229,6 +229,7 @@ fn linear_gradient_roundtrip() {
         geom: Some(GradientGeom { start: Point::new(10.0, 20.0), end: Point::new(90.0, 60.0), aspect: 1.0 }),
         angle: 0.0,
         swatch: None,
+        freeform: None,
     };
     let n = rect_node(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), Appearance::basic(Paint::Gradient(Box::new(gp)), Paint::None, 1.0));
     let d = doc_with(vec![n]);
@@ -260,6 +261,7 @@ fn radial_gradient_and_fit_roundtrip() {
         geom: Some(GradientGeom { start: Point::new(150.0, 150.0), end: Point::new(150.0, 180.0), aspect: 0.5 }),
         angle: 0.0,
         swatch: None,
+        freeform: None,
     };
     let n2 = rect_node(&mut d, Rect::new(100.0, 100.0, 200.0, 200.0), Appearance::basic(Paint::Gradient(Box::new(gp)), Paint::None, 1.0));
     let r = roundtrip(&doc_with(vec![n, n2]));

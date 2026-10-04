@@ -15,6 +15,7 @@ mod edit;
 mod effectcmd;
 pub mod fileio;
 mod fonts;
+pub(crate) mod freeform;
 pub(crate) mod gradient;
 pub(crate) mod graph;
 pub mod help;
@@ -196,6 +197,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(paint::proxy_specs());
         v.extend(overprint::specs());
         v.extend(swatchlib::specs());
+        v.extend(freeform::specs());
         v
     })
 }
