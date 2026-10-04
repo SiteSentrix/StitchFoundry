@@ -83,24 +83,14 @@ fn options<T: DeserializeOwned + Default>(f: &Format, p: &Value) -> Result<T> {
     T::deserialize(p).map_err(|e| bad(C, format!("{} options: {e}", f.label)))
 }
 
-/// Most pixels a raster export renders (1 GiB of RGBA).
-const MAX_PIXELS: f64 = 268_435_456.0;
+/// Most pixels a side of a WebP image can have (its sizes are stored in 14 bits).
+const WEBP_SIDE: f64 = 16383.0;
 
-/// Refuse a raster export the encoder can't write or memory can't hold (instead of writing an
-/// empty file or aborting).
-fn check_pixels(f: &Format, w: f64, h: f64) -> Result<()> {
-    // WebP stores sizes in 14 bits, JPEG in 16.
-    let side = if f.id == "webp" { 16383.0 } else { 65535.0 };
-    if w.round() > side || h.round() > side || w * h > MAX_PIXELS {
-        return Err(bad(
-            C,
-            format!(
-                "{}×{} px is too large for {} (at most {side} px a side, {MAX_PIXELS} px in all): lower the scale",
-                w.round(),
-                h.round(),
-                f.label
-            ),
-        ));
+/// Refuse a raster export its format can't store (instead of writing an empty file). The
+/// renderer's own size limits are [`vectorcraft_render::raster_size`]'s.
+fn check_format_size(f: &Format, w: f64, h: f64) -> Result<()> {
+    if f.id == "webp" && (w.round() > WEBP_SIDE || h.round() > WEBP_SIDE) {
+        return Err(bad(C, format!("{}×{} px is too large for {} (at most {WEBP_SIDE} px a side): lower the scale", w.round(), h.round(), f.label)));
     }
     Ok(())
 }
@@ -127,8 +117,8 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
             let o: RasterOptions = options(f, p)?;
             let region = doc.artboards[boards(o.boards.one(n))?].rect;
             let scale = o.scale.unwrap_or(1.0).clamp(0.01, 64.0);
+            check_format_size(f, region.width() * scale, region.height() * scale)?;
             vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
-            check_pixels(f, region.width() * scale, region.height() * scale)?;
             let img = vectorcraft_render::Renderer::new().render_region(doc, region, scale, f.id == "jpg");
             match f.id {
                 "png" => img.to_png(),
