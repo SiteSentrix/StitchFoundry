@@ -225,6 +225,11 @@ Groups are not isolated unless Isolate Blending is on: a blend mode inside a gro
 opacity mask, knockout or a clip reaches the art below the group, on screen and in PDF (a knockout group's elements
 then composite against the art below it). SVG has no non-isolated groups, so there such groups stay isolated.
 
+`transparency.viewOpacityMask {on?, id?}` is Alt-clicking the mask thumbnail: the canvas shows only the mask of `id`
+(default: the mask being edited, else the first selected masked object) as greyscale coverage (white = opaque) and the
+mask is edited; called again it shows the artwork, still editing. It is view state of the open document: the canvas
+(and `ui.screenshot`) shows it, exports never do, and it ends when mask editing ends.
+
 ## Clipping masks
 
 `object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a

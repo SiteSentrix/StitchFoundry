@@ -439,6 +439,8 @@ mod tests_effectedit;
 #[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
+mod tests_maskview;
+#[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]
 mod tests_strokedepth;

@@ -145,6 +145,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
+    let mask_view = st.shown_mask();
 
     // Pasteboard, artboard shadows and paper.
     painter.rect_filled(rect, 0.0, t.pasteboard);
@@ -217,6 +218,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let [r, g, b, _] = c.to_rgba8(1.0);
                 [r, g, b]
             }),
+            mask_view,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
