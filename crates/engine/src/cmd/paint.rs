@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, NodeKind};
 
-use super::gradient::{place_paint, place_run_paint, run_paint_mut};
+use super::gradient::{place_paint, place_run_paint, run_paint_mut, unplaced};
 use super::*;
 use crate::EngineError;
 
@@ -15,7 +15,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, ids?} sets selection fill and the default",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a gradient swatch fits each object, keeping its aspect), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, ids?} sets selection fill and the default (new art fits a gradient to itself)",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -75,10 +75,11 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
 
 fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     let paint = paint_from(s, p)?.ok_or_else(|| bad("paint.setFill", "give color, none, swatch or gradient"))?;
+    // New art gets the paint fitted to itself, not placed where this one is.
     if fill {
-        s.paint.fill = paint.clone();
+        s.paint.fill = unplaced(&paint);
     } else {
-        s.paint.stroke = paint.clone();
+        s.paint.stroke = unplaced(&paint);
     }
     s.fill_active = fill;
     let ids = paint_targets(s, p)?;

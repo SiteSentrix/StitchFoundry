@@ -61,8 +61,9 @@ fn gradient_params_round_trip_through_fill_and_swatches() {
     assert_eq!(got.gradient.stops, g.gradient.stops);
     let (a, b) = (got.geom.unwrap(), g.geom.unwrap());
     assert!(a.start.distance(b.start) < 1e-9 && a.end.distance(b.end) < 1e-9 && (a.aspect - b.aspect).abs() < 1e-9, "{a:?}");
-    // The default proxy keeps it too, and saving it as a swatch is lossless.
-    assert_eq!(s.paint.fill, Paint::Gradient(Box::new(got.clone())));
+    // The default for new art keeps all but the placement (new art fits it to itself), and saving
+    // it as a swatch is lossless.
+    assert_eq!(s.paint.fill, Paint::Gradient(Box::new(GradientPaint { geom: None, ..got.clone() })));
     let mut q = gradient_param(&g);
     q["name"] = json!("Three");
     s.execute("swatch.new", &q).unwrap();
@@ -345,4 +346,31 @@ fn the_selected_stop_belongs_to_its_gradient() {
     assert_eq!(s.selected_stop(), Some(1));
     s.execute("paint.toggleActive", &json!({})).unwrap();
     assert_eq!(s.selected_stop(), None);
+}
+
+#[test]
+fn swatches_and_new_art_fit_a_placed_gradient_to_themselves() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let mut g = three_stops();
+    g.gradient.kind = GradientKind::Radial;
+    let mut q = gradient_param(&g);
+    s.execute("paint.setFill", &q).unwrap();
+    q["name"] = json!("Placed");
+    s.execute("swatch.new", &q).unwrap();
+    // New art drawn elsewhere fits the gradient to itself rather than to the first rectangle.
+    let b = rect(&mut s, 500.0, 300.0, 100.0, 100.0);
+    assert_eq!(fill_gradient(&s, b).geom, None);
+    // Applying the swatch fits its gradient to each object, keeping the aspect it was saved with.
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Placed"})).unwrap();
+    let geom = fill_geom(&s, b);
+    assert_eq!(geom.start, Point::new(550.0, 350.0));
+    assert!((geom.aspect - 0.5).abs() < 1e-9 && (geom.length() - 50.0).abs() < 1e-9, "{geom:?}");
+    // On type, in text space.
+    let t = text(&mut s, 100.0, 400.0);
+    s.execute("paint.setFill", &json!({"swatch": "Placed"})).unwrap();
+    let (_, doc) = node(&s, t).proxy_gradient(false).unwrap();
+    let tb = node(&s, t).geometric_bounds().unwrap();
+    assert!(doc.start.distance(tb.center()) < 1e-9 && (doc.aspect - 0.5).abs() < 1e-9, "{doc:?} on {tb:?}");
 }

@@ -167,14 +167,34 @@ fn aspect_param(p: &Value) -> Parsed<Option<f64>> {
         .transpose()
 }
 
-/// `paint` as applied to an object with `bounds`: a gradient given an `aspect` but no vector is
-/// placed on the bounds so the aspect sticks.
-pub(crate) fn place_paint(paint: &Paint, p: &Value, bounds: Option<Rect>) -> Paint {
-    match (paint, p.get("gradient").and_then(|g| g.get("aspect"))) {
-        (Paint::Gradient(g), Some(a)) if g.geom.is_none() => {
-            apply_gradient_edit(paint, &json!({ "aspect": a }), bounds).unwrap_or_else(|_| paint.clone())
-        }
+/// `paint` without the placement it had on the art it came from (a swatch, or the default paint
+/// for new art): a placed gradient keeps its angle and fits each object it lands on.
+pub(crate) fn unplaced(paint: &Paint) -> Paint {
+    match paint {
+        Paint::Gradient(g) if g.geom.is_some() => Paint::Gradient(Box::new(GradientPaint { geom: None, ..(**g).clone() })),
         _ => paint.clone(),
+    }
+}
+
+/// Is `p` applying a swatch (whose gradient placement belongs to the art it was saved from)?
+fn applies_swatch(p: &Value) -> bool {
+    p.get("swatch").is_some()
+}
+
+/// `paint` as applied to an object with `bounds`: a gradient given an `aspect` but no vector is
+/// placed on the bounds so the aspect sticks, and a gradient swatch fits the object (keeping its
+/// aspect) instead of the art it was saved from.
+pub(crate) fn place_paint(paint: &Paint, p: &Value, bounds: Option<Rect>) -> Paint {
+    let Paint::Gradient(g) = paint else { return paint.clone() };
+    let aspect = match g.geom {
+        Some(geom) if applies_swatch(p) => (geom.aspect != 1.0).then(|| json!(geom.aspect * 100.0)),
+        None => p.get("gradient").and_then(|g| g.get("aspect")).cloned(),
+        Some(_) => return paint.clone(),
+    };
+    let fitted = unplaced(paint);
+    match aspect {
+        Some(a) => apply_gradient_edit(&fitted, &json!({ "aspect": a }), bounds).unwrap_or(fitted),
+        None => fitted,
     }
 }
 
@@ -308,6 +328,7 @@ pub(crate) fn place_run_paint(paint: &Paint, p: &Value, xf: Affine, bounds: Rect
     let mut out = place_paint(paint, p, Some(bounds));
     if let (Paint::Gradient(src), Paint::Gradient(g)) = (paint, &mut out)
         && src.geom.is_some()
+        && !applies_swatch(p)
         && let Some(inv) = invert(xf)
     {
         g.transform(inv);
