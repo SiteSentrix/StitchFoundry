@@ -133,7 +133,8 @@ exposes to agents, and exported by VectorCraft's own renderer. The source files 
 - **Robust.** Exact curve booleans (no "cannot perform operation"), unlimited undo via structural
   sharing, and property-tested file round trips.
 - **Open.** A documented native format (`.vectorcraft`, JSON), first-class SVG, PDF (and
-  PDF-compatible `.ai`) import and export, PNG/JPEG/WebP, and Export for Screens.
+  PDF-compatible `.ai`) import and export, PNG/JPEG/WebP export, Export for Screens, and SVGZ,
+  templates, GIF, TIFF and BMP on open.
 - **Agent-native.** Every menu item, tool gesture, panel and dialog can be driven over a JSON
   control channel and an **MCP server**, so Claude and other agents can draw, edit and export the
   way a person does.
@@ -150,7 +151,7 @@ cargo run --release -p vectorcraft-cli -- run --in examples/ribbons.vectorcraft 
 cargo run --release -p vectorcraft-cli -- bench examples/neon-drive.vectorcraft                   # render timing
 cargo xtask bundle                                        # dist/VectorCraft.app (macOS)
 cd apps/vectorcraft-web && trunk build --release            # web build → dist/web
-cargo xtask ci                                            # fmt, clippy, tests, layering, wasm
+cargo xtask ci                                            # fmt, clippy, tests, layering, wasm, vendor names
 ```
 
 ### Use it from Claude Code and other agents
