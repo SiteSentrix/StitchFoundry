@@ -3,11 +3,13 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::appearance::stroke_paint_bounds;
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::{Affine, Point, Rect};
+use vectorcraft_tools::params::color_json;
 
 use super::appearance::{ItemTarget, edit_items, edits_stroke, item_target};
 use super::edit::selected_roots;
+use super::paint::swatch_solid;
 use super::*;
 use crate::EngineError;
 
@@ -18,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; a freeform gradient's points are recoloured along them), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -103,9 +105,42 @@ fn parse_kind(k: &str) -> Parsed<GradientKind> {
     GradientKind::parse(k).ok_or_else(|| format!("unknown gradient kind `{k}` (linear, radial, freeform)"))
 }
 
+/// `v` (params holding `stops`) with each stop that names a `swatch` resolved through `d`
+/// ([`swatch_solid`]): a global or spot colour or a tint swatch gives the stop its colour, link and
+/// tint, a process colour just its colour. A stop linked to a swatch that no longer exists keeps
+/// the colour it gives.
+pub(crate) fn link_stops(d: &Document, v: &Value) -> Parsed<Value> {
+    let mut v = v.clone();
+    let Some(stops) = v.get_mut("stops").and_then(Value::as_array_mut) else { return Ok(v) };
+    for (i, st) in stops.iter_mut().enumerate() {
+        let Some(name) = st.get("swatch").and_then(Value::as_str).map(str::to_string) else { continue };
+        if d.swatch(&name).is_none() && st.get("color").is_some() {
+            continue;
+        }
+        let tint = st.get("tint").and_then(Value::as_f64).map(|t| (t / 100.0).clamp(0.0, 1.0) as f32);
+        let Paint::Solid { color, swatch, tint } = swatch_solid(d, &name, tint).map_err(|e| format!("stop {i}: {e}"))? else {
+            continue;
+        };
+        let Some(o) = st.as_object_mut() else { continue };
+        o.insert("color".into(), color_json(&color));
+        match swatch {
+            Some(n) => {
+                o.insert("swatch".into(), json!(n));
+                o.insert("tint".into(), json!(tint * 100.0));
+            }
+            None => {
+                o.remove("swatch");
+                o.remove("tint");
+            }
+        }
+    }
+    Ok(v)
+}
+
 /// Parse `stops` params: at least two, each with a numeric `offset` (clamped to 0..1) and a valid
 /// `color`; `opacity` is 0..1 (values above 1 are percentages) and `midpoint` is clamped to the
-/// diamond's range. The result is sorted by offset.
+/// diamond's range; `swatch` and `tint` (%) keep a stop's link as given (resolve them first with
+/// [`link_stops`]). The result is sorted by offset.
 pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
     let arr = v.as_array().ok_or("`stops` must be an array")?;
     if arr.len() < 2 {
@@ -119,13 +154,15 @@ pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
             let offset = num("offset")?.ok_or_else(|| format!("stop {i} needs `offset`"))?;
             let color = st.get("color").and_then(color_value).ok_or_else(|| format!("stop {i} needs a valid `color`"))?;
             let opacity = num("opacity")?.map(|o| if o > 1.0 { o / 100.0 } else { o }).unwrap_or(1.0);
+            let swatch = str_param(st, "swatch").map(str::to_string);
+            let tint = num("tint")?.filter(|_| swatch.is_some()).map_or(1.0, |t| (t / 100.0).clamp(0.0, 1.0) as f32);
             Ok(GradientStop {
                 offset: offset.clamp(0.0, 1.0) as f32,
                 color,
                 opacity: opacity.clamp(0.0, 1.0) as f32,
                 midpoint: num("midpoint")?.unwrap_or(0.5).clamp(0.13, 0.87) as f32,
-                swatch: None,
-                tint: 1.0,
+                swatch,
+                tint,
             })
         })
         .collect::<Parsed<Vec<_>>>()?;
@@ -301,6 +338,8 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = edits_stroke(s, p, item, !s.fill_active)?;
     let item = item.of_kind(s, !stroke);
     let ids = item.targets(s, p)?;
+    // Stops naming swatches take their colours from them.
+    let p = &link_stops(&s.doc()?.doc, p).map_err(|e| bad(C, e))?;
     // Validate against the defaults first so bad params fail without touching the document.
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
     let new_default = apply_gradient_edit(&default_paint, p, None).map_err(|e| bad(C, e))?;

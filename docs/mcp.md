@@ -444,3 +444,17 @@ colours and leaves the rest alone.
 {"name":"run_command","arguments":{"command":"paint.setFill","params":{"swatch":"Ink","tint":40}}}
 {"name":"run_command","arguments":{"command":"edit.colors.adjustBalance","params":{"mode":"global","tint":-20}}}
 ```
+
+## Linked gradient stops
+
+Applying a gradient swatch (`paint.setFill {swatch}`) records it as the gradient's `swatch` (the Swatches panel
+highlights it; new stops drop the link). A gradient stop can link to a global or spot swatch like a solid colour:
+give it `swatch` (and `tint` %, default 100 or a tint swatch's own) instead of `color` in `paint.editGradient
+{stops}` or a `gradient` paint's stops. Editing or deleting the swatch then recolours or unlinks the stop, in art and
+in gradient swatches. A spot stop separates on its plate; a gradient whose stops are all tints of one spot ink (or
+paper white, 0 %) exports to PDF as a Separation shading (the writer has no DeviceN, so a gradient mixing a spot
+ink with other colours is written in process colours, with a warning).
+
+```json
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stops":[{"offset":0,"swatch":"Ink"},{"offset":1,"swatch":"Ink","tint":20}]}}}
+```

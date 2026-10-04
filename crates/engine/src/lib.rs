@@ -805,6 +805,8 @@ mod tests_knockout;
 #[cfg(test)]
 mod tests_layerclip;
 #[cfg(test)]
+mod tests_linked_stops;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_menucmds;

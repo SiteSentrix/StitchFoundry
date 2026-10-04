@@ -13,10 +13,21 @@ pub fn color_json(c: &Color) -> Value {
     }
 }
 
-/// Gradient stops as the `stops` param of `paint.editGradient` / a `gradient` paint.
+/// Gradient stops as the `stops` param of `paint.editGradient` / a `gradient` paint (a linked
+/// stop also carries its `swatch` and `tint` %).
 pub fn stops_json(stops: &[GradientStop]) -> Value {
     Value::Array(
-        stops.iter().map(|s| json!({"offset": s.offset, "color": color_json(&s.color), "opacity": s.opacity, "midpoint": s.midpoint})).collect(),
+        stops
+            .iter()
+            .map(|s| {
+                let mut v = json!({"offset": s.offset, "color": color_json(&s.color), "opacity": s.opacity, "midpoint": s.midpoint});
+                if let Some(n) = &s.swatch {
+                    v["swatch"] = json!(n);
+                    v["tint"] = json!(s.tint * 100.0);
+                }
+                v
+            })
+            .collect(),
     )
 }
 
@@ -75,6 +86,11 @@ mod tests {
         let v = gradient_params(&g);
         assert_eq!((v["start"].clone(), v["end"].clone(), v["aspect"].clone()), (json!([1.0, 2.0]), json!([3.0, 4.0]), json!(50.0)));
         assert_eq!(v["swatch"], "Sky");
+        assert!(v["stops"][0].get("swatch").is_none(), "unlinked stops carry no link");
+        g.gradient.stops[1].swatch = Some("Ink".into());
+        g.gradient.stops[1].tint = 0.25;
+        let v = gradient_params(&g);
+        assert_eq!((v["stops"][1]["swatch"].clone(), v["stops"][1]["tint"].clone()), (json!("Ink"), json!(25.0)));
         assert_eq!(color_json(&Color::gray(0.25)), json!({"gray": 0.25}));
     }
 }

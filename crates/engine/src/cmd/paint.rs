@@ -1,7 +1,7 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind};
 
 use super::appearance::{ItemTarget, appearance_targets, edit_items, item_target};
@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch fits each object, keeping its aspect), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself)",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself)",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -314,12 +314,14 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
         return match &sw.paint {
             Paint::Solid { .. } => swatch_solid(d, name, tint).map(Some).map_err(|e| bad("paint", e)),
             _ if tint.is_some() => Err(bad("paint", "`tint` applies to global and spot colours")),
+            Paint::Gradient(g) => Ok(Some(Paint::Gradient(Box::new(GradientPaint { swatch: Some(name.to_string()), ..(**g).clone() })))),
             other => Ok(Some(other.clone())),
         };
     }
     if let Some(g) = p.get("gradient") {
-        let mut gp = super::gradient::parse_gradient(g).map_err(|e| bad("paint", e))?;
-        gp.gradient.stops.iter_mut().for_each(|st| st.color = new_color(st.color));
+        let g = super::gradient::link_stops(&s.doc()?.doc, g).map_err(|e| bad("paint", e))?;
+        let mut gp = super::gradient::parse_gradient(&g).map_err(|e| bad("paint", e))?;
+        gp.gradient.stops.iter_mut().filter(|st| st.swatch.is_none()).for_each(|st| st.color = new_color(st.color));
         return Ok(Some(Paint::Gradient(Box::new(gp))));
     }
     if let Some(c) = p.get("color") {

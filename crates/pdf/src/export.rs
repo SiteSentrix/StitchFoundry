@@ -261,6 +261,41 @@ impl Exporter<'_> {
         }
     }
 
+    /// The stops of a gradient whose every stop is a tint of one spot ink (or paper white, 0% of
+    /// it) as tints of that ink — a Separation shading — with midpoints as explicit stops (the
+    /// tint and opacity there are halfway). `None` for other gradients; one that mixes a spot ink
+    /// with other colours is written in process colours (the PDF writer has no DeviceN).
+    fn spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
+        let ink = g.stops.iter().find_map(|s| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot)))?;
+        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
+        let tints: Option<Vec<f32>> = g
+            .stops
+            .iter()
+            .map(|s| match s.swatch.as_deref() {
+                Some(n) if n == ink => Some(s.tint),
+                None if paper(&s.color) => Some(0.0),
+                _ => None,
+            })
+            .collect();
+        let Some(tints) = tints else {
+            self.warn("gradients mixing a spot color with other colors are exported in process colors");
+            return None;
+        };
+        let space = self.separation(ink)?;
+        let tint = |t: f32| -> krilla::color::Color { SepColor::new(q(t), space.clone()).into() };
+        let mut out = vec![];
+        for (i, s) in g.stops.iter().enumerate() {
+            out.push((s.offset, tint(tints[i]), s.opacity));
+            if let Some(n) = g.stops.get(i + 1)
+                && (s.midpoint - 0.5).abs() > 1e-3
+            {
+                let at = s.offset + (n.offset - s.offset) * s.midpoint;
+                out.push((at, tint((tints[i] + tints[i + 1]) / 2.0), (s.opacity + n.opacity) / 2.0));
+            }
+        }
+        Some(out)
+    }
+
     /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect.
     fn warn_raster(&mut self, effects: &[vectorcraft_doc::Effect]) {
         if effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
@@ -282,12 +317,30 @@ impl Exporter<'_> {
             Paint::Solid { color: c, swatch, tint } => Some(self.solid(c, swatch.as_deref(), *tint).into()),
             Paint::Gradient(g) => {
                 let geom = g.resolve(bounds);
+                let spot = (g.gradient.kind != GradientKind::Freeform).then(|| self.spot_stops(&g.gradient)).flatten();
+                let colored = match spot {
+                    Some(v) => v,
+                    None => {
+                        let stops = g.gradient.expanded_stops();
+                        // The PDF writer needs every stop in one colour space: stops of mixed
+                        // models (midpoints sample in RGB) go through RGB, or stay CMYK in a CMYK
+                        // document, where `col` separates the rest.
+                        let mixed = stops.windows(2).any(|w| w[0].1.model() != w[1].1.model());
+                        let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
+                        let one = |c: Color| match c {
+                            Color::Cmyk { .. } if cmyk_doc => c,
+                            _ if mixed => c.in_model(vectorcraft_color::cms::Model::Rgb),
+                            _ => c,
+                        };
+                        stops.into_iter().map(|(o, c, a)| (o, self.col(&one(c)), a)).collect()
+                    }
+                };
                 let mut stops: Vec<Stop> = Vec::new();
                 let mut last = 0.0f32;
-                for (o, c, a) in g.gradient.expanded_stops() {
+                for (o, color, a) in colored {
                     let o = o.clamp(last, 1.0);
                     last = o;
-                    stops.push(Stop { offset: norm(o), color: self.col(&c), opacity: norm(a) });
+                    stops.push(Stop { offset: norm(o), color, opacity: norm(a) });
                 }
                 if stops.is_empty() {
                     return None;

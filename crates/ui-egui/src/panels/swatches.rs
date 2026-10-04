@@ -693,7 +693,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
 }
 
 /// The swatch the active paint comes from: a linked colour's global swatch (a tint's tint swatch
-/// when there is one), or None.
+/// when there is one), a gradient's gradient swatch, or None.
 fn active_swatch(app: &VectorcraftApp) -> Option<String> {
     match active_paint(app) {
         Paint::Solid { swatch: Some(n), tint, .. } => {
@@ -701,6 +701,7 @@ fn active_swatch(app: &VectorcraftApp) -> Option<String> {
             let tint_swatch = d.swatches_iter().find(|w| w.tint_of() == Some((n.as_str(), tint)));
             Some(tint_swatch.map_or(n.clone(), |w| w.name.clone()))
         }
+        Paint::Gradient(g) => g.swatch,
         Paint::None => Some("[None]".to_string()),
         _ => None,
     }
@@ -1482,7 +1483,7 @@ mod tests {
     }
 
     #[test]
-    fn the_active_tint_swatch_is_highlighted_and_a_tint_edits_its_base() {
+    fn the_active_tint_or_gradient_swatch_is_highlighted_and_a_tint_edits_its_base() {
         let mut app = app();
         app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
         app.run("paint.setFill", json!({"swatch": "Ink", "tint": 40})).unwrap();
@@ -1491,6 +1492,8 @@ mod tests {
         assert_eq!(active_swatch(&app).as_deref(), Some("Ink 40%"));
         let tint = entries(&app, Kind::Color, "Ink 40").into_iter().find(|e| e.name() == "Ink 40%").unwrap();
         assert!(matches!(tint, Entry::Swatch { global: true, spot: true, .. }), "a tint swatch shows its base's kind");
+        app.run("paint.setFill", json!({"swatch": "Sunset"})).unwrap();
+        assert_eq!(active_swatch(&app).as_deref(), Some("Sunset"), "the applied gradient swatch");
         app.run("ui.swatchOptions", json!({"name": "Ink 40%"})).unwrap();
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.kind.as_str(), d.str("__swatch").as_str()), (KIND, "Ink"), "a tint swatch opens its base's options");
