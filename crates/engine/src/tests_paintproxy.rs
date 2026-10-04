@@ -197,6 +197,48 @@ fn a_mixed_selection_shows_a_question_mark_proxy() {
 }
 
 #[test]
+fn every_selection_change_bumps_the_revision() {
+    // The "?" proxy is cached per revision, so selecting by Magic Wand or font must bump it.
+    let mut s = session();
+    let a = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let b = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#fa0000"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let rev = s.doc().unwrap().revision;
+    s.execute("select.magicWand", &json!({"id": a.0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.len(), 2, "{a:?} and {b:?} are within the tolerance");
+    assert!(s.doc().unwrap().revision > rev);
+    assert_eq!(s.doc().unwrap().proxy_mixed(), (true, false));
+    let r = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "Hi"})).unwrap();
+    let family = match &node(&s, NodeId(r["id"].as_u64().unwrap())).kind {
+        NodeKind::Text(t) => t.first_style().font_family,
+        _ => panic!("not text"),
+    };
+    let rev = s.doc().unwrap().revision;
+    s.execute("select.font", &json!({"family": family})).unwrap();
+    assert!(s.doc().unwrap().revision > rev);
+}
+
+#[test]
+fn proxies_show_the_first_selected_object_or_the_defaults() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#123456"})).unwrap();
+    assert_eq!(s.proxy_paints().0.color().unwrap().to_hex(), "#123456");
+    s.execute("select.none", &json!({})).unwrap();
+    s.paint.fill = Paint::solid(Color::WHITE);
+    assert_eq!(s.proxy_paints().0, Paint::solid(Color::WHITE));
+    // Type shows its first run's paints.
+    let r = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap();
+    s.execute("select.set", &json!({"ids": [r["id"]]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#654321"})).unwrap();
+    assert_eq!(s.proxy_paints().0.color().unwrap().to_hex(), "#654321");
+    assert_eq!(s.execute("paint.proxies", &json!({})).unwrap()["fill"], json!(s.proxy_paints().0));
+    let _ = id;
+}
+
+#[test]
 fn live_paint_and_appearance_items_feed_recent_colours() {
     let mut s = session();
     let id = rect(&mut s);
@@ -209,4 +251,25 @@ fn live_paint_and_appearance_items_feed_recent_colours() {
     let g = s.doc().unwrap().selection.objects[0];
     s.execute("livePaint.fill", &json!({"group": g.0, "point": [50, 30], "color": "#00ff00"})).unwrap();
     assert_eq!(hexes(&s)[0], "#00ff00");
+}
+
+#[test]
+fn a_group_shows_its_contents_in_the_proxies() {
+    let mut s = session();
+    let a = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let b = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    // The group shows what the paint commands change: its contents' red fill, not mixed.
+    assert_eq!(s.doc().unwrap().selection.len(), 1);
+    assert_eq!(s.proxy_paints().0.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(s.doc().unwrap().proxy_mixed(), (false, false));
+    // Contents that differ make even a single selected group a "?" proxy.
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [b.0]})).unwrap();
+    assert_eq!(s.execute("paint.proxies", &json!({})).unwrap()["fillMixed"], true);
+    // An empty selection shows the defaults.
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.proxy_paints().0, s.paint.fill);
 }

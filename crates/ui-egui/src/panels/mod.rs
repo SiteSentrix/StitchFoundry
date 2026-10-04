@@ -38,7 +38,7 @@ pub mod transparency;
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::Node;
 
 use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
@@ -177,19 +177,10 @@ pub(crate) fn apply_click(app: &mut VectorcraftApp, ui: &Ui, mut params: Value) 
     app.run(proxy_cmd(app, alt), params).ok();
 }
 
-/// Fill and stroke as the proxies show them: the first selected object's (text uses its first
-/// run's style), else the defaults for new art.
+/// Fill and stroke as the proxies show them ([`vectorcraft_engine::Session::proxy_paints`]: the
+/// first selected object's, a group's first painted object's, else the defaults for new art).
 pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
-    match first_selected(app) {
-        Some(n) => match &n.kind {
-            NodeKind::Text(t) => {
-                let s = t.first_style();
-                (s.fill, s.stroke)
-            }
-            _ => (n.appearance.fill_paint(), n.appearance.stroke_paint()),
-        },
-        None => (app.session.paint.fill.clone(), app.session.paint.stroke.clone()),
-    }
+    app.session.proxy_paints()
 }
 
 /// Whether the selected objects' fills and strokes differ (the proxies show "?"), cached per

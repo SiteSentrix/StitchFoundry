@@ -159,7 +159,7 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
         })
         .collect();
     let n = hits.len();
-    s.doc_mut()?.selection.set(hits);
+    s.select(|_, sel| sel.set(hits))?;
     Ok(json!({ "count": n }))
 }
 

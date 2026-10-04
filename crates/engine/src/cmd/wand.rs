@@ -159,7 +159,7 @@ fn magic_wand(s: &mut Session, p: &Value) -> Result<Value> {
         other => return Err(bad("select.magicWand", format!("unknown mode `{other}` (set, add, subtract)"))),
     };
     let n = ids.len();
-    s.doc_mut()?.selection.set(ids);
+    s.select(|_, sel| sel.set(ids))?;
     Ok(json!({ "count": n }))
 }
 

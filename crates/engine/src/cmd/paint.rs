@@ -123,7 +123,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Fill and Stroke",
             [],
             None,
-            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the first selected object's, type: its first run's; else the defaults for new art), fillActive, fillMixed, strokeMixed: the selected objects' fills (strokes) differ, shown as a \"?\" proxy}",
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the first selected object's, a group's first painted object's, type: its first run's; else the defaults for new art), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, shown as a \"?\" proxy}",
             always,
             proxies
         ),
@@ -144,6 +144,19 @@ impl Session {
         }
     }
 
+    /// The fill and stroke the Fill/Stroke proxies show: the first selected object's (a group's
+    /// first painted object's; type: its first run's), else the defaults for new art.
+    pub fn proxy_paints(&self) -> (Paint, Paint) {
+        let mut nodes = vec![];
+        if let Some(n) = self.active().and_then(|st| st.selection.objects.first().and_then(|id| st.doc.node(*id))) {
+            painted(n, true, &mut nodes);
+        }
+        match nodes.first() {
+            Some(n) => (proxy_paint(n, false), proxy_paint(n, true)),
+            None => (self.paint.fill.clone(), self.paint.stroke.clone()),
+        }
+    }
+
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {
         match p {
             Paint::Solid { color, .. } => {
@@ -158,13 +171,12 @@ impl Session {
     }
 }
 
-/// The fill or stroke a proxy shows for `n` (type shows its first run's style).
+/// The fill or stroke a proxy shows for `n` (type shows its first run's style, as
+/// `TextNode::first_style` does).
 pub(crate) fn proxy_paint(n: &Node, stroke: bool) -> Paint {
+    let pick = |st: &CharStyle| if stroke { st.stroke.clone() } else { st.fill.clone() };
     match &n.kind {
-        NodeKind::Text(t) => {
-            let st = t.runs.first().map(|r| &r.style);
-            st.map(|st| if stroke { st.stroke.clone() } else { st.fill.clone() }).unwrap_or_default()
-        }
+        NodeKind::Text(t) => t.runs.first().map_or_else(|| pick(&CharStyle::default()), |r| pick(&r.style)),
         _ if stroke => n.appearance.stroke_paint(),
         _ => n.appearance.fill_paint(),
     }
@@ -180,40 +192,54 @@ fn same_in_proxy(a: &Paint, b: &Paint) -> bool {
     }
 }
 
+/// The objects whose paints the proxies show for a selected `n`, the ones the paint commands
+/// change ([`leaf_targets`]): groups and layers stand for their contents (and so do blends and
+/// other containers inside them), a compound path for its parts.
+fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
+    let expand = match n.kind {
+        NodeKind::Group { .. } | NodeKind::Layer { .. } => true,
+        NodeKind::Compound { .. } => false,
+        _ => !top && n.is_container(),
+    };
+    if expand {
+        n.children().into_iter().flatten().for_each(|c| painted(c, false, out));
+    } else {
+        out.push(n);
+    }
+}
+
 impl DocState {
     /// Whether the selected objects' fills and strokes differ as the proxies show them (a "?"
-    /// proxy). One walk of the document, so callers that ask every frame cache it by revision.
+    /// proxy; a group whose contents differ counts). One walk of the document, so callers that ask
+    /// every frame cache it by revision.
     pub fn proxy_mixed(&self) -> (bool, bool) {
-        if self.selection.len() < 2 {
+        if self.selection.is_empty() {
             return (false, false);
         }
         let ids: std::collections::HashSet<NodeId> = self.selection.objects.iter().copied().collect();
-        let mut first: Option<(Paint, Paint)> = None;
-        let mut mixed = (false, false);
+        let mut nodes = vec![];
         self.doc.walk(|n| {
-            if (mixed.0 && mixed.1) || !ids.contains(&n.id) {
-                return;
-            }
-            let (f, s) = (proxy_paint(n, false), proxy_paint(n, true));
-            match &first {
-                Some((f0, s0)) => {
-                    mixed.0 |= !same_in_proxy(f0, &f);
-                    mixed.1 |= !same_in_proxy(s0, &s);
-                }
-                None => first = Some((f, s)),
+            if ids.contains(&n.id) {
+                painted(n, true, &mut nodes);
             }
         });
+        let mut paints = nodes.iter().map(|n| (proxy_paint(n, false), proxy_paint(n, true)));
+        let Some((f0, s0)) = paints.next() else { return (false, false) };
+        let mut mixed = (false, false);
+        for (f, s) in paints {
+            mixed.0 |= !same_in_proxy(&f0, &f);
+            mixed.1 |= !same_in_proxy(&s0, &s);
+            if mixed.0 && mixed.1 {
+                break;
+            }
+        }
         mixed
     }
 }
 
 fn proxies(s: &mut Session, _: &Value) -> Result<Value> {
-    let st = s.doc().ok();
-    let (fill, stroke) = match st.and_then(|st| st.selection.objects.first().and_then(|id| st.doc.node(*id))) {
-        Some(n) => (proxy_paint(n, false), proxy_paint(n, true)),
-        None => (s.paint.fill.clone(), s.paint.stroke.clone()),
-    };
-    let (fill_mixed, stroke_mixed) = st.map_or((false, false), DocState::proxy_mixed);
+    let (fill, stroke) = s.proxy_paints();
+    let (fill_mixed, stroke_mixed) = s.active().map_or((false, false), DocState::proxy_mixed);
     Ok(json!({"fill": fill, "stroke": stroke, "fillActive": s.fill_active, "fillMixed": fill_mixed, "strokeMixed": stroke_mixed}))
 }
 

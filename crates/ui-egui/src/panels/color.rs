@@ -651,6 +651,34 @@ mod tests {
     }
 
     #[test]
+    fn double_clicking_a_proxy_opens_the_color_picker_for_it() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        // One frame of the proxy alone; returns the stroke square's rect.
+        let run = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let input = egui::RawInput { time: Some(time), events, ..Default::default() };
+            let mut rect = None;
+            let mut out = ctx.run_ui(input, |ui| {
+                crate::panels::proxy(app, ui, 40.0);
+                rect = ctx.read_response(ui.id().with("stroke-proxy")).map(|r| r.rect);
+            });
+            out.textures_delta.clear();
+            rect
+        };
+        let pos = run(&mut app, 0.0, vec![]).expect("the stroke square is drawn").right_bottom() - vec2(3.0, 3.0);
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        run(&mut app, 0.1, vec![egui::Event::PointerMoved(pos), button(true)]);
+        run(&mut app, 0.15, vec![button(false)]);
+        assert!(!app.session.fill_active, "a click brings the stroke to the front");
+        assert!(app.ui.dialog.is_none());
+        run(&mut app, 0.2, vec![button(true)]);
+        run(&mut app, 0.25, vec![button(false)]);
+        let d = app.ui.dialog.as_ref().expect("a double-click opens the Color Picker");
+        assert_eq!(d.kind, "colorPicker");
+        assert!(d.bool("stroke"));
+    }
+
+    #[test]
     fn hide_options_leaves_the_proxy_and_spectrum() {
         let mut app = app();
         let ctx = egui::Context::default();
