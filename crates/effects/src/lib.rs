@@ -12,6 +12,8 @@
 //!   renderer, the exporters and Outline Stroke.
 //! - [`effect_catalog`] lists every effect with its menu path, parameter documentation and the
 //!   defaults of Illustrator's dialogs. Missing parameters always fall back to those defaults.
+//! - [`reshape`] applies geometry effects to type, images, symbol instances and live objects
+//!   through their outlines.
 //! - [`clip_outline`] is the region a clip group clips to, shared by the renderer and the SVG and
 //!   PDF writers.
 //!
@@ -24,6 +26,7 @@ mod clip;
 mod distort;
 mod group;
 mod raster;
+mod reshape;
 pub mod stroke;
 mod stylize;
 mod util;
@@ -40,6 +43,7 @@ pub use bake::{bake_document, needs_bake};
 pub use clip::clip_outline;
 pub use group::{OutlineHook, PATHFINDER_EFFECTS, has_pathfinder, is_pathfinder, pathfinder_children};
 pub use raster::{RasterFx, outset, raster_effects};
+pub use reshape::{needs_outline, outline_art, outline_text, reshape};
 pub use warp::{WarpStyle, warp_point};
 
 /// Catalogue entry for one effect.
@@ -312,7 +316,7 @@ pub fn apply_geometry_bez(effects: &[Effect], path: &BezPath, bounds: Rect, ctx:
     apply_geometry_with(effects, &PathData::from_bezpath(path), bounds, ctx).to_bezpath()
 }
 
-fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext) -> PathData {
+pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext) -> PathData {
     use util::*;
     match id {
         "distort.freeDistort" => distort::free_distort(path, b, p),

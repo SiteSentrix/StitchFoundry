@@ -227,6 +227,13 @@ impl Exporter<'_> {
         SepColor::new(q(tint), SeparationSpace::new(SeparationColorant::Custom(name), alt)).into()
     }
 
+    /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect.
+    fn warn_raster(&mut self, effects: &[vectorcraft_doc::Effect]) {
+        if effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
+            self.warn("raster effects (shadows, glows, blur, feather) are not exported to PDF yet");
+        }
+    }
+
     fn warn(&mut self, w: impl Into<String>) {
         let w = w.into();
         if !self.warnings.contains(&w) {
@@ -360,9 +367,7 @@ impl Exporter<'_> {
             None if !n.is_container() => return,
             _ => {}
         }
-        if n.appearance.effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
-            self.warn("raster effects (shadows, glows, blur, feather) are not exported to PDF yet");
-        }
+        self.warn_raster(&n.appearance.effects);
         let container = n.is_container() && !matches!(n.kind, NodeKind::Compound { .. });
         let mut pushes = 0;
         if n.blend != BlendMode::Normal {
@@ -449,9 +454,7 @@ impl Exporter<'_> {
                     if !fl.visible || fl.paint.is_none() {
                         continue;
                     }
-                    if fl.effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
-                        self.warn("raster effects (shadows, glows, blur, feather) are not exported to PDF yet");
-                    }
+                    self.warn_raster(&fl.effects);
                     // Pattern fills: the tile instances covering the shape, clipped to it.
                     let doc = self.doc;
                     if let Paint::Pattern { pattern, xf } = &fl.paint
@@ -486,6 +489,7 @@ impl Exporter<'_> {
                     if !st.visible || st.paint.is_none() || st.width <= 0.0 {
                         continue;
                     }
+                    self.warn_raster(&st.effects);
                     self.stroke(s, bp, &path, r, st, bounds);
                 }
             }

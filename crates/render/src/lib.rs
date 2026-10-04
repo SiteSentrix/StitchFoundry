@@ -230,6 +230,8 @@ pub struct Renderer {
     live: live::LiveCache,
     /// Blurred, tinted drop shadow / outer glow rasters per object and effect (see `fx`).
     shadows: PtrMap<(usize, usize), fx::ShadowEntry>,
+    /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
+    fx_arts: PtrMap<usize, (Arc<Node>, Arc<Node>)>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -277,6 +279,7 @@ impl Renderer {
             brushes: Default::default(),
             shadows: PtrMap::default(),
             live: live::LiveCache::default(),
+            fx_arts: PtrMap::default(),
         }
     }
 
@@ -527,6 +530,9 @@ impl Renderer {
             self.stats.drawn += 1;
             return;
         }
+        if fx::has_object_fx(a) {
+            return self.draw_object_fx(ctx, f, a, true);
+        }
         if let NodeKind::Text(t) = &a.kind
             && a.opacity >= 1.0
             && a.blend == vectorcraft_color::BlendMode::Normal
@@ -557,6 +563,9 @@ impl Renderer {
             }
         } else if !n.is_container() {
             return;
+        }
+        if fx::has_object_fx(n) {
+            return self.draw_object_fx(ctx, f, &Arc::new(n.clone()), false);
         }
         let outline = f.opts.outline;
         let mut layers = 0;
@@ -1012,3 +1021,5 @@ fn now() -> u64 {
 mod tests;
 #[cfg(test)]
 mod tests_clip;
+#[cfg(test)]
+mod tests_objectfx;

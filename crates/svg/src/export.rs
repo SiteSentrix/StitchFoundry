@@ -446,6 +446,7 @@ impl Writer<'_> {
         let strokes = items.len() - fills;
         let simple = fills <= 1
             && strokes <= 1
+            && !items.iter().any(|i| has_raster(i.effects()))
             && items.iter().all(|i| match i {
                 AppearanceItem::Fill(f) => f.blend == BlendMode::Normal,
                 AppearanceItem::Stroke(s) => s.blend == BlendMode::Normal && s.align == StrokeAlign::Center,
@@ -476,6 +477,8 @@ impl Writer<'_> {
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
         for it in items {
+            // The item's own raster effects filter that item alone.
+            let filters = self.open_filters(n, it.effects());
             let mut p = Props::new();
             match it {
                 AppearanceItem::Fill(f) => {
@@ -525,6 +528,7 @@ impl Writer<'_> {
                     self.line(&format!("<path d=\"{d}\"{a}{extra}/>"));
                 }
             }
+            self.close_filters(filters);
         }
         self.depth -= 1;
         self.line("</g>");
@@ -573,7 +577,7 @@ impl Writer<'_> {
         if !n.visible {
             return;
         }
-        if n.appearance.effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
+        if has_raster(&n.appearance.effects) {
             return self.filtered(n);
         }
         if let Some(m) = n.mask.as_deref()
@@ -679,15 +683,22 @@ impl Writer<'_> {
     }
 
     /// Raster effects (drop shadow, glows, Gaussian blur, feather) as SVG filters: one `<g filter>`
-    /// per effect, the first effect innermost (Illustrator's stacking order).
+    /// per effect, the first effect innermost (the reference app's stacking order).
     fn filtered(&mut self, n: &Node) {
-        use vectorcraft_effects::RasterFx;
-        let fx = vectorcraft_effects::raster_effects(&n.appearance.effects);
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
+        let opened = self.open_filters(n, &n.appearance.effects);
+        self.node(&inner);
+        self.close_filters(opened);
+    }
+
+    /// Open one `<g filter>` per visible raster effect of `effects` (an object's, or one fill or
+    /// stroke's) on `n`, outermost last effect; returns how many to close.
+    fn open_filters(&mut self, n: &Node, effects: &[vectorcraft_doc::Effect]) -> usize {
+        use vectorcraft_effects::RasterFx;
+        let fx = vectorcraft_effects::raster_effects(effects);
         let reach: f64 = fx.iter().map(RasterFx::outset).sum::<f64>() + 2.0;
         let region = n.visual_bounds().map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
-        let mut opened = 0;
         for f in fx.iter().rev() {
             let fid = self.fresh_id("filter");
             let region_attr = match region {
@@ -741,9 +752,11 @@ impl Writer<'_> {
             self.def(1, &format!("<filter id=\"{fid}\"{region_attr} color-interpolation-filters=\"sRGB\">{body}</filter>"));
             self.line(&format!("<g filter=\"url(#{fid})\">"));
             self.depth += 1;
-            opened += 1;
         }
-        self.node(&inner);
+        fx.len()
+    }
+
+    fn close_filters(&mut self, opened: usize) {
         for _ in 0..opened {
             self.depth -= 1;
             self.line("</g>");
@@ -947,4 +960,9 @@ impl Writer<'_> {
         }
         out
     }
+}
+
+/// Any visible raster effect (shadow, glow, blur, feather) in `effects`?
+fn has_raster(effects: &[vectorcraft_doc::Effect]) -> bool {
+    effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id))
 }
