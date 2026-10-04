@@ -125,7 +125,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ramp(app, ui, &g.gradient, is_grad);
     ui.add_space(4.0);
     // Stop fields.
-    let sel = app.session.gradient_stop.filter(|i| *i < g.gradient.stops.len());
+    let sel = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len());
     ui.horizontal(|ui| {
         let enabled = is_grad && sel.is_some();
         let stop = sel.and_then(|i| g.gradient.stops.get(i)).copied();
@@ -210,7 +210,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     }
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let x_of = |o: f32| bar.left() + o * bar.width();
-    let sel = app.session.gradient_stop;
+    let sel = app.session.selected_stop();
     let mut drag: Drag = pstate(ui.ctx(), "grad-drag");
     let stops = &g.stops;
     // While dragging, edits are computed against the stops as they were when the drag began (the

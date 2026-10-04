@@ -26,7 +26,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec::window(show, confirm);
 /// The stops of the gradient behind the active proxy and the selected stop's index.
 fn selected(app: &VectorcraftApp) -> Option<(Vec<GradientStop>, usize)> {
     let Paint::Gradient(g) = active_paint(app) else { return None };
-    let i = app.session.gradient_stop.filter(|i| *i < g.gradient.stops.len())?;
+    let i = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len())?;
     Some((g.gradient.stops, i))
 }
 
@@ -34,7 +34,7 @@ fn selected(app: &VectorcraftApp) -> Option<(Vec<GradientStop>, usize)> {
 fn apply(app: &mut VectorcraftApp, stops: &[GradientStop], i: usize, phase: Live) {
     let params = json!({ "stops": stops_json(stops), "stroke": !app.session.fill_active });
     live_run(app, "Gradient", "paint.editGradient", params, phase);
-    if phase == Live::Released && app.session.gradient_stop != Some(i) {
+    if phase == Live::Released && app.session.selected_stop() != Some(i) {
         app.run("gradient.selectStop", json!({ "index": i })).ok();
     }
 }
@@ -107,7 +107,9 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if let (Some(tab), Some(d)) = (tab, app.ui.dialog.as_mut()) {
         d.fields.insert("tab".into(), json!(tab));
     }
-    if resp.clicked_elsewhere() {
+    // The double-click that opened the popover lands on its chip, outside it: only a later click
+    // elsewhere closes it.
+    if resp.clicked_elsewhere() && !ctx.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
         app.ui.dialog = None;
     }
 }
@@ -200,7 +202,7 @@ mod tests {
         crate::canvas::dispatch(&mut app, &PointerEvent { kind: PointerKind::DoubleClick, pos: chip, mods: Default::default(), pressure: 1.0 }, view);
         let d = app.ui.dialog.clone().expect("the popover opened");
         assert_eq!((d.kind.as_str(), d.fields["index"].clone(), d.str("tab")), ("gradientStop", json!(1), "color".into()));
-        assert_eq!(app.session.gradient_stop, Some(1));
+        assert_eq!(app.session.selected_stop(), Some(1));
         frame(&mut app, vec![]);
         app.ui.dialog.as_mut().unwrap().fields.insert("tab".into(), json!("swatches"));
         frame(&mut app, vec![]);
@@ -221,9 +223,26 @@ mod tests {
         // Moving it past the last stop keeps it selected at its new index.
         app.ui.dialog = Some(Dialog::new("gradientStop", json!({"location": 100})));
         super::super::confirm(&mut app).unwrap();
-        assert_eq!((app.session.gradient_stop, stops(&app)[2].color.to_hex()), (Some(2), "#ff0000".to_string()));
+        assert_eq!((app.session.selected_stop(), stops(&app)[2].color.to_hex()), (Some(2), "#ff0000".to_string()));
         app.ui.dialog = Some(Dialog::new("gradientStop", json!({"color": "red"})));
         assert!(super::super::confirm(&mut app).is_err());
+    }
+
+    fn click(at: egui::Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    }
+
+    #[test]
+    fn the_opening_double_click_keeps_it_open_and_a_later_click_elsewhere_closes_it() {
+        let mut app = app();
+        app.ui.dialog = Some(Dialog::new("gradientStop", json!({"index": 1, "x": 150, "y": 160})));
+        // The frame the double-click lands in (the popover opens beside the pointer, not under it).
+        let at = egui::pos2(5.0, 5.0);
+        let double = vec![egui::Event::PointerMoved(at), click(at, true), click(at, false), click(at, true), click(at, false)];
+        frame(&mut app, double);
+        assert!(app.ui.dialog.is_some(), "the opening double-click must not close it");
+        frame(&mut app, vec![egui::Event::PointerMoved(at), click(at, true), click(at, false)]);
+        assert!(app.ui.dialog.is_none(), "a click elsewhere closes it");
     }
 
     #[test]

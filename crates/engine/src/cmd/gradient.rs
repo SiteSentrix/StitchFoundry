@@ -71,8 +71,33 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
             Some(i)
         }
     };
-    s.gradient_stop = index;
+    s.gradient_stop = index.map(|i| (i, StopOwner::of(s)));
     Ok(json!({ "index": index }))
+}
+
+/// Whose gradient a selected stop belongs to: the active document, its first selected object
+/// (None: the default paint) and the proxy in front. Selecting other art or toggling the proxy
+/// leaves no stop selected.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct StopOwner {
+    doc: Option<usize>,
+    object: Option<NodeId>,
+    fill: bool,
+}
+
+impl StopOwner {
+    fn of(s: &Session) -> Self {
+        Self { doc: s.active, object: s.active().and_then(|d| d.selection.objects.first().copied()), fill: s.fill_active }
+    }
+}
+
+impl Session {
+    /// The selected gradient stop (`gradient.selectStop`), while the gradient it was selected on
+    /// is still the one behind the active proxy. Callers check it against the stop count (an undo
+    /// can remove stops).
+    pub fn selected_stop(&self) -> Option<usize> {
+        self.gradient_stop.filter(|(_, owner)| *owner == StopOwner::of(self)).map(|(i, _)| i)
+    }
 }
 
 type Parsed<T> = std::result::Result<T, String>;

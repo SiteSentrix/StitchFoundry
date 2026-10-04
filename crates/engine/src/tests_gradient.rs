@@ -285,12 +285,12 @@ fn stop_count(s: &Session, id: NodeId) -> usize {
 fn select_stop_is_validated_and_shared() {
     let (mut s, _) = annotated();
     assert_eq!(s.execute("gradient.selectStop", &json!({"index": 1})).unwrap(), json!({"index": 1}));
-    assert_eq!(s.gradient_stop, Some(1));
+    assert_eq!(s.selected_stop(), Some(1));
     assert!(s.execute("gradient.selectStop", &json!({"index": 2})).is_err(), "two stops");
     assert!(s.execute("gradient.selectStop", &json!({"index": "a"})).is_err());
     assert!(s.execute("gradient.selectStop", &json!({})).is_err());
     s.execute("gradient.selectStop", &json!({"index": null})).unwrap();
-    assert_eq!(s.gradient_stop, None);
+    assert_eq!(s.selected_stop(), None);
     // The stroke proxy's paint is solid: nothing to select there.
     s.execute("paint.toggleActive", &json!({})).unwrap();
     assert!(s.execute("gradient.selectStop", &json!({"index": 0})).is_err());
@@ -304,7 +304,7 @@ fn annotator_gestures_edit_the_gradient_as_single_undo_steps() {
     let stops = fill_gradient(&s, id).gradient.stops;
     assert_eq!(stops.len(), 3);
     assert!((stops[1].offset - 0.3).abs() < 1e-6);
-    assert_eq!(s.gradient_stop, Some(1));
+    assert_eq!(s.selected_stop(), Some(1));
     // Dragging the end handle changes only the end, as one undo step.
     let undo = s.doc().unwrap().history.undo.len();
     gesture(
@@ -320,9 +320,29 @@ fn annotator_gestures_edit_the_gradient_as_single_undo_steps() {
     assert!(s.tool_claims_key(ToolKey::Delete, view));
     s.tool_key(ToolKey::Delete, Mods::default(), view).unwrap();
     assert_eq!(stop_count(&s, id), 2);
-    assert_eq!(s.gradient_stop, Some(1));
+    assert_eq!(s.selected_stop(), Some(1));
     // Never below two stops.
     s.tool_key(ToolKey::Backspace, Mods::default(), view).unwrap();
     assert_eq!(stop_count(&s, id), 2);
     assert!(s.doc().unwrap().doc.node(id).is_some());
+}
+
+#[test]
+fn the_selected_stop_belongs_to_its_gradient() {
+    let (mut s, a) = annotated();
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {}})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("gradient.selectStop", &json!({"index": 1})).unwrap();
+    let view = crate::ViewInfo::default();
+    assert!(s.tool_claims_key(ToolKey::Delete, view));
+    // Other art selected: no stop is selected there, so Delete is not the tool's.
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(s.selected_stop(), None);
+    assert!(!s.tool_claims_key(ToolKey::Delete, view));
+    // Back on the art it was selected on, it is selected again; the other proxy has none.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(s.selected_stop(), Some(1));
+    s.execute("paint.toggleActive", &json!({})).unwrap();
+    assert_eq!(s.selected_stop(), None);
 }

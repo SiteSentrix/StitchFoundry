@@ -443,9 +443,10 @@ pub struct Session {
     untitled_counter: u32,
     /// Session-level state of the menu commands (saved selections, guide lock).
     pub(crate) menu: cmd::menucmds::MenuState,
-    /// The selected gradient stop (`gradient.selectStop`), shared by the Gradient tool's annotator,
-    /// the Gradient and Color panels and agents.
-    pub gradient_stop: Option<usize>,
+    /// The selected gradient stop (`gradient.selectStop`) and whose gradient it was selected on,
+    /// shared by the Gradient tool's annotator, the Gradient and Color panels and agents: read it
+    /// with [`Session::selected_stop`].
+    pub(crate) gradient_stop: Option<(usize, cmd::gradient::StopOwner)>,
 }
 
 impl Default for Session {

@@ -79,7 +79,7 @@ impl Session {
             snap_to_point: view.snap_to_point,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
-            gradient_stop: self.gradient_stop,
+            gradient_stop: self.selected_stop(),
         };
         f(self.tool.as_mut(), &cx)
     }

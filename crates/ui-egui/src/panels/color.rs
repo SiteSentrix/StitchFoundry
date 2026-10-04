@@ -163,7 +163,7 @@ fn target(app: &VectorcraftApp) -> Target {
     let p = active_paint(app);
     match &p {
         Paint::Gradient(g) => {
-            let i = app.session.gradient_stop.unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
+            let i = app.session.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
             let color = g.gradient.stops.get(i).map(|s| s.color).unwrap_or(Color::BLACK);
             Target::Stop { paint: p.clone(), index: i, color }
         }
