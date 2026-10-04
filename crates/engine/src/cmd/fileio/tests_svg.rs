@@ -182,3 +182,13 @@ fn formats_list_the_svg_options_with_their_defaults() {
         assert!(svg["options"].get(k).is_some(), "{k}");
     }
 }
+
+#[test]
+fn fewer_tspans_reaches_the_writer() {
+    let mut s = Session::new();
+    let src = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><text x="10" y="40" font-size="12">plain <tspan fill="#ff0000">red</tspan> plain</text></svg>"##;
+    s.execute("document.open", &json!({"name": "two-runs.svg", "dataBase64": vectorcraft_format::base64_encode(src.as_bytes())})).unwrap();
+    let placed = |svg: &str| svg.matches("<tspan x=").count();
+    assert_eq!(placed(&svg(&mut s, json!({}))), 3, "a tspan per style run");
+    assert_eq!(placed(&svg(&mut s, json!({"fewerTspans": true}))), 1, "a tspan per line");
+}

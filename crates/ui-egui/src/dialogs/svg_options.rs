@@ -168,6 +168,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.add_space(12.0);
         check(ui, d, "responsive", "Responsive", true);
     });
+    check(ui, d, "fewerTspans", "Fewer <tspan> Elements", !d.bool("outlineText"));
     check(ui, d, "metadata", "Include Metadata", true);
     if mode == Mode::Export {
         artboards(app, ui, d);

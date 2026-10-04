@@ -14,14 +14,6 @@ use crate::{EDITING_NS, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output
 
 type Props = Vec<(&'static str, String)>;
 
-/// One laid-out line of area type: baseline anchor (text space) and its pieces of each run.
-struct AreaLine<'t> {
-    x: f64,
-    y: f64,
-    pieces: Vec<(usize, &'t str)>,
-    hyphenated: bool,
-}
-
 pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
     let baked = vectorcraft_effects::bake_document(doc);
@@ -301,7 +293,7 @@ impl Writer<'_> {
             Styling::PresentationAttributes => {
                 // CSS-only properties go in a style attribute.
                 let (style, attrs): (Vec<_>, Vec<_>) =
-                    props.iter().partition(|(k, _)| matches!(*k, "mix-blend-mode" | "isolation" | "font-feature-settings"));
+                    props.iter().partition(|(k, _)| matches!(*k, "mix-blend-mode" | "isolation" | "font-feature-settings" | "font-kerning"));
                 let mut s: String = attrs.iter().map(|(k, v)| format!(" {k}=\"{}\"", xml_escape(v))).collect();
                 if !style.is_empty() {
                     s.push_str(&format!(" style=\"{}\"", xml_escape(&css(&style))));
@@ -1136,7 +1128,8 @@ impl Writer<'_> {
         let fam =
             if st.font_family.contains(|c: char| c.is_whitespace() || c == ',') { format!("'{}'", st.font_family) } else { st.font_family.clone() };
         p.push(("font-family", fam));
-        p.push(("font-size", self.num(st.size)));
+        // Vertical scale is the font size; horizontal scale stretches it (`textLength`).
+        p.push(("font-size", self.num(st.size * st.v_scale / 100.0)));
         let fs = st.font_style.to_ascii_lowercase();
         if fs.contains("bold") || fs.contains("black") || fs.contains("heavy") {
             p.push(("font-weight", "bold".into()));
@@ -1158,8 +1151,14 @@ impl Writer<'_> {
             }
             self.stroke_props(&layer, layer.width, None, &mut p);
         }
-        if st.tracking != 0.0 {
-            p.push(("letter-spacing", self.num(st.tracking / 1000.0 * st.size)));
+        // Tracking and manual kerning both add space after every character.
+        let spacing = st.tracking + st.kerning.unwrap_or(0.0);
+        if spacing != 0.0 {
+            p.push(("letter-spacing", self.num(spacing / 1000.0 * st.size)));
+        }
+        if st.kerning.is_some() {
+            // Manual kerning replaces the font's pair kerning.
+            p.push(("font-kerning", "none".into()));
         }
         if !st.features.is_empty() {
             let v: Vec<String> = st
@@ -1242,21 +1241,106 @@ impl Writer<'_> {
         self.line("</g>");
     }
 
+    /// Point and area type, every laid-out line at its own position: wraps, indents, tabs and
+    /// spacing come out as on the canvas. Centred and right-aligned lines are anchored
+    /// (`text-anchor`) at their centre or right end, so they stay aligned in a viewer whose font
+    /// differs; other lines are placed where each style run (and, justified, each word) starts.
     fn text(&mut self, n: &Node, t: &TextObject) {
-        let first = t.first_style();
-        let lead = first.effective_leading();
+        if let TextKind::OnPath { path, start } = &t.kind {
+            return self.text_on_path(n, t, path, *start);
+        }
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let lines = text_lines(t, &lay, self.opts.fewer_tspans);
+        // A tab starts a new chunk at its stop: only lines without tabs can be anchored.
+        let anchor = match t.para.justify {
+            Justify::Center => Some(("middle", 0.5)),
+            Justify::Right => Some(("end", 1.0)),
+            _ => None,
+        }
+        .filter(|_| !lines.iter().flatten().any(|s| s.brk));
+        let base = self.char_props(&t.first_style());
+        let mut props = base.clone();
+        if let Some((a, _)) = anchor {
+            props.push(("text-anchor", a.into()));
+        }
+        props.extend(Self::node_props(n));
         let id = self.id_attr(n);
-        let (m, on_path) = match &t.kind {
-            // Area type lines are positioned in text space (see `area_lines`).
-            TextKind::Point | TextKind::Area { .. } => (self.xf * t.xf, None),
-            TextKind::OnPath { path, start } => {
-                let pid = self.fresh_id("text-path");
-                let d = self.path_d(path, self.xf * t.xf);
-                self.def(1, &format!("<path id=\"{pid}\" d=\"{d}\"/>"));
-                (Affine::IDENTITY, Some((pid, *start)))
-            }
+        let a = self.attrs(&props);
+        let m = self.xf * t.xf;
+        let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
+        let starts: Vec<Option<(f64, f64)>> = lines.iter().map(|l| line_start(l, anchor.map(|a| a.1))).collect();
+        // The `<text>` carries the first line's position too, so readers that place text by its
+        // own x/y start where the first line does.
+        let at = match starts.iter().flatten().next() {
+            Some((x, y)) => format!(" x=\"{}\" y=\"{}\"", self.num(*x), self.num(*y)),
+            None => String::new(),
         };
-        let mut props = self.char_props(&first);
+        let mut s = format!("<text{id}{tr}{at} xml:space=\"preserve\"{a}>");
+        for (line, start) in lines.iter().zip(starts) {
+            if let Some(start) = start {
+                self.text_line(&mut s, t, line, start, anchor.is_some(), &base);
+            }
+        }
+        s.push_str("</text>");
+        self.line(&s);
+    }
+
+    /// One line of laid-out text starting at `start`. Default: a positioned `<tspan>` per segment
+    /// (only the first of an `anchored` line). Fewer tspans: one positioned `<tspan>` per line with
+    /// the style changes nested in it, positioned again only after tabs and justified word spaces.
+    /// Baseline shifts are relative (`dy`), undone by the next segment that isn't shifted.
+    fn text_line(&mut self, s: &mut String, t: &TextObject, line: &[Segment], start: (f64, f64), anchored: bool, base: &Props) {
+        let fewer = self.opts.fewer_tspans;
+        if fewer {
+            s.push_str(&format!("<tspan x=\"{}\" y=\"{}\">", self.num(start.0), self.num(start.1)));
+        }
+        let mut place = !fewer;
+        let mut first = true;
+        // The baseline shift the current text position carries.
+        let mut shift = 0.0;
+        for seg in line {
+            let Some(st) = t.runs.get(seg.run).map(|r| &r.style) else { continue };
+            let mut attrs = String::new();
+            if place {
+                let (x, y) = if first { start } else { (seg.x, seg.y) };
+                attrs.push_str(&format!(" x=\"{}\" y=\"{}\"", self.num(x), self.num(y)));
+                shift = 0.0;
+            }
+            first = false;
+            if st.baseline_shift != shift {
+                attrs.push_str(&format!(" dy=\"{}\"", self.num(shift - st.baseline_shift)));
+                shift = st.baseline_shift;
+            }
+            // After a tab or a justified word space the next segment is placed.
+            place = seg.brk || (!fewer && !anchored);
+            if (st.h_scale - st.v_scale).abs() > 1e-9 {
+                attrs.push_str(&format!(" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\"", self.num(seg.advance)));
+            }
+            if st.rotation != 0.0 {
+                attrs.push_str(&format!(" rotate=\"{}\"", self.num(-st.rotation)));
+            }
+            let diff = run_diff(base, self.char_props(st));
+            attrs.push_str(&self.attrs(&diff));
+            let text = xml_escape(&seg.text);
+            if attrs.is_empty() && fewer {
+                s.push_str(&text);
+            } else {
+                s.push_str(&format!("<tspan{attrs}>{text}</tspan>"));
+            }
+        }
+        if fewer {
+            s.push_str("</tspan>");
+        }
+    }
+
+    /// Type on a path: a `<textPath>` along the path (a def).
+    fn text_on_path(&mut self, n: &Node, t: &TextObject, path: &PathData, start: f64) {
+        let id = self.id_attr(n);
+        let pid = self.fresh_id("text-path");
+        let d = self.path_d(path, self.xf * t.xf);
+        self.def(1, &format!("<path id=\"{pid}\" d=\"{d}\"/>"));
+        let base = self.char_props(&t.first_style());
+        let mut props = base.clone();
         match t.para.justify {
             Justify::Center | Justify::JustifyCenter => props.push(("text-anchor", "middle".into())),
             Justify::Right | Justify::JustifyRight => props.push(("text-anchor", "end".into())),
@@ -1264,99 +1348,15 @@ impl Writer<'_> {
         }
         props.extend(Self::node_props(n));
         let a = self.attrs(&props);
-        let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
-        // Area type: laid-out lines (the `<text>` carries the first line's position too, so readers
-        // that place text by its own x/y start where the first line does).
-        let lines = matches!(t.kind, TextKind::Area { .. }).then(|| self.area_lines(t));
-        let at = match lines.as_ref().and_then(|l| l.first()) {
-            Some(l) => format!(" x=\"{}\" y=\"{}\"", self.num(l.x), self.num(l.y)),
-            None => String::new(),
-        };
-        let mut s = format!("<text{id}{tr}{at} xml:space=\"preserve\"{a}>");
-        if let Some((pid, start)) = &on_path {
-            s.push_str(&format!("<textPath xlink:href=\"#{pid}\" startOffset=\"{}%\">", fmt_num(start * 100.0, 3)));
+        let offset = fmt_num(start * 100.0, 3);
+        let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
+        for run in &t.runs {
+            let diff = run_diff(&base, self.char_props(&run.style));
+            let a = self.attrs(&diff);
+            s.push_str(&format!("<tspan{a}>{}</tspan>", xml_escape(&run.text.replace('\n', " "))));
         }
-        let base = self.char_props(&first);
-        if let Some(lines) = lines {
-            for l in lines {
-                let last = l.pieces.len() - 1;
-                for (k, (ri, text)) in l.pieces.into_iter().enumerate() {
-                    let pos = if k == 0 { format!(" x=\"{}\" y=\"{}\"", self.num(l.x), self.num(l.y)) } else { String::new() };
-                    let diff = run_diff(&base, self.char_props(&t.runs[ri].style));
-                    let a = self.attrs(&diff);
-                    let hy = if k == last && l.hyphenated { "-" } else { "" };
-                    s.push_str(&format!("<tspan{pos}{a}>{}{hy}</tspan>", xml_escape(text)));
-                }
-            }
-        } else {
-            let mut line = 0usize;
-            let mut pending = false;
-            for run in &t.runs {
-                let diff = run_diff(&base, self.char_props(&run.style));
-                for (i, piece) in run.text.split('\n').enumerate() {
-                    if i > 0 {
-                        line += 1;
-                        pending = true;
-                    }
-                    if piece.is_empty() {
-                        continue;
-                    }
-                    let pos = if pending && on_path.is_none() { format!(" x=\"0\" y=\"{}\"", self.num(line as f64 * lead)) } else { String::new() };
-                    pending = false;
-                    let a = self.attrs(&diff);
-                    s.push_str(&format!("<tspan{pos}{a}>{}</tspan>", xml_escape(piece)));
-                }
-            }
-        }
-        if on_path.is_some() {
-            s.push_str("</textPath>");
-        }
-        s.push_str("</text>");
+        s.push_str("</textPath></text>");
         self.line(&s);
-    }
-
-    /// Area type as laid out. Soft line breaks are only known to the layout, so each laid-out line
-    /// is placed at its baseline (text space), at its left edge, centre or right edge to match the
-    /// `text-anchor` of the paragraph alignment.
-    fn area_lines<'t>(&self, t: &'t TextObject) -> Vec<AreaLine<'t>> {
-        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-        let mut offsets = Vec::with_capacity(t.runs.len());
-        let mut off = 0;
-        for r in &t.runs {
-            offsets.push(off);
-            off += r.text.len();
-        }
-        let mut out = vec![];
-        for l in &lay.lines {
-            // Run pieces of this line (the paragraph's `\n` is outside `start..end`).
-            let mut pieces: Vec<(usize, &str)> = vec![];
-            for (ri, (r, &o)) in t.runs.iter().zip(&offsets).enumerate() {
-                let (a, b) = (l.start.max(o), l.end.min(o + r.text.len()));
-                if a < b {
-                    pieces.push((ri, &r.text[a - o..b - o]));
-                }
-            }
-            // Spaces where the line wrapped don't belong to the line.
-            while let Some((_, p)) = pieces.last_mut() {
-                *p = p.trim_end();
-                if !p.is_empty() {
-                    break;
-                }
-                pieces.pop();
-            }
-            if pieces.is_empty() {
-                continue;
-            }
-            let x = match t.para.justify {
-                Justify::Center | Justify::JustifyCenter => (l.x0 + l.x1) / 2.0,
-                Justify::Right | Justify::JustifyRight => l.x1,
-                _ => l.x0,
-            };
-            // A hyphenated break: the layout adds the hyphen as a glyph with no source text.
-            let hyphenated = l.glyph_end > l.glyph_start && lay.glyphs.get(l.glyph_end - 1).is_some_and(|g| g.len == 0);
-            out.push(AreaLine { x, y: l.baseline, pieces, hyphenated });
-        }
-        out
     }
 }
 
@@ -1379,6 +1379,7 @@ fn initial_value(k: &str) -> Option<&'static str> {
         "stroke-linejoin" => "miter",
         "stroke-miterlimit" => "4",
         "stroke-dashoffset" | "letter-spacing" => "0",
+        "font-kerning" => "auto",
         _ => return None,
     })
 }
@@ -1386,4 +1387,78 @@ fn initial_value(k: &str) -> Option<&'static str> {
 /// Any visible raster effect (shadow, glow, blur, feather) in `effects`?
 fn has_raster(effects: &[vectorcraft_doc::Effect]) -> bool {
     effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id))
+}
+
+/// Characters of one style on one line, written as one `<tspan>`.
+struct Segment {
+    /// Index into `TextObject::runs`.
+    run: usize,
+    /// Where the segment starts (text space; `y` is the baseline).
+    x: f64,
+    y: f64,
+    text: String,
+    /// The laid-out width (tracking and justification included).
+    advance: f64,
+    /// The next segment needs its own position (after a tab, or a word space of a justified line).
+    brk: bool,
+}
+
+/// The laid-out lines of `t` as segments: a new segment at every style change, after tabs and,
+/// on justified lines, after each word space (unless `fewer`). The text comes from the clusters
+/// the layout placed: soft hyphens draw nothing, a line broken by hyphenation ends in `-`, all
+/// caps are upper case.
+fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Vec<Segment>> {
+    let plain = t.plain_text();
+    let split_words = !fewer && !matches!(t.para.justify, Justify::Left | Justify::Center | Justify::Right);
+    let mut lines = Vec::with_capacity(lay.lines.len());
+    for line in &lay.lines {
+        let mut segs: Vec<Segment> = Vec::new();
+        let mut cluster = None;
+        let source = |g: &vectorcraft_text::PositionedGlyph| if g.len == 0 { "-" } else { plain.get(g.byte..g.byte + g.len).unwrap_or("") };
+        let mut glyphs = lay.glyphs.get(line.glyph_start..line.glyph_end).unwrap_or_default();
+        // Spaces where the line wrapped (it doesn't end its paragraph) don't belong to the line.
+        if plain.get(line.end..).is_some_and(|rest| !rest.is_empty() && !rest.starts_with('\n')) {
+            while let Some((_, rest)) = glyphs.split_last().filter(|(g, _)| source(g).chars().all(|c| c.is_whitespace() && c != '\t')) {
+                glyphs = rest;
+            }
+        }
+        for g in glyphs {
+            let Some(run) = t.runs.get(g.run) else { continue };
+            if g.len > 0 && cluster == Some(g.byte) {
+                // Another glyph of the same cluster.
+                if let Some(last) = segs.last_mut() {
+                    last.advance += g.advance;
+                }
+                continue;
+            }
+            cluster = Some(g.byte);
+            let src: String = source(g).chars().filter(|c| *c != '\u{ad}').collect();
+            let piece = if run.style.all_caps { src.to_uppercase() } else { src };
+            let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace));
+            match segs.last_mut() {
+                Some(last) if last.run == g.run && !last.brk => {
+                    last.text.push_str(&piece);
+                    last.advance += g.advance;
+                    last.brk = brk;
+                }
+                _ => segs.push(Segment { run: g.run, x: g.origin.x, y: g.origin.y, text: piece, advance: g.advance, brk }),
+            }
+        }
+        segs.retain(|s| !s.text.is_empty());
+        if !segs.is_empty() {
+            lines.push(segs);
+        }
+    }
+    lines
+}
+
+/// Where a line of segments starts: its first segment's origin or, `anchor`ed (0.5: centre, 1:
+/// right end), that point of its width. `None` for an empty line.
+fn line_start(line: &[Segment], anchor: Option<f64>) -> Option<(f64, f64)> {
+    let (first, last) = (line.first()?, line.last()?);
+    let x = match anchor {
+        Some(f) => first.x + f * (last.x + last.advance - first.x),
+        None => first.x,
+    };
+    Some((x, first.y))
 }

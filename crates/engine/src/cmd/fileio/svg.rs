@@ -56,6 +56,12 @@ pub const OPTIONS: &[FormatOption] = &[
     },
     FormatOption { name: "metadata", ty: "boolean", default: "false", description: "write <metadata> with the title and format (Dublin Core)" },
     FormatOption {
+        name: "fewerTspans",
+        ty: "boolean",
+        default: "false",
+        description: "type: one positioned <tspan> per line instead of one per style run, tab and justified word (smaller; viewers space the line themselves)",
+    },
+    FormatOption {
         name: "svg",
         ty: "object",
         default: "null",
