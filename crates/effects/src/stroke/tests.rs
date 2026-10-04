@@ -253,3 +253,53 @@ fn round_caps_never_poke_past_the_tip() {
         }
     }
 }
+
+// ---------------------------------------------------------------- robustness
+
+#[test]
+fn degenerate_paths_and_patterns_neither_panic_nor_hang() {
+    let finite = |b: &BezPath| b.elements().iter().filter_map(|e| e.end_point()).all(|q| q.x.is_finite() && q.y.is_finite());
+    let mut point = BezPath::new();
+    point.move_to((0.0, 0.0));
+    let lone = point.clone();
+    point.line_to((0.0, 0.0));
+    let mut still_curve = BezPath::new();
+    still_curve.move_to((0.0, 0.0));
+    still_curve.curve_to((0.0, 0.0), (0.0, 0.0), (0.0, 0.0));
+    // Drawing on after a ClosePath, and curves whose handles sit on their end points.
+    let mut mixed = BezPath::new();
+    mixed.move_to((0.0, 0.0));
+    mixed.line_to((10.0, 0.0));
+    mixed.close_path();
+    mixed.line_to((5.0, 5.0));
+    mixed.move_to((20.0, 0.0));
+    mixed.curve_to((20.0, 0.0), (50.0, 50.0), (50.0, 50.0));
+    mixed.quad_to((50.0, 50.0), (90.0, 0.0));
+    let paths = [BezPath::new(), lone, point, still_curve, mixed, square(20.0)];
+    // Negative, non-finite and sub-tolerance entries (the last used to loop forever on a
+    // zero-length path), and offsets far outside the pattern.
+    let patterns: [&[f64]; 6] = [&[0.0, 6.0], &[-1.0, 3.0], &[f64::NAN, 1.0], &[1e-12, 1e-12], &[0.0], &[3.0, 0.0]];
+    for bp in &paths {
+        for kind in Arrowhead::ALL {
+            for align in [ArrowAlign::Extend, ArrowAlign::Tip] {
+                for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+                    for pat in patterns {
+                        for off in [0.0, -7.0, 1e12, f64::INFINITY] {
+                            let st = stroke(2.0, |s| {
+                                s.start_arrow = Some(kind);
+                                s.end_arrow = Some(kind);
+                                s.arrow_align = align;
+                                s.cap = cap;
+                                s.dash = Some(dashed(pat, off));
+                            });
+                            let p = stroke_pieces(bp, &st);
+                            assert!(p.heads.iter().all(|h| finite(&h.outline)), "{bp:?} {kind:?}");
+                            assert!(finite(&line_outline(&p.line, &st, 2.0, 0.01)), "{bp:?} {pat:?} {off}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(dash(&line(0.0, 1e-9), &dashed(&[1e-12, 1e-12], 0.0)).is_none(), "too fine to advance: solid");
+}

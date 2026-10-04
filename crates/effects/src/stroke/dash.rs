@@ -9,6 +9,9 @@ use super::{ARCLEN_ACCURACY, push_seg, segments, subpaths, tangent};
 
 /// More dashes than this (a tiny pattern on a long path) draws the line solid instead.
 const MAX_DASHES: f64 = 200_000.0;
+/// A pattern whose longest entry is shorter than this can't advance along the path (each entry
+/// ends within the generator's tolerance of where it starts), so it draws the line solid.
+const MIN_ENTRY: f64 = 1e-6;
 
 /// A zero-length dash: where it sits and the path's direction there.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -25,13 +28,13 @@ pub struct Dashed {
 }
 
 /// Apply dash pattern `d` to `bp`. `None` when the pattern has no positive length (the line is
-/// solid) or is too fine to draw.
+/// solid) or is too fine to draw (then the line is drawn solid too).
 pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
     if d.pattern.iter().any(|v| !v.is_finite()) || !d.offset.is_finite() {
         return None;
     }
     let mut pat: Vec<f64> = d.pattern.iter().map(|v| v.max(0.0)).collect();
-    if !pat.iter().any(|v| *v > 0.0) {
+    if !pat.iter().any(|v| *v > MIN_ENTRY) {
         return None;
     }
     // An odd pattern repeats with dashes and gaps swapped (as in SVG and PDF).
