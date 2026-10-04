@@ -413,3 +413,18 @@ is edited the panel lists only an `<Opacity Mask>` entry and the document tab sa
 {"name":"run_command","arguments":{"command":"transparency.set","params":{"opacity":50}}}
 {"name":"run_command","arguments":{"command":"appearance.transfer","params":{"source":12,"target":2,"copy":true}}}
 ```
+
+## Expand Appearance
+
+`effect.expandAppearance {ids?, target?}` (Object → Expand Appearance, enabled when a selected or targeted object's appearance isn't basic)
+turns appearances into plain objects in one undo step: each visible fill becomes a copy of the path painted by that
+fill alone and each stroke its outline filled with its paint (a brushed stroke: its brush art), grouped in paint order
+under the object's id; each piece takes its fill's or stroke's opacity and blend mode, and the group keeps the
+object's transparency and opacity mask. Geometry effects are baked; raster effects become an embedded image at the
+document's raster effects resolution (shadows and outer glows under the art; a blur, feather or inner glow replaces
+the object with the image). Type with effects or fills and strokes of its own is outlined. A group's or layer's own
+fills and strokes become objects among its members, and its members are expanded too.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{"ids":[12]}}}
+```

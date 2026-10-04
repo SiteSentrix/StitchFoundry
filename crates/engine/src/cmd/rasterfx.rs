@@ -73,42 +73,65 @@ fn render(doc: &Document, nodes: Vec<Node>, region: Rect, scale: f64) -> vectorc
     r.render_region(&tmp, region, scale, false)
 }
 
-/// The image (and, for shadows and outer glows, the vector object above it) standing in for `n`.
-fn flatten_node(src: &Document, out: &mut Document, n: &Node, scale: f64) -> Option<Node> {
-    let fx = raster_fx(n);
-    let b = n.visual_bounds()?;
-    let reach = effects::outset(&n.appearance.effects) + 2.0;
+/// Pixels per point of raster effects rendered as images (the document's raster effects
+/// resolution).
+pub(crate) fn effects_scale(doc: &Document) -> f64 {
+    (doc.raster_effects_ppi / 72.0).clamp(1.0 / 72.0, 2400.0 / 72.0)
+}
+
+/// An embedded image (a new node of `out`, its pixels in `out.images`) of `whole` rendered alone
+/// with `out`'s resources at `scale` over its visual bounds and the reach of its raster effects
+/// (its own and its fills' and strokes'). With `knockout`, the coverage of that art is knocked out
+/// of the image, which then only holds what the effects add around it (a shadow to go under the
+/// vector object).
+pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&Node>, scale: f64) -> Option<Node> {
+    let b = whole.visual_bounds()?;
+    let reach = whole.appearance.items.iter().map(|i| effects::outset(i.effects())).fold(effects::outset(&whole.appearance.effects), f64::max) + 2.0;
     let b = b.inflate(reach, reach);
     // Whole pixels, and no larger than 64 Mpx.
     let scale = scale.min((64.0e6 / (b.width() * b.height()).max(1.0)).sqrt());
     let region = Rect::new(b.x0, b.y0, b.x0 + (b.width() * scale).ceil().max(1.0) / scale, b.y0 + (b.height() * scale).ceil().max(1.0) / scale);
-    let below_only = fx.iter().all(RasterFx::is_below);
-    let mut whole = n.clone();
-    whole.blend = vectorcraft_doc::color::BlendMode::Normal;
-    let mut img = render(src, vec![whole.clone()], region, scale);
-    let mut vector = None;
-    if below_only {
-        // Knock the object's own coverage out of the image; the vector object goes on top.
-        let mut bare = whole.clone();
-        bare.appearance.effects.retain(|e| !effects::is_raster(&e.id));
-        bare.opacity = 1.0;
-        let obj = render(src, vec![bare], region, scale);
+    let mut img = render(out, vec![whole.clone()], region, scale);
+    if let Some(bare) = knockout {
+        let obj = render(out, vec![bare.clone()], region, scale);
         for (px, o) in img.pixels.chunks_exact_mut(4).zip(obj.pixels.chunks_exact(4)) {
             let keep = 1.0 - o[3] as f32 / 255.0;
             for c in px.iter_mut() {
                 *c = (*c as f32 * keep).round() as u8;
             }
         }
+    }
+    let id = out.alloc_id();
+    let mut key = format!("raster-effect-{}", id.0);
+    while out.images.contains_key(&key) {
+        key.push('+');
+    }
+    out.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(img.to_png()) });
+    let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
+    let mut image = Node::new(id, NodeKind::Image(ImageObject { key, width: img.width, height: img.height, xf, link: None }));
+    image.name = Some("Raster effect".into());
+    Some(image)
+}
+
+/// The image (and, for shadows and outer glows, the vector object above it) standing in for `n`.
+fn flatten_node(out: &mut Document, n: &Node, scale: f64) -> Option<Node> {
+    let below_only = raster_fx(n).iter().all(RasterFx::is_below);
+    let mut whole = n.clone();
+    whole.blend = vectorcraft_doc::color::BlendMode::Normal;
+    // Shadows only: knock the object's own coverage out of the image; the vector object goes on top.
+    let bare = below_only.then(|| {
+        let mut bare = whole.clone();
+        bare.appearance.effects.retain(|e| !effects::is_raster(&e.id));
+        bare.opacity = 1.0;
+        bare
+    });
+    let mut image = effect_image(out, &whole, bare.as_ref(), scale)?;
+    let vector = bare.map(|_| {
         let mut v = n.clone();
         v.appearance.effects.retain(|e| !effects::is_raster(&e.id));
         v.blend = vectorcraft_doc::color::BlendMode::Normal;
-        vector = Some(v);
-    }
-    let key = format!("raster-effect-{}", n.id.0);
-    out.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(img.to_png()) });
-    let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-    let mut image = Node::new(out.alloc_id(), NodeKind::Image(ImageObject { key, width: img.width, height: img.height, xf, link: None }));
-    image.name = Some("Raster effect".into());
+        v
+    });
     Some(match vector {
         Some(v) => {
             let mut g = Node::group(out.alloc_id(), vec![Arc::new(image), Arc::new(v)]);
@@ -123,15 +146,15 @@ fn flatten_node(src: &Document, out: &mut Document, n: &Node, scale: f64) -> Opt
     })
 }
 
-fn walk(src: &Document, out: &mut Document, n: &Node, scale: f64) -> Option<Node> {
+fn walk(out: &mut Document, n: &Node, scale: f64) -> Option<Node> {
     if !needs(n) || !n.visible {
         return None;
     }
     if !raster_fx(n).is_empty() {
-        return flatten_node(src, out, n, scale);
+        return flatten_node(out, n, scale);
     }
     let mut m = n.clone();
-    let ch: Vec<Arc<Node>> = n.children()?.iter().map(|c| walk(src, out, c, scale).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
+    let ch: Vec<Arc<Node>> = n.children()?.iter().map(|c| walk(out, c, scale).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
     if let Some(slot) = m.children_mut() {
         *slot = ch;
     }
@@ -147,10 +170,10 @@ pub fn flatten_raster_effects(doc: &Document) -> Option<Document> {
     // Geometry effects first, so the vector objects kept above shadows are final.
     let baked = effects::bake_document(doc);
     let src = baked.as_ref().unwrap_or(doc);
-    let scale = (src.raster_effects_ppi / 72.0).clamp(1.0 / 72.0, 2400.0 / 72.0);
+    let scale = effects_scale(src);
     let mut out = src.clone();
     let layers = src.layers.clone();
-    out.layers = layers.iter().map(|l| walk(src, &mut out, l, scale).map(Arc::new).unwrap_or_else(|| l.clone())).collect();
+    out.layers = layers.iter().map(|l| walk(&mut out, l, scale).map(Arc::new).unwrap_or_else(|| l.clone())).collect();
     Some(out)
 }
 

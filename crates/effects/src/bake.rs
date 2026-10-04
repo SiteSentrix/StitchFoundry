@@ -6,13 +6,16 @@
 //! outlines, [`reshape`]) — is evaluated exactly like the renderer does, and so are the own fills,
 //! strokes and geometry effects of groups and layers ([`evaluate_container`]). Raster effects
 //! (shadows, glows, blur) stay on the objects for the exporter to translate (e.g. SVG filters).
+//!
+//! Object → Expand Appearance goes further ([`expand_leaf`]): every fill and stroke becomes an
+//! object of its own, strokes turned into filled art by the caller (their outlines or brush art).
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeKind};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::group::has_own_paint;
+use crate::group::{has_own_paint, paints};
 use crate::{GeomContext, apply_geometry_with, evaluate_container, has_geometry, has_pathfinder, is_geometry, needs_outline, reshape};
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -126,18 +129,48 @@ pub fn fresh_ids(d: &mut Document, n: &mut Node, seen: &mut std::collections::Ha
     }
 }
 
-fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
+/// A new path of `n`'s (its geometry `path`, filled under `rule`) painted by `item` alone, with
+/// none of `n`'s transparency.
+fn piece(d: &mut Document, n: &Node, path: PathData, rule: FillRule, item: AppearanceItem) -> Node {
+    let id = d.alloc_id();
+    let kind = path_kind(d, path, rule);
+    Node {
+        id,
+        name: None,
+        appearance: Appearance { items: vec![item], ..Default::default() },
+        opacity: 1.0,
+        blend: Default::default(),
+        isolate: false,
+        knockout: Default::default(),
+        knockout_shape: false,
+        mask: None,
+        trace: None,
+        wrap: None,
+        graph: None,
+        kind,
+        ..n.clone()
+    }
+}
+
+/// `n`'s geometry with its object-level geometry effects applied, its fill rule, the context of
+/// its effects, and `n` without those effects.
+fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     let (base, rule) = geometry(n)?;
     let ctx = GeomContext::of(n);
     let g = apply(&n.appearance.effects, &base, &ctx);
     let mut m = n.clone();
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
+    Some((g, rule, ctx, m))
+}
+
+fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
+    let (g, rule, ctx, mut m) = leaf_base(n)?;
     if !n.appearance.items.iter().any(|i| has_geometry(item_effects(i))) {
         m.kind = path_kind(d, g, rule);
         return Some(m);
     }
     // Per-item geometry: one path per fill/stroke, grouped under the object's transparency and
-    // raster effects (what Expand Appearance produces).
+    // raster effects.
     let children = n
         .appearance
         .items
@@ -146,29 +179,81 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
             let ig = apply(item_effects(item), &g, &ctx.item(item));
             let mut it = item.clone();
             clear_item_effects(&mut it);
-            let id = d.alloc_id();
-            let kind = path_kind(d, ig, rule);
-            Arc::new(Node {
-                id,
-                name: None,
-                appearance: Appearance { items: vec![it], ..Default::default() },
-                opacity: 1.0,
-                blend: Default::default(),
-                isolate: false,
-                knockout: Default::default(),
-                knockout_shape: false,
-                mask: None,
-                trace: None,
-                wrap: None,
-                graph: None,
-                kind,
-                ..n.clone()
-            })
+            Arc::new(piece(d, n, ig, rule, it))
         })
         .collect();
     m.appearance.items.clear();
     m.kind = NodeKind::Group { children, clip: false };
     Some(m)
+}
+
+/// Turns one stroke of a path (the path after its geometry effects, its fill rule, the stroke
+/// without geometry effects) into filled art for [`expand_leaf`]: its outline filled with its
+/// paint, or its brush art. `None` when it paints nothing.
+pub type StrokeArt<'a> = &'a mut dyn FnMut(&mut Document, &PathData, FillRule, &StrokeLayer) -> Option<Node>;
+
+/// Object → Expand Appearance of a path or compound path `n`: its geometry effects applied, every
+/// visible fill becomes a copy of the path painted by that fill alone and every visible stroke the
+/// filled art `stroke_art` makes of it (each with its fill's or stroke's opacity and blend mode as
+/// its own), in paint order, as the members of a group that keeps
+/// `n`'s id, name, transparency, opacity mask and remaining (raster) effects. A single piece
+/// without transparency or effects of its own takes `n`'s place itself. Hidden fills, strokes and
+/// effects are dropped. `None` for other kinds of objects.
+pub fn expand_leaf(d: &mut Document, n: &Node, stroke_art: StrokeArt) -> Option<Node> {
+    let (g, rule, ctx, mut m) = leaf_base(n)?;
+    m.appearance.effects.retain(|e| e.visible);
+    let mut pieces = vec![];
+    for item in n.appearance.items.iter().filter(|i| paints(i)) {
+        let ig = apply(item.effects(), &g, &ctx.item(item));
+        let mut it = item.clone();
+        clear_item_effects(&mut it);
+        it.effects_mut().retain(|e| e.visible);
+        let p = match &it {
+            AppearanceItem::Stroke(st) => stroke_art(d, &ig, rule, st),
+            AppearanceItem::Fill(_) => Some(piece(d, n, ig, rule, it)),
+        };
+        pieces.extend(p.map(hoist_transparency));
+    }
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    match pieces.as_slice() {
+        [one] if m.appearance.effects.is_empty() && one.has_default_transparency() && one.appearance.effects.is_empty() => {
+            m.kind = one.kind.clone();
+            m.appearance = one.appearance.clone();
+        }
+        _ => m.kind = NodeKind::Group { children: pieces.into_iter().map(Arc::new).collect(), clip: false },
+    }
+    Some(m)
+}
+
+/// `p` with the opacity and blend mode of its only fill or stroke as its own (the same look, and a
+/// basic appearance).
+fn hoist_transparency(mut p: Node) -> Node {
+    if p.has_default_transparency()
+        && let [item] = p.appearance.items.as_mut_slice()
+    {
+        let (opacity, blend) = match item {
+            AppearanceItem::Fill(f) => (&mut f.opacity, &mut f.blend),
+            AppearanceItem::Stroke(s) => (&mut s.opacity, &mut s.blend),
+        };
+        p.opacity = std::mem::replace(opacity, 1.0);
+        p.blend = std::mem::take(blend);
+    }
+    p
+}
+
+/// [`expand_leaf`] every path and compound path in `n` (art made for Expand Appearance, such as a
+/// group's own fills and strokes or outlined type), in place.
+pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
+    if matches!(n.kind, NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. }) {
+        if let Some(m) = expand_leaf(d, n, stroke_art) {
+            *n = m;
+        }
+        return;
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        expand_art(d, Arc::make_mut(c), stroke_art);
+    }
 }
 
 /// A copy of `doc` with every live geometry effect baked into plain paths, or `None` when the

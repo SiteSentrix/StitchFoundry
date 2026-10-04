@@ -140,8 +140,12 @@ fn group_appearance_round_trips_and_expands() {
     assert!(n.appearance.items.is_empty() && n.appearance.effects.is_empty());
     let ch = n.children().unwrap();
     assert_eq!(ch.len(), 4, "fill, two members, stroke");
-    // Each is a group of one path per member (sharing the item's opacity and blend mode).
+    // Each is a group of one path per member (sharing the item's opacity and blend mode); the
+    // stroke's paths are its outlines, filled.
     let first = |n: &Node| n.children().unwrap()[0].appearance.items[0].is_fill();
-    assert!(first(&ch[0]) && !first(&ch[3]) && ch[0].children().unwrap().len() == 2);
-    assert!((n.geometric_bounds().unwrap().y0 - 70.0).abs() < 1e-6);
+    assert!(first(&ch[0]) && first(&ch[3]) && ch[0].children().unwrap().len() == 2);
+    let outline = ch[3].children().unwrap()[0].geometric_bounds().unwrap();
+    assert!((outline.width() - 41.0).abs() < 0.1, "{outline:?}");
+    // Moved down 50 pt; the outlined 1 pt stroke reaches half a point beyond.
+    assert!((n.geometric_bounds().unwrap().y0 - 69.5).abs() < 1e-6);
 }

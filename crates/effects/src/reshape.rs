@@ -113,10 +113,26 @@ fn outline_nested_text(n: &mut Node) {
 /// a group with `n`'s id, name, transparency, opacity mask and remaining (raster) effects; `None`
 /// when `n` has no visible geometry effect or no art (a symbol instance without `symbol_art`).
 pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    let fx = geometry_effects(n);
-    if fx.is_empty() || !needs_outline(n) {
+    if geometry_effects(n).is_empty() || !needs_outline(n) {
         return None;
     }
+    as_art(n, symbol_art)
+}
+
+/// `n` (see [`needs_outline`]) as plain art for Expand Appearance: [`reshape`]d when it has
+/// geometry effects, else type with fills or strokes of its own outlined, in the same form. `None`
+/// when it has neither.
+pub fn expand_outlined(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    let own_paint = matches!(n.kind, NodeKind::Text(_)) && !n.appearance.items.is_empty();
+    if !needs_outline(n) || (geometry_effects(n).is_empty() && !own_paint) {
+        return None;
+    }
+    as_art(n, symbol_art)
+}
+
+/// [`reshape`] without its checks (no geometry effects: just the art).
+fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+    let fx = geometry_effects(n);
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
             let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);

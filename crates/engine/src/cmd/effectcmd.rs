@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Effect, Node, NodeKind};
+use vectorcraft_doc::{Document, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
@@ -58,8 +58,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?: [..], target?} bake geometry effects into the paths and drop them (raster effects stay live); a group's or layer's own fills and strokes become paths among its members → {ids}",
-            has_doc,
+            "{ids?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it), type with effects or fills of its own is outlined; a group's or layer's own fills and strokes become objects among its members, which are expanded too. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids}",
+            can_expand,
             expand_appearance
         ),
         cmd!(
@@ -247,71 +247,202 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
-/// Geometry of a path or compound path node.
-fn node_geometry(n: &Node) -> Option<(PathData, FillRule)> {
+// ---------- Expand Appearance ----------
+
+/// Has `n` an appearance Expand Appearance turns into objects: a path that isn't basic (several
+/// fills or strokes, effects, transparency of a fill or stroke, a brush), a group or layer with
+/// fills, strokes or effects of its own or such members, other objects with effects, or type with
+/// fills or strokes of its own?
+fn expandable(n: &Node) -> bool {
     match &n.kind {
-        NodeKind::Path { path, rule, guide: false, .. } => Some((path.clone(), *rule)),
-        NodeKind::Compound { children, rule } => {
-            Some((PathData::new(children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect()), *rule))
+        NodeKind::Path { clipping: true, .. } | NodeKind::Path { guide: true, .. } => false,
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => !n.appearance.is_basic() || vectorcraft_brush::has_brush(n),
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+            !n.appearance.items.is_empty() || !n.appearance.effects.is_empty() || children.iter().any(|c| expandable(c))
         }
-        _ => None,
+        NodeKind::Text(_) => !n.appearance.items.is_empty() || !n.appearance.effects.is_empty(),
+        _ => !n.appearance.effects.is_empty(),
     }
 }
 
-/// Bake the object-level geometry effects of `id` (and, recursively, of group members). A group's
-/// or layer's Pathfinder and geometry effects and its own fills and strokes become its members.
-fn expand_node(d: &mut vectorcraft_doc::Document, id: NodeId, out: &mut Vec<NodeId>) {
-    let Some(n) = d.node(id).cloned() else { return };
-    if matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) {
-        if let Some(mut m) = effects::evaluate_container(&n) {
-            let mut seen = std::collections::HashSet::from([m.id]);
-            for c in m.children_mut().into_iter().flatten() {
-                effects::fresh_ids(d, Arc::make_mut(c), &mut seen);
-            }
-            let Some(slot) = d.node_mut(id) else { return };
-            *slot = m;
-            out.push(id);
+fn can_expand(s: &Session) -> std::result::Result<(), String> {
+    has_doc(s)?;
+    let d = &s.doc().map_err(|e| e.to_string())?.doc;
+    let ids = appearance_targets(s, &Value::Null).map_err(|e| e.to_string())?;
+    if ids.iter().filter_map(|id| d.node(*id)).any(expandable) {
+        Ok(())
+    } else {
+        Err("select (or target) objects whose appearance isn't basic".into())
+    }
+}
+
+fn is_container(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
+}
+
+/// Remove the raster effects of `n` (its own and its fills' and strokes') and, with `members`, of
+/// everything inside it.
+fn strip_raster(n: &mut Node, members: bool) {
+    let keep = |e: &Effect| !effects::is_raster(&e.id);
+    n.appearance.effects.retain(keep);
+    for it in &mut n.appearance.items {
+        it.effects_mut().retain(keep);
+    }
+    if members {
+        for c in n.children_mut().into_iter().flatten() {
+            strip_raster(Arc::make_mut(c), true);
         }
+    }
+}
+
+/// The raster effects of `n` (its own, its fills' and strokes') as an embedded image rendered at
+/// the document's raster effects resolution, with whether they all paint below it (shadows and
+/// outer glows: the image then holds just them). A group's or layer's image leaves out its
+/// members' raster effects when those are expanded with them. `None` when it has none.
+fn raster_image(d: &mut Document, n: &Node) -> Option<(Node, bool)> {
+    let fx: Vec<effects::RasterFx> = std::iter::once(&n.appearance.effects)
+        .chain(n.appearance.items.iter().map(|i| i.effects()))
+        .flat_map(|e| effects::raster_effects(e))
+        .collect();
+    if fx.is_empty() {
+        return None;
+    }
+    let below = fx.iter().all(effects::RasterFx::is_below);
+    // Its transparency stays on the expanded object.
+    let mut whole = n.clone();
+    (whole.opacity, whole.blend, whole.mask) = (1.0, Default::default(), None);
+    if below && is_container(&whole) {
+        for c in whole.children_mut().into_iter().flatten() {
+            strip_raster(Arc::make_mut(c), true);
+        }
+    }
+    let bare = below.then(|| {
+        let mut b = whole.clone();
+        strip_raster(&mut b, false);
+        b
+    });
+    let scale = super::rasterfx::effects_scale(d);
+    let image = super::rasterfx::effect_image(d, &whole, bare.as_ref(), scale)?;
+    Some((image, below))
+}
+
+/// `m` (an expanded object) with `image` of its shadows and outer glows painted below its art: the
+/// image goes first in a group or layer (after a layer's clipping path), anything else is grouped
+/// with it under its id, name and transparency.
+fn put_below(d: &mut Document, m: &mut Node, image: Node) {
+    match &mut m.kind {
+        NodeKind::Group { children, clip: false } => children.insert(0, Arc::new(image)),
+        NodeKind::Layer { children, clip, .. } => children.insert(usize::from(*clip).min(children.len()), Arc::new(image)),
+        _ => {
+            let mut inner = m.clone();
+            inner.id = d.alloc_id();
+            (inner.name, inner.opacity, inner.blend, inner.isolate, inner.mask) = (None, 1.0, Default::default(), false, None);
+            inner.knockout = Default::default();
+            inner.knockout_shape = false;
+            m.appearance = Default::default();
+            m.kind = NodeKind::Group { children: vec![Arc::new(image), Arc::new(inner)], clip: false };
+        }
+    }
+}
+
+/// Give the members of `m`, art evaluated from the object of the same id (its pieces share that
+/// id), ids of their own and expand the pieces: those made from its own fills and strokes, or with
+/// `all` every member.
+fn expand_pieces(d: &mut Document, m: &mut Node, all: bool, stroke_art: effects::StrokeArt) {
+    let id = m.id;
+    let mut seen = std::collections::HashSet::from([id]);
+    for c in m.children_mut().into_iter().flatten() {
+        let own = all || c.id == id;
+        let c = Arc::make_mut(c);
+        effects::fresh_ids(d, c, &mut seen);
+        if own {
+            effects::expand_art(d, c, stroke_art);
+        }
+    }
+}
+
+/// Expand Appearance of `id` (and, recursively, of a group's or layer's members): every fill and
+/// stroke becomes an object of its own (strokes outlined, brushes as their art), geometry effects
+/// are baked, raster effects become an embedded image, and the object keeps its transparency.
+fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
+    let Some(n) = d.node(id).cloned() else { return };
+    let container = is_container(&n);
+    if !expandable(&n) {
+        return;
+    }
+    let image = raster_image(d, &n);
+    let mut v = n.clone();
+    strip_raster(&mut v, false);
+    let mut stroke_art =
+        |d: &mut Document, path: &PathData, rule: FillRule, st: &StrokeLayer| super::pathops::outlined_stroke(d, brushes, path, rule, st);
+    let expanded = match image {
+        // Blur, feather and inner glow change the object itself: it becomes the image (a layer
+        // keeps it as its only member).
+        Some((image, false)) => Some(if n.is_layer() {
+            let mut m = v;
+            m.appearance = Default::default();
+            m.set_clips(false);
+            if let Some(ch) = m.children_mut() {
+                *ch = vec![Arc::new(image)];
+            }
+            m
+        } else {
+            Node { kind: image.kind, appearance: Default::default(), ..v }
+        }),
+        image => {
+            let m = if container {
+                // A group's or layer's own fills and strokes become art among its members.
+                effects::evaluate_container(&v).map(|mut m| {
+                    expand_pieces(d, &mut m, false, &mut stroke_art);
+                    m
+                })
+            } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+                effects::expand_leaf(d, &v, &mut stroke_art)
+            } else {
+                // Type, images, symbol instances, live objects: through their outlines.
+                let symbol = match &n.kind {
+                    NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
+                    _ => None,
+                };
+                effects::expand_outlined(&v, symbol.as_deref()).map(|mut m| {
+                    expand_pieces(d, &mut m, true, &mut stroke_art);
+                    m
+                })
+            };
+            match image {
+                Some((image, _)) => {
+                    let mut m = m.unwrap_or(v);
+                    put_below(d, &mut m, image);
+                    Some(m)
+                }
+                None => m,
+            }
+        }
+    };
+    if let Some(m) = expanded
+        && let Some(slot) = d.node_mut(id)
+    {
+        *slot = m;
+        out.push(id);
+    }
+    if container {
         let children: Vec<NodeId> = d.node(id).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).collect()).unwrap_or_default();
         for c in children {
-            expand_node(d, c, out);
+            expand_node(d, c, brushes, out);
         }
-        return;
     }
-    if !effects::has_geometry(&n.appearance.effects) {
-        return;
-    }
-    let Some((path, rule)) = node_geometry(&n) else { return };
-    let Some(bounds) = path.bounds() else { return };
-    let baked = effects::apply_geometry_with(&n.appearance.effects, &path, bounds, &effects::GeomContext::of(&n));
-    let kind = if matches!(n.kind, NodeKind::Compound { .. }) || baked.subpaths.len() > 1 {
-        let children = baked
-            .subpaths
-            .into_iter()
-            .map(|sp| {
-                let cid = d.alloc_id();
-                Arc::new(Node::path(cid, PathData::single(sp), Default::default()))
-            })
-            .collect();
-        NodeKind::Compound { children, rule }
-    } else {
-        NodeKind::Path { path: baked, rule, live: None, clipping: false, guide: false }
-    };
-    let Some(m) = d.node_mut(id) else { return };
-    m.kind = kind;
-    m.appearance.effects.retain(|e| !effects::is_geometry(&e.id));
-    out.push(id);
 }
 
 fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = appearance_targets(s, p)?;
     let ids = s.edit("Expand Appearance", |d, _| {
+        let brushes = vectorcraft_brush::library(d);
         let mut out = vec![];
         for id in &roots {
-            expand_node(d, *id, &mut out);
+            expand_node(d, *id, &brushes, &mut out);
         }
         if out.is_empty() {
-            return Err(EngineError::Other("Expand Appearance: no geometry effects to expand".into()));
+            return Err(EngineError::Other("Expand Appearance: the selection has a basic appearance".into()));
         }
         Ok(out)
     })?;
@@ -370,16 +501,16 @@ mod tests {
     }
 
     #[test]
-    fn expand_appearance_bakes_geometry_and_keeps_raster() {
+    fn expand_appearance_bakes_geometry() {
         let (mut s, id) = session_with_rect();
+        s.execute("paint.setStroke", &json!({"none": true})).unwrap();
         s.execute("effect.apply", &json!({"effect": "path.offsetPath", "params": {"offset": 10}})).unwrap();
-        s.execute("effect.apply", &json!({"effect": "stylize.dropShadow"})).unwrap();
         s.execute("effect.expandAppearance", &json!({})).unwrap();
+        // One fill: the path itself, reshaped.
         let n = node(&s, id);
         let b = n.geometric_bounds().unwrap();
         assert!((b.width() - 120.0).abs() < 0.1, "{b:?}");
-        assert_eq!(n.appearance.effects.len(), 1);
-        assert_eq!(n.appearance.effects[0].id, "stylize.dropShadow");
+        assert!(n.appearance.effects.is_empty());
         assert!(matches!(n.kind, NodeKind::Path { live: None, .. }));
         // Nothing left to expand.
         assert!(s.execute("effect.expandAppearance", &json!({})).is_err());
@@ -388,6 +519,7 @@ mod tests {
     #[test]
     fn expand_transform_copies_makes_compound() {
         let (mut s, id) = session_with_rect();
+        s.execute("paint.setStroke", &json!({"none": true})).unwrap();
         s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"moveH": 120, "copies": 1}})).unwrap();
         s.execute("effect.expandAppearance", &json!({})).unwrap();
         let n = node(&s, id);

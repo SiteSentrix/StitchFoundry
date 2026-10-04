@@ -460,7 +460,13 @@ fn with_transparency(d: &mut Document, mut n: Node, opacity: f32, blend: BlendMo
 /// The art stroke `st` of a path (`path`, `rule`) paints, as fills: its brush art, or the
 /// outline of the stroke (as on the canvas) filled with the stroke's paint, opacity, blend mode
 /// and effects. `None` when it paints nothing.
-fn outlined_stroke(d: &mut Document, brushes: &[vectorcraft_brush::Brush], path: &PathData, rule: FillRule, st: &StrokeLayer) -> Option<Node> {
+pub(crate) fn outlined_stroke(
+    d: &mut Document,
+    brushes: &[vectorcraft_brush::Brush],
+    path: &PathData,
+    rule: FillRule,
+    st: &StrokeLayer,
+) -> Option<Node> {
     if let Some(b) = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) {
         let mut pieces = vectorcraft_brush::stroke_pieces(b, &path.to_bezpath(), st);
         let art = match pieces.len() {

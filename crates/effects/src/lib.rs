@@ -41,13 +41,13 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 
-pub use bake::{bake_document, fresh_ids, needs_bake};
+pub use bake::{StrokeArt, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
 pub use clip::clip_outline;
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, pathfinder_children,
 };
 pub use raster::{RasterFx, outset, raster_effects};
-pub use reshape::{needs_outline, outline_art, outline_text, reshape};
+pub use reshape::{expand_outlined, needs_outline, outline_art, outline_text, reshape};
 pub use warp::{WarpStyle, warp_point};
 
 /// Catalogue entry for one effect.
