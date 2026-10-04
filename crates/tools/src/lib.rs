@@ -129,12 +129,40 @@ pub enum Action {
     Notify(String),
 }
 
-/// Paint defaults for new art (the fill/stroke proxy).
+/// Paint defaults for new art (the fill/stroke proxy) and the rest of the new-art template.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PaintDefaults {
     pub fill: Paint,
     pub stroke: Paint,
     pub stroke_width: f64,
+    /// The appearance new art takes (stroke options, more fills and strokes, effects), its top
+    /// fill and stroke repainted with `fill`, `stroke` and `stroke_width`; `None`: one plain fill
+    /// and stroke. Its placed gradients are relative to the unit box.
+    pub appearance: Option<vectorcraft_doc::Appearance>,
+    /// New art's opacity and blend mode.
+    pub opacity: f32,
+    pub blend: vectorcraft_color::BlendMode,
+    /// The graphic style the template came from (by name): new art is linked to it.
+    pub style: Option<String>,
+    /// The template is the last selection's appearance (New Art Has Basic Appearance off): with
+    /// the option on again, new art takes only its basic fill and stroke.
+    pub inherited: bool,
+}
+
+impl Default for PaintDefaults {
+    /// White fill, 1 pt black stroke, nothing else.
+    fn default() -> Self {
+        Self {
+            fill: Paint::solid(vectorcraft_color::Color::WHITE),
+            stroke: Paint::solid(vectorcraft_color::Color::BLACK),
+            stroke_width: 1.0,
+            appearance: None,
+            opacity: 1.0,
+            blend: Default::default(),
+            style: None,
+            inherited: false,
+        }
+    }
 }
 
 /// Read-only context a tool sees.
@@ -332,11 +360,7 @@ pub(crate) mod testutil {
     }
 
     pub fn paint() -> PaintDefaults {
-        PaintDefaults {
-            fill: Paint::solid(vectorcraft_color::Color::WHITE),
-            stroke: Paint::solid(vectorcraft_color::Color::BLACK),
-            stroke_width: 1.0,
-        }
+        PaintDefaults::default()
     }
 
     pub fn cx<'a>(d: &'a Document, s: &'a Selection, p: &'a PaintDefaults) -> ToolContext<'a> {

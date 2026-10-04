@@ -676,3 +676,19 @@ points}` replaces them all, as dragging several Shift-selected points with the W
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.8,"left":12,"right":12}}}
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"index":1,"t":0.8,"left":4,"right":4}}}
 ```
+
+## New art
+
+New objects take the fill and stroke proxies (`paint.setFill` / `paint.setStroke` and the weight, whatever is
+selected) on top of a template. With nothing selected, `stroke.set` / `stroke.setAdvanced` (cap, join, dashes,
+arrowheads, profile…) and `graphicStyle.apply` (every fill, stroke and effect, opacity, blend mode and the link to the
+style; `add: true` stacks it) set that template instead of editing art. With the Appearance panel's New Art Has Basic
+Appearance off (`appearance.setNewArtBasic {on: false}`, the preference `newArtBasic`) new art takes the whole
+appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
+resets it.
+
+```json
+{"name":"run_command","arguments":{"command":"select.none","params":{}}}
+{"name":"run_command","arguments":{"command":"stroke.set","params":{"cap":"round","dash":[6,3]}}}
+{"name":"run_command","arguments":{"command":"appearance.newArt","params":{}}}
+```

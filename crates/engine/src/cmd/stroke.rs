@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone",
+            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Barbed|Concave|DoubleArrow|HalfArrowLeft|HalfArrowRight|Chevron|Feather|Swallowtail|Triangle|TriangleOpen|TriangleReverse|TriangleBar|Kite|Leaf|Drop|Circle|CircleOpen|HalfCircle|Oval|Target|Square|SquareOpen|Tag|TagOpen|Diamond|DiamondOpen|Hexagon|HexagonOpen|Star|Cross|Plus|Bar|DoubleBar|DotOnBar|Slash|DoubleSlash|Bracket|Fork|null (HalfArrowLeft/Right: one barb, left or right of the direction the head points), arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone. With nothing selected (and no ids) they set up the next object drawn (appearance.newArt; weight always does)",
             has_doc,
             stroke_set
         ),
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             [],
             None,
-            "{arrowScale?: [start %, end %], swapArrows?: bool, flipProfile?: \"along\"|\"across\", brush?: name|null, item?: stroke item index|null, ids?} Stroke panel extras",
+            "{arrowScale?: [start %, end %], swapArrows?: bool, flipProfile?: \"along\"|\"across\", brush?: name|null, item?: stroke item index|null, ids?} Stroke panel extras (with nothing selected, all but brush set up the next object drawn)",
             has_doc,
             stroke_advanced
         ),
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Width Profiles",
             [],
             None,
-            "{} → {profiles: [{id (stroke.set `profile`), label, builtIn, points: [[t, left, right]…]}], current: the selected stroke's profile id or name, \"custom\" when it isn't listed, null without a stroke}",
+            "{} → {profiles: [{id (stroke.set `profile`), label, builtIn, points: [[t, left, right]…]}], current: the selected stroke's profile id or name (nothing selected: the next object drawn's), \"custom\" when it isn't listed, null without a stroke}",
             always,
             profile_list
         ),
@@ -159,6 +159,11 @@ impl StrokeChange {
     }
 }
 
+/// Does a Stroke panel edit find nothing selected (and no `ids`)? It then sets up new art.
+fn no_targets(ids: &[vectorcraft_doc::NodeId], p: &Value) -> bool {
+    ids.is_empty() && p.get("ids").is_none() && p.get("id").is_none()
+}
+
 fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.set";
     let change = StrokeChange::parse(p, C)?;
@@ -167,6 +172,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?.of_kind(s, false);
     let mut ids = item.targets(s, p)?;
+    let new_art = no_targets(&ids, p);
     if item == ItemTarget::Top {
         // Images and symbol instances take no stroke from the panel.
         let d = &s.doc()?.doc;
@@ -192,17 +198,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
         Some(id) => Some(s.resolve_profile(id).ok_or_else(|| bad(C, format!("unknown profile {id} (see stroke.widthProfile.list)")))?),
     };
-    edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
-        if index.is_none()
-            && let NodeKind::Text(t) = &mut n.kind
-        {
-            t.runs.iter_mut().for_each(|r| change.apply_char(&mut r.style));
-            return Ok(());
-        }
-        if index.is_none() && n.appearance.stroke().is_none() {
-            n.appearance.set_stroke(Paint::solid(Color::BLACK));
-        }
-        let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };
+    let set = |st: &mut StrokeLayer| {
         change.apply(st);
         if let Some(a) = align {
             st.align = a;
@@ -219,6 +215,24 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(pr) = &profile {
             st.profile = pr.clone();
         }
+    };
+    // With nothing selected the Stroke panel sets up the next object drawn.
+    if new_art {
+        set(s.new_art_stroke_mut());
+    }
+    edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            t.runs.iter_mut().for_each(|r| change.apply_char(&mut r.style));
+            return Ok(());
+        }
+        if index.is_none() && n.appearance.stroke().is_none() {
+            n.appearance.set_stroke(Paint::solid(Color::BLACK));
+        }
+        if let Some(st) = n.appearance.stroke_at_mut(index) {
+            set(st);
+        }
         Ok(())
     })?;
     ok()
@@ -233,10 +247,12 @@ impl Session {
     /// The stroke the Stroke panel, the Control bar and the Properties panel show, picked as the
     /// Stroke proxy picks its paint: the Appearance panel's active item when it is a stroke, else
     /// the first selected object's (a group's first painted object's) top stroke, type's first
-    /// run's character stroke. None without a selection or a stroke.
+    /// run's character stroke; with nothing selected, the next object drawn's
+    /// ([`Session::new_art_stroke`]). None without a document or the selection's stroke.
     pub fn shown_stroke(&self) -> Option<StrokeLayer> {
         let st = self.active()?;
-        let first = st.doc.node(*st.selection.objects.first()?)?;
+        let Some(first) = st.selection.objects.first() else { return Some(self.new_art_stroke()) };
+        let first = st.doc.node(*first)?;
         if let Some(i) = first.appearance.item_of_kind(self.appearance_item(), false) {
             return first.appearance.stroke_at(Some(i)).cloned();
         }
@@ -331,8 +347,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?.of_kind(s, false);
     let ids = item.targets(s, p)?;
-    edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
-        let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };
+    let arrows_and_profile = |st: &mut StrokeLayer| {
         if let Some(sc) = scale {
             st.arrow_scale = sc;
         }
@@ -343,6 +358,14 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         if let (Some(along), Some(pr)) = (flip, &st.profile) {
             st.profile = Some(flip_profile(pr, along));
         }
+    };
+    // As stroke.set: with nothing selected, for the next object drawn.
+    if no_targets(&ids, p) && (scale.is_some() || swap || flip.is_some()) {
+        arrows_and_profile(s.new_art_stroke_mut());
+    }
+    edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
+        let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };
+        arrows_and_profile(st);
         if let Some(b) = &brush {
             st.brush = b.clone();
         }

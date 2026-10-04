@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, CharStyle, LiveShape, Node, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, FillRule, PathData, Point, Rect, SubPath, shapes};
 
+use super::newart::NewArt;
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -56,13 +57,20 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// Insert a new object at the top of the insertion parent with the current paint; select it.
+/// Insert a new object at the top of the insertion parent with the current paint and new-art
+/// template; select it.
 pub(crate) fn add_art(s: &mut Session, label: &str, kind: NodeKind, name: Option<String>) -> Result<Value> {
-    let appearance = Appearance::basic(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
-    add_node(s, label, kind, appearance, name)
+    let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+    add_look(s, label, kind, look, name)
 }
 
+/// [`add_look`] with just `appearance`.
 pub(crate) fn add_node(s: &mut Session, label: &str, kind: NodeKind, appearance: Appearance, name: Option<String>) -> Result<Value> {
+    add_look(s, label, kind, NewArt::plain(appearance), name)
+}
+
+/// Insert a new object looking like `look` (drawing modes apply); select it.
+pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>) -> Result<Value> {
     let parent = s.doc()?.insertion_parent();
     let mode = s.draw_mode;
     let inside = s.draw_inside;
@@ -70,7 +78,7 @@ pub(crate) fn add_node(s: &mut Session, label: &str, kind: NodeKind, appearance:
     let id = s.edit(label, |d, sel| {
         let id = d.alloc_id();
         let mut n = Node::new(id, kind);
-        n.appearance = appearance;
+        look.apply(d, &mut n);
         n.name = name;
         match (mode, inside) {
             (crate::DrawMode::Inside, Some(target)) if d.node(target).is_some() => {
@@ -291,12 +299,12 @@ fn line(s: &mut Session, p: &Value) -> Result<Value> {
     let b = Point::new(f64_req(p, "x2", "shape.line")?, f64_req(p, "y2", "shape.line")?);
     let live = LiveShape::Line { a, b };
     // Lines are stroked, never filled (Illustrator ignores the fill for new open lines).
-    let appearance = Appearance::basic(
+    let look = s.new_art_look(
         vectorcraft_color::Paint::None,
         if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
         s.paint.stroke_width.max(0.1),
     );
-    add_node(s, "Line", path_kind(live.to_path(), Some(live)), appearance, None)
+    add_look(s, "Line", path_kind(live.to_path(), Some(live)), look, None)
 }
 
 fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
@@ -319,13 +327,14 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn grid_group(s: &mut Session, label: &str, paths: Vec<PathData>) -> Result<Value> {
     let parent = s.doc()?.insertion_parent();
-    let ap = Appearance::basic(vectorcraft_color::Paint::None, s.paint.stroke.clone(), s.paint.stroke_width);
+    let look = s.new_art_look(vectorcraft_color::Paint::None, s.paint.stroke.clone(), s.paint.stroke_width);
     let id = s.edit(label, |d, sel| {
         let children = paths
             .into_iter()
             .map(|pd| {
-                let id = d.alloc_id();
-                std::sync::Arc::new(Node::path(id, pd, ap.clone()))
+                let mut n = Node::path(d.alloc_id(), pd, Appearance::default());
+                look.apply(d, &mut n);
+                std::sync::Arc::new(n)
             })
             .collect();
         let gid = d.alloc_id();
@@ -378,12 +387,13 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
         }
         PathData::single(SubPath::new(anchors, bool_or(p, "closed", false)))
     };
-    let mut ap = Appearance::basic(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+    let mut look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
     // Open paths drawn with a stroke of None would be invisible: mimic Illustrator and keep what the user set.
+    let ap = &mut look.appearance;
     if !path.is_closed() && ap.stroke_paint().is_none() && ap.fill_paint().is_none() {
         ap.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
     }
-    add_node(s, "Pen", path_kind(path, None), ap, None)
+    add_look(s, "Pen", path_kind(path, None), look, None)
 }
 
 fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
