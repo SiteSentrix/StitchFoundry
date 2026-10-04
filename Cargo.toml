@@ -41,12 +41,13 @@ proptest = "1"
 
 # rendering / formats
 vello_cpu = "0.2"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp"] }
 usvg = "0.48"
 krilla = "0.8"
 skrifa = "0.47"
 harfrust = "0.13"
 linesweeper = "0.4"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
 # ui
 egui = "0.36"

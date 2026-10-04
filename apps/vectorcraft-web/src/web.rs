@@ -3,12 +3,12 @@
 use std::sync::{Arc, Mutex};
 
 use vectorcraft_engine::Session;
+use vectorcraft_engine::cmd::fileio;
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
 
 type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
-const OPEN_EXTS: &[&str] = &["vectorcraft", "drawcraft", "svg", "png", "jpg", "jpeg", "gif", "webp"];
 const CANVAS_ID: &str = "vectorcraft_canvas";
 const LOADING_ID: &str = "vectorcraft_loading";
 
@@ -99,7 +99,8 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
             let inbox = open_inbox.clone();
             let ctx = ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let Some(file) = rfd::AsyncFileDialog::new().add_filter("All supported", OPEN_EXTS).pick_file().await else {
+                let dialog = fileio::open_filters().fold(rfd::AsyncFileDialog::new(), |d, (name, exts)| d.add_filter(name, exts));
+                let Some(file) = dialog.pick_file().await else {
                     return;
                 };
                 let bytes = file.read().await;
@@ -125,7 +126,7 @@ fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
     let document = window.document().ok_or("no document")?;
     let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
     let opts = web_sys::BlobPropertyBag::new();
-    opts.set_type(mime_for(&name));
+    opts.set_type(fileio::format_for_name(&name).map_or("application/octet-stream", |f| f.mime));
     let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).map_err(js)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(js)?;
     let a: web_sys::HtmlAnchorElement = document.create_element("a").map_err(js)?.dyn_into().map_err(|_| "not an anchor")?;
@@ -142,15 +143,4 @@ fn download(path: &str, bytes: &[u8]) -> Result<(), String> {
     });
     window.set_timeout_with_callback_and_timeout_and_arguments_0(revoke.unchecked_ref(), 10_000).map_err(js)?;
     Ok(())
-}
-
-fn mime_for(name: &str) -> &'static str {
-    match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
-        Some("svg") => "image/svg+xml",
-        Some("png") => "image/png",
-        Some("jpg" | "jpeg") => "image/jpeg",
-        Some("pdf") => "application/pdf",
-        Some("vectorcraft" | "drawcraft") => "application/json",
-        _ => "application/octet-stream",
-    }
 }

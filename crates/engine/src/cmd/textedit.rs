@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area / Path Type",
             [],
             None,
-            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", at?: [x, y] (on-path start: nearest point), size?, font?} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped, like Illustrator) → {id}",
+            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", at?: [x, y] (on-path start: nearest point), size?, font?} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id}",
             has_doc,
             create_in_path
         ),

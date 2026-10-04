@@ -229,7 +229,7 @@ pub struct UiState {
     #[serde(default)]
     pub shortcut_overrides: std::collections::BTreeMap<String, String>,
     /// Name of the shortcut set (preset or "Custom").
-    #[serde(default = "default_shortcut_set")]
+    #[serde(default = "default_shortcut_set", deserialize_with = "crate::shortcut_editor::deserialize_set_name")]
     pub shortcut_set: String,
     /// Current workspace (Window → Workspace).
     #[serde(default = "default_workspace")]

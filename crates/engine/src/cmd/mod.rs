@@ -1,5 +1,6 @@
 //! The command registry. Ids follow Illustrator's menu structure.
 
+mod appearance;
 mod brushsym;
 mod buildcmds;
 pub mod clipboard;
@@ -12,8 +13,9 @@ mod docmenu;
 mod draw2;
 mod edit;
 mod effectcmd;
-mod file;
+pub mod fileio;
 mod fonts;
+mod gradient;
 pub(crate) mod graph;
 pub mod help;
 mod layer;
@@ -31,6 +33,9 @@ pub mod prefscmds;
 pub mod rasterfx;
 mod recolor;
 mod select;
+mod stroke;
+mod style;
+mod swatch;
 pub(crate) mod tabs;
 mod textedit;
 pub mod textstyles;
@@ -141,13 +146,20 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(edit::specs());
         v.extend(clipboard::specs());
         v.extend(recolor::specs());
-        v.extend(file::specs());
+        v.extend(fileio::specs());
         v.extend(create::specs());
         v.extend(object::specs());
         v.extend(path::specs());
         v.extend(select::specs());
         v.extend(wand::specs());
         v.extend(paint::specs());
+        // Split out of `paint` (M3.8); kept next to it so lists in registry order (the command
+        // palette, `engine.commands`) show them where they always were.
+        v.extend(stroke::specs());
+        v.extend(appearance::specs());
+        v.extend(style::specs());
+        v.extend(swatch::specs());
+        v.extend(gradient::specs());
         v.extend(opacitymask::specs());
         v.extend(layer::specs());
         v.extend(draw2::specs());
@@ -259,4 +271,74 @@ pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
 
 pub(crate) fn ok() -> Result<Value> {
     Ok(Value::Null)
+}
+
+/// Leaves whose appearance a paint command changes: groups and layers expand to their contents,
+/// and compound paths own their children's appearance.
+pub(crate) fn leaf_targets(s: &Session, ids: &[NodeId]) -> Result<Vec<NodeId>> {
+    use vectorcraft_doc::NodeKind;
+    let d = &s.doc()?.doc;
+    let mut out = vec![];
+    for id in ids {
+        let Some(n) = d.node(*id) else { continue };
+        match &n.kind {
+            NodeKind::Group { .. } | NodeKind::Layer { .. } => n.walk(&mut |c| {
+                if !c.is_container() || matches!(c.kind, NodeKind::Compound { .. }) {
+                    out.push(c.id)
+                }
+            }),
+            _ => out.push(*id),
+        }
+    }
+    let comp: Vec<NodeId> = out.iter().filter(|id| matches!(d.node(**id).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).copied().collect();
+    out.retain(|id| !comp.iter().any(|c| d.parent_of(*id) == Some(*c)));
+    Ok(out)
+}
+
+/// [`leaf_targets`] of a command's [`targets`] (`ids`, `id` or the selection).
+pub(crate) fn paint_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    leaf_targets(s, &targets(s, p)?)
+}
+
+/// `base` if `taken` doesn't claim it, else the first free "base 2", "base 3", …
+pub(crate) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
+}
+
+/// A 1-based page/artboard range such as `"1-3, 5"` → 0-based indices in the order given (repeats
+/// dropped). Each number must lie in `1..=count`; `"3-"` runs to the last one, `"-2"` from the first.
+pub(crate) fn parse_range(s: &str, count: usize) -> std::result::Result<Vec<usize>, String> {
+    let num = |t: &str, open: usize| -> std::result::Result<usize, String> {
+        let t = t.trim();
+        if t.is_empty() {
+            return Ok(open);
+        }
+        t.parse().ok().filter(|n| (1..=count).contains(n)).ok_or_else(|| format!("range `{s}`: `{t}` is not a number from 1 to {count}"))
+    };
+    let mut out = vec![];
+    for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        let (a, b) = match part.replace('\u{2013}', "-").split_once('-') {
+            Some((a, b)) if a.trim().is_empty() && b.trim().is_empty() => return Err(format!("range `{s}`: `{part}` names no number")),
+            Some((a, b)) => (num(a, 1)?, num(b, count)?),
+            None => {
+                let n = num(part, 0)?;
+                (n, n)
+            }
+        };
+        if a > b {
+            return Err(format!("range `{s}`: `{part}` runs backwards"));
+        }
+        for i in a - 1..b {
+            if !out.contains(&i) {
+                out.push(i);
+            }
+        }
+    }
+    if out.is_empty() {
+        return Err(format!("range `{s}` is empty"));
+    }
+    Ok(out)
 }

@@ -125,7 +125,7 @@ impl IccProfile {
 /// Built-in RGB working spaces from `moxcms`'s standard primaries.
 pub fn builtin_rgb(name: &str) -> Option<IccProfile> {
     let p = match name {
-        super::ADOBE_RGB => ColorProfile::new_adobe_rgb(),
+        super::WIDE_GAMUT_RGB => ColorProfile::new_adobe_rgb(),
         super::DISPLAY_P3 => ColorProfile::new_display_p3(),
         super::PROPHOTO_RGB => ColorProfile::new_pro_photo_rgb(),
         super::SRGB => ColorProfile::new_srgb(),

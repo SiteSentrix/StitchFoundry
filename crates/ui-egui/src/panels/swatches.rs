@@ -431,7 +431,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     menu_item(ui, "Spot Colors…", false, false);
     ui.separator();
     menu_item(ui, "Open Swatch Library", false, false);
-    menu_item(ui, "Export Swatches Library as ASE…", false, false);
+    menu_item(ui, "Save Swatch Library…", false, false);
 }
 
 #[cfg(test)]

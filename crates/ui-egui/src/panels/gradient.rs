@@ -157,9 +157,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         widgets::dim_label(ui, "Stroke:");
         for (icon, tip) in [
-            ("dc-stroke-center", "Apply gradient within stroke"),
-            ("dc-stroke-outside", "Apply gradient along stroke (on the roadmap)"),
-            ("dc-stroke-inside", "Apply gradient across stroke (on the roadmap)"),
+            ("dc-stroke-center", "Gradient inside stroke"),
+            ("dc-stroke-outside", "Gradient along stroke (on the roadmap)"),
+            ("dc-stroke-inside", "Gradient across stroke (on the roadmap)"),
         ] {
             widgets::icon_button_enabled(ui, icon, tip, icon == "dc-stroke-center" && !app.session.fill_active, false, 22.0);
         }

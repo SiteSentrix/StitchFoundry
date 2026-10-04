@@ -20,7 +20,7 @@ pub enum Item {
     Todo(&'static str, &'static str),
     Sub(&'static str, Vec<Item>),
     Sep,
-    /// Section header (disabled label, e.g. "Illustrator Effects").
+    /// Section header (disabled label, e.g. "Vector Effects").
     Header(&'static str),
 }
 
@@ -38,6 +38,10 @@ fn todos(label: &'static str, sc: &'static str) -> Item {
 }
 fn sub(label: &'static str, items: Vec<Item>) -> Item {
     Item::Sub(label, items)
+}
+/// Window → … Libraries until the code-generated libraries land (disabled entries).
+fn library_placeholders() -> Vec<Item> {
+    vec![todo("Built-in Libraries"), todo("User Defined"), Sep, todo("Other Library…")]
 }
 use Item::Sep;
 
@@ -83,9 +87,9 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.clearRecent", "Clear Recent Files", "", "{}"),
     ("type.findFont", "Find Font…", "", "{} open the Find Font dialog (engine: text.fonts / text.replaceFont / select.font)"),
     ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
-    ("file.export.svg", "Export As SVG…", "", "{path?}"),
-    ("file.export.png", "Export As PNG…", "", "{path?, scale?: 1}"),
-    ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{path?, scale?}"),
+    ("file.export.svg", "Export As SVG…", "", "{path?, artboard?, outlineText?} (document.export options)"),
+    ("file.export.png", "Export As PNG…", "", "{path?, scale?: 1, artboard?} (document.export options)"),
+    ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{} opens the dialog; with params = document.exportForScreens"),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
@@ -94,7 +98,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
     ("shortcuts.reset", "Reset Keyboard Shortcuts", "", "{}"),
-    ("shortcuts.preset", "Keyboard Shortcut Set", "", "{name: \"VectorCraft Defaults\" | \"Illustrator Defaults\"}"),
+    (
+        "shortcuts.preset",
+        "Keyboard Shortcut Set",
+        "",
+        "{name: \"VectorCraft Defaults\" | \"Classic Defaults\"} (names of earlier versions are accepted)",
+    ),
     ("shortcuts.export", "Export Keyboard Shortcuts…", "", "{path?}"),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     ("view.outline", "Outline", "Cmd+Y", "{} toggle Outline/Preview"),
@@ -147,7 +156,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
     ("ui.recolorDialog", "Recolor Artwork…", "", "{} open Recolor Artwork (engine: recolor.colors / recolor.apply)"),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
-    ("file.export.pdf", "Save as PDF…", "", "{path?}"),
+    ("file.export.pdf", "Save as PDF…", "", "{path?, artboard? | artboards? | range?: \"1-3, 5\"} (document.export options)"),
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
@@ -231,8 +240,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 None => Err("cancelled".into()),
             }
         }
-        "file.export.svg" => io::export(app, "svg", s("path"), 1.0).map(|p| json!({"path": p})),
-        "file.exportForScreens" if p.get("path").is_none() && p.get("scale").is_none() => {
+        "file.export.svg" => io::export(app, Some("svg"), s("path"), p).map(|p| json!({"path": p})),
+        "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
             let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
             app.ui.dialog = Some(crate::state::Dialog::new(
@@ -241,9 +250,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             ));
             Ok(Value::Null)
         }
-        "file.export.png" | "file.exportForScreens" => {
-            io::export(app, "png", s("path"), p.get("scale").and_then(Value::as_f64).unwrap_or(1.0)).map(|p| json!({"path": p}))
-        }
+        "file.exportForScreens" => app.run("document.exportForScreens", p.clone()),
+        "file.export.png" => io::export(app, Some("png"), s("path"), p).map(|p| json!({"path": p})),
         "file.documentSetup" => {
             let units = app.session.active().map(|d| d.doc.units.label()).unwrap_or("Points");
             app.ui.dialog = Some(crate::state::Dialog::new("documentSetup", json!({"units": units})));
@@ -457,7 +465,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some((e, params)) => app.run("effect.apply", json!({"effect": e, "params": params})),
             None => Err("no effect applied yet".into()),
         },
-        "file.export.pdf" => io::export(app, "pdf", s("path"), 1.0).map(|p| json!({"path": p})),
+        "file.export.pdf" => io::export(app, Some("pdf"), s("path"), p).map(|p| json!({"path": p})),
         "help.about" => {
             app.ui.about = true;
             Ok(Value::Null)
@@ -746,7 +754,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 todo("Transparency Flattener Presets…"),
                 todo("Print Presets…"),
-                todo("Adobe PDF Presets…"),
+                todo("PDF Presets…"),
                 cp("Perspective Grid Presets…", "perspective.grid.preset", json!({"kind": 2})),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),
@@ -1218,10 +1226,10 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 todo("Variables"),
                 Sep,
-                sub("Brush Libraries", vec![todo("Arrows"), todo("Artistic"), todo("Borders"), todo("Decorative")]),
-                sub("Graphic Style Libraries", vec![todo("Additive"), todo("Artistic Effects"), todo("Buttons and Rollovers")]),
-                sub("Swatch Libraries", vec![todo("Art History"), todo("Celebration"), todo("Color Properties"), todo("Nature"), todo("Web")]),
-                sub("Symbol Libraries", vec![todo("Arrows"), todo("Charts"), todo("Web Buttons and Bars")]),
+                sub("Brush Libraries", library_placeholders()),
+                sub("Graphic Style Libraries", library_placeholders()),
+                sub("Swatch Libraries", library_placeholders()),
+                sub("Symbol Libraries", library_placeholders()),
             ],
         ),
         (
@@ -1576,7 +1584,7 @@ fn font_items() -> Vec<Item> {
         .collect()
 }
 
-/// The Effect menu, built from the effects catalogue (Illustrator Effects), plus raster effects.
+/// The Effect menu, built from the effects catalogue (vector effects), plus raster effects.
 fn effect_menu() -> Vec<Item> {
     let cat = vectorcraft_effects::effect_catalog();
     let mut out = vec![
@@ -1585,7 +1593,7 @@ fn effect_menu() -> Vec<Item> {
         Sep,
         c("Document Raster Effects Settings…", "document.rasterEffectsSettings"),
         Sep,
-        Item::Header("Illustrator Effects"),
+        Item::Header("Vector Effects"),
     ];
     // Submenus in Illustrator's order.
     let order = ["3D and Materials", "Convert to Shape", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];

@@ -11,6 +11,7 @@ mod control_server;
 mod native_menu;
 
 use vectorcraft_engine::Session;
+use vectorcraft_engine::cmd::fileio;
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 
 struct App(VectorcraftApp, #[cfg(target_os = "macos")] Option<native_menu::NativeMenu>);
@@ -98,8 +99,8 @@ fn save_prefs(app: &VectorcraftApp) {
 fn services() -> Services {
     Services {
         pick_open: Some(Box::new(|| {
-            rfd::FileDialog::new()
-                .add_filter("All supported", &["vectorcraft", "drawcraft", "svg", "png", "jpg", "jpeg", "gif", "webp"])
+            fileio::open_filters()
+                .fold(rfd::FileDialog::new(), |d, (name, exts)| d.add_filter(name, exts))
                 .pick_file()
                 .map(|p| p.to_string_lossy().to_string())
         })),

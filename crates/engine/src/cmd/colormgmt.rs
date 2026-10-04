@@ -157,10 +157,10 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
     let mut st = cms::active_settings();
     let before = st.clone();
     if let Some(v) = str_param(p, "rgb") {
-        st.rgb = v.to_string();
+        st.rgb = cms::canonical_name(v).to_string();
     }
     if let Some(v) = str_param(p, "cmyk") {
-        st.cmyk = v.to_string();
+        st.cmyk = cms::canonical_name(v).to_string();
     }
     if let Some(i) = intent_param(p, C)? {
         st.intent = i;
@@ -189,24 +189,23 @@ fn load_profile(_: &mut Session, _: &Value) -> Result<Value> {
 /// The document's assigned profiles (`None` = working space).
 pub fn doc_profiles(d: &vectorcraft_doc::Document) -> (Option<String>, Option<String>) {
     let o = d.unknown.get(PROFILES_KEY);
-    let get = |k: &str| o.and_then(|o| o.get(k)).and_then(Value::as_str).map(str::to_string);
+    let get = |k: &str| o.and_then(|o| o.get(k)).and_then(Value::as_str).map(|n| cms::canonical_name(n).to_string());
     (get("rgb"), get("cmyk"))
 }
 
 fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.assignProfile";
     let (mut rgb, mut cmyk) = doc_profiles(&s.doc()?.doc);
-    let known = cms::profiles();
     let pick = |key: &str, cur: &mut Option<String>, kind: cms::ProfileKind| -> Result<bool> {
         match p.get(key) {
             None => Ok(false),
             Some(Value::Null) => Ok(cur.take().is_some()),
             Some(Value::String(n)) => {
-                if !known.iter().any(|k| &k.name == n && k.kind == kind) {
+                let Some(info) = cms::profile(n).filter(|k| k.kind == kind) else {
                     return Err(bad(C, format!("unknown {key} profile `{n}`")));
-                }
-                let changed = cur.as_deref() != Some(n.as_str());
-                *cur = Some(n.clone());
+                };
+                let changed = cur.as_deref() != Some(info.name.as_str());
+                *cur = Some(info.name);
                 Ok(changed)
             }
             Some(_) => Err(bad(C, format!("`{key}` must be a profile name or null"))),
@@ -363,7 +362,7 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(t) = str_param(p, "target") {
         let t = ProofTarget::parse(t).ok_or_else(|| bad(C, format!("unknown proof target `{t}`")))?;
         if let ProofTarget::Cmyk(name) = &t
-            && !cms::profiles().iter().any(|k| &k.name == name && k.kind == cms::ProfileKind::Cmyk)
+            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
         {
             return Err(bad(C, format!("unknown CMYK profile `{name}`")));
         }

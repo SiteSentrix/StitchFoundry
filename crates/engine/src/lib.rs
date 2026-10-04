@@ -711,6 +711,8 @@ mod tests_brushsym;
 #[cfg(test)]
 mod tests_build;
 #[cfg(test)]
+mod tests_cmdsplit;
+#[cfg(test)]
 mod tests_colormgmt;
 #[cfg(test)]
 mod tests_distort;
