@@ -363,7 +363,7 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
                     // Outline: open edges stroked with the face's former fill.
                     let fill = st.appearance.fill_paint();
                     let paint = if fill.is_none() { st.appearance.stroke_paint() } else { fill };
-                    n.appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], effects: vec![] };
+                    n.appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() };
                 }
                 children.push(Arc::new(n));
             }
@@ -483,7 +483,7 @@ fn outlined_stroke(d: &mut Document, brushes: &[vectorcraft_brush::Brush], path:
         overprint: st.overprint,
         ..vectorcraft_doc::appearance::FillLayer::new(st.paint.clone())
     };
-    n.appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], effects: vec![] };
+    n.appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() };
     Some(n)
 }
 
@@ -499,7 +499,7 @@ fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &N
     let mut fills: Vec<AppearanceItem> = vec![];
     let fill_node = |d: &mut Document, items: Vec<AppearanceItem>| {
         let mut f = d.reid(l);
-        f.appearance = Appearance { items, effects: vec![] };
+        f.appearance = Appearance { items, ..Default::default() };
         f.opacity = 1.0;
         f.blend = BlendMode::Normal;
         f.name = None;

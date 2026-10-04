@@ -37,7 +37,7 @@ fn fitted_dashes_on_a_rectangle_look_as_on_the_canvas() {
     let mut n = Node::path(
         NodeId(0),
         shapes::rectangle(Rect::new(20.0, 20.0, 120.0, 70.0)),
-        Appearance { items: vec![AppearanceItem::Stroke(dashed(true))], effects: vec![] },
+        Appearance { items: vec![AppearanceItem::Stroke(dashed(true))], ..Default::default() },
     );
     n.id = d.alloc_id();
     let layer = d.default_layer().unwrap();

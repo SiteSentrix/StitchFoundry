@@ -678,6 +678,18 @@ impl Exporter<'_> {
     fn text(&mut self, s: &mut Surface, n: &Node, t: &TextObject) {
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         let tb = t.xf.transform_rect_bbox(layout.bounds);
+        // The object's own fills and strokes paint the whole outline: those below the Characters
+        // row under the characters, the others over them.
+        let (below, above) = n.appearance.split_contents();
+        let all = (!n.appearance.items.is_empty()).then(|| {
+            let mut all = layout.to_bezpath();
+            all.apply_affine(t.xf);
+            to_path(&all)
+        });
+        let all = all.flatten();
+        if let Some(path) = &all {
+            self.text_items(s, below, path, tb);
+        }
         s.push_transform(&xf(t.xf));
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
@@ -701,32 +713,34 @@ impl Exporter<'_> {
         s.set_fill(None);
         s.set_stroke(None);
         s.pop();
-        if !n.appearance.items.is_empty() {
-            let mut all = layout.to_bezpath();
-            all.apply_affine(t.xf);
-            let Some(path) = to_path(&all) else { return };
-            for item in &n.appearance.items {
-                match item {
-                    AppearanceItem::Fill(fl) if fl.visible => {
-                        if let Some(paint) = self.paint(&fl.paint, tb) {
-                            s.set_stroke(None);
-                            s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: krilla::paint::FillRule::NonZero }));
-                            s.draw_path(&path);
-                        }
-                    }
-                    AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {
-                        if let Some(paint) = self.paint(&st.paint, st.paint_bounds(tb)) {
-                            s.set_fill(None);
-                            s.set_stroke(Some(Stroke { paint, width: st.width as f32, opacity: norm(st.opacity), ..Default::default() }));
-                            s.draw_path(&path);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            s.set_fill(None);
-            s.set_stroke(None);
+        if let Some(path) = &all {
+            self.text_items(s, above, path, tb);
         }
+    }
+
+    /// A type object's own fills and strokes `items` on its glyph outlines `path` (`tb`: their bounds).
+    fn text_items(&mut self, s: &mut Surface, items: &[AppearanceItem], path: &Path, tb: Rect) {
+        for item in items {
+            match item {
+                AppearanceItem::Fill(fl) if fl.visible => {
+                    if let Some(paint) = self.paint(&fl.paint, tb) {
+                        s.set_stroke(None);
+                        s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: krilla::paint::FillRule::NonZero }));
+                        s.draw_path(path);
+                    }
+                }
+                AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {
+                    if let Some(paint) = self.paint(&st.paint, st.paint_bounds(tb)) {
+                        s.set_fill(None);
+                        s.set_stroke(Some(Stroke { paint, width: st.width as f32, opacity: norm(st.opacity), ..Default::default() }));
+                        s.draw_path(path);
+                    }
+                }
+                _ => {}
+            }
+        }
+        s.set_fill(None);
+        s.set_stroke(None);
     }
 
     fn load_image(&mut self, key: &str) -> Option<Image> {

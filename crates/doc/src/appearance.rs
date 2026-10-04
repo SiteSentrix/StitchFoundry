@@ -375,12 +375,17 @@ pub struct Appearance {
     pub items: Vec<AppearanceItem>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    /// Groups, layers and type: how many items paint below the object's contents (its members, or
+    /// type's characters), the slot of the Appearance panel's Contents (Characters) row. `None`:
+    /// every item paints above the contents (see [`Self::contents_at`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contents_index: Option<usize>,
 }
 
 impl Appearance {
     /// Illustrator's "basic appearance": one fill below one stroke.
     pub fn basic(fill: Paint, stroke: Paint, width: f64) -> Self {
-        Self { items: vec![AppearanceItem::Fill(FillLayer::new(fill)), AppearanceItem::Stroke(StrokeLayer::new(stroke, width))], effects: vec![] }
+        Self { items: vec![AppearanceItem::Fill(FillLayer::new(fill)), AppearanceItem::Stroke(StrokeLayer::new(stroke, width))], ..Self::default() }
     }
     /// White fill, 1 pt black stroke (the default for new art).
     pub fn default_art() -> Self {
@@ -410,7 +415,7 @@ impl Appearance {
     pub fn set_fill(&mut self, p: Paint) {
         match self.fill_mut() {
             Some(f) => f.paint = p,
-            None => self.items.insert(0, AppearanceItem::Fill(FillLayer::new(p))),
+            None => self.insert_item(0, AppearanceItem::Fill(FillLayer::new(p))),
         }
     }
     /// Set the top stroke's paint, creating a 1 pt stroke if there is none.
@@ -428,6 +433,7 @@ impl Appearance {
     pub fn is_basic(&self) -> bool {
         let count = |fill: bool| self.items.iter().filter(|i| i.is_fill() == fill).count();
         self.effects.is_empty()
+            && self.contents_index.is_none()
             && count(true) <= 1
             && count(false) <= 1
             && self.items.iter().all(|i| i.visible() && i.effects().is_empty() && i.opacity() == 1.0 && i.blend() == BlendMode::Normal)
@@ -679,6 +685,59 @@ impl Appearance {
     }
 }
 
+/// The contents slot: where a group's or layer's members (type: its characters) paint among the
+/// object's own fills and strokes.
+impl Appearance {
+    /// How many items paint below the contents (the Contents/Characters row sits above them).
+    pub fn contents_at(&self) -> usize {
+        self.contents_index.unwrap_or(0).min(self.items.len())
+    }
+    /// Put the contents above the bottom `k` items (clamped; 0, all items above, is stored as `None`).
+    pub fn set_contents_at(&mut self, k: usize) {
+        let k = k.min(self.items.len());
+        self.contents_index = (k > 0).then_some(k);
+    }
+    /// The items painted below the contents and those painted above them.
+    pub fn split_contents(&self) -> (&[AppearanceItem], &[AppearanceItem]) {
+        self.items.split_at(self.contents_at())
+    }
+    /// Insert `item` at paint-order index `at` (clamped). The contents stay between the same items;
+    /// an item landing right above them joins the item below it (below the contents if that one is).
+    pub fn insert_item(&mut self, at: usize, item: AppearanceItem) {
+        let k = self.contents_at();
+        let at = at.min(self.items.len());
+        self.items.insert(at, item);
+        if at < k || (at == k && k > 0) {
+            self.set_contents_at(k + 1);
+        }
+    }
+    /// Remove item `i` (if it exists), keeping the contents between the same items.
+    pub fn remove_item(&mut self, i: usize) -> Option<AppearanceItem> {
+        let k = self.contents_at();
+        (i < self.items.len()).then(|| {
+            let it = self.items.remove(i);
+            if i < k {
+                self.set_contents_at(k - 1);
+            }
+            it
+        })
+    }
+    /// Move item `from` to paint-order index `to` (clamped) and return where it landed, or `None`
+    /// when there is no item `from`. The contents stay between the same other items, and the moved
+    /// item keeps its side of them when it lands right next to them.
+    pub fn move_item(&mut self, from: usize, to: usize) -> Option<usize> {
+        let k = self.contents_at();
+        let below = from < k;
+        let it = self.remove_item(from)?;
+        let others_below = self.contents_at();
+        let to = to.min(self.items.len());
+        self.items.insert(to, it);
+        let now_below = if below { to <= others_below } else { to < others_below };
+        self.set_contents_at(others_below + usize::from(now_below));
+        Some(to)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -744,7 +803,7 @@ mod tests {
     #[test]
     fn basic_means_one_plain_fill_and_stroke() {
         let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 1.0));
-        let mut a = Appearance { items: vec![stroke(), stroke()], effects: vec![] };
+        let mut a = Appearance { items: vec![stroke(), stroke()], ..Appearance::default() };
         assert!(!a.is_basic(), "two strokes");
         a.items.pop();
         assert!(a.is_basic() && Appearance::default().is_basic());
@@ -830,5 +889,41 @@ mod tests {
         assert_eq!(a.outset(), 10.0);
         a.stroke_mut().unwrap().align = StrokeAlign::Inside;
         assert_eq!(a.outset(), 0.0);
+    }
+
+    #[test]
+    fn contents_slot_follows_item_edits_and_round_trips() {
+        let fill = || AppearanceItem::Fill(FillLayer::new(Paint::None));
+        let mut a = Appearance { items: vec![fill(), fill(), fill()], ..Appearance::default() };
+        assert_eq!((a.contents_at(), a.split_contents().1.len()), (0, 3), "all items above by default");
+        a.set_contents_at(1);
+        assert!(!a.is_basic());
+        // [0 | 1 2]: removing below shifts the slot, removing above doesn't.
+        a.remove_item(2);
+        assert_eq!(a.contents_at(), 1);
+        a.remove_item(0);
+        assert_eq!((a.contents_at(), a.contents_index), (0, None));
+        // Inserting next to the slot joins the item below it.
+        a.items.push(fill());
+        a.set_contents_at(1); // [0 | 1]
+        a.insert_item(1, fill());
+        assert_eq!(a.contents_at(), 2);
+        a.insert_item(3, fill()); // [0 1 | 2 3]
+        assert_eq!(a.contents_at(), 2);
+        // Moves keep their side when landing next to the slot, cross it otherwise.
+        assert_eq!(a.move_item(3, 2), Some(2));
+        assert_eq!(a.contents_at(), 2, "stays above");
+        a.move_item(3, 0);
+        assert_eq!(a.contents_at(), 3, "crossed below");
+        a.move_item(0, 3);
+        assert_eq!(a.contents_at(), 2, "crossed above");
+        assert_eq!(a.move_item(9, 0), None);
+        // Saved only when set; older files load with every item above.
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(json.contains("\"contents_index\":2"));
+        assert_eq!(serde_json::from_str::<Appearance>(&json).unwrap(), a);
+        let old: Appearance = serde_json::from_str(r#"{"items":[]}"#).unwrap();
+        assert_eq!(old.contents_index, None);
+        assert!(!serde_json::to_string(&Appearance::default_art()).unwrap().contains("contents_index"));
     }
 }

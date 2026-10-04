@@ -1,7 +1,9 @@
 //! Effect menu commands (live effects) and Object → Expand Appearance.
 //!
 //! Effects are stored on the object's appearance (`appearance.effects`) and evaluated at render
-//! time by `vectorcraft-effects` (re-exported by the renderer).
+//! time by `vectorcraft-effects` (re-exported by the renderer). The commands edit the objects'
+//! own stacks, groups and layers included (layers through `ids`), or with `target: "contents"`
+//! the objects inside them (see `appearance`).
 
 use std::sync::Arc;
 
@@ -20,8 +22,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\"), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..]} append a live effect to each selected object's appearance → {ids, index, item}",
-            has_selection,
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\"), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow) → {ids, index, item}",
+            has_doc,
             apply
         ),
         cmd!(
@@ -39,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             [],
             None,
             "{index: int (position in the effect list), item?: appearance item index|null (that fill/stroke's effects; omitted: the active item, else the object's), ids?: [..]} → {ids}",
-            has_selection,
+            has_doc,
             remove
         ),
         cmd!(
@@ -48,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             [],
             None,
             "{index: int, params?: {…} (merged into the current parameters), visible?: bool, item?: appearance item index|null (as effect.remove), ids?: [..]} → {ids}",
-            has_selection,
+            has_doc,
             set_params
         ),
         cmd!(
@@ -56,8 +58,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?: [..]} bake geometry effects into the paths and drop them (raster effects stay live) → {ids}",
-            has_selection,
+            "{ids?: [..], target?} bake geometry effects into the paths and drop them (raster effects stay live); a group's or layer's own fills and strokes become paths among its members → {ids}",
+            has_doc,
             expand_appearance
         ),
         cmd!(
@@ -66,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             [],
             None,
             "{index: int, item?: appearance item index|null (as effect.remove), ids?: [..]} insert a copy of the effect right after it → {ids}",
-            has_selection,
+            has_doc,
             duplicate
         ),
         cmd!(
@@ -75,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             [],
             None,
             "{from: int (position in the source list), to: int (its position in the destination list afterwards), fromItem?: appearance item index|null (the source list: that fill/stroke's effects, null the object's; omitted: the active item, else the object's), toItem?: item index|null (the destination list; default: the source list), copy?: bool (copy instead of move, as Alt-dragging the row), ids?: [..]} reorder an effect or move it between the object and its fills/strokes, as one undo step → {ids, index, item}",
-            has_selection,
+            has_doc,
             move_effect
         ),
     ]
@@ -256,31 +258,22 @@ fn node_geometry(n: &Node) -> Option<(PathData, FillRule)> {
     }
 }
 
-/// Bake the object-level geometry effects of `id` (and, recursively, of group members).
+/// Bake the object-level geometry effects of `id` (and, recursively, of group members). A group's
+/// or layer's Pathfinder and geometry effects and its own fills and strokes become its members.
 fn expand_node(d: &mut vectorcraft_doc::Document, id: NodeId, out: &mut Vec<NodeId>) {
     let Some(n) = d.node(id).cloned() else { return };
-    // Effect → Pathfinder: the group's members become the Pathfinder result.
-    if let Some(result) = effects::pathfinder_children(&n, None) {
-        let children = result
-            .into_iter()
-            .map(|c| {
-                let mut c = Arc::unwrap_or_clone(c);
-                c.id = d.alloc_id();
-                Arc::new(c)
-            })
-            .collect();
-        let Some(m) = d.node_mut(id) else { return };
-        if let Some(ch) = m.children_mut() {
-            *ch = children;
+    if matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) {
+        if let Some(mut m) = effects::evaluate_container(&n) {
+            let mut seen = std::collections::HashSet::from([m.id]);
+            for c in m.children_mut().into_iter().flatten() {
+                effects::fresh_ids(d, Arc::make_mut(c), &mut seen);
+            }
+            let Some(slot) = d.node_mut(id) else { return };
+            *slot = m;
+            out.push(id);
         }
-        m.appearance.effects.retain(|e| !effects::is_pathfinder(&e.id));
-        out.push(id);
-        return;
-    }
-    if let Some(children) = n.children()
-        && matches!(n.kind, NodeKind::Group { .. })
-    {
-        for c in children.iter().map(|c| c.id).collect::<Vec<_>>() {
+        let children: Vec<NodeId> = d.node(id).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).collect()).unwrap_or_default();
+        for c in children {
             expand_node(d, c, out);
         }
         return;

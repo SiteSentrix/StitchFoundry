@@ -14,7 +14,7 @@ fn doc(path: PathData, width: f64, f: impl FnOnce(&mut StrokeLayer)) -> Document
     let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), width);
     f(&mut st);
     let mut b = DocBuilder::new(160.0, 120.0);
-    b.path(path, Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] }, |_| {});
+    b.path(path, Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() }, |_| {});
     b.build()
 }
 

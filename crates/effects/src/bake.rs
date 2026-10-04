@@ -3,17 +3,17 @@
 //! SVG, PDF and the clipboard have no notion of Illustrator's live effects, so exporters receive a
 //! copy of the document in which every geometry effect — object level, per fill/stroke and
 //! Effect → Pathfinder, and those on type, images, symbol instances and live objects (through their
-//! outlines, [`reshape`]) — is evaluated exactly like the renderer does. Raster effects (shadows,
-//! glows, blur) stay on the objects for the exporter to translate (e.g. SVG filters).
+//! outlines, [`reshape`]) — is evaluated exactly like the renderer does, and so are the own fills,
+//! strokes and geometry effects of groups and layers ([`evaluate_container`]). Raster effects
+//! (shadows, glows, blur) stay on the objects for the exporter to translate (e.g. SVG filters).
 
 use std::sync::Arc;
 
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeKind};
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::{
-    GeomContext, apply_geometry_with, has_geometry, has_pathfinder, is_geometry, is_pathfinder, needs_outline, pathfinder_children, reshape,
-};
+use crate::group::has_own_paint;
+use crate::{GeomContext, apply_geometry_with, evaluate_container, has_geometry, has_pathfinder, is_geometry, needs_outline, reshape};
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
     match item {
@@ -32,6 +32,7 @@ fn clear_item_effects(item: &mut AppearanceItem) {
 /// Does anything in `n`'s subtree need baking?
 pub fn needs_bake(n: &Node) -> bool {
     has_pathfinder(n)
+        || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
         || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)))
         || n.children().is_some_and(|ch| ch.iter().any(|c| needs_bake(c)))
@@ -79,14 +80,16 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         let m = reshape(n, symbol.as_deref())?;
         return Some(bake_node(d, &m).unwrap_or(m));
     }
-    if let Some(result) = pathfinder_children(n, None) {
-        let mut m = n.clone();
-        m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
-        let children = result
+    // Groups and layers: Pathfinder, geometry effects and their own fills and strokes. The new
+    // pieces (results, outlines, the fills' and strokes' art) get ids of their own.
+    if let Some(mut m) = evaluate_container(n) {
+        let mut seen = std::collections::HashSet::from([m.id]);
+        let children = m.children().cloned().unwrap_or_default();
+        let children = children
             .into_iter()
             .map(|c| {
                 let mut c = Arc::unwrap_or_clone(c);
-                c.id = d.alloc_id();
+                fresh_ids(d, &mut c, &mut seen);
                 Arc::new(bake_node(d, &c).unwrap_or(c))
             })
             .collect();
@@ -109,6 +112,18 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(m);
     }
     bake_leaf(d, n)
+}
+
+/// Give `n` and its descendants a new id wherever one was already `seen` (the pieces evaluated art
+/// copies from its source keep ids of their own).
+pub fn fresh_ids(d: &mut Document, n: &mut Node, seen: &mut std::collections::HashSet<vectorcraft_doc::NodeId>) {
+    if !seen.insert(n.id) {
+        n.id = d.alloc_id();
+        seen.insert(n.id);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        fresh_ids(d, Arc::make_mut(c), seen);
+    }
 }
 
 fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
@@ -136,7 +151,7 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
             Arc::new(Node {
                 id,
                 name: None,
-                appearance: Appearance { items: vec![it], effects: vec![] },
+                appearance: Appearance { items: vec![it], ..Default::default() },
                 opacity: 1.0,
                 blend: Default::default(),
                 isolate: false,

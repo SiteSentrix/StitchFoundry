@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData, Rect, shapes};
 
 use crate::{GeomContext, apply_one, is_geometry, merged_params};
@@ -29,11 +29,8 @@ pub fn needs_outline(n: &Node) -> bool {
     )
 }
 
-/// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
-/// then (when the object has its own fills/strokes) the whole outline with the object's stack,
-/// painted over the characters as the renderer does.
-pub fn outline_text(n: &Node) -> Option<Node> {
-    let NodeKind::Text(t) = &n.kind else { return None };
+/// The glyph outlines of type `t` in text space: one path per run, and all of them as one.
+pub(crate) fn glyph_outlines(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::BezPath) {
     let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     let mut runs = vec![kurbo::BezPath::new(); t.runs.len()];
     let mut all = kurbo::BezPath::new();
@@ -43,13 +40,22 @@ pub fn outline_text(n: &Node) -> Option<Node> {
         }
         all.extend(g.outline.iter());
     }
+    (runs, all)
+}
+
+/// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
+/// and (when the object has its own fills/strokes) the whole outline with the object's items below
+/// the characters under them and the others over them, as the renderer paints them.
+pub fn outline_text(n: &Node) -> Option<Node> {
+    let NodeKind::Text(t) = &n.kind else { return None };
+    let (runs, all) = glyph_outlines(t);
     let path = |bp: &kurbo::BezPath| PathData::from_bezpath(bp).transformed(t.xf);
     let mut children: Vec<Arc<Node>> = runs
         .iter()
         .zip(&t.runs)
         .filter(|(bp, _)| !bp.elements().is_empty())
         .map(|(bp, run)| {
-            let mut ap = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(run.style.fill.clone()))], effects: vec![] };
+            let mut ap = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(run.style.fill.clone()))], ..Default::default() };
             if !run.style.stroke.is_none() && run.style.stroke_width > 0.0 {
                 ap.items.push(AppearanceItem::Stroke(StrokeLayer::new(run.style.stroke.clone(), run.style.stroke_width)));
             }
@@ -57,8 +63,14 @@ pub fn outline_text(n: &Node) -> Option<Node> {
         })
         .collect();
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
-        let ap = Appearance { items: n.appearance.items.clone(), effects: vec![] };
-        children.push(Arc::new(Node::path(n.id, path(&all), ap)));
+        let (below, above) = n.appearance.split_contents();
+        let glyphs = |items: &[AppearanceItem]| Arc::new(Node::path(n.id, path(&all), Appearance { items: items.to_vec(), ..Default::default() }));
+        if !below.is_empty() {
+            children.insert(0, glyphs(below));
+        }
+        if !above.is_empty() {
+            children.push(glyphs(above));
+        }
     }
     Some(Node::group(n.id, children))
 }
@@ -107,7 +119,7 @@ fn outline_nested_text(n: &mut Node) {
 /// a group with `n`'s id, name, transparency, opacity mask and remaining (raster) effects; `None`
 /// when `n` has no visible geometry effect or no art (a symbol instance without `symbol_art`).
 pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    let fx: Vec<_> = n.appearance.effects.iter().filter(|e| e.visible && is_geometry(&e.id)).collect();
+    let fx = geometry_effects(n);
     if fx.is_empty() || !needs_outline(n) {
         return None;
     }
@@ -123,16 +135,7 @@ pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
         }
         _ => outline_art(n, symbol_art)?,
     };
-    for e in fx {
-        // Every leaf takes the effect with the whole art's bounds as its reference box.
-        let Some(bounds) = art.geometric_bounds() else { break };
-        let params = merged_params(&e.id, &e.params);
-        for_each_leaf(&mut art, &mut |leaf| {
-            let Some((path, rule)) = leaf_geometry(leaf) else { return };
-            let out = apply_one(&e.id, &params, &path, bounds, &GeomContext::of(leaf));
-            set_geometry(leaf, out, rule);
-        });
-    }
+    reshape_leaves(&mut art, &fx);
     // The art is a group with `n`'s id (a clip group for an image).
     let mut out = art;
     out.name = n.name.clone();
@@ -144,6 +147,34 @@ pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     out.mask = n.mask.clone();
     out.appearance.effects = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
     Some(out)
+}
+
+/// The visible geometry effects of `n`'s own effect list, in order.
+pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
+    n.appearance.effects.iter().filter(|e| e.visible && is_geometry(&e.id)).collect()
+}
+
+/// Apply `fx` to every path under `art` as one piece: each effect takes the whole art's bounds as
+/// its reference box.
+pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
+    for e in fx {
+        let Some(bounds) = art.geometric_bounds() else { break };
+        let params = merged_params(&e.id, &e.params);
+        for_each_leaf(art, &mut |leaf| {
+            let Some((path, rule)) = leaf_geometry(leaf) else { return };
+            let out = apply_one(&e.id, &params, &path, bounds, &GeomContext::of(leaf));
+            set_geometry(leaf, out, rule);
+        });
+    }
+}
+
+/// `n` with type anywhere inside it outlined and live objects evaluated, so geometry effects on
+/// it reach every member.
+pub(crate) fn outlined_members(n: &Node) -> Node {
+    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
+    let mut art = vectorcraft_doc::live::expand_deep(n, Some(hook));
+    outline_nested_text(&mut art);
+    art
 }
 
 /// Run `f` on every path and compound path under `n` (guides skipped).
@@ -159,7 +190,7 @@ fn for_each_leaf(n: &mut Node, f: &mut dyn FnMut(&mut Node)) {
     }
 }
 
-fn leaf_geometry(n: &Node) -> Option<(PathData, FillRule)> {
+pub(crate) fn leaf_geometry(n: &Node) -> Option<(PathData, FillRule)> {
     match &n.kind {
         NodeKind::Path { path, rule, .. } => Some((path.clone(), *rule)),
         NodeKind::Compound { children, rule } => {

@@ -32,7 +32,7 @@ fn stroke_only(width: f64, f: impl FnOnce(&mut StrokeLayer)) -> Appearance {
     let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), width);
     st.cap = LineCap::Butt;
     f(&mut st);
-    Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] }
+    Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() }
 }
 
 // ---------------------------------------------------------------- gradients

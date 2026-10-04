@@ -14,7 +14,7 @@ fn rect_doc(align_corners: bool) -> Document {
     let n = Node::path(
         d.alloc_id(),
         shapes::rectangle(Rect::new(20.0, 20.0, 120.0, 70.0)),
-        Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] },
+        Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() },
     );
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();

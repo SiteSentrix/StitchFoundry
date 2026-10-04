@@ -13,7 +13,7 @@ pub(crate) fn line_doc(st: StrokeLayer) -> (Document, Node) {
     let mut n = Node::path(
         NodeId(0),
         shapes::line(Point::new(20.0, 50.0), Point::new(80.0, 50.0)),
-        Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] },
+        Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() },
     );
     n.id = d.alloc_id();
     let layer = d.default_layer().unwrap();

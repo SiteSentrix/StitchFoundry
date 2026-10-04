@@ -357,7 +357,7 @@ impl Importer {
             usvg::PaintOrder::FillAndStroke => [fill, stroke],
             usvg::PaintOrder::StrokeAndFill => [stroke, fill],
         };
-        (Appearance { items: items.into_iter().flatten().collect(), effects: vec![] }, r)
+        (Appearance { items: items.into_iter().flatten().collect(), ..Default::default() }, r)
     }
 
     fn path(&mut self, p: &usvg::Path, acc: Affine) -> Option<Node> {

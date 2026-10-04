@@ -15,7 +15,10 @@
 //!
 //! The same applies to one fill or stroke's own raster effects (around that item alone) and to
 //! type, images, symbol instances and live objects ([`Renderer::draw_object_fx`]): their art is
-//! drawn offscreen in the filter layers, reshaped first by their geometry effects.
+//! drawn offscreen in the filter layers, reshaped first by their geometry effects. Groups and
+//! layers with an appearance of their own take the same path with their evaluated art
+//! ([`effects::evaluate_container`]: their fills and strokes painting the members, their geometry
+//! effects reshaping them), so their raster effects apply to the composite (one combined shadow).
 
 use std::sync::Arc;
 
@@ -45,9 +48,15 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 }
 
 /// Does `n` carry visible object-level effects that only apply through its art (type, images,
-/// symbol instances, live objects; see [`Renderer::draw_object_fx`])?
+/// symbol instances, live objects), or is it a group or layer with an appearance of its own (see
+/// [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
-    effects::needs_outline(n) && visible(&n.appearance.effects)
+    (effects::needs_outline(n) && visible(&n.appearance.effects)) || effects::has_container_appearance(n)
+}
+
+/// Is `n` a group or layer (whose evaluated art keeps its knockout setting)?
+fn is_container(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
 }
 
 /// What [`Renderer::raster_fx`] paints effects around.
@@ -127,6 +136,18 @@ pub(crate) fn visual_bounds(n: &Node) -> Option<Rect> {
 /// the subtree (a shadow can reach the view while its object is outside it).
 pub(crate) fn cull_bounds(n: &Node) -> Option<Rect> {
     match &n.kind {
+        // The evaluated art (its fills, strokes and geometry effects) and the raster effects' reach.
+        _ if effects::has_container_appearance(n) => {
+            let art = effects::evaluate_container(n);
+            let art = art.as_ref().unwrap_or(n);
+            let b = if art.clips() {
+                art.visual_bounds()
+            } else {
+                art.children()?.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(c)))
+            }?;
+            let o = effects::outset(&n.appearance.effects);
+            Some(b.inflate(o, o))
+        }
         NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
             children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(c)))
         }
@@ -375,7 +396,8 @@ impl Renderer {
 
     /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):
     /// reshaped by its geometry effects, else type and images as themselves and the others as
-    /// their evaluated art; without the object's transparency and effects.
+    /// their evaluated art (groups and layers: [`effects::evaluate_container`], keeping their
+    /// knockout setting); without the object's transparency and effects.
     fn fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>, cache: bool) -> Arc<Node> {
         let key = Arc::as_ptr(a) as usize;
         if cache
@@ -390,8 +412,10 @@ impl Renderer {
             }
             _ => None,
         };
+        let container = is_container(a);
         let art = match effects::reshape(a, symbol.as_ref()) {
             Some(r) => r,
+            None if container => effects::evaluate_container(a).unwrap_or_else(|| (**a).clone()),
             None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_)) => (**a).clone(),
             None => effects::outline_art(a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
@@ -399,8 +423,9 @@ impl Renderer {
             opacity: 1.0,
             blend: Default::default(),
             isolate: false,
-            // One element: its pieces never knock each other out.
-            knockout: vectorcraft_doc::Knockout::Off,
+            // One element: its pieces never knock each other out (a group's members still do as
+            // its knockout setting says).
+            knockout: if container { a.knockout } else { vectorcraft_doc::Knockout::Off },
             mask: None,
             appearance: vectorcraft_doc::Appearance { effects: vec![], ..art.appearance },
             ..art

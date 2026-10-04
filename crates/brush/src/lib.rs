@@ -432,7 +432,7 @@ pub fn expand(doc: &Document, n: &Node) -> Option<Node> {
 
 /// A filled path node painted with `paint` (brush output).
 pub(crate) fn filled(path: vectorcraft_geom::PathData, paint: &Paint) -> Node {
-    Node::path(NodeId(0), path, Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(paint.clone()))], effects: vec![] })
+    Node::path(NodeId(0), path, Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(paint.clone()))], ..Default::default() })
 }
 
 /// A sample stroke for previews (a gentle S-curve in a `w`×`h` box).

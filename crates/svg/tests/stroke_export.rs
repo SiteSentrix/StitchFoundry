@@ -11,7 +11,7 @@ use vectorcraft_testkit::raster::{Image, assert_similar, render_artboard};
 fn add(d: &mut Document, path: PathData, f: impl FnOnce(&mut StrokeLayer)) {
     let mut st = StrokeLayer::new(Paint::solid(Color::rgb(0.1, 0.2, 0.6)), 4.0);
     f(&mut st);
-    let n = Node::path(d.alloc_id(), path, Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] });
+    let n = Node::path(d.alloc_id(), path, Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
     let l = d.layers[0].id;
     d.insert(Some(l), usize::MAX, n).unwrap();
 }
