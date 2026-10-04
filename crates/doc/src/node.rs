@@ -270,6 +270,10 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<Box<crate::graph::GraphSpec>>,
     pub kind: NodeKind,
+    /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
+    /// that style's look: editing its appearance or transparency breaks the link.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graphic_style: Option<u32>,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -314,6 +318,7 @@ impl Node {
             wrap: None,
             graph: None,
             kind,
+            graphic_style: None,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {

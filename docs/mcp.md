@@ -196,3 +196,20 @@ plain group and keeps the clipping path, unpainted.
 {"name":"run_command","arguments":{"command":"select.set","params":{"ids":[12,15]}}}
 {"name":"run_command","arguments":{"command":"object.clippingMask.make","params":{}}}
 ```
+
+## Graphic styles
+
+A graphic style holds an appearance (fills, strokes, effects) plus opacity, blend mode, isolate and knockout.
+`graphicStyle.new {name?, id?}` captures an object (a group without its own fills or strokes lends its topmost
+object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the objects the style and links them;
+`add: true` adds the style on top of the existing appearance instead. Linked objects stay linked while they keep the
+style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
+updates only the objects still linked. `graphicStyle.list` returns each style with the ids linked to it and the
+style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
+
+```json
+{"name":"run_command","arguments":{"command":"graphicStyle.new","params":{"id":12,"name":"Glow"}}}
+{"name":"run_command","arguments":{"command":"graphicStyle.apply","params":{"name":"Glow","ids":[15,20]}}}
+{"name":"run_command","arguments":{"command":"graphicStyle.redefine","params":{"id":12}}}
+{"name":"run_command","arguments":{"command":"graphicStyle.list","params":{}}}
+```

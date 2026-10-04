@@ -1,5 +1,5 @@
 //! Document Info panel: the document's setup and what it contains (objects by kind, fonts,
-//! images, symbols, spot colours…), for the whole document or the selection only.
+//! images, symbols, spot colours, graphic styles…), for the whole document or the selection only.
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -71,7 +71,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             widgets::dim_label(ui, "None");
         }
         widgets::divider(ui);
-        for (key, title) in [("fonts", "Fonts"), ("symbols", "Symbols"), ("spotColors", "Spot Colors")] {
+        for (key, title) in [("fonts", "Fonts"), ("symbols", "Symbols"), ("spotColors", "Spot Colors"), ("graphicStyleNames", "Graphic Styles")] {
             let list: Vec<&str> = i[key].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
             widgets::subheader(ui, &format!("{title} ({})", list.len()));
             for f in list {
@@ -87,7 +87,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::divider(ui);
         for (key, label) in [
             ("swatches", "Swatches"),
-            ("graphicStyles", "Graphic Styles"),
             ("characterStyles", "Character Styles"),
             ("paragraphStyles", "Paragraph Styles"),
             ("patterns", "Pattern Swatches"),
