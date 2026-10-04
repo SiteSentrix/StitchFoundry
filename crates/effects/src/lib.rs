@@ -10,6 +10,8 @@
 //!   the geometry.
 //! - [`effect_catalog`] lists every effect with its menu path, parameter documentation and the
 //!   defaults of Illustrator's dialogs. Missing parameters always fall back to those defaults.
+//! - [`clip_outline`] is the region a clip group clips to, shared by the renderer and the SVG and
+//!   PDF writers.
 //!
 //! Everything is deterministic: "random" effects (Roughen, Tweak, Scribble) use a seeded hash
 //! noise (`seed` parameter, default 0).
