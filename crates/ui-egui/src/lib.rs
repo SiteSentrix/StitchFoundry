@@ -38,6 +38,8 @@ mod tests_labels;
 mod tests_overprint;
 #[cfg(test)]
 mod tests_paintchips;
+#[cfg(test)]
+mod tests_transparencygrid;
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};

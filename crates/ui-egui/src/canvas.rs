@@ -145,6 +145,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
+    let mask_view = st.shown_mask();
 
     // Pasteboard, artboard shadows and paper.
     painter.rect_filled(rect, 0.0, t.pasteboard);
@@ -156,7 +157,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let shift = |d: f32| q.iter().map(|p| *p + vec2(d, d)).collect::<Vec<_>>();
             painter.add(Shape::convex_polygon(shift(2.0), Color32::from_black_alpha(26), Stroke::NONE));
             painter.add(Shape::convex_polygon(shift(1.0), Color32::from_black_alpha(52), Stroke::NONE));
-            if app.ui.view.transparency_grid && xf.rot == 0.0 {
+            if st.transparency_grid && xf.rot == 0.0 {
                 checker(&painter, r);
             } else {
                 painter.add(Shape::convex_polygon(q, Color32::WHITE, Stroke::NONE));
@@ -217,6 +218,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let [r, g, b, _] = c.to_rgba8(1.0);
                 [r, g, b]
             }),
+            mask_view,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.

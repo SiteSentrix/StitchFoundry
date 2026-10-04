@@ -40,6 +40,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             leave
         ),
+        cmd!(
+            "transparency.viewOpacityMask",
+            "View Opacity Mask",
+            ["Window", "Transparency"],
+            None,
+            "{on?: bool (default: toggle), id?} show only the opacity mask of `id` (default: the object whose mask is edited, else the first selected object with a mask) on the canvas, as greyscale coverage, and edit it, as Alt-clicking the mask thumbnail does; off shows the artwork again (still editing) → {on, id}",
+            has_doc,
+            view_mask
+        ),
     ]
 }
 
@@ -74,12 +83,45 @@ fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.mask_edit.is_some() {
         return Err(bad(C, "already editing an opacity mask"));
     }
-    let id = id_param(p, "id")
-        .or_else(|| st.selection.subjects().iter().copied().find(|i| st.doc.node(*i).is_some_and(|n| n.mask.is_some())))
-        .ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    let id = id_param(p, "id").or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    let layer = start(s, id)?;
+    Ok(json!({ "layer": layer.0 }))
+}
+
+/// The first selected object with an opacity mask.
+fn first_masked(st: &crate::DocState) -> Option<NodeId> {
+    st.selection.subjects().iter().copied().find(|i| st.doc.node(*i).is_some_and(|n| n.mask.is_some()))
+}
+
+/// Enter mask editing for `id` (one undo step) and isolate the editing layer. Returns the layer.
+fn start(s: &mut Session, id: NodeId) -> Result<NodeId> {
     let layer = s.edit("Edit Opacity Mask", |d, sel| begin(d, sel, id))?;
     show_editing(s, Some(layer))?;
-    Ok(json!({ "layer": layer.0 }))
+    Ok(layer)
+}
+
+fn view_mask(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "transparency.viewOpacityMask";
+    let st = s.doc()?;
+    let editing = st.doc.mask_edit.map(|m| m.object);
+    if !p.get("on").and_then(Value::as_bool).unwrap_or(st.shown_mask().is_none()) {
+        let st = s.doc_mut()?;
+        let id = st.mask_view.take();
+        st.revision += 1;
+        return Ok(json!({ "on": false, "id": id.map(|i| i.0) }));
+    }
+    let id = id_param(p, "id").or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    match editing {
+        Some(e) if e != id => return Err(bad(C, "already editing another object's opacity mask")),
+        Some(_) => {}
+        None => {
+            start(s, id)?;
+        }
+    }
+    let st = s.doc_mut()?;
+    st.mask_view = Some(id);
+    st.revision += 1;
+    Ok(json!({ "on": true, "id": id.0 }))
 }
 
 /// Enter mask editing for `id` inside an edit: copy its mask art onto a new editing layer and
@@ -123,29 +165,35 @@ pub(crate) fn finish(d: &mut Document, sel: &mut Selection) {
     }
 }
 
-/// Isolate the editing layer and draw into it (`Some`), or return to the document (`None`).
+/// Isolate the editing layer and draw into it (`Some`), or return to the document (`None`, which
+/// also ends View Opacity Mask).
 pub(crate) fn show_editing(s: &mut Session, layer: Option<NodeId>) -> Result<()> {
     let st = s.doc_mut()?;
     st.isolation = layer;
     st.active_layer = layer.or_else(|| st.doc.default_layer());
+    if layer.is_none() {
+        st.mask_view = None;
+    }
     st.revision += 1;
     Ok(())
 }
 
 /// After undo or redo, isolation follows the restored document into or out of mask editing
 /// (`was` is the editing layer before, if any), so it never names a layer that is gone (whose id
-/// a later object could reuse).
+/// a later object could reuse). Out of mask editing, View Opacity Mask ends.
 pub(crate) fn follow_history(st: &mut crate::DocState, was: Option<NodeId>) {
     match st.doc.mask_edit {
         Some(me) => {
             st.isolation = Some(me.layer);
             st.active_layer = Some(me.layer);
         }
-        None if was.is_some() && st.isolation == was => {
-            st.isolation = None;
-            st.active_layer = st.doc.default_layer();
+        None => {
+            st.mask_view = None;
+            if was.is_some() && st.isolation == was {
+                st.isolation = None;
+                st.active_layer = st.doc.default_layer();
+            }
         }
-        None => {}
     }
 }
 

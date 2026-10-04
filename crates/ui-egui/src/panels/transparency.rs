@@ -1,7 +1,8 @@
 //! Transparency panel: blend mode, opacity (field + slider popup), object/mask thumbnails with the
-//! opacity-mask controls (make/release, link, clip, invert; Shift-click the mask to disable it),
-//! Isolate Blending, the three-state Knockout Group (on → neutral → off) and Opacity & Mask Define
-//! Knockout Shape; the menu's Page Isolated Blending and Page Knockout Group.
+//! opacity-mask controls (make/release, link, clip, invert; Shift-click the mask to disable it,
+//! Alt-click it to view only the mask), Isolate Blending, the three-state Knockout Group (on →
+//! neutral → off) and Opacity & Mask Define Knockout Shape; the menu's Page Isolated Blending and
+//! Page Knockout Group.
 
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
@@ -13,6 +14,9 @@ use super::{current_paints, current_transparency, live_run, pstate, selection_le
 use crate::theme::Tokens;
 use crate::widgets::{self, TransparencyEdit, menu_item};
 use crate::{VectorcraftApp, icons};
+
+/// Interaction id of the mask thumbnail.
+pub(super) const MASK_THUMB: &str = "tr-mask-thumb";
 
 /// The panel's values ([`vectorcraft_engine::Session::transparency_info`]) and its first target
 /// (the selection, or the object whose mask is being edited), recomputed only when the document
@@ -100,25 +104,31 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     if lresp.on_hover_text(if m.linked { "Unlink the mask" } else { "Link the mask" }).clicked() {
                         app.run("transparency.setOpacityMask", json!({"linked": !m.linked})).ok();
                     }
-                    let (mr, mresp) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::click());
+                    let (mr, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
+                    let mresp = ui.interact(mr, egui::Id::new(MASK_THUMB), Sense::click());
                     let bg = if m.clip != m.invert { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
                     ui.painter().rect_filled(mr, 0.0, egui::Color32::from_rgb(bg[0], bg[1], bg[2]));
                     node_thumb(app, ui, "tr-mask", &m.art, mr.shrink(2.0), Some(bg));
-                    ui.painter().rect_stroke(
-                        mr,
-                        0.0,
-                        Stroke::new(mask_w, if editing.is_some() { t.border } else { t.input_border }),
-                        StrokeKind::Inside,
-                    );
+                    // Viewing the mask alone (Alt-click) highlights its thumbnail.
+                    let viewing = app.session.active().is_some_and(|d| d.shown_mask().is_some());
+                    let border = match (viewing, editing.is_some()) {
+                        (true, _) => Stroke::new(2.0, t.accent),
+                        (false, true) => Stroke::new(mask_w, t.border),
+                        (false, false) => Stroke::new(mask_w, t.input_border),
+                    };
+                    ui.painter().rect_stroke(mr, 0.0, border, StrokeKind::Inside);
                     if m.disabled {
                         let red = Stroke::new(2.0, egui::Color32::from_rgb(220, 40, 40));
                         ui.painter().line_segment([mr.left_top(), mr.right_bottom()], red);
                         ui.painter().line_segment([mr.right_top(), mr.left_bottom()], red);
                     }
-                    let shift = ui.input(|i| i.modifiers.shift);
-                    if mresp.on_hover_text("Click to edit the mask; Shift-click to disable or enable it").clicked() {
+                    let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
+                    let tip = "Click to edit the mask; Alt-click to view only the mask; Shift-click to disable or enable it";
+                    if mresp.on_hover_text(tip).clicked() {
                         if shift {
                             app.run(if m.disabled { "transparency.enableOpacityMask" } else { "transparency.disableOpacityMask" }, json!({})).ok();
+                        } else if alt {
+                            app.run("transparency.viewOpacityMask", json!({"id": id.0})).ok();
                         } else if editing.is_none() {
                             app.run("transparency.editOpacityMask", json!({"id": id.0})).ok();
                         }

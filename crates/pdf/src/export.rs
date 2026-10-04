@@ -527,13 +527,21 @@ impl Exporter<'_> {
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => self.children(s, children, page),
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                // The region every output clips to; nothing to clip by hides the clipped art.
+                // The region every output clips to; nothing to clip by hides the clipped art. The
+                // clipping path's fill paints behind the clipped art and its stroke over it, unclipped.
                 if let Some((clip, rest)) = children.split_first()
                     && let Some((p, r)) = vectorcraft_effects::clip_outline(clip).and_then(|(bp, r)| to_path(&bp).map(|p| (p, r)))
                 {
+                    let paint = clip.clip_paint();
                     s.push_clip_path(&p, &rule(r));
+                    if let Some(fill) = &paint.fill {
+                        self.node(s, fill, page, false);
+                    }
                     self.children(s, rest, page);
                     s.pop();
+                    if let Some(stroke) = &paint.stroke {
+                        self.node(s, stroke, page, false);
+                    }
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {

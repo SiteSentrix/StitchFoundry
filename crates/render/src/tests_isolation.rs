@@ -15,6 +15,11 @@ fn rect(d: &mut Document, r: Rect, c: [f32; 3]) -> Node {
     Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::rgb(c[0], c[1], c[2])), Paint::None, 0.0))
 }
 
+/// An unpainted clipping path, as Make Clipping Mask leaves it (a painted one paints too).
+fn clip_path(d: &mut Document, r: Rect) -> Node {
+    Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::None, Paint::None, 0.0))
+}
+
 /// A Multiply rectangle at 20..80 (the group's content).
 fn multiply(d: &mut Document) -> Node {
     let mut n = rect(d, Rect::new(20.0, 20.0, 80.0, 80.0), S);
@@ -98,7 +103,7 @@ fn a_group_blend_mode_applies_again_to_the_non_isolated_result() {
 #[test]
 fn a_clip_group_does_not_isolate_its_children() {
     let d = doc(|d| {
-        let clip = rect(d, Rect::new(30.0, 30.0, 70.0, 70.0), [0.0; 3]);
+        let clip = clip_path(d, Rect::new(30.0, 30.0, 70.0, 70.0));
         let m = multiply(d);
         Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(m)], clip: true })
     });
@@ -112,7 +117,7 @@ fn a_non_isolated_group_inside_a_clip_group_stays_clipped() {
     // The half-opaque group copies its backdrop while the clip is in force: the clip still applies
     // to it and to what follows.
     let d = doc(|d| {
-        let clip = rect(d, Rect::new(30.0, 30.0, 70.0, 70.0), [0.0; 3]);
+        let clip = clip_path(d, Rect::new(30.0, 30.0, 70.0, 70.0));
         let m = multiply(d);
         let g = group(d, vec![m], 0.5, Blend::Normal, false);
         let after = rect(d, Rect::new(0.0, 60.0, 100.0, 100.0), S);

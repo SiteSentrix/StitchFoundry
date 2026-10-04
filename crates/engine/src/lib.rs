@@ -101,6 +101,11 @@ pub struct DocState {
     pub last_selection_cmd: Option<(String, Value)>,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
+    /// shows alone, in greyscale, while that mask is edited (see [`DocState::shown_mask`]).
+    pub mask_view: Option<NodeId>,
+    /// View → Show Transparency Grid, per document (view state: not saved, not undoable).
+    pub transparency_grid: bool,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -122,6 +127,8 @@ impl DocState {
             last_transform: None,
             last_selection_cmd: None,
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            mask_view: None,
+            transparency_grid: false,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -153,6 +160,11 @@ impl DocState {
             return Some(i);
         }
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer() && !n.locked)).or_else(|| self.doc.default_layer())
+    }
+    /// The object whose opacity mask View Opacity Mask shows ([`DocState::mask_view`]): only while
+    /// its mask is being edited, so leaving editing by any route (undo, deleting the object) ends it.
+    pub fn shown_mask(&self) -> Option<NodeId> {
+        self.mask_view.filter(|id| self.doc.mask_edit.is_some_and(|m| m.object == *id))
     }
 }
 
@@ -783,6 +795,8 @@ mod tests_charstroke;
 #[cfg(test)]
 mod tests_clip;
 #[cfg(test)]
+mod tests_clippaint;
+#[cfg(test)]
 mod tests_cmdsplit;
 #[cfg(test)]
 mod tests_colorguide;
@@ -826,6 +840,8 @@ mod tests_layerclip;
 mod tests_linked_stops;
 #[cfg(test)]
 mod tests_live;
+#[cfg(test)]
+mod tests_maskview;
 #[cfg(test)]
 mod tests_menucmds;
 #[cfg(test)]
@@ -872,6 +888,8 @@ mod tests_textedit;
 mod tests_tileedge;
 #[cfg(test)]
 mod tests_tints;
+#[cfg(test)]
+mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_widthprofiles;
 #[cfg(test)]

@@ -27,7 +27,10 @@
 //! * One CSS pixel (user unit) is one point, as on export; a root `width`/`height` in absolute units
 //!   (`in`, `cm`, `mm`, `pt`, `pc`) keeps its physical size (72 pt per inch), so a 210 mm SVG opens on
 //!   a 210 mm artboard.
-//! * Masks and filters are ignored (reported as warnings); nested clip paths use the outer clip only.
+//! * `<mask>` imports as a luminance opacity mask; a mask we exported keeps its options and art
+//!   (its `data-vectorcraft-mask="noclip invert"` lists the options that differ from clipping and
+//!   not inverted). Filters are ignored (reported as warnings); nested clip paths use the outer
+//!   clip only.
 //! * usvg only keeps `<text>` when fonts are loaded; we don't load a font database (too expensive and
 //!   unavailable on wasm), so `<text>` elements are read directly from the XML as live point-type
 //!   [`TextObject`]s (type on a path for a `<textPath>`) and placed on top of their layer.

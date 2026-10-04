@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Clipping Mask"],
             Some("Cmd+7"),
-            "{} the topmost selected object (a path, compound path or text, which loses its paint) clips the others: compound holes, even-odd fills and glyph outlines clip as drawn → {id} of the clip group",
+            "{} the topmost selected object (a path, compound path or text, which loses its paint) clips the others: compound holes, even-odd fills and glyph outlines clip as drawn. Paint given to the clipping path later (paint commands with its id) shows: its fill behind the clipped art, its stroke over it → {id} of the clip group",
             has_multi,
             clip_make
         ),
@@ -102,7 +102,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release",
             ["Object", "Clipping Mask"],
             Some("Cmd+Alt+7"),
-            "{} the selected clip groups become plain groups; their clipping path (path, compound path or text) stays, unpainted",
+            "{} the selected clip groups become plain groups; their clipping path (path, compound path or text) stays, with the paint it has (none unless painted after Make)",
             has_selection,
             clip_release
         ),
@@ -383,11 +383,12 @@ fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {
             d.remove(*id)?;
             for (k, c) in children.into_iter().enumerate() {
                 let mut c = (*c).clone();
-                if clip && k == 0 {
-                    if let NodeKind::Path { clipping, .. } = &mut c.kind {
-                        *clipping = false;
-                    }
-                    c.appearance = Appearance::default();
+                // The clipping path keeps its paint (none, unless painted after Make).
+                if clip
+                    && k == 0
+                    && let NodeKind::Path { clipping, .. } = &mut c.kind
+                {
+                    *clipping = false;
                 }
                 c.opacity *= opacity;
                 new_sel.push(c.id);
@@ -552,7 +553,7 @@ pub(super) fn make_clipping_path(d: &mut Document, top: NodeId) -> Result<()> {
     Ok(())
 }
 
-/// Stop clip group or clipped layer `id` clipping; its clipping path stays, unpainted.
+/// Stop clip group or clipped layer `id` clipping; its clipping path stays, with its paint.
 pub(super) fn release_clip(d: &mut Document, id: NodeId) {
     let Some(n) = d.node_mut(id).filter(|n| n.clips()) else { return };
     n.set_clips(false);

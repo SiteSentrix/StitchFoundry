@@ -137,6 +137,9 @@ const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\
 /// Attributes of every `<mask>`: user-space units, and luminance taken from the sRGB values (as the
 /// canvas and PDF take it) rather than from linearised ones.
 const MASK: &str = "maskUnits=\"userSpaceOnUse\" color-interpolation=\"sRGB\"";
+/// Attribute of an exported opacity mask listing its options that differ from the defaults
+/// (clipping, not inverted): `noclip`, `invert`.
+pub(crate) const MASK_FLAGS: &str = "data-vectorcraft-mask";
 
 pub(crate) fn blend_css(b: BlendMode) -> &'static str {
     match b {
@@ -662,7 +665,10 @@ impl Writer<'_> {
             self.def(1, "</filter>");
             fid
         });
-        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {BIG}>"));
+        // The mask's options, so import restores them (and its art without backdrop and filter).
+        let flags: Vec<&str> = [(!m.clip).then_some("noclip"), m.invert.then_some("invert")].into_iter().flatten().collect();
+        let data = if flags.is_empty() { String::new() } else { format!(" {MASK_FLAGS}=\"{}\"", flags.join(" ")) };
+        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {BIG}{data}>"));
         if let Some(fid) = &inv {
             self.def(1, &format!("<g filter=\"url(#{fid})\">"));
         }
@@ -800,11 +806,32 @@ impl Writer<'_> {
                 self.def(1, "</clipPath>");
                 let id = self.id_attr(n);
                 let a = self.attrs(&self.group_props(n));
-                self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
+                // The clipping path's fill paints behind the clipped art and its stroke over it,
+                // outside the clip (the group then wraps both).
+                let paint = clip.clip_paint();
+                if paint.stroke.is_some() {
+                    self.line(&format!("<g{id}{a}>"));
+                    self.depth += 1;
+                    self.line(&format!("<g clip-path=\"url(#{cid})\">"));
+                } else {
+                    self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
+                }
                 self.depth += 1;
+                if let Some(fill) = &paint.fill {
+                    self.node(fill);
+                }
                 self.group_children(n, rest);
                 self.depth -= 1;
                 self.line("</g>");
+                if let Some(stroke) = &paint.stroke {
+                    // One element keeps the clipping path's id.
+                    let anonymous = self.anonymous;
+                    self.anonymous |= paint.fill.is_some();
+                    self.node(stroke);
+                    self.anonymous = anonymous;
+                    self.depth -= 1;
+                    self.line("</g>");
+                }
             }
             NodeKind::Path { guide: true, .. } => {}
             NodeKind::Path { path, rule, .. } => {

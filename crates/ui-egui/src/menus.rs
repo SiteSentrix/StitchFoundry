@@ -125,7 +125,6 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.artboards", "Hide Artboards", "Cmd+Shift+H", "{}"),
     ("view.rulers", "Show Rulers", "Cmd+R", "{}"),
     ("view.boundingBox", "Hide Bounding Box", "Cmd+Shift+B", "{}"),
-    ("view.transparencyGrid", "Show Transparency Grid", "Cmd+Shift+D", "{}"),
     ("view.guides", "Hide Guides", "Cmd+;", "{}"),
     ("view.smartGuides", "Smart Guides", "Cmd+U", "{}"),
     ("view.grid", "Show Grid", "Cmd+'", "{}"),
@@ -470,7 +469,6 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.artboards" => flag(&mut app.ui.view.artboards),
         "view.rulers" => flag(&mut app.ui.view.rulers),
         "view.boundingBox" => flag(&mut app.ui.view.bounding_box),
-        "view.transparencyGrid" => flag(&mut app.ui.view.transparency_grid),
         "view.guides" => flag(&mut app.ui.view.guides),
         "view.smartGuides" => flag(&mut app.ui.view.smart_guides),
         "view.grid" => flag(&mut app.ui.view.grid),
@@ -756,7 +754,9 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "view.artboards" => if v.artboards { "Hide Artboards" } else { "Show Artboards" }.into(),
         "view.rulers" => if v.rulers { "Hide Rulers" } else { "Show Rulers" }.into(),
         "view.boundingBox" => if v.bounding_box { "Hide Bounding Box" } else { "Show Bounding Box" }.into(),
-        "view.transparencyGrid" => if v.transparency_grid { "Hide Transparency Grid" } else { "Show Transparency Grid" }.into(),
+        "view.transparencyGrid" => {
+            if app.session.active().is_some_and(|d| d.transparency_grid) { "Hide Transparency Grid" } else { "Show Transparency Grid" }.into()
+        }
         "view.guides" => if v.guides { "Hide Guides" } else { "Show Guides" }.into(),
         "view.grid" => if v.grid { "Hide Grid" } else { "Show Grid" }.into(),
         "view.guides.lock" => if app.session.guides_locked() { "Unlock Guides" } else { "Lock Guides" }.into(),
