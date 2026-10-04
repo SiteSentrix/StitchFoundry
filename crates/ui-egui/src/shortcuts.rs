@@ -144,6 +144,17 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         return;
     }
+    // Keys the active tool claims ahead of their shortcuts (the Gradient tool's selected stop:
+    // Delete/Backspace remove it, ←/→ nudge it).
+    let m = ctx.input(|i| i.modifiers);
+    for (k, tk) in
+        [(Key::Delete, ToolKey::Delete), (Key::Backspace, ToolKey::Backspace), (Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right)]
+    {
+        if ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
+            let _ = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
+            return;
+        }
+    }
     // Command shortcuts.
     let mut fire: Option<&'static str> = None;
     for (sc, id) in all_shortcuts() {

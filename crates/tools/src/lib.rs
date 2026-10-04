@@ -158,6 +158,8 @@ pub struct ToolContext<'a> {
     pub corner_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
     pub fill_active: bool,
+    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator.
+    pub gradient_stop: Option<usize>,
 }
 
 impl ToolContext<'_> {
@@ -189,6 +191,8 @@ pub enum Overlay {
     Measure { p: Point, text: String },
     /// Translucent filled quad (text selection highlight), RGBA.
     Highlight { quad: [Point; 4], color: [u8; 4] },
+    /// A colour chip of fixed screen size (a gradient stop), RGBA; ringed when selected.
+    Swatch { p: Point, color: [u8; 4], selected: bool },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -217,6 +221,10 @@ pub enum Cursor {
     ZoomOut,
     Eyedropper,
     NotAllowed,
+    /// Over the gradient annotator's bar: a click adds a stop.
+    AddStop,
+    /// A gradient stop dragged off the bar: releasing deletes it.
+    RemoveStop,
 }
 
 /// A tool state machine.
@@ -239,6 +247,11 @@ pub trait Tool: Send {
     fn set_option(&mut self, _key: &str, _value: &Value) {}
     /// Is an interaction in progress (drag, open pen path)?
     fn busy(&self) -> bool {
+        false
+    }
+    /// Does the tool take `key` now, ahead of the command shortcuts bound to it (the Gradient tool
+    /// with a stop selected takes Delete and the arrows)?
+    fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
         false
     }
     /// Does the tool want typed text (Type tool editing)? Single-key shortcuts are suppressed.
@@ -328,6 +341,7 @@ pub(crate) mod testutil {
             snap_to_point: true,
             corner_widgets: true,
             fill_active: true,
+            gradient_stop: None,
         }
     }
 }

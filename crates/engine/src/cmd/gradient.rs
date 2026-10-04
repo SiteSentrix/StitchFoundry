@@ -30,7 +30,49 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             set_gradient_geom
         ),
+        cmd!(
+            "gradient.selectStop",
+            "Select Gradient Stop",
+            [],
+            None,
+            "{index: stop index (0 = the start) | null to clear} select a stop of the gradient behind the active proxy (the first selected object's, else the default paint): the stop the Gradient tool's annotator, the Gradient and Color panels and Delete/arrow keys act on → {index}",
+            always,
+            select_stop
+        ),
     ]
+}
+
+/// The gradient behind the active proxy: the first selected object's (see
+/// `Node::proxy_paint`), else the default paint for new art.
+pub(crate) fn active_gradient(s: &Session) -> Option<GradientPaint> {
+    let stroke = !s.fill_active;
+    let first = s.active().and_then(|d| d.selection.objects.first().and_then(|id| d.doc.node(*id)));
+    let paint = match first {
+        Some(n) => n.proxy_paint(stroke).map(|(p, ..)| p.clone()),
+        None => Some(if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() }),
+    };
+    match paint {
+        Some(Paint::Gradient(g)) => Some(*g),
+        _ => None,
+    }
+}
+
+fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "gradient.selectStop";
+    let index = match p.get("index") {
+        None => return Err(bad(C, "missing `index` (a stop index, or null to clear)")),
+        Some(Value::Null) => None,
+        Some(v) => {
+            let i = v.as_u64().ok_or_else(|| bad(C, "`index` must be a whole number or null"))? as usize;
+            let n = active_gradient(s).ok_or_else(|| bad(C, "the active paint is not a gradient"))?.gradient.stops.len();
+            if i >= n {
+                return Err(bad(C, format!("no stop {i} (the gradient has {n})")));
+            }
+            Some(i)
+        }
+    };
+    s.gradient_stop = index;
+    Ok(json!({ "index": index }))
 }
 
 type Parsed<T> = std::result::Result<T, String>;

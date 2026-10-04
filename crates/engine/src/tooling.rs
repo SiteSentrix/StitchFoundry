@@ -79,6 +79,7 @@ impl Session {
             snap_to_point: view.snap_to_point,
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
+            gradient_stop: self.gradient_stop,
         };
         f(self.tool.as_mut(), &cx)
     }
@@ -107,6 +108,11 @@ impl Session {
 
     pub fn tool_busy(&self) -> bool {
         self.tool.busy()
+    }
+
+    /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
+    pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
+        self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {

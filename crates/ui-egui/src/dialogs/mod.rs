@@ -14,6 +14,7 @@ mod document_setup;
 mod effect;
 mod export_for_screens;
 mod form;
+mod gradient_stop;
 mod new_document;
 mod path_ops;
 mod recolor;
@@ -127,6 +128,7 @@ registry! {
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
+    GradientStop: ["gradientStop"] => gradient_stop::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

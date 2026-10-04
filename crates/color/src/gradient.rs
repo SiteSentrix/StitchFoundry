@@ -116,6 +116,80 @@ impl Gradient {
     }
 }
 
+// ---------- stop editing (the Gradient panel, the annotator and agents share these) ----------
+
+/// Fewest stops a gradient keeps: deleting a stop never goes below this.
+pub const MIN_STOPS: usize = 2;
+
+/// Put `s` among `stops` (sorted by offset, after stops at the same offset). Returns its index.
+fn place_stop(stops: &mut Vec<GradientStop>, s: GradientStop) -> usize {
+    let i = stops.iter().position(|o| o.offset > s.offset).unwrap_or(stops.len());
+    stops.insert(i, s);
+    i
+}
+
+/// Insert a stop at `offset`, coloured by sampling the gradient there. Returns the new stops and
+/// the new stop's index.
+pub fn insert_stop(g: &Gradient, offset: f32) -> (Vec<GradientStop>, usize) {
+    let offset = offset.clamp(0.0, 1.0);
+    let (color, opacity) = g.sample(offset);
+    let mut stops = g.stops.clone();
+    let i = place_stop(&mut stops, GradientStop { offset, color, opacity, midpoint: 0.5 });
+    (stops, i)
+}
+
+/// Remove stop `i`; `None` when that would leave fewer than [`MIN_STOPS`].
+pub fn remove_stop(stops: &[GradientStop], i: usize) -> Option<Vec<GradientStop>> {
+    if stops.len() <= MIN_STOPS || i >= stops.len() {
+        return None;
+    }
+    let mut v = stops.to_vec();
+    v.remove(i);
+    Some(v)
+}
+
+/// Move stop `i` to `offset`, keeping the list sorted. Returns the stops and the stop's new index.
+pub fn move_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<GradientStop>, usize) {
+    let mut v = stops.to_vec();
+    if i >= v.len() {
+        return (v, i);
+    }
+    let mut s = v.remove(i);
+    s.offset = offset.clamp(0.0, 1.0);
+    let ni = place_stop(&mut v, s);
+    (v, ni)
+}
+
+/// Add a copy of stop `i` at `offset` (Alt-drag). Returns the stops and the copy's index.
+pub fn duplicate_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<GradientStop>, usize) {
+    let mut v = stops.to_vec();
+    let Some(&s) = v.get(i) else { return (v, i) };
+    let ni = place_stop(&mut v, GradientStop { offset: offset.clamp(0.0, 1.0), ..s });
+    (v, ni)
+}
+
+/// Set the midpoint between stop `i` and `i + 1` (clamped to the diamond's 13–87 %).
+pub fn set_midpoint(stops: &[GradientStop], i: usize, m: f32) -> Vec<GradientStop> {
+    let mut v = stops.to_vec();
+    if let Some(s) = v.get_mut(i) {
+        s.midpoint = m.clamp(0.13, 0.87);
+    }
+    v
+}
+
+/// Absolute position (0..1) of the midpoint diamond after stop `i`.
+pub fn midpoint_pos(stops: &[GradientStop], i: usize) -> Option<f32> {
+    let (a, b) = (stops.get(i)?, stops.get(i + 1)?);
+    Some(a.offset + (b.offset - a.offset) * a.midpoint)
+}
+
+/// Inverse of [`midpoint_pos`]: the relative midpoint for an absolute position.
+pub fn midpoint_from_pos(stops: &[GradientStop], i: usize, pos: f32) -> Option<f32> {
+    let (a, b) = (stops.get(i)?, stops.get(i + 1)?);
+    let span = (b.offset - a.offset).max(1e-6);
+    Some(((pos - a.offset) / span).clamp(0.13, 0.87))
+}
+
 /// Where the gradient sits on an object, in document coordinates.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GradientGeom {
@@ -355,6 +429,67 @@ mod tests {
         assert!((e.param_at(GradientKind::Radial, Point::new(0.0, 5.0)) - 1.0).abs() < 1e-12);
         assert!((e.param_at(GradientKind::Radial, Point::new(5.0, 0.0)) - 0.5).abs() < 1e-12);
         assert!((e.param_at(GradientKind::Linear, Point::new(5.0, 7.0)) - 0.5).abs() < 1e-12);
+    }
+
+    fn g3() -> Gradient {
+        let mut g = Gradient::default();
+        g.stops.insert(1, GradientStop { offset: 0.5, color: Color::rgb(1.0, 0.0, 0.0), opacity: 1.0, midpoint: 0.5 });
+        g
+    }
+
+    #[test]
+    fn insert_samples_color_and_sorts() {
+        let g = Gradient::default();
+        let (stops, i) = insert_stop(&g, 0.25);
+        assert_eq!(stops.len(), 3);
+        assert_eq!(i, 1);
+        let r = stops[1].color.to_rgb()[0];
+        assert!((r - 0.75).abs() < 1e-4, "sampled {r}");
+        let (stops, i) = insert_stop(&g, 2.0);
+        assert_eq!(i, 2);
+        assert_eq!(stops[2].offset, 1.0);
+    }
+
+    #[test]
+    fn remove_keeps_two() {
+        let g = g3();
+        let v = remove_stop(&g.stops, 1).unwrap();
+        assert_eq!(v.len(), 2);
+        assert!(remove_stop(&v, 0).is_none());
+        assert!(remove_stop(&g.stops, 9).is_none());
+    }
+
+    #[test]
+    fn move_reorders_and_tracks_index() {
+        let g = g3();
+        let (v, i) = move_stop(&g.stops, 0, 0.8);
+        assert_eq!(i, 1);
+        assert_eq!(v[1].color.to_hex(), "#ffffff");
+        assert!(v.windows(2).all(|w| w[0].offset <= w[1].offset));
+        let (v, i) = move_stop(&g.stops, 1, -3.0);
+        // Clamped to 0 and placed after the existing stop at 0.
+        assert_eq!((i, v[i].offset, v[i].color.to_hex()), (1, 0.0, "#ff0000".to_string()));
+    }
+
+    #[test]
+    fn duplicate_copies_the_stop_to_a_new_offset() {
+        let g = g3();
+        let (v, i) = duplicate_stop(&g.stops, 1, 0.9);
+        assert_eq!((v.len(), i, v[i].offset, v[i].color.to_hex()), (4, 2, 0.9, "#ff0000".to_string()));
+        assert_eq!(v[1], g.stops[1], "the original stays");
+        assert_eq!(duplicate_stop(&g.stops, 7, 0.5).0, g.stops);
+    }
+
+    #[test]
+    fn midpoint_math() {
+        let g = g3();
+        assert_eq!(midpoint_pos(&g.stops, 0), Some(0.25));
+        assert_eq!(midpoint_pos(&g.stops, 2), None);
+        let m = midpoint_from_pos(&g.stops, 1, 0.6).unwrap();
+        assert!((m - 0.2).abs() < 1e-5);
+        assert_eq!(midpoint_from_pos(&g.stops, 1, 0.51).unwrap(), 0.13);
+        let v = set_midpoint(&g.stops, 0, 0.99);
+        assert_eq!(v[0].midpoint, 0.87);
     }
 
     #[test]

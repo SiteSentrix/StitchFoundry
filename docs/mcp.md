@@ -106,6 +106,18 @@ Drive a tool like a mouse:
   {"kind":"down","x":100,"y":100},{"kind":"drag","x":150,"y":140},{"kind":"up","x":200,"y":180}]}}
 ```
 
+Edit a gradient with the Gradient tool's annotator (the bar runs along the vector; stop chips sit 10 px under
+it, midpoint diamonds 7 px above): a click on the bar adds a stop, dragging a chip moves it (drag it off the bar to
+delete it, hold Alt to copy it), dragging the end handle changes the vector. The selected stop
+(`gradient.selectStop`) takes Delete and ←/→:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.setFill","params":{"gradient":{"start":[100,150],"end":[200,150]}}}}
+{"name":"pointer_gesture","arguments":{"tool":"gradient","events":[{"kind":"down","x":130,"y":150},{"kind":"up","x":130,"y":150}]}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":130,"y":160},{"kind":"drag","x":160,"y":160},{"kind":"up","x":160,"y":160}]}}
+{"name":"press_key","arguments":{"key":"Delete"}}
+```
+
 Raw protocol (for debugging):
 
 ```sh

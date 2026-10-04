@@ -1,8 +1,10 @@
-//! Gradients through commands: lossless, validated params (M3.14).
+//! Gradients through commands: lossless, validated params (M3.14), transforms (M3.15), the active
+//! proxy and type (M3.16) and the interactive annotator (M3.17).
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::Point;
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use super::*;
 
@@ -255,4 +257,72 @@ fn aspect_works_on_type_and_run_strokes_fit_the_inflated_box() {
     let (g, doc) = node(&s, id).proxy_gradient(true).unwrap();
     assert!(doc.end.distance(Point::new(150.0, 190.0)) < 1e-9 && (doc.aspect - 2.0).abs() < 1e-9, "aspect kept: {doc:?}");
     assert_eq!(g.gradient.kind, GradientKind::Radial);
+}
+
+// ---------- M3.17: the interactive annotator ----------
+
+/// A 100 × 100 rectangle at (100, 100) with a horizontal fill gradient across it, and the
+/// Gradient tool.
+fn annotated() -> (Session, NodeId) {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"start": [100, 150], "end": [200, 150]}})).unwrap();
+    s.select_tool("gradient", crate::ViewInfo::default()).unwrap();
+    (s, id)
+}
+
+fn gesture(s: &mut Session, events: &[(PointerKind, f64, f64)]) {
+    for (k, x, y) in events {
+        s.pointer(&PointerEvent::new(*k, *x, *y), crate::ViewInfo::default()).unwrap();
+    }
+}
+
+fn stop_count(s: &Session, id: NodeId) -> usize {
+    fill_gradient(s, id).gradient.stops.len()
+}
+
+#[test]
+fn select_stop_is_validated_and_shared() {
+    let (mut s, _) = annotated();
+    assert_eq!(s.execute("gradient.selectStop", &json!({"index": 1})).unwrap(), json!({"index": 1}));
+    assert_eq!(s.gradient_stop, Some(1));
+    assert!(s.execute("gradient.selectStop", &json!({"index": 2})).is_err(), "two stops");
+    assert!(s.execute("gradient.selectStop", &json!({"index": "a"})).is_err());
+    assert!(s.execute("gradient.selectStop", &json!({})).is_err());
+    s.execute("gradient.selectStop", &json!({"index": null})).unwrap();
+    assert_eq!(s.gradient_stop, None);
+    // The stroke proxy's paint is solid: nothing to select there.
+    s.execute("paint.toggleActive", &json!({})).unwrap();
+    assert!(s.execute("gradient.selectStop", &json!({"index": 0})).is_err());
+}
+
+#[test]
+fn annotator_gestures_edit_the_gradient_as_single_undo_steps() {
+    let (mut s, id) = annotated();
+    // A click on the bar adds a stop there and selects it.
+    gesture(&mut s, &[(PointerKind::Down, 130.0, 150.0), (PointerKind::Up, 130.0, 150.0)]);
+    let stops = fill_gradient(&s, id).gradient.stops;
+    assert_eq!(stops.len(), 3);
+    assert!((stops[1].offset - 0.3).abs() < 1e-6);
+    assert_eq!(s.gradient_stop, Some(1));
+    // Dragging the end handle changes only the end, as one undo step.
+    let undo = s.doc().unwrap().history.undo.len();
+    gesture(
+        &mut s,
+        &[(PointerKind::Down, 200.0, 150.0), (PointerKind::Drag, 210.0, 160.0), (PointerKind::Drag, 220.0, 170.0), (PointerKind::Up, 220.0, 170.0)],
+    );
+    let g = fill_geom(&s, id);
+    assert_eq!((g.start, g.end), (Point::new(100.0, 150.0), Point::new(220.0, 170.0)));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // The selected stop takes Delete ahead of edit.clear; the object stays.
+    let view = crate::ViewInfo::default();
+    assert!(s.tool_claims_key(ToolKey::Delete, view));
+    s.tool_key(ToolKey::Delete, Mods::default(), view).unwrap();
+    assert_eq!(stop_count(&s, id), 2);
+    assert_eq!(s.gradient_stop, Some(1));
+    // Never below two stops.
+    s.tool_key(ToolKey::Backspace, Mods::default(), view).unwrap();
+    assert_eq!(stop_count(&s, id), 2);
+    assert!(s.doc().unwrap().doc.node(id).is_some());
 }
