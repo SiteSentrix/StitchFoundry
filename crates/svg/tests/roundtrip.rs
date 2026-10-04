@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, CharStyle, Dash, Document, FillLayer, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign,
-    StrokeLayer, TextObject,
+    StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
 use vectorcraft_svg::{ExportOptions, Styling, export, import, import_with_report};
@@ -372,6 +372,26 @@ fn text_roundtrip_and_escaping() {
     assert!((f.size - 18.0).abs() < 1e-6);
     assert_eq!(f.fill.color().unwrap().to_hex(), "#ff0000");
     assert!(t.xf.translation().to_point().distance(Point::new(20.0, 50.0)) < 0.01);
+}
+
+#[test]
+fn text_on_path_roundtrip() {
+    let mut d = Document::new(200.0, 200.0);
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    let mut t = TextObject::point(Point::new(0.0, 0.0), "On a curve", CharStyle { size: 14.0, ..CharStyle::default() });
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.25 };
+    let id = d.alloc_id();
+    let d = doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]);
+    let r = roundtrip(&d);
+    let a = art(&r);
+    let NodeKind::Text(t) = &a[0].kind else { panic!() };
+    assert_eq!(t.plain_text(), "On a curve");
+    let TextKind::OnPath { path, start } = &t.kind else { panic!("not type on a path: {:?}", t.kind) };
+    assert!((start - 0.25).abs() < 1e-6, "start {start}");
+    let doc_path = path.bounds().map(|b| t.xf.transform_rect_bbox(b)).unwrap();
+    assert!(close_rect(doc_path, PathData::from_bezpath(&curve).bounds().unwrap(), 0.01), "{doc_path:?}");
 }
 
 #[test]

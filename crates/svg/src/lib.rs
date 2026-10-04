@@ -22,7 +22,7 @@
 //! * Masks and filters are ignored (reported as warnings); nested clip paths use the outer clip only.
 //! * usvg only keeps `<text>` when fonts are loaded; we don't load a font database (too expensive and
 //!   unavailable on wasm), so `<text>` elements are read directly from the XML as live point-type
-//!   [`TextObject`]s and placed on top of their layer.
+//!   [`TextObject`]s (type on a path for a `<textPath>`) and placed on top of their layer.
 #![forbid(unsafe_code)]
 
 mod export;
