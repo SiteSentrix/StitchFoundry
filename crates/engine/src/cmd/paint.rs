@@ -1,7 +1,7 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Node, NodeId, NodeKind};
 
 use super::appearance::{ItemTarget, appearance_targets, edit_items, item_target};
@@ -102,7 +102,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "{stroke?: bool (default: the active proxy), ids?} apply the last gradient used (paint.recent lastGradient), fitted to each object, to the active proxy of the selection and the default",
             has_doc,
             |s, p| {
-                let paint = Paint::Gradient(Box::new(GradientPaint { geom: None, ..s.last_gradient.clone() }));
+                let paint = super::gradient::unplaced(&Paint::Gradient(Box::new(s.last_gradient.clone())));
                 apply_to_proxy(s, p, paint)
             }
         ),
@@ -153,18 +153,26 @@ impl Session {
     /// object's (a group's first painted object's; type: its first run's), else the defaults for
     /// new art.
     pub fn proxy_paints(&self) -> (Paint, Paint) {
-        let default = |stroke: bool| if stroke { self.paint.stroke.clone() } else { self.paint.fill.clone() };
-        let Some(first) = self.active().and_then(|st| st.selection.objects.first().and_then(|id| st.doc.node(*id))) else {
-            return (default(false), default(true));
-        };
-        let item = self.appearance_item();
-        let mut nodes = vec![];
-        painted(first, true, &mut nodes);
-        let show = |stroke: bool| match first.appearance.item_of_kind(item, !stroke) {
-            Some(_) => proxy_paint(first, stroke, item),
-            None => nodes.first().map_or_else(|| default(stroke), |n| proxy_paint(n, stroke, None)),
+        let show = |stroke: bool| match self.proxy_source(stroke) {
+            Some((n, item)) => proxy_paint(n, stroke, item),
+            None if stroke => self.paint.stroke.clone(),
+            None => self.paint.fill.clone(),
         };
         (show(false), show(true))
+    }
+
+    /// The object whose fill (or stroke) the proxy shows, with the Appearance panel's active item
+    /// when it stands for it (see [`Session::proxy_paints`]); None: the defaults for new art.
+    pub(crate) fn proxy_source(&self, stroke: bool) -> Option<(&Node, Option<usize>)> {
+        let st = self.active()?;
+        let first = st.doc.node(*st.selection.objects.first()?)?;
+        let item = self.appearance_item();
+        if first.appearance.item_of_kind(item, !stroke).is_some() {
+            return Some((first, item));
+        }
+        let mut nodes = vec![];
+        painted(first, true, &mut nodes);
+        nodes.first().map(|n| (*n, None))
     }
 
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {

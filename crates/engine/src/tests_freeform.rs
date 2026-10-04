@@ -1,7 +1,8 @@
-//! Freeform gradients through commands: the first application, transforms and warps (M3.81).
+//! Freeform gradients through commands: the first application (M3.81), transforms and warps, and
+//! the point and line commands (M3.82).
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Freeform, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{Color, Freeform, GradientKind, GradientPaint, Paint};
 use vectorcraft_geom::Point;
 
 use super::*;
@@ -99,8 +100,7 @@ fn transforms_and_warps_move_the_points() {
     }
     // A perspective distort maps each point exactly: a point on a corner stays on it.
     let (mut s, id) = freeform_rect();
-    let corner = json!({"kind": "freeform", "freeform": {"points": [{"at": [200, 200], "color": "#ff0000"}]}});
-    run(&mut s, "paint.setFill", json!({ "gradient": corner }));
+    run(&mut s, "paint.freeform.addPoint", json!({"at": [200, 200]}));
     run(&mut s, "object.distort", json!({"corners": [[100, 100], [200, 100], [260, 240], [100, 200]]}));
     let f = points(&s, id);
     assert!(close(f.points.last().unwrap().at, Point::new(260.0, 240.0)), "{:?}", f.points.last());
@@ -110,10 +110,7 @@ fn transforms_and_warps_move_the_points() {
 fn freeform_paints_survive_saving_and_old_files_load() {
     let (mut s, id) = freeform_rect();
     run(&mut s, "paint.editGradient", json!({"mode": "lines"}));
-    let mut g = fill_gradient(&s, id);
-    g.freeform.as_mut().unwrap().add_line(vec![0, 1, 2]).unwrap();
-    run(&mut s, "paint.setFill", json!({"gradient": vectorcraft_tools::params::gradient_params(&g)}));
-    assert_eq!(points(&s, id).lines, vec![vec![0, 1, 2]]);
+    run(&mut s, "paint.freeform.addLine", json!({"points": [0, 1, 2]}));
     vectorcraft_testkit::invariants::check_native_roundtrip_exact(&s.doc().unwrap().doc).unwrap();
     // A gradient saved before freeform points existed has none.
     let old: GradientPaint = serde_json::from_value(json!({"gradient": {"kind": "Freeform", "stops": []}, "angle": 0.0})).unwrap();
@@ -123,4 +120,121 @@ fn freeform_paints_survive_saving_and_old_files_load() {
     let other = shape(&mut s, "shape.rectangle", 300.0, 300.0, 50.0, 50.0);
     run(&mut s, "paint.setFill", json!({"gradient": vectorcraft_tools::params::gradient_params(&g), "ids": [other.0]}));
     assert_eq!(fill_gradient(&s, other), g);
+}
+
+#[test]
+fn reapplied_gradients_place_their_points_afresh() {
+    let (mut s, id) = freeform_rect();
+    run(&mut s, "paint.freeform.setPoint", json!({"index": 0, "color": "#ff0000"}));
+    // The last gradient (`.`) on other art: points inside it, coloured like the first object's.
+    let other = shape(&mut s, "shape.rectangle", 400.0, 300.0, 100.0, 100.0);
+    run(&mut s, "paint.lastGradient", json!({}));
+    let (a, (b, _)) = (points(&s, id), node(&s, other).proxy_freeform(false, None).unwrap());
+    assert!(b.points.iter().all(|p| p.at.x >= 400.0 && p.at.y >= 300.0), "{:?}", b.points);
+    assert_eq!(a.points.iter().map(|p| p.color.to_hex()).collect::<Vec<_>>(), b.points.iter().map(|p| p.color.to_hex()).collect::<Vec<_>>());
+}
+
+// ---------- M3.82: points and lines ----------
+
+#[test]
+fn add_set_and_delete_points() {
+    let (mut s, id) = freeform_rect();
+    let n = points(&s, id).points.len();
+    let field = points(&s, id);
+    let r = run(&mut s, "paint.freeform.addPoint", json!({"at": [150, 150]}));
+    assert_eq!(r["index"], json!(n));
+    assert_eq!(s.selected_freeform_point(), Some(n), "the new point is selected");
+    let p = points(&s, id).points[n];
+    // Without a colour it takes the gradient's colour there.
+    let (want, _) = field.sample(Point::new(150.0, 150.0), 50.0);
+    assert!(close(p.at, Point::new(150.0, 150.0)) && p.color.to_hex() == want.to_hex(), "{p:?} vs {want:?}");
+    // The selected point takes edits without an index; opacity and spread take 0..1 or percentages.
+    run(&mut s, "paint.freeform.setPoint", json!({"color": "#00ff00", "opacity": 50, "spread": 0.4, "at": [160, 170]}));
+    let p = points(&s, id).points[n];
+    assert_eq!((p.color.to_hex().as_str(), p.opacity, p.spread, p.at), ("#00ff00", 0.5, 0.4, Point::new(160.0, 170.0)));
+    assert_eq!(fill_gradient(&s, id).gradient.stops[n].color.to_hex(), "#00ff00", "the stops follow");
+    // One undo step per command.
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(points(&s, id).points[n].color.to_hex(), want.to_hex());
+    run(&mut s, "edit.redo", json!({}));
+    run(&mut s, "paint.freeform.deletePoint", json!({}));
+    assert_eq!(points(&s, id).points.len(), n);
+    assert_eq!(s.selected_freeform_point(), None);
+    for i in (1..n).rev() {
+        run(&mut s, "paint.freeform.deletePoint", json!({"index": i}));
+    }
+    let e = s.execute("paint.freeform.deletePoint", &json!({"index": 0})).unwrap_err().to_string();
+    assert!(e.contains("at least one"), "{e}");
+    let e = s.execute("paint.freeform.setPoint", &json!({"index": 5, "color": "#000000"})).unwrap_err().to_string();
+    assert!(e.contains("no point 5"), "{e}");
+}
+
+#[test]
+fn lines_join_split_and_follow_the_selection() {
+    let (mut s, id) = freeform_rect();
+    assert_eq!(run(&mut s, "paint.freeform.addLine", json!({"points": [0, 1]}))["line"], json!(0));
+    run(&mut s, "paint.freeform.selectPoint", json!({"index": 1}));
+    // Adding a point with `line` extends the line ending at the selected point.
+    let i = run(&mut s, "paint.freeform.addPoint", json!({"at": [190, 190], "line": true}))["index"].as_u64().unwrap() as usize;
+    assert_eq!(points(&s, id).lines, vec![vec![0, 1, i]]);
+    let j = run(&mut s, "paint.freeform.splitLine", json!({"line": 0, "segment": 1}))["index"].as_u64().unwrap() as usize;
+    assert_eq!((points(&s, id).lines[0].clone(), s.selected_freeform_point()), (vec![0, 1, j, i], Some(j)));
+    assert!(s.execute("paint.freeform.splitLine", &json!({"line": 0, "segment": 3})).is_err());
+    assert!(s.execute("paint.freeform.addLine", &json!({"points": [0, 99]})).is_err());
+    // The query reports points in document coordinates, the lines and the selection.
+    let g = run(&mut s, "paint.freeform.get", json!({}));
+    assert_eq!((g["lines"].clone(), g["selected"].clone(), g["mode"].clone()), (json!([[0, 1, j, i]]), json!(j), json!("points")));
+    assert_eq!(g["points"][i]["at"], json!([190.0, 190.0]));
+}
+
+#[test]
+fn point_commands_need_a_freeform_gradient() {
+    let mut s = session();
+    shape(&mut s, "shape.rectangle", 0.0, 0.0, 50.0, 50.0);
+    for paint in [json!({"color": "#ff0000"}), json!({"gradient": {"kind": "radial"}})] {
+        run(&mut s, "paint.setFill", paint);
+        for (cmd, p) in [
+            ("paint.freeform.addPoint", json!({"at": [10, 10]})),
+            ("paint.freeform.setPoint", json!({"index": 0, "color": "#000000"})),
+            ("paint.freeform.deletePoint", json!({"index": 0})),
+            ("paint.freeform.addLine", json!({"points": [0, 1]})),
+            ("paint.freeform.splitLine", json!({"line": 0, "segment": 0})),
+            ("paint.freeform.selectPoint", json!({"index": 0})),
+            ("paint.freeform.get", json!({})),
+        ] {
+            let e = s.execute(cmd, &p).unwrap_err().to_string();
+            assert!(e.contains("not a freeform gradient"), "{cmd}: {e}");
+        }
+    }
+    // Nothing selected: nothing to edit.
+    run(&mut s, "select.none", json!({}));
+    assert!(s.execute("paint.freeform.addPoint", &json!({"at": [1, 1]})).is_err());
+}
+
+#[test]
+fn selection_follows_the_object_and_the_proxy() {
+    let (mut s, id) = freeform_rect();
+    run(&mut s, "paint.freeform.selectPoint", json!({"index": 2}));
+    assert_eq!(s.selected_freeform_point(), Some(2));
+    run(&mut s, "paint.toggleActive", json!({}));
+    assert_eq!(s.selected_freeform_point(), None, "the Stroke proxy has its own paint");
+    run(&mut s, "paint.toggleActive", json!({}));
+    assert_eq!(s.selected_freeform_point(), Some(2));
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    assert_eq!(s.selected_freeform_point(), Some(2), "same object, same proxy");
+    assert!(s.execute("paint.freeform.selectPoint", &json!({"index": 99})).is_err());
+}
+
+#[test]
+fn type_objects_keep_points_in_text_space() {
+    let mut s = session();
+    let r = run(&mut s, "text.create", json!({"x": 100, "y": 200, "text": "Freeform", "size": 40}));
+    let id = NodeId(r["id"].as_u64().unwrap());
+    run(&mut s, "paint.editGradient", json!({"kind": "freeform"}));
+    run(&mut s, "object.rotate", json!({"angle": 90, "origin": [100, 200]}));
+    let i = run(&mut s, "paint.freeform.addPoint", json!({"at": [90, 150], "color": "#ff00ff"}))["index"].as_u64().unwrap() as usize;
+    let (f, _) = node(&s, id).proxy_freeform(false, None).unwrap();
+    assert!(close(f.points[i].at, Point::new(90.0, 150.0)), "back in document coordinates: {:?}", f.points[i].at);
+    assert_eq!(f.points[i].color, Color::rgb(1.0, 0.0, 1.0));
 }

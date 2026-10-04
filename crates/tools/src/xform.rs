@@ -7,6 +7,7 @@
 mod artboard;
 mod eyedropper;
 mod free;
+mod freeform;
 mod gradient;
 mod measure;
 mod transform;

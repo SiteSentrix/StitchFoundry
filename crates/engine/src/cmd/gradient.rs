@@ -82,7 +82,7 @@ pub(crate) struct StopOwner {
 }
 
 impl StopOwner {
-    fn of(s: &Session) -> Self {
+    pub(crate) fn of(s: &Session) -> Self {
         Self { doc: s.active, object: s.active().and_then(|d| d.selection.objects.first().copied()), fill: s.fill_active, item: s.appearance_item() }
     }
 }

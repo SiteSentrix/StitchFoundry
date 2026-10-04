@@ -975,10 +975,12 @@ pub struct SwatchRows {
 
 impl PanelDrag {
     /// `paint` dragged from a Fill/Stroke proxy or the Gradient panel's thumbnail. A gradient
-    /// carries no placement: it fits the art it lands on.
+    /// carries no placement: it fits the art it lands on (freeform points are placed afresh there,
+    /// coloured like the dragged ones).
     pub fn paint(mut paint: Paint) -> Self {
         if let Paint::Gradient(g) = &mut paint {
             g.geom = None;
+            g.freeform = None;
         }
         Self::Paint { params: crate::panels::paint_params(&paint), paint, rows: None }
     }
