@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Adjust Color Balance…",
             ["Edit", "Edit Colors"],
             None,
-            "{r?, g?, b? | c?, m?, y?, k? | gray?: -100..100 (% added per channel), convert?: false (keep the result in the adjusted model), fill?, stroke?, ids?} → {changed}",
+            "{mode?: \"rgb\"|\"cmyk\"|\"gray\"|\"global\" (default: from the channels given), r?, g?, b? | c?, m?, y?, k? | gray?: -100..100 (% added per channel, default 0), convert?: false (true: the results stay in the adjusted model; false: each colour keeps its own), fill?, stroke?, ids?} → {changed}. Global mode (tints of global and spot colours) isn't available yet",
             has_selection,
             adjust_balance
         ),
@@ -214,29 +214,47 @@ fn saturate(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.colors.adjustBalance";
+    let given = |keys: &[&str]| keys.iter().any(|k| p.get(*k).is_some());
+    let mode = match str_param(p, "mode") {
+        Some(m) => m.to_ascii_lowercase(),
+        None if given(&["c", "m", "y", "k"]) => "cmyk".into(),
+        None if given(&["gray"]) => "gray".into(),
+        None if given(&["r", "g", "b"]) => "rgb".into(),
+        None => return Err(bad(C, "give a mode or r/g/b, c/m/y/k or gray adjustments")),
+    };
     let g = |k: &str| (f64_or(p, k, 0.0).clamp(-100.0, 100.0) / 100.0) as f32;
-    let convert = bool_or(p, "convert", false);
-    let cmyk = ["c", "m", "y", "k"].iter().any(|k| p.get(*k).is_some());
-    let gray = p.get("gray").is_some();
-    let rgb = ["r", "g", "b"].iter().any(|k| p.get(*k).is_some());
-    if !(cmyk || gray || rgb) {
-        return Err(bad("edit.colors.adjustBalance", "give r/g/b, c/m/y/k or gray adjustments"));
-    }
-    let (dr, dg, db) = (g("r"), g("g"), g("b"));
-    let (dc, dm, dy, dk) = (g("c"), g("m"), g("y"), g("k"));
-    let dgray = g("gray");
     let cl = |v: f32| v.clamp(0.0, 1.0);
+    let adjust: Box<dyn Fn(Color) -> Color> = match mode.as_str() {
+        "rgb" => {
+            let (dr, dg, db) = (g("r"), g("g"), g("b"));
+            Box::new(move |c| {
+                let [r, gg, b] = c.to_rgb();
+                Color::rgb(cl(r + dr), cl(gg + dg), cl(b + db))
+            })
+        }
+        "cmyk" => {
+            let (dc, dm, dy, dk) = (g("c"), g("m"), g("y"), g("k"));
+            Box::new(move |c| {
+                let [cc, m, y, k] = c.to_cmyk();
+                Color::cmyk(cl(cc + dc), cl(m + dm), cl(y + dy), cl(k + dk))
+            })
+        }
+        "gray" => {
+            let dgray = g("gray");
+            Box::new(move |c| {
+                let Color::Gray { k } = to_gray(c) else { unreachable!() };
+                Color::gray(cl(k + dgray))
+            })
+        }
+        "global" => {
+            return Err(bad(C, "mode `global` shifts the tints of global and spot colours, which aren't supported yet: use rgb, cmyk or gray"));
+        }
+        other => return Err(bad(C, format!("unknown mode `{other}` (rgb|cmyk|gray|global)"))),
+    };
+    let convert = bool_or(p, "convert", false);
     recolor(s, p, "Adjust Colors", &move |c| {
-        let out = if cmyk {
-            let [cc, m, y, k] = c.to_cmyk();
-            Color::cmyk(cl(cc + dc), cl(m + dm), cl(y + dy), cl(k + dk))
-        } else if gray {
-            let Color::Gray { k } = to_gray(c) else { unreachable!() };
-            Color::gray(cl(k + dgray))
-        } else {
-            let [r, gg, b] = c.to_rgb();
-            Color::rgb(cl(r + dr), cl(gg + dg), cl(b + db))
-        };
+        let out = adjust(c);
         if convert { out } else { keep_model(c, out) }
     })
 }

@@ -9,6 +9,7 @@
 mod about;
 mod all_tools;
 mod artboard_options;
+pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
 mod command;
@@ -24,6 +25,7 @@ mod new_document;
 pub mod new_swatch;
 mod path_ops;
 mod recolor;
+pub mod saturate;
 mod save_changes;
 mod shapes;
 pub mod swatch_options;
@@ -146,6 +148,8 @@ registry! {
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
     EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
+    ColorBalance: [color_balance::KIND] => color_balance::SPEC,
+    Saturate: [saturate::KIND] => saturate::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

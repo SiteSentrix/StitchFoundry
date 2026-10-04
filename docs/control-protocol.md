@@ -70,3 +70,10 @@ its variation grid; the panel draws the same grid. `ui.colorGuideOptions` opens 
 (fields `steps` 1–20, `amount` 0–100) and `ui.dialog.confirm` sets the panel's options, which `ui.inspect` reports
 as `ui.color_guide` (`variation`, `steps`, `amount`). Save Colors as Swatches runs `swatch.new {colors: [...]}`
 (one swatch per colour, one undo step).
+
+Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
+`global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` from −100 to 100, `convert`, `fill`, `stroke`,
+`preview`) and `ui.saturateDialog` opens Saturate (`saturate`: `intensity` −100..100, `preview`). Both preview on the
+canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.colors.adjustBalance` /
+`edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global
+and spot colours exist; the dialog then stays open.

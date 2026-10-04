@@ -143,7 +143,7 @@ pub(super) const SLIDER_LABEL: f32 = 64.0;
 pub(super) const SLIDER_WIDTH: f32 = 180.0;
 
 /// A labelled slider with a value field for the number `d.fields[key]` in `range` (whole numbers,
-/// `suffix` after the value); `track(t)` colours the rail at 0..1. Returns true when it changed.
+/// `suffix` after the value); `track(t)` colours the rail at 0..1.
 pub(super) fn slider(
     ui: &mut egui::Ui,
     d: &mut Dialog,
@@ -152,7 +152,7 @@ pub(super) fn slider(
     range: std::ops::RangeInclusive<f64>,
     suffix: &str,
     track: &dyn Fn(f32) -> egui::Color32,
-) -> bool {
+) {
     let t = Tokens::get(ui.ctx());
     let (min, max) = (*range.start(), *range.end());
     let v = d.f64(key, 0.0).clamp(min, max);
@@ -166,11 +166,50 @@ pub(super) fn slider(
             new = Some(x.round().clamp(min, max));
         }
     });
-    match new {
-        Some(n) if n != v => {
-            d.fields.insert(key.into(), json!(n));
-            true
-        }
-        _ => false,
+    if let Some(n) = new.filter(|n| *n != v) {
+        d.fields.insert(key.into(), json!(n));
     }
+}
+
+/// The Preview checkbox of a dialog that previews `cmd` on the canvas: while it is on, `params` run
+/// again on the interaction's snapshot whenever they differ from the last preview (whether a widget
+/// or `ui.dialog.set` changed them); turning it off rolls back.
+pub(super) fn preview(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, label: &str, cmd: &str, params: Value) {
+    const LAST: &str = "__previewed";
+    ui.add_space(8.0);
+    let mut on = d.bool("preview");
+    if crate::widgets::check(ui, "Preview", on, true) {
+        on = !on;
+        d.fields.insert("preview".into(), json!(on));
+    }
+    if !on {
+        if d.fields.remove(LAST).is_some() {
+            let _ = app.session.cancel_interaction();
+        }
+        return;
+    }
+    if d.fields.get(LAST) != Some(&params) || !app.session.in_interaction() {
+        let _ = app.session.begin_interaction(label);
+        if let Err(e) = app.session.preview(cmd, &params) {
+            app.status(e.to_string());
+        }
+        d.fields.insert(LAST.into(), params);
+    }
+}
+
+/// OK of a dialog using [`preview`]: keep the previewed `cmd` as one undo step (or run it when no
+/// preview runs) and close. On an error the dialog stays open.
+pub(super) fn commit_preview(app: &mut crate::VectorcraftApp, cmd: &str, params: Value) -> Result<Value, String> {
+    let r = if app.session.in_interaction() {
+        match app.session.preview(cmd, &params) {
+            Ok(_) => app.session.commit_interaction().map(|_| Value::Null).map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        }
+    } else {
+        app.run(cmd, params)
+    };
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
+    r
 }

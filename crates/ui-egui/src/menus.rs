@@ -207,6 +207,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Color Guide Options (dialog `colorGuideOptions`, fields `steps` 1–20 and `amount` 0–100): OK sets the Color Guide panel's variation grid (read back with `ui.inspect`: ui.color_guide; engine: color.harmony)",
     ),
+    (
+        "ui.colorBalanceDialog",
+        "Adjust Color Balance…",
+        "",
+        "{} open Adjust Colors for the selection (dialog `colorBalance`, fields `mode` gray|rgb|cmyk|global, channels r g b / c m y k / gray −100..100, `convert`, `fill`, `stroke`, `preview`): previews live, OK runs edit.colors.adjustBalance as one undo step",
+    ),
+    (
+        "ui.saturateDialog",
+        "Saturate…",
+        "",
+        "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -532,6 +544,14 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::color_guide_options::open(app);
             Ok(Value::Null)
         }
+        "ui.colorBalanceDialog" => {
+            crate::dialogs::color_balance::open(app);
+            Ok(Value::Null)
+        }
+        "ui.saturateDialog" => {
+            crate::dialogs::saturate::open(app);
+            Ok(Value::Null)
+        }
         _ => return None,
     };
     Some(r)
@@ -696,6 +716,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.export.pdf" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
+        "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         _ => true,
     }
 }
@@ -790,7 +811,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "Edit Colors",
                     vec![
                         c("Recolor Artwork…", "ui.recolorDialog"),
-                        cp("Adjust Color Balance…", "edit.colors.adjustBalance", json!({"r": 0, "g": 0, "b": 0})),
+                        c("Adjust Color Balance…", "ui.colorBalanceDialog"),
                         c("Blend Front to Back", "edit.colors.blendFrontToBack"),
                         c("Blend Horizontally", "edit.colors.blendHorizontally"),
                         c("Blend Vertically", "edit.colors.blendVertically"),
@@ -803,7 +824,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                             "edit.colors.overprintBlack",
                             json!({"remove": false, "percentage": 100, "fill": true, "stroke": true, "includeCmyBlacks": false, "includeSpotBlacks": false}),
                         ),
-                        cp("Saturate…", "edit.colors.saturate", json!({"intensity": 20})),
+                        c("Saturate…", "ui.saturateDialog"),
                     ],
                 ),
                 todo("Edit Original"),
