@@ -19,7 +19,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.set_width(380.0);
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(44.0, 44.0), egui::Sense::hover());
-                crate::brand::paint_mark(ui.painter(), r);
+                crate::brand::paint_mark(ui, r);
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new("VectorCraft").font(theme::semibold(22.0)));
                     ui.label(format!("Version {} — open-source vector illustration in pure Rust.", env!("CARGO_PKG_VERSION")));

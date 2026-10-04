@@ -23,9 +23,9 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             titlebar::drag_area(ui, ui.max_rect());
         }
         ui.horizontal_centered(|ui| {
-            // Brand mark (our own artwork, matches the app icon).
+            // Brand mark: the app icon.
             let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
-            crate::brand::paint_mark(ui.painter(), r);
+            crate::brand::paint_mark(ui, r);
             ui.add_space(4.0);
             if widgets::icon_button(ui, "house", "Home", false, 24.0).clicked() {
                 app.ui.dialog = Some(crate::state::Dialog::new("newDocument", json!({"preset": "Letter", "width": "612 pt", "height": "792 pt", "units": "Points", "artboards": 1, "colorMode": "RGB", "name": "Untitled-1"})));
