@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{AppearanceItem, Effect, Node};
+use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeId};
 
 use super::{first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
@@ -15,39 +15,61 @@ use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
 const ROW: f32 = 30.0;
-const EYE_W: f32 = 26.0;
+pub(super) const EYE_W: f32 = 26.0;
 
-/// What is selected in the stack (for Duplicate / Delete). A fill/stroke row is the engine's
-/// active appearance item (`appearance.setActiveItem`); effect rows are panel state.
+/// What is selected in the stack (for Duplicate / Delete). A fill/stroke row (also the owner of a
+/// selected item effect) is the engine's active appearance item (`appearance.setActiveItem`), so
+/// paint edits, the fx button and the Effect menu target it; effect rows are panel state.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Sel {
     #[default]
     None,
     Item(usize),
+    /// An object-level effect.
     Effect(usize),
+    /// Effect `k` of fill/stroke item `i`.
+    ItemEffect(usize, usize),
 }
 
-/// The selected row: the engine's active item, else a selected effect row.
-fn current_sel(app: &VectorcraftApp, ctx: &egui::Context) -> Sel {
-    match app.session.appearance_item() {
-        Some(i) => Sel::Item(i),
-        None => match pstate(ctx, "ap-sel") {
-            Sel::Item(_) => Sel::None,
-            other => other,
-        },
+impl Sel {
+    /// The fill/stroke row this selection makes the active item.
+    fn item(self) -> Option<usize> {
+        match self {
+            Sel::Item(i) | Sel::ItemEffect(i, _) => Some(i),
+            Sel::None | Sel::Effect(_) => None,
+        }
+    }
+    /// `{item, index}` of a selected effect row (`item: null` for the object's own effects).
+    fn effect(self) -> Option<Value> {
+        match self {
+            Sel::Effect(k) => Some(json!({"item": null, "index": k})),
+            Sel::ItemEffect(i, k) => Some(json!({"item": i, "index": k})),
+            Sel::None | Sel::Item(_) => None,
+        }
     }
 }
 
-/// Select a row: fill/stroke rows become the active item that paint edits target.
+/// The selected row of `node` (the first selected object): a selected effect row while that
+/// effect still exists and agrees with the engine's active item, else the active item's row.
+fn current_sel(app: &VectorcraftApp, ctx: &egui::Context, node: Option<&Node>) -> Sel {
+    let Some(n) = node else { return Sel::None };
+    let (owner, sel): (Option<NodeId>, Sel) = pstate(ctx, "ap-sel");
+    let exists = |item: Option<usize>, k: usize| owner == Some(n.id) && n.appearance.effects_at(item).is_some_and(|fx| k < fx.len());
+    match (app.session.appearance_item(), sel) {
+        (Some(i), Sel::ItemEffect(j, k)) if i == j && exists(Some(i), k) => sel,
+        (Some(i), _) => Sel::Item(i),
+        (None, Sel::Effect(k)) if exists(None, k) => sel,
+        (None, _) => Sel::None,
+    }
+}
+
+/// Select a row; its fill/stroke becomes the active item that paint and effect edits target.
 pub(crate) fn select_row(app: &mut VectorcraftApp, ctx: &egui::Context, sel: Sel) {
-    let index = match sel {
-        Sel::Item(i) => json!(i),
-        _ => Value::Null,
-    };
-    if app.session.appearance_item().map_or(Value::Null, |i| json!(i)) != index {
-        app.run("appearance.setActiveItem", json!({ "index": index })).ok();
+    if app.session.appearance_item() != sel.item() {
+        app.run("appearance.setActiveItem", json!({ "index": sel.item() })).ok();
     }
-    set_pstate(ctx, "ap-sel", if matches!(sel, Sel::Item(_)) { Sel::None } else { sel });
+    let owner = app.session.active().and_then(|d| d.selection.objects.first().copied());
+    set_pstate(ctx, "ap-sel", (owner, sel));
 }
 
 fn catalog() -> &'static [(String, String, Vec<String>)] {
@@ -141,7 +163,7 @@ fn link(ui: &mut Ui, pos: egui::Pos2, id: impl std::hash::Hash + std::fmt::Debug
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let node = first_selected(app);
-    let sel = current_sel(app, ui.ctx());
+    let sel = current_sel(app, ui.ctx(), node.as_ref());
     let hide_thumb: bool = pstate(ui.ctx(), "ap-hide-thumb");
     widgets::list_box(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -191,19 +213,20 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
     let t = Tokens::get(ui.ctx());
-    let items: Vec<(usize, AppearanceItem)> = n.appearance.items.iter().cloned().enumerate().rev().collect();
     let mut drop: Option<(usize, usize)> = None;
     let mut stopped = false;
     let dragging: Option<usize> = pstate(ui.ctx(), "ap-drag");
     let mut row_rects = vec![];
-    for (i, it) in items {
+    for (i, it) in n.appearance.items.iter().enumerate().rev() {
         let open: bool = pstate(ui.ctx(), &format!("ap-open-{i}"));
         let (r, resp) = row(ui, sel == Sel::Item(i));
         row_rects.push((i, r));
-        let (visible, paint, is_stroke, width, opacity, blend, effects) = match &it {
-            AppearanceItem::Fill(f) => (f.visible, f.paint.clone(), false, 0.0, f.opacity, f.blend, f.effects.clone()),
-            AppearanceItem::Stroke(s) => (s.visible, s.paint.clone(), true, s.width, s.opacity, s.blend, s.effects.clone()),
+        let visible = it.visible();
+        let (paint, width) = match it {
+            AppearanceItem::Fill(f) => (&f.paint, 0.0),
+            AppearanceItem::Stroke(s) => (&s.paint, s.width),
         };
+        let is_stroke = !it.is_fill();
         if eye(ui, r, ("ap-eye", i), visible, true) {
             app.run("appearance.setItem", json!({"index": i, "visible": !visible})).ok();
         }
@@ -221,7 +244,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
         }
         // Swatch with a swatches popup that sets this item's paint.
         let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0));
-        chip(ui, cr, &paint);
+        chip(ui, cr, paint);
         let cresp = ui.interact(cr.expand(2.0), ui.id().with(("ap-chip", i)), Sense::click()).on_hover_text("Click to choose a swatch");
         egui::Popup::menu(&cresp).show(|ui| {
             swatch_picker(app, ui, i);
@@ -246,9 +269,9 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
             stopped = true;
         }
         if open {
-            sub_row(app, ui, ("ap-sub-op", i), &format!("Opacity: {}", opacity_text(opacity, blend)), true, 1);
-            for (k, e) in effects.iter().enumerate() {
-                sub_row(app, ui, ("ap-sub-fx", i, k), &effect_label(&e.id), e.visible, 1);
+            sub_row(app, ui, ("ap-sub-op", i), &format!("Opacity: {}", opacity_text(it.opacity(), it.blend())), true, 1);
+            for (k, e) in it.effects().iter().enumerate() {
+                effect_row(app, ui, Some(i), k, e, sel == Sel::ItemEffect(i, k));
             }
         }
     }
@@ -272,7 +295,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
     }
     // Object-level effects.
     for (k, e) in n.appearance.effects.iter().enumerate() {
-        effect_row(app, ui, k, e, sel == Sel::Effect(k));
+        effect_row(app, ui, None, k, e, sel == Sel::Effect(k));
     }
     // Object opacity row.
     let (r, resp) = row(ui, false);
@@ -303,36 +326,41 @@ fn sub_row(_app: &mut VectorcraftApp, ui: &mut Ui, id: impl std::hash::Hash + st
     text(ui, r.left_center() + vec2(EYE_W + 24.0 + depth as f32 * 12.0, 0.0), label, false);
 }
 
-fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, k: usize, e: &Effect, selected: bool) {
+/// An effect row: of the object (`item: None`) or, indented under it, of fill/stroke `item`.
+fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect, selected: bool) {
     let t = Tokens::get(ui.ctx());
-    let open: bool = pstate(ui.ctx(), &format!("ap-fx-open-{k}"));
+    let open_key = format!("ap-fx-open-{item:?}-{k}");
+    let open: bool = pstate(ui.ctx(), &open_key);
+    let this = item.map_or(Sel::Effect(k), |i| Sel::ItemEffect(i, k));
     let (r, resp) = row(ui, selected);
-    if eye(ui, r, ("ap-fx-eye", k), e.visible, true) {
-        app.run("effect.setParams", json!({"index": k, "visible": !e.visible})).ok();
+    if eye(ui, r, ("ap-fx-eye", item, k), e.visible, true) {
+        app.run("effect.setParams", json!({"item": item, "index": k, "visible": !e.visible})).ok();
     }
-    if chevron(ui, r, ("ap-fx-chev", k), open) {
-        set_pstate(ui.ctx(), &format!("ap-fx-open-{k}"), !open);
+    let indent = if item.is_some() { 12.0 } else { 0.0 };
+    let r = Rect::from_min_max(pos2(r.left() + indent, r.top()), r.max);
+    if chevron(ui, r, ("ap-fx-chev", item, k), open) {
+        set_pstate(ui.ctx(), &open_key, !open);
     }
     let lx = r.left() + EYE_W + 24.0;
-    if link(ui, pos2(lx, r.center().y), ("ap-fx-link", k), &effect_label(&e.id)) {
-        set_pstate(ui.ctx(), &format!("ap-fx-open-{k}"), !open);
-        select_row(app, ui.ctx(), Sel::Effect(k));
+    if link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_label(&e.id)) {
+        set_pstate(ui.ctx(), &open_key, !open);
+        select_row(app, ui.ctx(), this);
     }
     icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     if resp.clicked() {
-        select_row(app, ui.ctx(), Sel::Effect(k));
+        select_row(app, ui.ctx(), this);
     }
     if resp.double_clicked() {
-        set_pstate(ui.ctx(), &format!("ap-fx-open-{k}"), !open);
+        set_pstate(ui.ctx(), &open_key, !open);
     }
     if open {
-        effect_editor(app, ui, k, e);
+        effect_editor(app, ui, item, k, e);
     }
 }
 
 /// Inline editor for an applied effect's parameters (numbers, booleans, strings, colours);
 /// edits go through `effect.setParams`.
-fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, k: usize, e: &Effect) {
+fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect) {
     let t = Tokens::get(ui.ctx());
     let defaults = vectorcraft_effects::effect_catalog().into_iter().find(|c| c.id == e.id).map(|c| c.defaults).unwrap_or(Value::Null);
     let mut params = defaults.as_object().cloned().unwrap_or_default();
@@ -359,7 +387,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, k: usize, e: &Effect) {
                     }
                     Value::Number(n) => {
                         let x = n.as_f64().unwrap_or(0.0);
-                        if let Some(nx) = widgets::plain_field(ui, ("fx", k, key.as_str()), x, "", 2, 70.0) {
+                        if let Some(nx) = widgets::plain_field(ui, ("fx", item, k, key.as_str()), x, "", 2, 70.0) {
                             change = Some((key.clone(), json!(nx)));
                         }
                     }
@@ -378,7 +406,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, k: usize, e: &Effect) {
         }
     });
     if let Some((key, v)) = change {
-        app.run("effect.setParams", json!({"index": k, "params": {key: v}})).ok();
+        app.run("effect.setParams", json!({"item": item, "index": k, "params": {key: v}})).ok();
     }
 }
 
@@ -442,11 +470,9 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) 
         if widgets::icon_button_enabled(ui, "dc-clear", "Clear Appearance", false, has, 24.0).clicked() {
             app.run("appearance.clear", json!({})).ok();
         }
-        let can_dup = has && matches!(sel, Sel::Item(_));
-        if widgets::icon_button_enabled(ui, "dc-new-item", "Duplicate Selected Item", false, can_dup, 24.0).clicked()
-            && let Sel::Item(i) = sel
-        {
-            app.run("appearance.duplicateItem", json!({"index": i})).ok();
+        let can_dup = has && sel != Sel::None;
+        if widgets::icon_button_enabled(ui, "dc-new-item", "Duplicate Selected Item", false, can_dup, 24.0).clicked() {
+            duplicate_selected(app, sel);
         }
         let can_del = has && sel != Sel::None;
         if widgets::icon_button_enabled(ui, "trash-2", "Delete Selected Item", false, can_del, 24.0).clicked() {
@@ -456,15 +482,24 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) 
     });
 }
 
-fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, sel: Sel) {
-    // Removing the active item clears it in the engine.
-    let ok = match sel {
-        Sel::Item(i) => app.run("appearance.removeItem", json!({"index": i})).is_ok(),
-        Sel::Effect(k) => app.run("effect.remove", json!({"index": k})).is_ok(),
-        Sel::None => false,
+fn duplicate_selected(app: &mut VectorcraftApp, sel: Sel) {
+    match (sel, sel.effect()) {
+        (Sel::Item(i), _) => app.run("appearance.duplicateItem", json!({"index": i})).ok(),
+        (_, Some(fx)) => app.run("effect.duplicate", fx).ok(),
+        _ => None,
     };
+}
+
+fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, sel: Sel) {
+    let ok = match (sel, sel.effect()) {
+        (Sel::Item(i), _) => app.run("appearance.removeItem", json!({"index": i})).is_ok(),
+        (_, Some(fx)) => app.run("effect.remove", fx).is_ok(),
+        _ => false,
+    };
+    // Removing the active item clears it in the engine; a removed item effect leaves its item
+    // selected.
     if ok {
-        set_pstate(ui.ctx(), "ap-sel", Sel::None);
+        select_row(app, ui.ctx(), if let Sel::ItemEffect(i, _) = sel { Sel::Item(i) } else { Sel::None });
     }
 }
 
@@ -493,7 +528,7 @@ fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_selected(app);
     let has = node.is_some();
-    let sel = current_sel(app, ui.ctx());
+    let sel = current_sel(app, ui.ctx(), node.as_ref());
     if menu_item(ui, "Add New Fill", has, false) {
         app.run("appearance.addFill", json!({})).ok();
     }
@@ -501,10 +536,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("appearance.addStroke", json!({})).ok();
     }
     ui.separator();
-    if menu_item(ui, "Duplicate Item", has && matches!(sel, Sel::Item(_)), false)
-        && let Sel::Item(i) = sel
-    {
-        app.run("appearance.duplicateItem", json!({"index": i})).ok();
+    if menu_item(ui, "Duplicate Item", has && sel != Sel::None, false) {
+        duplicate_selected(app, sel);
     }
     if menu_item(ui, "Remove Item", has && sel != Sel::None, false) {
         delete_selected(app, ui, sel);

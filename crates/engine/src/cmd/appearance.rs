@@ -50,7 +50,15 @@ pub fn specs() -> Vec<CommandSpec> {
             set_item
         ),
         cmd!("appearance.removeItem", "Remove Item", [], None, "{index, ids?}", has_selection, remove_item),
-        cmd!("appearance.addEffect", "Add Effect", ["Effect"], None, "{effect: id, params?: {…}} append a live effect", has_selection, add_effect),
+        cmd!(
+            "appearance.addEffect",
+            "Add Effect",
+            [],
+            None,
+            "same as effect.apply (an alias): {effect: id, params?: {…}, item?: appearance item index|null, ids?} → {ids, index, item}",
+            has_selection,
+            super::effectcmd::apply
+        ),
         cmd!("appearance.duplicateItem", "Duplicate Item", ["Window", "Appearance"], None, "{index, ids?}", has_selection, duplicate_item),
         cmd!("appearance.moveItem", "Reorder Appearance Item", [], None, "{from, to, ids?} (paint-order indices)", has_selection, move_item),
         cmd!(
@@ -147,6 +155,16 @@ impl ItemTarget {
                 None if explicit => Err(bad(cmd, format!("appearance item {index} is not a {}", if fill { "fill" } else { "stroke" }))),
                 found => Ok(found),
             },
+        }
+    }
+
+    /// The item whose own effects an effect edit changes; `None` = the object-level effects.
+    pub(crate) fn effects_item(self, ap: &Appearance, cmd: &str) -> Result<Option<usize>> {
+        match self {
+            ItemTarget::Top => Ok(None),
+            ItemTarget::Item { index, .. } if index < ap.items.len() => Ok(Some(index)),
+            ItemTarget::Item { index, explicit: true } => Err(bad(cmd, format!("no appearance item {index}"))),
+            ItemTarget::Item { explicit: false, .. } => Ok(None),
         }
     }
 }
@@ -328,21 +346,6 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         std::cmp::Ordering::Equal => None,
         std::cmp::Ordering::Greater => Some(a - 1),
     });
-    ok()
-}
-
-fn add_effect(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = str_param(p, "effect").ok_or_else(|| bad("appearance.addEffect", "missing effect id"))?.to_string();
-    let params = p.get("params").cloned().unwrap_or(json!({}));
-    let ids = targets(s, p)?;
-    s.edit("Add Effect", |d, _| {
-        for nid in &ids {
-            if let Some(n) = d.node_mut(*nid) {
-                n.appearance.effects.push(vectorcraft_doc::Effect { id: id.clone(), params: params.clone(), visible: true });
-            }
-        }
-        Ok(())
-    })?;
     ok()
 }
 

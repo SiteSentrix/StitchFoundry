@@ -24,12 +24,22 @@ fn frame_texts(app: &mut VectorcraftApp, f: impl FnMut(&mut VectorcraftApp, &mut
     frame_in(&ctx, app, f)
 }
 
-fn frame_in(ctx: &egui::Context, app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| f(app, ui));
+fn frame_in(ctx: &egui::Context, app: &mut VectorcraftApp, f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<String> {
+    frame_events(ctx, app, vec![], f).into_iter().map(|(s, _)| s).collect()
+}
+
+/// One headless frame with input `events`: every text drawn, with its screen rect.
+fn frame_events(
+    ctx: &egui::Context,
+    app: &mut VectorcraftApp,
+    events: Vec<egui::Event>,
+    mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui),
+) -> Vec<(String, egui::Rect)> {
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| f(app, ui));
     out.textures_delta.clear();
-    fn collect(s: &egui::Shape, out: &mut Vec<String>) {
+    fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
         match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
             egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
             _ => {}
         }
@@ -39,6 +49,19 @@ fn frame_in(ctx: &egui::Context, app: &mut VectorcraftApp, mut f: impl FnMut(&mu
         collect(&c.shape, &mut texts);
     }
     texts
+}
+
+/// Click at `pos` over three frames of `f` (hover, press, release).
+fn click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) {
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+        frame_events(ctx, app, vec![e], &mut f);
+    }
+}
+
+/// The rect of the first drawn text equal to `s`.
+fn text_rect(texts: &[(String, egui::Rect)], s: &str) -> egui::Rect {
+    texts.iter().find(|(t, _)| t == s).unwrap_or_else(|| panic!("`{s}` not drawn: {texts:?}")).1
 }
 
 #[test]
@@ -77,4 +100,29 @@ fn transparency_panel_reads_the_active_item() {
     run(&mut app, "appearance.setActiveItem", json!({"index": 0}));
     assert!((current_transparency(&app).unwrap().0 - 0.4).abs() < 1e-6);
     assert!(frame_texts(&mut app, transparency::show).iter().any(|t| t.starts_with("40")));
+}
+
+#[test]
+fn item_effect_rows_toggle_their_eye() {
+    let mut app = app_with_rect();
+    run(&mut app, "effect.apply", json!({"effect": "distort.roughen", "item": 1}));
+    let ctx = egui::Context::default();
+    // The stroke row's disclosure is open: its Opacity sub-row and its effect show under it.
+    super::set_pstate(&ctx, "ap-open-1", true);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let label = text_rect(&texts, "Roughen");
+    // The eye sits in the first column of the effect's row (the label is indented one level).
+    let eye = egui::pos2(label.left() - 12.0 - 24.0 - appearance::EYE_W / 2.0, label.center().y);
+    click(&ctx, &mut app, eye, appearance::show);
+    let visible = |app: &VectorcraftApp| current_stroke_effects(app)[0].visible;
+    assert!(!visible(&app));
+    click(&ctx, &mut app, eye, appearance::show);
+    assert!(visible(&app));
+    // Clicking the effect's row selects it and makes its stroke the active item.
+    click(&ctx, &mut app, egui::pos2(label.right() + 40.0, label.center().y), appearance::show);
+    assert_eq!(app.session.appearance_item(), Some(1));
+}
+
+fn current_stroke_effects(app: &VectorcraftApp) -> Vec<vectorcraft_doc::Effect> {
+    first_selected(app).unwrap().appearance.items[1].effects().clone()
 }

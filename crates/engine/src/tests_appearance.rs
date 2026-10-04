@@ -194,3 +194,54 @@ fn text_items_take_item_paint() {
     let vectorcraft_doc::NodeKind::Text(tx) = &n.kind else { panic!() };
     assert_ne!(tx.first_style().fill, Paint::solid(Color::from_hex("#ff0000").unwrap()));
 }
+
+#[test]
+fn effects_land_on_the_targeted_item() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    let r = run(&mut s, "effect.apply", json!({"effect": "distort.roughen", "item": 1}));
+    assert_eq!((r["index"].clone(), r["item"].clone()), (json!(0), json!(1)));
+    let n = node(&s, id);
+    assert_eq!(stroke(&n, 1).effects.len(), 1);
+    assert!(n.appearance.effects.is_empty() && n.appearance.items[0].effects().is_empty());
+    run(&mut s, "edit.undo", json!({}));
+    assert!(stroke(&node(&s, id), 1).effects.is_empty());
+    assert!(s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": 9})).is_err());
+    assert!(s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": -1})).is_err());
+    // The active item takes the Effect menu's effects (and its alias).
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    run(&mut s, "appearance.addEffect", json!({"effect": "stylize.roundCorners"}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items[0].effects().iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["distort.twist", "stylize.roundCorners"]);
+    let l = run(&mut s, "effect.list", json!({}));
+    assert_eq!(l["activeItem"], 0);
+    assert_eq!(l["applied"][0]["items"][0]["kind"], "fill");
+    assert_eq!(l["applied"][0]["items"][0]["effects"].as_array().unwrap().len(), 2);
+    // Sub-row eye, duplicate and delete address the item's list.
+    run(&mut s, "effect.setParams", json!({"index": 1, "visible": false}));
+    run(&mut s, "effect.duplicate", json!({"index": 0}));
+    run(&mut s, "effect.remove", json!({"index": 2}));
+    let fx = node(&s, id).appearance.items[0].effects().clone();
+    assert_eq!(fx.iter().map(|e| (e.id.as_str(), e.visible)).collect::<Vec<_>>(), [("distort.twist", true), ("distort.twist", true)]);
+    assert!(s.execute("effect.remove", &json!({"index": 5})).is_err());
+    // `item: null` addresses the object's own effects.
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "item": null}));
+    assert_eq!(node(&s, id).appearance.effects.len(), 1);
+}
+
+#[test]
+fn per_fill_offset_path_renders() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let render = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+    };
+    assert_eq!(render(&s).pixel(90, 150)[3], 0);
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 20}, "item": 0}));
+    assert_eq!(node(&s, id).appearance.items[0].effects().len(), 1);
+    let px = render(&s).pixel(90, 150);
+    assert!(px[0] > 200 && px[3] > 200, "{px:?}");
+}

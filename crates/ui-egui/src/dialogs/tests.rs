@@ -163,3 +163,16 @@ fn effect_preview_is_kept_as_one_undo_step() {
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, before);
 }
+
+#[test]
+fn effect_dialog_applies_to_its_appearance_item() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("effect.dialog", json!({"effect": "distort.roughen", "item": 1})).unwrap();
+    frame(&mut app, Default::default());
+    confirm(&mut app).unwrap();
+    let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    assert_eq!(n.appearance.items[1].effects().len(), 1, "the effect goes to the stroke");
+    assert!(n.appearance.effects.is_empty() && n.appearance.items[0].effects().is_empty());
+}

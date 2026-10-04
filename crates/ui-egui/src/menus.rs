@@ -152,7 +152,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.newWindow", "New Window", "", "{}"),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
     ("tool.setOption", "Tool Option", "", "{key, value}"),
-    ("effect.dialog", "Effect…", "", "{effect: id} open the effect's dialog with live preview"),
+    (
+        "effect.dialog",
+        "Effect…",
+        "",
+        "{effect: id, item?: appearance item index|null (default: the Appearance panel's active item)} open the effect's dialog with live preview",
+    ),
     ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
     ("ui.recolorDialog", "Recolor Artwork…", "", "{} open Recolor Artwork (engine: recolor.colors / recolor.apply)"),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
@@ -439,6 +444,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                     fields.insert("__effect".into(), json!(e.id));
                     fields.insert("__label".into(), json!(e.label.trim_end_matches('…')));
                     fields.insert("preview".into(), json!(true));
+                    if let Some(item) = p.get("item") {
+                        fields.insert("__item".into(), item.clone());
+                    }
                     app.ui.dialog = Some(crate::state::Dialog { kind: "effect".into(), fields });
                     Ok(Value::Null)
                 }
