@@ -911,12 +911,13 @@ pub fn menu_item(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool
     ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame(false)).clicked()
 }
 
-/// A number field that may be empty (Stroke dash/gap). Returns `Some(new)` on commit, where
-/// `new` is `None` when the field was cleared.
-pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, width: f32) -> Option<Option<f64>> {
+/// A number field that may be empty (Stroke dash/gap): `value` (points) shows in `unit` without
+/// its suffix, to fit narrow fields. Returns `Some(new)` (points) on commit, where `new` is `None`
+/// when the field was cleared; typed units and arithmetic work as in [`num_field`].
+pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, unit: Unit, width: f32) -> Option<Option<f64>> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
-    let shown = value.map(|v| format!("{v}")).unwrap_or_default();
+    let shown = value.map(|v| unit.format(v).trim_end_matches(unit.suffix()).trim_end().to_string()).unwrap_or_default();
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
     let enabled = ui.is_enabled();
@@ -938,8 +939,8 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         .inner;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if resp.lost_focus() && buf != shown {
-        let s = buf.trim().trim_end_matches("pt").trim();
-        if s.is_empty() { Some(None) } else { s.parse::<f64>().ok().map(Some) }
+        let s = buf.trim();
+        if s.is_empty() { Some(None) } else { unit.parse(s).map(Some) }
     } else {
         None
     }

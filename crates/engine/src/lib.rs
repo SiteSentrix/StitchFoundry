@@ -801,6 +801,8 @@ mod tests_prefs;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]
+mod tests_strokeux;
+#[cfg(test)]
 mod tests_styles;
 #[cfg(test)]
 mod tests_swatchcmds;

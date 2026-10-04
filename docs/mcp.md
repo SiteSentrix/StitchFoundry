@@ -332,4 +332,5 @@ options go to every run (the object keeps no stroke of its own); an `item` still
 with `appearance.addStroke`, which takes every stroke option (dashes, profile, opacity, blend) like a path's and paints under or over the
 characters as its place relative to the Characters row says. To stroke
 some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight?, cap?, join?, miterLimit?, dash?,
-dashOffset?, alignDashes?}}`.
+dashOffset?, alignDashes?}}`. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first
+run's) in `stroke.set` terms. `stroke.set` on a group leaves the images and symbol instances in it alone.

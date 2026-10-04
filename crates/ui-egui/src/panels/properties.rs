@@ -266,10 +266,7 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(n) = first_selected(app) else { return };
     section_header(ui, "Appearance");
     let (fill, stroke) = super::current_paints(app);
-    let weight = match &n.kind {
-        NodeKind::Text(tx) if app.session.appearance_item().is_none() => tx.first_style().stroke_width,
-        _ => super::current_stroke(app).map_or(0.0, |s| s.width),
-    };
+    let weight = super::stroke::shown_weight(app, super::current_stroke(app).as_ref(), &super::stroke_mixed(app, ui.ctx()));
     for (label, paint, is_fill) in [("Fill", fill, true), ("Stroke", stroke, false)] {
         ui.horizontal(|ui| {
             let (r, resp) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::click());
@@ -287,12 +284,11 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.label(egui::RichText::new(label).size(12.0));
             if !is_fill {
                 ui.add_space(8.0);
-                if let Some(w) = widgets::num_field(ui, "ap-w", Some(weight), Unit::Points, 70.0) {
+                if let Some(w) = widgets::num_field(ui, "ap-w", weight, app.session.stroke_unit(), 70.0) {
                     app.run("stroke.set", json!({"weight": w})).ok();
                 }
-                if widgets::icon_button(ui, "ellipsis", "Stroke options", false, 22.0).clicked() {
-                    app.ui.open_panel = Some("stroke".into());
-                }
+                let more = widgets::icon_button(ui, "ellipsis", "Stroke options", false, 22.0);
+                super::stroke::popover(app, &more);
             }
         });
     }

@@ -1,7 +1,7 @@
 //! Agent-friendly document summaries and view-models for panels.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer};
+use vectorcraft_doc::{ArrowAlign, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, WidthProfile};
 
 use crate::Session;
 
@@ -30,7 +30,9 @@ pub fn node_summary(n: &Node) -> Value {
         v["stroke"] = json!(n.appearance.stroke_paint().label());
         v["strokeWidth"] = json!(n.appearance.stroke_width());
     }
-
+    if let Some(st) = node_stroke(n) {
+        v["strokeOptions"] = stroke_options(&st);
+    }
     match &n.kind {
         NodeKind::Path { path, .. } => {
             v["anchors"] = json!(path.anchor_count());
@@ -77,12 +79,46 @@ pub const JOINS: [(LineJoin, &str); 3] = [(LineJoin::Miter, "miter"), (LineJoin:
 /// Stroke alignment names as `stroke.set` takes them.
 pub const ALIGNS: [(StrokeAlign, &str); 3] = [(StrokeAlign::Center, "center"), (StrokeAlign::Inside, "inside"), (StrokeAlign::Outside, "outside")];
 
+fn name_of<T: PartialEq>(table: &[(T, &'static str)], v: T) -> &'static str {
+    table.iter().find(|(k, _)| *k == v).map_or("", |(_, n)| n)
+}
+
 /// The stroke an object's Stroke panel options describe: type's first run's character stroke,
-/// else the topmost stroke. None for containers and objects without a stroke.
+/// else the topmost stroke of its own (groups and layers too). None without a stroke.
 pub fn node_stroke(n: &Node) -> Option<StrokeLayer> {
     match &n.kind {
         NodeKind::Text(t) => Some(t.runs.first().map_or_else(|| vectorcraft_doc::CharStyle::default().stroke_layer(), |r| r.style.stroke_layer())),
-        _ if n.is_container() => None,
         _ => n.appearance.stroke().cloned(),
     }
+}
+
+/// A stroke's options in `stroke.set` terms: cap, join, miterLimit, align, dash (null when
+/// solid), dashOffset, alignDashes, startArrow/endArrow (null for none), arrowAlign and profile.
+pub fn stroke_options(st: &StrokeLayer) -> Value {
+    json!({
+        "cap": name_of(&CAPS, st.cap),
+        "join": name_of(&JOINS, st.join),
+        "miterLimit": st.miter_limit,
+        "align": name_of(&ALIGNS, st.align),
+        "dash": st.dash.as_ref().map(|d| &d.pattern),
+        "dashOffset": st.dash.as_ref().map_or(0.0, |d| d.offset),
+        "alignDashes": st.dash.as_ref().is_some_and(|d| d.align_corners),
+        "startArrow": st.start_arrow,
+        "endArrow": st.end_arrow,
+        "arrowAlign": if st.arrow_align == ArrowAlign::Tip { "tip" } else { "extend" },
+        "profile": WidthProfile::id_of(st.profile.as_ref()),
+    })
+}
+
+/// Which Stroke panel values the selected objects don't share (their fields show blank), and
+/// whether Align Stroke applies to them (no open path or type among them).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StrokeMixed {
+    pub weight: bool,
+    pub cap: bool,
+    pub join: bool,
+    pub miter_limit: bool,
+    pub align: bool,
+    pub dash: bool,
+    pub can_align: bool,
 }

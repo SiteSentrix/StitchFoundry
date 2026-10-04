@@ -3,12 +3,13 @@
 
 use serde_json::Value;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, NodeKind, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, StrokeLayer, Unit, WidthProfile};
 
-use super::appearance::{edit_items, item_target};
+use super::appearance::{ItemTarget, edit_items, item_target};
 use super::paint::painted;
 use super::*;
-use crate::inspect::{ALIGNS, CAPS, JOINS, node_stroke};
+use crate::DocState;
+use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -17,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range)",
+            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone",
             has_doc,
             stroke_set
         ),
@@ -35,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// The stroke attributes object and character strokes share, parsed from `stroke.set` params
 /// (also the `strokeOptions` of `text.setRangeStyle`).
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct StrokeChange {
     pub(crate) weight: Option<f64>,
     cap: Option<LineCap>,
@@ -129,7 +130,12 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         s.paint.stroke_width = w;
     }
     let item = item_target(s, p, C)?.of_kind(s, false);
-    let ids = item.targets(s, p)?;
+    let mut ids = item.targets(s, p)?;
+    if item == ItemTarget::Top {
+        // Images and symbol instances take no stroke from the panel.
+        let d = &s.doc()?.doc;
+        ids.retain(|id| !matches!(d.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::SymbolInstance { .. })));
+    }
     let arrow = |k: &str| -> Result<Option<Option<Arrowhead>>> {
         match p.get(k) {
             None => Ok(None),
@@ -202,6 +208,54 @@ impl Session {
         let mut nodes = vec![];
         painted(first, true, &mut nodes);
         node_stroke(nodes.first()?)
+    }
+}
+
+impl DocState {
+    /// Which Stroke panel values the selected objects' strokes (type: every run's) don't share,
+    /// and whether Align Stroke applies to them. One walk of the selection, so callers that ask
+    /// every frame cache it by revision.
+    pub fn stroke_mixed(&self) -> StrokeMixed {
+        let mut nodes = vec![];
+        for id in &self.selection.objects {
+            if let Some(n) = self.doc.node(*id) {
+                painted(n, true, &mut nodes);
+            }
+        }
+        let mut strokes = vec![];
+        let mut can_align = true;
+        for n in &nodes {
+            match &n.kind {
+                NodeKind::Text(t) => {
+                    can_align = false;
+                    strokes.extend(t.runs.iter().map(|r| r.style.stroke_layer()));
+                }
+                _ => {
+                    can_align &= encloses(n);
+                    strokes.extend(n.appearance.stroke().cloned());
+                }
+            }
+        }
+        let Some((first, rest)) = strokes.split_first() else { return StrokeMixed { can_align, ..Default::default() } };
+        let differs = |same: fn(&StrokeLayer, &StrokeLayer) -> bool| rest.iter().any(|s| !same(first, s));
+        StrokeMixed {
+            weight: differs(|a, b| a.width == b.width),
+            cap: differs(|a, b| a.cap == b.cap),
+            join: differs(|a, b| a.join == b.join),
+            miter_limit: differs(|a, b| a.miter_limit == b.miter_limit),
+            align: differs(|a, b| a.align == b.align),
+            dash: differs(|a, b| a.dash == b.dash),
+            can_align,
+        }
+    }
+}
+
+/// Does `n` enclose an area a stroke can be aligned inside or outside of (no open path)?
+fn encloses(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.is_closed(),
+        NodeKind::Compound { children, .. } => children.iter().all(|c| encloses(c)),
+        _ => true,
     }
 }
 
