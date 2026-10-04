@@ -165,6 +165,11 @@ fn opacity_is_a_percentage_everywhere() {
     assert_eq!(doc(&s).node(a).unwrap().opacity, 1.0);
     s.execute("transparency.set", &json!({"opacity": 0.5})).unwrap();
     assert!((doc(&s).node(a).unwrap().opacity - 0.005).abs() < 1e-6);
+    // Appearance items take ids without a selection too.
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("appearance.setItem", &json!({"index": 0, "opacity": 30})).is_err(), "no selection, no ids");
+    s.execute("appearance.setItem", &json!({"index": 0, "ids": [a.0], "opacity": 30})).unwrap();
+    assert!((fill_opacity(&s) - 0.3).abs() < 1e-6);
 }
 
 #[test]
@@ -228,4 +233,36 @@ fn exports_while_editing_leave_the_editing_layer_out() {
     assert_eq!(svg(&mut s), svg_editing);
     assert_eq!(pdf(&mut s).len(), pdf_editing.len());
     assert_eq!(png(&mut s), png_editing);
+}
+
+#[test]
+fn undo_and_redo_walk_in_and_out_of_mask_editing() {
+    let mut s = session();
+    let obj = rect(&mut s, 0.0, 200.0);
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let layer = doc(&s).mask_edit.unwrap().layer;
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap();
+    s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.mask_edit.map(|m| m.layer), st.isolation, st.active_layer == Some(layer), has_edit_layer(&st.doc))
+    };
+    let editing = (Some(layer), Some(layer), true, true);
+    assert_eq!(state(&s), (None, None, false, false));
+    // Back into editing with the drawn art, then before it, then before the mask.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(state(&s), editing);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(state(&s), editing);
+    assert!(doc(&s).node(layer).unwrap().children().unwrap().is_empty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(state(&s), (None, None, false, false));
+    assert!(mask(&s, obj).is_none());
+    // And forward again.
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(state(&s), editing);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(state(&s), (None, None, false, false));
+    assert_eq!(mask(&s, obj).unwrap().art.geometric_bounds().unwrap().x1, 100.0);
 }

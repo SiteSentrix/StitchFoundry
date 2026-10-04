@@ -22,8 +22,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index, ids?, opacity?: 0..100, blend?, visible?, weight?, color?|none?|swatch?|gradient?} edit one fill/stroke of the appearance stack of the selection (or `ids`)",
-            has_selection,
+            "{index, ids?, opacity?: 0..100, blend?, visible?, weight?, color?|none?|swatch?|gradient?} edit one fill/stroke of the appearance stack of `ids` (default: the selection)",
+            has_doc,
             set_item
         ),
         cmd!("appearance.removeItem", "Remove Item", [], None, "{index}", has_selection, remove_item),
@@ -98,6 +98,9 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad("appearance.setItem", "missing index"))? as usize;
     let paint = paint_from(s, p)?;
     let ids = paint_targets(s, p)?;
+    if ids.is_empty() {
+        return Err(bad("appearance.setItem", "select objects or give ids"));
+    }
     let blend = str_param(p, "blend").and_then(BlendMode::parse);
     s.edit("Appearance", |d, _| {
         for id in &ids {
