@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod brush_fx;
+mod freeform;
 mod fx;
 mod group;
 mod live;
@@ -1160,6 +1161,8 @@ mod tests_charstroke;
 mod tests_clip;
 #[cfg(test)]
 mod tests_container;
+#[cfg(test)]
+mod tests_freeform;
 #[cfg(test)]
 mod tests_isolation;
 #[cfg(test)]

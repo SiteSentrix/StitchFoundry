@@ -592,6 +592,23 @@ impl Node {
         }
         Some((g, geom))
     }
+    /// The freeform gradient behind the Fill (or Stroke) proxy, its points in document coordinates
+    /// (the automatic ones while unplaced), and the length its spreads are fractions of there
+    /// (see [`Node::proxy_paint`]): what the Gradient tool's freeform annotator shows and edits.
+    pub fn proxy_freeform(&self, stroke: bool, item: Option<usize>) -> Option<(vectorcraft_color::Freeform, f64)> {
+        let (paint, to_doc, b) = self.proxy_paint(stroke, item)?;
+        let vectorcraft_color::Paint::Gradient(g) = paint else { return None };
+        if g.gradient.kind != vectorcraft_color::GradientKind::Freeform {
+            return None;
+        }
+        let mut f = g.freeform_on(b).into_owned();
+        let mut scale = vectorcraft_color::freeform::spread_scale(b);
+        if to_doc != Affine::IDENTITY {
+            f.transform(to_doc);
+            scale *= to_doc.determinant().abs().sqrt();
+        }
+        Some((f, scale))
+    }
 }
 
 /// Unites filled regions (each under its own fill rule) into one path filled non-zero. Booleans

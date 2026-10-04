@@ -15,6 +15,7 @@ mod edit;
 mod effectcmd;
 pub mod fileio;
 mod fonts;
+pub(crate) mod freeform;
 pub(crate) mod gradient;
 pub(crate) mod graph;
 pub mod help;

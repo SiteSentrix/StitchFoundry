@@ -1,16 +1,19 @@
 //! Gradients: definitions (swatch-able) and their placement on an object.
 
+use std::borrow::Cow;
+
 use kurbo::{Affine, Point, Rect, Vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::Color;
+use crate::freeform::Freeform;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GradientKind {
     #[default]
     Linear,
     Radial,
-    /// Freeform gradients (points/lines) — rendered via a mesh approximation.
+    /// Freeform gradients: colour points and lines (see [`crate::freeform`]).
     Freeform,
 }
 
@@ -284,12 +287,8 @@ impl GradientGeom {
     /// relative to the box (along a side `from` has no extent on, their offset from its centre).
     /// The aspect ratio is kept.
     pub fn rebase(&mut self, from: Rect, to: Rect) {
-        let axis = |v: f64, a0: f64, a1: f64, b0: f64, b1: f64| {
-            if (a1 - a0).abs() > 1e-12 { b0 + (v - a0) / (a1 - a0) * (b1 - b0) } else { v - (a0 + a1) / 2.0 + (b0 + b1) / 2.0 }
-        };
-        let map = |p: Point| Point::new(axis(p.x, from.x0, from.x1, to.x0, to.x1), axis(p.y, from.y0, from.y1, to.y0, to.y1));
-        self.start = map(self.start);
-        self.end = map(self.end);
+        self.start = rebase_point(self.start, from, to);
+        self.end = rebase_point(self.end, from, to);
     }
 
     /// The gradient parameter (0 at the start, 1 at the end) at document point `p`: the projection
@@ -316,6 +315,15 @@ impl GradientGeom {
     }
 }
 
+/// `p` moved from box `from` to box `to`, keeping its position relative to the box (along a side
+/// `from` has no extent on, its offset from the centre).
+fn rebase_point(p: Point, from: Rect, to: Rect) -> Point {
+    let axis = |v: f64, a0: f64, a1: f64, b0: f64, b1: f64| {
+        if (a1 - a0).abs() > 1e-12 { b0 + (v - a0) / (a1 - a0) * (b1 - b0) } else { v - (a0 + a1) / 2.0 + (b0 + b1) / 2.0 }
+    };
+    Point::new(axis(p.x, from.x0, from.x1, to.x0, to.x1), axis(p.y, from.y0, from.y1, to.y0, to.y1))
+}
+
 /// A gradient applied to a fill or stroke.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GradientPaint {
@@ -328,32 +336,78 @@ pub struct GradientPaint {
     /// Name of the gradient swatch, if linked.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub swatch: Option<String>,
+    /// A freeform gradient's points, in the same space as `geom` (None: placed automatically on
+    /// the object's box each render, coloured along the stops).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub freeform: Option<Freeform>,
 }
 
 impl GradientPaint {
     pub fn new(gradient: Gradient) -> Self {
-        Self { gradient, geom: None, angle: 0.0, swatch: None }
+        Self { gradient, geom: None, angle: 0.0, swatch: None, freeform: None }
+    }
+    /// The freeform gradient drawn on box `bounds`: its own points, else the automatic ones
+    /// (fitted to the box: [`Freeform::auto`] without a shape to keep them inside).
+    pub fn freeform_on(&self, bounds: Rect) -> Cow<'_, Freeform> {
+        match &self.freeform {
+            Some(f) if !f.points.is_empty() => Cow::Borrowed(f),
+            f => Cow::Owned(Freeform {
+                mode: f.as_ref().map_or_else(Default::default, |f| f.mode),
+                ..Freeform::auto(bounds, &self.gradient, &|_| true)
+            }),
+        }
+    }
+    /// Does it carry its own freeform points (rather than placing them on each render)?
+    pub fn has_freeform_points(&self) -> bool {
+        self.freeform.as_ref().is_some_and(|f| !f.points.is_empty())
+    }
+    /// Give a freeform gradient without points its automatic ones on `bounds`, kept `inside` the
+    /// shape (the Draw mode stays).
+    pub fn seed_freeform(&mut self, bounds: Rect, inside: &dyn Fn(Point) -> bool) {
+        if self.gradient.kind == GradientKind::Freeform && !self.has_freeform_points() {
+            let mode = self.freeform.as_ref().map_or_else(Default::default, |f| f.mode);
+            self.set_freeform(Freeform { mode, ..Freeform::auto(bounds, &self.gradient, inside) });
+        }
+    }
+    /// Set the freeform points, with the stops following their colours (what swatch chips,
+    /// exports without freeform shading and re-seeding on other art show).
+    pub fn set_freeform(&mut self, f: Freeform) {
+        self.gradient.stops = f.stops();
+        self.freeform = Some(f);
     }
     pub fn resolve(&self, bounds: Rect) -> GradientGeom {
         self.geom.unwrap_or_else(|| GradientGeom::fit(self.gradient.kind, bounds, self.angle))
     }
+    /// Is the gradient placed in its paint's space (its vector, and a freeform gradient's points),
+    /// rather than fitted to the object's box on each render?
+    pub fn is_placed(&self) -> bool {
+        self.geom.is_some() && (self.gradient.kind != GradientKind::Freeform || self.has_freeform_points())
+    }
     /// Fix an unplaced gradient (geom None) to its fit on `bounds`, so it can follow transforms
     /// that refitting wouldn't reproduce (rotation, shear, non-uniform scale, warps).
+    /// Freeform gradients get their automatic points.
     pub fn pin(&mut self, bounds: Rect) {
         if self.geom.is_none() {
             self.geom = Some(self.resolve(bounds));
         }
+        self.seed_freeform(bounds, &|_| true);
     }
     /// Move a placed gradient from box `from` to box `to` (see [`GradientGeom::rebase`]).
     pub fn rebase(&mut self, from: Rect, to: Rect) {
         if let Some(g) = &mut self.geom {
             g.rebase(from, to);
         }
+        if let Some(f) = &mut self.freeform {
+            f.map_points(|p| rebase_point(p, from, to));
+        }
     }
-    /// Map a placed gradient through `a` (see [`GradientGeom::transform`]).
+    /// Map a placed gradient (and freeform points) through `a` (see [`GradientGeom::transform`]).
     pub fn transform(&mut self, a: Affine) {
         if let Some(g) = &mut self.geom {
             g.transform(a, self.gradient.kind);
+        }
+        if let Some(f) = &mut self.freeform {
+            f.transform(a);
         }
     }
 }

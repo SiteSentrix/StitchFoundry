@@ -2,7 +2,7 @@
 //! paint read from the document and sent back through a command arrives unchanged.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, GradientPaint, GradientStop};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, GradientPaint, GradientStop};
 
 /// A colour as a `color` param in its own model: `[r,g,b]`, `{c,m,y,k}` or `{gray}`.
 pub fn color_json(c: &Color) -> Value {
@@ -20,8 +20,23 @@ pub fn stops_json(stops: &[GradientStop]) -> Value {
     )
 }
 
+/// A freeform point as its `paint.freeform.addPoint` / `freeform` param fields.
+pub fn freeform_point_json(p: &FreeformPoint) -> Value {
+    json!({"at": [p.at.x, p.at.y], "color": color_json(&p.color), "opacity": p.opacity, "spread": p.spread})
+}
+
+/// A freeform gradient as the `freeform` param of a `gradient` paint: points, lines and Draw mode.
+pub fn freeform_json(f: &Freeform) -> Value {
+    json!({
+        "points": f.points.iter().map(freeform_point_json).collect::<Vec<_>>(),
+        "lines": f.lines,
+        "mode": f.mode.label().to_lowercase(),
+    })
+}
+
 /// A gradient paint as the `gradient` param of `paint.setFill` / `swatch.new`: kind, stops (with
-/// opacity and midpoint), angle, the linked swatch and, once placed, the vector and aspect (%).
+/// opacity and midpoint), angle, the linked swatch and, once placed, the vector and aspect (%)
+/// and the freeform points.
 pub fn gradient_params(g: &GradientPaint) -> Value {
     let mut v = json!({
         "kind": g.gradient.kind.label().to_lowercase(),
@@ -35,6 +50,9 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
     }
     if let Some(s) = &g.swatch {
         v["swatch"] = json!(s);
+    }
+    if let Some(f) = &g.freeform {
+        v["freeform"] = freeform_json(f);
     }
     v
 }
