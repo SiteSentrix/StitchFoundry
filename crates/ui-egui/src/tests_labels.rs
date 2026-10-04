@@ -67,3 +67,41 @@ fn swatches_menu_offers_save_swatch_library() {
     assert!(text.contains("Save Swatch Library…"), "{text}");
     assert!(!text.contains("ASE"), "{text}");
 }
+
+#[test]
+fn edit_menu_lists_pdf_presets() {
+    let app = app();
+    assert!(menus::menu_entries(&app).iter().any(|e| e.path == ["Edit"] && e.label == "PDF Presets…" && !e.enabled));
+}
+
+#[test]
+fn clipboard_preferences_name_the_legacy_format_neutrally() {
+    let label = |key: &str| vectorcraft_engine::cmd::prefscmds::PREF_SPECS.iter().find(|p| p.key == key).unwrap().label;
+    assert_eq!(label("copyAicb"), "Legacy vector clipboard (no transparency)");
+    assert_eq!(label("aicbMode"), "Legacy vector clipboard");
+}
+
+#[test]
+fn shortcut_set_old_name_is_accepted() {
+    use crate::shortcut_editor::{PRESETS, import_json};
+    const OLD: &str = "Illustrator Defaults"; // brand-ok: legacy preference value under test
+    assert_eq!(PRESETS, ["VectorCraft Defaults", "Classic Defaults"]);
+    // UI preferences saved by an earlier version load (and save again) under the current name.
+    let ui: crate::state::UiState = serde_json::from_value(json!({ "shortcut_set": OLD })).unwrap();
+    assert_eq!(ui.shortcut_set, "Classic Defaults");
+    let saved = serde_json::to_value(&ui).unwrap();
+    assert_eq!(saved["shortcut_set"], "Classic Defaults");
+    let back: crate::state::UiState = serde_json::from_value(saved).unwrap();
+    assert_eq!(back.shortcut_set, "Classic Defaults");
+    let default: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(default.shortcut_set, PRESETS[0]);
+    // The command and imported sets take the old name too.
+    let mut app = app();
+    app.run("shortcuts.preset", json!({ "name": OLD })).unwrap();
+    assert_eq!(app.ui.shortcut_set, "Classic Defaults");
+    app.run("shortcuts.preset", json!({ "name": "VectorCraft Defaults" })).unwrap();
+    assert_eq!(app.ui.shortcut_set, "VectorCraft Defaults");
+    assert!(app.run("shortcuts.preset", json!({ "name": "Nope" })).is_err());
+    let (set, _) = import_json(&json!({ "set": OLD, "overrides": {} })).unwrap();
+    assert_eq!(set, "Classic Defaults");
+}

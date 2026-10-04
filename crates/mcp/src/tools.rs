@@ -302,7 +302,7 @@ pub fn tool_definitions() -> Vec<Value> {
             obj(
                 json!({
                     "effect": {"type": "string", "description": "Effect id (see the catalogue)"},
-                    "params": {"type": "object", "description": "Effect parameters; missing keys take Illustrator's dialog defaults"},
+                    "params": {"type": "object", "description": "Effect parameters; missing keys take the dialog defaults"},
                     "ids": {"type": "array", "items": {"type": "integer"}},
                 }),
                 &[],
@@ -347,7 +347,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "create_graph",
             "Create graph",
-            "Create a graph (Illustrator graph tools) in the plot rectangle. Data as `csv` (first row: empty cell then series names; then one row per category: label, values…) or `series`/`categories`/`rows`. Edit later with run_command graph.setData / graph.setType.",
+            "Create a graph (graph tools) in the plot rectangle. Data as `csv` (first row: empty cell then series names; then one row per category: label, values…) or `series`/`categories`/`rows`. Edit later with run_command graph.setData / graph.setType.",
             obj(
                 json!({
                     "type": {"type": "string", "enum": ["column", "stackedColumn", "bar", "stackedBar", "line", "area", "scatter", "pie", "radar"]},

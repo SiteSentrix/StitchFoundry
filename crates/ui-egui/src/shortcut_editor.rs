@@ -17,8 +17,20 @@ use crate::state::{Dialog, UiState};
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, menus, widgets};
 
-pub const PRESETS: &[&str] = &["VectorCraft Defaults", "Illustrator Defaults"];
+pub const PRESETS: &[&str] = &["VectorCraft Defaults", "Classic Defaults"];
 pub const CUSTOM: &str = "Custom";
+/// Set names earlier versions saved: (old name, current name).
+const LEGACY_PRESETS: &[(&str, &str)] = &[("Illustrator Defaults", "Classic Defaults")]; // brand-ok: legacy preference value
+
+/// The current name of a shortcut set: names earlier versions saved map to today's.
+pub fn set_name(name: &str) -> &str {
+    LEGACY_PRESETS.iter().find(|(old, _)| *old == name).map_or(name, |(_, new)| new)
+}
+
+/// Serde reader for a saved set name (UI preferences written by earlier versions).
+pub fn deserialize_set_name<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    <String as serde::Deserialize>::deserialize(d).map(|s| set_name(&s).to_string())
+}
 
 /// Bumped whenever overrides or the workspace list change (the native menu rebuilds on it).
 pub static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -281,7 +293,7 @@ pub fn reset_one(overrides: &mut BTreeMap<String, String>, key: &str) {
 
 /// Overrides of a preset (both presets are the registry defaults for now).
 pub fn preset(name: &str) -> Option<BTreeMap<String, String>> {
-    PRESETS.contains(&name).then(BTreeMap::new)
+    PRESETS.contains(&set_name(name)).then(BTreeMap::new)
 }
 
 /// Export format: `{"format": "vectorcraft-shortcuts", "set": name, "overrides": {...}}`.
@@ -299,7 +311,7 @@ pub fn import_json(v: &Value) -> Result<(String, BTreeMap<String, String>), Stri
         }
         out.insert(k.clone(), normalize(s).unwrap_or_default());
     }
-    Ok((v.get("set").and_then(Value::as_str).unwrap_or(CUSTOM).to_string(), out))
+    Ok((v.get("set").and_then(Value::as_str).map_or(CUSTOM, set_name).to_string(), out))
 }
 
 // ---------- UI commands ----------
@@ -370,7 +382,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             sync(&app.ui);
             Ok(Value::Null)
         }
-        "shortcuts.preset" => match s("name").as_deref().and_then(|n| preset(n).map(|p| (n.to_string(), p))) {
+        "shortcuts.preset" => match s("name").as_deref().map(set_name).and_then(|n| preset(n).map(|p| (n.to_string(), p))) {
             Some((n, p)) => {
                 app.ui.shortcut_overrides = p;
                 app.ui.shortcut_set = n;

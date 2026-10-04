@@ -4,6 +4,7 @@
 //! invoked through `std::process::Command`.
 
 mod assets;
+mod brands;
 mod bundle;
 mod ico;
 mod layers;
@@ -18,9 +19,10 @@ usage: cargo xtask <command>
 
 commands:
   assets          check that every icon/image/font/asset is attributed in ASSETS.md
+  brands          check that user-visible text (labels, params docs, MCP, docs, packaging) names no other vendor's products
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates
-  ci              fmt --check, clippy -D warnings, test, assets, layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, assets, brands, layers, wasm (stops at first failure)
   corpus [--download]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite
   bundle          build dist/VectorCraft.app (macOS) with assets/app-icon/vectorcraft.icns
@@ -34,6 +36,7 @@ fn main() -> ExitCode {
     let rest: Vec<&str> = args.iter().skip(1).map(String::as_str).collect();
     let result = match args.first().map(String::as_str) {
         Some("assets") => assets::run(&root()),
+        Some("brands") => brands::run(&root()),
         Some("layers") => cmd_layers(),
         Some("wasm") => cmd_wasm(),
         Some("ci") => cmd_ci(),
@@ -60,6 +63,19 @@ fn main() -> ExitCode {
 /// Workspace root (parent of the xtask crate).
 pub fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("xtask has a parent dir").to_path_buf()
+}
+
+/// Tracked and untracked (not ignored) files that exist, relative to `root`.
+pub fn repo_files(root: &Path) -> Result<Vec<String>, String> {
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(["ls-files", "--cached", "--others", "--exclude-standard"])
+        .output()
+        .map_err(|e| format!("git ls-files: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("git ls-files failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).lines().filter(|l| root.join(l).exists()).map(str::to_owned).collect())
 }
 
 pub fn cargo() -> Command {
@@ -176,6 +192,7 @@ fn cmd_ci() -> Result<(), String> {
             }),
         ),
         ("assets", Box::new(|| assets::run(&root()))),
+        ("brands", Box::new(|| brands::run(&root()))),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];

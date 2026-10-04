@@ -21,13 +21,13 @@ use vectorcraft_doc::Document;
 /// PDF standard / version to target.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Compatibility {
-    /// Acrobat 5 (PDF 1.4).
+    /// PDF 1.4.
     Pdf14,
-    /// Acrobat 6 (PDF 1.5).
+    /// PDF 1.5.
     Pdf15,
-    /// Acrobat 7 (PDF 1.6).
+    /// PDF 1.6.
     Pdf16,
-    /// Acrobat 8+ (PDF 1.7). The default.
+    /// PDF 1.7. The default.
     #[default]
     Pdf17,
     /// PDF 2.0.
