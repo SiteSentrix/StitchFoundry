@@ -236,4 +236,17 @@ mod tests {
         drop(w);
         assert!(export(&mut app, None, Some("/tmp/x.bmp".into()), &Value::Null).is_err(), "BMP is read-only");
     }
+
+    #[test]
+    fn export_for_screens_with_params_runs_the_engine() {
+        let (mut app, _) = app();
+        app.session.execute("file.new", &json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+        let r = app.run("file.exportForScreens", json!({"range": "2-3", "formats": [{"format": "pdf"}]})).unwrap();
+        let files = r["files"].as_array().unwrap();
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0]["name"], "Artboard-2.pdf");
+        assert!(app.ui.dialog.is_none());
+        app.run("file.exportForScreens", Value::Null).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("exportForScreens"));
+    }
 }

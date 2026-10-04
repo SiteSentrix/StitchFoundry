@@ -54,6 +54,13 @@ fn convert_pdf_to_svg_and_info_on_ai() {
     assert_eq!(v["artboards"][0]["rect"][2], 120.0);
     // `run --in` takes it too.
     ok(&["run", "--in", &ai, "--cmd", "document.inspect"]);
+    // A PDF keeps every artboard unless --artboard / --range names some.
+    let all = tmp("all.pdf");
+    ok(&["convert", &ai, &all]);
+    assert_eq!(info(&all)["artboards"].as_array().unwrap().len(), 2);
+    let second = tmp("second.pdf");
+    ok(&["convert", &ai, &second, "--range", "2"]);
+    assert_eq!(info(&second)["artboards"].as_array().unwrap().len(), 1);
 }
 
 #[test]

@@ -173,3 +173,108 @@ fn ranges_parse_one_based() {
         assert!(parse_range(bad, 5).is_err(), "{bad:?}");
     }
 }
+
+/// Pages in a PDF, counted by importing it (one artboard per page).
+fn pdf_pages(bytes: &[u8]) -> usize {
+    vectorcraft_pdf::import(bytes).unwrap().artboards.len()
+}
+
+#[test]
+fn pdf_export_honours_artboard_and_range() {
+    let mut s = session(100.0, 80.0, 3);
+    let pages = |s: &mut Session, p: Value| pdf_pages(&b64(&s.execute("document.export", &p).unwrap()));
+    assert_eq!(pages(&mut s, json!({"format": "pdf"})), 3);
+    assert_eq!(pages(&mut s, json!({"format": "pdf", "artboard": 1})), 1);
+    assert_eq!(pages(&mut s, json!({"format": "pdf", "artboards": [0, 2]})), 2);
+    assert_eq!(pages(&mut s, json!({"format": "pdf", "range": "2-3"})), 2);
+    assert_eq!(pdf_pages(&b64(&s.execute("document.serialize", &json!({"format": "pdf", "artboard": 2})).unwrap())), 1);
+    assert!(s.execute("document.export", &json!({"format": "pdf", "artboard": 3})).is_err());
+    assert!(s.execute("document.export", &json!({"format": "pdf", "range": "1-4"})).is_err());
+    // Single-image formats take one artboard.
+    assert!(s.execute("document.export", &json!({"format": "png", "range": "1-2"})).is_err());
+    let png = b64(&s.execute("document.export", &json!({"format": "png", "range": "2", "scale": 0.5})).unwrap());
+    assert_eq!(image::load_from_memory(&png).unwrap().width(), 50);
+    assert!(s.execute("document.export", &json!({"format": "png", "scale": "big"})).is_err(), "typed options reject a bad type");
+}
+
+#[test]
+fn export_without_path_returns_bytes_and_never_retargets() {
+    let mut s = session(100.0, 100.0, 1);
+    let dir = tmp_dir("retarget");
+    let doc_path = dir.join("doc.vectorcraft").to_string_lossy().to_string();
+    s.execute("document.save", &json!({"path": doc_path})).unwrap();
+    let copy = dir.join("copy.vectorcraft").to_string_lossy().to_string();
+    let r = s.execute("document.export", &json!({"path": copy})).unwrap();
+    assert_eq!(r["format"], "vectorcraft");
+    assert!(vectorcraft_format::sniff(&std::fs::read(&copy).unwrap()));
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(doc_path.as_str()), "exporting the native format keeps the document's path");
+    let r = s.execute("document.export", &json!({"format": "jpg"})).unwrap();
+    assert_eq!(&b64(&r)[..2], [0xFF, 0xD8]);
+    assert!(r.get("path").is_none());
+    assert!(s.execute("document.export", &json!({"path": dir.join("x.bmp").to_string_lossy()})).is_err(), "BMP is read-only");
+    // A never-saved document hands its native bytes back.
+    let mut s = session(10.0, 10.0, 1);
+    let r = s.execute("document.save", &json!({})).unwrap();
+    assert!(vectorcraft_format::sniff(&b64(&r)));
+    assert_eq!(s.doc().unwrap().path, None);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A red square on a template layer and a blue one on a normal layer above it.
+fn template_doc() -> (Session, u64, u64) {
+    let mut s = session(100.0, 100.0, 1);
+    let template = s.doc().unwrap().doc.layers[0].id.0;
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let red = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("layer.new", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    let blue = s.execute("shape.rectangle", &json!({"x": 50, "y": 0, "width": 50, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("layer.setProps", &json!({"id": template, "template": true})).unwrap();
+    (s, red, blue)
+}
+
+fn has_red(png: &[u8]) -> bool {
+    image::load_from_memory(png).unwrap().to_rgba8().pixels().any(|p| p[0] > 200 && p[2] < 80 && p[3] > 0)
+}
+
+#[test]
+fn raster_exports_leave_template_layers_out() {
+    let (mut s, red, blue) = template_doc();
+    let png = b64(&s.execute("document.export", &json!({"format": "png"})).unwrap());
+    assert!(!has_red(&png), "no red pixels from the template layer");
+    assert!(image::load_from_memory(&png).unwrap().to_rgba8().get_pixel(75, 50)[2] > 200, "the normal layer is exported");
+    s.execute("select.set", &json!({"ids": [red, blue]})).unwrap();
+    let r = s.execute("document.exportSelection", &json!({"format": "png"})).unwrap();
+    assert!(!has_red(&b64(&r)));
+    assert!(r["bounds"][0].as_f64().unwrap() > 40.0, "only the blue square (and its stroke) is exported: {}", r["bounds"]);
+}
+
+#[test]
+fn export_for_screens_one_page_per_pdf_unique_names() {
+    let mut s = session(100.0, 80.0, 3);
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "Icon"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Icon"})).unwrap();
+    let dir = tmp_dir("screens");
+    let folder = dir.to_string_lossy().to_string();
+    let r = s
+        .execute(
+            "document.exportForScreens",
+            &json!({"folder": folder, "formats": [{"format": "pdf"}, {"format": "svg", "scale": 2}, {"format": "svg", "scale": 3}, {"format": "png", "scale": 2}]}),
+        )
+        .unwrap();
+    let files: Vec<String> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
+    let names: Vec<&str> = files.iter().map(|f| f.rsplit('/').next().unwrap()).collect();
+    assert_eq!(
+        names,
+        ["Icon.pdf", "Icon.svg", "Icon@2x.png", "Icon-2.pdf", "Icon-2.svg", "Icon-2@2x.png", "Artboard-3.pdf", "Artboard-3.svg", "Artboard-3@2x.png"]
+    );
+    for f in files.iter().filter(|f| f.ends_with(".pdf")) {
+        assert_eq!(pdf_pages(&std::fs::read(f).unwrap()), 1, "{f}");
+    }
+    // No folder: the files come back as bytes.
+    let r = s.execute("document.exportForScreens", &json!({"range": "3", "formats": [{"format": "jpg", "scale": 0.5}]})).unwrap();
+    assert_eq!(r["files"][0]["name"], "Artboard-3@0.5x.jpg");
+    assert_eq!(image::load_from_memory(&b64(&r["files"][0])).unwrap().width(), 50);
+    assert!(s.execute("document.exportForScreens", &json!({"formats": [{"format": "vectorcraft"}]})).is_err());
+    let _ = std::fs::remove_dir_all(dir);
+}

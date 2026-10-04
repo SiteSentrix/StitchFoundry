@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0 (svg and raster), scale?: 1 (raster), quality?: 90 (jpg), outlineText?: bool (svg)} → {path, format, bytes}",
+            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" (1-based; PDF writes one page per artboard, default all; the other formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), outlineText?: bool (svg)} → {path, format, bytes}; no path → {dataBase64, format, bytes}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Selection…",
             ["File"],
             None,
-            "{path?, format?: png|jpg|webp|svg|pdf (default: from the extension, else png), scale?: 1, …the format's options} the selected objects cropped to their bounds → {path, bytes, bounds} (no path → {dataBase64, bounds})",
+            "{path?, format?: png|jpg|webp|svg|pdf (default: from the extension, else png), scale?: 1, …the format's options} the selected objects cropped to their bounds (template layers left out) → {path, bytes, bounds} (no path → {dataBase64, bounds})",
             has_selection,
             export::export_selection
         ),
@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export for Screens",
             ["File", "Export"],
             None,
-            "{folder, artboards?: [index…] (default all), formats?: [{format: png|jpg|webp|svg|pdf, scale?: 1, suffix?: \"@2x\"}], prefix?} → {files: [...]}",
+            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|pdf, scale?: 1 (raster only), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1)}], prefix?} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name get -2, -3…) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
             has_doc,
             export::export_for_screens
         ),
@@ -159,6 +159,14 @@ const ARTBOARD: FormatOption = FormatOption {
     default: "0",
     description: "0-based artboard to export (`artboards: [i]` or `range: \"n\"` naming one artboard work too)",
 };
+const ARTBOARDS: FormatOption =
+    FormatOption { name: "artboards", ty: "array", default: "null", description: "0-based artboards, one page each (default: all)" };
+const RANGE: FormatOption = FormatOption {
+    name: "range",
+    ty: "string",
+    default: "null",
+    description: "1-based artboards such as \"1-3, 5\" (wins over artboards and artboard)",
+};
 const SCALE: FormatOption = FormatOption { name: "scale", ty: "number", default: "1", description: "pixels per point (0.01–64)" };
 const QUALITY: FormatOption = FormatOption { name: "quality", ty: "integer", default: "90", description: "JPEG quality 1–100" };
 const OUTLINE_TEXT: FormatOption =
@@ -192,7 +200,16 @@ pub const FORMATS: &[Format] = &[
         options: &[ARTBOARD, OUTLINE_TEXT],
     },
     reader("svgz", "SVG Compressed", &["svgz"], "image/svg+xml", false),
-    Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: &[] },
+    Format {
+        id: "pdf",
+        label: "PDF",
+        extensions: &["pdf"],
+        mime: "application/pdf",
+        read: true,
+        write: true,
+        raster: false,
+        options: &[ARTBOARD, ARTBOARDS, RANGE],
+    },
     reader("ai", "PDF-compatible .ai", &["ai"], "application/pdf", false),
     reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),
     Format { id: "png", label: "PNG", extensions: &["png"], mime: "image/png", read: true, write: true, raster: true, options: &[ARTBOARD, SCALE] },

@@ -81,7 +81,7 @@ fn options<T: DeserializeOwned + Default>(f: &Format, p: &Value) -> Result<T> {
 }
 
 /// Encode `doc` as `format` (an id or extension from [`super::FORMATS`]) with that format's
-/// options from `p` (see `document.formats`).
+/// options from `p` (see `document.formats`). Raster formats leave template layers out.
 pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
     let f = super::writable(C, Some(format), None)?;
     let n = doc.artboards.len();
@@ -93,7 +93,11 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
             let opts = vectorcraft_svg::ExportOptions { artboard, outline_text: o.outline_text.unwrap_or(false), ..Default::default() };
             vectorcraft_svg::export(doc, &opts).into_bytes()
         }
-        "pdf" => super::super::rasterfx::export_pdf(doc, &vectorcraft_pdf::PdfOptions::default()).map_err(|e| EngineError::Other(e.to_string()))?,
+        "pdf" => {
+            let o: ArtboardPick = options(f, p)?;
+            let opts = vectorcraft_pdf::PdfOptions { artboards: boards(o.resolve(n))?, ..Default::default() };
+            super::super::rasterfx::export_pdf(doc, &opts).map_err(|e| EngineError::Other(e.to_string()))?
+        }
         "png" | "jpg" | "webp" => {
             let o: RasterOptions = options(f, p)?;
             let region = doc.artboards[boards(o.boards.one(n))?].rect;

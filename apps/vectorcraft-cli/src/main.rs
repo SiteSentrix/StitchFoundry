@@ -4,7 +4,7 @@
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless]
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg|.png|.pdf|.jpg|.webp|.vectorcraft]... [--scale 2]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0] [--outline-text]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000]
@@ -34,9 +34,11 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I] [--outline-text]
+  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text]
       Open IN (any readable format) and export OUT by extension (.svg, .pdf, .png, .jpg, .webp,
-      .vectorcraft). Live effects are kept; --outline-text writes SVG text as paths.
+      .vectorcraft). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
+      unless one of them is given, the other formats the first. Live effects are kept;
+      --outline-text writes SVG text as paths.
 
   vectorcraft-cli info FILE
       Print a JSON summary: title, colour mode, units, artboards, object counts by kind, fonts.
@@ -124,12 +126,13 @@ fn commands() -> Result<(), String> {
 
 fn convert(args: &[String]) -> Result<(), String> {
     let mut files = vec![];
-    let (mut scale, mut artboard, mut outline_text) = (1.0f64, 0u64, false);
+    let (mut scale, mut artboard, mut range, mut outline_text) = (1.0f64, None::<u64>, None::<String>, false);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--scale" | "-s" => scale = it.next().and_then(|v| v.parse().ok()).ok_or("--scale needs a number")?,
-            "--artboard" | "-a" => artboard = it.next().and_then(|v| v.parse().ok()).ok_or("--artboard needs an index")?,
+            "--artboard" | "-a" => artboard = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--artboard needs an index")?),
+            "--range" | "-r" => range = Some(it.next().cloned().ok_or("--range needs artboards such as 1-3,5")?),
             "--outline-text" => outline_text = true,
             f => files.push(f.to_string()),
         }
@@ -140,7 +143,7 @@ fn convert(args: &[String]) -> Result<(), String> {
     let r = h
         .call(
             "engine.execute",
-            json!({"command": "document.export", "params": {"path": output, "scale": scale, "artboard": artboard, "outlineText": outline_text}}),
+            json!({"command": "document.export", "params": {"path": output, "scale": scale, "artboard": artboard, "range": range, "outlineText": outline_text}}),
         )
         .map_err(|e| format!("export {output}: {e}"))?;
     println!("{r}");

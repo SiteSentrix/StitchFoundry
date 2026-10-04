@@ -48,6 +48,8 @@ pub struct RenderOptions {
     pub overprint_preview: bool,
     /// Trim View: clip the artwork to the artboards (nothing on the pasteboard is drawn).
     pub trim: bool,
+    /// Leave template layers out (exports and thumbnails: templates are guides, not artwork).
+    pub skip_templates: bool,
 }
 
 impl Default for RenderOptions {
@@ -61,6 +63,7 @@ impl Default for RenderOptions {
             proof: None,
             overprint_preview: false,
             trim: false,
+            skip_templates: false,
         }
     }
 }
@@ -295,7 +298,8 @@ impl Renderer {
         if !self.draw_pattern_edit(&mut ctx, &frame) {
             // While editing an opacity mask its art is seen only through the mask (Illustrator).
             let mask_layer = doc.mask_edit.map(|m| m.layer);
-            for layer in doc.layers.iter().filter(|l| Some(l.id) != mask_layer) {
+            let skipped = |l: &Node| Some(l.id) == mask_layer || opts.skip_templates && matches!(l.kind, NodeKind::Layer { template: true, .. });
+            for layer in doc.layers.iter().filter(|l| !skipped(l)) {
                 self.draw_arc(&mut ctx, &frame, layer);
             }
         }
@@ -327,12 +331,13 @@ impl Renderer {
         Rendered { width: w as u32, height: h as u32, pixels }
     }
 
-    /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white.
+    /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white,
+    /// as exported: template layers are left out.
     pub fn render_region(&mut self, doc: &Document, region: Rect, scale: f64, white: bool) -> Rendered {
         let w = (region.width() * scale).round().max(1.0) as u32;
         let h = (region.height() * scale).round().max(1.0) as u32;
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
-        let opts = RenderOptions { background: white.then_some([255, 255, 255, 255]), ..Default::default() };
+        let opts = RenderOptions { background: white.then_some([255, 255, 255, 255]), skip_templates: true, ..Default::default() };
         self.render(doc, w, h, view, &opts)
     }
 

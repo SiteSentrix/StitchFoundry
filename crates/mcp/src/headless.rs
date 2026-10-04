@@ -28,7 +28,8 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     ("file.open", "Open…", "{path} open any readable file (see document.formats) as a new document; templates open untitled"),
     ("file.save", "Save", "{path?} save as .vectorcraft (default: the document's path)"),
     ("file.saveAs", "Save As…", "{path}"),
-    ("file.export", "Export…", "{path, format?, artboard?, scale?, …} = document.export"),
+    ("file.export", "Export…", "{path?, format?, artboard?, range?, scale?, …} = document.export (no path → dataBase64)"),
+    ("file.exportForScreens", "Export for Screens…", "{folder?, artboards? | range?, formats?, prefix?} = document.exportForScreens"),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),
 ];
 
@@ -103,6 +104,7 @@ impl Headless {
             "file.open" => self.open(params),
             "file.save" | "file.saveAs" => self.save(params),
             "file.export" => self.export(params),
+            "file.exportForScreens" => self.session.execute("document.exportForScreens", params).map_err(|e| e.to_string()),
             "tool.select" => self.select_tool(params),
             _ => self.session.execute(id, params).map_err(|e| e.to_string()),
         }
@@ -222,7 +224,7 @@ impl Headless {
         self.session.execute("document.save", p).map_err(|e| e.to_string())
     }
 
-    /// `app.export {path, format?, …}`: `document.export` (format defaults to the path's extension).
+    /// `app.export {path?, format?, …}`: `document.export` (format defaults to the path's extension).
     pub fn export(&mut self, p: &Value) -> Result<Value, String> {
         self.session.execute("document.export", p).map_err(|e| e.to_string())
     }

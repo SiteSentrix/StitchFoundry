@@ -85,7 +85,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
     ("file.export.svg", "Export As SVG…", "", "{path?, artboard?, outlineText?} (document.export options)"),
     ("file.export.png", "Export As PNG…", "", "{path?, scale?: 1, artboard?} (document.export options)"),
-    ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{path?, scale?}"),
+    ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{} opens the dialog; with params = document.exportForScreens"),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
@@ -147,7 +147,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
     ("ui.recolorDialog", "Recolor Artwork…", "", "{} open Recolor Artwork (engine: recolor.colors / recolor.apply)"),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
-    ("file.export.pdf", "Save as PDF…", "", "{path?}"),
+    ("file.export.pdf", "Save as PDF…", "", "{path?, artboard? | artboards? | range?: \"1-3, 5\"} (document.export options)"),
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
@@ -232,7 +232,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             }
         }
         "file.export.svg" => io::export(app, Some("svg"), s("path"), p).map(|p| json!({"path": p})),
-        "file.exportForScreens" if p.get("path").is_none() && p.get("scale").is_none() => {
+        "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
             let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
             app.ui.dialog = Some(crate::state::Dialog::new(
@@ -241,7 +241,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             ));
             Ok(Value::Null)
         }
-        "file.export.png" | "file.exportForScreens" => io::export(app, Some("png"), s("path"), p).map(|p| json!({"path": p})),
+        "file.exportForScreens" => app.run("document.exportForScreens", p.clone()),
+        "file.export.png" => io::export(app, Some("png"), s("path"), p).map(|p| json!({"path": p})),
         "file.documentSetup" => {
             let units = app.session.active().map(|d| d.doc.units.label()).unwrap_or("Points");
             app.ui.dialog = Some(crate::state::Dialog::new("documentSetup", json!({"units": units})));
