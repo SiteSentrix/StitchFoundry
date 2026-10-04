@@ -175,7 +175,8 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action, current: &str) -> 
                 f();
                 return Ok(());
             }
-            let path = app.services.pick_open.as_mut().and_then(|f| f()).ok_or("cancelled")?;
+            let pick = crate::FilePick { filters: vec![("PDF presets", vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS)], ..Default::default() };
+            let path = app.services.pick_open.as_mut().and_then(|f| f(&pick)).ok_or("cancelled")?;
             let r = app.run("pdf.preset.import", json!({ "path": path }))?;
             if let Some(first) = r["imported"].get(0).and_then(Value::as_str) {
                 select(d, first);
@@ -295,7 +296,7 @@ mod tests {
         let file = dir.join("mine.vcpdfpresets").to_string_lossy().to_string();
         let picked = file.clone();
         let services = crate::Services {
-            pick_save: Some(Box::new(move |_: &str| Some(picked.clone()))),
+            pick_save: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
             write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
             ..Default::default()
         };

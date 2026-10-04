@@ -12,9 +12,14 @@ const FIELD_W: f32 = 132.0;
 
 /// A labelled text field bound to `d.fields[key]` (one grid row).
 pub(super) fn field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
+    field_w(ui, d, key, label, FIELD_W - 12.0);
+}
+
+/// [`field`] `width` points wide.
+pub(super) fn field_w(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, width: f32) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(label).color(t.text_dim));
-    text(ui, d, key, FIELD_W - 12.0);
+    text(ui, d, key, width);
     ui.end_row();
 }
 

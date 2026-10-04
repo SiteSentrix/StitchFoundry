@@ -54,6 +54,12 @@ impl LoadOptions {
         Ok(Self { pages, crop, password, color_mode })
     }
 
+    /// Does the document read only part of the file, or read it differently (a page range, another
+    /// box, a password)? Writing it back would lose the rest, so Save doesn't (it asks for a name).
+    pub fn is_partial(&self) -> bool {
+        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some()
+    }
+
     /// The PDF import options: `pages` resolved against the file's page count.
     fn import_options(&self, bytes: &[u8]) -> Result<ImportOptions> {
         let pages = match &self.pages {

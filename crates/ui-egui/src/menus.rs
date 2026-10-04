@@ -7,6 +7,8 @@
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use vectorcraft_engine::cmd::fileio::SaveMode;
+
 use crate::VectorcraftApp;
 use crate::io;
 use crate::state::{DockTab, ICON_PANELS, next_zoom};
@@ -52,19 +54,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.save",
         "Save",
         "Cmd+S",
-        "{path?, svg?: {…SVG options}, …PDF options for .ai} (a document saved as .svg saves as SVG again, with the same options; one saved or opened as .ai saves as .ai again)",
-    ),
-    (
-        "file.saveAs",
-        "Save As…",
-        "Cmd+Shift+S",
-        "{path?, svg?: {…SVG options}, …document.exportPdf options for .ai} .vectorcraft, .ai (PDF-compatible: a PDF carrying the native document, which reopens editable) or .svg/.svgz (such a path without svg options opens SVG Options)",
-    ),
-    (
-        "file.saveCopy",
-        "Save a Copy…",
-        "Cmd+Alt+S",
-        "{path?, svg?: {…SVG options}, …PDF options for .ai} like Save As, but the document keeps its path",
+        "{path?, format?, options?, svg?: {…SVG options}} = document.save, written through the app (a document saved as SVG, PDF or .ai, or opened from one Save can write back, saves as that again, with the same options); with no path known (never saved) the Save As panel asks first",
     ),
     ("file.newFromTemplate", "New from Template…", "Cmd+Shift+N", "{path?} open a template as a new untitled document"),
     ("file.revert", "Revert", "F12", "{}"),
@@ -440,13 +430,14 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(path) => io::open_path(app, &path).map(|_| Value::Null),
             None => io::open_dialog(app).map(|_| Value::Null),
         },
-        "file.save" => io::save(app, s("path"), false, p).map(|p| json!({"path": p})),
-        "file.saveAs" | "file.saveCopy" => io::save_as(app, id == "file.saveCopy", p),
+        // Saves write through the app (save panel, download); with no path known the panel and the
+        // format's options dialog ask first.
+        "file.save" => io::save(app, SaveMode::Save, p, true),
+        "file.saveAs" => io::save(app, SaveMode::SaveAs, p, true),
+        "file.saveCopy" => io::save(app, SaveMode::Copy, p, true),
+        "file.saveAsTemplate" => io::save(app, SaveMode::Template, p, true),
         "document.exportSelection" => {
             io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
-        }
-        "file.saveAsTemplate" => {
-            io::save_command_output(app, id, "vectorcraft", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
         }
         "file.newFromTemplate" => match s("path") {
             Some(path) => io::open_path(app, &path).map(|_| Value::Null),
@@ -944,10 +935,9 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
     }
     match id {
-        "file.save"
-        | "file.saveAs"
-        | "file.saveCopy"
-        | "file.place"
+        // Save is off for a clean document that already has its own file.
+        "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.is_dirty()),
+        "file.place"
         | "file.export.svg"
         | "file.export.png"
         | "file.exportAs"
@@ -1022,6 +1012,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Save As…", "file.saveAs"),
                 c("Save a Copy…", "file.saveCopy"),
                 c("Save as Template…", "file.saveAsTemplate"),
+                c("Save as PDF…", "file.export.pdf"),
                 c("Revert", "file.revert"),
                 Sep,
                 c("Place…", "file.place"),

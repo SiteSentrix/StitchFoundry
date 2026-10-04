@@ -248,6 +248,12 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     }
     let bytes = match f.id {
         "vectorcraft" => vectorcraft_format::save_file(doc),
+        // A native file flagged so opening it starts a new untitled document.
+        "template" => {
+            let mut d = doc.clone();
+            d.template = true;
+            vectorcraft_format::save_file(&d)
+        }
         "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
         "pdf" => {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;

@@ -29,9 +29,8 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     (
         "file.save",
         "Save",
-        "{path?, format?} = document.save: .vectorcraft, .ai (a PDF that reopens editable), .svg or .svgz (default: the document's path)",
+        "{path?, format?, options?, svg?: {…SVG options}} = document.save: .vectorcraft, .ai (a PDF that reopens editable), .pdf, .svg or .svgz (default: the document's own path and format)",
     ),
-    ("file.saveAs", "Save As…", "{path, format?, …the format's options} = document.save"),
     ("file.export", "Export…", "{path?, format?, artboard?, range?, scale?, …} = document.export (no path → dataBase64)"),
     ("file.exportForScreens", "Export for Screens…", "{folder?, artboards? | range?, formats?, prefix?} = document.exportForScreens"),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),
@@ -106,7 +105,7 @@ impl Headless {
     fn exec(&mut self, id: &str, params: &Value) -> Result<Value, String> {
         match id {
             "file.open" => self.open(params),
-            "file.save" | "file.saveAs" => self.save(params),
+            "file.save" => self.save(params),
             "file.export" => self.export(params),
             "file.exportForScreens" => self.session.execute("document.exportForScreens", params).map_err(|e| e.to_string()),
             "tool.select" => self.select_tool(params),
@@ -221,7 +220,8 @@ impl Headless {
         self.session.execute("document.open", &json!({"path": path})).map_err(|e| e.to_string())
     }
 
-    /// `app.save {path?}`: native format; remembers the path and clears the dirty flag.
+    /// `app.save {path?, format?, options?}`: `document.save` (by default the document's own path and
+    /// format); remembers the path and clears the dirty flag.
     pub fn save(&mut self, p: &Value) -> Result<Value, String> {
         let st = self.session.active().ok_or("no document")?;
         if s(p, "path").is_none() && st.path.is_none() {

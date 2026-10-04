@@ -141,7 +141,12 @@ pub(crate) fn pick_library_file(app: &mut VectorcraftApp, path: Option<String>) 
         f();
         return Ok(None);
     }
-    path.or_else(|| app.services.pick_open.as_mut().and_then(|f| f())).map(Some).ok_or_else(|| "cancelled".into())
+    path.or_else(|| {
+        let pick = crate::FilePick { filters: vectorcraft_engine::cmd::fileio::open_filters().collect(), ..Default::default() };
+        app.services.pick_open.as_mut().and_then(|f| f(&pick))
+    })
+    .map(Some)
+    .ok_or_else(|| "cancelled".into())
 }
 
 /// The User Defined library a Window menu slot (`prefix` and a number from 1) stands for, of
@@ -557,7 +562,7 @@ mod tests {
         let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
         let w = written.clone();
         let services = crate::Services {
-            pick_save: Some(Box::new(|name: &str| Some(format!("/tmp/{name}")))),
+            pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
             write: Some(Box::new(move |p: &str, b: &[u8]| {
                 w.borrow_mut().push((p.to_string(), b.to_vec()));
                 Ok(())

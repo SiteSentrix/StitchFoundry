@@ -78,7 +78,12 @@ pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
     if app.session.active().is_some_and(|st| st.doc.setup.export_text == vectorcraft_doc::ExportText::Appearance) {
         fields.insert("outlineText".into(), json!(true));
     }
-    let saved = app.session.active().map(|st| st.save_options.clone()).filter(|_| mode != Mode::Export);
+    // Only options saved with an SVG format are SVG options.
+    let saved = app
+        .session
+        .active()
+        .filter(|st| mode != Mode::Export && matches!(st.format, "svg" | "svgz"))
+        .map(|st| Value::Object(st.save_options.clone()));
     for last in [&app.ui.svg_options].into_iter().chain(saved.as_ref()) {
         if let Some(o) = last.as_object() {
             fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
@@ -289,7 +294,7 @@ mod tests {
                 w.borrow_mut().push((p.to_string(), b.to_vec()));
                 Ok(())
             })),
-            pick_save: Some(Box::new(move |_: &str| Some(picked.clone()))),
+            pick_save: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
             ..Default::default()
         };
         let mut app = VectorcraftApp::new(Session::new(), services);

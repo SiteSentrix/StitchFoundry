@@ -107,7 +107,11 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         if widgets::flat_button(ui, "Load Profile…", 110.0).clicked()
-            && let Some(path) = app.services.pick_open.as_mut().and_then(|f| f())
+            && let Some(path) = app
+                .services
+                .pick_open
+                .as_mut()
+                .and_then(|f| f(&crate::FilePick { filters: vec![("ICC Profiles", &["icc", "icm"])], ..Default::default() }))
         {
             run(app, "color.loadProfile", json!({ "path": path }));
         }

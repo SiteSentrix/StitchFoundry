@@ -112,9 +112,12 @@ pub struct DocState {
     pub mask_view: Option<NodeId>,
     /// View → Show Transparency Grid, per document (view state: not saved, not undoable).
     pub transparency_grid: bool,
-    /// The SVG options this document was last saved with as SVG (Save reuses them; JSON as in
-    /// `document.save {svg}`, null when none).
-    pub save_options: Value,
+    /// The format Save writes ([`cmd::fileio::SAVE_FORMATS`]): the one the document was opened
+    /// from or last saved as.
+    pub format: &'static str,
+    /// That format's options as last saved (SVG options for SVG, the Save PDF settings for PDF;
+    /// empty for native files): Save reuses them and `file.formatOptions` reads them back.
+    pub save_options: serde_json::Map<String, Value>,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -138,7 +141,8 @@ impl DocState {
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             mask_view: None,
             transparency_grid: false,
-            save_options: Value::Null,
+            format: "vectorcraft",
+            save_options: Default::default(),
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -1013,6 +1017,8 @@ mod tests_rastersettings;
 mod tests_recolor;
 #[cfg(test)]
 mod tests_registration;
+#[cfg(test)]
+mod tests_save;
 #[cfg(test)]
 mod tests_scalestrokes;
 #[cfg(test)]

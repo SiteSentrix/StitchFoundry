@@ -117,7 +117,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     } else {
         let path = match d.str("path") {
             p if !p.is_empty() => p,
-            _ => app.services.pick_open.as_mut().and_then(|f| f()).ok_or("cancelled")?,
+            _ => {
+                let pick = crate::FilePick { filters: vectorcraft_engine::cmd::fileio::place_filters().collect(), ..Default::default() };
+                app.services.pick_open.as_mut().and_then(|f| f(&pick)).ok_or("cancelled")?
+            }
         };
         out = app.run("links.relink", json!({ "ids": current["ids"], "path": path }))?;
         // Apply to All: the others by name in the same folder; any not there are asked about.

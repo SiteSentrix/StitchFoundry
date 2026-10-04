@@ -69,7 +69,25 @@ pub use control::{ControlRequest, ControlResponse};
 pub use state::{UiState, View};
 pub use sysclip::SystemClipboard;
 
-pub type PickSave = Box<dyn FnMut(&str) -> Option<String>>;
+/// What a file dialog shows: a suggested file name (save dialogs), the folder to start in and the
+/// file-type filters.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FilePick {
+    pub name: String,
+    pub folder: Option<String>,
+    /// `(label, extensions without the dot)`, the default type first; empty = every file.
+    pub filters: Vec<(&'static str, &'static [&'static str])>,
+}
+
+impl FilePick {
+    /// A save dialog suggesting `name`.
+    pub fn named(name: &str) -> Self {
+        Self { name: name.to_string(), ..Default::default() }
+    }
+}
+
+pub type PickOpen = Box<dyn FnMut(&FilePick) -> Option<String>>;
+pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 pub type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
@@ -82,8 +100,8 @@ pub type OpenUrlFn = Box<dyn FnMut(&str)>;
 #[derive(Default)]
 pub struct Services {
     /// Show an open dialog; returns a path.
-    pub pick_open: Option<Box<dyn FnMut() -> Option<String>>>,
-    /// Show a save dialog with a suggested file name; returns a path.
+    pub pick_open: Option<PickOpen>,
+    /// Show a save dialog (suggested name, folder, file types); returns a path.
     pub pick_save: Option<PickSave>,
     pub read: Option<ReadFn>,
     pub write: Option<WriteFn>,

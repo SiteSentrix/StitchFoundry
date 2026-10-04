@@ -39,6 +39,7 @@ pub mod raster_effects;
 pub mod recolor;
 pub mod saturate;
 mod save_changes;
+pub(crate) mod save_options;
 mod save_pdf;
 pub mod save_style_library;
 pub mod save_swatch_library;
@@ -201,6 +202,7 @@ registry! {
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
+    SaveOptions: [save_options::KIND] => save_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

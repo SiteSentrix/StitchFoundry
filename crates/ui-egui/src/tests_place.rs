@@ -38,7 +38,7 @@ fn app() -> VectorcraftApp {
 /// File → Place… with `path` chosen in the file picker.
 fn place_picked(app: &mut VectorcraftApp, path: &str) {
     let path = path.to_string();
-    app.services.pick_open = Some(Box::new(move || Some(path.clone())));
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(path.clone())));
     app.run("file.place", json!({})).unwrap();
 }
 

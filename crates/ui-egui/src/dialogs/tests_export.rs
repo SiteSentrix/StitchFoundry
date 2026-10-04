@@ -18,7 +18,7 @@ fn app(artboards: usize) -> (VectorcraftApp, Written) {
     let written = Written::default();
     let w = written.clone();
     let services = Services {
-        pick_save: Some(Box::new(|name: &str| Some(format!("/out/{name}")))),
+        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
@@ -211,7 +211,7 @@ fn old_ids_and_agents_export_directly_with_a_path() {
 #[test]
 fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
     let (mut app, written) = app(1);
-    app.services.pick_save = Some(Box::new(|_: &str| panic!("no save dialog without art")));
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| panic!("no save dialog without art")));
     app.run("select.all", json!({})).unwrap();
     app.run("edit.clear", json!({})).unwrap();
     app.run("file.exportAs", json!({})).unwrap();
@@ -219,7 +219,7 @@ fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
     assert_eq!(kind(&app), Some("exportAs"));
     // With Use Artboards the empty artboard is exported.
     set(&mut app, "useArtboards", json!(true));
-    app.services.pick_save = Some(Box::new(|name: &str| Some(format!("/out/{name}"))));
+    app.services.pick_save = Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name))));
     confirm(&mut app).unwrap();
     assert_eq!(kind(&app), Some("pngOptions"));
     assert!(written.borrow().is_empty());

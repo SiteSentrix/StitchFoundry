@@ -241,3 +241,9 @@ fn pdf_settings(s: &mut Session, p: &Value) -> Result<Value> {
     let v = serde_json::to_value(&set).map_err(|e| EngineError::Other(e.to_string()))?;
     Ok(json!({ "settings": v, "presets": presets(s), "changed": diff, "warnings": warnings }))
 }
+
+/// Is `key` a top-level PDF setting (a [`PdfSettings`] field as `document.exportPdf` names it)?
+pub fn is_setting(key: &str) -> bool {
+    static DEFAULTS: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| serde_json::to_value(PdfSettings::default()).unwrap_or_default());
+    DEFAULTS.get(key).is_some()
+}
