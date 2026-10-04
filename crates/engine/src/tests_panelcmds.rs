@@ -1,4 +1,4 @@
-//! Panel-support commands (`cmd/panelcmds.rs`).
+//! Panel-support commands (`cmd/{panelcmds,gradient,appearance,stroke,swatch,style}.rs`).
 
 use serde_json::json;
 use vectorcraft_color::{GradientKind, Paint};

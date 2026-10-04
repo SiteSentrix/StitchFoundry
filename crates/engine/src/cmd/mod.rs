@@ -1,5 +1,6 @@
 //! The command registry. Ids follow Illustrator's menu structure.
 
+mod appearance;
 mod brushsym;
 mod buildcmds;
 pub mod clipboard;
@@ -14,6 +15,7 @@ mod edit;
 mod effectcmd;
 mod file;
 mod fonts;
+mod gradient;
 pub(crate) mod graph;
 pub mod help;
 mod layer;
@@ -31,6 +33,9 @@ pub mod prefscmds;
 pub mod rasterfx;
 mod recolor;
 mod select;
+mod stroke;
+mod style;
+mod swatch;
 pub(crate) mod tabs;
 mod textedit;
 pub mod textstyles;
@@ -179,6 +184,11 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(patterncmds::specs());
         v.extend(prefscmds::specs());
         v.extend(distortcmds::specs());
+        v.extend(appearance::specs());
+        v.extend(gradient::specs());
+        v.extend(stroke::specs());
+        v.extend(style::specs());
+        v.extend(swatch::specs());
         v
     })
 }
@@ -259,4 +269,39 @@ pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
 
 pub(crate) fn ok() -> Result<Value> {
     Ok(Value::Null)
+}
+
+/// Leaves whose appearance a paint command changes: groups and layers expand to their contents,
+/// and compound paths own their children's appearance.
+pub(crate) fn leaf_targets(s: &Session, ids: &[NodeId]) -> Result<Vec<NodeId>> {
+    use vectorcraft_doc::NodeKind;
+    let d = &s.doc()?.doc;
+    let mut out = vec![];
+    for id in ids {
+        let Some(n) = d.node(*id) else { continue };
+        match &n.kind {
+            NodeKind::Group { .. } | NodeKind::Layer { .. } => n.walk(&mut |c| {
+                if !c.is_container() || matches!(c.kind, NodeKind::Compound { .. }) {
+                    out.push(c.id)
+                }
+            }),
+            _ => out.push(*id),
+        }
+    }
+    let comp: Vec<NodeId> = out.iter().filter(|id| matches!(d.node(**id).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).copied().collect();
+    out.retain(|id| !comp.iter().any(|c| d.parent_of(*id) == Some(*c)));
+    Ok(out)
+}
+
+/// [`leaf_targets`] of a command's [`targets`] (`ids`, `id` or the selection).
+pub(crate) fn paint_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    leaf_targets(s, &targets(s, p)?)
+}
+
+/// `base` if `taken` doesn't claim it, else the first free "base 2", "base 3", …
+pub(crate) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
 }
