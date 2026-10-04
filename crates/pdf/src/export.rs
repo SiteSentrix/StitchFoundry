@@ -469,8 +469,8 @@ impl Exporter<'_> {
             pushes += 1;
         }
         match &n.kind {
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => self.children(s, children, page),
-            NodeKind::Group { children, clip: true } => {
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => self.children(s, children, page),
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art.
                 if let Some((clip, rest)) = children.split_first()
                     && let Some((p, r)) = vectorcraft_effects::clip_outline(clip).and_then(|(bp, r)| to_path(&bp).map(|p| (p, r)))

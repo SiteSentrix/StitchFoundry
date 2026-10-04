@@ -777,7 +777,7 @@ impl Writer<'_> {
         }
         match &n.kind {
             NodeKind::Layer { template: true, .. } => {}
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 let id = self.id_attr(n);
                 let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id}{a}>"));
@@ -786,7 +786,7 @@ impl Writer<'_> {
                 self.depth -= 1;
                 self.line("</g>");
             }
-            NodeKind::Group { children, clip: true } => {
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 let Some((clip, rest)) = children.split_first() else { return };
                 let cid = self.fresh_id("clip-path");
                 self.def(1, &format!("<clipPath id=\"{cid}\">"));

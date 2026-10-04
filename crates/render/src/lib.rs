@@ -456,7 +456,7 @@ impl Renderer {
             return e.bounds;
         }
         let b = match &a.kind {
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } if !fx::has_fx(a) => {
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_fx(a) => {
                 let mut acc: Option<Rect> = None;
                 for c in children {
                     if c.visible {
@@ -642,13 +642,15 @@ impl Renderer {
     /// What `n` draws inside its transparency group (`knockout`: its children knock each other out).
     fn draw_content(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, knockout: bool) {
         match &n.kind {
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => self.draw_children(ctx, f, children, knockout),
-            NodeKind::Group { children, clip: true } if f.opts.outline => {
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                self.draw_children(ctx, f, children, knockout)
+            }
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } if f.opts.outline => {
                 for c in children {
                     self.draw_node(ctx, f, c, false);
                 }
             }
-            NodeKind::Group { children, clip: true } => {
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // Nothing to clip by hides the clipped art (as in the SVG and PDF output). A clip
                 // group doesn't isolate: blending inside it reaches the art below.
                 if let Some((clip, rest)) = children.split_first()

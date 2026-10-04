@@ -127,7 +127,7 @@ pub(crate) fn visual_bounds(n: &Node) -> Option<Rect> {
 /// the subtree (a shadow can reach the view while its object is outside it).
 pub(crate) fn cull_bounds(n: &Node) -> Option<Rect> {
     match &n.kind {
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
+        NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
             children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(c)))
         }
         _ if has_fx(n) => visual_bounds(n),

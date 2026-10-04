@@ -174,6 +174,9 @@ pub enum NodeKind {
         #[serde(default = "yes")]
         printable: bool,
         children: Vec<Arc<Node>>,
+        /// Layer clipping mask: the first (bottom-most) child clips the others, as in a clip group.
+        #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+        clip: bool,
     },
     /// A group. With `clip`, the first (bottom-most) child is the clipping path.
     Group {
@@ -336,7 +339,7 @@ impl Node {
         Self::new(id, NodeKind::Group { children, clip: false })
     }
     pub fn layer(id: NodeId, name: &str, color: LayerColor) -> Self {
-        let mut n = Self::new(id, NodeKind::Layer { color, template: false, printable: true, children: vec![] });
+        let mut n = Self::new(id, NodeKind::Layer { color, template: false, printable: true, children: vec![], clip: false });
         n.name = Some(name.to_string());
         n
     }
@@ -427,7 +430,9 @@ impl Node {
     pub fn geometric_bounds(&self) -> Option<Rect> {
         match &self.kind {
             NodeKind::Path { path, .. } => path.bounds(),
-            NodeKind::Group { children, clip: true } => children.first().and_then(|c| c.geometric_bounds()),
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+                children.first().and_then(|c| c.geometric_bounds())
+            }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => children
                 .iter()
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
@@ -447,7 +452,9 @@ impl Node {
     /// Visual bounds (includes stroke outset).
     pub fn visual_bounds(&self) -> Option<Rect> {
         match &self.kind {
-            NodeKind::Group { children, clip: true } => children.first().and_then(|c| c.geometric_bounds()),
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+                children.first().and_then(|c| c.geometric_bounds())
+            }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
                 children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()))
             }
@@ -731,7 +738,7 @@ impl Node {
     /// A plain group or layer that is neutral to knockout and has no transparency or appearance
     /// of its own: inside a knockout group its children composite as the group's own children.
     pub fn passes_knockout_through(&self) -> bool {
-        matches!(self.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { template: false, .. })
+        matches!(self.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { template: false, clip: false, .. })
             && self.has_default_transparency()
             && self.appearance.items.is_empty()
             && self.appearance.effects.is_empty()
@@ -751,6 +758,18 @@ impl Node {
         let mut out = Vec::with_capacity(children.len());
         push(children, &mut out);
         out
+    }
+
+    /// Whether this is a clip group or a layer with a clipping mask: its first child clips the rest.
+    pub fn clips(&self) -> bool {
+        matches!(self.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. })
+    }
+
+    /// Make this group or layer clip its children by its first child, or stop it.
+    pub fn set_clips(&mut self, on: bool) {
+        if let NodeKind::Group { clip, .. } | NodeKind::Layer { clip, .. } = &mut self.kind {
+            *clip = on;
+        }
     }
 
     /// Whether blending inside this object reaches the art below it unless the object isolates

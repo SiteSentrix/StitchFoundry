@@ -222,6 +222,11 @@ plain group and keeps the clipping path, unpainted.
 {"name":"run_command","arguments":{"command":"object.clippingMask.make","params":{}}}
 ```
 
+`layer.clippingMask.toggle {id?}` is the Layers panel's clipping mask button: the top object of the layer `id` (default:
+the one selected group, else the current layer) becomes its clipping path (unpainted, moved to the bottom of the layer,
+so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
+underlines clipping-path names.
+
 ## Graphic styles
 
 A graphic style holds an appearance (fills, strokes, effects) plus opacity, blend mode, isolate and knockout.
