@@ -121,7 +121,7 @@ fn reset_defaults_restores_missing_swatches_or_replaces_them() {
     let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}))["id"].clone();
     run(&mut s, "select.set", json!({"ids": [id]}));
     run(&mut s, "paint.setFill", json!({"swatch": "Mine"}));
-    assert_eq!(s.paint.fill, Paint::Solid { color: Color::from_hex("#abcdef").unwrap(), swatch: Some("Mine".into()) });
+    assert_eq!(s.paint.fill, Paint::Solid { color: Color::from_hex("#abcdef").unwrap(), swatch: Some("Mine".into()), tint: 1.0 });
     run(&mut s, "swatch.resetDefaults", json!({"replace": true}));
     let d = doc(&s);
     assert_eq!(d.swatches_iter().map(|w| w.name.clone()).collect::<Vec<_>>(), defaults);

@@ -1,7 +1,9 @@
 //! Color panel: Grayscale / RGB / HSB / CMYK / Web Safe RGB sliders with colour-gradient tracks,
 //! value fields, hex field, None/Black/White chips, spectrum ramp and the Fill/Stroke proxy.
 //! When the active paint is a gradient, the sliders edit the Gradient panel's selected stop (on a
-//! freeform gradient, its selected point).
+//! freeform gradient, its selected point). A colour (or stop) linked to a global or spot swatch
+//! shows Tint mode instead: the swatch's chip and name and a T slider (0–100 % of the swatch);
+//! picking a mode from the menu makes it a process colour.
 //!
 //! The mode follows the colour's own model (the last mode picked comes back for colours in its
 //! model). Alt-clicking the spectrum or a chip paints the inactive proxy; Shift-clicking the
@@ -259,19 +261,45 @@ fn to32(c: &Color) -> Color32 {
     super::c32(c)
 }
 
-/// What the panel is editing: the active proxy's solid colour, a selected gradient stop or a
-/// selected freeform point.
+/// The global or spot swatch a colour is a tint of (Tint mode).
+struct Tint {
+    swatch: String,
+    spot: bool,
+    /// 0..1.
+    tint: f32,
+    /// The swatch's colour (100 %).
+    base: Color,
+}
+
+impl Tint {
+    /// The tint `link` (a swatch name) and `tint` show: `None` unless the swatch is a global colour.
+    fn of(app: &VectorcraftApp, link: Option<&str>, tint: f32) -> Option<Self> {
+        let name = link?;
+        let d = &app.session.active()?.doc;
+        let spot = d.swatch(name)?.spot;
+        Some(Self { swatch: name.to_string(), spot, tint, base: d.global_color(name)? })
+    }
+}
+
+/// What the panel is editing: the active proxy's solid colour or a selected gradient stop (with
+/// the global swatch it is a tint of), or a selected freeform point.
 enum Target {
-    Paint(Option<Color>),
-    Stop { paint: Paint, index: usize, color: Color },
+    Paint(Option<Color>, Option<Tint>),
+    Stop { paint: Paint, index: usize, color: Color, tint: Option<Tint> },
     Point { index: usize, color: Color },
 }
 
 impl Target {
     fn color(&self) -> Option<Color> {
         match self {
-            Target::Paint(c) => *c,
+            Target::Paint(c, _) => *c,
             Target::Stop { color, .. } | Target::Point { color, .. } => Some(*color),
+        }
+    }
+    fn tint(&self) -> Option<&Tint> {
+        match self {
+            Target::Paint(_, t) | Target::Stop { tint: t, .. } => t.as_ref(),
+            Target::Point { .. } => None,
         }
     }
 }
@@ -279,7 +307,7 @@ impl Target {
 /// The active proxy's colour or gradient stop; no colour for None, patterns and a "?" proxy.
 fn target(app: &VectorcraftApp, ui: &Ui) -> Target {
     if super::active_mixed(app, ui.ctx()) {
-        return Target::Paint(None);
+        return Target::Paint(None, None);
     }
     let p = active_paint(app);
     match &p {
@@ -291,11 +319,11 @@ fn target(app: &VectorcraftApp, ui: &Ui) -> Target {
         }
         Paint::Gradient(g) => {
             let i = app.session.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
-            let color = g.gradient.stops.get(i).map(|s| s.color).unwrap_or(Color::BLACK);
-            Target::Stop { paint: p.clone(), index: i, color }
+            let (color, tint) = g.gradient.stops.get(i).map_or((Color::BLACK, None), |s| (s.color, Tint::of(app, s.swatch.as_deref(), s.tint)));
+            Target::Stop { paint: p.clone(), index: i, color, tint }
         }
-        Paint::Solid { color, .. } => Target::Paint(Some(*color)),
-        _ => Target::Paint(None),
+        Paint::Solid { color, swatch, tint } => Target::Paint(Some(*color), Tint::of(app, swatch.as_deref(), *tint)),
+        _ => Target::Paint(None, None),
     }
 }
 
@@ -306,7 +334,7 @@ fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: 
         Target::Stop { paint: Paint::Gradient(g), index, .. } if !behind => {
             let mut stops = g.gradient.stops.clone();
             if let Some(s) = stops.get_mut(*index) {
-                s.color = c;
+                s.set_color(c, None);
             }
             super::gradient::set_stops(app, &stops, None, phase);
         }
@@ -322,15 +350,57 @@ fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: 
     }
 }
 
-/// Switch the panel to `mode`, converting the colour to its model.
+/// Set the target's tint of its swatch to `t` (0..1), keeping the link (the T slider).
+fn apply_tint(app: &mut VectorcraftApp, tgt: &Target, tint: &Tint, t: f32, phase: Live) {
+    match tgt {
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => {
+            let mut stops = g.gradient.stops.clone();
+            if let Some(s) = stops.get_mut(*index) {
+                s.set_color(tint.base.tinted(t), Some((tint.swatch.clone(), t)));
+            }
+            super::gradient::set_stops(app, &stops, None, phase);
+        }
+        _ => {
+            let cmd = super::proxy_cmd(app, false);
+            live_run(app, "Color", cmd, json!({"swatch": tint.swatch, "tint": t * 100.0}), phase);
+        }
+    }
+}
+
+/// Switch the panel to `mode`, converting the colour to its model (a tint becomes a process
+/// colour).
 fn set_mode(app: &mut VectorcraftApp, ctx: &egui::Context, tgt: &Target, mode: Mode) {
     set_pstate(ctx, "color-mode", Some(mode));
     if let Some(c) = tgt.color() {
         let conv = convert_to(mode, &c);
-        if conv != c {
+        if conv != c || tgt.tint().is_some() {
             apply(app, tgt, conv, Live::Released, false);
         }
     }
+}
+
+/// Tint mode's rows: the swatch's chip and name, and the T slider and field. Returns a new tint
+/// (0..1) and its phase.
+fn tint_rows(ui: &mut Ui, tint: &Tint, slider_w: f32, field_w: f32) -> Option<(f32, Live)> {
+    let t = Tokens::get(ui.ctx());
+    ui.horizontal(|ui| {
+        let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+        widgets::swatch_tile(ui, r, &Paint::solid(tint.base), false, false);
+        super::swatches::global_mark(ui, r, tint.spot);
+        ui.label(egui::RichText::new(&tint.swatch).size(12.5).color(t.text));
+    });
+    ui.horizontal(|ui| {
+        ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new("T").size(12.5).color(t.text)));
+        let track = |x: f32| to32(&tint.base.tinted(x));
+        let (nv, phase) = widgets::color_slider(ui, ("color-slider", "tint"), tint.tint, slider_w, &track);
+        let field = widgets::plain_field(ui, ("color-field", "tint"), (tint.tint * 100.0).round() as f64, "%", 0, field_w);
+        match (nv, field) {
+            (Some(v), _) => Some(((v * 100.0).round() / 100.0, phase)),
+            (None, Some(v)) => Some(((v as f32 / 100.0).clamp(0.0, 1.0), Live::Released)),
+            _ => None,
+        }
+    })
+    .inner
 }
 
 /// What happened on the spectrum ramp.
@@ -391,6 +461,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Alt held for the inactive proxy (`behind`).
     let mut new: Option<(Color, Live, Vec<f32>)> = None;
     let mut behind: Option<(Color, Live)> = None;
+    let mut tinted: Option<(f32, Live)> = None;
     let gamut = color.filter(|_| matches!(mode, Mode::Rgb | Mode::Hsb)).and_then(|c| gamut_fix(app, ui.ctx(), "color-gamut", &c));
     ui.horizontal(|ui| {
         // Left column: proxy, out-of-gamut and out-of-web warnings.
@@ -412,6 +483,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let shift = ui.input(|i| i.modifiers.shift);
             let field_w = 48.0;
             let slider_w = (ui.available_width() - field_w - 24.0).max(60.0);
+            if let Some(tint) = tgt.tint() {
+                tinted = tint_rows(ui, tint, slider_w, field_w);
+                return;
+            }
             let enabled = color.is_some();
             for (i, lbl) in mode.labels().iter().enumerate() {
                 ui.horizontal(|ui| {
@@ -489,6 +564,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some((c, phase)) = behind {
         apply(app, &tgt, c, phase, true);
     }
+    if let (Some((t, phase)), Some(tint)) = (tinted, tgt.tint()) {
+        apply_tint(app, &tgt, tint, t, phase);
+    }
     if let Some((c, phase, comps2)) = new {
         let key = (c.to_hex(), mode as u8);
         set_pstate(ui.ctx(), "color-comps", Some((key, comps2)));
@@ -504,9 +582,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     let tgt = target(app, ui);
     let color = tgt.color();
+    // Tint mode checks no colour mode: picking one makes the tint a process colour.
     let cur = display_mode(pstate(ui.ctx(), "color-mode"), color.as_ref());
     for (m, label) in Mode::ALL {
-        if menu_item(ui, label, true, m == cur) {
+        if menu_item(ui, label, true, m == cur && tgt.tint().is_none()) {
             set_mode(app, ui.ctx(), &tgt, m);
         }
     }
@@ -531,7 +610,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, "Create New Swatch…", color.is_some(), false)
         && let Some(c) = color
     {
-        app.run("swatch.new", json!({"color": color_json(&c)})).ok();
+        // A tint saves a tint swatch ("Name 40%").
+        let p = match tgt.tint() {
+            Some(t) => json!({"swatch": t.swatch, "tint": t.tint * 100.0}),
+            None => json!({"color": color_json(&c)}),
+        };
+        app.run("swatch.new", p).ok();
     }
     if menu_item(ui, "Copy Color Value (Hex)", color.is_some(), false)
         && let Some(c) = color
@@ -689,6 +773,54 @@ mod tests {
         let d = app.ui.dialog.as_ref().expect("a double-click opens the Color Picker");
         assert_eq!(d.kind, "colorPicker");
         assert!(d.bool("stroke"));
+    }
+
+    #[test]
+    fn a_global_colour_shows_tint_mode_and_the_t_slider_sets_its_tint() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})).unwrap();
+        app.run("paint.setFill", json!({"swatch": "Ink", "tint": 50})).unwrap();
+        frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+        let _ = ctx.run_ui(Default::default(), |ui| {
+            let tgt = target(&app, ui);
+            let t = tgt.tint().expect("Tint mode");
+            assert_eq!((t.swatch.as_str(), t.spot, t.tint, t.base), ("Ink", true, 0.5, Color::cmyk(0.0, 1.0, 0.0, 0.0)));
+        });
+        // The chip's name and the T row are drawn; a click on the slider's right part raises the
+        // tint and keeps the link.
+        let texts = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+                match s {
+                    egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.pos + t.galley.rect.center().to_vec2())),
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                    _ => {}
+                }
+            }
+            let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(260.0, 600.0));
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let mut v = vec![];
+            out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+            v
+        };
+        let drawn = texts(&mut app, vec![]);
+        let at = |label: &str| drawn.iter().find(|(t, _)| t == label).map(|(_, p)| *p);
+        assert!(at("Ink").is_some(), "the swatch's name: {drawn:?}");
+        let (t_label, field) = (at("T").expect("the T row"), at("50%").expect("the tint field"));
+        let pos = egui::pos2(field.x - 40.0, t_label.y);
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        texts(&mut app, vec![egui::Event::PointerMoved(pos), button(true)]);
+        texts(&mut app, vec![button(false)]);
+        let Paint::Solid { swatch, tint, .. } = crate::panels::current_paints(&app).0 else { panic!() };
+        assert_eq!(swatch.as_deref(), Some("Ink"));
+        assert!(tint > 0.6 && tint < 1.0, "{tint}");
+        // Picking a mode makes it a process colour.
+        let _ = ctx.run_ui(Default::default(), |ui| {
+            let tgt = target(&app, ui);
+            set_mode(&mut app, ui.ctx(), &tgt, Mode::Cmyk);
+        });
+        assert!(matches!(crate::panels::current_paints(&app).0, Paint::Solid { swatch: None, .. }));
     }
 
     #[test]

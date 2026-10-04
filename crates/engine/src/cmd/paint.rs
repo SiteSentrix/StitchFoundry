@@ -1,8 +1,8 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{Appearance, CharStyle, Node, NodeId, NodeKind};
+use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
+use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind};
 
 use super::appearance::{ItemTarget, appearance_targets, edit_items, item_target};
 use super::gradient::{item_paint_bounds, place_paint, place_run_paint, run_paint_mut, run_stroke_weight, unplaced};
@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a gradient swatch fits each object, keeping its aspect), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself)",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself)",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -304,23 +304,24 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
         return Ok(Some(Paint::None));
     }
     if let Some(name) = str_param(p, "swatch") {
-        let st = s.doc()?;
+        let d = &s.doc()?.doc;
         // A pattern definition works as its swatch even without a swatch entry.
-        if st.doc.swatch(name).is_none() && st.doc.pattern(name).is_some() {
+        if d.swatch(name).is_none() && d.pattern(name).is_some() {
             return Ok(Some(vectorcraft_doc::pattern::pattern_paint(name)));
         }
-        let sw = st.doc.swatch(name).ok_or_else(|| EngineError::Other(format!("no swatch `{name}`")))?;
-        let mut paint = sw.paint.clone();
-        if sw.global
-            && let Paint::Solid { swatch, .. } = &mut paint
-        {
-            *swatch = Some(name.to_string());
-        }
-        return Ok(Some(paint));
+        let sw = d.swatch(name).ok_or_else(|| EngineError::Other(format!("no swatch `{name}`")))?;
+        let tint = tint_param(p, "paint")?;
+        return match &sw.paint {
+            Paint::Solid { .. } => swatch_solid(d, name, tint).map(Some).map_err(|e| bad("paint", e)),
+            _ if tint.is_some() => Err(bad("paint", "`tint` applies to global and spot colours")),
+            Paint::Gradient(g) => Ok(Some(Paint::Gradient(Box::new(GradientPaint { swatch: Some(name.to_string()), ..(**g).clone() })))),
+            other => Ok(Some(other.clone())),
+        };
     }
     if let Some(g) = p.get("gradient") {
-        let mut gp = super::gradient::parse_gradient(g).map_err(|e| bad("paint", e))?;
-        gp.gradient.stops.iter_mut().for_each(|st| st.color = new_color(st.color));
+        let g = super::gradient::link_stops(&s.doc()?.doc, g).map_err(|e| bad("paint", e))?;
+        let mut gp = super::gradient::parse_gradient(&g).map_err(|e| bad("paint", e))?;
+        gp.gradient.stops.iter_mut().filter(|st| st.swatch.is_none()).for_each(|st| st.color = new_color(st.color));
         return Ok(Some(Paint::Gradient(Box::new(gp))));
     }
     if let Some(c) = p.get("color") {
@@ -330,8 +331,35 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
     Ok(None)
 }
 
+/// The `tint` param (a percentage) as 0..1.
+pub(crate) fn tint_param(p: &Value, cmd: &str) -> Result<Option<f32>> {
+    p.get("tint")
+        .filter(|v| !v.is_null())
+        .map(|v| v.as_f64().map(|t| (t / 100.0).clamp(0.0, 1.0) as f32).ok_or_else(|| bad(cmd, "`tint` must be a number (%)")))
+        .transpose()
+}
+
+/// The solid paint colour swatch `name` applies at `tint` (0..1): a global or spot colour links to
+/// itself (default 100%), a tint swatch to its base (default: its own tint), a process colour is
+/// just its colour (it has no tints).
+pub(crate) fn swatch_solid(d: &Document, name: &str, tint: Option<f32>) -> std::result::Result<Paint, String> {
+    let sw = d.swatch(name).ok_or_else(|| format!("no swatch `{name}`"))?;
+    if sw.paint.color().is_none() {
+        return Err(format!("`{name}` isn't a colour swatch"));
+    }
+    match (d.swatch_link(name), tint) {
+        // A tint swatch whose base is gone keeps its colour.
+        (Some((base, own)), _) => Ok(d.tint_paint(&base, tint.unwrap_or(own)).unwrap_or_else(|| sw.paint.clone())),
+        (None, None) => Ok(sw.paint.clone()),
+        (None, Some(_)) => Err(format!("`{name}` is a process colour: tints apply to global and spot colours")),
+    }
+}
+
 fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
+    if p.get("tint").is_some() && p.get("swatch").is_none() {
+        return Err(bad(cmd, "`tint` goes with a global or spot `swatch`"));
+    }
     let paint = paint_from(s, p)?.ok_or_else(|| bad(cmd, "give color, none, swatch or gradient"))?;
     apply_paint(s, p, paint, fill)
 }

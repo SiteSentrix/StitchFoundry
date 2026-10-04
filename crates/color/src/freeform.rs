@@ -144,7 +144,7 @@ impl Freeform {
     /// swatch chips, exports without freeform shading and re-seeding on other art use.
     pub fn stops(&self) -> Vec<GradientStop> {
         let n = self.points.len();
-        let stop = |offset: f32, p: &FreeformPoint| GradientStop { offset, color: p.color, opacity: p.opacity, midpoint: 0.5 };
+        let stop = |offset: f32, p: &FreeformPoint| GradientStop { opacity: p.opacity, ..GradientStop::new(offset, p.color) };
         match n {
             0 => Gradient::default().stops,
             1 => vec![stop(0.0, &self.points[0]), stop(1.0, &self.points[0])],

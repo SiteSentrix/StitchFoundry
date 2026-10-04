@@ -6,7 +6,9 @@
 //! Alt-dropping it on another stop swaps their colours), drag it off to remove it, double-click it
 //! for the stop popover, and drag a diamond to move a midpoint (a selected diamond's midpoint
 //! shows in Location). Dropping a colour swatch on the ramp adds a stop of that colour, or
-//! recolours the stop it lands on. Hide Options leaves the thumbnail, the proxy and the slider.
+//! recolours the stop it lands on; a global or spot colour (or a tint of one) stays linked, so
+//! editing the swatch recolours the stop. The thumbnail menu marks the gradient swatch the
+//! gradient was applied from. Hide Options leaves the thumbnail, the proxy and the slider.
 //!
 //! A freeform gradient shows its section instead of the angle, aspect and slider: the Draw
 //! toggle (Points or Lines: how the Gradient tool adds points) and the selected point's colour
@@ -54,15 +56,26 @@ pub fn x_to_offset(x: f32, left: f32, width: f32) -> f32 {
 pub use vectorcraft_tools::params::stops_json;
 
 /// A colour dropped on the ramp: recolours stop `on` (fully opaque), or adds an opaque stop of
-/// that colour at `offset`. Returns the stops and the index of the stop that took the colour.
-fn drop_color(g: &Gradient, on: Option<usize>, offset: f32, c: Color) -> (Vec<GradientStop>, usize) {
+/// that colour at `offset`, linked to `link` (a global swatch and tint) when given. Returns the
+/// stops and the index of the stop that took the colour.
+fn drop_color(g: &Gradient, on: Option<usize>, offset: f32, c: Color, link: Option<(String, f32)>) -> (Vec<GradientStop>, usize) {
     let (mut v, i) = match on.filter(|i| *i < g.stops.len()) {
         Some(i) => (g.stops.clone(), i),
         None => insert_stop(g, offset),
     };
-    v[i].color = c;
+    v[i].set_color(c, link);
     v[i].opacity = 1.0;
     (v, i)
+}
+
+/// The swatch link a dropped paint's params give a stop: `{swatch, tint?}` of a global or spot
+/// colour or a tint swatch (a proxy's tint carries its percentage); none for other colours.
+pub(crate) fn dropped_link(app: &VectorcraftApp, params: &Value) -> Option<(String, f32)> {
+    let name = params.get("swatch")?.as_str()?;
+    let d = &app.session.active()?.doc;
+    let (base, own) = d.swatch_link(name)?;
+    let tint = params.get("tint").and_then(Value::as_f64).map_or(own, |t| (t / 100.0).clamp(0.0, 1.0) as f32);
+    Some((base, tint))
 }
 
 /// The stops after dragging stop `i` of `origin` to `offset`: moved, or with `copy` (Alt) a copy
@@ -337,7 +350,10 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
         }
         for (name, grad) in &swatches {
             let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
-            if resp.hovered() {
+            // The gradient swatch the gradient was applied from.
+            if g.swatch.as_ref() == Some(name) {
+                ui.painter().rect_filled(row, 0.0, t.row_selected);
+            } else if resp.hovered() {
                 ui.painter().rect_filled(row, 0.0, t.hover);
             }
             let chip = Rect::from_min_size(row.left_center() + vec2(4.0, -8.0), vec2(16.0, 16.0));
@@ -365,13 +381,18 @@ fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: boo
     let stops = &g.stops;
     let sel = app.session.selected_stop().filter(|i| *i < stops.len() && is_grad);
     let mid = selected_mid(app, ui.ctx(), stops.len()).filter(|_| is_grad);
-    let stop = sel.map(|i| stops[i]);
+    let stop = sel.map(|i| &stops[i]);
     if let (Some(i), Some(s)) = (sel, stop) {
         ui.horizontal(|ui| {
             widgets::dim_label(ui, "Color:");
             let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
             widgets::swatch_tile(ui, r, &Paint::solid(s.color), false, resp.hovered());
-            widgets::dim_label(ui, &s.color.to_hex().to_uppercase());
+            // A linked stop names its swatch and tint.
+            let label = match &s.swatch {
+                Some(n) => format!("{n} {}%", vectorcraft_color::tint_percent(s.tint)),
+                None => s.color.to_hex().to_uppercase(),
+            };
+            widgets::dim_label(ui, &label);
             if resp.on_hover_text("Edit the stop").clicked() {
                 open_popover(app, i, r.left_bottom() + vec2(0.0, 4.0));
             }
@@ -598,7 +619,11 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         && let Some(c) = d.color()
         && let Some(p) = ui.input(|i| i.pointer.latest_pos())
     {
-        let (v, i) = drop_color(g, stops.iter().position(|s| marker(s.offset).contains(p)), offset_at(p), c);
+        let link = match &*d {
+            PanelDrag::Paint { params, .. } => dropped_link(app, params),
+            _ => None,
+        };
+        let (v, i) = drop_color(g, stops.iter().position(|s| marker(s.offset).contains(p)), offset_at(p), c, link);
         select = Some(i);
         changed = Some((v, Live::Released));
     }
@@ -666,9 +691,9 @@ mod tests {
         let mut g = Gradient::default();
         g.stops[1].opacity = 0.5;
         let red = Color::rgb(1.0, 0.0, 0.0);
-        let (v, i) = drop_color(&g, Some(1), 0.3, red);
+        let (v, i) = drop_color(&g, Some(1), 0.3, red, None);
         assert_eq!((v.len(), i, v[1].color, v[1].opacity), (2, 1, red, 1.0));
-        let (v, i) = drop_color(&g, None, 0.3, red);
+        let (v, i) = drop_color(&g, None, 0.3, red, None);
         assert_eq!((v.len(), i, v[1].color, v[1].offset, v[1].opacity), (3, 1, red, 0.3, 1.0));
     }
 
@@ -879,6 +904,20 @@ mod tests {
         let last = p.widget(("grad-stop", 2)).center();
         drop(&mut p, &mut app, last);
         assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#ff0000"]);
+        // A spot swatch tile dropped on a stop links it: editing the swatch recolours the stop.
+        app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true, "focus": false})).unwrap();
+        let ink = app.session.doc().unwrap().doc.swatch("Ink").unwrap().paint.clone();
+        egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::Paint { paint: ink, params: json!({"swatch": "Ink"}), rows: None });
+        p.frame(&mut app, vec![Event::PointerMoved(a)], Modifiers::NONE);
+        p.frame(
+            &mut app,
+            vec![Event::PointerButton { pos: a, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }],
+            Modifiers::NONE,
+        );
+        let st = fill(&app).gradient.stops[0].clone();
+        assert_eq!((st.swatch.as_deref(), st.tint, st.color.to_hex()), (Some("Ink"), 1.0, "#cc0066".to_string()));
+        app.run("swatch.edit", json!({"name": "Ink", "color": "#0066cc"})).unwrap();
+        assert_eq!(hexes(&app)[0], "#0066cc");
     }
 
     #[test]

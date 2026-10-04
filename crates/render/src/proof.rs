@@ -3,9 +3,10 @@
 //! * **Proof Colors** post-processes the rendered frame: every pixel goes display sRGB → proof
 //!   space (CMYK press or RGB/colour-blindness simulation) → display, through a cached 17³ LUT.
 //! * **Separations Preview** recolours the *document* before rendering: each paint colour is split
-//!   into process inks (colour-managed) plus a spot ink when it's linked to a spot swatch. With one
-//!   plate visible the plate renders as greyscale ink coverage (black = 100%); with several, the
-//!   visible inks are composited through the proof profile, spots multiplied on top.
+//!   into process inks (colour-managed), or a spot ink at the colour's tint when it's linked to a
+//!   spot swatch (solid colours and gradient stops alike). With one plate visible the plate
+//!   renders as greyscale ink coverage (black = 100%); with several, the visible inks are
+//!   composited through the proof profile, spots multiplied on top.
 //!   Placed raster images are not separated (limitation).
 //! * **Overprint Preview** (and Separations Preview, which implies it): fills and strokes that
 //!   overprint ([`vectorcraft_doc::FillLayer::overprint`], characters' too) are drawn with
@@ -72,26 +73,26 @@ fn spot_swatch<'a>(doc: &'a Document, name: &str) -> Option<&'a Color> {
     })
 }
 
-/// Separate one colour into inks. Colours linked to a spot swatch print on that plate only, with
-/// the tint given by the colour's ink total relative to the swatch's.
-pub fn inks(doc: &Document, c: &Cms, color: &Color, swatch: Option<&str>, intent: Intent) -> Inks {
-    if let Some(name) = swatch
-        && let Some(sc) = spot_swatch(doc, name)
+/// A colour's swatch link and tint (`(swatch name, tint 0..1)`), as the colour visitors pass it.
+pub type Link<'a> = Option<(&'a str, f32)>;
+
+/// Separate one colour into inks. A colour linked to a spot swatch prints on that plate only, at
+/// its tint.
+pub fn inks(doc: &Document, c: &Cms, color: &Color, link: Link, intent: Intent) -> Inks {
+    if let Some((name, tint)) = link
+        && spot_swatch(doc, name).is_some()
     {
-        let full: f32 = c.to_cmyk(sc, intent).iter().sum();
-        let this: f32 = c.to_cmyk(color, intent).iter().sum();
-        let tint = if full <= 1e-4 { 1.0 } else { (this / full).clamp(0.0, 1.0) };
-        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint)) };
+        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint.clamp(0.0, 1.0))) };
     }
     Inks { cmyk: c.to_cmyk(color, intent), spot: None }
 }
 
-fn map_paint(p: &mut Paint, f: &mut dyn FnMut(&Color, Option<&str>) -> Color) {
+fn map_paint(p: &mut Paint, f: &mut dyn FnMut(&Color, Link) -> Color) {
     match p {
-        Paint::Solid { color, swatch } => *color = f(color, swatch.as_deref()),
+        Paint::Solid { color, swatch, tint } => *color = f(color, swatch.as_deref().map(|s| (s, *tint))),
         Paint::Gradient(g) => {
             for s in &mut g.gradient.stops {
-                s.color = f(&s.color, None);
+                s.color = f(&s.color, s.swatch.as_deref().map(|n| (n, s.tint)));
             }
         }
         _ => {}
@@ -99,8 +100,8 @@ fn map_paint(p: &mut Paint, f: &mut dyn FnMut(&Color, Option<&str>) -> Color) {
 }
 
 /// Apply `f` to every colour of a node tree (fills, strokes, gradient stops, text runs, mesh
-/// points), keeping swatch links.
-pub fn map_node_colors(n: &mut Node, f: &mut dyn FnMut(&Color, Option<&str>) -> Color) {
+/// points) given its swatch link and tint, keeping the links.
+pub fn map_node_colors(n: &mut Node, f: &mut dyn FnMut(&Color, Link) -> Color) {
     for it in &mut n.appearance.items {
         match it {
             AppearanceItem::Fill(l) => map_paint(&mut l.paint, f),
@@ -129,7 +130,7 @@ pub fn map_node_colors(n: &mut Node, f: &mut dyn FnMut(&Color, Option<&str>) -> 
 }
 
 /// Apply `f` to every colour in the document's art and symbol definitions.
-pub fn map_document_colors(doc: &mut Document, f: &mut dyn FnMut(&Color, Option<&str>) -> Color) {
+pub fn map_document_colors(doc: &mut Document, f: &mut dyn FnMut(&Color, Link) -> Color) {
     for l in &mut doc.layers {
         map_node_colors(Arc::make_mut(l), f);
     }
@@ -162,8 +163,8 @@ fn multiply_overprints(a: &mut Arc<Node>) {
     }
 }
 
-fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], color: &Color, swatch: Option<&str>) -> Color {
-    let ink = inks(doc, c, color, swatch, proof.intent);
+fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], color: &Color, link: Link) -> Color {
+    let ink = inks(doc, c, color, link, proof.intent);
     let rgb = if visible.len() == 1 {
         let name = &visible[0];
         let v = match PROCESS_PLATES.iter().position(|p| p == name) {

@@ -355,7 +355,7 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
             };
             let mut stops = g.gradient.stops;
             let n = stops.len();
-            stops.get_mut(i).ok_or_else(|| bad(C, format!("no stop {i} (the gradient has {n})")))?.color = color;
+            stops.get_mut(i).ok_or_else(|| bad(C, format!("no stop {i} (the gradient has {n})")))?.set_color(color, None);
             ("paint.editGradient", json!({ "stops": vectorcraft_tools::params::stops_json(&stops), "stroke": stroke }))
         }
     };

@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
 use krilla::color::{cmyk, luma, rgb};
 use krilla::configure::{Archival, ConfigurationBuilder, PdfVersion};
 use krilla::geom::{Path, PathBuilder, Size, Transform};
@@ -242,19 +243,57 @@ impl Exporter<'_> {
         color(c)
     }
 
-    /// A solid paint, as a Separation colour space when it's linked to a spot swatch (the
-    /// swatch's CMYK equivalent is the alternate space).
-    fn solid(&mut self, c: &Color, swatch: Option<&str>) -> krilla::color::Color {
-        use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
-        let spot = swatch.and_then(|n| self.doc.swatch(n).filter(|s| s.spot)).and_then(|s| s.paint.color().map(|sc| (s.name.clone(), sc)));
-        let Some((name, sc)) = spot else { return self.col(c) };
+    /// The Separation colour space of spot swatch `name` (its CMYK equivalent is the alternate
+    /// space); `None` when `name` isn't a spot colour.
+    fn separation(&self, name: &str) -> Option<SeparationSpace> {
+        let sw = self.doc.swatch(name).filter(|s| s.spot)?;
         let cms = vectorcraft_color::cms::active();
-        let intent = cms.settings().intent;
-        let full = cms.to_cmyk(&sc, intent);
-        let total: f32 = full.iter().sum();
-        let tint = if total <= 1e-4 { 1.0 } else { (cms.to_cmyk(c, intent).iter().sum::<f32>() / total).clamp(0.0, 1.0) };
+        let full = cms.to_cmyk(&sw.paint.color()?, cms.settings().intent);
         let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
-        SepColor::new(q(tint), SeparationSpace::new(SeparationColorant::Custom(name), alt)).into()
+        Some(SeparationSpace::new(SeparationColorant::Custom(sw.name.clone()), alt))
+    }
+
+    /// A solid paint, in the Separation colour space at its tint when it's linked to a spot swatch.
+    fn solid(&mut self, c: &Color, link: Option<&str>, tint: f32) -> krilla::color::Color {
+        match link.and_then(|n| self.separation(n)) {
+            Some(space) => SepColor::new(q(tint), space).into(),
+            None => self.col(c),
+        }
+    }
+
+    /// The stops of a gradient whose every stop is a tint of one spot ink (or paper white, 0% of
+    /// it) as tints of that ink — a Separation shading — with midpoints as explicit stops (the
+    /// tint and opacity there are halfway). `None` for other gradients; one that mixes a spot ink
+    /// with other colours is written in process colours (the PDF writer has no DeviceN).
+    fn spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
+        let ink = g.stops.iter().find_map(|s| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot)))?;
+        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
+        let tints: Option<Vec<f32>> = g
+            .stops
+            .iter()
+            .map(|s| match s.swatch.as_deref() {
+                Some(n) if n == ink => Some(s.tint),
+                None if paper(&s.color) => Some(0.0),
+                _ => None,
+            })
+            .collect();
+        let Some(tints) = tints else {
+            self.warn("gradients mixing a spot color with other colors are exported in process colors");
+            return None;
+        };
+        let space = self.separation(ink)?;
+        let tint = |t: f32| -> krilla::color::Color { SepColor::new(q(t), space.clone()).into() };
+        let mut out = vec![];
+        for (i, s) in g.stops.iter().enumerate() {
+            out.push((s.offset, tint(tints[i]), s.opacity));
+            if let Some(n) = g.stops.get(i + 1)
+                && (s.midpoint - 0.5).abs() > 1e-3
+            {
+                let at = s.offset + (n.offset - s.offset) * s.midpoint;
+                out.push((at, tint((tints[i] + tints[i + 1]) / 2.0), (s.opacity + n.opacity) / 2.0));
+            }
+        }
+        Some(out)
     }
 
     /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect.
@@ -275,15 +314,33 @@ impl Exporter<'_> {
     fn paint(&mut self, p: &Paint, bounds: Rect) -> Option<krilla::paint::Paint> {
         match p {
             Paint::None => None,
-            Paint::Solid { color: c, swatch } => Some(self.solid(c, swatch.as_deref()).into()),
+            Paint::Solid { color: c, swatch, tint } => Some(self.solid(c, swatch.as_deref(), *tint).into()),
             Paint::Gradient(g) => {
                 let geom = g.resolve(bounds);
+                let spot = (g.gradient.kind != GradientKind::Freeform).then(|| self.spot_stops(&g.gradient)).flatten();
+                let colored = match spot {
+                    Some(v) => v,
+                    None => {
+                        let stops = g.gradient.expanded_stops();
+                        // The PDF writer needs every stop in one colour space: stops of mixed
+                        // models (midpoints sample in RGB) go through RGB, or stay CMYK in a CMYK
+                        // document, where `col` separates the rest.
+                        let mixed = stops.windows(2).any(|w| w[0].1.model() != w[1].1.model());
+                        let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
+                        let one = |c: Color| match c {
+                            Color::Cmyk { .. } if cmyk_doc => c,
+                            _ if mixed => c.in_model(vectorcraft_color::cms::Model::Rgb),
+                            _ => c,
+                        };
+                        stops.into_iter().map(|(o, c, a)| (o, self.col(&one(c)), a)).collect()
+                    }
+                };
                 let mut stops: Vec<Stop> = Vec::new();
                 let mut last = 0.0f32;
-                for (o, c, a) in g.gradient.expanded_stops() {
+                for (o, color, a) in colored {
                     let o = o.clamp(last, 1.0);
                     last = o;
-                    stops.push(Stop { offset: norm(o), color: self.col(&c), opacity: norm(a) });
+                    stops.push(Stop { offset: norm(o), color, opacity: norm(a) });
                 }
                 if stops.is_empty() {
                     return None;

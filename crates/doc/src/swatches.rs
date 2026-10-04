@@ -1,13 +1,15 @@
 //! Swatch lookups across colour groups and the walks over the paints that link to swatches.
 //!
 //! A swatch lives either in `Document::swatches` or in one of `Document::swatch_groups`; every
-//! lookup here covers both. Solid paints link to a global swatch by name (`Paint::Solid.swatch`);
-//! [`Document::map_solid_paints`] rewrites those links (and colours) wherever art can hold them,
-//! copying only the nodes that change.
+//! lookup here covers both. Solid paints and gradient stops link to a global swatch by name, at a
+//! tint (`Paint::Solid.swatch` / `.tint`, `GradientStop.swatch` / `.tint`); a tint swatch is a
+//! swatch whose own paint links to its base that way. [`Document::map_solid_paints`] rewrites
+//! those links (and colours) wherever art and swatches hold them, copying only the nodes that
+//! change.
 
 use std::sync::Arc;
 
-use vectorcraft_color::{Color, Paint, Swatch};
+use vectorcraft_color::{Color, Paint, Swatch, tint_percent};
 
 use crate::{AppearanceItem, Document, Node, NodeId, NodeKind};
 
@@ -24,6 +26,29 @@ impl Document {
     }
     pub fn swatch_mut(&mut self, name: &str) -> Option<&mut Swatch> {
         self.swatches_iter_mut().find(|s| s.name == name)
+    }
+    /// The colour of global (or spot) swatch `name`, which its tints scale; `None` when `name`
+    /// isn't a global solid colour of its own (a tint swatch isn't).
+    pub fn global_color(&self, name: &str) -> Option<Color> {
+        match &self.swatch(name).filter(|w| w.global)?.paint {
+            Paint::Solid { color, swatch: None, .. } => Some(*color),
+            _ => None,
+        }
+    }
+    /// The link a colour taken from swatch `name` gets: a global solid colour links to itself at
+    /// 100 %, a tint swatch to its base at its tint; `None` for other swatches.
+    pub fn swatch_link(&self, name: &str) -> Option<(String, f32)> {
+        let w = self.swatch(name)?;
+        match (w.tint_of(), &w.paint) {
+            (Some((base, tint)), _) => Some((base.to_string(), tint)),
+            (None, Paint::Solid { .. }) if w.global => Some((name.to_string(), 1.0)),
+            _ => None,
+        }
+    }
+    /// Tint `tint` (0..1) of global swatch `name` as a solid paint linked to it.
+    pub fn tint_paint(&self, name: &str, tint: f32) -> Option<Paint> {
+        let tint = tint.clamp(0.0, 1.0);
+        Some(Paint::Solid { color: self.global_color(name)?.tinted(tint), swatch: Some(name.to_string()), tint })
     }
     /// Index of the colour group holding swatch `name` (`None` when ungrouped or missing).
     pub fn swatch_group_of(&self, name: &str) -> Option<usize> {
@@ -49,6 +74,7 @@ impl Document {
     /// "New Pattern Swatch 1"…
     pub fn new_swatch_name(&self, paint: &Paint) -> String {
         let base = match paint {
+            Paint::Solid { swatch: Some(n), tint, .. } if *tint < 1.0 => return self.free_swatch_name(&format!("{n} {}%", tint_percent(*tint))),
             Paint::Solid { color, .. } => return self.free_swatch_name(&color_name(*color)),
             Paint::Gradient(_) => "New Gradient Swatch",
             _ => "New Pattern Swatch",
@@ -66,11 +92,12 @@ impl Document {
         Some(list.remove(i))
     }
 
-    /// Visit every solid paint (fills, strokes and text runs) in the art, symbol definitions,
-    /// pattern tiles and graphic styles. `f(colour, link)` may change both and returns true when it
-    /// did. Only nodes holding a changed paint (and the paths to them) are copied. Returns the
-    /// number of changed paints.
-    pub fn map_solid_paints(&mut self, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) -> usize {
+    /// Visit every colour that can link to a swatch — solid paints and gradient stops of fills,
+    /// strokes and text runs — in the art, symbol definitions, pattern tiles, graphic styles and the
+    /// swatches themselves (tint swatches, gradient swatches' stops). `f(colour, link, tint)` may
+    /// change them and returns true when it did ([`Paint::map_links`]). Only nodes holding a changed
+    /// paint (and the paths to them) are copied. Returns the number of changed paints.
+    pub fn map_solid_paints(&mut self, f: &mut LinkFn) -> usize {
         let mut n = map_trees(&mut self.layers, f);
         for s in &mut self.symbols {
             n += map_tree(&mut s.art, f);
@@ -80,15 +107,18 @@ impl Document {
         }
         for gs in &mut self.graphic_styles {
             for it in &mut gs.appearance.items {
-                n += usize::from(map_solid(item_paint_mut(it), f));
+                n += usize::from(item_paint_mut(it).map_links(f));
             }
+        }
+        for w in self.swatches_iter_mut() {
+            n += usize::from(w.paint.map_links(f));
         }
         n
     }
 
-    /// [`Document::map_solid_paints`] limited to the subtrees of `ids` (each paint visited once even
-    /// when an id is inside another).
-    pub fn map_solid_paints_in(&mut self, ids: &[NodeId], f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) -> usize {
+    /// [`Document::map_solid_paints`] limited to the art in the subtrees of `ids` (each paint
+    /// visited once even when an id is inside another).
+    pub fn map_solid_paints_in(&mut self, ids: &[NodeId], f: &mut LinkFn) -> usize {
         let roots: Vec<NodeId> =
             ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
         let mut n = 0;
@@ -135,14 +165,18 @@ pub fn color_name(c: Color) -> String {
     }
 }
 
-/// Every colour in the subtree of `n` with the swatch it links to: solid fills, strokes and text
-/// runs (with their link), then gradient stops and mesh points (unlinked), in paint order.
+/// What [`Document::map_solid_paints`] applies to each linkable colour: `(colour, link, tint)`,
+/// true when it changed them.
+pub type LinkFn<'a> = dyn FnMut(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
+
+/// Every colour in the subtree of `n` with the swatch it links to: solid fills, strokes, text runs
+/// and gradient stops (with their link), then mesh points (unlinked), in paint order.
 pub fn node_colors(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
     n.walk(&mut |m| {
         for p in node_paints(m) {
             match p {
-                Paint::Solid { color, swatch } => f(color, swatch.as_deref()),
-                Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, None)),
+                Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref()),
+                Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, s.swatch.as_deref())),
                 _ => {}
             }
         }
@@ -184,24 +218,17 @@ fn node_paints_mut(n: &mut Node) -> impl Iterator<Item = &mut Paint> {
     n.appearance.items.iter_mut().map(item_paint_mut).chain(runs.iter_mut().flat_map(|r| [&mut r.style.fill, &mut r.style.stroke]))
 }
 
-/// Apply `f` to a solid paint; true when it changed.
-fn map_solid(p: &mut Paint, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) -> bool {
-    match p {
-        Paint::Solid { color, swatch } => f(color, swatch),
-        _ => false,
-    }
-}
-
-/// `n` with `f` applied to its subtree's solid paints, or `None` when nothing changed (then nothing
-/// was copied). Also returns the number of changed paints.
-fn map_node(n: &Node, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) -> Option<(Node, usize)> {
-    // Try each own paint on a scratch copy first, so unchanged nodes are never cloned.
-    let mut changes: Vec<(usize, Color, Option<String>)> = vec![];
+/// `n` with `f` applied to its subtree's linkable colours, or `None` when nothing changed (then
+/// nothing was copied). Also returns the number of changed paints.
+fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
+    // Try each own solid or gradient paint on a scratch copy first, so unchanged nodes are never
+    // cloned.
+    let mut changes: Vec<(usize, Paint)> = vec![];
     for (i, p) in node_paints(n).enumerate() {
-        if let Paint::Solid { color, swatch } = p {
-            let (mut c, mut s) = (*color, swatch.clone());
-            if f(&mut c, &mut s) {
-                changes.push((i, c, s));
+        if matches!(p, Paint::Solid { .. } | Paint::Gradient(_)) {
+            let mut q = p.clone();
+            if q.map_links(f) {
+                changes.push((i, q));
             }
         }
     }
@@ -212,10 +239,9 @@ fn map_node(n: &Node, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool
         let mut changes = changes.into_iter().peekable();
         for (i, p) in node_paints_mut(&mut m).enumerate() {
             if changes.peek().is_some_and(|c| c.0 == i)
-                && let (Some((_, c, s)), Paint::Solid { color, swatch }) = (changes.next(), p)
+                && let Some((_, q)) = changes.next()
             {
-                *color = c;
-                *swatch = s;
+                *p = q;
             }
         }
         out = Some(m);
@@ -234,7 +260,7 @@ fn map_node(n: &Node, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool
     out.map(|m| (m, count))
 }
 
-fn map_tree(n: &mut Arc<Node>, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) -> usize {
+fn map_tree(n: &mut Arc<Node>, f: &mut LinkFn) -> usize {
     match map_node(n, f) {
         Some((new, count)) => {
             *n = Arc::new(new);
@@ -244,7 +270,7 @@ fn map_tree(n: &mut Arc<Node>, f: &mut dyn FnMut(&mut Color, &mut Option<String>
     }
 }
 
-fn map_trees(v: &mut [Arc<Node>], f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) -> usize {
+fn map_trees(v: &mut [Arc<Node>], f: &mut LinkFn) -> usize {
     v.iter_mut().map(|n| map_tree(n, f)).sum()
 }
 
@@ -257,7 +283,7 @@ mod tests {
     use crate::Appearance;
 
     fn linked(color: Color, name: &str) -> Paint {
-        Paint::Solid { color, swatch: Some(name.into()) }
+        Paint::Solid { color, swatch: Some(name.into()), tint: 1.0 }
     }
 
     /// A document with a grouped global swatch "Brand", a rectangle filled with it and an unlinked one.
@@ -309,7 +335,7 @@ mod tests {
         let (mut d, a, b) = doc();
         let before = d.clone();
         let blue = Color::rgb(0.0, 0.0, 1.0);
-        let n = d.map_solid_paints(&mut |c, s| {
+        let n = d.map_solid_paints(&mut |c, s, _| {
             if s.as_deref() != Some("Brand") {
                 return false;
             }
@@ -323,7 +349,7 @@ mod tests {
         assert!(Arc::ptr_eq(&unchanged(&d), &unchanged(&before)), "the unlinked rectangle is shared, not copied");
         // Nothing to change: the tree is untouched.
         let again = d.clone();
-        assert_eq!(d.map_solid_paints(&mut |_, _| false), 0);
+        assert_eq!(d.map_solid_paints(&mut |_, _, _| false), 0);
         assert!(Arc::ptr_eq(&d.layers[0], &again.layers[0]));
     }
 
@@ -332,7 +358,7 @@ mod tests {
         let (mut d, a, b) = doc();
         let layer = d.layers[0].id;
         let mut seen = 0;
-        let n = d.map_solid_paints_in(&[layer, a], &mut |_, s| {
+        let n = d.map_solid_paints_in(&[layer, a], &mut |_, s, _| {
             seen += 1;
             s.take().is_some()
         });

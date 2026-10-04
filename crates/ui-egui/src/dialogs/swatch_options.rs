@@ -53,10 +53,18 @@ fn set_color(d: &mut Dialog, c: Color) {
     d.fields.insert("color".into(), json!(c));
 }
 
-/// Open the editor of swatch `name`: Swatch Options for a colour or a gradient (its name only),
-/// pattern editing for a pattern.
+/// Open the editor of swatch `name`: Swatch Options for a colour (a tint swatch's base) or a
+/// gradient (its name only), pattern editing for a pattern.
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
-    let sw = app.session.active().and_then(|st| st.doc.swatch(name).cloned()).ok_or_else(|| format!("no swatch `{name}`"))?;
+    let d = app.session.active().map(|st| &st.doc);
+    let sw = d.and_then(|d| d.swatch(name)).ok_or_else(|| format!("no swatch `{name}`"))?;
+    if let Some((base, _)) = sw.tint_of()
+        && d.is_some_and(|d| d.swatch(base).is_some())
+    {
+        let base = base.to_string();
+        return open(app, &base);
+    }
+    let sw = sw.clone();
     match &sw.paint {
         Paint::Solid { color, .. } => {
             let fields = json!({

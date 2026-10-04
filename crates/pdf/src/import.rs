@@ -397,7 +397,7 @@ fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern) -> Option<Gra
     keep.push(N);
     let stop_at = |t: f32, offset: f32| -> GradientStop {
         let (color, _) = sample(t).unwrap_or((Color::BLACK, 1.0));
-        GradientStop { offset, color, opacity: 1.0, midpoint: 0.5 }
+        GradientStop::new(offset, color)
     };
     let c = |x: f32, y: f32| m * Point::new(x as f64, y as f64);
     let (kind, geom, stops) = if *axial {

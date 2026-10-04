@@ -31,7 +31,7 @@ impl GradientKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GradientStop {
     /// 0..=1 along the gradient.
     pub offset: f32,
@@ -41,6 +41,27 @@ pub struct GradientStop {
     /// Midpoint to the next stop, 0.13..=0.87 (Illustrator's diamond), default 0.5.
     #[serde(default = "half")]
     pub midpoint: f32,
+    /// The global or spot swatch this stop's colour is linked to (edits to the swatch recolour it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub swatch: Option<String>,
+    /// Tint of the linked swatch (0..1; 1 without a link), as on a solid paint.
+    #[serde(default = "crate::full_tint", skip_serializing_if = "crate::is_full_tint")]
+    pub tint: f32,
+}
+
+impl GradientStop {
+    /// An opaque, unlinked stop of `color` at `offset` with a centred midpoint.
+    pub fn new(offset: f32, color: Color) -> Self {
+        Self { offset, color, opacity: 1.0, midpoint: 0.5, swatch: None, tint: 1.0 }
+    }
+    /// Give the stop `color`, linked to `link` (a global swatch and tint) or unlinked.
+    pub fn set_color(&mut self, color: Color, link: Option<(String, f32)>) {
+        self.color = color;
+        (self.swatch, self.tint) = match link {
+            Some((n, t)) => (Some(n), t),
+            None => (None, 1.0),
+        };
+    }
 }
 
 fn one() -> f32 {
@@ -59,13 +80,7 @@ pub struct Gradient {
 impl Default for Gradient {
     /// Illustrator's default "White, Black" gradient.
     fn default() -> Self {
-        Self {
-            kind: GradientKind::Linear,
-            stops: vec![
-                GradientStop { offset: 0.0, color: Color::WHITE, opacity: 1.0, midpoint: 0.5 },
-                GradientStop { offset: 1.0, color: Color::BLACK, opacity: 1.0, midpoint: 0.5 },
-            ],
-        }
+        Self { kind: GradientKind::Linear, stops: vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)] }
     }
 }
 
@@ -137,7 +152,7 @@ pub fn insert_stop(g: &Gradient, offset: f32) -> (Vec<GradientStop>, usize) {
     let offset = offset.clamp(0.0, 1.0);
     let (color, opacity) = g.sample(offset);
     let mut stops = g.stops.clone();
-    let i = place_stop(&mut stops, GradientStop { offset, color, opacity, midpoint: 0.5 });
+    let i = place_stop(&mut stops, GradientStop { opacity, ..GradientStop::new(offset, color) });
     (stops, i)
 }
 
@@ -166,19 +181,22 @@ pub fn move_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<Gradient
 /// Add a copy of stop `i` at `offset` (Alt-drag). Returns the stops and the copy's index.
 pub fn duplicate_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<GradientStop>, usize) {
     let mut v = stops.to_vec();
-    let Some(&s) = v.get(i) else { return (v, i) };
+    let Some(s) = v.get(i).cloned() else { return (v, i) };
     let ni = place_stop(&mut v, GradientStop { offset: offset.clamp(0.0, 1.0), ..s });
     (v, ni)
 }
 
-/// Swap the colours of stops `a` and `b` (Alt-dropping one stop on another); offsets, opacities
-/// and midpoints stay. Out-of-range indices leave the stops unchanged.
+/// Swap the colours of stops `a` and `b` (Alt-dropping one stop on another), with their swatch
+/// links and tints; offsets, opacities and midpoints stay. Out-of-range indices leave the stops
+/// unchanged.
 pub fn swap_stop_colors(stops: &[GradientStop], a: usize, b: usize) -> Vec<GradientStop> {
     let mut v = stops.to_vec();
-    if a < v.len() && b < v.len() {
-        let c = v[a].color;
-        v[a].color = v[b].color;
-        v[b].color = c;
+    if a < v.len() && b < v.len() && a != b {
+        let (lo, hi) = v.split_at_mut(a.max(b));
+        let (x, y) = (&mut lo[a.min(b)], &mut hi[0]);
+        std::mem::swap(&mut x.color, &mut y.color);
+        std::mem::swap(&mut x.swatch, &mut y.swatch);
+        std::mem::swap(&mut x.tint, &mut y.tint);
     }
     v
 }
@@ -517,7 +535,7 @@ mod tests {
 
     fn g3() -> Gradient {
         let mut g = Gradient::default();
-        g.stops.insert(1, GradientStop { offset: 0.5, color: Color::rgb(1.0, 0.0, 0.0), opacity: 1.0, midpoint: 0.5 });
+        g.stops.insert(1, GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)));
         g
     }
 

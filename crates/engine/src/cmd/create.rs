@@ -218,7 +218,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         seed ^= seed << 17;
         (seed >> 11) as f64 / (1u64 << 53) as f64
     };
-    let stop = |offset: f32, opacity: f32| GradientStop { offset, color: vectorcraft_color::Color::WHITE, opacity, midpoint: 0.5 };
+    let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient { kind: GradientKind::Radial, stops });
         g.geom = Some(GradientGeom { start: centre, end: centre + vectorcraft_geom::Vec2::new(radius, 0.0), aspect: 1.0 });

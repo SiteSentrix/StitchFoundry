@@ -53,21 +53,6 @@ fn adjust_balance_modes() {
 }
 
 #[test]
-fn global_mode_needs_tints_and_says_so() {
-    let mut s = session();
-    s.execute("swatch.new", &json!({"name": "Brand", "color": "#3366cc", "global": true})).unwrap();
-    let a = id_of(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
-    s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Brand"})).unwrap();
-    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
-    let before = s.doc().unwrap().doc.clone();
-    let e = s.execute("edit.colors.adjustBalance", &json!({"mode": "global"})).unwrap_err().to_string();
-    assert!(e.contains("global and spot"), "{e}");
-    assert_eq!(*s.doc().unwrap().doc, *before, "nothing changed");
-    let p = s.doc().unwrap().doc.node(a).unwrap().appearance.fill_paint();
-    assert!(matches!(p, Paint::Solid { swatch: Some(ref n), .. } if n == "Brand"), "the link is kept");
-}
-
-#[test]
 fn balance_previews_and_commits_one_step() {
     let mut s = session();
     let a = rect(&mut s, json!("#808080"));

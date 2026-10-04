@@ -76,7 +76,7 @@ as `ui.color_guide` (`variation`, `steps`, `amount`). Save Colors as Swatches ru
 (one swatch per colour, one undo step).
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
-`global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` from −100 to 100, `convert`, `fill`, `stroke`,
+`global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
 `preview`) and `ui.saturateDialog` opens Saturate (`saturate`: `intensity` −100..100, `preview`). Both preview on the
 canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.colors.adjustBalance` /
 `edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global

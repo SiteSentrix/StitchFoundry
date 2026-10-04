@@ -1,7 +1,8 @@
 //! The gradient stop popover: double-clicking a stop on the Gradient tool's annotator (or the
 //! Gradient panel's slider) edits it next to its chip — its colour (the Color panel's controls,
-//! or a document swatch), opacity and location. It edits the selected stop
-//! (`gradient.selectStop`) through `paint.editGradient`, and closes on Escape or a click elsewhere.
+//! or a document swatch, which stays linked when it is a global or spot colour), opacity and
+//! location. It edits the selected stop (`gradient.selectStop`) through `paint.editGradient`, and
+//! closes on Escape or a click elsewhere.
 //!
 //! Fields: `index`, `x`, `y` (the chip, document coordinates) or `screen` ([x, y], screen points,
 //! from the panel), and `tab` (`color` or `swatches`).
@@ -31,9 +32,9 @@ fn selected(app: &VectorcraftApp) -> Option<(Vec<GradientStop>, usize)> {
     Some((g.gradient.stops, i))
 }
 
-/// `stops` with stop `i` given `color`.
-fn recolor(mut stops: Vec<GradientStop>, i: usize, color: Color) -> Vec<GradientStop> {
-    stops[i].color = color;
+/// `stops` with stop `i` given `color`, linked to `link` (a global swatch and tint) or unlinked.
+fn recolor(mut stops: Vec<GradientStop>, i: usize, color: Color, link: Option<(String, f32)>) -> Vec<GradientStop> {
+    stops[i].set_color(color, link);
     stops
 }
 
@@ -84,7 +85,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let s = stops[i];
+                    let s = &stops[i];
                     widgets::dim_label(ui, "Opacity:");
                     if let Some(v) = widgets::plain_field(ui, "stop-pop-op", s.opacity as f64 * 100.0, "%", 0, 54.0) {
                         let mut v2 = stops.clone();
@@ -124,12 +125,14 @@ fn swatch_grid(app: &mut VectorcraftApp, ui: &mut egui::Ui, stops: &[GradientSto
             let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
             widgets::swatch_tile(ui, r, &Paint::solid(*c), stops[i].color == *c, resp.hovered());
             if resp.on_hover_text(name).clicked() {
-                pick = Some(*c);
+                pick = Some((name.clone(), *c));
             }
         }
     });
-    if let Some(c) = pick {
-        set_stops(app, &recolor(stops.to_vec(), i, c), Some(i), Live::Released);
+    // A global or spot colour (or a tint of one) stays linked.
+    if let Some((name, c)) = pick {
+        let link = crate::panels::gradient::dropped_link(app, &json!({ "swatch": name }));
+        set_stops(app, &recolor(stops.to_vec(), i, c, link), Some(i), Live::Released);
     }
 }
 
@@ -138,7 +141,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let (mut stops, mut i) = selected(app).ok_or("no gradient stop is selected")?;
     if let Some(hex) = d.fields.get("color").and_then(Value::as_str) {
         let c = crate::panels::color::parse_hex(hex).ok_or_else(|| format!("bad colour `{hex}` (#rrggbb)"))?;
-        stops = recolor(stops, i, c);
+        stops = recolor(stops, i, c, None);
     }
     if d.fields.contains_key("opacity") {
         stops[i].opacity = (d.f64("opacity", 100.0) / 100.0).clamp(0.0, 1.0) as f32;

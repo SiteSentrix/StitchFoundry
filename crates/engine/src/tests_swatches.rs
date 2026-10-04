@@ -128,7 +128,7 @@ fn fill_of(s: &Session, id: NodeId) -> Paint {
 }
 
 fn linked(hex: &str, name: &str) -> Paint {
-    Paint::Solid { color: Color::from_hex(hex).unwrap(), swatch: Some(name.into()) }
+    Paint::Solid { color: Color::from_hex(hex).unwrap(), swatch: Some(name.into()), tint: 1.0 }
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn tints_of_global_swatches_get_swatches_only_when_asked() {
     let (_, b) = art(&mut s);
     // A 50% tint of Brand on b's stroke.
     let tint = Color::from_hex("#95b7d8").unwrap();
-    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).map_solid_paints_in(&[b], &mut |c, l| {
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).map_solid_paints_in(&[b], &mut |c, l, _| {
         let hit = l.as_deref() == Some("Brand");
         if hit {
             *c = tint;
@@ -322,7 +322,11 @@ fn tints_of_global_swatches_get_swatches_only_when_asked() {
     run(&mut s, "edit.undo", json!({}));
     let with = run(&mut s, "swatch.newGroup", json!({"fromArtwork": true, "includeTints": true}));
     assert_eq!(with["swatches"], json!(["Brand", "R=255 G=0 B=0", "R=0 G=255 B=0", "R=149 G=183 B=216"]));
-    assert_eq!(doc(&s).node(b).unwrap().appearance.stroke_paint(), Paint::Solid { color: tint, swatch: Some("Brand".into()) }, "tints stay linked");
+    assert_eq!(
+        doc(&s).node(b).unwrap().appearance.stroke_paint(),
+        Paint::Solid { color: tint, swatch: Some("Brand".into()), tint: 1.0 },
+        "tints stay linked"
+    );
 }
 
 #[test]

@@ -428,3 +428,33 @@ fills and strokes become objects among its members, and its members are expanded
 ```json
 {"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{"ids":[12]}}}
 ```
+
+## Tints of global and spot colours
+
+A colour linked to a global or spot swatch has a tint (the reference app's T slider): `paint.setFill {swatch,
+tint?: 0..100}` (and `paint.setStroke`) applies the swatch at that percentage, linked, so `swatch.edit` recolours it
+at its own tint. `paint.proxies` and `document.inspect` show the paint as `{type: "solid", color, swatch, tint}`
+(`tint` 0..1, left out at 100 %). `swatch.new {tint?}` with the current fill (or `swatch`) saves a tint swatch,
+"Name 40%": `swatch.list` reports it with `tintOf` and `tint`, applying it links to its base at that tint, and it
+follows edits of its base. A spot tint prints that percentage of its plate (Separations Preview, PDF Separation
+value). `edit.colors.adjustBalance {tint: -100..100}` (Global mode) shifts the tints of the selection's linked
+colours and leaves the rest alone.
+
+```json
+{"name":"run_command","arguments":{"command":"paint.setFill","params":{"swatch":"Ink","tint":40}}}
+{"name":"run_command","arguments":{"command":"edit.colors.adjustBalance","params":{"mode":"global","tint":-20}}}
+```
+
+## Linked gradient stops
+
+Applying a gradient swatch (`paint.setFill {swatch}`) records it as the gradient's `swatch` (the Swatches panel
+highlights it; new stops drop the link). A gradient stop can link to a global or spot swatch like a solid colour:
+give it `swatch` (and `tint` %, default 100 or a tint swatch's own) instead of `color` in `paint.editGradient
+{stops}` or a `gradient` paint's stops. Editing or deleting the swatch then recolours or unlinks the stop, in art and
+in gradient swatches. A spot stop separates on its plate; a gradient whose stops are all tints of one spot ink (or
+paper white, 0 %) exports to PDF as a Separation shading (the writer has no DeviceN, so a gradient mixing a spot
+ink with other colours is written in process colours, with a warning).
+
+```json
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stops":[{"offset":0,"swatch":"Ink"},{"offset":1,"swatch":"Ink","tint":20}]}}}
+```

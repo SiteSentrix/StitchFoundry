@@ -805,6 +805,8 @@ mod tests_knockout;
 #[cfg(test)]
 mod tests_layerclip;
 #[cfg(test)]
+mod tests_linked_stops;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_menucmds;
@@ -846,5 +848,7 @@ mod tests_targeting;
 mod tests_textedit;
 #[cfg(test)]
 mod tests_tileedge;
+#[cfg(test)]
+mod tests_tints;
 #[cfg(test)]
 mod tests_xform;

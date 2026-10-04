@@ -15,7 +15,7 @@ fn render(d: &Document) -> Image {
 }
 
 fn stops(a: Color, b: Color) -> Vec<GradientStop> {
-    vec![GradientStop { offset: 0.0, color: a, opacity: 1.0, midpoint: 0.5 }, GradientStop { offset: 1.0, color: b, opacity: 1.0, midpoint: 0.5 }]
+    vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)]
 }
 
 fn gradient(kind: GradientKind, a: Color, b: Color, angle: f64) -> Paint {
