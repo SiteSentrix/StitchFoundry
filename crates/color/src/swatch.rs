@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::cms::Model;
 use crate::{Color, Gradient, GradientKind, GradientStop, Paint};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -26,9 +27,33 @@ fn solid(name: &str, hex: &str) -> Swatch {
     Swatch { name: name.into(), paint: Paint::solid(Color::from_hex(hex).unwrap()), global: false, spot: false }
 }
 
+/// The default swatches of a document in colour `model`: [`base_swatches`] with their RGB colours
+/// (gradient stops too) as whole-percent CMYK in a CMYK document. Greys stay Gray.
+pub fn default_swatches(model: Model) -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    let (mut s, mut g) = base_swatches();
+    if model == Model::Cmyk {
+        let cmyk = |c: &mut Color| {
+            if let Color::Rgb { .. } = c {
+                let pct = |v: f32| (v.clamp(0.0, 1.0) * 100.0).round() / 100.0;
+                let [cc, m, y, k] = c.to_cmyk();
+                *c = Color::cmyk(pct(cc), pct(m), pct(y), pct(k));
+            }
+        };
+        for w in s.iter_mut().chain(g.iter_mut().flat_map(|g| g.swatches.iter_mut())) {
+            match &mut w.paint {
+                Paint::Solid { color, .. } => cmyk(color),
+                Paint::Gradient(gp) => gp.gradient.stops.iter_mut().for_each(|st| cmyk(&mut st.color)),
+                _ => {}
+            }
+        }
+    }
+    (s, g)
+}
+
 /// The default document swatches: None, Registration-like black, white, black, a spectrum, greys,
-/// gradients. (Composition is ours; Illustrator's layout grammar — None first, then specials — is kept.)
-pub fn default_swatches() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+/// gradients. (The composition is ours; the reference app's layout grammar — None first, then
+/// specials — is kept.)
+fn base_swatches() -> (Vec<Swatch>, Vec<SwatchGroup>) {
     let mut s =
         vec![Swatch { name: "[None]".into(), paint: Paint::None, global: false, spot: false }, solid("White", "#ffffff"), solid("Black", "#000000")];
     let spectrum = [
@@ -110,10 +135,28 @@ mod tests {
 
     #[test]
     fn defaults_start_with_none() {
-        let (s, g) = default_swatches();
+        let (s, g) = default_swatches(Model::Rgb);
         assert!(s[0].paint.is_none());
         assert!(s.len() > 30);
         assert_eq!(g.len(), 2);
         assert_eq!(g[0].swatches.len(), 9);
+    }
+
+    #[test]
+    fn cmyk_defaults_are_cmyk_with_the_same_names() {
+        let (rgb, _) = default_swatches(Model::Rgb);
+        let (s, g) = default_swatches(Model::Cmyk);
+        assert_eq!(s.iter().map(|w| &w.name).collect::<Vec<_>>(), rgb.iter().map(|w| &w.name).collect::<Vec<_>>());
+        let colors = s.iter().chain(g.iter().flat_map(|g| &g.swatches)).flat_map(|w| match &w.paint {
+            Paint::Solid { color, .. } => vec![*color],
+            Paint::Gradient(gp) => gp.gradient.stops.iter().map(|st| st.color).collect(),
+            _ => vec![],
+        });
+        assert!(colors.clone().all(|c| !matches!(c, Color::Rgb { .. })));
+        assert!(colors.clone().any(|c| matches!(c, Color::Gray { .. })), "greys stay Gray");
+        let white = s.iter().find(|w| w.name == "White").and_then(|w| w.paint.color());
+        assert_eq!(white, Some(Color::cmyk(0.0, 0.0, 0.0, 0.0)));
+        let black = s.iter().find(|w| w.name == "Black").and_then(|w| w.paint.color());
+        assert_eq!(black, Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
     }
 }

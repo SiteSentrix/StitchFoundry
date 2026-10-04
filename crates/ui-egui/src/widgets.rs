@@ -255,8 +255,14 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
     let s = size * 0.62;
     let fill_r = Rect::from_min_size(rect.min + vec2(0.0, 0.0), Vec2::splat(s));
     let stroke_r = Rect::from_min_size(rect.max - Vec2::splat(s), Vec2::splat(s));
-    let stroke_resp = ui.interact(stroke_r, ui.id().with("stroke-proxy"), Sense::click());
-    let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click());
+    let stroke_resp = ui.interact(stroke_r, ui.id().with("stroke-proxy"), Sense::click_and_drag());
+    let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click_and_drag());
+    // A proxy drags its paint (onto the Swatches panel or art), unless it shows "?".
+    for (resp, paint, mixed) in [(&fill_resp, fill, mixed.0), (&stroke_resp, stroke, mixed.1)] {
+        if resp.drag_started() && !mixed {
+            egui::DragAndDrop::set_payload(ui.ctx(), paint.clone());
+        }
+    }
     let question = |ui: &Ui, r: Rect, color: Color32| {
         ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(r.height() * 0.8), color);
     };
@@ -855,6 +861,29 @@ pub fn swatch_tile(ui: &Ui, rect: Rect, paint: &Paint, selected: bool, hovered: 
         ui.painter().rect_stroke(rect.shrink(1.0), 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
         ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, if selected { t.accent } else { t.text }), StrokeKind::Outside);
     }
+}
+
+/// A recessed search field with an italic `hint` (Layers' Search All, Swatches' Find), keeping its
+/// text in egui memory under `id`. Returns the text.
+pub fn search_field(ui: &mut Ui, id: egui::Id, hint: &str) -> String {
+    let t = Tokens::get(ui.ctx());
+    let mut query: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+    egui::Frame::NONE
+        .fill(t.input)
+        .stroke(Stroke::new(1.0, t.input_border))
+        .corner_radius(egui::CornerRadius::same(2))
+        .inner_margin(egui::Margin::symmetric(8, 5))
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut query)
+                    .id(id.with("edit"))
+                    .frame(egui::Frame::NONE)
+                    .hint_text(egui::RichText::new(hint).italics())
+                    .desired_width(ui.available_width()),
+            );
+        });
+    ui.data_mut(|d| d.insert_temp(id, query.clone()));
+    query
 }
 
 /// A bordered list box (Swatches tiles, Appearance rows, Artboards list).

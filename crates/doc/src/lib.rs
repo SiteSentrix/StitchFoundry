@@ -207,6 +207,16 @@ pub enum ColorMode {
     Cmyk,
 }
 
+impl ColorMode {
+    /// The colour model new colours take in a document of this mode.
+    pub fn model(self) -> vectorcraft_color::cms::Model {
+        match self {
+            ColorMode::Rgb => vectorcraft_color::cms::Model::Rgb,
+            ColorMode::Cmyk => vectorcraft_color::cms::Model::Cmyk,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Artboard {
     pub id: u32,
@@ -389,15 +399,20 @@ fn ppi72() -> f64 {
 pub const FORMAT_VERSION: u32 = 1;
 
 impl Document {
-    /// A new document with one artboard of `size` and one layer ("Layer 1").
+    /// A new RGB document with one artboard of `size` and one layer ("Layer 1").
     pub fn new(width: f64, height: f64) -> Self {
-        let (swatches, swatch_groups) = vectorcraft_color::default_swatches();
+        Self::new_with_mode(width, height, ColorMode::Rgb)
+    }
+
+    /// [`Document::new`] in colour `mode`, with that mode's default swatches.
+    pub fn new_with_mode(width: f64, height: f64, mode: ColorMode) -> Self {
+        let (swatches, swatch_groups) = vectorcraft_color::default_swatches(mode.model());
         let mut d = Self {
             version: FORMAT_VERSION,
             title: "Untitled-1".into(),
             template: false,
             units: Unit::Points,
-            color_mode: ColorMode::Rgb,
+            color_mode: mode,
             artboards: vec![Artboard {
                 id: 1,
                 name: "Artboard 1".into(),

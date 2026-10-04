@@ -94,6 +94,16 @@ swatches and colour groups in one undo step (art using a deleted global swatch k
 `swatch.new {color?, mode?, spot?, global?, group?}` saves a colour (into a colour group with `group`), gradient
 or pattern; `swatch.newGroup {fromArtwork: true, toGlobal?, includeTints?}` makes a colour group of the selected
 art's colours (by default as global swatches the art links to).
+`swatch.move {names, to?, group?}` reorders swatches or moves them into or out of a colour group (as dragging
+them in the Swatches panel does); give colour group names instead to reorder the groups. Dropping a swatch on art
+in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
+The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
+names Select All Unused selects), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
+`swatch.sortByKind`.
+Document colour mode: `file.new {colorMode: "cmyk"}` starts a CMYK document with CMYK default swatches, and RGB
+colours applied to it (`paint.setFill`/`setStroke` colours and gradient stops, `swatch.new`) are stored as CMYK;
+Gray stays Gray, and `keepModel: true` keeps a colour as given. RGB documents keep colours as given. Harmonies, Edit
+Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
 
 ## Resources
 

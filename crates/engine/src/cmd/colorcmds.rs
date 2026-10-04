@@ -6,7 +6,8 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::cms::Model;
+use vectorcraft_color::{Color, Paint, keep_model};
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind};
 
 use super::edit::selected_roots;
@@ -100,29 +101,12 @@ pub(crate) fn invert(c: Color) -> Color {
     c.invert_keep_model()
 }
 
-/// Express `new` in the colour model of `orig`.
-fn keep_model(orig: Color, new: Color) -> Color {
-    match orig {
-        Color::Rgb { .. } => {
-            let [r, g, b] = new.to_rgb();
-            Color::rgb(r, g, b)
-        }
-        Color::Cmyk { .. } => to_cmyk(new),
-        Color::Gray { .. } => to_gray(new),
-    }
-}
-
 pub(crate) fn to_cmyk(c: Color) -> Color {
-    let [c, m, y, k] = c.to_cmyk();
-    Color::cmyk(c, m, y, k)
+    c.in_model(Model::Cmyk)
 }
 
 pub(crate) fn to_gray(c: Color) -> Color {
-    if let Color::Gray { .. } = c {
-        return c;
-    }
-    let [r, g, b] = c.to_rgb();
-    Color::gray((1.0 - (0.299 * r + 0.587 * g + 0.114 * b)).clamp(0.0, 1.0))
+    c.in_model(Model::Gray)
 }
 
 /// Apply `f` to a paint; returns whether anything changed.
@@ -318,6 +302,8 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
     }
     let first = d.node(ids[0]).and_then(fill_color).unwrap_or_default();
     let last = d.node(*ids.last().unwrap()).and_then(fill_color).unwrap_or_default();
+    // Ends in one model blend in it; mixed ones give colours in the document's model.
+    let model = if first.model() == last.model() { first.model() } else { d.color_mode.model() };
     let n = ids.len();
     let label = match order {
         BlendOrder::Stack => "Blend Front to Back",
@@ -327,7 +313,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
     let changed = s.edit(label, |d, _| {
         let mut changed = 0;
         for (i, id) in ids.iter().enumerate().take(n - 1).skip(1) {
-            let c = lerp_model(first, last, i as f32 / (n - 1) as f32);
+            let c = lerp_model(first, last, i as f32 / (n - 1) as f32).in_model(model);
             if let Some(node) = d.node_mut(*id) {
                 changed += map_node_colors(node, &|_| c, true, false);
             }

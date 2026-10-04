@@ -205,6 +205,36 @@ impl Color {
         let b = other.to_rgb();
         Color::rgb(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t)
     }
+    /// The colour model this colour is authored in.
+    pub fn model(&self) -> cms::Model {
+        match self {
+            Color::Rgb { .. } => cms::Model::Rgb,
+            Color::Cmyk { .. } => cms::Model::Cmyk,
+            Color::Gray { .. } => cms::Model::Gray,
+        }
+    }
+    /// This colour expressed in `model` with the profile-free formulas Edit Colors uses (RGB from
+    /// the display colour, CMYK by [`Color::to_cmyk`], Gray as ink from luminance); unchanged when it
+    /// is in `model` already.
+    pub fn in_model(self, model: cms::Model) -> Color {
+        if self.model() == model {
+            return self;
+        }
+        match model {
+            cms::Model::Rgb => {
+                let [r, g, b] = self.to_rgb();
+                Color::rgb(r, g, b)
+            }
+            cms::Model::Cmyk => {
+                let [c, m, y, k] = self.to_cmyk();
+                Color::cmyk(c, m, y, k)
+            }
+            cms::Model::Gray => {
+                let [r, g, b] = self.to_rgb();
+                Color::gray((1.0 - (0.299 * r + 0.587 * g + 0.114 * b)).clamp(0.0, 1.0))
+            }
+        }
+    }
     pub fn model_name(&self) -> &'static str {
         match self {
             Color::Rgb { .. } => "RGB",
@@ -212,6 +242,12 @@ impl Color {
             Color::Gray { .. } => "Grayscale",
         }
     }
+}
+
+/// `new` expressed in the colour model of `orig` ([`Color::in_model`]): results of colour operations
+/// (harmonies, blends, inversions, recolouring) keep the model of the colour they came from.
+pub fn keep_model(orig: Color, new: Color) -> Color {
+    new.in_model(orig.model())
 }
 
 /// What fills or strokes an object.
@@ -320,6 +356,19 @@ mod tests {
         assert_eq!(Color::gray(0.25).invert_keep_model(), Color::gray(0.75));
         assert!(matches!(Color::cmyk(0.0, 1.0, 1.0, 0.0).invert_keep_model(), Color::Cmyk { .. }));
         assert_eq!(Color::rgb(1.0, 1.0, 0.0).invert_keep_model(), Color::rgb(0.0, 0.0, 1.0));
+    }
+
+    #[test]
+    fn colours_convert_between_models_and_keep_them() {
+        use cms::Model;
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        assert_eq!(red.in_model(Model::Cmyk), Color::cmyk(0.0, 1.0, 1.0, 0.0));
+        assert_eq!(red.in_model(Model::Rgb), red, "already RGB: unchanged");
+        assert_eq!(Color::gray(0.25).in_model(Model::Gray), Color::gray(0.25));
+        assert_eq!(Color::WHITE.in_model(Model::Gray), Color::gray(0.0));
+        assert_eq!(keep_model(Color::cmyk(0.1, 0.2, 0.3, 0.0), red).model(), Model::Cmyk);
+        assert_eq!(keep_model(Color::gray(0.5), red).model(), Model::Gray);
+        assert_eq!(keep_model(red, Color::rgb(0.0, 0.5, 1.0)), Color::rgb(0.0, 0.5, 1.0));
     }
 
     #[test]
