@@ -13,7 +13,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null, dashOffset?, alignDashes?, startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", ids?}",
+            "{weight?, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares), dashOffset?, alignDashes?, startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", ids?}",
             has_doc,
             stroke_set
         ),
