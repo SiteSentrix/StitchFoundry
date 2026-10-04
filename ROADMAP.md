@@ -1,6 +1,6 @@
 # VectorCraft Roadmap
 
-VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the industry-standard vector illustration workflow (called "the reference app" below). It runs on macOS, Windows, Linux and the web (WASM), and agents can drive it fully over a JSON control channel and MCP.
+VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs on macOS, Windows, Linux and the web (WASM), and agents can drive it fully over a JSON control channel and MCP.
 
 This file tracks **how far we are and what's left**. Time estimates are wall-clock hours of continuous Claude Opus 5.5 agent work (including builds and the CI gate), given both for **one agent** and for **4–6 parallel agents** on disjoint crates. They are counted from the remaining work (see [Parity estimate](#parity-estimate)), calibrated against measured throughput, and updated as work lands.
 
@@ -11,8 +11,8 @@ _Last updated: 2026-10-04._
 | Dimension | Status |
 |---|---|
 | Infrastructure (engine, command registry, history, render, formats, MCP, web, packaging, tests) | **~90%** |
-| Look & feel vs the reference app's 2026 default workspace (measured) | **~75–80%** |
-| Feature surface vs the full reference app (weighted, see below) | **~66%** |
+| Look & feel vs Illustrator 2026 default workspace (measured) | **~75–80%** |
+| Feature surface vs full Illustrator (weighted, see below) | **~66%** |
 | Parity including interaction fidelity and hardening ("a power user can't tell the difference, but faster") | **~50%** |
 | Time to **feature parity** (every menu item, tool, panel, effect and dialog functional) | **~460–660 h** one agent · **~115–190 h** with 4–6 agents |
 | Time to **full parity** (feature parity + interaction-fidelity pass + hardening) | **~570–830 h** one agent · **~145–235 h** with 4–6 agents |
@@ -25,7 +25,7 @@ _Last updated: 2026-10-04._
   - MCP server with 25 tools (drawing, text, effects, Pathfinder, transforms, graphs, text wrap, export, screenshots, any command), attached to the running app or headless.
   - Headless CLI (`vectorcraft-cli run`, `convert`, `info`, `bench`, `perf`, `mcp`).
   - Actions panel that records and plays back commands.
-- **UI:** the reference app's 2026 layout restyled to measured values:
+- **UI:** Illustrator 2026 layout restyled to measured values:
   - Medium Dark theme, categorized and Advanced toolbars, 35 pt document tabs, 33 pt panel tabs.
   - Hint bar, contextual task bar, 19 dock panels with ≡ menus.
   - Native macOS menu bar, vector tool cursors, a ⌘K command palette, middle-button panning with any tool.
@@ -87,9 +87,9 @@ _Last updated: 2026-10-04._
 
 ## Parity estimate
 
-_Method (2026-10-02, M3 rows re-derived 2026-10-04):_ the reference app's feature surface is split into 22 areas, weighted by how much of the app (and of
+_Method (2026-10-02, M3 rows re-derived 2026-10-04):_ Illustrator's feature surface is split into 22 areas, weighted by how much of the app (and of
 real users' work) each represents. Each area is scored by depth of behaviour, not by presence of a menu item: an area
-is 100% only when every feature in it behaves like the reference app. Feature parity = Σ weight × score / Σ weight. Remaining
+is 100% only when every feature in it behaves like Illustrator. Feature parity = Σ weight × score / Σ weight. Remaining
 time is counted per area from what is missing, calibrated on measured throughput: in the last session one agent landed
 about 20 medium features (Text Wrap, Graphs, Effect → Pathfinder, export baking…) in ~16 h wall clock including builds
 and CI on a heavily loaded machine — about 0.8 h per medium feature; large subsystems (3D, raster filters, vertical type)
@@ -122,7 +122,7 @@ found more missing depth than the first estimate; they are calibrated on its fir
 | UI chrome (panels, contextual Properties, workspaces, prefs) | 6 | 75% | ~14 panels (Tabs, Links, Attributes, Asset Export, SVG Interactivity, Variables, CSS Properties…), Properties per context | 20–30 |
 | Libraries, Links, Package | 2 | 15% | Links panel, Package, local libraries | 10–15 |
 | **Feature parity** | **103** | **~66%** | | **~460–660** |
-| Interaction-fidelity pass (side by side with the reference app: every tool modifier, cursor, dialog, Properties context) | | | | 60–90 |
+| Interaction-fidelity pass (side by side with Illustrator: every tool modifier, cursor, dialog, Properties context) | | | | 60–90 |
 | Hardening (big-file corpus, fuzzing, cross-platform and browser QA, accessibility, packaging) | | | | 50–80 |
 | **Full parity** | | **~50%** | | **~570–830** |
 
@@ -132,18 +132,18 @@ With 4–6 agents working on disjoint crates (as the layering allows) the wall-c
 
 _Inventories (2026-10-02):_ 426 engine commands + ~60 UI commands; 316 menu items wired, ~70 still disabled; 69 of 79
 tools implemented (missing: Slice ×2, Touch Type, vertical type ×3, Print Tiling); 32 panels of ~45; 44 live
-effects of ~110 (vector effects 44/54, raster effects 1/56); ~1,050 tests (~1,300 on 2026-10-04).
+effects of ~110 (Illustrator effects 44/54, Photoshop-style raster effects 1/56); ~1,050 tests (~1,300 on 2026-10-04).
 
-_Where we already beat the reference app:_ exact curve booleans, off-thread multithreaded rendering, undo that never runs out,
+_Where we already beat Illustrator:_ exact curve booleans, off-thread multithreaded rendering, undo that never runs out,
 lossless SVG/PDF export of live effects with SVG filters, a documented JSON format, the same app on the web, and every
 command, gesture and dialog drivable by agents (MCP, CLI, control channel).
 
 ## Out of scope (by design or by law)
-- **Native `.ai` private data:** it's undocumented. We read the PDF-compatible part, so live objects only the reference app understands arrive as appearance.
-- **The reference app's cloud services** (library sync, hosted fonts, generative features): these are pluggable provider APIs, not built in.
-- **The reference app's bundled assets** (swatch/brush/symbol libraries, presets, icons): ours are original.
+- **Native `.ai` private data:** it's undocumented. We read the PDF-compatible part, so Illustrator-only live objects arrive as appearance.
+- **Adobe cloud services** (Libraries sync, Adobe Fonts, Firefly/generative): these are pluggable provider APIs, not built in.
+- **Adobe's bundled assets** (swatch/brush/symbol libraries, presets, icons): ours are original.
 
-## Where we aim to be better than the reference app
+## Where we aim to be better than Illustrator
 - **Speed:** off-thread multithreaded rendering, instant startup, a responsive UI on huge files.
 - **Robustness:** exact curve booleans (no "cannot perform operation"), property-tested undo/redo and file round trips.
 - **Openness:** a documented native format, first-class SVG, and the same app in the browser.

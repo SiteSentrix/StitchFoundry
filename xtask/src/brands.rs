@@ -6,7 +6,8 @@
 //!   MCP tool definitions…). Comments and test code (`tests*.rs`, `*_tests.rs`, `tests/` and
 //!   `benches/` folders, items under `#[cfg(test)]`) are skipped;
 //! * the `description` of every `Cargo.toml`;
-//! * every text file under `docs/` and `packaging/`.
+//! * every text file under `packaging/`, and under `docs/` except Markdown pages: Markdown docs
+//!   (like `README.md` and `ROADMAP.md`) may name the reference app and compare against it.
 //!
 //! A line that has to keep an old name (an alias that old files or preferences still use) says
 //! `brand-ok` in a comment on that line.
@@ -88,7 +89,7 @@ enum Kind {
 }
 
 fn kind_of(path: &str) -> Option<Kind> {
-    if path.starts_with("docs/") || path.starts_with("packaging/") {
+    if (path.starts_with("docs/") && !path.ends_with(".md")) || path.starts_with("packaging/") {
         Some(Kind::Text)
     } else if path == "Cargo.toml" || path.ends_with("/Cargo.toml") {
         Some(Kind::Manifest)
@@ -348,9 +349,9 @@ line Pantone"; }
         assert_eq!(kind_of("crates/engine/tests/command_sweep.rs"), None);
         assert_eq!(kind_of(SELF), None);
         assert_eq!(kind_of("crates/ui-egui/Cargo.toml"), Some(Kind::Manifest));
-        assert_eq!(kind_of("docs/mcp.md"), Some(Kind::Text));
+        assert_eq!(kind_of("docs/brand/LICENSE-brand.txt"), Some(Kind::Text));
         assert_eq!(kind_of("packaging/linux/nfpm.yaml"), Some(Kind::Text));
-        for skipped in ["README.md", "ROADMAP.md", "CLAUDE.md", "AGENTS.md", ".github/workflows/release.yml", "ASSETS.md"] {
+        for skipped in ["README.md", "ROADMAP.md", "CLAUDE.md", "AGENTS.md", ".github/workflows/release.yml", "ASSETS.md", "docs/mcp.md"] {
             assert_eq!(kind_of(skipped), None, "{skipped}");
         }
     }
@@ -365,13 +366,14 @@ line Pantone"; }
         };
         file("crates/x/src/lib.rs", "pub const LABEL: &str = \"Export for Illustrator\"; // a comment: Adobe\n");
         file("docs/x.md", "Works like Photoshop.\n");
+        file("docs/x.txt", "Works like Photoshop.\n");
         file("packaging/x.desktop", "Keywords=vector;illustrator;\n");
         file("README.md", "Adobe trademark notice\n");
-        let files: Vec<String> = ["crates/x/src/lib.rs", "docs/x.md", "packaging/x.desktop", "README.md"].map(String::from).to_vec();
+        let files: Vec<String> = ["crates/x/src/lib.rs", "docs/x.md", "docs/x.txt", "packaging/x.desktop", "README.md"].map(String::from).to_vec();
         let hits = scan(&dir, &files);
         let _ = std::fs::remove_dir_all(&dir);
         let found: Vec<(&str, usize, &str)> = hits.iter().map(|h| (h.path.as_str(), h.line, h.term)).collect();
-        assert_eq!(found, [("crates/x/src/lib.rs", 1, "illustrator"), ("docs/x.md", 1, "photoshop"), ("packaging/x.desktop", 1, "illustrator")]);
+        assert_eq!(found, [("crates/x/src/lib.rs", 1, "illustrator"), ("docs/x.txt", 1, "photoshop"), ("packaging/x.desktop", 1, "illustrator")]);
     }
 
     #[test]
