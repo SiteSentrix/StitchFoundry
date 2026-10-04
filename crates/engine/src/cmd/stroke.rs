@@ -1,9 +1,9 @@
 //! The Stroke panel: weight, cap, join, alignment, dashes, arrowheads, width profiles and brushes.
 //! With type selected it edits the characters' stroke (weight, cap, join, miter limit, dashes).
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, SavedProfile, StrokeLayer, Unit, WidthProfile};
 
 use super::appearance::{ItemTarget, edit_items, item_target};
 use super::paint::painted;
@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone",
+            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\"|\"pinch\"|\"teardrop\"|\"wave\"|a saved profile's name (stroke.widthProfile.list), item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone",
             has_doc,
             stroke_set
         ),
@@ -30,6 +30,42 @@ pub fn specs() -> Vec<CommandSpec> {
             "{arrowScale?: [start %, end %], swapArrows?: bool, flipProfile?: \"along\"|\"across\", brush?: name|null, item?: stroke item index|null, ids?} Stroke panel extras",
             has_doc,
             stroke_advanced
+        ),
+        cmd!(
+            "stroke.widthProfile.add",
+            "Add to Profiles",
+            [],
+            None,
+            "{name?} save the selected stroke's variable width to the Profile list (kept with the preferences) under `name` (default \"Width Profile N\"; unique, not a built-in's) → {name}",
+            can_add_profile,
+            profile_add
+        ),
+        cmd!(
+            "stroke.widthProfile.delete",
+            "Delete Profile",
+            [],
+            None,
+            "{name?} remove a saved profile from the Profile list (default: the selected stroke's); built-in profiles can't be deleted, and strokes keep their widths → {deleted}",
+            has_saved_profiles,
+            profile_delete
+        ),
+        cmd!(
+            "stroke.widthProfile.reset",
+            "Reset Profiles",
+            [],
+            None,
+            "{} remove every saved profile, leaving the built-ins → {removed: count}",
+            has_saved_profiles,
+            profile_reset
+        ),
+        cmd!(
+            query "stroke.widthProfile.list",
+            "Width Profiles",
+            [],
+            None,
+            "{} → {profiles: [{id (stroke.set `profile`), label, builtIn, points: [[t, left, right]…]}], current: the selected stroke's profile id or name, \"custom\" when it isn't listed, null without a stroke}",
+            always,
+            profile_list
         ),
     ]
 }
@@ -154,8 +190,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let profile = match str_param(p, "profile") {
         None => None,
-        Some("uniform") => Some(None),
-        Some(id) => Some(Some(WidthProfile::preset(id).ok_or_else(|| bad(C, format!("unknown profile {id}")))?)),
+        Some(id) => Some(s.resolve_profile(id).ok_or_else(|| bad(C, format!("unknown profile {id} (see stroke.widthProfile.list)")))?),
     };
     edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
         if index.is_none()
@@ -313,4 +348,119 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// One row of the Profile list: a built-in profile or a saved one.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProfileEntry<'a> {
+    /// What `stroke.set {profile}` takes: a built-in's id, a saved profile's name.
+    pub id: &'a str,
+    pub label: &'a str,
+    pub points: &'a [(f64, f64, f64)],
+    pub built_in: bool,
+}
+
+impl ProfileEntry<'_> {
+    /// Does this row describe `p` (`None`: the plain stroke, the Uniform row)?
+    pub fn matches(&self, p: Option<&WidthProfile>) -> bool {
+        match p {
+            None => self.built_in && self.id == "uniform",
+            Some(p) => p.points == self.points,
+        }
+    }
+}
+
+impl Session {
+    /// The Profile list: the built-in profiles, then the saved ones.
+    pub fn profile_entries(&self) -> impl Iterator<Item = ProfileEntry<'_>> {
+        let built_in = WidthProfile::PRESETS.iter().map(|p| ProfileEntry { id: p.id, label: p.label, points: p.points, built_in: true });
+        let saved =
+            self.prefs.width_profiles.iter().map(|p| ProfileEntry { id: &p.name, label: &p.name, points: &p.profile.points, built_in: false });
+        built_in.chain(saved)
+    }
+
+    /// The Profile list row showing `p` (`None`: the plain stroke), if it is listed.
+    pub fn profile_entry(&self, p: Option<&WidthProfile>) -> Option<ProfileEntry<'_>> {
+        self.profile_entries().find(|e| e.matches(p))
+    }
+
+    /// The profile `stroke.set {profile: key}` applies: `Some(None)` for "uniform" (the plain
+    /// stroke), else a built-in's id or a saved profile's name; `None` when nothing is called `key`.
+    pub fn resolve_profile(&self, key: &str) -> Option<Option<WidthProfile>> {
+        let e = self.profile_entries().find(|e| e.id == key)?;
+        Some((!e.matches(None)).then(|| WidthProfile { points: e.points.to_vec() }))
+    }
+
+    /// The name Add to Profiles suggests: the first free "Width Profile N".
+    pub fn next_profile_name(&self) -> String {
+        (1..).map(|n| format!("Width Profile {n}")).find(|n| !self.profile_name_taken(n)).unwrap_or_default()
+    }
+
+    /// Does a listed profile have `name` as its id or label (ignoring case)?
+    fn profile_name_taken(&self, name: &str) -> bool {
+        self.profile_entries().any(|e| e.id.eq_ignore_ascii_case(name) || e.label.eq_ignore_ascii_case(name))
+    }
+
+    /// The variable width Add to Profiles saves: the shown stroke's profile, when it isn't listed.
+    fn profile_to_add(&self) -> std::result::Result<WidthProfile, String> {
+        let p = self.shown_stroke().and_then(|s| s.profile).ok_or("select a stroke with a variable width")?;
+        match self.profile_entry(Some(&p)) {
+            Some(e) => Err(format!("the selected stroke's profile is already listed as {}", e.label)),
+            None => Ok(p),
+        }
+    }
+}
+
+fn can_add_profile(s: &Session) -> std::result::Result<(), String> {
+    has_doc(s)?;
+    s.profile_to_add().map(|_| ())
+}
+
+fn has_saved_profiles(s: &Session) -> std::result::Result<(), String> {
+    if s.prefs.width_profiles.is_empty() { Err("no saved profiles".into()) } else { Ok(()) }
+}
+
+fn profile_add(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "stroke.widthProfile.add";
+    let profile = s.profile_to_add().map_err(|e| bad(C, e))?;
+    let name = match str_param(p, "name").map(str::trim) {
+        None => s.next_profile_name(),
+        Some("") => return Err(bad(C, "the name is empty")),
+        Some(n) if s.profile_name_taken(n) => return Err(bad(C, format!("a profile is already called {n}"))),
+        Some(n) => n.to_string(),
+    };
+    s.prefs.width_profiles.push(SavedProfile { name: name.clone(), profile });
+    Ok(json!({ "name": name }))
+}
+
+fn profile_delete(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "stroke.widthProfile.delete";
+    let name = match str_param(p, "name") {
+        Some(n) => n.to_string(),
+        None => {
+            let shown = s.shown_stroke().and_then(|st| st.profile);
+            let entry = shown.as_ref().and_then(|p| s.profile_entry(Some(p)));
+            entry.map(|e| e.id.to_string()).ok_or_else(|| bad(C, "give a name, or select a stroke with a saved profile"))?
+        }
+    };
+    if WidthProfile::PRESETS.iter().any(|b| b.id == name || b.label == name) {
+        return Err(bad(C, format!("{name} is built in and can't be deleted")));
+    }
+    let i = s.prefs.width_profiles.iter().position(|sp| sp.name == name).ok_or_else(|| bad(C, format!("no saved profile called {name}")))?;
+    s.prefs.width_profiles.remove(i);
+    Ok(json!({ "deleted": name }))
+}
+
+fn profile_reset(s: &mut Session, _: &Value) -> Result<Value> {
+    let removed = std::mem::take(&mut s.prefs.width_profiles).len();
+    Ok(json!({ "removed": removed }))
+}
+
+fn profile_list(s: &mut Session, _: &Value) -> Result<Value> {
+    let profiles: Vec<Value> = s
+        .profile_entries()
+        .map(|e| json!({"id": e.id, "label": e.label, "builtIn": e.built_in, "points": e.points.iter().map(|&(t, l, r)| [t, l, r]).collect::<Vec<_>>()}))
+        .collect();
+    let current = s.shown_stroke().map(|st| s.profile_entry(st.profile.as_ref()).map_or("custom", |e| e.id).to_string());
+    Ok(json!({ "profiles": profiles, "current": current }))
 }

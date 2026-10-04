@@ -599,7 +599,7 @@ fn stroke_notes(ui: &Ui, r: Rect, st: &vectorcraft_doc::StrokeLayer) {
     if let Some(p) = st.profile.as_ref().filter(|p| p.preset_id() != Some("uniform")) {
         let pr = Rect::from_min_size(pos2(x, r.center().y - 5.0), vec2(28.0, 10.0));
         if pr.right() <= r.right() {
-            paint_profile(ui, pr, Some(p), t.text);
+            paint_profile(ui, pr, Some(&p.points), t.text);
         }
     }
 }

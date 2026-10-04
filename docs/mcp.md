@@ -484,4 +484,18 @@ and flat-colour regions, plus `regions` (bounds, and `id` for objects) for the `
 
 ```json
 {"name":"run_command","arguments":{"command":"flattener.preview","params":{"highlight":"allRasterized","preset":"low"}}}
+
+## Width profiles
+
+The Profile list holds the built-in variable-width profiles (`uniform`, `lens`, `taperStart`, `taperEnd`, `pinch`,
+`teardrop`, `wave`) and profiles saved from strokes; saved ones are kept with the preferences, not in the document
+(no undo step). `stroke.widthProfile.list` returns every row (`id`, `label`, `builtIn`, `points` as `[t, left,
+right]`) and `current`, the selected stroke's profile (`"custom"` when it isn't listed).
+`stroke.widthProfile.add {name?}` saves the selected stroke's variable width (default name "Width Profile N"),
+`stroke.widthProfile.delete {name?}` removes a saved one (default: the selected stroke's; built-ins can't be deleted)
+and `stroke.widthProfile.reset` removes every saved one. `stroke.set {profile}` takes a built-in id or a saved name.
+
+```json
+{"name":"run_command","arguments":{"command":"stroke.widthProfile.add","params":{"name":"Ribbon"}}}
+{"name":"run_command","arguments":{"command":"stroke.set","params":{"ids":[9],"profile":"Ribbon"}}}
 ```

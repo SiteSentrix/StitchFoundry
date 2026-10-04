@@ -127,8 +127,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let link = ui.link(egui::RichText::new("Stroke:").size(12.0).color(t.text).underline()).on_hover_text("Stroke options");
                 stroke_panel::popover(app, &link);
                 stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
-                let profile = vectorcraft_doc::WidthProfile::id_of(shown_stroke.as_ref().and_then(|s| s.profile.as_ref()));
-                if let Some(id) = stroke_panel::profile_dropdown(ui, profile) {
+                if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
                     app.run("stroke.set", json!({"profile": id})).ok();
                 }
                 ui.add_space(4.0);

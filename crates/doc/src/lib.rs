@@ -34,8 +34,8 @@ pub(crate) mod skip {
 }
 
 pub use appearance::{
-    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer,
-    WidthProfile,
+    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, ProfilePreset, SavedProfile, StrokeAlign,
+    StrokeLayer, WidthProfile,
 };
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};

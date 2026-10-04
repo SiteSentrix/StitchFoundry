@@ -106,9 +106,12 @@ pub struct ProfilePreset {
 }
 
 impl WidthProfile {
-    /// Width factor at `t` (average of both sides), linear between points.
+    /// (left, right) width factors at `t`, linear between points.
     pub fn at(&self, t: f64) -> (f64, f64) {
-        let p = &self.points;
+        Self::at_points(&self.points, t)
+    }
+    /// [`Self::at`] of a profile's points (a preset's or a saved profile's).
+    pub fn at_points(p: &[(f64, f64, f64)], t: f64) -> (f64, f64) {
         if p.is_empty() {
             return (1.0, 1.0);
         }
@@ -125,11 +128,17 @@ impl WidthProfile {
         (l.1, l.2)
     }
     /// The built-in profiles, in menu order. "uniform" is the plain stroke (no profile).
-    pub const PRESETS: [ProfilePreset; 4] = [
+    pub const PRESETS: [ProfilePreset; 7] = [
         ProfilePreset { id: "uniform", label: "Uniform", points: &[(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] },
         ProfilePreset { id: "lens", label: "Lens", points: &[(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] },
         ProfilePreset { id: "taperStart", label: "Taper Start", points: &[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] },
         ProfilePreset { id: "taperEnd", label: "Taper End", points: &[(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+        // Full width at both ends, pinched to a quarter in the middle.
+        ProfilePreset { id: "pinch", label: "Pinch", points: &[(0.0, 1.0, 1.0), (0.5, 0.25, 0.25), (1.0, 1.0, 1.0)] },
+        // A round head a fifth of the way along, then a long taper to the end.
+        ProfilePreset { id: "teardrop", label: "Teardrop", points: &[(0.0, 0.0, 0.0), (0.2, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+        // Two swells between narrow necks.
+        ProfilePreset { id: "wave", label: "Wave", points: &[(0.0, 0.3, 0.3), (0.25, 1.0, 1.0), (0.5, 0.3, 0.3), (0.75, 1.0, 1.0), (1.0, 0.3, 0.3)] },
     ];
     /// The built-in profile with this id.
     pub fn preset(id: &str) -> Option<Self> {
@@ -153,6 +162,14 @@ impl WidthProfile {
     pub fn taper_start() -> Self {
         Self::preset("taperStart").expect("built-in")
     }
+}
+
+/// A width profile saved to the Profile list under a name (Add to Profiles), kept with the
+/// preferences.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedProfile {
+    pub name: String,
+    pub profile: WidthProfile,
 }
 
 /// A live effect in an appearance stack. Parameters are interpreted by `vectorcraft-effects`.
