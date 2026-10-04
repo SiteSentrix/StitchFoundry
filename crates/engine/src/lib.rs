@@ -322,6 +322,10 @@ pub struct Prefs {
     /// edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub flattener_presets: Vec<cmd::FlattenerPreset>,
+    /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
+    /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub width_profiles: Vec<vectorcraft_doc::SavedProfile>,
 }
 
 impl Default for Prefs {
@@ -441,6 +445,7 @@ impl Default for Prefs {
             },
             eyedropper: Default::default(),
             flattener_presets: vec![],
+            width_profiles: vec![],
         }
     }
 }
@@ -841,6 +846,8 @@ mod tests_proxyitems;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]
+mod tests_strokereach;
+#[cfg(test)]
 mod tests_strokeux;
 #[cfg(test)]
 mod tests_stylepanel;
@@ -860,5 +867,7 @@ mod tests_textedit;
 mod tests_tileedge;
 #[cfg(test)]
 mod tests_tints;
+#[cfg(test)]
+mod tests_widthprofiles;
 #[cfg(test)]
 mod tests_xform;

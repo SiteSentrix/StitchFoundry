@@ -17,8 +17,9 @@ mod width;
 
 use std::borrow::Cow;
 
-use kurbo::{BezPath, ParamCurve, ParamCurveDeriv, PathEl, PathSeg, Vec2};
+use kurbo::{BezPath, PathEl, PathSeg};
 use vectorcraft_doc::{LineCap, LineJoin, StrokeAlign, StrokeLayer};
+pub(crate) use vectorcraft_geom::bez::{kink, segments, subpaths, tangent, unit};
 
 pub use arrow::Arrow;
 pub use dash::{Dashed, Dot, dash, dot_outline};
@@ -27,9 +28,6 @@ pub use width::width_outline;
 
 /// Arc-length accuracy for dashing and trimming (document points).
 const ARCLEN_ACCURACY: f64 = 1e-6;
-/// Tangents meeting at more than about 1° (this cosine) make a corner: fitted dashes centre on it
-/// and variable-width strokes give it the stroke's join.
-const CORNER_COS: f64 = 0.9998;
 
 /// The geometry one stroke paints, in the coordinate space of its path.
 #[derive(Clone, Debug)]
@@ -119,40 +117,6 @@ pub fn line_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> B
     }
 }
 
-/// Do segments `a` and `b` (`b` following `a`) meet at a corner?
-pub(crate) fn kink(a: &PathSeg, b: &PathSeg) -> bool {
-    tangent(a, 1.0).dot(tangent(b, 0.0)) < CORNER_COS
-}
-
-/// Unit tangent of `s` at `t`, robust at ends where control points coincide with the end point.
-pub(crate) fn tangent(s: &PathSeg, t: f64) -> Vec2 {
-    let d = match s {
-        PathSeg::Line(l) => l.p1 - l.p0,
-        PathSeg::Quad(q) => {
-            let v = q.deriv().eval(t).to_vec2();
-            if v.hypot() > 1e-9 { v } else { q.p2 - q.p0 }
-        }
-        PathSeg::Cubic(c) => {
-            let v = c.deriv().eval(t).to_vec2();
-            if v.hypot() > 1e-9 {
-                v
-            } else if t < 0.5 {
-                // The first control point that differs from the start gives the direction.
-                [c.p2, c.p3].into_iter().map(|p| p - c.p0).find(|v| v.hypot() > 1e-9).unwrap_or_default()
-            } else {
-                [c.p1, c.p0].into_iter().map(|p| c.p3 - p).find(|v| v.hypot() > 1e-9).unwrap_or_default()
-            }
-        }
-    };
-    unit(d)
-}
-
-/// `v` normalised, or +x when it has no length.
-pub(crate) fn unit(v: Vec2) -> Vec2 {
-    let h = v.hypot();
-    if h > 1e-12 { v / h } else { Vec2::new(1.0, 0.0) }
-}
-
 /// Append `seg` to `out` (which must already have a current point at its start).
 pub(crate) fn push_seg(out: &mut BezPath, seg: &PathSeg) {
     match seg {
@@ -162,38 +126,11 @@ pub(crate) fn push_seg(out: &mut BezPath, seg: &PathSeg) {
     }
 }
 
-/// Element ranges of the subpaths of `bp` (each with whether it is closed).
-pub(crate) fn subpaths(bp: &BezPath) -> Vec<(std::ops::Range<usize>, bool)> {
-    let els = bp.elements();
-    let mut out = vec![];
-    let mut start = 0;
-    for (i, el) in els.iter().enumerate() {
-        match el {
-            PathEl::MoveTo(_) if i > start => {
-                out.push((start..i, false));
-                start = i;
-            }
-            PathEl::ClosePath => {
-                out.push((start..i + 1, true));
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    if start < els.len() {
-        out.push((start..els.len(), false));
-    }
-    // A lone MoveTo (or a MoveTo straight after a ClosePath) draws nothing.
-    out.retain(|(r, _)| r.len() > 1);
-    out
-}
-
-/// The segments of one subpath (`els` starts with its MoveTo; a ClosePath adds the closing line).
-pub(crate) fn segments(els: &[PathEl]) -> Vec<PathSeg> {
-    kurbo::segments(els.iter().copied()).collect()
-}
-
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_arrows;
+#[cfg(test)]
 mod tests_fit;
+#[cfg(test)]
+mod tests_reach;

@@ -48,6 +48,7 @@ impl Dash {
     }
 }
 
+/// An arrowhead shape. Saved by variant name: new shapes are appended, never renamed or reordered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Arrowhead {
     Triangle,
@@ -60,21 +61,130 @@ pub enum Arrowhead {
     Diamond,
     Arrow,
     ArrowOpen,
+    Barbed,
+    /// One barb, on the left of the direction the head points.
+    HalfArrowLeft,
+    /// One barb, on the right of the direction the head points.
+    HalfArrowRight,
+    Concave,
+    DoubleBar,
+    Feather,
+    DotOnBar,
+    Chevron,
+    DoubleArrow,
+    Target,
+    Star,
+    Cross,
+    Plus,
+    Hexagon,
+    HexagonOpen,
+    Tag,
+    TagOpen,
+    HalfCircle,
+    Drop,
+    Slash,
+    DoubleSlash,
+    DiamondOpen,
+    TriangleReverse,
+    Swallowtail,
+    Bracket,
+    Fork,
+    Leaf,
+    Kite,
+    TriangleBar,
+    Oval,
 }
 
 impl Arrowhead {
-    pub const ALL: [Arrowhead; 10] = [
+    /// Every arrowhead, in menu order (arrows, then outlined shapes, then bars and marks).
+    pub const ALL: [Arrowhead; 40] = [
         Arrowhead::Arrow,
         Arrowhead::ArrowOpen,
+        Arrowhead::Barbed,
+        Arrowhead::Concave,
+        Arrowhead::DoubleArrow,
+        Arrowhead::HalfArrowLeft,
+        Arrowhead::HalfArrowRight,
+        Arrowhead::Chevron,
+        Arrowhead::Feather,
+        Arrowhead::Swallowtail,
         Arrowhead::Triangle,
         Arrowhead::TriangleOpen,
+        Arrowhead::TriangleReverse,
+        Arrowhead::TriangleBar,
+        Arrowhead::Kite,
+        Arrowhead::Leaf,
+        Arrowhead::Drop,
         Arrowhead::Circle,
         Arrowhead::CircleOpen,
+        Arrowhead::HalfCircle,
+        Arrowhead::Oval,
+        Arrowhead::Target,
         Arrowhead::Square,
         Arrowhead::SquareOpen,
+        Arrowhead::Tag,
+        Arrowhead::TagOpen,
         Arrowhead::Diamond,
+        Arrowhead::DiamondOpen,
+        Arrowhead::Hexagon,
+        Arrowhead::HexagonOpen,
+        Arrowhead::Star,
+        Arrowhead::Cross,
+        Arrowhead::Plus,
         Arrowhead::Bar,
+        Arrowhead::DoubleBar,
+        Arrowhead::DotOnBar,
+        Arrowhead::Slash,
+        Arrowhead::DoubleSlash,
+        Arrowhead::Bracket,
+        Arrowhead::Fork,
     ];
+
+    /// The name the arrowhead menus show.
+    pub fn label(self) -> &'static str {
+        match self {
+            Arrowhead::Triangle => "Triangle",
+            Arrowhead::TriangleOpen => "Triangle (open)",
+            Arrowhead::Circle => "Circle",
+            Arrowhead::CircleOpen => "Circle (open)",
+            Arrowhead::Square => "Square",
+            Arrowhead::SquareOpen => "Square (open)",
+            Arrowhead::Bar => "Bar",
+            Arrowhead::Diamond => "Diamond",
+            Arrowhead::Arrow => "Arrow",
+            Arrowhead::ArrowOpen => "Arrow (open)",
+            Arrowhead::Barbed => "Barbed",
+            Arrowhead::HalfArrowLeft => "Half Arrow (left)",
+            Arrowhead::HalfArrowRight => "Half Arrow (right)",
+            Arrowhead::Concave => "Concave",
+            Arrowhead::DoubleBar => "Double Bar",
+            Arrowhead::Feather => "Feather",
+            Arrowhead::DotOnBar => "Dot on Bar",
+            Arrowhead::Chevron => "Chevron",
+            Arrowhead::DoubleArrow => "Double Arrow",
+            Arrowhead::Target => "Target",
+            Arrowhead::Star => "Star",
+            Arrowhead::Cross => "Cross",
+            Arrowhead::Plus => "Plus",
+            Arrowhead::Hexagon => "Hexagon",
+            Arrowhead::HexagonOpen => "Hexagon (open)",
+            Arrowhead::Tag => "Tag",
+            Arrowhead::TagOpen => "Tag (open)",
+            Arrowhead::HalfCircle => "Half Circle",
+            Arrowhead::Drop => "Drop",
+            Arrowhead::Slash => "Slash",
+            Arrowhead::DoubleSlash => "Double Slash",
+            Arrowhead::DiamondOpen => "Diamond (open)",
+            Arrowhead::TriangleReverse => "Reverse Triangle",
+            Arrowhead::Swallowtail => "Swallowtail",
+            Arrowhead::Bracket => "Bracket",
+            Arrowhead::Fork => "Fork",
+            Arrowhead::Leaf => "Leaf",
+            Arrowhead::Kite => "Kite",
+            Arrowhead::TriangleBar => "Triangle to Bar",
+            Arrowhead::Oval => "Oval",
+        }
+    }
 }
 
 /// Where an arrowhead sits relative to the end of its path. In both modes the stroke stops under
@@ -106,9 +216,12 @@ pub struct ProfilePreset {
 }
 
 impl WidthProfile {
-    /// Width factor at `t` (average of both sides), linear between points.
+    /// (left, right) width factors at `t`, linear between points.
     pub fn at(&self, t: f64) -> (f64, f64) {
-        let p = &self.points;
+        Self::at_points(&self.points, t)
+    }
+    /// [`Self::at`] of a profile's points (a preset's or a saved profile's).
+    pub fn at_points(p: &[(f64, f64, f64)], t: f64) -> (f64, f64) {
         if p.is_empty() {
             return (1.0, 1.0);
         }
@@ -125,11 +238,17 @@ impl WidthProfile {
         (l.1, l.2)
     }
     /// The built-in profiles, in menu order. "uniform" is the plain stroke (no profile).
-    pub const PRESETS: [ProfilePreset; 4] = [
+    pub const PRESETS: [ProfilePreset; 7] = [
         ProfilePreset { id: "uniform", label: "Uniform", points: &[(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] },
         ProfilePreset { id: "lens", label: "Lens", points: &[(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] },
         ProfilePreset { id: "taperStart", label: "Taper Start", points: &[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] },
         ProfilePreset { id: "taperEnd", label: "Taper End", points: &[(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+        // Full width at both ends, pinched to a quarter in the middle.
+        ProfilePreset { id: "pinch", label: "Pinch", points: &[(0.0, 1.0, 1.0), (0.5, 0.25, 0.25), (1.0, 1.0, 1.0)] },
+        // A round head a fifth of the way along, then a long taper to the end.
+        ProfilePreset { id: "teardrop", label: "Teardrop", points: &[(0.0, 0.0, 0.0), (0.2, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+        // Two swells between narrow necks.
+        ProfilePreset { id: "wave", label: "Wave", points: &[(0.0, 0.3, 0.3), (0.25, 1.0, 1.0), (0.5, 0.3, 0.3), (0.75, 1.0, 1.0), (1.0, 0.3, 0.3)] },
     ];
     /// The built-in profile with this id.
     pub fn preset(id: &str) -> Option<Self> {
@@ -153,6 +272,14 @@ impl WidthProfile {
     pub fn taper_start() -> Self {
         Self::preset("taperStart").expect("built-in")
     }
+}
+
+/// A width profile saved to the Profile list under a name (Add to Profiles), kept with the
+/// preferences.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedProfile {
+    pub name: String,
+    pub profile: WidthProfile,
 }
 
 /// A live effect in an appearance stack. Parameters are interpreted by `vectorcraft-effects`.
@@ -239,6 +366,10 @@ pub struct StrokeLayer {
     pub overprint: bool,
 }
 
+/// How far any arrowhead reaches from its tip, in units of its weight (the open arrow's arms are
+/// cut square a little behind its 4 × 4 box).
+pub(crate) const HEAD_REACH: f64 = 4.6;
+
 fn ten() -> f64 {
     10.0
 }
@@ -276,16 +407,50 @@ impl StrokeLayer {
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
-    /// a quarter point. A head of weight `hw` is `4·hw` long and wide.
+    /// a quarter point. A head of weight `hw` fits a box about `4·hw` long and wide.
     pub fn arrow_weight(&self, end: bool) -> f64 {
         let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
         (self.width * pct / 100.0).max(0.25)
     }
-    /// How far the arrowheads can reach from the path's end points (0 without heads): the
-    /// head's diagonal, or with [`ArrowAlign::Extend`] its length plus the cap past the end.
+    /// How far the start (`end == false`) or end arrowhead can reach from its end point (0
+    /// without one): the head's diagonal, or with [`ArrowAlign::Extend`] its length, plus the cap.
+    pub fn head_reach(&self, end: bool) -> f64 {
+        let head = if end { self.end_arrow } else { self.start_arrow };
+        head.map_or(0.0, |_| HEAD_REACH * self.arrow_weight(end) + self.width / 2.0)
+    }
+    /// How far the arrowheads can reach from the path's end points (0 without heads).
     pub fn arrow_reach(&self) -> f64 {
-        let reach = |head: Option<Arrowhead>, end: bool| head.map_or(0.0, |_| 4.5 * self.arrow_weight(end) + self.width / 2.0);
-        reach(self.start_arrow, false).max(reach(self.end_arrow, true))
+        self.head_reach(false).max(self.head_reach(true))
+    }
+    /// The widest the width profile makes the stroke, as a factor of its weight (1 without one).
+    pub fn profile_max(&self) -> f64 {
+        self.profile.as_ref().and_then(|p| p.points.iter().map(|&(_, l, r)| l.max(r)).reduce(f64::max)).unwrap_or(1.0).max(0.0)
+    }
+    /// The stroke's body across a path that is `closed` or open: how far it reaches from the path
+    /// at full width (half the weight centred; the whole weight on one side when aligned inside or
+    /// outside a closed path, which open paths ignore), and for aligned strokes which side it
+    /// paints (`Some(true)`: inside).
+    pub fn body(&self, closed: bool) -> (f64, Option<bool>) {
+        match self.align {
+            StrokeAlign::Outside if closed => (self.width, Some(false)),
+            StrokeAlign::Inside if closed => (self.width, Some(true)),
+            _ => (self.width / 2.0, None),
+        }
+    }
+    /// How far the body paints outside a path that is `closed` or open, at the profile's widest.
+    pub fn side_reach(&self, closed: bool) -> f64 {
+        match self.body(closed) {
+            (_, Some(true)) => 0.0,
+            (half, _) => half * self.profile_max(),
+        }
+    }
+    /// The farthest this stroke can paint from any path: its body, miter spikes up to the miter
+    /// limit, projecting caps' corners and the arrowheads ([`Appearance::outset`]).
+    pub fn reach(&self) -> f64 {
+        let side = self.side_reach(true).max(self.side_reach(false));
+        let miter = if self.join == LineJoin::Miter { self.miter_limit.max(1.0) } else { 1.0 };
+        let cap = if self.cap == LineCap::Square { std::f64::consts::SQRT_2 } else { 1.0 };
+        (side * miter.max(cap)).max(self.arrow_reach())
     }
     /// The box an unplaced gradient on this stroke fits to (see [`stroke_paint_bounds`]).
     pub fn paint_bounds(&self, geometric: vectorcraft_geom::Rect) -> vectorcraft_geom::Rect {
@@ -529,22 +694,17 @@ impl Appearance {
             Some(i) => self.items.get_mut(i).map(AppearanceItem::effects_mut),
         }
     }
-    /// Largest distance the painted area extends beyond the geometry (for visual bounds).
+    /// The visible strokes that paint something.
+    pub fn painted_strokes(&self) -> impl Iterator<Item = &StrokeLayer> {
+        self.items.iter().filter_map(|i| match i {
+            AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(s),
+            _ => None,
+        })
+    }
+    /// Largest distance the painted area can extend beyond any geometry (see
+    /// [`StrokeLayer::reach`]); paths measure their own with [`Self::stroked_bounds`].
     pub fn outset(&self) -> f64 {
-        self.items
-            .iter()
-            .filter_map(|i| match i {
-                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(
-                    match s.align {
-                        StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
-                        StrokeAlign::Outside => s.width,
-                        StrokeAlign::Inside => 0.0,
-                    }
-                    .max(s.arrow_reach()),
-                ),
-                _ => None,
-            })
-            .fold(0.0, f64::max)
+        self.painted_strokes().map(StrokeLayer::reach).fold(0.0, f64::max)
     }
     /// Scale stroke weights (Scale Strokes & Effects).
     pub fn scale_strokes(&mut self, s: f64) {
@@ -864,6 +1024,60 @@ mod tests {
     }
 
     #[test]
+    fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
+        // Saved files store these names: they may only ever be appended to.
+        const SAVED: [&str; 40] = [
+            "Triangle",
+            "TriangleOpen",
+            "Circle",
+            "CircleOpen",
+            "Square",
+            "SquareOpen",
+            "Bar",
+            "Diamond",
+            "Arrow",
+            "ArrowOpen",
+            "Barbed",
+            "HalfArrowLeft",
+            "HalfArrowRight",
+            "Concave",
+            "DoubleBar",
+            "Feather",
+            "DotOnBar",
+            "Chevron",
+            "DoubleArrow",
+            "Target",
+            "Star",
+            "Cross",
+            "Plus",
+            "Hexagon",
+            "HexagonOpen",
+            "Tag",
+            "TagOpen",
+            "HalfCircle",
+            "Drop",
+            "Slash",
+            "DoubleSlash",
+            "DiamondOpen",
+            "TriangleReverse",
+            "Swallowtail",
+            "Bracket",
+            "Fork",
+            "Leaf",
+            "Kite",
+            "TriangleBar",
+            "Oval",
+        ];
+        for name in SAVED {
+            let a: Arrowhead = serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(serde_json::to_value(a).unwrap(), name);
+            assert_eq!(Arrowhead::ALL.iter().filter(|x| **x == a).count(), 1, "{name} in the menu once");
+        }
+        let labels: std::collections::HashSet<&str> = Arrowhead::ALL.iter().map(|a| a.label()).collect();
+        assert_eq!(labels.len(), Arrowhead::ALL.len(), "labels are distinct");
+    }
+
+    #[test]
     fn arrow_align_defaults_to_extend_and_round_trips() {
         let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
         assert_eq!(st.arrow_align, ArrowAlign::Extend);
@@ -886,8 +1100,9 @@ mod tests {
         st.arrow_scale = (100.0, 200.0);
         assert_eq!(st.arrow_weight(false), 4.0);
         assert_eq!(st.arrow_weight(true), 8.0);
+        assert_eq!((st.head_reach(false), st.head_reach(true)), (0.0, HEAD_REACH * 8.0 + 2.0));
         // A 32 pt head whose tip sits up to its length (plus the cap) past the end point.
-        assert_eq!(a.outset(), 4.5 * 8.0 + 2.0);
+        assert_eq!(a.outset(), HEAD_REACH * 8.0 + 2.0);
         a.stroke_mut().unwrap().width = 0.01;
         assert_eq!(a.stroke().unwrap().arrow_weight(true), 0.25, "heads keep a minimum size");
     }
@@ -899,8 +1114,28 @@ mod tests {
         assert_eq!(a.outset(), 5.0);
         a.stroke_mut().unwrap().align = StrokeAlign::Outside;
         assert_eq!(a.outset(), 10.0);
+        // Open paths stroke inside-aligned strokes centred.
         a.stroke_mut().unwrap().align = StrokeAlign::Inside;
-        assert_eq!(a.outset(), 0.0);
+        assert_eq!(a.outset(), 5.0);
+        assert_eq!((a.stroke().unwrap().side_reach(true), a.stroke().unwrap().body(true)), (0.0, (10.0, Some(true))));
+    }
+
+    #[test]
+    fn outset_covers_miter_spikes_projecting_caps_and_profile_maxima() {
+        let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
+        // Miter joins can spike out to the limit × half the weight.
+        assert_eq!(a.outset(), 10.0);
+        let st = a.stroke_mut().unwrap();
+        st.join = LineJoin::Bevel;
+        st.cap = LineCap::Square;
+        assert!((a.outset() - std::f64::consts::SQRT_2).abs() < 1e-12, "a projecting cap's corner");
+        let st = a.stroke_mut().unwrap();
+        st.cap = LineCap::Round;
+        st.profile = Some(WidthProfile { points: vec![(0.0, 0.5, 2.5), (1.0, 1.0, 1.0)] });
+        assert_eq!(st.profile_max(), 2.5);
+        assert_eq!(a.outset(), 2.5);
+        a.stroke_mut().unwrap().paint = Paint::None;
+        assert_eq!(a.outset(), 0.0, "an unpainted stroke");
     }
 
     #[test]

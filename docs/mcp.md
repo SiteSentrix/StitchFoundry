@@ -484,4 +484,33 @@ and flat-colour regions, plus `regions` (bounds, and `id` for objects) for the `
 
 ```json
 {"name":"run_command","arguments":{"command":"flattener.preview","params":{"highlight":"allRasterized","preset":"low"}}}
+
+## Width profiles
+
+The Profile list holds the built-in variable-width profiles (`uniform`, `lens`, `taperStart`, `taperEnd`, `pinch`,
+`teardrop`, `wave`) and profiles saved from strokes; saved ones are kept with the preferences, not in the document
+(no undo step). `stroke.widthProfile.list` returns every row (`id`, `label`, `builtIn`, `points` as `[t, left,
+right]`) and `current`, the selected stroke's profile (`"custom"` when it isn't listed).
+`stroke.widthProfile.add {name?}` saves the selected stroke's variable width (default name "Width Profile N"),
+`stroke.widthProfile.delete {name?}` removes a saved one (default: the selected stroke's; built-ins can't be deleted)
+and `stroke.widthProfile.reset` removes every saved one. `stroke.set {profile}` takes a built-in id or a saved name.
+
+```json
+{"name":"run_command","arguments":{"command":"stroke.widthProfile.add","params":{"name":"Ribbon"}}}
+{"name":"run_command","arguments":{"command":"stroke.set","params":{"ids":[9],"profile":"Ribbon"}}}
 ```
+
+## Arrowheads
+
+`stroke.set {startArrow, endArrow}` takes any of 40 generated heads by name (the params doc lists them; `null` for
+none): arrows (`Arrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
+`Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`, `Diamond`, `Hexagon`, `Star`,
+the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`, `Bracket`, `Fork`, `Cross`,
+`Plus`). Each head fits a box about four times its weight (stroke weight × `arrowScale`) long and wide.
+
+## Stroke bounds and clicks
+
+Visual bounds (Fit to Selected Art, Rasterize, exporting all art) and clicks on the canvas take
+in the whole stroke as drawn: arrowheads, inside/outside alignment (an outside stroke is hit outside the path, an
+inside one inside it), the width profile's width where you click, projecting caps and miter spikes up to the miter
+limit. A rectangle's right-angle miters stay within half the weight of its edges.

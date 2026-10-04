@@ -1,9 +1,10 @@
 //! Stroke panel: weight spinner + presets, cap / corner / align toggles, miter limit, dashed line
-//! with three dash/gap pairs, arrowheads with drawn previews, arrow scale, width profiles.
+//! with three dash/gap pairs, arrowheads with rendered previews, arrow scale, width profiles.
 
-use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, WidthProfile};
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, LineCap, LineJoin, Node, StrokeAlign, StrokeLayer, WidthProfile};
 use vectorcraft_engine::inspect::StrokeMixed;
 
 use super::{character, current_stroke, pstate, set_pstate, stroke_mixed};
@@ -14,9 +15,9 @@ use crate::{VectorcraftApp, icons};
 pub const WEIGHT_PRESETS: [f64; 22] =
     [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
 
-/// The silhouette drawn for profile `id` (None draws the plain uniform bar).
-fn profile_of(id: &str) -> Option<WidthProfile> {
-    WidthProfile::preset(id).filter(|_| id != "uniform")
+/// A profile's points as its silhouette: none (the plain bar) for the uniform stroke.
+fn silhouette(points: &[(f64, f64, f64)]) -> Option<&[(f64, f64, f64)]> {
+    (points != WidthProfile::PRESETS[0].points).then_some(points)
 }
 
 /// The Arrowheads Align buttons: (alignment, `stroke.set` value, icon, tooltip).
@@ -64,14 +65,8 @@ pub fn dash_pattern(fields: &[Option<f64>; 6]) -> Vec<f64> {
     out
 }
 
-fn arrow_label(a: Option<Arrowhead>) -> String {
-    match a {
-        None => "None".into(),
-        Some(a) => {
-            let s = format!("{a:?}");
-            s.replace("Open", " (open)")
-        }
-    }
+fn arrow_label(a: Option<Arrowhead>) -> &'static str {
+    a.map_or("None", Arrowhead::label)
 }
 
 /// Apply Stroke panel options (`stroke.set` params): while the Type tool edits text, to the
@@ -269,10 +264,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::divider(ui);
     // Profile.
-    let pid = WidthProfile::id_of(st.as_ref().and_then(|s| s.profile.as_ref()));
     ui.horizontal(|ui| {
         row_label(ui, "Profile:");
-        if let Some(id) = profile_dropdown(ui, pid) {
+        if let Some(id) = profile_dropdown(app, ui, st.as_ref().and_then(|s| s.profile.as_ref())) {
             set(app, json!({"profile": id}));
         }
         let can_flip = st.as_ref().is_some_and(|s| s.profile.is_some());
@@ -285,31 +279,34 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
-/// Draw an arrowhead preview: a line with the head at the left (`start`) or right end.
+/// The document an arrowhead preview renders: a `w`×`h` pt line with head `a` at its left
+/// (`start`) or right end, its tip on the end point, drawn white (the preview is tinted).
+pub(super) fn arrow_doc(a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Option<Document> {
+    let mut doc = Document::new(w, h);
+    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 1.5);
+    let st = ap.stroke_mut()?;
+    // Heads of weight 2.5 pt: 10 pt long and wide.
+    st.arrow_scale = (500.0 / 3.0, 500.0 / 3.0);
+    st.arrow_align = ArrowAlign::Tip;
+    if start {
+        st.start_arrow = a
+    } else {
+        st.end_arrow = a
+    }
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((3.0, h / 2.0));
+    bp.line_to((w - 3.0, h / 2.0));
+    let (id, l) = (doc.alloc_id(), doc.layers[0].id);
+    doc.insert(Some(l), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), ap)).ok()?;
+    Some(doc)
+}
+
+/// Draw an arrowhead preview (the head as the canvas draws it) in `r`: a line with the head at the
+/// left (`start`) or right end.
 fn paint_arrow(ui: &Ui, r: Rect, a: Option<Arrowhead>, start: bool, color: Color32) {
-    let y = r.center().y;
-    let (tip_x, back) = if start { (r.left() + 4.0, 1.0) } else { (r.right() - 4.0, -1.0) };
-    let s = Stroke::new(1.5, color);
-    let line_from = if a.is_some() { tip_x + back * 8.0 } else { tip_x };
-    let other = if start { r.right() - 4.0 } else { r.left() + 4.0 };
-    ui.painter().line_segment([pos2(line_from, y), pos2(other, y)], s);
-    let Some(a) = a else { return };
-    let p = |dx: f32, dy: f32| -> Pos2 { pos2(tip_x + back * dx, y + dy) };
-    let solid = |pts: Vec<Pos2>| egui::Shape::convex_polygon(pts, color, Stroke::NONE);
-    let open = |pts: Vec<Pos2>| egui::Shape::closed_line(pts, s);
-    let shape = match a {
-        Arrowhead::Triangle => solid(vec![p(0.0, 0.0), p(9.0, -4.5), p(9.0, 4.5)]),
-        Arrowhead::TriangleOpen => open(vec![p(0.0, 0.0), p(9.0, -4.5), p(9.0, 4.5)]),
-        Arrowhead::Arrow => solid(vec![p(0.0, 0.0), p(10.0, -5.0), p(7.0, 0.0), p(10.0, 5.0)]),
-        Arrowhead::ArrowOpen => egui::Shape::line(vec![p(9.0, -5.0), p(0.0, 0.0), p(9.0, 5.0)], s),
-        Arrowhead::Circle => egui::Shape::circle_filled(p(4.5, 0.0), 4.5, color),
-        Arrowhead::CircleOpen => egui::Shape::circle_stroke(p(4.5, 0.0), 4.0, s),
-        Arrowhead::Square => egui::Shape::rect_filled(Rect::from_center_size(p(4.5, 0.0), vec2(8.0, 8.0)), 0.0, color),
-        Arrowhead::SquareOpen => egui::Shape::rect_stroke(Rect::from_center_size(p(4.5, 0.0), vec2(8.0, 8.0)), 0.0, s, StrokeKind::Middle),
-        Arrowhead::Diamond => solid(vec![p(0.0, 0.0), p(5.0, -5.0), p(10.0, 0.0), p(5.0, 5.0)]),
-        Arrowhead::Bar => egui::Shape::line_segment([p(0.0, -6.0), p(0.0, 6.0)], Stroke::new(2.0, color)),
-    };
-    ui.painter().add(shape);
+    if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{a:?}:{start}"), r.size(), |w, h| arrow_doc(a, start, w, h)) {
+        ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), color);
+    }
 }
 
 /// Dropdown whose button and items show drawn arrowhead previews. Returns Some(choice).
@@ -324,41 +321,42 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) ->
     let resp = resp.on_hover_text(if start { "Start arrowhead" } else { "End arrowhead" });
     let mut out = None;
     egui::Popup::menu(&resp).id(egui::Id::new(("arrow-pop", id))).show(|ui| {
-        ui.set_min_width(140.0);
-        let opts: Vec<Option<Arrowhead>> = std::iter::once(None).chain(Arrowhead::ALL.iter().copied().map(Some)).collect();
-        for a in opts {
-            let (row, rr) = ui.allocate_exact_size(vec2(140.0, 22.0), Sense::click());
-            if a == cur {
-                ui.painter().rect_filled(row, 0.0, t.row_selected);
-            } else if rr.hovered() {
-                ui.painter().rect_filled(row, 0.0, t.hover);
+        ui.set_min_width(170.0);
+        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+            for a in std::iter::once(None).chain(Arrowhead::ALL.map(Some)) {
+                let (row, rr) = ui.allocate_exact_size(vec2(170.0, 22.0), Sense::click());
+                if a == cur {
+                    ui.painter().rect_filled(row, 0.0, t.row_selected);
+                } else if rr.hovered() {
+                    ui.painter().rect_filled(row, 0.0, t.hover);
+                }
+                paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
+                ui.painter().text(
+                    row.left_center() + vec2(66.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    arrow_label(a),
+                    egui::FontId::proportional(11.5),
+                    t.text,
+                );
+                if rr.clicked() {
+                    out = Some(a);
+                    ui.close();
+                }
             }
-            paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
-            ui.painter().text(
-                row.left_center() + vec2(66.0, 0.0),
-                egui::Align2::LEFT_CENTER,
-                arrow_label(a),
-                egui::FontId::proportional(11.5),
-                t.text,
-            );
-            if rr.clicked() {
-                out = Some(a);
-                ui.close();
-            }
-        }
+        });
     });
     out
 }
 
-/// Draw a width profile's silhouette into `r`.
-pub fn paint_profile(ui: &Ui, r: Rect, prof: Option<&WidthProfile>, color: Color32) {
+/// Draw a width profile's silhouette (its points; None: the plain bar) into `r`.
+pub fn paint_profile(ui: &Ui, r: Rect, points: Option<&[(f64, f64, f64)]>, color: Color32) {
     let n = 32;
     let half = r.height() / 2.0 - 1.0;
     let mut top = vec![];
     let mut bot = vec![];
     for i in 0..=n {
         let tt = i as f64 / n as f64;
-        let (l, rr) = prof.map(|p| p.at(tt)).unwrap_or((0.35, 0.35));
+        let (l, rr) = points.map_or((0.35, 0.35), |p| WidthProfile::at_points(p, tt));
         let x = r.left() + tt as f32 * r.width();
         top.push(pos2(x, r.center().y - l as f32 * half));
         bot.push(pos2(x, r.center().y + rr as f32 * half));
@@ -376,31 +374,41 @@ pub fn paint_profile(ui: &Ui, r: Rect, prof: Option<&WidthProfile>, color: Color
     ui.painter().add(egui::Shape::mesh(mesh));
 }
 
-pub(crate) fn profile_dropdown(ui: &mut Ui, cur: &str) -> Option<&'static str> {
+/// The Profile dropdown (Stroke panel, Control bar): the stroke's own silhouette on the button
+/// (a custom profile too), the built-in profiles and then the saved ones in the list. Returns the
+/// id or name picked.
+pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, cur: Option<&WidthProfile>) -> Option<String> {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(100.0, 24.0), Sense::click());
     ui.painter().rect_filled(r, 2, t.input);
     ui.painter().rect_stroke(r, 2, Stroke::new(1.0, if resp.hovered() { t.text } else { t.input_border }), StrokeKind::Inside);
     let body = Rect::from_min_max(r.min + vec2(6.0, 5.0), pos2(r.right() - 20.0, r.bottom() - 5.0));
-    paint_profile(ui, body, profile_of(cur).as_ref(), t.text_strong);
+    paint_profile(ui, body, cur.and_then(|p| silhouette(&p.points)), t.text_strong);
     icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(r.right() - 9.0, r.center().y), vec2(10.0, 10.0)), t.icon);
     let resp = resp.on_hover_text("Variable Width Profile");
     let mut out = None;
     egui::Popup::menu(&resp).show(|ui| {
-        for ProfilePreset { id, label, .. } in WidthProfile::PRESETS {
-            let (row, rr) = ui.allocate_exact_size(vec2(170.0, 26.0), Sense::click());
-            if id == cur {
-                ui.painter().rect_filled(row, 0.0, t.row_selected);
-            } else if rr.hovered() {
-                ui.painter().rect_filled(row, 0.0, t.hover);
+        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+            // A divider between the built-in profiles and the saved ones.
+            let mut divide = true;
+            for e in app.session.profile_entries() {
+                if !e.built_in && std::mem::take(&mut divide) {
+                    ui.separator();
+                }
+                let (row, rr) = ui.allocate_exact_size(vec2(170.0, 26.0), Sense::click());
+                if e.matches(cur) {
+                    ui.painter().rect_filled(row, 0.0, t.row_selected);
+                } else if rr.hovered() {
+                    ui.painter().rect_filled(row, 0.0, t.hover);
+                }
+                paint_profile(ui, Rect::from_min_size(row.min + vec2(6.0, 6.0), vec2(70.0, 14.0)), silhouette(e.points), t.text_strong);
+                ui.painter().text(row.left_center() + vec2(84.0, 0.0), egui::Align2::LEFT_CENTER, e.label, egui::FontId::proportional(11.5), t.text);
+                if rr.clicked() {
+                    out = Some(e.id.to_string());
+                    ui.close();
+                }
             }
-            paint_profile(ui, Rect::from_min_size(row.min + vec2(6.0, 6.0), vec2(70.0, 14.0)), profile_of(id).as_ref(), t.text_strong);
-            ui.painter().text(row.left_center() + vec2(84.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(11.5), t.text);
-            if rr.clicked() {
-                out = Some(id);
-                ui.close();
-            }
-        }
+        });
     });
     out
 }
@@ -410,10 +418,20 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
         set_pstate(ui.ctx(), "stroke-hide-options", !hidden);
     }
-    menu_item(ui, "Add to Profiles", false, false);
-    menu_item(ui, "Delete Profile", false, false);
-    if menu_item(ui, "Reset Profile", current_stroke(app).is_some_and(|s| s.profile.is_some()), false) {
-        set(app, json!({"profile": "uniform"}));
+    ui.separator();
+    if menu_item(ui, "Add to Profiles…", crate::menus::enabled(app, "stroke.widthProfile.add"), false) {
+        let name = app.session.next_profile_name();
+        let p = json!({"command": "stroke.widthProfile.add", "label": "Variable Width Profile", "params": {"name": name}});
+        app.run("ui.paramDialog", p).ok();
+    }
+    // Deletes the selected stroke's saved profile.
+    let shown = current_stroke(app).and_then(|s| s.profile);
+    let saved = shown.as_ref().and_then(|p| app.session.profile_entry(Some(p))).is_some_and(|e| !e.built_in);
+    if menu_item(ui, "Delete Profile", saved, false) {
+        app.run("stroke.widthProfile.delete", json!({})).ok();
+    }
+    if menu_item(ui, "Reset Profiles", crate::menus::enabled(app, "stroke.widthProfile.reset"), false) {
+        app.run("stroke.widthProfile.reset", json!({})).ok();
     }
 }
 
@@ -437,9 +455,9 @@ mod tests {
 
     #[test]
     fn profile_silhouettes_and_arrow_labels() {
-        assert!(profile_of("uniform").is_none());
-        assert_eq!(profile_of("lens"), Some(WidthProfile::lens()));
-        assert!(profile_of("custom").is_none());
+        assert!(silhouette(WidthProfile::PRESETS[0].points).is_none(), "uniform draws the plain bar");
+        let lens = WidthProfile::lens();
+        assert_eq!(silhouette(&lens.points), Some(lens.points.as_slice()));
         assert_eq!(arrow_label(Some(Arrowhead::CircleOpen)), "Circle (open)");
     }
 

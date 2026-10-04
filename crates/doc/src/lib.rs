@@ -13,6 +13,7 @@ pub mod node;
 pub mod overprint;
 pub mod pattern;
 mod pixels;
+mod reach;
 pub mod selection;
 pub mod swatches;
 pub mod text;
@@ -34,8 +35,8 @@ pub(crate) mod skip {
 }
 
 pub use appearance::{
-    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer,
-    WidthProfile,
+    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, ProfilePreset, SavedProfile, StrokeAlign,
+    StrokeLayer, WidthProfile,
 };
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};

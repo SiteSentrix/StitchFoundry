@@ -441,4 +441,6 @@ mod tests_freeform;
 #[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]
+mod tests_strokedepth;
+#[cfg(test)]
 mod tests_strokeux;
