@@ -275,7 +275,7 @@ impl Importer {
         if !g.filters().is_empty() {
             self.warn(format!("filter on {label} ignored"));
         }
-        let children = self.children(g, ts);
+        let mut children = self.children(g, ts);
         let mut n = if let Some(cp) = g.clip_path() {
             if cp.clip_path().is_some() {
                 self.warn(format!("nested clip path on {label} approximated by its outer clip"));
@@ -294,8 +294,9 @@ impl Importer {
                 && mask.is_none()
                 && children.len() == 1
                 && (g.blend_mode() == usvg::BlendMode::Normal || children[0].blend == BlendMode::Normal)
+                && let Some(only) = children.pop()
             {
-                let mut c = Arc::unwrap_or_clone(children.into_iter().next().unwrap());
+                let mut c = Arc::unwrap_or_clone(only);
                 c.opacity *= g.opacity().get();
                 if g.blend_mode() != usvg::BlendMode::Normal {
                     c.blend = blend(g.blend_mode());

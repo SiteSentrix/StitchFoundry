@@ -1,4 +1,6 @@
 //! `cargo run --release -p vectorcraft-render --example bench` — render timing on synthetic documents.
+// Example (dev tool): unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node};

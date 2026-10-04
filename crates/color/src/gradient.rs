@@ -110,8 +110,10 @@ impl Gradient {
                 return (mix(&a.color, &b.color, v), a.opacity + (b.opacity - a.opacity) * v);
             }
         }
-        let l = stops.last().unwrap();
-        (l.color, l.opacity)
+        match stops.last() {
+            Some(l) => (l.color, l.opacity),
+            None => (Color::BLACK, 1.0),
+        }
     }
     /// Stops expanded so that midpoints are represented as explicit stops (for renderers without midpoints).
     pub fn expanded_stops(&self) -> Vec<(f32, Color, f32)> {

@@ -137,9 +137,8 @@ impl TypeTool {
         }
         if self.typing.is_none() {
             out.push(Action::Begin("Typing".into()));
-            self.typing = Some(Typing { base: t.runs.clone(), cur: t.runs.clone() });
         }
-        let ty = self.typing.as_mut().expect("typing session");
+        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone() });
         let len = edit::runs_len(&ty.cur);
         let (a, b) = (self.caret.min(self.anchor).min(len), self.caret.max(self.anchor).min(len));
         let caret = match &styled {

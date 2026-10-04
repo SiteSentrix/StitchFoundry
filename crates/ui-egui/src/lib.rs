@@ -320,7 +320,10 @@ impl VectorcraftApp {
         let Some(rx) = self.control_rx.take() else { return };
         while let Ok(req) = rx.try_recv() {
             let reply = req.reply.clone();
-            match control::handle(self, ctx, &req) {
+            // Guarded per request: a panic must not drop the channel (taken out of `self` above).
+            let outcome = vectorcraft_engine::guard::catch_panic(|| control::handle(self, ctx, &req))
+                .unwrap_or_else(|msg| control::err(format!("internal error: {msg} (please report this bug)")));
+            match outcome {
                 control::Outcome::Done(v) => {
                     let _ = reply.send(v);
                 }
@@ -419,8 +422,15 @@ pub fn now_ms() -> f64 {
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl.
 impl VectorcraftApp {
-    /// Per-frame logic before layout (control channel, shortcuts, inbox).
+    /// Per-frame logic before layout (control channel, shortcuts, inbox). A bug that panics costs
+    /// one frame and shows an error, instead of closing the app with unsaved work.
     pub fn logic(&mut self, ctx: &egui::Context) {
+        if let Err(msg) = vectorcraft_engine::guard::catch_panic(|| self.logic_frame(ctx)) {
+            self.status(format!("Internal error: {msg} (please report this bug)"));
+        }
+    }
+
+    fn logic_frame(&mut self, ctx: &egui::Context) {
         if !self.styled {
             theme::install_fonts(ctx);
             theme::apply(ctx, self.ui.brightness);
@@ -498,6 +508,12 @@ impl VectorcraftApp {
 
     /// Lay out the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        if let Err(msg) = vectorcraft_engine::guard::catch_panic(|| self.ui_frame(ui)) {
+            self.status(format!("Internal error: {msg} (please report this bug)"));
+        }
+    }
+
+    fn ui_frame(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         if !self.fonts_ready {
             ctx.request_repaint();

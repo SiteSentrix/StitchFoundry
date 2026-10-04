@@ -57,9 +57,9 @@ pub struct Region {
 }
 
 impl Region {
-    /// Front-most covering shape.
-    pub fn top(&self) -> usize {
-        *self.sources.last().expect("regions are never uncovered")
+    /// Front-most covering shape (`None` only for an uncovered face, which regions never are).
+    pub fn top(&self) -> Option<usize> {
+        self.sources.last().copied()
     }
     /// Does the face contain `p`?
     pub fn contains(&self, p: Point) -> bool {
@@ -87,23 +87,27 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
         return Vec::new();
     }
     let front_key = shapes[n - 1].key;
-    if op == PathfinderOp::Unite {
+    let unite = || {
         let v: Vec<(&PathData, FillRule)> = shapes.iter().map(|s| (&s.path, s.rule)).collect();
-        return one(unite_all(&v), front_key);
+        one(unite_all(&v), front_key)
+    };
+    // Unite doesn't need the arrangement.
+    if op == PathfinderOp::Unite {
+        return unite();
     }
     let Some(arr) = arrangement(shapes) else { return Vec::new() };
     let p = &arr.tidy;
     match op {
-        PathfinderOp::Unite => unreachable!(),
+        PathfinderOp::Unite => unite(),
         PathfinderOp::MinusFront => one(all_contours_to_path(&arr.contours(|m| m[0] && !m[1..].iter().any(|&b| b)), p), shapes[0].key),
         PathfinderOp::MinusBack => one(all_contours_to_path(&arr.contours(|m| m[n - 1] && !m[..n - 1].iter().any(|&b| b)), p), front_key),
         PathfinderOp::Intersect => one(all_contours_to_path(&arr.contours(|m| m.iter().all(|&b| b)), p), front_key),
         PathfinderOp::Exclude => one(all_contours_to_path(&arr.contours(|m| m.iter().filter(|&&b| b).count() % 2 == 1), p), front_key),
         PathfinderOp::Divide => regions_of(&arr)
             .into_iter()
-            .map(|r| {
-                let key = shapes[r.top()].key;
-                Shape::new(r.path, FillRule::NonZero, key)
+            .filter_map(|r| {
+                let key = shapes.get(r.top()?)?.key;
+                Some(Shape::new(r.path, FillRule::NonZero, key))
             })
             .collect(),
         PathfinderOp::Trim => (0..n).flat_map(|i| one(all_contours_to_path(&arr.contours(|m| topmost(m) == Some(i)), p), shapes[i].key)).collect(),

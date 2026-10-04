@@ -481,3 +481,32 @@ fn shaper_turns_rough_strokes_into_live_shapes_and_scribbles_delete() {
     stroke(&mut s, &zig);
     assert!(s.doc().unwrap().doc.node(id).is_none());
 }
+
+#[test]
+fn a_panicking_command_rolls_back_instead_of_crashing() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
+    let before = s.doc().unwrap().doc.clone();
+    let undo_steps = s.doc().unwrap().history.undo.len();
+    // A bug halfway through a command: the document was already changed in place, inside a
+    // nested command.
+    let r = s.run_guarded("test.panic", |s| {
+        let st = s.doc_mut()?;
+        Arc::make_mut(&mut st.doc).remove(a)?;
+        st.selection = Selection::default();
+        s.run_nested(|_| panic!("boom"))
+    });
+    match r {
+        Err(EngineError::Internal { cmd, msg }) => assert_eq!((cmd.as_str(), msg.as_str()), ("test.panic", "boom")),
+        other => panic!("expected an internal error, got {other:?}"),
+    }
+    let st = s.doc().unwrap();
+    assert!(Arc::ptr_eq(&st.doc, &before), "document rolled back");
+    assert_eq!(st.selection.objects, vec![a]);
+    assert_eq!(st.history.undo.len(), undo_steps);
+    assert_eq!(s.depth, 0);
+    // The session keeps working (and journaling top-level commands).
+    let b = rect(&mut s, 200.0, 10.0, 50.0, 50.0);
+    assert!(s.doc().unwrap().doc.node(b).is_some());
+    assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("shape.rectangle"));
+}

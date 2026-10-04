@@ -63,7 +63,14 @@ unsafe_code = "deny"
 
 [workspace.lints.clippy]
 dbg_macro = "warn"
-todo = "warn"
+# VectorCraft never crashes: shipped code returns `Result`/`Option` instead of panicking (see
+# AGENTS.md › Robustness). Tests may unwrap (clippy.toml).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
 
 [profile.dev.package."*"]
 opt-level = 2

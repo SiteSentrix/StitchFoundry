@@ -126,7 +126,10 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
             for r in &mut t.runs {
                 if matches(&r.style) {
                     // An explicit style, else the closest the new family has to the old one.
-                    let style = ts.clone().unwrap_or_else(|| db.face(&tf, &r.style.font_style).style.clone());
+                    let style = ts
+                        .clone()
+                        .or_else(|| db.face(&tf, &r.style.font_style).map(|f| f.style.clone()))
+                        .unwrap_or_else(|| r.style.font_style.clone());
                     r.style.font_family = tf.clone();
                     r.style.font_style = style;
                     changed = true;

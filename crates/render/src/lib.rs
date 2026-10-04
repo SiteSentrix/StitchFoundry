@@ -118,7 +118,7 @@ impl Rendered {
     /// Un-premultiplied RGBA8 copy.
     pub fn to_straight(&self) -> Vec<u8> {
         let mut out = self.pixels.clone();
-        for px in out.chunks_exact_mut(4) {
+        for px in out.as_chunks_mut::<4>().0 {
             let a = px[3] as u32;
             if a != 0 && a != 255 {
                 for c in &mut px[..3] {
@@ -129,17 +129,20 @@ impl Rendered {
         out
     }
     /// Encode as PNG.
-    pub fn to_png(&self) -> Vec<u8> {
+    pub fn to_png(&self) -> Result<Vec<u8>, String> {
         let mut buf = Vec::new();
-        let img = image::RgbaImage::from_raw(self.width, self.height, self.to_straight()).expect("size");
-        img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).expect("png encode");
-        buf
+        let img = image::RgbaImage::from_raw(self.width, self.height, self.to_straight())
+            .ok_or("PNG encoding failed: pixel buffer doesn't match the image size")?;
+        img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).map_err(|e| format!("PNG encoding failed: {e}"))?;
+        Ok(buf)
     }
     /// Encode as JPEG (flattened on white) at `quality` 1..=100.
-    pub fn to_jpeg(&self, quality: u8) -> Vec<u8> {
+    pub fn to_jpeg(&self, quality: u8) -> Result<Vec<u8>, String> {
         let rgba = self.to_straight();
         let rgb: Vec<u8> = rgba
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(|p| {
                 let a = p[3] as u32;
                 let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
@@ -148,15 +151,17 @@ impl Rendered {
             .collect();
         let mut buf = Vec::new();
         let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality.clamp(1, 100));
-        let _ = image::ImageEncoder::write_image(enc, &rgb, self.width, self.height, image::ExtendedColorType::Rgb8);
-        buf
+        image::ImageEncoder::write_image(enc, &rgb, self.width, self.height, image::ExtendedColorType::Rgb8)
+            .map_err(|e| format!("JPEG encoding failed: {e}"))?;
+        Ok(buf)
     }
     /// Encode as lossless WebP.
-    pub fn to_webp(&self) -> Vec<u8> {
+    pub fn to_webp(&self) -> Result<Vec<u8>, String> {
         let mut buf = Vec::new();
         let enc = image::codecs::webp::WebPEncoder::new_lossless(&mut buf);
-        let _ = image::ImageEncoder::write_image(enc, &self.to_straight(), self.width, self.height, image::ExtendedColorType::Rgba8);
-        buf
+        image::ImageEncoder::write_image(enc, &self.to_straight(), self.width, self.height, image::ExtendedColorType::Rgba8)
+            .map_err(|e| format!("WebP encoding failed: {e}"))?;
+        Ok(buf)
     }
     /// Straight-alpha RGBA at (x, y).
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {

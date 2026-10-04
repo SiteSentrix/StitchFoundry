@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 pub mod cmd;
+pub mod guard;
 pub mod inspect;
 mod tooling;
 
@@ -39,6 +40,9 @@ pub enum EngineError {
     NoNode(NodeId),
     #[error("{0}")]
     Other(String),
+    /// A bug: the command panicked. The document was rolled back to its state before the command.
+    #[error("internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)")]
+    Internal { cmd: String, msg: String },
 }
 
 impl From<vectorcraft_doc::DocError> for EngineError {
@@ -489,6 +493,8 @@ pub struct Session {
     pub(crate) tool: Box<dyn Tool>,
     pub(crate) last_view: ViewInfo,
     depth: u32,
+    /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
+    tool_panic: Option<EngineError>,
     /// Draw Normal / Behind / Inside (toolbar drawing modes).
     pub draw_mode: DrawMode,
     /// The path new art is drawn inside (Draw Inside).
@@ -545,6 +551,7 @@ impl Session {
             tool: vectorcraft_tools::create("selection"),
             last_view: ViewInfo::default(),
             depth: 0,
+            tool_panic: None,
             draw_mode: DrawMode::Normal,
             draw_inside: None,
             untitled_counter: 0,
@@ -654,9 +661,7 @@ impl Session {
         if self.depth == 0 {
             self.journal_note.clear();
         }
-        self.depth += 1;
-        let r = (spec.run)(self, params);
-        self.depth -= 1;
+        let r = if self.depth == 0 { self.run_guarded(id, |s| (spec.run)(s, params)) } else { self.run_nested(|s| (spec.run)(s, params)) };
         let r = r?;
         if self.depth == 0 {
             self.inherit_new_art();
@@ -687,6 +692,39 @@ impl Session {
             }
             Value::Null if !note.is_empty() => Value::Object(note),
             _ => params.clone(),
+        }
+    }
+
+    fn run_nested(&mut self, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
+        self.depth += 1;
+        let r = f(self);
+        self.depth -= 1;
+        r
+    }
+
+    /// A top-level command: a panic (a bug) becomes [`EngineError::Internal`] and the active
+    /// document goes back to how it was before the command, instead of crashing the frontend.
+    fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
+        let snapshot = self.active().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone()));
+        let active = self.active;
+        match guard::catch_panic(|| self.run_nested(f)) {
+            Ok(r) => r,
+            Err(msg) => {
+                self.depth = 0;
+                self.journal_note.clear();
+                if let Some((uid, doc, selection, interaction)) = snapshot
+                    && let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid)
+                {
+                    st.doc = doc;
+                    st.selection = selection;
+                    st.interaction = interaction;
+                    st.revision += 1;
+                }
+                if active.is_some_and(|i| i < self.docs.len()) {
+                    self.active = active;
+                }
+                Err(EngineError::Internal { cmd: id.to_string(), msg })
+            }
         }
     }
 

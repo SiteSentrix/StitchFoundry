@@ -248,11 +248,12 @@ fn brush_apply(s: &mut Session, p: &Value) -> Result<Value> {
             if n.appearance.stroke().is_none_or(|st| st.paint.is_none()) {
                 n.appearance.set_stroke(stroke.clone());
             }
-            let st = n.appearance.stroke_mut().expect("stroke");
-            if st.width <= 0.0 {
-                st.width = 1.0;
+            if let Some(st) = n.appearance.stroke_mut() {
+                if st.width <= 0.0 {
+                    st.width = 1.0;
+                }
+                st.brush = Some(name.clone());
             }
-            st.brush = Some(name.clone());
         }
         Ok(())
     })?;
@@ -515,7 +516,7 @@ fn unique_symbol_name(d: &Document, base: &str) -> String {
     if !taken(base) {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap()
+    (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
 }
 
 fn instances_of(d: &Document, name: Option<&str>) -> Vec<NodeId> {
@@ -676,7 +677,7 @@ fn symbol_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let first = *ids.first().ok_or_else(|| EngineError::Other("select a symbol instance".into()))?;
     let name = match &s.doc()?.doc.node(first).map(|n| n.kind.clone()) {
         Some(NodeKind::SymbolInstance { symbol, .. }) => symbol.clone(),
-        _ => unreachable!(),
+        _ => return Err(EngineError::Other("select a symbol instance".into())),
     };
     let out = s.edit("Edit Symbol", |d, sel| {
         let out = break_links(d, &[first])?;

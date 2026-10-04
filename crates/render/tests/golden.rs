@@ -1,5 +1,7 @@
 //! Pixel-sample "golden" tests on small fixtures: gradients, blend modes, clip groups, stroke
 //! alignment/dashes/arrowheads, effects, text, and opacity folding vs layer compositing.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
@@ -137,7 +139,7 @@ fn blend_ref(mode: BlendMode, b: f64, s: f64) -> f64 {
                 b + (2.0 * s - 1.0) * (d - b)
             }
         }
-        _ => unreachable!(),
+        other => panic!("unexpected {other:?}"),
     }
 }
 
@@ -496,7 +498,7 @@ fn png_encoding_roundtrips_pixels() {
     b.rect(Rect::new(10.0, 10.0, 60.0, 60.0), Color::rgb(0.2, 0.4, 0.6), |n| n.opacity = 0.5);
     let d = b.build();
     let r = vectorcraft_render::Renderer::new().render_region(&d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, false);
-    let decoded = Image::from_png(&r.to_png()).unwrap();
+    let decoded = Image::from_png(&r.to_png().unwrap()).unwrap();
     assert_eq!(decoded, Image::from_rendered(&r));
 }
 

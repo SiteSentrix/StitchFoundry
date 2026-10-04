@@ -48,7 +48,7 @@ pub struct SwatchGroup {
 }
 
 fn solid(name: &str, hex: &str) -> Swatch {
-    Swatch { name: name.into(), paint: Paint::solid(Color::from_hex(hex).unwrap()), global: false, spot: false }
+    Swatch { name: name.into(), paint: Paint::solid(Color::from_hex(hex).unwrap_or(Color::BLACK)), global: false, spot: false }
 }
 
 /// The default swatches of a document in colour `model`: [`base_swatches`] with their RGB colours
@@ -125,7 +125,10 @@ fn base_swatches() -> (Vec<Swatch>, Vec<SwatchGroup>) {
         name: name.into(),
         paint: Paint::Gradient(Box::new(crate::GradientPaint::new(Gradient {
             kind,
-            stops: vec![GradientStop::new(0.0, Color::from_hex(a).unwrap()), GradientStop::new(1.0, Color::from_hex(b).unwrap())],
+            stops: vec![
+                GradientStop::new(0.0, Color::from_hex(a).unwrap_or(Color::WHITE)),
+                GradientStop::new(1.0, Color::from_hex(b).unwrap_or(Color::BLACK)),
+            ],
         }))),
         global: false,
         spot: false,
@@ -179,5 +182,17 @@ mod tests {
         assert_eq!(white, Some(Color::cmyk(0.0, 0.0, 0.0, 0.0)));
         let black = s.iter().find(|w| w.name == "Black").and_then(|w| w.paint.color());
         assert_eq!(black, Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    }
+
+    #[test]
+    fn default_swatches_parse() {
+        // `solid`/`grad` fall back to black or white on a bad literal instead of panicking; make sure
+        // none falls back.
+        let src = include_str!("swatch.rs");
+        let hexes: Vec<&str> = src.split('"').filter(|t| t.starts_with('#') && t.len() == 7).collect();
+        assert!(hexes.len() > 30);
+        for h in hexes {
+            assert!(Color::from_hex(h).is_some(), "{h}");
+        }
     }
 }

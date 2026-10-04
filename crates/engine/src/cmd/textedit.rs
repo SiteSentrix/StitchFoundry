@@ -231,8 +231,11 @@ impl CharChange {
             // Keep the style when the new family has it, else its closest match.
             if self.style.is_none() {
                 let styles = vectorcraft_text::FontDb::global().styles(f);
-                if !styles.is_empty() && !styles.iter().any(|s| s.eq_ignore_ascii_case(&st.font_style)) {
-                    st.font_style = vectorcraft_text::FontDb::global().face(f, &st.font_style).style.clone();
+                if !styles.is_empty()
+                    && !styles.iter().any(|s| s.eq_ignore_ascii_case(&st.font_style))
+                    && let Some(face) = vectorcraft_text::FontDb::global().face(f, &st.font_style)
+                {
+                    st.font_style = face.style.clone();
                 }
             }
         }

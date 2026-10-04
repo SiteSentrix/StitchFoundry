@@ -1,5 +1,7 @@
 //! Minimal reproductions of engine bugs found by the property tests. Each is `#[ignore]`d with a
 //! `BUG:` reason until fixed; remove the attribute when the fix lands.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use serde_json::json;
 use vectorcraft_engine::Session;

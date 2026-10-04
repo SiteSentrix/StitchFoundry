@@ -111,7 +111,10 @@ impl Server {
         if !(id.is_string() || id.is_number()) {
             return Some(error(Value::Null, INVALID_REQUEST, "`id` must be a string or number"));
         }
-        Some(match self.request(method, &params) {
+        // A bug that panics fails this request only; the server keeps serving.
+        let r = vectorcraft_engine::guard::catch_panic(|| self.request(method, &params))
+            .unwrap_or_else(|msg| Err((INTERNAL_ERROR, format!("internal error in `{method}`: {msg} (please report this bug)"))));
+        Some(match r {
             Ok(r) => response(id, r),
             Err((code, m)) => error(id, code, m),
         })

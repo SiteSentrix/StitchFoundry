@@ -241,8 +241,7 @@ impl WidthProfile {
                 return (w[0].1 + (w[1].1 - w[0].1) * u, w[0].2 + (w[1].2 - w[0].2) * u);
             }
         }
-        let l = p.last().unwrap();
-        (l.1, l.2)
+        p.last().map_or((1.0, 1.0), |l| (l.1, l.2))
     }
     /// The built-in profiles, in menu order. "uniform" is the plain stroke (no profile).
     pub const PRESETS: [ProfilePreset; 7] = [

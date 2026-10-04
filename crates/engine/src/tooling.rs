@@ -4,7 +4,7 @@ use serde_json::Value;
 use vectorcraft_geom::Point;
 use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, ToolContext, ToolKey};
 
-use crate::{Result, Session};
+use crate::{EngineError, Result, Session};
 
 /// View state the tools need from the frontend.
 #[derive(Clone, Copy, Debug)]
@@ -86,24 +86,43 @@ impl Session {
             raster_sample: self.prefs.eyedropper.sample_size,
             preview_bounds: self.prefs.use_preview_bounds,
         };
-        f(self.tool.as_mut(), &cx)
+        let tool = &mut self.tool;
+        match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
+            Ok(r) => r,
+            Err(msg) => {
+                // A bug in the tool: start it afresh and drop its half-done drag.
+                let id = self.tool.id();
+                self.tool = vectorcraft_tools::create(id);
+                let _ = self.cancel_interaction();
+                self.tool_panic = Some(EngineError::Internal { cmd: format!("tool `{id}`"), msg });
+                R::default()
+            }
+        }
+    }
+
+    /// The error of a tool that panicked in the last [`Self::with_tool_cx`] call, if any.
+    fn take_tool_panic(&mut self) -> Result<()> {
+        self.tool_panic.take().map_or(Ok(()), Err)
     }
 
     /// Feed a pointer event to the active tool. Returns requests for the UI.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
         self.last_view = view;
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
+        self.take_tool_panic()?;
         self.apply_actions(acts)
     }
 
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
+        self.take_tool_panic()?;
         self.apply_actions(acts)
     }
 
     /// Typed text for the active tool (Type tool).
     pub fn tool_text(&mut self, text: &str, view: ViewInfo) -> Result<Vec<UiRequest>> {
         let acts = self.with_tool_cx(view, |t, cx| t.text_input(cx, text));
+        self.take_tool_panic()?;
         self.apply_actions(acts)
     }
 

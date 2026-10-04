@@ -615,8 +615,11 @@ impl Document {
     pub fn remove(&mut self, id: NodeId) -> Result<Arc<Node>, DocError> {
         let parent = self.parent_of(id);
         let path = self.index_path(id).ok_or(DocError::NoNode(id))?;
-        let idx = *path.last().unwrap();
+        let idx = *path.last().ok_or(DocError::NoNode(id))?;
         let ch = self.children_mut(parent)?;
+        if idx >= ch.len() {
+            return Err(DocError::NoNode(id));
+        }
         Ok(ch.remove(idx))
     }
 
@@ -719,8 +722,7 @@ impl Document {
         n.id = self.alloc_id();
         if let Some(ch) = n.children_mut() {
             let old: Vec<Arc<Node>> = std::mem::take(ch);
-            let fresh: Vec<Arc<Node>> = old.iter().map(|c| Arc::new(self.reid(c))).collect();
-            *n.children_mut().unwrap() = fresh;
+            *ch = old.iter().map(|c| Arc::new(self.reid(c))).collect();
         }
         n
     }
@@ -781,7 +783,7 @@ impl Document {
 
 fn default_graphic_styles() -> Vec<GraphicStyle> {
     use vectorcraft_color::{Color, Paint};
-    let solid = |hex| Paint::solid(Color::from_hex(hex).unwrap());
+    let solid = |hex| Paint::solid(Color::from_hex(hex).unwrap_or(Color::BLACK));
     [
         GraphicStyle::new(DEFAULT_GRAPHIC_STYLE, Appearance::default_art()),
         GraphicStyle::new("Black Outline", Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0)),

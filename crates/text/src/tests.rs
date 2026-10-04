@@ -47,15 +47,15 @@ fn bundled_families_and_styles() {
 
 #[test]
 fn style_lookup_and_fallback() {
-    let f = db().face("Inter", "Semibold");
+    let f = db().face("Inter", "Semibold").unwrap();
     assert_eq!((f.family.as_str(), f.style.as_str()), ("Inter", "SemiBold"));
-    let f = db().face("inter", "Bold");
+    let f = db().face("inter", "Bold").unwrap();
     assert_eq!(f.style, "SemiBold", "closest weight");
-    let f = db().face("No Such Font", "Regular");
+    let f = db().face("No Such Font", "Regular").unwrap();
     assert_eq!((f.family.as_str(), f.style.as_str()), ("Source Sans 3", "Regular"));
-    let f = db().face("No Such Font", "Bold");
+    let f = db().face("No Such Font", "Bold").unwrap();
     assert_eq!(f.style, "Bold");
-    assert_eq!(db().face("Source Sans 3", "Italic").style, "Italic");
+    assert_eq!(db().face("Source Sans 3", "Italic").unwrap().style, "Italic");
 }
 
 #[test]
@@ -344,7 +344,7 @@ fn on_path_circle_and_overflow() {
 
 #[test]
 fn fallback_font_per_character() {
-    let primary = db().face("Source Sans 3", "Regular");
+    let primary = db().face("Source Sans 3", "Regular").unwrap();
     // Find a character the primary lacks but another bundled font has.
     let c = ['\u{2500}', '\u{2192}', '\u{25B6}', '\u{2588}', '\u{21E5}', '\u{2318}']
         .into_iter()

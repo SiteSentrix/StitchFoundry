@@ -112,8 +112,11 @@ pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Ve
             if shape_mode && lv.len() > 1 {
                 let parts: Vec<(PathData, FillRule)> = lv.iter().filter_map(geometry).collect();
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
-                shapes.push(po::Shape::new(po::unite_all(&refs), FillRule::NonZero, sources.len() as u64));
-                sources.push(lv.pop().expect("non-empty"));
+                let key = sources.len() as u64;
+                if let Some(top) = lv.pop() {
+                    shapes.push(po::Shape::new(po::unite_all(&refs), FillRule::NonZero, key));
+                    sources.push(top);
+                }
             } else {
                 for l in lv {
                     if let Some((p, r)) = geometry(&l) {

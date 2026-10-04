@@ -308,7 +308,7 @@ fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
                     new_nodes.push(shape_node(d, rest, Some(leaf)));
                 }
             }
-            if !erase && i == style_src {
+            if !erase && Some(i) == style_src {
                 let mut m = shape_node(d, union.clone(), Some(leaf));
                 if let Some(f) = &fill {
                     m.appearance.set_fill(f.clone());
@@ -399,7 +399,7 @@ fn build_children(d: &mut Document, sources: Vec<Arc<Node>>) -> Result<(Vec<Arc<
     let nfaces = regs.len();
     for r in regs {
         let id = d.alloc_id();
-        let fill = styles[r.top()].0.clone();
+        let fill = r.top().and_then(|t| styles.get(t)).map_or(Paint::None, |s| s.0.clone());
         let mut n = Node::path(id, r.path, fill_only(fill));
         n.name = Some(FACE_NAME.into());
         children.push(Arc::new(n));
@@ -680,7 +680,14 @@ fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
     let id = s.edit(label, |d, sel| {
         let src = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
-        let mut image = if is_trace_group(&src) { (**src.children().unwrap().first().unwrap()).clone() } else { src.clone() };
+        let mut image = if is_trace_group(&src) {
+            src.children()
+                .and_then(|c| c.first())
+                .map(|c| (**c).clone())
+                .ok_or_else(|| EngineError::Other("Image Trace: the traced image is missing".into()))?
+        } else {
+            src.clone()
+        };
         image.visible = true;
         let mut children: Vec<Arc<Node>> = vec![];
         if !expand {

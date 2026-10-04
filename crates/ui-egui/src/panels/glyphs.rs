@@ -141,7 +141,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The panel browses the current text's font unless another font was picked here.
     let picked: Option<(String, String)> = pstate(ui.ctx(), "gl-font");
     let (family, style) = picked.or(current).unwrap_or_else(|| (vectorcraft_text::FALLBACK_FAMILY.to_string(), "Regular".to_string()));
-    let face = db.face(&family, &style);
+    let Some(face) = db.face(&family, &style) else {
+        ui.label(egui::RichText::new("No fonts are available.").color(t.text_dim));
+        return;
+    };
     let subset: usize = pstate(ui.ctx(), "gl-subset");
     let (_, lo, hi) = SUBSETS[subset.min(SUBSETS.len() - 1)];
     let w = ui.available_width();

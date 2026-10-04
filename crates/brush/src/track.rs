@@ -76,11 +76,11 @@ impl Track {
                     corner.push(a.dot(b) < cos_limit);
                     tangents.push(unit(a + b));
                 }
-                (Some(a), None) | (None, Some(a)) => {
+                (a, b) => {
+                    // An end of an open track (both `None` only for a track without segments).
                     corner.push(false);
-                    tangents.push(a);
+                    tangents.push(a.or(b).unwrap_or(Vec2::new(1.0, 0.0)));
                 }
-                (None, None) => unreachable!(),
             }
         }
         Some(Track { verts: pts, cum, closed, dirs, tangents, corner })

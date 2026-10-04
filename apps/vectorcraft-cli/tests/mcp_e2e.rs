@@ -1,4 +1,6 @@
 //! End-to-end MCP over stdio against the built `vectorcraft-cli mcp --headless` binary.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};

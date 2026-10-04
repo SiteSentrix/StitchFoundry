@@ -1,4 +1,6 @@
 //! Geometry property tests: PathData ↔ BezPath, bounds, hit testing, anchors and shapes.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
 use vectorcraft_geom::hit::{distance_to_outline, fill_contains, stroke_contains};
@@ -29,7 +31,7 @@ fn crossing_winding(bp: &BezPath, p: Point) -> i32 {
         PathEl::MoveTo(q) => pts.push(vec![q]),
         PathEl::LineTo(q) => pts.last_mut().unwrap().push(q),
         PathEl::ClosePath => {}
-        _ => unreachable!(),
+        other => panic!("unexpected {other:?}"),
     });
     for poly in pts {
         for i in 0..poly.len() {

@@ -347,12 +347,13 @@ fn cut_subpath(sp: &SubPath, remove: &dyn Fn(Point) -> bool) -> Option<Vec<SubPa
     }
     // A closed path's last and first runs meet at anchor 0.
     if sp.closed && runs.len() >= 2 {
-        let first_starts = runs[0][0].0 == 0 && runs[0][0].1 == 0.0;
-        let last = runs.last().unwrap();
-        let last_ends = last[last.len() - 1].0 == nseg - 1 && last[last.len() - 1].2 == 1.0;
+        let first_starts = runs.first().and_then(|r| r.first()).is_some_and(|s| s.0 == 0 && s.1 == 0.0);
+        let last_ends = runs.last().and_then(|r| r.last()).is_some_and(|s| s.0 + 1 == nseg && s.2 == 1.0);
         if first_starts && last_ends {
             let first = runs.remove(0);
-            runs.last_mut().unwrap().extend(first);
+            if let Some(last) = runs.last_mut() {
+                last.extend(first);
+            }
         }
     }
     let out = runs
@@ -363,10 +364,10 @@ fn cut_subpath(sp: &SubPath, remove: &dyn Fn(Point) -> bool) -> Option<Vec<SubPa
             for &(i, t0, t1) in r {
                 let c = sp.segment(i).subsegment(t0..t1);
                 let (h1, h2) = if sp.segment_is_line(i) { (c.p0, c.p3) } else { (c.p1, c.p2) };
-                if anchors.is_empty() {
-                    anchors.push(Anchor::corner(c.p0));
+                match anchors.last_mut() {
+                    Some(a) => a.h_out = h1,
+                    None => anchors.push(Anchor { h_out: h1, ..Anchor::corner(c.p0) }),
                 }
-                anchors.last_mut().unwrap().h_out = h1;
                 anchors.push(Anchor { p: c.p3, h_in: h2, h_out: c.p3, kind: AnchorKind::Corner });
             }
             for a in &mut anchors {
@@ -419,16 +420,20 @@ fn path_kind(path: PathData) -> NodeKind {
 /// corners) and simplify it to `tol`.
 fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
     let min = (tol * 0.3).max(0.05);
-    let mut kept: Vec<Point> = vec![pts[0]];
-    for &p in &pts[1..] {
-        if kept.last().unwrap().distance(p) >= min {
+    let (Some(&p0), Some(&pn)) = (pts.first(), pts.last()) else { return SubPath::new(vec![], closed) };
+    let mut kept: Vec<Point> = vec![p0];
+    for &p in pts.iter().skip(1) {
+        if kept.last().is_none_or(|k| k.distance(p) >= min) {
             kept.push(p);
         }
     }
-    if let (Some(&l), true) = (pts.last(), kept.len() > 1) {
-        *kept.last_mut().unwrap() = l;
-    } else if kept.len() == 1 && pts.len() > 1 {
-        kept.push(pts[pts.len() - 1]);
+    // The last sample always ends the stroke.
+    if kept.len() > 1 {
+        if let Some(k) = kept.last_mut() {
+            *k = pn;
+        }
+    } else if pts.len() > 1 {
+        kept.push(pn);
     }
     let n = kept.len();
     let marked: Vec<(Point, bool)> = (0..n)
@@ -465,25 +470,34 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         if at_start {
             sp.reverse();
         }
-        let end = sp.anchors.last().unwrap().p;
-        pts[0] = end;
+        let (Some(first), Some(end)) = (sp.anchors.first().map(|a| a.p), sp.anchors.last().map(|a| a.p)) else {
+            return Err(bad(C, "path has no open end"));
+        };
+        let Some(p0) = pts.first_mut() else { return Err(bad(C, "needs points")) };
+        *p0 = end;
         if pts.len() < 2 {
             return Ok(json!({ "id": id.0 }));
         }
-        let first = sp.anchors[0].p;
         let close_tol = (tol * 4.0).max(6.0);
-        let closing = sp.anchors.len() >= 2 && pts.last().unwrap().distance(first) <= close_tol;
-        if closing {
-            *pts.last_mut().unwrap() = first;
+        let closing = sp.anchors.len() >= 2 && pts.last().is_some_and(|p| p.distance(first) <= close_tol);
+        if closing && let Some(l) = pts.last_mut() {
+            *l = first;
         }
         let fit = fit_freehand(&pts, tol, false);
         let mut add = fit.anchors;
-        sp.anchors.last_mut().unwrap().h_out = add[0].h_out;
-        add.remove(0);
+        if let (Some(last), Some(a0)) = (sp.anchors.last_mut(), add.first()) {
+            last.h_out = a0.h_out;
+        }
+        if !add.is_empty() {
+            add.remove(0);
+        }
         sp.anchors.extend(add);
-        if closing && sp.anchors.len() > 2 {
-            let l = sp.anchors.pop().unwrap();
-            sp.anchors[0].h_in = l.h_in;
+        if closing
+            && sp.anchors.len() > 2
+            && let Some(l) = sp.anchors.pop()
+            && let Some(a0) = sp.anchors.first_mut()
+        {
+            a0.h_in = l.h_in;
             sp.closed = true;
         }
         for a in &mut sp.anchors {
@@ -900,8 +914,10 @@ fn smooth_subpath(sp: &SubPath, near: &dyn Fn(Point) -> bool, tol: f64) -> Optio
         m.push(false);
         open.closed = false;
         let mut res = smooth_open(&open.anchors, &m, tol);
-        let l = res.pop().unwrap();
-        res[0].h_in = l.h_in;
+        let l = res.pop()?;
+        if let Some(r0) = res.first_mut() {
+            r0.h_in = l.h_in;
+        }
         return Some(SubPath::new(res, true));
     }
     Some(SubPath::new(smooth_open(&sp.anchors, &marked, tol), false))
@@ -1029,8 +1045,10 @@ fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
         if ida == idb && sa == sb {
             let path = path_mut(d, ida)?;
             let sp = &mut path.subpaths[sa];
-            if merge && sp.anchors.len() > 2 {
-                let l = sp.anchors.pop().unwrap();
+            if merge
+                && sp.anchors.len() > 2
+                && let Some(l) = sp.anchors.pop()
+            {
                 let d0 = mid - sp.anchors[0].p;
                 sp.anchors[0].translate(d0);
                 sp.anchors[0].h_in = l.h_in + (mid - l.p);
@@ -1048,10 +1066,12 @@ fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
         if !startb {
             y.reverse();
         }
-        if merge {
+        if merge
+            && !y.anchors.is_empty()
+            && let Some(last) = x.anchors.last_mut()
+        {
             let yf = y.anchors.remove(0);
-            let lp = x.anchors.last().unwrap().p;
-            let last = x.anchors.last_mut().unwrap();
+            let lp = last.p;
             last.translate(mid - lp);
             last.h_out = yf.h_out + (mid - yf.p);
             *last = Anchor::with_handles(last.p, last.h_in, last.h_out);
@@ -1117,8 +1137,9 @@ fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     let mut inputs: Vec<(&PathData, FillRule)> = vec![(&region, FillRule::NonZero)];
     inputs.extend(merge_ids.iter().map(|(_, pd, r)| (pd, *r)));
     let merged = po::unite_all(&inputs);
-    let keep = merge_ids.last().unwrap().0;
-    let others: Vec<NodeId> = merge_ids[..merge_ids.len() - 1].iter().map(|m| m.0).collect();
+    let Some(((keep, _, _), rest)) = merge_ids.split_last() else { return add_node(s, "Blob Brush", path_kind(region), ap, None) };
+    let keep = *keep;
+    let others: Vec<NodeId> = rest.iter().map(|m| m.0).collect();
     s.edit("Blob Brush", |d, sel| {
         *path_mut(d, keep)? = merged;
         for id in others {
