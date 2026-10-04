@@ -188,7 +188,9 @@ until `transparency.stopEditingOpacityMask`. Saves and exports never include the
 Knockout Group has three states: `transparency.set {knockout: "on"|"off"|"neutral"}` (`true` = on, `false` =
 neutral, the default). In a knockout group each child hides what it covers of the children below it; neutral groups
 pass the enclosing group's setting to their children, off groups never knock out. `knockoutShape: true` makes the
-object's opacity and opacity mask scale how much it knocks out. Knockout groups render as isolated groups;
+object's opacity and opacity mask scale how much it knocks out. `transparency.togglePageKnockoutGroup` and
+`transparency.togglePageIsolatedBlending` (`{value?}`) treat the whole page as a knockout or isolated group; they are
+saved with the document and undoable, and `transparency.info` reports them. Knockout groups render as isolated groups;
 PDF and SVG write them as soft-masked groups with the same look (the PDF export reports a warning).
 
 ## Clipping masks

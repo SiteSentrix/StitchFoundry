@@ -1,7 +1,7 @@
 //! Transparency panel: blend mode, opacity (field + slider popup), object/mask thumbnails with the
 //! opacity-mask controls (make/release, link, clip, invert; Shift-click the mask to disable it),
 //! Isolate Blending, the three-state Knockout Group (on → neutral → off) and Opacity & Mask Define
-//! Knockout Shape.
+//! Knockout Shape; the menu's Page Isolated Blending and Page Knockout Group.
 
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
@@ -200,8 +200,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("transparency.toggleNewMasksInverted", json!({})).ok();
     }
     ui.separator();
-    menu_item(ui, "Page Isolated Blending", false, false);
-    menu_item(ui, "Page Knockout Group", false, false);
+    let page = app.session.active().map(|d| (d.doc.page_isolate, d.doc.page_knockout));
+    let (isolate, knockout) = page.unwrap_or_default();
+    if menu_item(ui, "Page Isolated Blending", page.is_some(), isolate) {
+        app.run("transparency.togglePageIsolatedBlending", json!({})).ok();
+    }
+    if menu_item(ui, "Page Knockout Group", page.is_some(), knockout) {
+        app.run("transparency.togglePageKnockoutGroup", json!({})).ok();
+    }
 }
 
 /// The menu's opacity-mask rows (label, command, enabled) for the target's `mask`; Make needs a
@@ -358,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn knockout_states() {
+    fn knockout_states_and_page_group_items() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         run(&mut app, "file.new", json!({"width": 100, "height": 100}));
         run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
@@ -367,5 +373,10 @@ mod tests {
             let texts = frame(&mut app);
             assert!(texts.iter().any(|t| t == "Knockout Group") && texts.iter().any(|t| t == "Opacity & Mask Define Knockout Shape"));
         }
+        assert!(frame(&mut app).iter().any(|t| t.ends_with(" Page Knockout Group") && !t.starts_with('✓')));
+        run(&mut app, "transparency.togglePageKnockoutGroup", json!({}));
+        run(&mut app, "transparency.togglePageIsolatedBlending", json!({}));
+        let texts = frame(&mut app);
+        assert!(texts.iter().any(|t| t == "✓ Page Knockout Group") && texts.iter().any(|t| t == "✓ Page Isolated Blending"), "{texts:?}");
     }
 }

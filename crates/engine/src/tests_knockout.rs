@@ -1,4 +1,4 @@
-//! Knockout groups and the knockout shape (M3.46–M3.47): commands, undo, files
+//! Knockout groups, the knockout shape and the page group (M3.46–M3.48): commands, undo, files
 //! (old bools load) and the PDF and SVG output.
 
 use serde_json::{Value, json};
@@ -81,19 +81,40 @@ fn knockout_shape_is_an_object_option() {
 }
 
 #[test]
+fn page_group_toggles_are_undoable_document_settings() {
+    let mut s = session();
+    let doc = |s: &Session| (s.doc().unwrap().doc.page_isolate, s.doc().unwrap().doc.page_knockout);
+    let before = steps(&s);
+    assert_eq!(run(&mut s, "transparency.togglePageIsolatedBlending", json!({})), json!({"value": true}));
+    assert_eq!(run(&mut s, "transparency.togglePageKnockoutGroup", json!({"value": true})), json!({"value": true}));
+    assert_eq!((doc(&s), steps(&s)), ((true, true), before + 2));
+    // Setting the current value is not a change.
+    run(&mut s, "transparency.togglePageKnockoutGroup", json!({"value": true}));
+    assert_eq!(steps(&s), before + 2);
+    let info = run(&mut s, "transparency.info", json!({}));
+    assert_eq!((info["pageIsolatedBlending"].clone(), info["pageKnockoutGroup"].clone()), (json!(true), json!(true)));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(doc(&s), (true, false));
+    run(&mut s, "transparency.togglePageIsolatedBlending", json!({}));
+    assert_eq!(doc(&s), (false, false));
+}
+
+#[test]
 fn knockout_settings_round_trip_and_old_bools_load() {
     let mut s = session();
     let g = knockout_group(&mut s);
     let child = node(&s, g).children().unwrap()[0].id.0;
     run(&mut s, "transparency.set", json!({"ids": [g], "knockout": "off"}));
     run(&mut s, "transparency.set", json!({"ids": [child], "knockout": "on", "knockoutShape": true}));
+    run(&mut s, "transparency.togglePageIsolatedBlending", json!({}));
+    run(&mut s, "transparency.togglePageKnockoutGroup", json!({}));
     let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, false);
     let back = vectorcraft_format::load(&bytes).unwrap();
     let (bg, bc) = (back.node(NodeId(g)).unwrap(), back.node(NodeId(child)).unwrap());
-    assert_eq!((bg.knockout, bc.knockout, bc.knockout_shape), (Knockout::Off, Knockout::On, true));
+    assert_eq!((bg.knockout, bc.knockout, bc.knockout_shape, back.page_isolate, back.page_knockout), (Knockout::Off, Knockout::On, true, true, true));
     // Defaults are not written.
     let text = String::from_utf8(vectorcraft_format::save(&session().doc().unwrap().doc, false)).unwrap();
-    assert!(!text.contains("knockout"), "{text}");
+    assert!(!text.contains("knockout") && !text.contains("page_isolate"), "{text}");
     // Files from before the three states stored a bool: true is On, false is Neutral.
     let mut v: Value = serde_json::from_slice(&bytes).unwrap();
     let mut patched = 0;
@@ -145,4 +166,12 @@ fn pdf_and_svg_write_knockout_groups_as_masks() {
     run(&mut s, "transparency.set", json!({"ids": [g], "knockout": "neutral"}));
     run(&mut s, "transparency.set", json!({"ids": [outer], "knockout": "on"}));
     assert_eq!(svg(&s.doc().unwrap().doc).matches("mask=\"url(#knockout-").count(), 1);
+
+    // The page group: an isolated group around the page content.
+    let mut page = (*plain).clone();
+    page.page_isolate = true;
+    assert!(svg(&page).contains("isolation"));
+    page.page_knockout = true;
+    assert_eq!(svg(&page).matches("mask=\"url(#knockout-").count(), 1, "the layer is neutral: its objects knock each other out");
+    assert!(String::from_utf8_lossy(&pdf(&page).bytes).contains("/Luminosity"));
 }

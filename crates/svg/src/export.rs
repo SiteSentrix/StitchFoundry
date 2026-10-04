@@ -44,13 +44,22 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> String {
         depth: 1,
         patterns: HashMap::new(),
         pattern_nest: 0,
-        knockout: false,
+        knockout: doc.page_knockout,
         anonymous: false,
         knockout_filter: None,
     };
     w.assign_name_ids();
-    for l in &doc.layers {
-        w.node(l);
+    // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
+    let page_group = doc.page_isolate || doc.page_knockout;
+    if page_group {
+        let a = w.attrs(&vec![("isolation", "isolate".into())]);
+        w.line(&format!("<g{a}>"));
+        w.depth += 1;
+    }
+    w.children(&doc.layers);
+    if page_group {
+        w.depth -= 1;
+        w.line("</g>");
     }
 
     let nl = if opts.minify { "" } else { "\n" };

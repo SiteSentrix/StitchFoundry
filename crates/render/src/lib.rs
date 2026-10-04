@@ -336,10 +336,25 @@ impl Renderer {
         if !self.draw_pattern_edit(&mut ctx, &frame) {
             // While editing an opacity mask its art is seen only through the mask (Illustrator).
             let mask_layer = doc.mask_edit.map(|m| m.layer);
-            self.knockout = false;
-            for layer in doc.layers.iter().filter(|l| Some(l.id) != mask_layer) {
-                self.draw_arc(&mut ctx, &frame, layer);
+            let layers = doc.layers.iter().filter(|l| Some(l.id) != mask_layer);
+            // Page Isolated Blending / Page Knockout Group: the page is a group of its own.
+            let page_group = !opts.outline && (doc.page_isolate || doc.page_knockout);
+            self.knockout = page_group && doc.page_knockout;
+            if page_group {
+                ctx.set_transform(Affine::IDENTITY);
+                ctx.push_layer(None, None, None, None, None);
             }
+            if self.knockout {
+                self.draw_knockout(&mut ctx, &frame, &layers.cloned().collect::<Vec<_>>());
+            } else {
+                for layer in layers {
+                    self.draw_arc(&mut ctx, &frame, layer);
+                }
+            }
+            if page_group {
+                ctx.pop_layer();
+            }
+            self.knockout = false;
         }
         if trim {
             ctx.pop_layer();

@@ -70,7 +70,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     }
     pdf.set_metadata(meta);
 
-    let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), knockout: false };
+    let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), knockout: doc.page_knockout };
     for i in indices {
         let ab = &doc.artboards[i];
         let r = ab.rect;
@@ -79,8 +79,15 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         let mut s = page.surface();
         // krilla's page space is y-down with the origin at the top-left corner, like ours.
         s.push_transform(&xf(Affine::translate((-r.x0, -r.y0))));
-        for layer in &doc.layers {
-            ex.node(&mut s, layer, r, false);
+        // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
+        // writer has no page group attributes).
+        let page_group = doc.page_isolate || doc.page_knockout;
+        if page_group {
+            s.push_isolated();
+        }
+        ex.children(&mut s, &doc.layers, r);
+        if page_group {
+            s.pop();
         }
         s.pop();
         s.finish();

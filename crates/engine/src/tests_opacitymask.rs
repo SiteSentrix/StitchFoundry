@@ -182,7 +182,7 @@ fn info_reports_mixed_values_as_null() {
     let info = s.execute("transparency.info", &json!({})).unwrap();
     assert_eq!(
         info,
-        json!({"ids": [a.0, b.0], "opacity": null, "blend": "Screen", "isolate": null, "knockout": "neutral", "knockoutShape": false, "editingMask": null})
+        json!({"ids": [a.0, b.0], "opacity": null, "blend": "Screen", "isolate": null, "knockout": "neutral", "knockoutShape": false, "editingMask": null, "pageIsolatedBlending": false, "pageKnockoutGroup": false})
     );
     let one = s.execute("transparency.info", &json!({"id": a.0})).unwrap();
     assert_eq!((one["opacity"].clone(), one["isolate"].clone()), (json!(50.0), json!(true)));

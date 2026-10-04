@@ -334,6 +334,14 @@ pub struct Document {
     /// Foreign data preserved on round-trip.
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub unknown: serde_json::Map<String, serde_json::Value>,
+    /// Transparency panel → Page Isolated Blending: the page is an isolated transparency group,
+    /// so top-level blend modes don't blend with what lies under the page.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub page_isolate: bool,
+    /// Transparency panel → Page Knockout Group: the page's elements (its layers; neutral layers
+    /// pass their contents through) knock each other out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub page_knockout: bool,
 }
 
 fn ppi72() -> f64 {
@@ -377,6 +385,8 @@ impl Document {
             mask_edit: None,
             next_id: 1,
             unknown: Default::default(),
+            page_isolate: false,
+            page_knockout: false,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));

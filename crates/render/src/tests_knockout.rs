@@ -1,7 +1,7 @@
-//! Knockout groups and the knockout shape (Transparency panel).
+//! Knockout groups, the knockout shape and the page group (Transparency panel).
 
 use super::*;
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{BlendMode as Blend, Color, Paint};
 use vectorcraft_doc::{Appearance, Knockout, Node};
 use vectorcraft_geom::shapes;
 
@@ -104,4 +104,25 @@ fn neutral_groups_pass_knockout_through() {
     let mut plain = nested(Knockout::Neutral);
     Arc::make_mut(&mut Arc::make_mut(&mut plain.layers[0]).children_mut().unwrap()[0]).knockout = Knockout::Neutral;
     assert!(close(render(&plain).pixel(50, 50), BLUE_OVER_RED));
+}
+
+#[test]
+fn page_knockout_and_isolated_blending() {
+    // Page Knockout Group: the neutral layer passes its objects through to the page.
+    let mut d = doc(Knockout::Neutral, |_, _| {});
+    d.page_knockout = true;
+    assert!(close(render(&d).pixel(50, 50), BLUE_OVER_WHITE), "{:?}", render(&d).pixel(50, 50));
+    // A layer set to Off keeps its objects from knocking each other out.
+    Arc::make_mut(&mut d.layers[0]).knockout = Knockout::Off;
+    assert!(close(render(&d).pixel(50, 50), BLUE_OVER_RED));
+
+    // Page Isolated Blending: a Difference object no longer blends with the white under the page.
+    let mut d = Document::new(100.0, 100.0);
+    let mut red = half(&mut d, 10.0, (1.0, 0.0, 0.0));
+    red.opacity = 1.0;
+    red.blend = Blend::Difference;
+    d.insert(Some(d.layers[0].id), 0, red).unwrap();
+    assert!(close(render(&d).pixel(30, 50), [0, 255, 255, 255]), "inverts the white: {:?}", render(&d).pixel(30, 50));
+    d.page_isolate = true;
+    assert!(close(render(&d).pixel(30, 50), [255, 0, 0, 255]), "isolated: {:?}", render(&d).pixel(30, 50));
 }
