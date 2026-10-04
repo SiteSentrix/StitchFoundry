@@ -199,3 +199,49 @@ fn dialogs_are_as_tall_as_their_content() {
     let prompt = height(&mut app, crate::unsaved::KIND, json!({"index": 0, "name": "Untitled-1", "then": "close"}));
     assert!(prompt < 180.0 && prompt < tall, "save prompt {prompt} pt tall (the dialog before it: {tall} pt)");
 }
+
+#[test]
+fn dialogs_do_not_stretch_to_the_screen() {
+    // A dialog is as tall as its content: the same on a short and a tall screen.
+    let openers: &[(&str, serde_json::Value)] = &[
+        ("ui.newSwatch", json!({})),
+        ("ui.newColorGroup", json!({})),
+        ("ui.swatchOptions", json!({"name": "White"})),
+        ("ui.colorPicker", json!({})),
+        ("ui.graphicStyleOptions", json!({})),
+        ("ui.colorGuideOptions", json!({})),
+        ("ui.colorBalanceDialog", json!({})),
+        ("ui.saturateDialog", json!({})),
+        ("ui.saveSwatchLibrary", json!({})),
+        ("ui.flattenTransparencyDialog", json!({})),
+        ("ui.expandDialog", json!({})),
+        ("ui.spotColors", json!({})),
+        ("ui.paramDialog", json!({"command": "object.path.simplify", "label": "Simplify", "params": {"tolerance": 2}})),
+        ("effect.dialog", json!({"effect": "distort.roughen"})),
+    ];
+    let height = |id: &str, p: &serde_json::Value, screen_h: f32| -> Option<(String, f32)> {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run(id, p.clone()).ok()?;
+        let kind = app.ui.dialog.as_ref()?.kind.clone();
+        spec(&kind).window.is_none().then_some(())?;
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, screen_h));
+        for _ in 0..4 {
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            ctx.run_ui(input, |ui| show(&mut app, ui.ctx())).textures_delta.clear();
+        }
+        let h = ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", kind.as_str()))))?.height();
+        Some((kind, h))
+    };
+    let mut checked = 0;
+    for (id, p) in openers {
+        let (Some((kind, short)), Some((_, tall))) = (height(id, p, 1000.0), height(id, p, 2000.0)) else { continue };
+        assert!((short - tall).abs() < 1.0, "{kind} is {short} pt tall on a 1000 pt screen but {tall} pt on a 2000 pt one");
+        checked += 1;
+    }
+    assert!(checked >= 10, "only {checked} dialogs drew in the shared frame");
+}
