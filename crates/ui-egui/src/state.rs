@@ -89,6 +89,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("imageTrace", "Image Trace", "image"),
     ("magicWand", "Magic Wand", "wand-sparkles"),
     (crate::panels::flattener_preview::ID, "Flattener Preview", "eye"),
+    ("attributes", "Attributes", "settings"),
 ];
 
 /// Groups of icon panels separated by dividers in the collapsed column.

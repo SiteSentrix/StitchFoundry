@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::overprint::OverprintBlack;
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, ImageMap, Node, NodeId, NodeKind};
+use vectorcraft_geom::FillRule;
 
 use super::appearance::{ItemTarget, item_target};
 use super::edit::selected_roots;
@@ -29,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Attributes",
             [],
             None,
-            "{ids?, item?} → {ids, overprintFill, overprintStroke} the Attributes panel's values for `ids` or the selection, aimed as object.setOverprint aims; a value is null where they differ (or nothing has a fill or stroke)",
+            "{ids?, item?} → {ids, overprintFill, overprintStroke, showCenter, imageMap: \"none\"|\"rectangle\"|\"polygon\", url, note, fillRule: \"nonZero\"|\"evenOdd\" (of the paths and compound paths in them), reversed (their subpaths run counter-clockwise on screen: Reverse Path Direction On), recentUrls: [newest first]} the Attributes panel's values for `ids` or the selection, overprint aimed as object.setOverprint aims; a value is null where they differ (or nothing has a fill, stroke or path)",
             has_doc,
             |s, p| Ok(attributes(s, p)?.to_json())
         ),
@@ -45,6 +46,17 @@ pub struct AttributesInfo {
     pub overprint_fill: Option<bool>,
     /// Overprint Stroke; `None` where the targets differ or have no stroke.
     pub overprint_stroke: Option<bool>,
+    /// The rest of the panel ([`super::attributes`]); `None` where the targets differ.
+    pub show_center: Option<bool>,
+    pub image_map: Option<ImageMap>,
+    pub url: Option<String>,
+    pub note: Option<String>,
+    /// Fill rule of the paths and compound paths in the targets.
+    pub fill_rule: Option<FillRule>,
+    /// Whether their subpaths run counter-clockwise on screen (Reverse Path Direction On).
+    pub reversed: Option<bool>,
+    /// [`Session::recent_urls`].
+    pub recent_urls: Vec<String>,
 }
 
 impl AttributesInfo {
@@ -53,6 +65,13 @@ impl AttributesInfo {
             "ids": self.ids.iter().map(|id| id.0).collect::<Vec<_>>(),
             "overprintFill": self.overprint_fill,
             "overprintStroke": self.overprint_stroke,
+            "showCenter": self.show_center,
+            "imageMap": self.image_map,
+            "url": self.url,
+            "note": self.note,
+            "fillRule": self.fill_rule.map(super::attributes::rule_name),
+            "reversed": self.reversed,
+            "recentUrls": self.recent_urls,
         })
     }
 }
@@ -97,9 +116,9 @@ fn flags_mut(n: &mut Node, fill: bool, index: Option<usize>) -> Vec<&mut bool> {
     v
 }
 
-/// The `fill` and `stroke` params given: (fill?, on).
-fn kinds(p: &Value, cmd: &str) -> Result<Vec<(bool, bool)>> {
-    [(true, "fill"), (false, "stroke")]
+/// The fill and stroke overprint params given under `keys` (fill's, stroke's): (fill?, on).
+fn kinds(p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<(bool, bool)>> {
+    [(true, keys[0]), (false, keys[1])]
         .into_iter()
         .filter_map(|(fill, key)| {
             p.get(key).map(|v| v.as_bool().map(|on| (fill, on)).ok_or_else(|| bad(cmd, format!("`{key}` must be true or false"))))
@@ -121,7 +140,7 @@ fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>
 
 /// Run `f` on a copy of the document and commit it as one undo step (`label`) only when `f`
 /// reports changes; returns their count.
-fn edit_counted(s: &mut Session, label: &str, f: impl FnOnce(&mut Document) -> Result<usize>) -> Result<usize> {
+pub(super) fn edit_counted(s: &mut Session, label: &str, f: impl FnOnce(&mut Document) -> Result<usize>) -> Result<usize> {
     let mut d = (*s.doc()?.doc).clone();
     let n = f(&mut d)?;
     if n > 0 {
@@ -133,27 +152,42 @@ fn edit_counted(s: &mut Session, label: &str, f: impl FnOnce(&mut Document) -> R
     Ok(n)
 }
 
-fn set_overprint(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "object.setOverprint";
-    let kinds = kinds(p, C)?;
-    if kinds.is_empty() {
-        return Err(bad(C, "give `fill` and/or `stroke`"));
-    }
-    let jobs: Vec<_> = aims(s, p, C, kinds.iter().map(|k| k.0))?.into_iter().zip(kinds.iter().map(|k| k.1)).collect();
-    let changed = edit_counted(s, "Overprint", |d| {
-        let mut changed = BTreeSet::new();
-        for ((fill, item, ids), on) in &jobs {
-            for id in ids {
-                let Some(n) = d.node_mut(*id) else { continue };
-                let index = item.resolve(&n.appearance, *fill, C)?;
-                for f in flags_mut(n, *fill, index) {
-                    if *f != *on {
-                        *f = *on;
-                        changed.insert(*id);
-                    }
+/// One overprint edit: (fill?, item, objects), on.
+pub(super) type OverprintJob = ((bool, ItemTarget, Vec<NodeId>), bool);
+
+/// The overprint edits `p` asks for under `keys` (the fill's and the stroke's), aimed as
+/// `object.setOverprint` aims.
+pub(super) fn overprint_jobs(s: &Session, p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<OverprintJob>> {
+    let kinds = kinds(p, cmd, keys)?;
+    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0))?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
+}
+
+/// Apply `jobs` to `d`, adding the objects changed to `changed`.
+pub(super) fn apply_overprint(d: &mut Document, jobs: &[OverprintJob], cmd: &str, changed: &mut BTreeSet<NodeId>) -> Result<()> {
+    for ((fill, item, ids), on) in jobs {
+        for id in ids {
+            let Some(n) = d.node_mut(*id) else { continue };
+            let index = item.resolve(&n.appearance, *fill, cmd)?;
+            for f in flags_mut(n, *fill, index) {
+                if *f != *on {
+                    *f = *on;
+                    changed.insert(*id);
                 }
             }
         }
+    }
+    Ok(())
+}
+
+fn set_overprint(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.setOverprint";
+    let jobs = overprint_jobs(s, p, C, ["fill", "stroke"])?;
+    if jobs.is_empty() {
+        return Err(bad(C, "give `fill` and/or `stroke`"));
+    }
+    let changed = edit_counted(s, "Overprint", |d| {
+        let mut changed = BTreeSet::new();
+        apply_overprint(d, &jobs, C, &mut changed)?;
         Ok(changed.len())
     })?;
     Ok(json!({ "changed": changed }))
@@ -162,7 +196,8 @@ fn set_overprint(s: &mut Session, p: &Value) -> Result<Value> {
 fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
     const C: &str = "attributes.info";
     let d = &s.doc()?.doc;
-    let mut info = AttributesInfo { ids: targets(s, p)?, ..Default::default() };
+    let mut info = AttributesInfo { ids: targets(s, p)?, recent_urls: s.recent_urls.clone(), ..Default::default() };
+    super::attributes::fill_info(d, &mut info);
     for (fill, item, ids) in aims(s, p, C, [true, false])? {
         let mut all =
             ids.iter().filter_map(|id| d.node(*id)).filter_map(|n| Some(flags(n, fill, item.resolve(&n.appearance, fill, C).ok()?))).flatten();

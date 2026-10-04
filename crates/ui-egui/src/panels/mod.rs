@@ -7,6 +7,7 @@ pub mod actions;
 pub mod align;
 pub mod appearance;
 pub mod artboards;
+pub mod attributes;
 pub mod brushes;
 pub mod character;
 pub mod color;
@@ -90,6 +91,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "magicWand" => magic_wand::show(app, ui),
         "tabs" => tabs::show(app, ui),
         flattener_preview::ID => flattener_preview::show(app, ui),
+        "attributes" => attributes::show(app, ui),
         _ => {
             dim_label(ui, "This panel is on the roadmap (see the parity plan).");
         }
@@ -129,6 +131,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "magicWand" => magic_wand::menu(app, ui),
         "tabs" => tabs::menu(app, ui),
         flattener_preview::ID => flattener_preview::menu(app, ui),
+        "attributes" => attributes::menu(app, ui),
         _ => {
             ui.add_enabled(false, egui::Button::new("No options").frame(false));
         }

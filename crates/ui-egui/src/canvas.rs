@@ -886,6 +886,12 @@ fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                 );
             }
         });
+        // Centre point (Attributes panel → Show Center).
+        if n.shows_center()
+            && let Some(b) = n.geometric_bounds()
+        {
+            anchor_square(p, xf.to_screen(b.center()), color, true, 4.0);
+        }
         // Text: baseline marker.
         if let NodeKind::Text(tx) = &n.kind {
             let o = xf.to_screen(tx.xf * Point::ZERO);

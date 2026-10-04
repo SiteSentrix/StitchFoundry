@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatches",
             [],
             None,
-            "{group?: name (only that colour group's swatches)} → {swatches: [{name, kind: \"none\"|\"color\"|\"gradient\"|\"pattern\", group, global, spot, color?, hex?, tintOf?: base swatch of a tint swatch, tint?: its %, gradient?, pattern?}], groups: [{name, swatches: [names]}]}",
+            "{group?: name (only that colour group's swatches)} → {swatches: [{name, kind: \"none\"|\"color\"|\"gradient\"|\"pattern\", group, global, spot, color?, hex?, tintOf?: base swatch of a tint swatch, tint?: its %, gradient?, pattern?}] (the built-in [Registration] after None: it prints on every plate and can't be edited, moved or deleted), groups: [{name, swatches: [names]}]}",
             has_doc,
             swatch_list
         ),
@@ -210,7 +210,7 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
             Some(g) => g.swatches.iter().collect(),
             None => vec![d.swatch(n).ok_or_else(|| bad(C, format!("no swatch or colour group `{n}`")))?],
         };
-        if swatches.iter().any(|w| w.paint.is_none()) {
+        if swatches.iter().any(|w| w.is_reserved()) {
             return Err(bad(C, format!("`{n}` can't be deleted")));
         }
         global.extend(swatches.iter().filter(|w| w.global).map(|w| w.name.clone()));
@@ -355,7 +355,7 @@ fn swatch_move(s: &mut Session, p: &Value) -> Result<Value> {
         }
         for n in &names {
             let sw = d.swatch(n).ok_or_else(|| bad(C, format!("no swatch `{n}` (swatches and colour groups move separately)")))?;
-            if sw.paint.is_none() {
+            if sw.is_reserved() {
                 return Err(bad(C, format!("`{n}` can't be moved")));
             }
             if group.is_some() && sw.paint.color().is_none() {
@@ -384,6 +384,9 @@ fn swatch_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").ok_or_else(|| bad("swatch.duplicate", "missing name"))?.to_string();
     let new = s.edit("Duplicate Swatch", |d, _| {
         let src = d.swatch(&name).cloned().ok_or_else(|| EngineError::Other(format!("no swatch `{name}`")))?;
+        if src.is_reserved() {
+            return Err(bad("swatch.duplicate", format!("`{name}` can't be duplicated")));
+        }
         let nm = d.free_swatch_name(&format!("{name} copy"));
         let copy = Swatch { name: nm.clone(), ..src };
         if let Some(pos) = d.swatches.iter().position(|sw| sw.name == name) {
@@ -480,7 +483,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?.to_string();
     let d = &s.doc()?.doc;
     let sw = d.swatch(&name).cloned().ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
-    if sw.paint.is_none() {
+    if sw.is_reserved() {
         return Err(bad(C, format!("`{name}` can't be edited")));
     }
     let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
@@ -567,7 +570,11 @@ fn swatch_list(s: &mut Session, p: &Value) -> Result<Value> {
         Some(g) => vec![d.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| bad("swatch.list", format!("no colour group `{g}`")))?],
         None => d.swatch_groups.iter().collect(),
     };
-    let ungrouped = d.swatches.iter().filter(|_| only.is_none()).map(|w| swatch_json(w, None));
+    // The built-in Registration swatch lists after None, as the panel shows it.
+    let none = d.swatches.iter().take_while(|w| w.paint.is_none()).count();
+    let (specials, rest) = d.swatches.split_at(none);
+    let all = specials.iter().chain([vectorcraft_color::swatch::registration()]).chain(rest);
+    let ungrouped = all.filter(|_| only.is_none()).map(|w| swatch_json(w, None));
     let grouped = groups.iter().flat_map(|g| g.swatches.iter().map(|w| swatch_json(w, Some(&g.name))));
     let swatches: Vec<Value> = ungrouped.chain(grouped).collect();
     let groups: Vec<Value> =
@@ -653,7 +660,11 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
     let names = names_param(p, C)?;
     let d = &s.doc()?.doc;
     for n in &names {
-        if d.swatch(n).ok_or_else(|| bad(C, format!("no swatch `{n}`")))?.paint.color().is_none() {
+        let sw = d.swatch(n).ok_or_else(|| bad(C, format!("no swatch `{n}`")))?;
+        if sw.is_reserved() {
+            return Err(bad(C, format!("`{n}` can't be merged")));
+        }
+        if sw.paint.color().is_none() {
             return Err(bad(C, format!("`{n}` isn't a solid colour")));
         }
     }

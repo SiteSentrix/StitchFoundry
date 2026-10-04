@@ -89,6 +89,7 @@ pub const PANEL_SHORTCUTS: &[(&str, &str)] = &[
     ("stroke", "Cmd+F10"),
     ("gradient", "Cmd+F9"),
     ("transparency", "Cmd+Shift+F10"),
+    ("attributes", "Cmd+F11"),
 ];
 
 /// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id).

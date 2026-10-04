@@ -144,3 +144,7 @@ opens the `expand` dialog for the selection. Fields: `object`, `fill`, `stroke` 
 `__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled),
 `gradient` (`objects` or `mesh`) and `steps` (1–1000, default 255). `ui.dialog.confirm` runs `object.expand` with them as
 one undo step.
+
+Attributes panel: `window.panel {panel: "attributes"}` (Cmd+F11) shows it; its controls run `attributes.set`,
+`path.reverse {reversed}` and `path.setFillRule {rule}`, and its Browser button runs the UI command
+`attributes.openUrl {url?}`, which opens the URL (default: the selection's) in the web browser and answers `{url}`.

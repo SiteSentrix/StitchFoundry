@@ -16,7 +16,10 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeKind, Stro
 use vectorcraft_geom::{FillRule, PathData};
 
 use crate::group::{has_own_paint, paints};
-use crate::{GeomContext, apply_geometry_with, evaluate_container, has_geometry, has_pathfinder, is_geometry, needs_outline, reshape};
+use crate::{
+    GeomContext, apply_geometry_with, crop_marks_art, evaluate_container, has_crop_marks, has_geometry, has_pathfinder, is_geometry, needs_outline,
+    reshape,
+};
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
     match item {
@@ -34,7 +37,8 @@ fn clear_item_effects(item: &mut AppearanceItem) {
 
 /// Does anything in `n`'s subtree need baking?
 pub fn needs_bake(n: &Node) -> bool {
-    has_pathfinder(n)
+    has_crop_marks(n)
+        || has_pathfinder(n)
         || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
         || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)))
@@ -74,6 +78,10 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if !needs_bake(n) {
         return None;
     }
+    // Crop marks: the object and its marks.
+    if let Some(m) = crop_marks_art(n) {
+        return Some(bake_pieces(d, m));
+    }
     // Type, images, symbol instances and live objects: reshaped through their outlines.
     if needs_outline(n) && has_geometry(&n.appearance.effects) {
         let symbol = match &n.kind {
@@ -85,21 +93,8 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Groups and layers: Pathfinder, geometry effects and their own fills and strokes. The new
     // pieces (results, outlines, the fills' and strokes' art) get ids of their own.
-    if let Some(mut m) = evaluate_container(n) {
-        let mut seen = std::collections::HashSet::from([m.id]);
-        let children = m.children().cloned().unwrap_or_default();
-        let children = children
-            .into_iter()
-            .map(|c| {
-                let mut c = Arc::unwrap_or_clone(c);
-                fresh_ids(d, &mut c, &mut seen);
-                Arc::new(bake_node(d, &c).unwrap_or(c))
-            })
-            .collect();
-        if let Some(ch) = m.children_mut() {
-            *ch = children;
-        }
-        return Some(m);
+    if let Some(m) = evaluate_container(n) {
+        return Some(bake_pieces(d, m));
     }
     if let Some(ch) = n.children() {
         if matches!(n.kind, NodeKind::Compound { .. })
@@ -115,6 +110,25 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(m);
     }
     bake_leaf(d, n)
+}
+
+/// `m`, art evaluated from an object, with its children baked and given ids of their own (the
+/// pieces copied from the source keep the source's ids until then).
+fn bake_pieces(d: &mut Document, mut m: Node) -> Node {
+    let mut seen = std::collections::HashSet::from([m.id]);
+    let children = m.children().cloned().unwrap_or_default();
+    let children = children
+        .into_iter()
+        .map(|c| {
+            let mut c = Arc::unwrap_or_clone(c);
+            fresh_ids(d, &mut c, &mut seen);
+            Arc::new(bake_node(d, &c).unwrap_or(c))
+        })
+        .collect();
+    if let Some(ch) = m.children_mut() {
+        *ch = children;
+    }
+    m
 }
 
 /// Give `n` and its descendants a new id wherever one was already `seen` (the pieces evaluated art
@@ -147,6 +161,8 @@ fn piece(d: &mut Document, n: &Node, path: PathData, rule: FillRule, item: Appea
         trace: None,
         wrap: None,
         graph: None,
+        // The group keeps the URL (one link around the pieces).
+        attrs: None,
         kind,
         ..n.clone()
     }

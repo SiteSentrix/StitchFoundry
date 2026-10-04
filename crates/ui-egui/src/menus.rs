@@ -315,6 +315,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Expand for the selection (dialog `expand`, fields object, fill, stroke (all on; one the selection has nothing for is disabled, see object.expand.info), gradient: objects|mesh, steps 1..1000 (255)): OK runs object.expand with them as one undo step",
     ),
+    (
+        "attributes.openUrl",
+        "Browser",
+        "",
+        "{url?} open url, else the selection's URL (attributes.info), in the web browser (the Attributes panel's Browser button) → {url}",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -682,6 +688,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("no such user library".into()),
         },
         "ui.expandDialog" => crate::dialogs::expand::open(app),
+        "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         _ => return None,
     };
     Some(r)
@@ -1417,7 +1424,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Appearance", "appearance"),
                 panel("Artboards", "artboards"),
                 todo("Asset Export"),
-                todo("Attributes"),
+                panel("Attributes", "attributes"),
                 panel("Brushes", "brushes"),
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
@@ -1841,9 +1848,15 @@ fn effect_menu() -> Vec<Item> {
         Sep,
         Item::Header("Vector Effects"),
     ];
-    // Submenus in Illustrator's order.
-    let order = ["3D and Materials", "Convert to Shape", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];
+    // Submenus (and Crop Marks, an item of its own) in the reference app's order.
+    let order =
+        ["3D and Materials", "Convert to Shape", "Crop Marks", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];
+    let top_level = |e: &vectorcraft_effects::EffectInfo| e.menu == ["Effect"] && order.contains(&e.label);
     for sub_name in order {
+        if let Some(e) = cat.iter().find(|e| top_level(e) && e.label == sub_name) {
+            out.push(Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })));
+            continue;
+        }
         let items: Vec<Item> = cat
             .iter()
             .filter(|e| e.menu.last().copied() == Some(sub_name))
@@ -1873,7 +1886,7 @@ fn effect_menu() -> Vec<Item> {
         }
     }
     // Anything not placed above (future effects) still shows up.
-    for e in cat.iter().filter(|e| !e.menu.last().is_some_and(|m| order.contains(m))) {
+    for e in cat.iter().filter(|e| !top_level(e) && !e.menu.last().is_some_and(|m| order.contains(m))) {
         out.push(Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })));
     }
     out

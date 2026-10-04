@@ -221,6 +221,16 @@ impl SubPath {
             *a = a.reversed();
         }
     }
+    /// Signed area, closing an open subpath with a line: positive when it runs clockwise on
+    /// screen (y down), negative when counter-clockwise.
+    pub fn signed_area(&self) -> f64 {
+        use kurbo::ParamCurveArea;
+        let a: f64 = (0..self.segment_count()).map(|i| self.segment(i).signed_area()).sum();
+        match (self.closed, self.anchors.first(), self.anchors.last()) {
+            (false, Some(f), Some(l)) => a + kurbo::Line::new(l.p, f.p).signed_area(),
+            _ => a,
+        }
+    }
     /// Split segment `seg` at parameter `t`, inserting a new anchor. Returns the new anchor index.
     pub fn insert_anchor(&mut self, seg: usize, t: f64) -> usize {
         let n = self.anchors.len();

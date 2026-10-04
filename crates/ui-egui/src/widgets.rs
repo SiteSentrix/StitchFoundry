@@ -130,6 +130,59 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
     if commit { unit.parse(&buf) } else { None }
 }
 
+/// The recessed text box of the panel fields showing `shown`, `rows` lines tall (1: single line),
+/// its text kept under `id` while it has focus. Returns the text (as edited) and the response.
+fn recessed_text(ui: &mut Ui, id: egui::Id, shown: &str, width: f32, rows: usize) -> (String, Response) {
+    let t = Tokens::get(ui.ctx());
+    let editing = ui.memory(|m| m.has_focus(id));
+    let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.to_string()) } else { shown.to_string() };
+    let height = 26.0 + 16.0 * (rows.max(1) - 1) as f32;
+    let resp = ui
+        .allocate_ui_with_layout(vec2(width, height), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.set_min_width(width);
+            egui::Frame::NONE
+                .fill(t.input)
+                .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
+                .corner_radius(CornerRadius::same(2))
+                .inner_margin(egui::Margin::symmetric(6, 4))
+                .show(ui, |ui| {
+                    let edit = if rows > 1 { egui::TextEdit::multiline(&mut buf).desired_rows(rows) } else { egui::TextEdit::singleline(&mut buf) };
+                    ui.add(
+                        edit.id(id)
+                            .frame(egui::Frame::NONE)
+                            .desired_width(width - 14.0)
+                            .min_size(vec2(width - 14.0, 0.0))
+                            .font(egui::FontId::proportional(12.5))
+                            .text_color(t.text_strong),
+                    )
+                })
+                .inner
+        })
+        .inner;
+    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    (buf, resp)
+}
+
+/// A recessed text field showing `value` (blank when `None`: the selection's values differ),
+/// `rows` lines tall (1: single line, which Enter commits). Returns the new text, trimmed, when a
+/// change is committed (Enter or focus loss).
+pub fn text_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<&str>, width: f32, rows: usize) -> Option<String> {
+    let id = ui.id().with(id);
+    let shown = value.unwrap_or_default();
+    let (buf, resp) = recessed_text(ui, id, shown, width, rows);
+    (resp.lost_focus() && buf.trim() != shown).then(|| buf.trim().to_string())
+}
+
+/// A form row: `label` in a column `label_width` wide, then what `add` draws.
+pub fn label_row(ui: &mut Ui, label: &str, label_width: f32, add: impl FnOnce(&mut Ui)) {
+    ui.horizontal(|ui| {
+        let (r, _) = ui.allocate_exact_size(vec2(label_width, 24.0), Sense::hover());
+        let t = Tokens::get(ui.ctx());
+        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
+        add(ui);
+    });
+}
+
 /// A plain number field (percent, degrees, counts) with optional suffix.
 pub fn plain_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: f64, suffix: &str, decimals: usize, width: f32) -> Option<f64> {
     mixed_field(ui, id, Some(value), suffix, decimals, width)
@@ -144,7 +197,6 @@ pub fn mixed_field(
     decimals: usize,
     width: f32,
 ) -> Option<f64> {
-    let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
     let shown = value
         .map(|value| {
@@ -153,31 +205,7 @@ pub fn mixed_field(
             format!("{s}{suffix}")
         })
         .unwrap_or_default();
-    let editing = ui.memory(|m| m.has_focus(id));
-    let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
-    let resp = ui
-        .allocate_ui_with_layout(vec2(width, 26.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.set_min_width(width);
-            egui::Frame::NONE
-                .fill(t.input)
-                .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-                .corner_radius(CornerRadius::same(2))
-                .inner_margin(egui::Margin::symmetric(6, 4))
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut buf)
-                            .id(id)
-                            .frame(egui::Frame::NONE)
-                            .desired_width(width - 14.0)
-                            .min_size(vec2(width - 14.0, 0.0))
-                            .font(egui::FontId::proportional(12.5))
-                            .text_color(t.text_strong),
-                    )
-                })
-                .inner
-        })
-        .inner;
-    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    let (buf, resp) = recessed_text(ui, id, &shown, width, 1);
     if resp.lost_focus() && buf != shown {
         buf.trim().trim_end_matches(suffix.trim()).trim().trim_end_matches(['%', '°']).parse::<f64>().ok()
     } else {

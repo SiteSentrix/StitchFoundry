@@ -567,3 +567,32 @@ stroke}`), and `object.mesh.create` on a gradient-filled object colours the mesh
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
 {"name":"run_command","arguments":{"command":"object.expand","params":{"steps":16}}}
 ```
+
+## Attributes, URLs and image maps
+
+The Attributes panel (`window.panel {panel: "attributes"}`, Cmd+F11) reads `attributes.info {ids?}`:
+`overprintFill`, `overprintStroke`, `showCenter`, `imageMap`, `url`, `note`, `fillRule` and `reversed` (null where the
+objects differ) and `recentUrls`. `attributes.set {overprintFill?, overprintStroke?, showCenter?, imageMap?, url?,
+note?, ids?}` sets them in one undo step; `path.setFillRule {rule: "nonZero"|"evenOdd"}` sets the fill rule of the
+paths and compound paths, and `path.reverse {reversed?}` makes subpaths run counter-clockwise (true) or clockwise
+(false). SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
+
+```json
+{"name":"run_command","arguments":{"command":"attributes.set","params":{"ids":[12],"url":"https://example.com","imageMap":"rectangle"}}}
+{"name":"run_command","arguments":{"command":"path.setFillRule","params":{"rule":"evenOdd"}}}
+```
+
+## Registration and trim marks
+
+Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on
+every plate, process and spot. `paint.setStroke {swatch: "[Registration]"}` applies it; it can't be edited, moved,
+duplicated, merged or deleted. Separations Preview shows it on each plate and PDF export writes it as
+`/Separation /All`. `object.createTrimMarks {style?, allArtboards?}` draws trim marks in Registration around the
+selection, or around every artboard when nothing is selected; `effect.apply {effect: "cropMarks"}` adds live crop
+marks that follow the object. Both use Japanese marks (double lines at the trim and bleed edges, centre marks) when
+the preference `japaneseCropMarks` is on or `style: "japanese"` is given.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"japaneseCropMarks","value":true}}}
+{"name":"run_command","arguments":{"command":"object.createTrimMarks","params":{}}}
+```

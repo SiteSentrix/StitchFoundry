@@ -338,6 +338,8 @@ pub struct Prefs {
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub width_profiles: Vec<vectorcraft_doc::SavedProfile>,
+    /// General → Use Japanese Crop Marks: the style of Create Trim Marks and Effect → Crop Marks.
+    pub japanese_crop_marks: bool,
 }
 
 impl Default for Prefs {
@@ -458,6 +460,7 @@ impl Default for Prefs {
             eyedropper: Default::default(),
             flattener_presets: vec![],
             width_profiles: vec![],
+            japanese_crop_marks: false,
         }
     }
 }
@@ -507,6 +510,8 @@ pub struct Session {
     pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
     /// User Defined and loaded graphic style libraries (Window → Graphic Style Libraries); not saved.
     pub style_libraries: cmd::stylelib::Libraries,
+    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
+    pub recent_urls: Vec<String>,
 }
 
 impl Default for Session {
@@ -541,6 +546,7 @@ impl Session {
             swatch_libraries: Default::default(),
             freeform_point: None,
             style_libraries: Default::default(),
+            recent_urls: vec![],
         }
     }
 
@@ -787,6 +793,8 @@ mod tests;
 #[cfg(test)]
 mod tests_appearance;
 #[cfg(test)]
+mod tests_attributes;
+#[cfg(test)]
 mod tests_brushsym;
 #[cfg(test)]
 mod tests_build;
@@ -864,6 +872,8 @@ mod tests_pattern;
 mod tests_prefs;
 #[cfg(test)]
 mod tests_proxyitems;
+#[cfg(test)]
+mod tests_registration;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]

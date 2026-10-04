@@ -10,6 +10,7 @@ use std::sync::Arc;
 use egui::{Color32, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES};
+use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Color, GradientKind, Paint, Swatch, SwatchLibrary};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::swatchlib;
@@ -106,8 +107,6 @@ impl Entry {
     }
 }
 
-const REGISTRATION: &str = "[Registration]";
-
 /// The panel's rows for the kind filter and the find field's `query` (a case-insensitive name
 /// match; a colour group whose name matches shows all its swatches).
 fn entries(app: &VectorcraftApp, kind: Kind, query: &str) -> Vec<Entry> {
@@ -148,7 +147,7 @@ fn entries(app: &VectorcraftApp, kind: Kind, query: &str) -> Vec<Entry> {
 /// The paint command params that apply entry `e` (`paint.setFill`); none for a colour group.
 fn swatch_params(e: &Entry) -> Option<Value> {
     Some(match e {
-        Entry::Registration => json!({"color": {"c": 1.0, "m": 1.0, "y": 1.0, "k": 1.0}}),
+        Entry::Registration => json!({"swatch": REGISTRATION}),
         Entry::Swatch { paint, .. } if paint.is_none() => json!({"none": true}),
         Entry::Swatch { name, .. } => json!({"swatch": name}),
         Entry::Folder(_) => return None,
@@ -369,10 +368,14 @@ fn held(resp: &Response) -> Option<std::sync::Arc<PanelDrag>> {
     resp.dnd_hover_payload::<PanelDrag>().filter(|d| matches!(**d, PanelDrag::Paint { .. }))
 }
 
-/// The drag a tile or row of `e` starts, moving rows `names`. Registration and colour groups have
-/// no paint of their own (the chip under the pointer draws Registration's mark).
+/// The drag a tile or row of `e` starts, moving rows `names`. Colour groups have no paint of their
+/// own (the chip under the pointer draws Registration's mark for Registration).
 fn drag_of(e: &Entry, names: Vec<String>) -> PanelDrag {
-    let paint = if let Entry::Swatch { paint, .. } = e { paint.clone() } else { Paint::None };
+    let paint = match e {
+        Entry::Swatch { paint, .. } => paint.clone(),
+        Entry::Registration => Paint::registration(),
+        Entry::Folder(_) => Paint::None,
+    };
     let rows = SwatchRows { grabbed: e.name().to_string(), names, groups: e.is_folder() };
     PanelDrag::Paint { paint, params: swatch_params(e).unwrap_or_default(), rows: Some(rows) }
 }

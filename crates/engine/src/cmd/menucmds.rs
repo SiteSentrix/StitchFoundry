@@ -6,8 +6,9 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::marks::{MarkStyle, TrimMarks};
 use vectorcraft_doc::{Appearance, ImageObject, LiveShape, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, Vec2, shapes};
+use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, Vec2};
 
 use super::edit::{duplicate_in, selected_roots};
 use super::*;
@@ -115,7 +116,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Trim Marks",
             ["Object"],
             None,
-            "{offset?: pt (9), length?: pt (18), weight?: pt (0.3)} trim marks around the selection (or the first artboard) as a group → {id}",
+            "{style?: \"roman\"|\"japanese\" (default: the japaneseCropMarks preference; japanese: double lines at the trim and bleed edges plus centre marks), allArtboards?: bool (default: true when nothing is selected), offset?: pt (9, roman), length?: pt (18), bleed?: pt (8.5, japanese), weight?: pt (0.3)} trim marks stroked in [Registration] (printing on every plate) around the selection, or around every artboard, one group each, as one undo step → {id: the first group, ids}",
             has_doc,
             trim_marks
         ),
@@ -518,47 +519,48 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Trim marks ----------
 
-fn trim_marks(s: &mut Session, p: &Value) -> Result<Value> {
-    let st = s.doc()?;
-    let off = f64_or(p, "offset", 9.0).max(0.0);
-    let len = f64_or(p, "length", 18.0).max(0.1);
-    let weight = f64_or(p, "weight", 0.3).max(0.01);
-    let r = if st.selection.is_empty() {
-        st.doc.artboards.first().map(|a| a.rect)
-    } else {
-        let roots = selected_roots(s)?;
-        s.doc()?.doc.bounds_of(&roots, true)
+impl Session {
+    /// The trim mark style the preferences ask for (General → Use Japanese Crop Marks).
+    pub fn crop_mark_style(&self) -> MarkStyle {
+        if self.prefs.japanese_crop_marks { MarkStyle::Japanese } else { MarkStyle::Roman }
     }
-    .ok_or_else(|| EngineError::Other("nothing to mark".into()))?;
+}
+
+fn trim_marks(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.createTrimMarks";
+    let style = match str_param(p, "style") {
+        Some(v) => MarkStyle::parse(v).ok_or_else(|| bad(C, "`style` must be roman or japanese"))?,
+        None => s.crop_mark_style(),
+    };
+    let d = TrimMarks::default();
+    let marks = TrimMarks {
+        style,
+        offset: f64_or(p, "offset", d.offset).max(0.0),
+        length: f64_or(p, "length", d.length).max(0.1),
+        bleed: f64_or(p, "bleed", d.bleed).max(0.0),
+        weight: f64_or(p, "weight", d.weight).max(0.01),
+    };
+    let st = s.doc()?;
+    let rects: Vec<Rect> = if bool_or(p, "allArtboards", st.selection.is_empty()) {
+        st.doc.artboards.iter().map(|a| a.rect).collect()
+    } else {
+        st.doc.bounds_of(&selected_roots(s)?, true).into_iter().collect()
+    };
+    if rects.is_empty() {
+        return Err(bad(C, "nothing to mark"));
+    }
     let parent = s.doc()?.insertion_parent();
-    let lines = [
-        // Top-left.
-        (Point::new(r.x0 - off - len, r.y0), Point::new(r.x0 - off, r.y0)),
-        (Point::new(r.x0, r.y0 - off - len), Point::new(r.x0, r.y0 - off)),
-        // Top-right.
-        (Point::new(r.x1 + off, r.y0), Point::new(r.x1 + off + len, r.y0)),
-        (Point::new(r.x1, r.y0 - off - len), Point::new(r.x1, r.y0 - off)),
-        // Bottom-right.
-        (Point::new(r.x1 + off, r.y1), Point::new(r.x1 + off + len, r.y1)),
-        (Point::new(r.x1, r.y1 + off), Point::new(r.x1, r.y1 + off + len)),
-        // Bottom-left.
-        (Point::new(r.x0 - off - len, r.y1), Point::new(r.x0 - off, r.y1)),
-        (Point::new(r.x0, r.y1 + off), Point::new(r.x0, r.y1 + off + len)),
-    ];
-    let id = s.edit("Create Trim Marks", |d, sel| {
-        let mut children = vec![];
-        for (a, b) in lines {
-            let id = d.alloc_id();
-            children.push(Arc::new(Node::path(id, shapes::line(a, b), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), weight))));
+    let ids = s.edit("Create Trim Marks", |d, sel| {
+        let mut ids = vec![];
+        for r in &rects {
+            let g = marks.group(*r, &mut || d.alloc_id());
+            ids.push(g.id);
+            d.insert(parent, usize::MAX, g)?;
         }
-        let gid = d.alloc_id();
-        let mut g = Node::group(gid, children);
-        g.name = Some("Trim Marks".into());
-        d.insert(parent, usize::MAX, g)?;
-        sel.set([gid]);
-        Ok(gid)
+        sel.set(ids.iter().copied());
+        Ok(ids)
     })?;
-    Ok(json!({ "id": id.0 }))
+    Ok(json!({ "id": ids[0].0, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
 // ---------- Convert to Shape ----------
