@@ -330,7 +330,7 @@ impl Writer<'_> {
 
     fn gradient_def(&mut self, g: &GradientPaint, bounds: Rect) -> String {
         let mut geom = g.resolve(bounds);
-        geom.transform(self.xf);
+        geom.transform(self.xf, g.gradient.kind);
         let (s, e) = (geom.start, geom.end);
         let head = match g.gradient.kind {
             GradientKind::Radial => {
@@ -530,32 +530,6 @@ impl Writer<'_> {
         self.line("</g>");
     }
 
-    /// `(d, rule)` of every path in a clipping object.
-    fn clip_shapes(&self, n: &Node, out: &mut Vec<(String, FillRule)>) {
-        match &n.kind {
-            NodeKind::Path { path, rule, .. } => out.push((self.path_d(path, self.xf), *rule)),
-            NodeKind::Compound { children, rule } => {
-                let d: Vec<String> = children.iter().filter_map(|c| c.path_data()).map(|p| self.path_d(p, self.xf)).collect();
-                out.push((d.join(" "), *rule));
-            }
-            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
-                for c in children {
-                    self.clip_shapes(c, out);
-                }
-            }
-            NodeKind::Image(im) => {
-                let r = Rect::new(0.0, 0.0, im.width as f64, im.height as f64);
-                let p = vectorcraft_geom::shapes::rectangle(r).transformed(im.xf);
-                out.push((self.path_d(&p, self.xf), FillRule::NonZero));
-            }
-            NodeKind::Text(_) | NodeKind::SymbolInstance { .. } => {}
-            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
-                let g = vectorcraft_doc::live::expand_deep(n, None);
-                self.clip_shapes(&g, out);
-            }
-        }
-    }
-
     /// An object with an opacity mask: `<g mask="url(#…)">` around the unmasked object. The mask
     /// art goes in `<defs>`; no-clip adds a white backdrop and invert a colour-inverting filter.
     fn masked(&mut self, n: &Node, m: &vectorcraft_doc::OpacityMask) {
@@ -622,11 +596,12 @@ impl Writer<'_> {
             }
             NodeKind::Group { children, clip: true } => {
                 let Some((clip, rest)) = children.split_first() else { return };
-                let mut shapes = Vec::new();
-                self.clip_shapes(clip, &mut shapes);
                 let cid = self.fresh_id("clip-path");
                 self.def(1, &format!("<clipPath id=\"{cid}\">"));
-                for (d, rule) in shapes {
+                // The region every output clips to; with nothing to clip by, an empty clip path
+                // hides the clipped art.
+                if let Some((bp, rule)) = vectorcraft_effects::clip_outline(clip) {
+                    let d = self.path_d(&PathData::from_bezpath(&bp), self.xf);
                     let r = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
                     self.def(2, &format!("<path d=\"{d}\"{r}/>"));
                 }

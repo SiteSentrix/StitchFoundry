@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             None,
             "{fill?: true, stroke?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) → {changed}",
             has_selection,
-            |s, p| recolor(s, p, "Invert Colors", &|c| keep_model(c, c.invert()))
+            |s, p| recolor(s, p, "Invert Colors", &invert)
         ),
         cmd!(
             "edit.colors.toCMYK",
@@ -95,6 +95,11 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// The RGB inverse of `c`, expressed in `c`'s colour model.
+pub(crate) fn invert(c: Color) -> Color {
+    c.invert_keep_model()
+}
+
 /// Express `new` in the colour model of `orig`.
 fn keep_model(orig: Color, new: Color) -> Color {
     match orig {
@@ -121,7 +126,7 @@ pub(crate) fn to_gray(c: Color) -> Color {
 }
 
 /// Apply `f` to a paint; returns whether anything changed.
-fn map_paint(p: &mut Paint, f: &dyn Fn(Color) -> Color) -> bool {
+pub(crate) fn map_paint(p: &mut Paint, f: &dyn Fn(Color) -> Color) -> bool {
     match p {
         Paint::Solid { color, swatch } => {
             let n = f(*color);
@@ -195,7 +200,7 @@ fn recolor_ids(s: &mut Session, label: &str, ids: Vec<NodeId>, fill: bool, strok
     Ok(json!({ "changed": n }))
 }
 
-fn recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
+pub(crate) fn recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
     let ids = match ids_param(p, "ids") {
         Some(v) => v,
         None => selected_roots(s)?,

@@ -341,6 +341,11 @@ impl TextObject {
     pub fn transform(&mut self, a: Affine) {
         self.xf = a * self.xf;
     }
+    /// Layout bounds in text space (the layout cache, else the estimate): the box an unplaced run
+    /// gradient fits, as the renderers lay it out.
+    pub fn local_bounds(&self) -> Rect {
+        self.cached_bounds.unwrap_or_else(|| self.estimate_bounds())
+    }
 }
 
 #[cfg(test)]

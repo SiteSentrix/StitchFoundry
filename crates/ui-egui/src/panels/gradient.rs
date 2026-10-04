@@ -4,95 +4,32 @@
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::gradient::{MIN_STOPS, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint};
+use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop, Paint};
 
-use super::{active_paint, color_json, live_run, pstate, set_pstate};
+use super::{active_paint, live_run, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, Live, menu_item};
 use crate::{VectorcraftApp, icons};
 
-/// Minimum number of stops (Illustrator won't delete below two).
-pub const MIN_STOPS: usize = 2;
 /// Dragging a stop this far below the ramp removes it.
 pub const REMOVE_DISTANCE: f32 = 28.0;
 
-/// The Gradient panel's selected stop (shared with the Color panel).
-pub fn selected_stop(ctx: &egui::Context) -> Option<usize> {
-    pstate::<Option<usize>>(ctx, "grad-stop")
-}
-fn select_stop(ctx: &egui::Context, i: Option<usize>) {
-    set_pstate(ctx, "grad-stop", i);
+/// Select stop `i` (the session's selected stop, shared with the Gradient tool's annotator, the
+/// Color panel and agents). Run after the edit that creates it.
+fn select_stop(app: &mut VectorcraftApp, i: usize) {
+    app.run("gradient.selectStop", json!({ "index": i })).ok();
 }
 
-// ---------- pure stop math (unit-tested) ----------
-
-/// Insert a stop at `offset`, coloured by sampling the gradient there. Returns the new stops and
-/// the new stop's index.
-pub fn insert_stop(g: &Gradient, offset: f32) -> (Vec<GradientStop>, usize) {
-    let offset = offset.clamp(0.0, 1.0);
-    let (color, opacity) = g.sample(offset);
-    let mut stops = g.stops.clone();
-    let idx = stops.iter().position(|s| s.offset > offset).unwrap_or(stops.len());
-    stops.insert(idx, GradientStop { offset, color, opacity, midpoint: 0.5 });
-    (stops, idx)
-}
-
-/// Remove stop `i`; `None` when that would leave fewer than [`MIN_STOPS`].
-pub fn remove_stop(stops: &[GradientStop], i: usize) -> Option<Vec<GradientStop>> {
-    if stops.len() <= MIN_STOPS || i >= stops.len() {
-        return None;
-    }
-    let mut v = stops.to_vec();
-    v.remove(i);
-    Some(v)
-}
-
-/// Move stop `i` to `offset`, keeping the list sorted. Returns the stops and the stop's new index.
-pub fn move_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<GradientStop>, usize) {
-    let mut v = stops.to_vec();
-    if i >= v.len() {
-        return (v, i);
-    }
-    let mut s = v.remove(i);
-    s.offset = offset.clamp(0.0, 1.0);
-    let idx = v.iter().position(|o| o.offset > s.offset).unwrap_or(v.len());
-    v.insert(idx, s);
-    (v, idx)
-}
-
-/// Set the midpoint between stop `i` and `i + 1` (clamped to Illustrator's 13–87 %).
-pub fn set_midpoint(stops: &[GradientStop], i: usize, m: f32) -> Vec<GradientStop> {
-    let mut v = stops.to_vec();
-    if let Some(s) = v.get_mut(i) {
-        s.midpoint = m.clamp(0.13, 0.87);
-    }
-    v
-}
+// ---------- pure ramp math (unit-tested) ----------
 
 /// Offset (0..1) of an x position on a ramp spanning `left..left + width`.
 pub fn x_to_offset(x: f32, left: f32, width: f32) -> f32 {
     ((x - left) / width.max(1.0)).clamp(0.0, 1.0)
 }
 
-/// Absolute position (0..1) of the midpoint diamond after stop `i`.
-pub fn midpoint_pos(stops: &[GradientStop], i: usize) -> Option<f32> {
-    let (a, b) = (stops.get(i)?, stops.get(i + 1)?);
-    Some(a.offset + (b.offset - a.offset) * a.midpoint)
-}
-
-/// Inverse of [`midpoint_pos`]: the relative midpoint for an absolute position.
-pub fn midpoint_from_pos(stops: &[GradientStop], i: usize, pos: f32) -> Option<f32> {
-    let (a, b) = (stops.get(i)?, stops.get(i + 1)?);
-    let span = (b.offset - a.offset).max(1e-6);
-    Some(((pos - a.offset) / span).clamp(0.13, 0.87))
-}
-
 /// Stops as `paint.editGradient` JSON.
-pub fn stops_json(stops: &[GradientStop]) -> Value {
-    Value::Array(
-        stops.iter().map(|s| json!({"offset": s.offset, "color": color_json(&s.color), "opacity": s.opacity, "midpoint": s.midpoint})).collect(),
-    )
-}
+pub use vectorcraft_tools::params::stops_json;
 
 // ---------- UI ----------
 
@@ -157,9 +94,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         widgets::dim_label(ui, "Stroke:");
         for (icon, tip) in [
-            ("dc-stroke-center", "Apply gradient within stroke"),
-            ("dc-stroke-outside", "Apply gradient along stroke (on the roadmap)"),
-            ("dc-stroke-inside", "Apply gradient across stroke (on the roadmap)"),
+            ("dc-stroke-center", "Gradient inside stroke"),
+            ("dc-stroke-outside", "Gradient along stroke (on the roadmap)"),
+            ("dc-stroke-inside", "Gradient across stroke (on the roadmap)"),
         ] {
             widgets::icon_button_enabled(ui, icon, tip, icon == "dc-stroke-center" && !app.session.fill_active, false, 22.0);
         }
@@ -188,7 +125,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ramp(app, ui, &g.gradient, is_grad);
     ui.add_space(4.0);
     // Stop fields.
-    let sel = selected_stop(ui.ctx()).filter(|i| *i < g.gradient.stops.len());
+    let sel = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len());
     ui.horizontal(|ui| {
         let enabled = is_grad && sel.is_some();
         let stop = sel.and_then(|i| g.gradient.stops.get(i)).copied();
@@ -209,16 +146,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             && let Some(i) = sel
         {
             let (stops, ni) = move_stop(&g.gradient.stops, i, (v / 100.0) as f32);
-            select_stop(ui.ctx(), Some(ni));
             edit(app, json!({"stops": stops_json(&stops)}), Live::Released);
+            select_stop(app, ni);
         }
         let can_del = enabled && g.gradient.stops.len() > MIN_STOPS;
         if widgets::icon_button_enabled(ui, "trash-2", "Delete Stop", false, can_del, 22.0).clicked()
             && let Some(i) = sel
             && let Some(stops) = remove_stop(&g.gradient.stops, i)
         {
-            select_stop(ui.ctx(), Some(i.min(stops.len() - 1)));
             edit(app, json!({"stops": stops_json(&stops)}), Live::Released);
+            select_stop(app, i.min(stops.len() - 1));
         }
     });
     if let Some(i) = sel
@@ -273,7 +210,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     }
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let x_of = |o: f32| bar.left() + o * bar.width();
-    let sel = selected_stop(ui.ctx());
+    let sel = app.session.selected_stop();
     let mut drag: Drag = pstate(ui.ctx(), "grad-drag");
     let stops = &g.stops;
     // While dragging, edits are computed against the stops as they were when the drag began (the
@@ -281,6 +218,8 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     let origin: Vec<GradientStop> = if drag == Drag::None { stops.clone() } else { pstate::<Vec<GradientStop>>(ui.ctx(), "grad-origin") };
     let origin = if origin.len() == stops.len() { origin } else { stops.clone() };
     let mut changed: Option<(Vec<GradientStop>, Live)> = None;
+    // The stop to select once `changed` is applied.
+    let mut select: Option<usize> = None;
     // Midpoint diamonds.
     for i in 0..stops.len().saturating_sub(1) {
         let Some(p) = midpoint_pos(stops, i) else { continue };
@@ -329,7 +268,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
             continue;
         }
         if resp.clicked() || resp.drag_started() {
-            select_stop(ui.ctx(), Some(i));
+            select = Some(i);
         }
         if resp.drag_started() {
             drag = Drag::Stop(i);
@@ -344,12 +283,12 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
                 drag = Drag::None;
                 if removing {
                     if let Some(v) = remove_stop(&origin, i) {
-                        select_stop(ui.ctx(), Some(i.min(v.len() - 1)));
+                        select = Some(i.min(v.len() - 1));
                         changed = Some((v, Live::Released));
                     }
                 } else {
                     let (v, ni) = move_stop(&origin, i, x_to_offset(pp.x, bar.left(), bar.width()));
-                    select_stop(ui.ctx(), Some(ni));
+                    select = Some(ni);
                     changed = Some((v, Live::Released));
                 }
             } else if removing {
@@ -373,7 +312,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     {
         if is_grad {
             let (v, i) = insert_stop(g, x_to_offset(p.x, bar.left(), bar.width()));
-            select_stop(ui.ctx(), Some(i));
+            select = Some(i);
             changed = Some((v, Live::Released));
         } else {
             edit(app, json!({}), Live::Released);
@@ -386,6 +325,9 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     set_pstate(ui.ctx(), "grad-drag", drag);
     if let Some((v, phase)) = changed {
         edit(app, json!({"stops": stops_json(&v)}), phase);
+    }
+    if let Some(i) = select {
+        select_stop(app, i);
     }
 }
 
@@ -404,72 +346,19 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         let d = Gradient::default();
         edit(app, json!({"stops": stops_json(&d.stops)}), Live::Released);
     }
-    let _ = Color::BLACK;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn g3() -> Gradient {
-        let mut g = Gradient::default();
-        g.stops.insert(1, GradientStop { offset: 0.5, color: Color::rgb(1.0, 0.0, 0.0), opacity: 1.0, midpoint: 0.5 });
-        g
-    }
-
-    #[test]
-    fn insert_samples_color_and_sorts() {
-        let g = Gradient::default();
-        let (stops, i) = insert_stop(&g, 0.25);
-        assert_eq!(stops.len(), 3);
-        assert_eq!(i, 1);
-        let r = stops[1].color.to_rgb()[0];
-        assert!((r - 0.75).abs() < 1e-4, "sampled {r}");
-        let (stops, i) = insert_stop(&g, 2.0);
-        assert_eq!(i, 2);
-        assert_eq!(stops[2].offset, 1.0);
-    }
-
-    #[test]
-    fn remove_keeps_two() {
-        let g = g3();
-        let v = remove_stop(&g.stops, 1).unwrap();
-        assert_eq!(v.len(), 2);
-        assert!(remove_stop(&v, 0).is_none());
-        assert!(remove_stop(&g.stops, 9).is_none());
-    }
-
-    #[test]
-    fn move_reorders_and_tracks_index() {
-        let g = g3();
-        let (v, i) = move_stop(&g.stops, 0, 0.8);
-        assert_eq!(i, 1);
-        assert_eq!(v[1].color.to_hex(), "#ffffff");
-        assert!(v.windows(2).all(|w| w[0].offset <= w[1].offset));
-        let (v, i) = move_stop(&g.stops, 1, -3.0);
-        // Clamped to 0 and placed after the existing stop at 0.
-        assert_eq!((i, v[i].offset, v[i].color.to_hex()), (1, 0.0, "#ff0000".to_string()));
-    }
-
-    #[test]
-    fn midpoint_math() {
-        let g = g3();
-        assert_eq!(midpoint_pos(&g.stops, 0), Some(0.25));
-        assert_eq!(midpoint_pos(&g.stops, 2), None);
-        let m = midpoint_from_pos(&g.stops, 1, 0.6).unwrap();
-        assert!((m - 0.2).abs() < 1e-5);
-        assert_eq!(midpoint_from_pos(&g.stops, 1, 0.51).unwrap(), 0.13);
-        let v = set_midpoint(&g.stops, 0, 0.99);
-        assert_eq!(v[0].midpoint, 0.87);
-    }
-
     #[test]
     fn offsets_and_json() {
         assert_eq!(x_to_offset(50.0, 0.0, 200.0), 0.25);
         assert_eq!(x_to_offset(-5.0, 0.0, 200.0), 0.0);
         assert_eq!(x_to_offset(500.0, 0.0, 200.0), 1.0);
-        let j = stops_json(&g3().stops);
-        assert_eq!(j.as_array().unwrap().len(), 3);
+        let j = stops_json(&Gradient::default().stops);
+        assert_eq!(j.as_array().unwrap().len(), 2);
         assert_eq!(j[1]["midpoint"], json!(0.5));
     }
 }

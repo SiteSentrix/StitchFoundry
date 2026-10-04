@@ -12,7 +12,9 @@
   </developer>
   <description>
     <p>
-      VectorCraft is a vector graphics editor. Draw and edit vector illustrations, SVG and PDF
+      VectorCraft is an open-source vector illustration app. Draw with pen, shape and brush tools,
+      style art with fills, strokes, gradients and live effects, lay out artboards and type, and
+      open and save SVG and PDF.
     </p>
   </description>
   <launchable type="desktop-id">ai.storyteller.vectorcraft.desktop</launchable>
@@ -24,19 +26,21 @@
   <url type="contact">https://discord.gg/artcraft</url>
   <categories>
     <category>Graphics</category>
-    <category>RasterGraphics</category>
-    <category>Photography</category>
+    <category>2DGraphics</category>
+    <category>VectorGraphics</category>
   </categories>
   <keywords>
-    <keyword>photo</keyword>
-    <keyword>image editor</keyword>
-    <keyword>psd</keyword>
-    <keyword>layers</keyword>
+    <keyword>vector</keyword>
+    <keyword>illustration</keyword>
+    <keyword>svg</keyword>
+    <keyword>pdf</keyword>
+    <keyword>drawing</keyword>
+    <keyword>bezier</keyword>
   </keywords>
   <screenshots>
     <screenshot type="default">
-      <caption>Editing The Great Wave off Kanagawa with type layers and adjustment layers</caption>
-      <image>https://raw.githubusercontent.com/storytold/vectorcraft/main/docs/images/vectorcraft-demo.jpg</image>
+      <caption>Editing the Neon Drive poster with a live glow effect in the Appearance panel</caption>
+      <image>https://raw.githubusercontent.com/storytold/vectorcraft/main/docs/images/shot-1-neon.png</image>
     </screenshot>
   </screenshots>
   <branding>

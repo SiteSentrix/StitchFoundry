@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::BlendMode;
-use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, shapes};
 
 use crate::appearance::Appearance;
-use crate::live::{BlendSpec, EnvelopeKind, GradientMesh};
+use crate::live::{BlendSpec, EnvelopeKind, GradientMesh, Outliner};
 use crate::pattern::RepeatSpec;
 use crate::text::TextObject;
 
@@ -357,6 +357,11 @@ impl Node {
     pub fn is_container(&self) -> bool {
         self.children().is_some()
     }
+    /// Full opacity, Normal blending, no isolation, knockout or opacity mask (the Layers panel
+    /// fills an object's target circle otherwise).
+    pub fn has_default_transparency(&self) -> bool {
+        self.opacity >= 1.0 && self.blend == BlendMode::Normal && !self.isolate && !self.knockout && self.mask.is_none()
+    }
     /// Kind name as the Layers panel / Properties panel shows it.
     pub fn kind_label(&self) -> &'static str {
         match &self.kind {
@@ -367,7 +372,7 @@ impl Node {
             NodeKind::Path { guide: true, .. } => "Guide",
             NodeKind::Path { .. } => "Path",
             NodeKind::Compound { .. } => "Compound Path",
-            NodeKind::Text(_) => "Text",
+            NodeKind::Text(_) => "Type",
             NodeKind::Image(_) => "Image",
             NodeKind::SymbolInstance { .. } => "Symbol",
             NodeKind::Blend { .. } => "Blend",
@@ -448,13 +453,17 @@ impl Node {
     /// Apply an affine transform to the geometry (and gradients) of this node and its descendants.
     /// `scale_strokes` also scales stroke weights by the transform's mean scale.
     pub fn transform(&mut self, a: Affine, scale_strokes: bool) {
+        // Refitting an unplaced gradient only reproduces moves and uniform scales.
+        if !keeps_gradient_fit(a) {
+            self.pin_gradients();
+        }
         if scale_strokes {
             let det = a.determinant().abs().sqrt();
             if (det - 1.0).abs() > 1e-9 {
                 self.appearance.scale_strokes(det);
             }
         }
-        transform_paints(&mut self.appearance, a);
+        self.appearance.transform_gradients(a);
         match &mut self.kind {
             NodeKind::Path { path, live, .. } => {
                 path.transform(a);
@@ -516,22 +525,121 @@ impl Node {
         self.walk(&mut |_| n += 1);
         n
     }
-}
-
-fn transform_paints(ap: &mut Appearance, a: Affine) {
-    use crate::appearance::AppearanceItem;
-    use vectorcraft_color::Paint;
-    for it in &mut ap.items {
-        let p = match it {
-            AppearanceItem::Fill(f) => &mut f.paint,
-            AppearanceItem::Stroke(s) => &mut s.paint,
-        };
-        if let Paint::Gradient(g) = p
-            && let Some(geom) = &mut g.geom
+    /// Fix this node's unplaced gradients to their fit on its current bounds (before a transform
+    /// or warp that refitting wouldn't reproduce). Descendants pin their own when transformed.
+    pub fn pin_gradients(&mut self) {
+        if self.appearance.has_unplaced_gradient()
+            && let Some(b) = self.geometric_bounds()
         {
-            geom.transform(a);
+            self.appearance.pin_gradients(b);
         }
     }
+    /// The paint behind the Fill (or Stroke) proxy, the map from its space to the document and
+    /// the box (in that space) an unplaced gradient fits. `item` (the Appearance panel's active
+    /// item) stands in for the topmost fill or stroke when it is of the proxy's kind. Otherwise
+    /// type objects paint their runs (the first run speaks for all) in text space, fitted to the
+    /// layout bounds; everything else paints its fill or stroke in the document, fitted to the
+    /// geometric bounds. Strokes fit the box grown by half their weight.
+    pub fn proxy_paint(&self, stroke: bool, item: Option<usize>) -> Option<(&vectorcraft_color::Paint, Affine, Rect)> {
+        let item = self.appearance.item_of_kind(item, !stroke);
+        if item.is_none()
+            && let NodeKind::Text(t) = &self.kind
+        {
+            let st = &t.runs.first()?.style;
+            let b = t.local_bounds();
+            return Some(if stroke { (&st.stroke, t.xf, crate::appearance::stroke_paint_bounds(b, st.stroke_width)) } else { (&st.fill, t.xf, b) });
+        }
+        let b = self.geometric_bounds()?;
+        if stroke {
+            self.appearance.stroke_at(item).map(|s| (&s.paint, Affine::IDENTITY, s.paint_bounds(b)))
+        } else {
+            self.appearance.fill_at(item).map(|f| (&f.paint, Affine::IDENTITY, b))
+        }
+    }
+    /// The gradient behind the Fill (or Stroke) proxy and its placement in document coordinates
+    /// (see [`Node::proxy_paint`]): what the gradient annotator shows and edits.
+    pub fn proxy_gradient(&self, stroke: bool, item: Option<usize>) -> Option<(&vectorcraft_color::GradientPaint, vectorcraft_color::GradientGeom)> {
+        let (paint, to_doc, b) = self.proxy_paint(stroke, item)?;
+        let vectorcraft_color::Paint::Gradient(g) = paint else { return None };
+        let mut geom = g.resolve(b);
+        if to_doc != Affine::IDENTITY {
+            geom.transform(to_doc, g.gradient.kind);
+        }
+        Some((g, geom))
+    }
+}
+
+/// Unites filled regions (each under its own fill rule) into one path filled non-zero. Booleans
+/// live above this crate (`vectorcraft-pathops`), so callers supply it.
+pub type Uniter<'a> = &'a dyn Fn(&[(BezPath, FillRule)]) -> BezPath;
+
+impl Node {
+    /// The filled regions this object clips to as the clipping path of a clip group, in document
+    /// space, each with its fill rule: a path, a compound path (with its holes), an image's frame,
+    /// text outlined by `text` (glyph outlines need the font engine, above this crate), the visible
+    /// members of a group (their union) and the clipping path of a nested clip group. Live objects
+    /// are evaluated first. Guides and symbol instances add nothing.
+    pub fn clip_shapes(&self, text: Outliner) -> Vec<(BezPath, FillRule)> {
+        let mut out = vec![];
+        self.push_clip_shapes(text, &mut out);
+        out
+    }
+
+    fn push_clip_shapes(&self, text: Outliner, out: &mut Vec<(BezPath, FillRule)>) {
+        match &self.kind {
+            NodeKind::Path { guide: true, .. } | NodeKind::SymbolInstance { .. } => {}
+            NodeKind::Path { path, rule, .. } => out.push((path.to_bezpath(), *rule)),
+            NodeKind::Compound { children, rule } => {
+                let mut bp = BezPath::new();
+                for p in children.iter().filter_map(|c| c.path_data()) {
+                    bp.extend(p.to_bezpath());
+                }
+                out.push((bp, *rule));
+            }
+            NodeKind::Group { children, clip: true } => {
+                if let Some(c) = children.first() {
+                    c.push_clip_shapes(text, out);
+                }
+            }
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                for c in children.iter().filter(|c| c.visible) {
+                    c.push_clip_shapes(text, out);
+                }
+            }
+            NodeKind::Text(_) => {
+                if let Some(o) = text.and_then(|f| f(self)) {
+                    o.push_clip_shapes(None, out);
+                }
+            }
+            NodeKind::Image(im) => {
+                let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+                out.push((frame.to_bezpath(), FillRule::NonZero));
+            }
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
+                crate::live::expand_deep(self, text).push_clip_shapes(text, out);
+            }
+        }
+    }
+
+    /// The region this object clips to as one path and fill rule ([`Self::clip_shapes`]), shared
+    /// by the renderer and the SVG and PDF writers so every output clips alike. One shape keeps its
+    /// own rule; several are united by `unite` (filled non-zero). `None` when there is nothing to
+    /// clip by: the clipped art is then hidden.
+    pub fn clip_outline(&self, text: Outliner, unite: Uniter) -> Option<(BezPath, FillRule)> {
+        let mut shapes = self.clip_shapes(text);
+        match shapes.len() {
+            0 => None,
+            1 => shapes.pop(),
+            _ => Some((unite(&shapes), FillRule::NonZero)),
+        }
+    }
+}
+
+/// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?
+fn keeps_gradient_fit(a: Affine) -> bool {
+    let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+    let eps = 1e-12 * m0.abs().max(1.0);
+    m0 > 0.0 && m1.abs() <= eps && m2.abs() <= eps && (m0 - m3).abs() <= eps
 }
 
 #[cfg(test)]
@@ -546,6 +654,24 @@ mod tests {
     }
 
     #[test]
+    fn default_transparency() {
+        let p = || Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        assert!(p().has_default_transparency());
+        let tweaks: [fn(&mut Node); 5] = [
+            |n| n.opacity = 0.5,
+            |n| n.blend = BlendMode::Multiply,
+            |n| n.isolate = true,
+            |n| n.knockout = true,
+            |n| n.mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
+        ];
+        for tweak in tweaks {
+            let mut n = p();
+            tweak(&mut n);
+            assert!(!n.has_default_transparency(), "{n:?}");
+        }
+    }
+
+    #[test]
     fn transform_group_recurses() {
         let p = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         let mut g = Node::group(NodeId(1), vec![Arc::new(p)]);
@@ -553,6 +679,29 @@ mod tests {
         assert_eq!(g.geometric_bounds(), Some(Rect::new(0.0, 0.0, 20.0, 20.0)));
         let child = &g.children().unwrap()[0];
         assert_eq!(child.appearance.stroke_width(), 2.0);
+    }
+
+    #[test]
+    fn unplaced_gradients_pin_only_when_a_refit_would_differ() {
+        use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
+        let grad = || Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let fresh = || Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), Appearance::basic(grad(), grad(), 2.0));
+        let geoms = |n: &Node| match (n.appearance.fill_paint(), n.appearance.stroke_paint()) {
+            (Paint::Gradient(f), Paint::Gradient(s)) => (f.geom, s.geom),
+            _ => unreachable!(),
+        };
+        let mut n = fresh();
+        n.transform(Affine::translate((10.0, 5.0)) * Affine::scale(2.0), true);
+        assert_eq!(geoms(&n), (None, None), "moves and uniform scales keep refitting");
+        let mut n = fresh();
+        n.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), false);
+        let (f, s) = geoms(&n);
+        // Fitted on the old bounds (strokes on the stroke-inflated box), then rotated: vertical.
+        let mut want = GradientGeom::fit(GradientKind::Linear, Rect::new(0.0, 0.0, 100.0, 50.0), 0.0);
+        want.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), GradientKind::Linear);
+        let f = f.unwrap();
+        assert!(f.start.distance(want.start) < 1e-9 && f.end.distance(want.end) < 1e-9, "{f:?}");
+        assert!((s.unwrap().length() - 102.0).abs() < 1e-9);
     }
 
     #[test]

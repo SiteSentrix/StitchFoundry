@@ -265,11 +265,10 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(n) = first_selected(app) else { return };
     section_header(ui, "Appearance");
-    let (fill, stroke, weight) = if let NodeKind::Text(tx) = &n.kind {
-        let s = tx.first_style();
-        (s.fill.clone(), s.stroke.clone(), s.stroke_width)
-    } else {
-        (n.appearance.fill_paint(), n.appearance.stroke_paint(), n.appearance.stroke().map(|s| s.width).unwrap_or(0.0))
+    let (fill, stroke) = super::current_paints(app);
+    let weight = match &n.kind {
+        NodeKind::Text(tx) if app.session.appearance_item().is_none() => tx.first_style().stroke_width,
+        _ => super::current_stroke(app).map_or(0.0, |s| s.width),
     };
     for (label, paint, is_fill) in [("Fill", fill, true), ("Stroke", stroke, false)] {
         ui.horizontal(|ui| {
@@ -279,7 +278,9 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.painter().rect_filled(r.shrink(7.0), 0.0, t.panel);
             }
             ui.painter().rect_stroke(r.shrink(2.0), 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Outside);
-            if resp.clicked() {
+            if resp.double_clicked() {
+                app.run("ui.colorPicker", json!({ "stroke": !is_fill })).ok();
+            } else if resp.clicked() {
                 app.session.fill_active = is_fill;
                 app.ui.open_panel = Some("swatches".into());
             }
@@ -299,7 +300,7 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.label(egui::RichText::new("Opacity").size(12.0));
         ui.add_space(8.0);
         if let Some(o) = widgets::plain_field(ui, "ap-op", n.opacity as f64 * 100.0, "%", 0, 64.0) {
-            app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0) / 100.0})).ok();
+            app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
         }
         if widgets::icon_button(ui, "ellipsis", "Transparency", false, 22.0).clicked() {
             app.ui.open_panel = Some("transparency".into());

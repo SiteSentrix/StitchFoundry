@@ -4,6 +4,7 @@
 
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::json;
+use vectorcraft_color::Paint;
 use vectorcraft_tools::{TOOL_GROUPS, ToolInfo, tool_info};
 
 use crate::theme::{self, Tokens};
@@ -178,46 +179,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
-    let (fill, stroke) = match app.session.active().and_then(|d| d.selection.objects.first().and_then(|id| d.doc.node(*id))) {
-        Some(n) if !n.is_container() => (n.appearance.fill_paint(), n.appearance.stroke_paint()),
-        _ => (app.session.paint.fill.clone(), app.session.paint.stroke.clone()),
-    };
-    ui.vertical_centered(|ui| {
-        let (f, s, swap, def) = widgets::fill_stroke_proxy(ui, &fill, &stroke, app.session.fill_active, 36.0);
-        if f {
-            app.session.fill_active = true;
-        }
-        if s {
-            app.session.fill_active = false;
-        }
-        if swap {
-            app.run("paint.swap", json!({})).ok();
-        }
-        if def {
-            app.run("paint.default", json!({})).ok();
-        }
-    });
+    ui.vertical_centered(|ui| crate::panels::proxy(app, ui, 36.0));
     ui.add_space(5.0);
-    let target = if app.session.fill_active { "paint.setFill" } else { "paint.setStroke" };
+    // Color (the last solid colour), Gradient (the last gradient) and None, as commands.
     ui.horizontal(|ui| {
         ui.add_space((ui.available_width() - 27.0) / 2.0);
         ui.spacing_mut().item_spacing.x = 2.0;
-        let s = 7.5;
-        let last = app.session.paint.fill.color().unwrap_or(vectorcraft_color::Color::BLACK);
-        let (r, resp) = ui.allocate_exact_size(vec2(s, s), Sense::click());
-        widgets::paint_chip(ui, r, &vectorcraft_color::Paint::solid(last));
-        if resp.on_hover_text("Color (,)").clicked() {
-            app.run(target, json!({"color": last.to_hex()})).ok();
+        let mut clicked = None;
+        for (tip, cmd) in [("Color (,)", "paint.lastColor"), ("Gradient (.)", "paint.lastGradient"), ("None (/)", "paint.none")] {
+            let (r, resp) = ui.allocate_exact_size(vec2(7.5, 7.5), Sense::click());
+            match cmd {
+                "paint.lastColor" => widgets::paint_chip(ui, r, &Paint::solid(app.session.last_solid)),
+                "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
+                _ => widgets::paint_chip(ui, r, &Paint::None),
+            }
+            if resp.on_hover_text(tip).clicked() {
+                clicked = Some(cmd);
+            }
         }
-        let (r, resp) = ui.allocate_exact_size(vec2(s, s), Sense::click());
-        widgets::paint_chip(ui, r, &vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(Default::default()))));
-        if resp.on_hover_text("Gradient (.)").clicked() {
-            app.run(target, json!({"gradient": {"kind": "linear"}})).ok();
-        }
-        let (r, resp) = ui.allocate_exact_size(vec2(s, s), Sense::click());
-        widgets::paint_chip(ui, r, &vectorcraft_color::Paint::None);
-        if resp.on_hover_text("None (/)").clicked() {
-            app.run(target, json!({"none": true})).ok();
+        if let Some(cmd) = clicked {
+            app.run(cmd, json!({})).ok();
         }
     });
     ui.add_space(6.0);

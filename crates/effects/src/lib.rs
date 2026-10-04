@@ -8,17 +8,23 @@
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
+//! - **Stroke geometry** ([`stroke`]): arrowheads, dash patterns and width profiles, shared by the
+//!   renderer, the exporters and Outline Stroke.
 //! - [`effect_catalog`] lists every effect with its menu path, parameter documentation and the
 //!   defaults of Illustrator's dialogs. Missing parameters always fall back to those defaults.
+//! - [`clip_outline`] is the region a clip group clips to, shared by the renderer and the SVG and
+//!   PDF writers.
 //!
 //! Everything is deterministic: "random" effects (Roughen, Tweak, Scribble) use a seeded hash
 //! noise (`seed` parameter, default 0).
 #![forbid(unsafe_code)]
 
 mod bake;
+mod clip;
 mod distort;
 mod group;
 mod raster;
+pub mod stroke;
 mod stylize;
 mod util;
 mod warp;
@@ -31,6 +37,7 @@ use vectorcraft_doc::Effect;
 use vectorcraft_geom::{BezPath, PathData, Rect};
 
 pub use bake::{bake_document, needs_bake};
+pub use clip::clip_outline;
 pub use group::{OutlineHook, PATHFINDER_EFFECTS, has_pathfinder, is_pathfinder, pathfinder_children};
 pub use raster::{RasterFx, outset, raster_effects};
 pub use warp::{WarpStyle, warp_point};

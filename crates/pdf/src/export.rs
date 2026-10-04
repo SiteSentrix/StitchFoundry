@@ -11,9 +11,10 @@ use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
 use krilla::surface::Surface;
-use kurbo::{ParamCurve, ParamCurveDeriv, PathEl, Shape, Vec2};
+use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, Arrowhead, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
+use vectorcraft_doc::appearance::stroke_paint_bounds;
+use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 
 use crate::{Compatibility, ExportReport, PdfError, PdfOptions};
@@ -215,9 +216,7 @@ impl Exporter<'_> {
     /// swatch's CMYK equivalent is the alternate space).
     fn solid(&mut self, c: &Color, swatch: Option<&str>) -> krilla::color::Color {
         use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
-        let spot = swatch
-            .and_then(|n| self.doc.swatches.iter().find(|s| s.spot && s.name == n))
-            .and_then(|s| s.paint.color().map(|sc| (s.name.clone(), sc)));
+        let spot = swatch.and_then(|n| self.doc.swatch(n).filter(|s| s.spot)).and_then(|s| s.paint.color().map(|sc| (s.name.clone(), sc)));
         let Some((name, sc)) = spot else { return self.col(c) };
         let cms = vectorcraft_color::cms::active();
         let intent = cms.settings().intent;
@@ -394,32 +393,15 @@ impl Exporter<'_> {
                 }
             }
             NodeKind::Group { children, clip: true } => {
-                let clip = children.first().and_then(|c| match &c.kind {
-                    NodeKind::Path { path, rule, .. } => Some((path.to_bezpath(), *rule)),
-                    NodeKind::Compound { children, rule } => {
-                        let mut bp = BezPath::new();
-                        for ch in children {
-                            if let Some(p) = ch.path_data() {
-                                bp.extend(p.to_bezpath());
-                            }
-                        }
-                        Some((bp, *rule))
+                // The region every output clips to; nothing to clip by hides the clipped art.
+                if let Some((clip, rest)) = children.split_first()
+                    && let Some((p, r)) = vectorcraft_effects::clip_outline(clip).and_then(|(bp, r)| to_path(&bp).map(|p| (p, r)))
+                {
+                    s.push_clip_path(&p, &rule(r));
+                    for c in rest {
+                        self.node(s, c, page, false);
                     }
-                    _ => None,
-                });
-                match clip.and_then(|(bp, r)| to_path(&bp).map(|p| (p, r))) {
-                    Some((p, r)) => {
-                        s.push_clip_path(&p, &rule(r));
-                        for c in children.iter().skip(1) {
-                            self.node(s, c, page, false);
-                        }
-                        s.pop();
-                    }
-                    None => {
-                        for c in children {
-                            self.node(s, c, page, false);
-                        }
-                    }
+                    s.pop();
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {
@@ -523,6 +505,18 @@ impl Exporter<'_> {
             s.push_blend_mode(blend(st.blend));
             pushes += 1;
         }
+        // The line ends under its arrowheads; they overlap, so both take the opacity once, as a group.
+        let pieces = vectorcraft_effects::stroke::stroke_pieces(bp, st);
+        let grouped = !pieces.heads.is_empty() && st.opacity < 1.0;
+        if grouped {
+            s.push_opacity(norm(st.opacity));
+            pushes += 1;
+        }
+        let opacity = if grouped { NormalizedF32::ONE } else { norm(st.opacity) };
+        let trimmed = match &pieces.line {
+            std::borrow::Cow::Owned(line) => Some(to_path(line)),
+            std::borrow::Cow::Borrowed(_) => None,
+        };
         let width = match st.align {
             StrokeAlign::Center => st.width,
             _ if closed => st.width * 2.0,
@@ -567,20 +561,23 @@ impl Exporter<'_> {
                 LineJoin::Round => krilla::paint::LineJoin::Round,
                 LineJoin::Bevel => krilla::paint::LineJoin::Bevel,
             },
-            opacity: norm(st.opacity),
+            opacity,
             dash,
         }));
-        s.draw_path(path);
+        // A line fully covered by its heads (Tip alignment) has nothing left to stroke.
+        if let Some(line) = trimmed.as_ref().map_or(Some(path), Option::as_ref) {
+            s.draw_path(line);
+        }
         s.set_stroke(None);
         // Pop the alignment clip before drawing arrowheads.
         if matches!(st.align, StrokeAlign::Inside | StrokeAlign::Outside) && closed && pushes > 0 {
             s.pop();
             pushes -= 1;
         }
-        if st.start_arrow.is_some() || st.end_arrow.is_some() {
-            for head in arrowheads(bp, st) {
-                if let Some(p) = to_path(&head) {
-                    s.set_fill(Some(Fill { paint: paint.clone(), opacity: norm(st.opacity), rule: krilla::paint::FillRule::NonZero }));
+        if !pieces.heads.is_empty() {
+            s.set_fill(Some(Fill { paint, opacity, rule: krilla::paint::FillRule::NonZero }));
+            for head in &pieces.heads {
+                if let Some(p) = to_path(&head.outline) {
                     s.draw_path(&p);
                 }
             }
@@ -607,7 +604,7 @@ impl Exporter<'_> {
                 s.draw_path(&path);
             }
             if run.style.stroke_width > 0.0
-                && let Some(paint) = self.paint(&run.style.stroke, layout.bounds)
+                && let Some(paint) = self.paint(&run.style.stroke, stroke_paint_bounds(layout.bounds, run.style.stroke_width))
             {
                 s.set_fill(None);
                 s.set_stroke(Some(Stroke { paint, width: run.style.stroke_width as f32, ..Default::default() }));
@@ -631,7 +628,7 @@ impl Exporter<'_> {
                         }
                     }
                     AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {
-                        if let Some(paint) = self.paint(&st.paint, tb) {
+                        if let Some(paint) = self.paint(&st.paint, st.paint_bounds(tb)) {
                             s.set_fill(None);
                             s.set_stroke(Some(Stroke { paint, width: st.width as f32, opacity: norm(st.opacity), ..Default::default() }));
                             s.draw_path(&path);
@@ -678,79 +675,4 @@ impl Exporter<'_> {
         s.draw_image(img, size);
         s.pop();
     }
-}
-
-/// Arrowhead outlines for a stroke (same geometry as the renderer).
-fn arrowheads(bp: &BezPath, st: &StrokeLayer) -> Vec<BezPath> {
-    let segs: Vec<kurbo::PathSeg> = bp.segments().collect();
-    let mut out = Vec::new();
-    let (Some(first), Some(last)) = (segs.first(), segs.last()) else { return out };
-    if let Some(a) = st.start_arrow {
-        out.push(head(a, first.eval(0.0), tangent(first, 0.0) * -1.0, st.width * st.arrow_scale.0 / 100.0));
-    }
-    if let Some(a) = st.end_arrow {
-        out.push(head(a, last.eval(1.0), tangent(last, 1.0), st.width * st.arrow_scale.1 / 100.0));
-    }
-    out
-}
-
-fn tangent(s: &kurbo::PathSeg, t: f64) -> Vec2 {
-    let d = match s {
-        kurbo::PathSeg::Line(l) => l.p1 - l.p0,
-        kurbo::PathSeg::Quad(q) => q.deriv().eval(t).to_vec2(),
-        kurbo::PathSeg::Cubic(c) => {
-            let v = c.deriv().eval(t).to_vec2();
-            if v.hypot() < 1e-9 { c.p3 - c.p0 } else { v }
-        }
-    };
-    let l = d.hypot();
-    if l < 1e-12 { Vec2::new(1.0, 0.0) } else { d / l }
-}
-
-fn head(kind: Arrowhead, tip: kurbo::Point, dir: Vec2, w: f64) -> BezPath {
-    let w = w.max(0.25);
-    let n = Vec2::new(-dir.y, dir.x);
-    let len = 4.0 * w;
-    let half = 2.0 * w;
-    let base = tip - dir * len;
-    let mut p = BezPath::new();
-    match kind {
-        Arrowhead::Triangle | Arrowhead::TriangleOpen | Arrowhead::Arrow | Arrowhead::ArrowOpen => {
-            p.move_to(tip);
-            p.line_to(base + n * half);
-            if matches!(kind, Arrowhead::Arrow | Arrowhead::ArrowOpen) {
-                p.line_to(tip - dir * (len * 0.7));
-            }
-            p.line_to(base - n * half);
-            p.close_path();
-        }
-        Arrowhead::Circle | Arrowhead::CircleOpen => {
-            p = kurbo::Circle::new(tip - dir * half, half).to_path(0.01);
-        }
-        Arrowhead::Square | Arrowhead::SquareOpen => {
-            let c = tip - dir * half;
-            p.move_to(c + dir * half + n * half);
-            p.line_to(c - dir * half + n * half);
-            p.line_to(c - dir * half - n * half);
-            p.line_to(c + dir * half - n * half);
-            p.close_path();
-        }
-        Arrowhead::Diamond => {
-            let c = tip - dir * half;
-            p.move_to(tip);
-            p.line_to(c + n * half);
-            p.line_to(c - dir * half);
-            p.line_to(c - n * half);
-            p.close_path();
-        }
-        Arrowhead::Bar => {
-            let t = w * 0.75;
-            p.move_to(tip + n * half);
-            p.line_to(tip + n * half - dir * t);
-            p.line_to(tip - n * half - dir * t);
-            p.line_to(tip - n * half);
-            p.close_path();
-        }
-    }
-    p
 }

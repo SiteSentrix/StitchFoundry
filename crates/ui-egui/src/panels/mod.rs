@@ -37,8 +37,8 @@ pub mod transparency;
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::{Node, StrokeLayer};
 
 use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
@@ -46,8 +46,7 @@ use crate::{VectorcraftApp, icons};
 
 /// The first selected node (cloned), if any.
 pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
-    let st = app.session.active()?;
-    st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned()
+    first_node(app).cloned()
 }
 
 /// Number of selected objects.
@@ -159,24 +158,72 @@ pub fn libraries(_app: &mut VectorcraftApp, ui: &mut Ui) {
 
 // ---------- shared helpers ----------
 
-/// The paint command for the active proxy (Fill or Stroke).
-pub(crate) fn paint_target(app: &VectorcraftApp) -> &'static str {
-    if app.session.fill_active { "paint.setFill" } else { "paint.setStroke" }
+/// The paint command of the active proxy (Fill or Stroke), or of the inactive one.
+pub(crate) fn proxy_cmd(app: &VectorcraftApp, inactive: bool) -> &'static str {
+    if app.session.fill_active != inactive { "paint.setFill" } else { "paint.setStroke" }
 }
 
-/// Fill and stroke as the proxies show them: the first selected object's (text uses its first
-/// run's style), else the defaults for new art.
+/// The first selected node, borrowed (for per-frame reads that need no copy of it).
+fn first_node(app: &VectorcraftApp) -> Option<&Node> {
+    let st = app.session.active()?;
+    st.selection.objects.first().and_then(|id| st.doc.node(*id))
+}
+
+/// Is Alt held? A click on a colour then paints the inactive proxy.
+pub(crate) fn alt_held(ui: &Ui) -> bool {
+    ui.input(|i| i.modifiers.alt)
+}
+
+/// Apply a clicked colour, swatch or None (`params`: `{color}`, `{swatch}` or `{none}`) to the
+/// active proxy, or with Alt held to the inactive one, which stays behind.
+pub(crate) fn apply_click(app: &mut VectorcraftApp, ui: &Ui, mut params: Value) {
+    let alt = alt_held(ui);
+    params["focus"] = json!(!alt);
+    app.run(proxy_cmd(app, alt), params).ok();
+}
+
+/// Fill and stroke as the proxies show them ([`vectorcraft_engine::Session::proxy_paints`]: the
+/// Appearance panel's active item for the proxy of its kind, else the first selected object's, a
+/// group's first painted object's, else the defaults for new art).
 pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
-    match first_selected(app) {
-        Some(n) => match &n.kind {
-            NodeKind::Text(t) => {
-                let s = t.first_style();
-                (s.fill, s.stroke)
-            }
-            _ => (n.appearance.fill_paint(), n.appearance.stroke_paint()),
-        },
-        None => (app.session.paint.fill.clone(), app.session.paint.stroke.clone()),
+    app.session.proxy_paints()
+}
+
+/// Whether the selected objects' fills and strokes differ (the proxies show "?"), cached per
+/// document revision.
+pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool) {
+    let Some(st) = app.session.active() else { return (false, false) };
+    let key = (st.uid, st.revision);
+    match pstate::<Option<((u64, u64), (bool, bool))>>(ctx, "proxy-mixed") {
+        Some((k, mixed)) if k == key => mixed,
+        _ => {
+            let mixed = st.proxy_mixed();
+            set_pstate(ctx, "proxy-mixed", Some((key, mixed)));
+            mixed
+        }
     }
+}
+
+/// The stroke the Stroke panel, Control bar and Properties show: the Appearance panel's active
+/// item when it is a stroke, else the first selected object's top stroke.
+pub(crate) fn current_stroke(app: &VectorcraftApp) -> Option<StrokeLayer> {
+    first_node(app)?.appearance.stroke_for(app.session.appearance_item()).cloned()
+}
+
+/// Opacity and blend mode as the Transparency panel and Control bar show them: the Appearance
+/// panel's active item's, else the first selected object's.
+pub(crate) fn current_transparency(app: &VectorcraftApp) -> Option<(f32, BlendMode)> {
+    let n = first_node(app)?;
+    Some(match app.session.appearance_item().and_then(|i| n.appearance.items.get(i)) {
+        Some(it) => (it.opacity(), it.blend()),
+        None => (n.opacity, n.blend),
+    })
+}
+
+/// Is the active proxy "?" (the selected objects' paints differ)?
+pub(crate) fn active_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    let (f, s) = mixed_paints(app, ctx);
+    if app.session.fill_active { f } else { s }
 }
 
 /// The paint behind the active proxy.
@@ -188,15 +235,19 @@ pub(crate) fn active_paint(app: &VectorcraftApp) -> Paint {
 /// Draw the Fill/Stroke proxy and handle its clicks through commands.
 pub(crate) fn proxy(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     let (f, s) = current_paints(app);
-    let (a, b, swap, def) = crate::widgets::fill_stroke_proxy(ui, &f, &s, app.session.fill_active, size);
-    if (a && !app.session.fill_active) || (b && app.session.fill_active) {
+    let mixed = mixed_paints(app, ui.ctx());
+    let c = crate::widgets::fill_stroke_proxy(ui, &f, &s, mixed, app.session.fill_active, size);
+    if (c.fill && !app.session.fill_active) || (c.stroke && app.session.fill_active) {
         app.run("paint.toggleActive", json!({})).ok();
     }
-    if swap {
+    if c.swap {
         app.run("paint.swap", json!({})).ok();
     }
-    if def {
+    if c.default {
         app.run("paint.default", json!({})).ok();
+    }
+    if let Some(stroke) = c.pick {
+        app.run("ui.colorPicker", json!({ "stroke": stroke })).ok();
     }
 }
 
@@ -229,27 +280,15 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(("panel-state", key)), v));
 }
 
-/// Recently applied colours (Swatches / Color panels "Recent Colors" row), newest first.
-pub(crate) fn recent_colors(ctx: &egui::Context) -> Vec<Color> {
-    pstate::<Vec<Color>>(ctx, "recent-colors")
-}
-pub(crate) fn push_recent(ctx: &egui::Context, c: Color) {
-    let mut v = recent_colors(ctx);
-    v.retain(|x| x.to_hex() != c.to_hex());
-    v.insert(0, c);
-    v.truncate(10);
-    set_pstate(ctx, "recent-colors", v);
-}
-
-/// "Recent Colors" header + a row of chips; clicking one applies it to the active proxy.
+/// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
+/// command feeds); clicking one applies it to the active proxy (Alt: the inactive one).
 pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, "Recent Colors");
-    let recent = recent_colors(ui.ctx());
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     let mut chosen = None;
-    for (i, c) in recent.iter().enumerate() {
+    for (i, c) in app.session.recent_colors.iter().enumerate() {
         let cell = Rect::from_min_size(r.min + vec2(3.0 + i as f32 * 19.0, 3.0), vec2(16.0, 16.0));
         if cell.right() > r.right() - 2.0 {
             break;
@@ -261,31 +300,21 @@ pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     if let Some(c) = chosen {
-        app.run(paint_target(app), json!({"color": color_json(&c)})).ok();
+        apply_click(app, ui, json!({"color": color_json(&c)}));
     }
 }
 
 /// A colour as command JSON, keeping its model.
-pub(crate) fn color_json(c: &Color) -> Value {
-    match *c {
-        Color::Rgb { r, g, b } => json!([r, g, b]),
-        Color::Cmyk { c, m, y, k } => json!({"c": c, "m": m, "y": y, "k": k}),
-        Color::Gray { k } => json!({"gray": k}),
-    }
-}
+pub(crate) use vectorcraft_tools::params::color_json;
 
-/// Paint as command params (`{color}`, `{none}` or `{gradient}`).
+/// Paint as command params (`{color}`, `{swatch}`, `{none}`, `{gradient}` (lossless) or `{pattern}`).
 pub(crate) fn paint_params(p: &Paint) -> Value {
     match p {
         Paint::None => json!({"none": true}),
         Paint::Solid { swatch: Some(n), .. } => json!({"swatch": n}),
         Paint::Solid { color, .. } => json!({"color": color_json(color)}),
-        Paint::Gradient(g) => json!({"gradient": {
-            "kind": g.gradient.kind.label().to_lowercase(),
-            "angle": g.angle,
-            "stops": g.gradient.stops.iter().map(|s| json!({"offset": s.offset, "color": color_json(&s.color), "opacity": s.opacity})).collect::<Vec<_>>()
-        }}),
-        Paint::Pattern { .. } => json!({"none": true}),
+        Paint::Gradient(g) => json!({"gradient": vectorcraft_tools::params::gradient_params(g)}),
+        Paint::Pattern { pattern, .. } => json!({"pattern": pattern}),
     }
 }
 
@@ -321,5 +350,9 @@ mod tests {
         let p = paint_params(&g);
         assert_eq!(p["gradient"]["kind"], "linear");
         assert_eq!(p["gradient"]["stops"].as_array().unwrap().len(), 2);
+        assert_eq!(paint_params(&vectorcraft_doc::pattern::pattern_paint("Dots")), json!({"pattern": "Dots"}));
+        assert_eq!(p["gradient"]["stops"][0]["midpoint"], json!(0.5));
     }
 }
+#[cfg(test)]
+mod tests_appearance;

@@ -76,13 +76,22 @@ pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
     None
 }
 
+/// Is `p` inside the region `clip` clips to ([`Node::clip_shapes`])? Text counts by its frame:
+/// glyph outlines need the font engine, above this crate.
+fn clip_contains(clip: &Node, p: Point) -> bool {
+    let frame = |n: &Node| {
+        let b = n.geometric_bounds()?;
+        Some(Node::path(n.id, vectorcraft_geom::shapes::rectangle(b), Default::default()))
+    };
+    clip.clip_shapes(Some(&frame)).iter().any(|(bp, rule)| fill_contains(bp, *rule, p))
+}
+
 fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId>) -> Option<Hit> {
     let children = parent.children()?;
     // A clip group only hits inside its clipping path.
     if let NodeKind::Group { clip: true, .. } = parent.kind
         && let Some(clip) = children.first()
-        && let Some(path) = clip.path_data()
-        && !fill_contains(&path.to_bezpath(), vectorcraft_geom::FillRule::NonZero, p)
+        && !clip_contains(clip, p)
     {
         return None;
     }

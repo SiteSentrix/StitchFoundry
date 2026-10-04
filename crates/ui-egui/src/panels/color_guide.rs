@@ -6,7 +6,7 @@ use serde_json::json;
 use vectorcraft_color::harmony::Harmony;
 use vectorcraft_color::{Color, Paint};
 
-use super::{active_paint, color_json, paint_target, pstate, push_recent, set_pstate};
+use super::{active_paint, apply_click, color_json, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -122,10 +122,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("swatch.newGroup", json!({"name": h.label(), "colors": cs})).ok();
         }
     });
-    if let Some(c) = chosen
-        && app.run(paint_target(app), json!({"color": color_json(&c)})).is_ok()
-    {
-        push_recent(ui.ctx(), c);
+    if let Some(c) = chosen {
+        apply_click(app, ui, json!({"color": color_json(&c)}));
     }
 }
 

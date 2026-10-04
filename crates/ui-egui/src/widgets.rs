@@ -1,7 +1,7 @@
 //! Shared widgets in Illustrator's panel style. Colours come from theme tokens.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
-use vectorcraft_color::Paint;
+use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::Unit;
 
 use crate::icons;
@@ -132,13 +132,27 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
 
 /// A plain number field (percent, degrees, counts) with optional suffix.
 pub fn plain_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: f64, suffix: &str, decimals: usize, width: f32) -> Option<f64> {
+    mixed_field(ui, id, Some(value), suffix, decimals, width)
+}
+
+/// [`plain_field`] for a value the selected objects may not share: `None` shows a blank field.
+pub fn mixed_field(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: Option<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
-    let shown = {
-        let s = format!("{:.*}", decimals, value);
-        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
-        format!("{s}{suffix}")
-    };
+    let shown = value
+        .map(|value| {
+            let s = format!("{:.*}", decimals, value);
+            let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
+            format!("{s}{suffix}")
+        })
+        .unwrap_or_default();
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
     let resp = ui
@@ -183,30 +197,7 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
             let [r, g, b, _] = color.to_rgba8(1.0);
             p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
         }
-        Paint::Gradient(gp) => {
-            if gp.gradient.kind == vectorcraft_color::GradientKind::Radial {
-                // Outer colour fills the corners beyond the largest circle.
-                let (c, _) = gp.gradient.sample(1.0);
-                let [r, g, b, _] = c.to_rgba8(1.0);
-                p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
-            }
-            let n = 24;
-            let w = rect.width() / n as f32;
-            for i in 0..n {
-                let tt = (i as f32 + 0.5) / n as f32;
-                let (c, _) = gp.gradient.sample(tt);
-                let [r, g, b, _] = c.to_rgba8(1.0);
-                let rr = Rect::from_min_size(pos2(rect.left() + i as f32 * w, rect.top()), vec2(w + 0.5, rect.height()));
-                if gp.gradient.kind == vectorcraft_color::GradientKind::Radial {
-                    let (c, _) = gp.gradient.sample(1.0 - tt);
-                    let [r, g, b, _] = c.to_rgba8(1.0);
-                    let s = rect.width().min(rect.height()) * tt / 2.0;
-                    p.circle_filled(rect.center(), s.max(0.5), Color32::from_rgb(r, g, b));
-                } else {
-                    p.rect_filled(rr, 0.0, Color32::from_rgb(r, g, b));
-                }
-            }
-        }
+        Paint::Gradient(gp) => gradient_chip(ui, rect, &gp.gradient),
         Paint::Pattern { .. } => {
             p.rect_filled(rect, 0.0, Color32::from_gray(200));
             for i in 0..4 {
@@ -217,8 +208,48 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
     }
 }
 
-/// The Fill/Stroke proxy pair (Illustrator's overlapping squares). Returns (fill clicked, stroke clicked, swap, default).
-pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active: bool, size: f32) -> (bool, bool, bool, bool) {
+/// Draw a gradient preview into `rect` (linear left to right; radial from the centre).
+pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient) {
+    let p = ui.painter();
+    let radial = gradient.kind == vectorcraft_color::GradientKind::Radial;
+    if radial {
+        // Outer colour fills the corners beyond the largest circle.
+        let (c, _) = gradient.sample(1.0);
+        let [r, g, b, _] = c.to_rgba8(1.0);
+        p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
+    }
+    let n = 24;
+    let w = rect.width() / n as f32;
+    for i in 0..n {
+        let tt = (i as f32 + 0.5) / n as f32;
+        if radial {
+            let (c, _) = gradient.sample(1.0 - tt);
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            let s = rect.width().min(rect.height()) * tt / 2.0;
+            p.circle_filled(rect.center(), s.max(0.5), Color32::from_rgb(r, g, b));
+        } else {
+            let (c, _) = gradient.sample(tt);
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            let rr = Rect::from_min_size(pos2(rect.left() + i as f32 * w, rect.top()), vec2(w + 0.5, rect.height()));
+            p.rect_filled(rr, 0.0, Color32::from_rgb(r, g, b));
+        }
+    }
+}
+
+/// What the user did on a [`fill_stroke_proxy`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ProxyClicks {
+    pub fill: bool,
+    pub stroke: bool,
+    pub swap: bool,
+    pub default: bool,
+    /// Double-clicked a square: open the Color Picker for it (`true` = the stroke).
+    pub pick: Option<bool>,
+}
+
+/// The Fill/Stroke proxy pair (two overlapping squares). `mixed` (fill, stroke) draws a "?" square
+/// for a selection whose objects differ.
+pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool, bool), fill_active: bool, size: f32) -> ProxyClicks {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
     let s = size * 0.62;
@@ -226,16 +257,31 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active:
     let stroke_r = Rect::from_min_size(rect.max - Vec2::splat(s), Vec2::splat(s));
     let stroke_resp = ui.interact(stroke_r, ui.id().with("stroke-proxy"), Sense::click());
     let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click());
+    let question = |ui: &Ui, r: Rect, color: Color32| {
+        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(r.height() * 0.8), color);
+    };
     let draw_fill = |ui: &Ui| {
-        paint_chip(ui, fill_r, fill);
+        if mixed.0 {
+            ui.painter().rect_filled(fill_r, 0.0, Color32::WHITE);
+            question(ui, fill_r, Color32::BLACK);
+        } else {
+            paint_chip(ui, fill_r, fill);
+        }
         ui.painter().rect_stroke(fill_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(fill_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
     };
     let draw_stroke = |ui: &Ui| {
         let w = s * 0.28;
-        paint_chip(ui, stroke_r, stroke);
+        if mixed.1 {
+            ui.painter().rect_filled(stroke_r, 0.0, Color32::WHITE);
+        } else {
+            paint_chip(ui, stroke_r, stroke);
+        }
         let inner = stroke_r.shrink(w);
         ui.painter().rect_filled(inner, 0.0, t.panel);
+        if mixed.1 {
+            question(ui, inner, t.text_strong);
+        }
         ui.painter().rect_stroke(stroke_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Outside);
         ui.painter().rect_stroke(stroke_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
@@ -259,29 +305,144 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active:
     ui.painter().rect_stroke(b, 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
     ui.painter().rect_filled(a, 0.0, Color32::WHITE);
     ui.painter().rect_stroke(a, 0.0, Stroke::new(1.0, Color32::BLACK), StrokeKind::Inside);
-    (
-        fill_resp.on_hover_text("Fill (X)").clicked(),
-        stroke_resp.on_hover_text("Stroke (X)").clicked(),
-        swap.on_hover_text("Swap Fill and Stroke (Shift+X)").clicked(),
-        def.on_hover_text("Default Fill and Stroke (D)").clicked(),
-    )
+    let pick = if fill_resp.double_clicked() {
+        Some(false)
+    } else if stroke_resp.double_clicked() {
+        Some(true)
+    } else {
+        None
+    };
+    ProxyClicks {
+        fill: fill_resp.on_hover_text("Fill (X), double-click for the Color Picker").clicked(),
+        stroke: stroke_resp.on_hover_text("Stroke (X), double-click for the Color Picker").clicked(),
+        swap: swap.on_hover_text("Swap Fill and Stroke (Shift+X)").clicked(),
+        default: def.on_hover_text("Default Fill and Stroke (D)").clicked(),
+        pick,
+    }
 }
 
 /// A compact dropdown. Returns the chosen index.
 pub fn dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str, options: &[&str], width: f32) -> Option<usize> {
-    let t = Tokens::get(ui.ctx());
-    let mut chosen = None;
-    let resp = egui::Frame::NONE.fill(t.input).stroke(Stroke::new(1.0, t.input_border)).corner_radius(CornerRadius::same(3)).show(ui, |ui| {
-        egui::ComboBox::from_id_salt(ui.id().with(id)).selected_text(egui::RichText::new(current).size(12.0)).width(width - 4.0).show_ui(ui, |ui| {
-            for (i, o) in options.iter().enumerate() {
-                if ui.selectable_label(*o == current, *o).clicked() {
-                    chosen = Some(i);
-                }
+    combo(ui, id, current, width, |ui| {
+        let mut chosen = None;
+        for (i, o) in options.iter().enumerate() {
+            if ui.selectable_label(*o == current, *o).clicked() {
+                chosen = Some(i);
             }
+        }
+        chosen
+    })
+}
+
+/// The recessed combo box of [`dropdown`] showing `current`; `list` draws the options and returns
+/// the chosen one.
+fn combo<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    current: &str,
+    width: f32,
+    list: impl FnOnce(&mut Ui) -> Option<R>,
+) -> Option<R> {
+    let t = Tokens::get(ui.ctx());
+    egui::Frame::NONE
+        .fill(t.input)
+        .stroke(Stroke::new(1.0, t.input_border))
+        .corner_radius(CornerRadius::same(3))
+        .show(ui, |ui| {
+            egui::ComboBox::from_id_salt(ui.id().with(id))
+                .selected_text(egui::RichText::new(current).size(12.0))
+                .width(width - 4.0)
+                .show_ui(ui, list)
+                .inner
+                .flatten()
         })
+        .inner
+}
+
+/// Whether the blend-mode list draws a separator above `BlendMode::ALL[i]`: where a
+/// [`BlendMode::group`] starts.
+pub fn blend_separator_before(i: usize) -> bool {
+    i > 0 && i < BlendMode::ALL.len() && BlendMode::ALL[i].group() != BlendMode::ALL[i - 1].group()
+}
+
+/// The blend-mode dropdown, its groups separated (Normal | darken | lighten | contrast | inversion
+/// | component modes). `None` (objects that differ) shows blank. Returns the chosen mode.
+pub fn blend_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: Option<BlendMode>, width: f32) -> Option<BlendMode> {
+    combo(ui, id, current.map_or("", BlendMode::label), width, |ui| {
+        let mut chosen = None;
+        for (i, m) in BlendMode::ALL.into_iter().enumerate() {
+            if blend_separator_before(i) {
+                ui.separator();
+            }
+            if ui.selectable_label(Some(m) == current, m.label()).clicked() {
+                chosen = Some(m);
+            }
+        }
+        chosen
+    })
+}
+
+/// The blend mode an effect parameter names (`"mode": "multiply"`), which editors show as a
+/// [`blend_param_dropdown`].
+pub fn blend_param(key: &str, value: &serde_json::Value) -> Option<BlendMode> {
+    value.as_str().filter(|_| key == "mode").and_then(BlendMode::parse)
+}
+
+/// [`blend_dropdown`] for a blend-mode parameter; returns the chosen mode's parameter value.
+pub fn blend_param_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: BlendMode) -> Option<serde_json::Value> {
+    blend_dropdown(ui, id, Some(current), 120.0).map(|m| serde_json::Value::String(m.label().to_ascii_lowercase()))
+}
+
+/// An edit made with [`opacity_blend`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TransparencyEdit {
+    Blend(BlendMode),
+    /// Opacity in percent, with the slider's drag phase (`Released` for a typed value).
+    Opacity(f64, Live),
+}
+
+/// The transparency controls shared by the Transparency panel and the Appearance panel's Opacity
+/// popups: the grouped blend-mode dropdown, the opacity percent field and its slider popup.
+/// `opacity` (0..1) and `blend` are `None` where the objects differ (shown blank).
+pub fn opacity_blend(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug + Copy,
+    opacity: Option<f32>,
+    blend: Option<BlendMode>,
+    enabled: bool,
+) -> Option<TransparencyEdit> {
+    let t = Tokens::get(ui.ctx());
+    let mut edit = None;
+    ui.horizontal(|ui| {
+        ui.add_enabled_ui(enabled, |ui| {
+            if let Some(m) = blend_dropdown(ui, (id, "blend"), blend, 104.0) {
+                edit = Some(TransparencyEdit::Blend(m));
+            }
+        });
+        dim_label(ui, "Opacity:");
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.add_enabled_ui(enabled, |ui| {
+            if let Some(o) = mixed_field(ui, (id, "opacity"), opacity.map(|o| o as f64 * 100.0), "%", 0, 50.0) {
+                edit = Some(TransparencyEdit::Opacity(o.clamp(0.0, 100.0), Live::Released));
+            }
+        });
+        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 26.0), if enabled { Sense::click() } else { Sense::hover() });
+        ui.painter().rect_stroke(r, 2, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
+        icons::paint(ui, "chevron-right", r.shrink2(vec2(3.0, 7.0)), if enabled { t.icon } else { t.text_disabled });
+        egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            let mut o = opacity.unwrap_or(1.0) * 100.0;
+            let r = ui.add(egui::Slider::new(&mut o, 0.0..=100.0).show_value(false));
+            let phase = if r.drag_stopped() || (r.changed() && !r.dragged()) {
+                Live::Released
+            } else if r.changed() {
+                Live::Dragging
+            } else {
+                return;
+            };
+            edit = Some(TransparencyEdit::Opacity(o.round() as f64, phase));
+        });
     });
-    let _ = resp;
-    chosen
+    edit
 }
 
 /// The 3×3 reference point locator. Returns a new index when clicked.
@@ -356,35 +517,48 @@ pub fn link_label(ui: &mut Ui, text: &str) -> Response {
     resp
 }
 
-/// Illustrator-style checkbox with a disabled state. Returns true when toggled.
-pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
+/// The row of a checkbox or radio button: allocates a 13 pt box plus `label`, draws the label and
+/// returns the box, the response and the box's border colour.
+fn choice_row(ui: &mut Ui, label: &str, enabled: bool) -> (Rect, Response, Color32) {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(12.5), if enabled { t.text } else { t.text_disabled });
     let (rect, resp) =
         ui.allocate_exact_size(vec2(18.0 + galley.size().x, 20.0f32.max(galley.size().y)), if enabled { Sense::click() } else { Sense::hover() });
     let bx = Rect::from_min_size(pos2(rect.left(), rect.center().y - 6.5), Vec2::splat(13.0));
+    ui.painter().galley(pos2(bx.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley, t.text);
+    let border = if !enabled {
+        t.divider
+    } else if resp.hovered() {
+        t.text
+    } else {
+        t.button_border
+    };
+    (bx, resp, border)
+}
+
+/// Panel-style checkbox with a disabled state. Returns true when toggled.
+pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (bx, resp, border) = choice_row(ui, label, enabled);
     ui.painter().rect_filled(bx, CornerRadius::same(2), if value && enabled { t.accent_strong } else { t.input });
-    ui.painter().rect_stroke(
-        bx,
-        CornerRadius::same(2),
-        Stroke::new(
-            1.0,
-            if !enabled {
-                t.divider
-            } else if resp.hovered() {
-                t.text
-            } else {
-                t.button_border
-            },
-        ),
-        StrokeKind::Inside,
-    );
+    ui.painter().rect_stroke(bx, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
     if value {
         let c = if enabled { Color32::WHITE } else { t.text_disabled };
         ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.center_bottom() + vec2(-1.0, -3.5)], Stroke::new(1.6, c));
         ui.painter().line_segment([bx.center_bottom() + vec2(-1.0, -3.5), bx.right_top() + vec2(-3.0, 3.0)], Stroke::new(1.6, c));
     }
-    ui.painter().galley(pos2(bx.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley, t.text);
+    enabled && resp.clicked()
+}
+
+/// Radio button in the style of [`check`], with a disabled state. Returns true when clicked.
+pub fn radio(ui: &mut Ui, label: &str, selected: bool, enabled: bool) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (bx, resp, border) = choice_row(ui, label, enabled);
+    let c = bx.center();
+    ui.painter().circle(c, 6.0, if selected && enabled { t.accent_strong } else { t.input }, Stroke::new(1.0, border));
+    if selected {
+        ui.painter().circle_filled(c, 2.5, if enabled { Color32::WHITE } else { t.text_disabled });
+    }
     enabled && resp.clicked()
 }
 
@@ -514,12 +688,7 @@ pub fn color_slider(
     let (rect, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
     let bar = Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0));
     let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
-    let n = (bar.width() / 2.0).ceil().max(2.0) as usize;
-    let seg = bar.width() / n as f32;
-    for i in 0..n {
-        let r = Rect::from_min_size(pos2(bar.left() + i as f32 * seg, bar.top()), vec2(seg + 0.6, bar.height()));
-        ui.painter().rect_filled(r, 0.0, track((i as f32 + 0.5) / n as f32));
-    }
+    gradient_strip(ui, bar, (bar.width() / 2.0).ceil().max(2.0) as usize, false, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let v = value.clamp(0.0, 1.0);
     let x = bar.left() + v * bar.width();
@@ -527,15 +696,141 @@ pub fn color_slider(
     let thumb = vec![tip, pos2(x + 5.5, tip.y + 6.0), pos2(x + 5.5, tip.y + 10.0), pos2(x - 5.5, tip.y + 10.0), pos2(x - 5.5, tip.y + 6.0)];
     let fill = if resp.dragged() || resp.hovered() { Color32::WHITE } else { t.icon };
     ui.painter().add(egui::Shape::convex_polygon(thumb, fill, Stroke::new(1.0, t.border)));
-    let mut out = None;
-    let mut phase = Live::Idle;
-    if (resp.dragged() || resp.clicked() || resp.drag_stopped())
-        && let Some(p) = resp.interact_pointer_pos()
-    {
-        out = Some(((p.x - bar.left()) / bar.width()).clamp(0.0, 1.0));
-        phase = if resp.dragged() && !resp.drag_stopped() { Live::Dragging } else { Live::Released };
+    match pointer_phase(&resp) {
+        Some((p, phase)) => (Some(((p.x - bar.left()) / bar.width()).clamp(0.0, 1.0)), phase),
+        None => (None, Live::Idle),
     }
-    (out, phase)
+}
+
+/// The pointer of a click or drag on `resp` and its phase (dragging, or released on click/drop).
+pub(crate) fn pointer_phase(resp: &Response) -> Option<(Pos2, Live)> {
+    if !(resp.dragged() || resp.clicked() || resp.drag_stopped()) {
+        return None;
+    }
+    let p = resp.interact_pointer_pos()?;
+    Some((p, if resp.dragged() && !resp.drag_stopped() { Live::Dragging } else { Live::Released }))
+}
+
+/// A gradient strip into `rect`: `n` bands along x (or up y when `vertical`), each filled with
+/// `track(t)` at its centre.
+fn gradient_strip(ui: &Ui, rect: Rect, n: usize, vertical: bool, track: &dyn Fn(f32) -> Color32) {
+    let len = if vertical { rect.height() } else { rect.width() };
+    let seg = len / n as f32;
+    for i in 0..n {
+        let r = if vertical {
+            Rect::from_min_size(pos2(rect.left(), rect.bottom() - (i + 1) as f32 * seg), vec2(rect.width(), seg + 0.6))
+        } else {
+            Rect::from_min_size(pos2(rect.left() + i as f32 * seg, rect.top()), vec2(seg + 0.6, rect.height()))
+        };
+        ui.painter().rect_filled(r, 0.0, track((i as f32 + 0.5) / n as f32));
+    }
+}
+
+/// The Color Picker's 2D colour field: `color_at(x, y)` gives the colour at a point (0..1 each, y
+/// down) and a ring marks `pos`. Returns the clicked or dragged point and the phase.
+pub fn color_field(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    size: Vec2,
+    pos: (f32, f32),
+    color_at: &dyn Fn(f32, f32) -> Color32,
+) -> (Option<(f32, f32)>, Live) {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
+    let painter = ui.painter_at(rect.expand(6.0));
+    painter.add(color_mesh(rect, (32, 32), color_at));
+    painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
+    let c = pos2(rect.left() + pos.0.clamp(0.0, 1.0) * rect.width(), rect.top() + pos.1.clamp(0.0, 1.0) * rect.height());
+    painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
+    painter.circle_stroke(c, 4.0, Stroke::new(1.0, Color32::WHITE));
+    match pointer_phase(&resp) {
+        Some((p, phase)) => {
+            let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
+            (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase)
+        }
+        None => (None, Live::Idle),
+    }
+}
+
+/// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1
+/// each, y down) at its vertices.
+pub fn color_mesh(rect: Rect, (cols, rows): (u32, u32), color_at: &dyn Fn(f32, f32) -> Color32) -> egui::Shape {
+    let mut mesh = egui::Mesh::default();
+    let row = cols + 1;
+    mesh.reserve_vertices((row * (rows + 1)) as usize);
+    mesh.reserve_triangles((cols * rows * 2) as usize);
+    for j in 0..=rows {
+        for i in 0..=cols {
+            let (x, y) = (i as f32 / cols as f32, j as f32 / rows as f32);
+            mesh.colored_vertex(pos2(rect.left() + x * rect.width(), rect.top() + y * rect.height()), color_at(x, y));
+        }
+    }
+    for j in 0..rows {
+        for i in 0..cols {
+            let a = j * row + i;
+            mesh.add_triangle(a, a + 1, a + row);
+            mesh.add_triangle(a + 1, a + row + 1, a + row);
+        }
+    }
+    egui::Shape::mesh(mesh)
+}
+
+/// The Color Picker's vertical channel slider: `track(t)` gives the colour at 0..1 (bottom to top)
+/// and arrows on both sides mark `value`. Returns the new value and the phase.
+pub fn channel_slider(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: f32,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Option<f32>, Live) {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
+    let bar = rect.shrink2(vec2(6.0, 0.0));
+    gradient_strip(ui, bar, (bar.height() / 2.0).ceil().max(2.0) as usize, true, track);
+    ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
+    let y = bar.bottom() - value.clamp(0.0, 1.0) * bar.height();
+    let fill = if resp.dragged() || resp.hovered() { t.text_strong } else { t.icon };
+    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)] {
+        let tip = pos2(x + d * 5.0, y);
+        ui.painter().add(egui::Shape::convex_polygon(vec![tip, pos2(x, y + 4.0 * d), pos2(x, y - 4.0 * d)], fill, Stroke::NONE));
+    }
+    match pointer_phase(&resp) {
+        Some((p, phase)) => (Some(((bar.bottom() - p.y) / bar.height()).clamp(0.0, 1.0)), phase),
+        None => (None, Live::Idle),
+    }
+}
+
+/// A hex colour field (`E67828`, no `#`) after a `#` label. Returns the text on commit when it
+/// changed.
+pub fn hex_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, hex: &str) -> Option<String> {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new("#").size(15.0).color(t.text));
+    let id = ui.id().with(id);
+    let editing = ui.memory(|m| m.has_focus(id));
+    let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
+    let resp = egui::Frame::NONE
+        .fill(t.input)
+        .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
+        .corner_radius(2)
+        .inner_margin(egui::Margin::symmetric(6, 4))
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut buf)
+                    .id(id)
+                    .frame(egui::Frame::NONE)
+                    .desired_width(62.0)
+                    .char_limit(7)
+                    .font(egui::FontId::proportional(12.5))
+                    .text_color(t.text_strong),
+            )
+        })
+        .inner;
+    let commit = resp.lost_focus() && buf != hex;
+    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    commit.then_some(buf)
 }
 
 /// One swatch tile (Illustrator: 1 px dark frame, white inset on hover/selection).

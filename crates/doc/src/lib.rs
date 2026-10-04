@@ -12,6 +12,7 @@ pub mod live;
 pub mod node;
 pub mod pattern;
 pub mod selection;
+pub mod swatches;
 pub mod text;
 
 use std::collections::BTreeMap;
@@ -30,7 +31,10 @@ pub(crate) mod skip {
     }
 }
 
-pub use appearance::{Appearance, AppearanceItem, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, StrokeAlign, StrokeLayer, WidthProfile};
+pub use appearance::{
+    Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer,
+    WidthProfile,
+};
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
@@ -321,8 +325,9 @@ pub struct Document {
     /// Pattern editing mode, while active.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pattern_edit: Option<PatternEdit>,
-    /// Opacity-mask editing mode, while active.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Opacity-mask editing mode, while active. Never saved (see [`Document::without_edit_modes`]);
+    /// still read so files saved mid-edit by older versions load without the editing layer.
+    #[serde(default, skip_serializing)]
     pub mask_edit: Option<MaskEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.
@@ -594,9 +599,6 @@ impl Document {
     pub fn pattern_mut(&mut self, name: &str) -> Option<&mut PatternDef> {
         self.patterns.iter_mut().find(|p| p.name == name)
     }
-    pub fn swatch(&self, name: &str) -> Option<&Swatch> {
-        self.swatches.iter().chain(self.swatch_groups.iter().flat_map(|g| g.swatches.iter())).find(|s| s.name == name)
-    }
     /// Deep-clone `node` with fresh ids for it and all descendants.
     pub fn reid(&mut self, node: &Node) -> Node {
         let mut n = node.clone();
@@ -607,6 +609,27 @@ impl Document {
             *n.children_mut().unwrap() = fresh;
         }
         n
+    }
+}
+
+impl Document {
+    /// Leave opacity-mask editing: drop the temporary editing layer, a working copy of art the
+    /// mask already holds (the engine syncs it after every edit).
+    pub fn drop_edit_modes(&mut self) {
+        if let Some(me) = self.mask_edit.take() {
+            self.layers.retain(|l| l.id != me.layer);
+        }
+    }
+
+    /// The document as saved and exported: without the opacity-mask editing layer. Borrowed when
+    /// no mask is being edited. (Pattern editing is saved: its tile layer holds unapplied edits.)
+    pub fn without_edit_modes(&self) -> std::borrow::Cow<'_, Document> {
+        if self.mask_edit.is_none() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut d = self.clone();
+        d.drop_edit_modes();
+        std::borrow::Cow::Owned(d)
     }
 }
 

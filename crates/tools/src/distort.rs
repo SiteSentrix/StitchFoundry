@@ -19,8 +19,7 @@ mod width;
 
 use std::sync::Arc;
 
-use vectorcraft_color::Paint;
-use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeKind};
+use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Affine, Point, Vec2};
 
 use crate::Tool;
@@ -42,11 +41,15 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
     })
 }
 
-/// Apply a point map to every anchor and handle of `n` and its descendants. Gradient vectors are
-/// mapped too; objects without editable points (text, images, symbols, meshes, live objects) get
-/// the map's affine approximation at their centre. Live shapes become plain paths.
+/// Apply a point map to every anchor and handle of `n` and its descendants. Gradients (pinned
+/// first if unplaced) follow the map's affine approximation at their centre; objects without
+/// editable points (text, images, symbols, meshes, live objects) get the approximation at their
+/// centre. Live shapes become plain paths.
 pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
-    warp_paints(&mut n.appearance, f);
+    let bounds = n.geometric_bounds();
+    // Finite-difference step: 5% of the object (at least half a point).
+    let eps = bounds.map_or(0.5, |b| (b.width().max(b.height()) * 0.05).max(0.5));
+    n.pin_gradients();
     match &mut n.kind {
         NodeKind::Path { path, live, .. } => {
             *live = None;
@@ -67,27 +70,13 @@ pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
             }
         }
         _ => {
-            if let Some(b) = n.geometric_bounds() {
-                let a = affine_near(f, b.center(), (b.width().max(b.height()) * 0.05).max(0.5));
-                n.transform(a, false);
+            if let Some(b) = bounds {
+                n.transform(affine_near(f, b.center(), eps), false);
             }
+            return;
         }
     }
-}
-
-fn warp_paints(ap: &mut Appearance, f: &dyn Fn(Point) -> Point) {
-    for it in &mut ap.items {
-        let p = match it {
-            AppearanceItem::Fill(fl) => &mut fl.paint,
-            AppearanceItem::Stroke(s) => &mut s.paint,
-        };
-        if let Paint::Gradient(g) = p
-            && let Some(geom) = &mut g.geom
-        {
-            geom.start = f(geom.start);
-            geom.end = f(geom.end);
-        }
-    }
+    n.appearance.warp_gradients(&|p| affine_near(f, p, eps));
 }
 
 /// The affine map that best matches `f` near `p` (finite differences with step `eps`).
@@ -136,6 +125,8 @@ pub(crate) fn ellipse_path(c: Point, rx: f64, ry: f64, angle_deg: f64) -> vector
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vectorcraft_color::{Gradient, GradientPaint, Paint};
+    use vectorcraft_doc::Appearance;
     use vectorcraft_geom::{PathData, Rect, shapes};
 
     #[test]
@@ -168,6 +159,17 @@ mod tests {
             assert!(live.is_none());
         }
         let _ = PathData::default();
+    }
+
+    #[test]
+    fn warp_pins_and_maps_gradients_once() {
+        let grad = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let mut n =
+            Node::path(vectorcraft_doc::NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(grad, Paint::None, 0.0));
+        warp_node_with(&mut n, &|p| Point::new(p.x * 2.0, p.y + 1.0));
+        let Paint::Gradient(g) = n.appearance.fill_paint() else { panic!() };
+        let geom = g.geom.expect("pinned before the warp");
+        assert!(geom.start.distance(Point::new(0.0, 6.0)) < 1e-9 && geom.end.distance(Point::new(20.0, 6.0)) < 1e-9, "{geom:?}");
     }
 
     #[test]

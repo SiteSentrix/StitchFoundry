@@ -5,57 +5,62 @@
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_doc::{Node, NodeId, OpacityMask};
+use vectorcraft_engine::cmd::TransparencyInfo;
 
-use super::{current_paints, first_selected, live_run, pstate, selection_len, set_pstate};
+use super::{current_paints, current_transparency, live_run, pstate, selection_len, set_pstate};
 use crate::theme::Tokens;
-use crate::widgets::{self, Live, menu_item};
+use crate::widgets::{self, TransparencyEdit, menu_item};
 use crate::{VectorcraftApp, icons};
+
+/// The panel's values ([`vectorcraft_engine::Session::transparency_info`]) and its first target
+/// (the selection, or the object whose mask is being edited), recomputed only when the document
+/// or the selection changes.
+fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (TransparencyInfo, Option<Node>) {
+    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
+    let Some(st) = app.session.active() else { return Default::default() };
+    let sel = &st.selection.objects;
+    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
+    let id = egui::Id::new("tr-state");
+    if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (TransparencyInfo, Option<Node>))>(id))
+        && k == key
+    {
+        return v;
+    }
+    let info = app.session.transparency_info();
+    let first = info.ids.first().and_then(|id| st.doc.node(*id)).cloned();
+    let v = (info, first);
+    ctx.data_mut(|d| d.insert_temp(id, (key, v.clone())));
+    v
+}
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // While editing a mask the panel shows the masked object (the selection is its mask art).
     let editing = app.session.active().and_then(|d| d.doc.mask_edit);
-    let n = match editing {
-        Some(me) => app.session.active().and_then(|d| d.doc.node(me.object).cloned()),
-        None => first_selected(app),
-    };
+    let (info, n) = state(app, ui.ctx());
     let has = n.is_some();
-    let (blend, op, isolate, knockout) =
-        n.as_ref().map(|n| (n.blend, n.opacity, n.isolate, n.knockout)).unwrap_or((BlendMode::Normal, 1.0, false, false));
-    ui.horizontal(|ui| {
-        let labels: Vec<&str> = BlendMode::ALL.iter().map(|b| b.label()).collect();
-        ui.add_enabled_ui(has, |ui| {
-            if let Some(i) = widgets::dropdown(ui, "tr-blend", blend.label(), &labels, 104.0) {
-                app.run("transparency.set", json!({"blend": labels[i]})).ok();
-            }
-        });
-        widgets::dim_label(ui, "Opacity:");
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_enabled_ui(has, |ui| {
-            if let Some(o) = widgets::plain_field(ui, "tr-op", op as f64 * 100.0, "%", 0, 50.0) {
-                app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
-            }
-        });
-        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 26.0), if has { Sense::click() } else { Sense::hover() });
-        ui.painter().rect_stroke(r, 2, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
-        icons::paint(ui, "chevron-right", r.shrink2(vec2(3.0, 7.0)), if has { t.icon } else { t.text_disabled });
-        egui::Popup::menu(&resp).show(|ui| {
-            let mut o = op * 100.0;
-            let r = ui.add(egui::Slider::new(&mut o, 0.0..=100.0).show_value(false));
-            let phase = if r.drag_stopped() || (r.changed() && !r.dragged()) {
-                Live::Released
-            } else if r.changed() {
-                Live::Dragging
-            } else {
-                Live::Idle
-            };
-            live_run(app, "Opacity", "transparency.set", json!({"opacity": o.round()}), phase);
-        });
-    });
+    let (isolate, knockout) = (info.isolate.unwrap_or(false), info.knockout.unwrap_or(false));
+    // Opacity and blend of the Appearance panel's active item (not while a mask is edited: the
+    // panel then shows the masked object), else of the targets, blank where they differ; with no
+    // target, the defaults for new art.
+    let item = editing.is_none().then(|| app.session.appearance_item()).flatten().and_then(|_| current_transparency(app));
+    let (op, blend) = match item {
+        Some((o, b)) => (Some(o), Some(b)),
+        None if has => (info.opacity.map(|o| (o / 100.0) as f32), info.blend),
+        None => (Some(1.0), Some(BlendMode::Normal)),
+    };
+    match widgets::opacity_blend(ui, "tr", op, blend, has) {
+        Some(TransparencyEdit::Blend(b)) => {
+            app.run("transparency.set", json!({"blend": b.label()})).ok();
+        }
+        Some(TransparencyEdit::Opacity(o, phase)) => live_run(app, "Opacity", "transparency.set", json!({ "opacity": o }), phase),
+        None => {}
+    }
     widgets::divider(ui);
     // Thumbnails and the opacity-mask controls.
     let hide_thumbs: bool = pstate(ui.ctx(), "tr-hide-thumbs");
-    let mask = n.as_ref().and_then(|n| n.mask.as_deref().cloned());
+    let mask = n.as_ref().and_then(|n| n.mask.as_deref());
     let (new_clip, new_invert) = app.session.new_mask_defaults();
     ui.horizontal(|ui| {
         if !hide_thumbs {
@@ -81,8 +86,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
             }
-            match &mask {
-                Some(m) => {
+            match (mask, n.as_ref().map(|n| n.id)) {
+                (Some(m), Some(id)) => {
                     // Link toggle between the object and its mask.
                     let (lr, lresp) = ui.allocate_exact_size(vec2(14.0, 50.0), Sense::click());
                     icons::paint(
@@ -114,11 +119,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         if shift {
                             app.run(if m.disabled { "transparency.enableOpacityMask" } else { "transparency.disableOpacityMask" }, json!({})).ok();
                         } else if editing.is_none() {
-                            app.run("transparency.editOpacityMask", json!({})).ok();
+                            app.run("transparency.editOpacityMask", json!({"id": id.0})).ok();
                         }
                     }
                 }
-                None => {
+                _ => {
                     let (m, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
                     ui.painter().rect_stroke(m, 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
                     icons::paint(ui, "dc-mask-none", m.shrink(12.0), t.text_disabled);
@@ -126,15 +131,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         ui.vertical(|ui| {
-            let can_make = selection_len(app) >= 2;
             let label = if mask.is_some() { "Release" } else { "Make Mask" };
-            let enabled = mask.is_some() || can_make;
+            let enabled = mask.is_some() || (has && editing.is_none());
             let r = ui.add_enabled_ui(enabled, |ui| widgets::flat_button(ui, label, 96.0)).inner;
-            if r.on_disabled_hover_text("Select the art and, on top of it, the mask object").clicked() {
+            if r.on_disabled_hover_text("Select the art (and, on top of it, the mask object)").clicked() {
                 let id = if mask.is_some() { "transparency.releaseOpacityMask" } else { "transparency.makeOpacityMask" };
                 app.run(id, json!({})).ok();
             }
-            let (clip, invert) = mask.as_ref().map(|m| (m.clip, m.invert)).unwrap_or((new_clip, new_invert));
+            let (clip, invert) = mask.map(|m| (m.clip, m.invert)).unwrap_or((new_clip, new_invert));
             if widgets::check(ui, "Clip", clip, mask.is_some()) {
                 app.run("transparency.setOpacityMask", json!({"clip": !clip})).ok();
             }
@@ -168,9 +172,32 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_pstate(ui.ctx(), "tr-hide-options", !hide_opts);
     }
     ui.separator();
-    let mask = first_selected(app).and_then(|n| n.mask.as_deref().cloned());
-    let can_make = selection_len(app) >= 2 && mask.is_none();
-    let items: [(&str, &str, bool); 4] = match &mask {
+    // The masked object's mask, also while editing it (the selection then is the mask art).
+    let editing = app.session.active().is_some_and(|d| d.doc.mask_edit.is_some());
+    let (_, n) = state(app, ui.ctx());
+    let mask = n.as_ref().and_then(|n| n.mask.as_deref());
+    for (label, id, enabled) in mask_items(mask, n.is_some() && !editing) {
+        if menu_item(ui, label, enabled, false) {
+            app.run(id, json!({})).ok();
+        }
+    }
+    ui.separator();
+    let (clip, invert) = app.session.new_mask_defaults();
+    if menu_item(ui, "New Opacity Masks Are Clipping", true, clip) {
+        app.run("transparency.toggleNewMasksClipping", json!({})).ok();
+    }
+    if menu_item(ui, "New Opacity Masks Are Inverted", true, invert) {
+        app.run("transparency.toggleNewMasksInverted", json!({})).ok();
+    }
+    ui.separator();
+    menu_item(ui, "Page Isolated Blending", false, false);
+    menu_item(ui, "Page Knockout Group", false, false);
+}
+
+/// The menu's opacity-mask rows (label, command, enabled) for the target's `mask`; Make needs a
+/// target without one, outside mask editing (`can_make`).
+fn mask_items(mask: Option<&OpacityMask>, can_make: bool) -> [(&'static str, &'static str, bool); 4] {
+    match mask {
         Some(m) => [
             ("Make Opacity Mask", "transparency.makeOpacityMask", false),
             ("Release Opacity Mask", "transparency.releaseOpacityMask", true),
@@ -191,23 +218,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             ("Disable Opacity Mask", "", false),
             ("Unlink Opacity Mask", "", false),
         ],
-    };
-    for (label, id, enabled) in items {
-        if menu_item(ui, label, enabled, false) {
-            app.run(id, json!({})).ok();
-        }
     }
-    ui.separator();
-    let (clip, invert) = app.session.new_mask_defaults();
-    if menu_item(ui, "New Opacity Masks Are Clipping", true, clip) {
-        app.run("transparency.toggleNewMasksClipping", json!({})).ok();
-    }
-    if menu_item(ui, "New Opacity Masks Are Inverted", true, invert) {
-        app.run("transparency.toggleNewMasksInverted", json!({})).ok();
-    }
-    ui.separator();
-    menu_item(ui, "Page Isolated Blending", false, false);
-    menu_item(ui, "Page Knockout Group", false, false);
 }
 
 /// A rendered thumbnail of `n` (which may live outside the tree, like mask art). One texture per
@@ -242,14 +253,80 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
-    /// Run the panel and its ≡ menu for one headless frame.
-    fn frame(app: &mut VectorcraftApp) {
+    /// Run the panel and its menu for one headless frame: the texts drawn.
+    fn frame(app: &mut VectorcraftApp) -> Vec<String> {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
         let ctx = egui::Context::default();
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             show(app, ui);
             menu(app, ui);
         });
         out.textures_delta.clear();
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+        v
+    }
+
+    fn run(app: &mut VectorcraftApp, id: &str, p: serde_json::Value) -> serde_json::Value {
+        app.session.execute(id, &p).unwrap()
+    }
+
+    #[test]
+    fn panel_in_mask_editing_mode_shows_and_edits_the_masked_object() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        run(&mut app, "transparency.set", json!({"opacity": 60}));
+        // One object: an empty mask, drawn in editing mode.
+        run(&mut app, "transparency.makeOpacityMask", json!({}));
+        run(&mut app, "shape.ellipse", json!({"x": 0, "y": 0, "width": 30, "height": 30}));
+        let texts = frame(&mut app);
+        assert!(texts.iter().any(|t| t == "60%"), "the masked object's opacity, not the mask art's: {texts:?}");
+        assert!(texts.iter().any(|t| t == "Release"));
+        let (info, n) = state(&app, &egui::Context::default());
+        assert_eq!((info.ids, n.as_ref().map(|n| n.id.0)), (vec![vectorcraft_doc::NodeId(a)], Some(a)));
+        // The menu is enabled for the masked object while editing (Make is not).
+        let items = mask_items(n.as_ref().and_then(|n| n.mask.as_deref()), false);
+        assert_eq!(items.map(|(_, _, on)| on), [false, true, true, true]);
+        // The panel's controls run without ids and reach the masked object.
+        run(&mut app, "transparency.setOpacityMask", json!({"clip": false}));
+        run(&mut app, "transparency.unlinkOpacityMask", json!({}));
+        run(&mut app, "transparency.set", json!({"blend": "Multiply"}));
+        frame(&mut app);
+        let st = app.session.active().unwrap();
+        let obj = st.doc.node(vectorcraft_doc::NodeId(a)).unwrap();
+        let m = obj.mask.as_ref().unwrap();
+        assert!(!m.clip && !m.linked && obj.blend == BlendMode::Multiply);
+        assert!(st.doc.mask_edit.is_some());
+        // Release leaves editing and puts the drawn mask art back.
+        run(&mut app, "transparency.releaseOpacityMask", json!({}));
+        assert!(frame(&mut app).iter().any(|t| t == "Make Mask"));
+        assert!(app.session.active().unwrap().doc.mask_edit.is_none());
+    }
+
+    #[test]
+    fn mixed_values_show_blank() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        run(&mut app, "transparency.set", json!({"opacity": 50, "blend": "Screen"}));
+        let b = run(&mut app, "shape.rectangle", json!({"x": 60, "y": 0, "width": 30, "height": 30}))["id"].clone();
+        run(&mut app, "select.set", json!({"ids": [a, b]}));
+        let texts = frame(&mut app);
+        assert!(!texts.iter().any(|t| t.ends_with('%') || t == "Screen" || t == "Normal"), "{texts:?}");
+        run(&mut app, "select.set", json!({"ids": [a]}));
+        let texts = frame(&mut app);
+        assert!(texts.iter().any(|t| t == "50%") && texts.iter().any(|t| t == "Screen"), "{texts:?}");
+        // Nothing selected: the defaults for new art, disabled.
+        run(&mut app, "select.none", json!({}));
+        let texts = frame(&mut app);
+        assert!(texts.iter().any(|t| t == "100%") && texts.iter().any(|t| t == "No Selection"), "{texts:?}");
     }
 
     #[test]

@@ -5,7 +5,6 @@
 //! as `` `path` `` in ASSETS.md. See the asset policy in AGENTS.md.
 
 use std::path::Path;
-use std::process::Command;
 
 const ASSET_EXT: &[&str] = &[
     "png",
@@ -51,12 +50,7 @@ pub fn missing(files: &[String], assets_md: &str) -> Vec<String> {
 }
 
 pub fn run(root: &Path) -> Result<(), String> {
-    let out = Command::new("git")
-        .current_dir(root)
-        .args(["ls-files", "--cached", "--others", "--exclude-standard"])
-        .output()
-        .map_err(|e| format!("git ls-files: {e}"))?;
-    let files: Vec<String> = String::from_utf8_lossy(&out.stdout).lines().filter(|l| root.join(l).exists()).map(str::to_owned).collect();
+    let files = crate::repo_files(root)?;
     let md = std::fs::read_to_string(root.join("ASSETS.md")).map_err(|e| format!("ASSETS.md: {e}"))?;
     let miss = missing(&files, &md);
     if miss.is_empty() {

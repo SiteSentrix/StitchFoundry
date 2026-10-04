@@ -77,10 +77,32 @@ impl Arrowhead {
     ];
 }
 
+/// Where an arrowhead sits relative to the end of its path. In both modes the stroke stops under
+/// the head, so the line never shows through a hollow head or past its tip.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ArrowAlign {
+    /// The tip extends past the end point (the path keeps its length).
+    #[default]
+    Extend,
+    /// The tip sits on the end point (the stroke is shortened by the head).
+    Tip,
+}
+
 /// Variable-width profile: (position 0..1 along the path, left width factor, right width factor).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct WidthProfile {
     pub points: Vec<(f64, f64, f64)>,
+}
+
+/// A built-in width profile (the Stroke panel's Profile list).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProfilePreset {
+    /// Stable id used by `stroke.set {profile}`.
+    pub id: &'static str,
+    /// Menu label.
+    pub label: &'static str,
+    /// (t, left, right) width points.
+    pub points: &'static [(f64, f64, f64)],
 }
 
 impl WidthProfile {
@@ -102,15 +124,34 @@ impl WidthProfile {
         let l = p.last().unwrap();
         (l.1, l.2)
     }
-    /// Illustrator's "Width Profile 1" (lens shape) analogue.
+    /// The built-in profiles, in menu order. "uniform" is the plain stroke (no profile).
+    pub const PRESETS: [ProfilePreset; 4] = [
+        ProfilePreset { id: "uniform", label: "Uniform", points: &[(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] },
+        ProfilePreset { id: "lens", label: "Lens", points: &[(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+        ProfilePreset { id: "taperStart", label: "Taper Start", points: &[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] },
+        ProfilePreset { id: "taperEnd", label: "Taper End", points: &[(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+    ];
+    /// The built-in profile with this id.
+    pub fn preset(id: &str) -> Option<Self> {
+        Self::PRESETS.iter().find(|p| p.id == id).map(|p| Self { points: p.points.to_vec() })
+    }
+    /// The id of the built-in profile these points match, if any.
+    pub fn preset_id(&self) -> Option<&'static str> {
+        Self::PRESETS.iter().find(|p| p.points == self.points.as_slice()).map(|p| p.id)
+    }
+    /// The id of a stroke's profile: "uniform" without one, "custom" when it matches no preset.
+    pub fn id_of(p: Option<&Self>) -> &'static str {
+        p.map_or(Some("uniform"), Self::preset_id).unwrap_or("custom")
+    }
+    /// The lens profile (thin ends, full width in the middle).
     pub fn lens() -> Self {
-        Self { points: vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] }
+        Self::preset("lens").expect("built-in")
     }
     pub fn taper_end() -> Self {
-        Self { points: vec![(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] }
+        Self::preset("taperEnd").expect("built-in")
     }
     pub fn taper_start() -> Self {
-        Self { points: vec![(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] }
+        Self::preset("taperStart").expect("built-in")
     }
 }
 
@@ -186,6 +227,9 @@ pub struct StrokeLayer {
     pub visible: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    /// Arrowhead placement at both ends.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub arrow_align: ArrowAlign,
 }
 
 fn ten() -> f64 {
@@ -220,8 +264,31 @@ impl StrokeLayer {
             blend: BlendMode::Normal,
             visible: true,
             effects: vec![],
+            arrow_align: ArrowAlign::Extend,
         }
     }
+    /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
+    /// a quarter point. A head of weight `hw` is `4·hw` long and wide.
+    pub fn arrow_weight(&self, end: bool) -> f64 {
+        let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
+        (self.width * pct / 100.0).max(0.25)
+    }
+    /// How far the arrowheads can reach from the path's end points (0 without heads): the
+    /// head's diagonal, or with [`ArrowAlign::Extend`] its length plus the cap past the end.
+    pub fn arrow_reach(&self) -> f64 {
+        let reach = |head: Option<Arrowhead>, end: bool| head.map_or(0.0, |_| 4.5 * self.arrow_weight(end) + self.width / 2.0);
+        reach(self.start_arrow, false).max(reach(self.end_arrow, true))
+    }
+    /// The box an unplaced gradient on this stroke fits to (see [`stroke_paint_bounds`]).
+    pub fn paint_bounds(&self, geometric: vectorcraft_geom::Rect) -> vectorcraft_geom::Rect {
+        stroke_paint_bounds(geometric, self.width)
+    }
+}
+
+/// The box an unplaced gradient on a stroke of `width` fits to: the geometric bounds grown by half
+/// the weight (object strokes and type strokes alike, on screen and in exports).
+pub fn stroke_paint_bounds(geometric: vectorcraft_geom::Rect, width: f64) -> vectorcraft_geom::Rect {
+    geometric.inflate(width / 2.0, width / 2.0)
 }
 
 /// One entry of the appearance stack.
@@ -230,6 +297,53 @@ impl StrokeLayer {
 pub enum AppearanceItem {
     Fill(FillLayer),
     Stroke(StrokeLayer),
+}
+
+impl AppearanceItem {
+    pub fn is_fill(&self) -> bool {
+        matches!(self, AppearanceItem::Fill(_))
+    }
+    /// `"fill"` or `"stroke"` (the serialized `kind`).
+    pub fn kind_name(&self) -> &'static str {
+        if self.is_fill() { "fill" } else { "stroke" }
+    }
+    pub fn paint(&self) -> &Paint {
+        match self {
+            AppearanceItem::Fill(f) => &f.paint,
+            AppearanceItem::Stroke(s) => &s.paint,
+        }
+    }
+    pub fn visible(&self) -> bool {
+        match self {
+            AppearanceItem::Fill(f) => f.visible,
+            AppearanceItem::Stroke(s) => s.visible,
+        }
+    }
+    pub fn opacity(&self) -> f32 {
+        match self {
+            AppearanceItem::Fill(f) => f.opacity,
+            AppearanceItem::Stroke(s) => s.opacity,
+        }
+    }
+    pub fn blend(&self) -> BlendMode {
+        match self {
+            AppearanceItem::Fill(f) => f.blend,
+            AppearanceItem::Stroke(s) => s.blend,
+        }
+    }
+    /// The item's own live effects (applied to this fill or stroke only).
+    pub fn effects(&self) -> &Vec<Effect> {
+        match self {
+            AppearanceItem::Fill(f) => &f.effects,
+            AppearanceItem::Stroke(s) => &s.effects,
+        }
+    }
+    pub fn effects_mut(&mut self) -> &mut Vec<Effect> {
+        match self {
+            AppearanceItem::Fill(f) => &mut f.effects,
+            AppearanceItem::Stroke(s) => &mut s.effects,
+        }
+    }
 }
 
 /// Appearance attributes. `items` is in paint order: `items[0]` is painted first (the bottom of the
@@ -288,26 +402,119 @@ impl Appearance {
     pub fn stroke_width(&self) -> f64 {
         self.stroke().filter(|s| !s.paint.is_none()).map(|s| s.width).unwrap_or(0.0)
     }
-    /// Is this the basic one-fill-one-stroke appearance without effects?
+    /// Is this a basic appearance: at most one fill and one stroke, none hidden or with its own
+    /// opacity, blend mode or effects, and no object effects?
     pub fn is_basic(&self) -> bool {
+        let count = |fill: bool| self.items.iter().filter(|i| i.is_fill() == fill).count();
         self.effects.is_empty()
-            && self.items.len() <= 2
-            && self.items.iter().filter(|i| matches!(i, AppearanceItem::Fill(_))).count() <= 1
-            && self.items.iter().all(|i| match i {
-                AppearanceItem::Fill(f) => f.effects.is_empty() && f.opacity == 1.0 && f.blend == BlendMode::Normal,
-                AppearanceItem::Stroke(s) => s.effects.is_empty() && s.opacity == 1.0 && s.blend == BlendMode::Normal,
-            })
+            && count(true) <= 1
+            && count(false) <= 1
+            && self.items.iter().all(|i| i.visible() && i.effects().is_empty() && i.opacity() == 1.0 && i.blend() == BlendMode::Normal)
+    }
+    /// Fill item `index`, or the topmost fill for `None`. `None` when that item is not a fill.
+    pub fn fill_at(&self, index: Option<usize>) -> Option<&FillLayer> {
+        match index {
+            None => self.fill(),
+            Some(i) => match self.items.get(i)? {
+                AppearanceItem::Fill(f) => Some(f),
+                AppearanceItem::Stroke(_) => None,
+            },
+        }
+    }
+    pub fn fill_at_mut(&mut self, index: Option<usize>) -> Option<&mut FillLayer> {
+        match index {
+            None => self.fill_mut(),
+            Some(i) => match self.items.get_mut(i)? {
+                AppearanceItem::Fill(f) => Some(f),
+                AppearanceItem::Stroke(_) => None,
+            },
+        }
+    }
+    /// Stroke item `index`, or the topmost stroke for `None`. `None` when that item is not a stroke.
+    pub fn stroke_at(&self, index: Option<usize>) -> Option<&StrokeLayer> {
+        match index {
+            None => self.stroke(),
+            Some(i) => match self.items.get(i)? {
+                AppearanceItem::Stroke(s) => Some(s),
+                AppearanceItem::Fill(_) => None,
+            },
+        }
+    }
+    pub fn stroke_at_mut(&mut self, index: Option<usize>) -> Option<&mut StrokeLayer> {
+        match index {
+            None => self.stroke_mut(),
+            Some(i) => match self.items.get_mut(i)? {
+                AppearanceItem::Stroke(s) => Some(s),
+                AppearanceItem::Fill(_) => None,
+            },
+        }
+    }
+    /// `index` when it names a fill (`fill`) or stroke item, else `None` (the topmost one): the
+    /// item a fill or stroke edit changes while item `index` is the Appearance panel's target.
+    pub fn item_of_kind(&self, index: Option<usize>, fill: bool) -> Option<usize> {
+        index.filter(|i| self.items.get(*i).is_some_and(|it| it.is_fill() == fill))
+    }
+    /// The fill the Fill proxy shows while item `index` is targeted: that item when it is a fill,
+    /// else the topmost fill.
+    pub fn fill_for(&self, index: Option<usize>) -> Option<&FillLayer> {
+        self.fill_at(self.item_of_kind(index, true))
+    }
+    /// The stroke the Stroke proxy and panel show while item `index` is targeted.
+    pub fn stroke_for(&self, index: Option<usize>) -> Option<&StrokeLayer> {
+        self.stroke_at(self.item_of_kind(index, false))
+    }
+    /// Set the paint of fill item `index` (`None`: the top fill, created if missing). False when
+    /// `index` is not a fill.
+    pub fn set_fill_at(&mut self, index: Option<usize>, p: Paint) -> bool {
+        if index.is_none() {
+            self.set_fill(p);
+            return true;
+        }
+        self.fill_at_mut(index).map(|f| f.paint = p).is_some()
+    }
+    /// Set the paint of stroke item `index` (`None`: the top stroke, created if missing). False
+    /// when `index` is not a stroke.
+    pub fn set_stroke_at(&mut self, index: Option<usize>, p: Paint) -> bool {
+        if index.is_none() {
+            self.set_stroke(p);
+            return true;
+        }
+        self.stroke_at_mut(index).map(|s| s.paint = p).is_some()
+    }
+    /// The paint of fill (`fill`) or stroke item `index` (`None`: the topmost one).
+    pub fn paint_at(&self, index: Option<usize>, fill: bool) -> Option<&Paint> {
+        if fill { self.fill_at(index).map(|f| &f.paint) } else { self.stroke_at(index).map(|s| &s.paint) }
+    }
+    /// [`Self::set_fill_at`] or [`Self::set_stroke_at`].
+    pub fn set_paint_at(&mut self, index: Option<usize>, fill: bool, p: Paint) -> bool {
+        if fill { self.set_fill_at(index, p) } else { self.set_stroke_at(index, p) }
+    }
+    /// The effects of item `index`, or the object-level effects for `None`.
+    pub fn effects_at(&self, index: Option<usize>) -> Option<&Vec<Effect>> {
+        match index {
+            None => Some(&self.effects),
+            Some(i) => self.items.get(i).map(AppearanceItem::effects),
+        }
+    }
+    pub fn effects_mut(&mut self, index: Option<usize>) -> Option<&mut Vec<Effect>> {
+        match index {
+            None => Some(&mut self.effects),
+            Some(i) => self.items.get_mut(i).map(AppearanceItem::effects_mut),
+        }
     }
     /// Largest distance the painted area extends beyond the geometry (for visual bounds).
     pub fn outset(&self) -> f64 {
         self.items
             .iter()
             .filter_map(|i| match i {
-                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(match s.align {
-                    StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
-                    StrokeAlign::Outside => s.width,
-                    StrokeAlign::Inside => 0.0,
-                }),
+                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(
+                    match s.align {
+                        StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
+                        StrokeAlign::Outside => s.width,
+                        StrokeAlign::Inside => 0.0,
+                    }
+                    .max(s.arrow_reach()),
+                ),
                 _ => None,
             })
             .fold(0.0, f64::max)
@@ -322,6 +529,54 @@ impl Appearance {
                         *v *= s;
                     }
                 }
+            }
+        }
+    }
+    /// Gradient paints of the fills and strokes.
+    fn gradients_mut(&mut self) -> impl Iterator<Item = &mut vectorcraft_color::GradientPaint> {
+        self.items.iter_mut().filter_map(|i| match i {
+            AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. })
+            | AppearanceItem::Stroke(StrokeLayer { paint: Paint::Gradient(g), .. }) => Some(&mut **g),
+            _ => None,
+        })
+    }
+    /// Does a fill or stroke carry a gradient that is fitted to the bounds on each render?
+    pub fn has_unplaced_gradient(&self) -> bool {
+        self.items.iter().any(|i| match i {
+            AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. })
+            | AppearanceItem::Stroke(StrokeLayer { paint: Paint::Gradient(g), .. }) => g.geom.is_none(),
+            _ => false,
+        })
+    }
+    /// Fix unplaced gradients to their fit on `bounds` (the object's geometric bounds; strokes fit
+    /// the stroke-inflated box), so they can follow transforms that refitting wouldn't reproduce.
+    pub fn pin_gradients(&mut self, bounds: vectorcraft_geom::Rect) {
+        for i in &mut self.items {
+            match i {
+                AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. }) => g.pin(bounds),
+                AppearanceItem::Stroke(s) => {
+                    let b = s.paint_bounds(bounds);
+                    if let Paint::Gradient(g) = &mut s.paint {
+                        g.pin(b);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    /// Map placed gradients through `a`.
+    pub fn transform_gradients(&mut self, a: vectorcraft_geom::Affine) {
+        for g in self.gradients_mut() {
+            g.transform(a);
+        }
+    }
+    /// Map placed gradients through a warp, given its local affine approximation at a point (taken
+    /// at each gradient's centre: the start of a radial, the middle of a linear vector).
+    pub fn warp_gradients(&mut self, near: &dyn Fn(vectorcraft_geom::Point) -> vectorcraft_geom::Affine) {
+        for g in self.gradients_mut() {
+            if let Some(geom) = g.geom {
+                let c = if g.gradient.kind == vectorcraft_color::GradientKind::Radial { geom.start } else { geom.start.midpoint(geom.end) };
+                g.transform(near(c));
             }
         }
     }
@@ -340,6 +595,47 @@ mod tests {
     }
 
     #[test]
+    fn items_by_index() {
+        let mut a = Appearance::default_art();
+        a.items.push(AppearanceItem::Fill(FillLayer::new(Paint::None)));
+        // [Fill white, Stroke black, Fill none]
+        assert_eq!(a.fill_at(None).unwrap().paint, Paint::None);
+        assert_eq!(a.fill_at(Some(0)).unwrap().paint, Paint::solid(Color::WHITE));
+        assert!(a.fill_at(Some(1)).is_none() && a.stroke_at(Some(0)).is_none() && a.fill_at(Some(9)).is_none());
+        assert_eq!(a.item_of_kind(Some(1), false), Some(1));
+        assert_eq!(a.item_of_kind(Some(1), true), None);
+        assert_eq!(a.fill_for(Some(1)).unwrap().paint, Paint::None);
+        assert!(a.set_fill_at(Some(0), Paint::solid(Color::BLACK)));
+        assert!(!a.set_stroke_at(Some(0), Paint::None));
+        assert_eq!(a.fill_at(Some(0)).unwrap().paint, Paint::solid(Color::BLACK));
+        a.effects_mut(Some(1)).unwrap().push(Effect { id: "distort.roughen".into(), params: serde_json::Value::Null, visible: true });
+        assert_eq!(a.effects_at(Some(1)).unwrap().len(), 1);
+        assert!(a.effects_at(None).unwrap().is_empty() && a.effects_mut(Some(3)).is_none());
+        assert_eq!((a.items[1].kind_name(), a.items[2].kind_name()), ("stroke", "fill"));
+    }
+
+    #[test]
+    fn basic_means_one_plain_fill_and_stroke() {
+        let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 1.0));
+        let mut a = Appearance { items: vec![stroke(), stroke()], effects: vec![] };
+        assert!(!a.is_basic(), "two strokes");
+        a.items.pop();
+        assert!(a.is_basic() && Appearance::default().is_basic());
+        let mut b = Appearance::default_art();
+        b.stroke_mut().unwrap().visible = false;
+        assert!(!b.is_basic(), "a hidden stroke");
+        let mut c = Appearance::default_art();
+        c.fill_mut().unwrap().opacity = 0.5;
+        assert!(!c.is_basic(), "fill opacity");
+        let mut d = Appearance::default_art();
+        d.items.push(AppearanceItem::Fill(FillLayer::new(Paint::None)));
+        assert!(!d.is_basic(), "two fills");
+        let mut e = Appearance::default_art();
+        e.effects.push(Effect { id: "distort.roughen".into(), params: serde_json::Value::Null, visible: true });
+        assert!(!e.is_basic(), "an effect");
+    }
+
+    #[test]
     fn set_creates_missing() {
         let mut a = Appearance::default();
         a.set_fill(Paint::solid(Color::BLACK));
@@ -354,6 +650,48 @@ mod tests {
         assert_eq!(p.at(0.5), (1.0, 1.0));
         assert_eq!(p.at(0.25), (0.5, 0.5));
         assert_eq!(p.at(2.0), (0.0, 0.0));
+    }
+
+    #[test]
+    fn profile_presets_round_trip_their_ids() {
+        for p in WidthProfile::PRESETS {
+            let prof = WidthProfile::preset(p.id).unwrap();
+            assert_eq!(prof.preset_id(), Some(p.id));
+            assert_eq!(WidthProfile::id_of(Some(&prof)), p.id);
+        }
+        assert_eq!(WidthProfile::id_of(None), "uniform");
+        assert_eq!(WidthProfile::id_of(Some(&WidthProfile { points: vec![(0.0, 0.3, 0.3)] })), "custom");
+        assert!(WidthProfile::preset("nope").is_none());
+        assert_eq!(WidthProfile::lens().points, vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]);
+    }
+
+    #[test]
+    fn arrow_align_defaults_to_extend_and_round_trips() {
+        let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+        assert_eq!(st.arrow_align, ArrowAlign::Extend);
+        // The default is not written, so older readers see the same JSON as before.
+        assert!(!serde_json::to_string(&st).unwrap().contains("arrow_align"));
+        let old: StrokeLayer = serde_json::from_str(r#"{"paint":{"type":"none"},"width":2.0}"#).unwrap();
+        assert_eq!(old.arrow_align, ArrowAlign::Extend);
+        st.arrow_align = ArrowAlign::Tip;
+        let back: StrokeLayer = serde_json::from_str(&serde_json::to_string(&st).unwrap()).unwrap();
+        assert_eq!(back, st);
+    }
+
+    #[test]
+    fn outset_covers_arrowheads() {
+        let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+        a.stroke_mut().unwrap().join = LineJoin::Round;
+        assert_eq!(a.outset(), 2.0);
+        let st = a.stroke_mut().unwrap();
+        st.end_arrow = Some(Arrowhead::Triangle);
+        st.arrow_scale = (100.0, 200.0);
+        assert_eq!(st.arrow_weight(false), 4.0);
+        assert_eq!(st.arrow_weight(true), 8.0);
+        // A 32 pt head whose tip sits up to its length (plus the cap) past the end point.
+        assert_eq!(a.outset(), 4.5 * 8.0 + 2.0);
+        a.stroke_mut().unwrap().width = 0.01;
+        assert_eq!(a.stroke().unwrap().arrow_weight(true), 0.25, "heads keep a minimum size");
     }
 
     #[test]

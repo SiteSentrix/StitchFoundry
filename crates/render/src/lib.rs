@@ -12,22 +12,22 @@ mod live;
 mod paint;
 mod pattern;
 pub mod proof;
-mod width;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
+use vectorcraft_doc::appearance::stroke_paint_bounds;
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
 use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
+pub use effects::stroke::width_outline;
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
 pub use vello_cpu;
-pub use width::width_outline;
 
 /// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
 /// addresses at most `u16::MAX` pixels per side (and panics at that edge).
@@ -73,6 +73,8 @@ pub struct RenderOptions {
     pub overprint_preview: bool,
     /// Trim View: clip the artwork to the artboards (nothing on the pasteboard is drawn).
     pub trim: bool,
+    /// Leave template layers out (exports and thumbnails: templates are guides, not artwork).
+    pub skip_templates: bool,
 }
 
 impl Default for RenderOptions {
@@ -86,6 +88,7 @@ impl Default for RenderOptions {
             proof: None,
             overprint_preview: false,
             trim: false,
+            skip_templates: false,
         }
     }
 }
@@ -195,9 +198,14 @@ struct GeomEntry {
     stamp: u64,
 }
 
+/// A clipping path (kept alive so its address can't be reused) and the region it clips to.
+type ClipEntry = (Arc<Node>, Option<Arc<(BezPath, FillRule)>>);
+
 /// Reusable renderer (keeps the render context, decoded images and glyph caches between frames).
 pub struct Renderer {
     texts: PtrMap<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// Clip regions per clipping path (see [`Self::clip_of`]).
+    clips: PtrMap<usize, ClipEntry>,
     /// Context reused when rendering single-threaded (`threads == 0`).
     ctx_st: Option<RenderContext>,
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
@@ -254,6 +262,7 @@ impl Renderer {
     pub fn new() -> Self {
         Self {
             texts: PtrMap::default(),
+            clips: PtrMap::default(),
             ctx_st: None,
             threads: default_threads(),
             geom: PtrMap::default(),
@@ -352,12 +361,13 @@ impl Renderer {
         Rendered { width: w as u32, height: h as u32, pixels }
     }
 
-    /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white.
+    /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white,
+    /// as exported: template layers are left out.
     pub fn render_region(&mut self, doc: &Document, region: Rect, scale: f64, white: bool) -> Rendered {
         let w = (region.width() * scale).round().max(1.0) as u32;
         let h = (region.height() * scale).round().max(1.0) as u32;
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
-        let opts = RenderOptions { background: white.then_some([255, 255, 255, 255]), ..Default::default() };
+        let opts = RenderOptions { background: white.then_some([255, 255, 255, 255]), skip_templates: true, ..Default::default() };
         self.render(doc, w, h, view, &opts)
     }
 
@@ -411,6 +421,23 @@ impl Renderer {
         b
     }
 
+    /// Cached region a clip group's clipping path `a` clips to ([`effects::clip_outline`]):
+    /// outlining text and uniting shapes is too slow to repeat every frame.
+    fn clip_of(&mut self, a: &Arc<Node>) -> Option<Arc<(BezPath, FillRule)>> {
+        let key = Arc::as_ptr(a) as usize;
+        if let Some((node, region)) = self.clips.get(&key)
+            && Arc::ptr_eq(node, a)
+        {
+            return region.clone();
+        }
+        let region = effects::clip_outline(a).map(Arc::new);
+        if self.clips.len() > 1024 {
+            self.clips.clear();
+        }
+        self.clips.insert(key, (a.clone(), region.clone()));
+        region
+    }
+
     /// Cached BezPath of a path node.
     fn path_of(&mut self, a: &Arc<Node>) -> Option<Arc<BezPath>> {
         let key = Arc::as_ptr(a) as usize;
@@ -427,7 +454,8 @@ impl Renderer {
     }
 
     fn draw_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
-        if !a.visible || f.opts.hidden.contains(&a.id) {
+        let skipped_template = f.opts.skip_templates && matches!(a.kind, NodeKind::Layer { template: true, .. });
+        if !a.visible || skipped_template || f.opts.hidden.contains(&a.id) {
             return;
         }
         match self.bounds_of(a) {
@@ -545,23 +573,23 @@ impl Renderer {
                     self.draw_arc(ctx, f, c);
                 }
             }
+            NodeKind::Group { children, clip: true } if outline => {
+                for c in children {
+                    self.draw_node(ctx, f, c, false);
+                }
+            }
             NodeKind::Group { children, clip: true } => {
-                let clip = children.first().and_then(|c| c.path_data()).map(|p| p.to_bezpath());
-                match (clip, outline) {
-                    (Some(clip), false) => {
-                        ctx.set_transform(f.view);
-                        ctx.set_fill_rule(peniko::Fill::NonZero);
-                        ctx.push_clip_layer(&clip);
-                        for c in children.iter().skip(1) {
-                            self.draw_arc(ctx, f, c);
-                        }
-                        ctx.pop_layer();
+                // Nothing to clip by hides the clipped art (as in the SVG and PDF output).
+                if let Some((clip, rest)) = children.split_first()
+                    && let Some(region) = self.clip_of(clip)
+                {
+                    ctx.set_transform(f.view);
+                    ctx.set_fill_rule(fill_rule(region.1));
+                    ctx.push_clip_layer(&region.0);
+                    for c in rest {
+                        self.draw_arc(ctx, f, c);
                     }
-                    _ => {
-                        for c in children {
-                            self.draw_node(ctx, f, c, false);
-                        }
-                    }
+                    ctx.pop_layer();
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {
@@ -667,57 +695,36 @@ impl Renderer {
     }
 
     fn draw_stroke(&mut self, ctx: &mut RenderContext, f: &Frame, bp: &BezPath, rule: FillRule, st: &StrokeLayer, bounds: Rect) {
-        let layered = st.opacity < 1.0 || st.blend != vectorcraft_color::BlendMode::Normal || st.align == StrokeAlign::Outside;
+        let pieces = effects::stroke::stroke_pieces(bp, st);
+        // The line and its heads overlap: they take the opacity once, in one layer, instead of
+        // each folding it into its paint.
+        let folded = if pieces.heads.is_empty() { 1.0 } else { std::mem::replace(&mut self.alpha, 1.0) };
+        let opacity = st.opacity * folded;
+        let layered = opacity < 1.0 || st.blend != vectorcraft_color::BlendMode::Normal || st.align == StrokeAlign::Outside;
         if layered {
             ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, Some(blend_mode(st.blend)), Some(st.opacity), None, None);
+            ctx.push_layer(None, Some(blend_mode(st.blend)), Some(opacity), None, None);
         }
         ctx.set_transform(f.view);
-        let closed = bp.elements().last().is_some_and(|e| matches!(e, kurbo::PathEl::ClosePath));
-        let width = match st.align {
-            StrokeAlign::Center => st.width,
-            _ if closed => st.width * 2.0,
-            _ => st.width,
-        };
-        // Keep hairlines visible when zoomed far out (Illustrator shows at least ~1 device pixel).
-        let width = width.max(f.px * 0.5);
-        let mut stroke = kurbo::Stroke::new(width)
-            .with_join(match st.join {
-                LineJoin::Miter => kurbo::Join::Miter,
-                LineJoin::Round => kurbo::Join::Round,
-                LineJoin::Bevel => kurbo::Join::Bevel,
-            })
-            .with_caps(match st.cap {
-                LineCap::Butt => kurbo::Cap::Butt,
-                LineCap::Round => kurbo::Cap::Round,
-                LineCap::Square => kurbo::Cap::Square,
-            })
-            .with_miter_limit(st.miter_limit);
-        if let Some(d) = &st.dash
-            && d.is_dashed()
-        {
-            let mut pat = d.pattern.clone();
-            if pat.len() % 2 == 1 {
-                pat.extend(pat.clone());
-            }
-            stroke = stroke.with_dashes(d.offset, pat);
-        }
-        ctx.set_stroke(stroke.clone());
+        let closed = effects::stroke::is_closed(bp);
+        // Keep hairlines visible when zoomed far out (at least ~1 device pixel).
+        let width = effects::stroke::aligned_width(st, closed).max(f.px * 0.5);
         let inside = st.align == StrokeAlign::Inside && closed;
         if inside {
             ctx.set_fill_rule(fill_rule(rule));
             ctx.push_clip_layer(bp);
         }
-        if paint::set_paint(ctx, &st.paint, bounds.inflate(st.width / 2.0, st.width / 2.0), f.doc) {
+        // One paint box for the line and the heads, so a gradient runs on into the heads.
+        let paint_bounds = bounds.inflate(st.width / 2.0, st.width / 2.0);
+        if paint::set_paint(ctx, &st.paint, paint_bounds, f.doc) {
             self.fold_alpha(ctx, &st.paint);
-            if let Some(o) = width::outline_for(bp, st, f.px * 0.25) {
-                ctx.set_fill_rule(peniko::Fill::NonZero);
-                ctx.fill_path(&o);
-            } else if let Some(o) = self.cached_stroke(f, bp, st, &stroke) {
-                ctx.set_fill_rule(peniko::Fill::NonZero);
-                ctx.fill_path(&o);
-            } else {
-                ctx.stroke_path(bp);
+            ctx.set_fill_rule(peniko::Fill::NonZero);
+            match self.cached_stroke(f, &pieces.line, st, width) {
+                Some(o) => ctx.fill_path(&o),
+                None => ctx.fill_path(&effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
+            }
+            for head in &pieces.heads {
+                ctx.fill_path(&head.outline);
             }
         }
         if inside {
@@ -731,36 +738,29 @@ impl Renderer {
             ctx.fill_path(bp);
             ctx.set_blend_mode(BlendMode::default());
         }
-        // Arrowheads.
-        if st.start_arrow.is_some() || st.end_arrow.is_some() {
-            for (arrow, head) in paint::arrowheads(bp, st) {
-                let _ = arrow;
-                if paint::set_paint(ctx, &st.paint, bounds, f.doc) {
-                    ctx.set_fill_rule(peniko::Fill::NonZero);
-                    ctx.fill_path(&head);
-                }
-            }
-        }
         if layered {
             ctx.pop_layer();
         }
+        if !pieces.heads.is_empty() {
+            self.alpha = folded;
+        }
     }
 
-    /// The stroke of the fast-path node `self.cur` expanded to a fill outline in document space,
-    /// cached across frames. The tolerance (vello's 0.25 device px) is bucketed to powers of two,
-    /// never coarser than needed, so zooming reuses outlines until the level changes.
-    fn cached_stroke(&mut self, f: &Frame, bp: &BezPath, st: &StrokeLayer, stroke: &kurbo::Stroke) -> Option<Arc<BezPath>> {
+    /// The line part of a stroke of the fast-path node `self.cur` (see
+    /// [`effects::stroke::line_outline`]), cached across frames. The tolerance (vello's 0.25
+    /// device px) is bucketed to powers of two, never coarser than needed, so zooming reuses
+    /// outlines until the level changes.
+    fn cached_stroke(&mut self, f: &Frame, line: &BezPath, st: &StrokeLayer, width: f64) -> Option<Arc<BezPath>> {
         let node = self.cur.clone()?;
         let level = (f.px * 0.25).log2().floor() as i32;
-        let key = (st as *const StrokeLayer as usize, stroke.width.to_bits(), level);
+        let key = (st as *const StrokeLayer as usize, width.to_bits(), level);
         if let Some(e) = self.strokes.get_mut(&key)
             && Arc::ptr_eq(&e.node, &node)
         {
             e.stamp = self.stamp;
             return Some(e.outline.clone());
         }
-        let tolerance = 2f64.powi(level);
-        let outline = Arc::new(kurbo::stroke(bp.iter(), stroke, &kurbo::StrokeOpts::default(), tolerance));
+        let outline = Arc::new(effects::stroke::line_outline(line, st, width, 2f64.powi(level)));
         self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp });
         Some(outline)
     }
@@ -810,7 +810,10 @@ impl Renderer {
                 self.fold_alpha(ctx, &run.style.fill);
                 ctx.fill_path(path);
             }
-            if !run.style.stroke.is_none() && run.style.stroke_width > 0.0 && paint::set_paint(ctx, &run.style.stroke, g.bounds, f.doc) {
+            if !run.style.stroke.is_none()
+                && run.style.stroke_width > 0.0
+                && paint::set_paint(ctx, &run.style.stroke, stroke_paint_bounds(g.bounds, run.style.stroke_width), f.doc)
+            {
                 ctx.set_stroke(kurbo::Stroke::new(run.style.stroke_width));
                 ctx.stroke_path(path);
             }
@@ -818,18 +821,27 @@ impl Renderer {
         if !n.appearance.items.is_empty() {
             let mut all = g.all.clone();
             all.apply_affine(t.xf);
-            for item in &n.appearance.items {
+            for item in n.appearance.items.iter().filter(|i| i.visible() && !i.paint().is_none()) {
+                // Each item composites with its own opacity and blend mode.
+                let layered = item.opacity() < 1.0 || item.blend() != vectorcraft_color::BlendMode::Normal;
+                if layered {
+                    ctx.set_transform(Affine::IDENTITY);
+                    ctx.push_layer(None, Some(blend_mode(item.blend())), Some(item.opacity()), None, None);
+                }
                 ctx.set_transform(f.view);
                 match item {
-                    AppearanceItem::Fill(fl) if fl.visible && paint::set_paint(ctx, &fl.paint, tb, f.doc) => {
+                    AppearanceItem::Fill(fl) if paint::set_paint(ctx, &fl.paint, tb, f.doc) => {
                         ctx.set_fill_rule(peniko::Fill::NonZero);
                         ctx.fill_path(&all);
                     }
-                    AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && paint::set_paint(ctx, &st.paint, tb, f.doc) => {
+                    AppearanceItem::Stroke(st) if st.width > 0.0 && paint::set_paint(ctx, &st.paint, st.paint_bounds(tb), f.doc) => {
                         ctx.set_stroke(kurbo::Stroke::new(st.width));
                         ctx.stroke_path(&all);
                     }
                     _ => {}
+                }
+                if layered {
+                    ctx.pop_layer();
                 }
             }
         }
@@ -998,3 +1010,5 @@ fn now() -> u64 {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_clip;

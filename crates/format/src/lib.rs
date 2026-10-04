@@ -59,14 +59,16 @@ struct File {
     images: BTreeMap<String, Image>,
 }
 
-/// Serialize a document (pretty = human-diffable).
+/// Serialize a document (pretty = human-diffable). Editing-mode working copies are left out
+/// ([`Document::without_edit_modes`]).
 pub fn save(doc: &Document, pretty: bool) -> Vec<u8> {
+    let doc = doc.without_edit_modes();
     let images = doc.images.iter().map(|(k, b)| (k.clone(), Image { mime: b.mime.clone(), data: base64_encode(&b.bytes) })).collect();
     let f = File {
         format: "vectorcraft".into(),
         version: VERSION,
         generator: format!("VectorCraft {}", env!("CARGO_PKG_VERSION")),
-        document: doc.clone(),
+        document: doc.into_owned(),
         images,
     };
     if pretty { serde_json::to_vec_pretty(&f).unwrap_or_default() } else { serde_json::to_vec(&f).unwrap_or_default() }
@@ -95,6 +97,8 @@ pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
         let bytes = base64_decode(&img.data).ok_or_else(|| FormatError::BadImage(k.clone()))?;
         doc.images.insert(k, ImageBlob { mime: img.mime, bytes: Arc::new(bytes) });
     }
+    // Saved mid-edit by an older version: drop the opacity-mask editing layer.
+    doc.drop_edit_modes();
     doc.fix_next_id();
     Ok(doc)
 }

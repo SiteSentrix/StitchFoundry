@@ -92,24 +92,19 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let units = st.doc.units;
                 let first = sel.first().and_then(|id| st.doc.node(*id)).cloned();
                 let anchor_mode = !st.selection.anchors.is_empty();
-                let label = match (&first, sel.len()) {
-                    (None, _) => "No Selection".to_string(),
-                    (_, n) if n > 1 => "Mixed Objects".to_string(),
-                    (Some(_), _) if anchor_mode => "Anchor Point".to_string(),
-                    (Some(n), _) => match &n.kind {
-                        NodeKind::Text(_) => "Type".into(),
-                        NodeKind::Image(_) => "Embedded".into(),
-                        NodeKind::Path { live: Some(_), .. } => n.kind_label().to_string(),
-                        _ => n.kind_label().to_string(),
-                    },
+                let label = match &first {
+                    Some(_) if sel.len() == 1 && anchor_mode => "Anchor Point",
+                    Some(n) if sel.len() == 1 && matches!(n.kind, NodeKind::Image(_)) => "Embedded",
+                    _ => crate::panels::appearance::object_label(app),
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 ui.add_space(6.0);
-                let (fill, stroke, weight, opacity) = match &first {
-                    Some(n) => {
-                        (n.appearance.fill_paint(), n.appearance.stroke_paint(), n.appearance.stroke().map(|s| s.width).unwrap_or(0.0), n.opacity)
+                let (fill, stroke) = crate::panels::current_paints(app);
+                let (weight, opacity) = match &first {
+                    Some(_) => {
+                        (crate::panels::current_stroke(app).map_or(0.0, |s| s.width), crate::panels::current_transparency(app).map_or(1.0, |t| t.0))
                     }
-                    None => (app.session.paint.fill.clone(), app.session.paint.stroke.clone(), app.session.paint.stroke_width, 1.0),
+                    None => (app.session.paint.stroke_width, 1.0),
                 };
                 if chip_button(ui, &fill, false, "Fill").clicked() {
                     app.run("paint.toggleActive", json!({})).ok();
@@ -134,7 +129,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, 56.0)
                     && !sel.is_empty()
                 {
-                    app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0) / 100.0})).ok();
+                    app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
                 }
                 ui.separator();
                 if sel.is_empty() {

@@ -3,9 +3,9 @@
 
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Arrowhead, LineCap, LineJoin, StrokeAlign, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, Unit, WidthProfile};
 
-use super::{first_selected, pstate, set_pstate};
+use super::{current_stroke, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -13,28 +13,20 @@ use crate::{VectorcraftApp, icons};
 pub const WEIGHT_PRESETS: [f64; 22] =
     [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
 
-/// Width profile presets: (id for `stroke.set`, label).
-pub const PROFILES: [(&str, &str); 4] =
-    [("uniform", "Uniform"), ("lens", "Width Profile 1"), ("taperStart", "Width Profile 4"), ("taperEnd", "Width Profile 5")];
-
-/// Which preset a stroke's profile is (None profile = uniform).
-pub fn profile_id(p: Option<&WidthProfile>) -> &'static str {
-    let Some(p) = p else { return "uniform" };
-    for (id, prof) in [("lens", WidthProfile::lens()), ("taperStart", WidthProfile::taper_start()), ("taperEnd", WidthProfile::taper_end())] {
-        if prof.points == p.points {
-            return id;
-        }
-    }
-    "custom"
+/// The silhouette drawn for profile `id` (None draws the plain uniform bar).
+fn profile_of(id: &str) -> Option<WidthProfile> {
+    WidthProfile::preset(id).filter(|_| id != "uniform")
 }
 
-fn profile_of(id: &str) -> Option<WidthProfile> {
-    match id {
-        "lens" => Some(WidthProfile::lens()),
-        "taperStart" => Some(WidthProfile::taper_start()),
-        "taperEnd" => Some(WidthProfile::taper_end()),
-        _ => None,
-    }
+/// The Arrowheads Align buttons: (alignment, `stroke.set` value, icon, tooltip).
+const ARROW_ALIGN: [(ArrowAlign, &str, &str, &str); 2] = [
+    (ArrowAlign::Extend, "extend", "dc-arrow-extend", "Tip extends past the end point"),
+    (ArrowAlign::Tip, "tip", "dc-arrow-tip", "Tip on the end point"),
+];
+
+/// Which Align button is on, and whether they are usable (only a stroke with a head can be aligned).
+fn arrow_align_state(st: Option<&StrokeLayer>) -> (ArrowAlign, bool) {
+    st.map_or((ArrowAlign::default(), false), |s| (s.arrow_align, s.start_arrow.is_some() || s.end_arrow.is_some()))
 }
 
 /// Dash pattern → the panel's six dash/gap fields (None = empty field).
@@ -72,17 +64,13 @@ fn arrow_label(a: Option<Arrowhead>) -> String {
     }
 }
 
-fn stroke_now(app: &VectorcraftApp) -> Option<StrokeLayer> {
-    first_selected(app).and_then(|n| n.appearance.stroke().cloned())
-}
-
 fn set(app: &mut VectorcraftApp, p: Value) {
     app.run("stroke.set", p).ok();
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let st = stroke_now(app);
+    let st = current_stroke(app);
     let weight = st.as_ref().map(|s| s.width).unwrap_or(app.session.paint.stroke_width);
     let hidden: bool = pstate(ui.ctx(), "stroke-hide-options");
     let label_w = 64.0;
@@ -165,19 +153,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space((ui.available_width() - 56.0).max(0.0));
         let on = dash.is_some();
-        if widgets::icon_button_enabled(ui, "dc-dash-exact", "Preserves exact dash and gap lengths", on && !align_corners, on, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-dash-exact", "Exact dash lengths", on && !align_corners, on, 24.0).clicked() {
             set(app, json!({"dash": dash_pattern(&fields), "alignDashes": false}));
         }
-        if widgets::icon_button_enabled(
-            ui,
-            "dc-dash-align",
-            "Aligns dashes to corners and path ends, adjusting lengths to fit",
-            on && align_corners,
-            on,
-            24.0,
-        )
-        .clicked()
-        {
+        if widgets::icon_button_enabled(ui, "dc-dash-align", "Fit dashes to corners and ends", on && align_corners, on, 24.0).clicked() {
             set(app, json!({"dash": dash_pattern(&fields), "alignDashes": true}));
         }
     });
@@ -221,11 +200,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let scale = st.as_ref().map(|s| s.arrow_scale).unwrap_or((100.0, 100.0));
     let linked: bool = pstate(ui.ctx(), "arrow-scale-link");
+    // Scale and Align only mean something for a stroke with a head.
+    let (arrow_align, has_head) = arrow_align_state(st.as_ref());
     ui.horizontal(|ui| {
         row_label(ui, "Scale:");
-        let on = st.is_some() && (sa.is_some() || ea.is_some());
         let mut ns = None;
-        ui.add_enabled_ui(on, |ui| {
+        ui.add_enabled_ui(has_head, |ui| {
             if let Some(v) = widgets::plain_field(ui, "arrow-scale-s", scale.0, "%", 0, 56.0) {
                 ns = Some((v, if linked { v } else { scale.1 }));
             }
@@ -242,12 +222,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.horizontal(|ui| {
         row_label(ui, "Align:");
-        widgets::icon_button_enabled(ui, "dc-cap-square", "Extend arrow tip beyond end of path (on the roadmap)", true, false, 22.0);
-        widgets::icon_button_enabled(ui, "dc-cap-butt", "Place arrow tip at end of path (on the roadmap)", false, false, 22.0);
+        for (v, name, icon, tip) in ARROW_ALIGN {
+            if widgets::icon_button_enabled(ui, icon, tip, arrow_align == v, has_head, 22.0).clicked() {
+                set(app, json!({"arrowAlign": name}));
+            }
+        }
     });
     widgets::divider(ui);
     // Profile.
-    let pid = profile_id(st.as_ref().and_then(|s| s.profile.as_ref()));
+    let pid = WidthProfile::id_of(st.as_ref().and_then(|s| s.profile.as_ref()));
     ui.horizontal(|ui| {
         row_label(ui, "Profile:");
         if let Some(id) = profile_dropdown(ui, pid) {
@@ -365,7 +348,7 @@ fn profile_dropdown(ui: &mut Ui, cur: &str) -> Option<&'static str> {
     let resp = resp.on_hover_text("Variable Width Profile");
     let mut out = None;
     egui::Popup::menu(&resp).show(|ui| {
-        for (id, label) in PROFILES {
+        for ProfilePreset { id, label, .. } in WidthProfile::PRESETS {
             let (row, rr) = ui.allocate_exact_size(vec2(170.0, 26.0), Sense::click());
             if id == cur {
                 ui.painter().rect_filled(row, 0.0, t.row_selected);
@@ -390,7 +373,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     menu_item(ui, "Add to Profiles", false, false);
     menu_item(ui, "Delete Profile", false, false);
-    if menu_item(ui, "Reset Profile", stroke_now(app).is_some_and(|s| s.profile.is_some()), false) {
+    if menu_item(ui, "Reset Profile", current_stroke(app).is_some_and(|s| s.profile.is_some()), false) {
         set(app, json!({"profile": "uniform"}));
     }
 }
@@ -414,11 +397,51 @@ mod tests {
     }
 
     #[test]
-    fn profile_ids() {
-        assert_eq!(profile_id(None), "uniform");
-        assert_eq!(profile_id(Some(&WidthProfile::lens())), "lens");
-        assert_eq!(profile_id(Some(&WidthProfile::taper_end())), "taperEnd");
-        assert_eq!(profile_id(Some(&WidthProfile { points: vec![(0.0, 0.3, 0.3)] })), "custom");
+    fn profile_silhouettes_and_arrow_labels() {
+        assert!(profile_of("uniform").is_none());
+        assert_eq!(profile_of("lens"), Some(WidthProfile::lens()));
+        assert!(profile_of("custom").is_none());
         assert_eq!(arrow_label(Some(Arrowhead::CircleOpen)), "Circle (open)");
+    }
+
+    #[test]
+    fn arrow_align_buttons_need_a_head() {
+        let mut st = StrokeLayer::new(vectorcraft_color::Paint::None, 1.0);
+        assert_eq!(arrow_align_state(None), (ArrowAlign::Extend, false));
+        assert_eq!(arrow_align_state(Some(&st)), (ArrowAlign::Extend, false));
+        st.start_arrow = Some(Arrowhead::Bar);
+        st.arrow_align = ArrowAlign::Tip;
+        assert_eq!(arrow_align_state(Some(&st)), (ArrowAlign::Tip, true));
+        for (_, _, icon, _) in ARROW_ALIGN {
+            assert!(icons::exists(icon), "{icon}");
+        }
+    }
+
+    /// Run the panel and its ≡ menu for one headless frame.
+    fn frame(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            show(app, ui);
+            menu(app, ui);
+        });
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn panel_draws_for_lines_with_and_without_heads() {
+        use vectorcraft_engine::Session;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let r = |app: &mut VectorcraftApp, id: &str, p: Value| app.session.execute(id, &p).unwrap();
+        r(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        frame(&mut app);
+        r(&mut app, "shape.line", json!({"x1": 10, "y1": 50, "x2": 90, "y2": 50}));
+        frame(&mut app);
+        for p in [json!({"endArrow": "ArrowOpen", "arrowAlign": "tip"}), json!({"profile": "lens"}), json!({"dash": [0, 6], "cap": "round"})] {
+            r(&mut app, "stroke.set", p);
+            frame(&mut app);
+        }
+        let st = current_stroke(&app).unwrap();
+        assert_eq!((st.end_arrow, st.arrow_align), (Some(Arrowhead::ArrowOpen), ArrowAlign::Tip));
+        assert_eq!(WidthProfile::id_of(st.profile.as_ref()), "lens");
     }
 }
