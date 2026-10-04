@@ -39,6 +39,15 @@ pub struct Dash {
     pub align_corners: bool,
 }
 
+impl Dash {
+    /// Whether the pattern draws dashes. As in PDF (`d` operator) and SVG (`stroke-dasharray`), a
+    /// pattern with a negative or non-finite value, or whose values are all zero, is invalid and the
+    /// stroke is drawn solid.
+    pub fn is_dashed(&self) -> bool {
+        self.pattern.iter().all(|v| v.is_finite() && *v >= 0.0) && self.pattern.iter().any(|v| *v > 0.0)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Arrowhead {
     Triangle,

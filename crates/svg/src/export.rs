@@ -413,8 +413,7 @@ impl Writer<'_> {
             LineJoin::Bevel => p.push(("stroke-linejoin", "bevel".into())),
         }
         if let Some(d) = &s.dash
-            && !d.pattern.is_empty()
-            && d.pattern.iter().any(|v| *v > 0.0)
+            && d.is_dashed()
         {
             p.push(("stroke-dasharray", d.pattern.iter().map(|v| self.num(*v)).collect::<Vec<_>>().join(" ")));
             if d.offset != 0.0 {

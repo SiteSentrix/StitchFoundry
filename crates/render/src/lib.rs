@@ -669,7 +669,7 @@ impl Renderer {
             })
             .with_miter_limit(st.miter_limit);
         if let Some(d) = &st.dash
-            && d.pattern.iter().any(|v| *v > 0.0)
+            && d.is_dashed()
         {
             let mut pat = d.pattern.clone();
             if pat.len() % 2 == 1 {

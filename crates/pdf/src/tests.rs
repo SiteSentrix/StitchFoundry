@@ -428,6 +428,32 @@ fn import_handmade_pdf() {
 }
 
 #[test]
+fn import_invalid_dash_array_strokes_solid() {
+    // A dash array with a negative value is invalid (PDF 32000-1 §8.4.3.6): the line is solid. A valid
+    // array next to it stays dashed.
+    let content = "0 0 1 RG 4 w [-5 3] 0 d 10 10 m 90 10 l S [6 2] 1 d 10 50 m 90 50 l S";
+    let d = import(&handmade_pdf(content, "[0 0 100 100]")).unwrap();
+    let l = leaves(&d);
+    assert_eq!(l.len(), 2);
+    let dash = |n: &Node| match &n.appearance.items[..] {
+        [.., AppearanceItem::Stroke(st)] => st.dash.clone(),
+        items => panic!("no stroke: {items:?}"),
+    };
+    assert_eq!(dash(l[0]), None);
+    assert_eq!(dash(l[1]).map(|d| d.pattern), Some(vec![6.0, 2.0]));
+    // And the exporter never writes an invalid array back.
+    let mut d2 = doc(100.0, 100.0);
+    let mut n = rect_node(Rect::new(10.0, 10.0, 90.0, 90.0), Color::rgb(1.0, 0.0, 0.0));
+    n.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
+    if let Some(AppearanceItem::Stroke(st)) = n.appearance.items.last_mut() {
+        st.dash = Some(Dash { pattern: vec![-5.0, 3.0], offset: 0.0, align_corners: false });
+    }
+    add(&mut d2, n);
+    let s = uncompressed(&d2);
+    assert!(!s.contains("-5 3]") && !s.contains("[0 3]"), "invalid dash written:\n{s}");
+}
+
+#[test]
 fn import_clip_from_handmade_pdf() {
     let content = "q 0 0 50 50 re W n 1 0 0 rg 0 0 100 100 re f Q";
     let d = import(&handmade_pdf(content, "[0 0 100 100]")).unwrap();

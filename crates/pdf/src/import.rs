@@ -189,13 +189,9 @@ fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f64) -> Stro
         kurbo::Join::Bevel => LineJoin::Bevel,
     };
     st.miter_limit = p.miter_limit as f64;
-    if p.dash_array.iter().any(|v| *v > 0.0) {
-        st.dash = Some(Dash {
-            pattern: p.dash_array.iter().map(|v| *v as f64 * scale).collect(),
-            offset: p.dash_offset as f64 * scale,
-            align_corners: false,
-        });
-    }
+    let dash = Dash { pattern: p.dash_array.iter().map(|v| *v as f64 * scale).collect(), offset: p.dash_offset as f64 * scale, align_corners: false };
+    // An invalid dash array (a negative value, or all zeros) strokes solid.
+    st.dash = dash.is_dashed().then_some(dash);
     st
 }
 
