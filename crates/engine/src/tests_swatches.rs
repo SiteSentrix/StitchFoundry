@@ -204,7 +204,7 @@ fn swatch_list_reports_kinds_and_groups() {
     let mut s = session();
     let all = run(&mut s, "swatch.list", json!({}));
     let list = all["swatches"].as_array().unwrap();
-    assert_eq!(list.len(), doc(&s).swatches_iter().count());
+    assert_eq!(list.len(), doc(&s).swatches_iter().count() + 1, "and the built-in [Registration]");
     let find = |n: &str| list.iter().find(|w| w["name"] == n).unwrap().clone();
     assert_eq!(find("[None]")["kind"], "none");
     assert_eq!(find("Red")["kind"], "color");

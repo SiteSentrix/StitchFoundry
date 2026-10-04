@@ -17,6 +17,16 @@ pub struct Swatch {
     pub spot: bool,
 }
 
+/// The name of the built-in Registration swatch ([`registration`]).
+pub const REGISTRATION: &str = "[Registration]";
+
+/// The built-in Registration swatch: a global colour of 100% of every ink that prints on every
+/// plate, process and spot (printer's marks). Every document has it; it can't be edited or deleted.
+pub fn registration() -> &'static Swatch {
+    static S: std::sync::OnceLock<Swatch> = std::sync::OnceLock::new();
+    S.get_or_init(|| Swatch { name: REGISTRATION.into(), paint: Paint::solid(Color::cmyk(1.0, 1.0, 1.0, 1.0)), global: true, spot: false })
+}
+
 impl Swatch {
     /// A tint swatch's base swatch and tint: its colour links to another (global) swatch.
     pub fn tint_of(&self) -> Option<(&str, f32)> {
@@ -24,6 +34,10 @@ impl Swatch {
             Paint::Solid { swatch: Some(base), tint, .. } => Some((base, *tint)),
             _ => None,
         }
+    }
+    /// None and Registration: built in, they can't be edited, moved or deleted.
+    pub fn is_reserved(&self) -> bool {
+        self.paint.is_none() || self.name == REGISTRATION
     }
 }
 

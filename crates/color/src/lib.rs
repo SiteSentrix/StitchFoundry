@@ -328,6 +328,14 @@ impl Paint {
             _ => None,
         }
     }
+    /// The Registration colour: 100% of every ink, linked to [`swatch::REGISTRATION`].
+    pub fn registration() -> Self {
+        Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(swatch::REGISTRATION.into()), tint: 1.0 }
+    }
+    /// Is this a colour linked to the Registration swatch (it prints on every plate)?
+    pub fn is_registration(&self) -> bool {
+        matches!(self, Paint::Solid { swatch: Some(s), .. } if s == swatch::REGISTRATION)
+    }
     pub fn label(&self) -> String {
         match self {
             Paint::None => "None".into(),

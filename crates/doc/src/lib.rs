@@ -9,6 +9,7 @@ pub mod appearance;
 pub mod graph;
 pub mod hit;
 pub mod live;
+pub mod marks;
 pub mod node;
 pub mod overprint;
 pub mod pattern;

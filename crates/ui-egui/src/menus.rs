@@ -1848,9 +1848,15 @@ fn effect_menu() -> Vec<Item> {
         Sep,
         Item::Header("Vector Effects"),
     ];
-    // Submenus in Illustrator's order.
-    let order = ["3D and Materials", "Convert to Shape", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];
+    // Submenus (and Crop Marks, an item of its own) in the reference app's order.
+    let order =
+        ["3D and Materials", "Convert to Shape", "Crop Marks", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];
+    let top_level = |e: &vectorcraft_effects::EffectInfo| e.menu == ["Effect"] && order.contains(&e.label);
     for sub_name in order {
+        if let Some(e) = cat.iter().find(|e| top_level(e) && e.label == sub_name) {
+            out.push(Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })));
+            continue;
+        }
         let items: Vec<Item> = cat
             .iter()
             .filter(|e| e.menu.last().copied() == Some(sub_name))
@@ -1880,7 +1886,7 @@ fn effect_menu() -> Vec<Item> {
         }
     }
     // Anything not placed above (future effects) still shows up.
-    for e in cat.iter().filter(|e| !e.menu.last().is_some_and(|m| order.contains(m))) {
+    for e in cat.iter().filter(|e| !top_level(e) && !e.menu.last().is_some_and(|m| order.contains(m))) {
         out.push(Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })));
     }
     out

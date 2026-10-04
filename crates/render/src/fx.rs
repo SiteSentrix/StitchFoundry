@@ -48,10 +48,10 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 }
 
 /// Does `n` carry visible object-level effects that only apply through its art (type, images,
-/// symbol instances, live objects), or is it a group or layer with an appearance of its own (see
-/// [`Renderer::draw_object_fx`])?
+/// symbol instances, live objects; Crop Marks on anything), or is it a group or layer with an
+/// appearance of its own (see [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
-    (effects::needs_outline(n) && visible(&n.appearance.effects)) || effects::has_container_appearance(n)
+    (effects::needs_outline(n) && visible(&n.appearance.effects)) || effects::has_container_appearance(n) || effects::has_crop_marks(n)
 }
 
 /// Is `n` a group or layer (whose evaluated art keeps its knockout setting)?
@@ -136,6 +136,8 @@ pub(crate) fn visual_bounds(n: &Node) -> Option<Rect> {
 /// the subtree (a shadow can reach the view while its object is outside it).
 pub(crate) fn cull_bounds(n: &Node) -> Option<Rect> {
     match &n.kind {
+        // The object and its crop marks.
+        _ if effects::has_crop_marks(n) => effects::crop_marks_art(n).and_then(|art| cull_bounds(&art)),
         // The evaluated art (its fills, strokes and geometry effects) and the raster effects' reach.
         _ if effects::has_container_appearance(n) => {
             let art = effects::evaluate_container(n);
@@ -378,7 +380,8 @@ impl Renderer {
     /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
     fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
         let art = self.fx_art(f.doc, a, cache);
-        let rfx = effects::raster_effects(&a.appearance.effects);
+        // With Crop Marks, the object inside the art paints its own raster effects.
+        let rfx = if effects::has_crop_marks(a) { vec![] } else { effects::raster_effects(&a.appearance.effects) };
         match cull_bounds(&art) {
             Some(reach) if !f.opts.outline && !rfx.is_empty() => {
                 // Feather and Inner Glow clip to the art's outline.
@@ -413,7 +416,7 @@ impl Renderer {
             _ => None,
         };
         let container = is_container(a);
-        let art = match effects::reshape(a, symbol.as_ref()) {
+        let art = match effects::crop_marks_art(a).or_else(|| effects::reshape(a, symbol.as_ref())) {
             Some(r) => r,
             None if container => effects::evaluate_container(a).unwrap_or_else(|| (**a).clone()),
             None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_)) => (**a).clone(),

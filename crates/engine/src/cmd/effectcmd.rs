@@ -58,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it), type with effects or fills of its own is outlined; a group's or layer's own fills and strokes become objects among its members, which are expanded too. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids}",
+            "{ids?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (strokes outlined, brushed strokes their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; a group's or layer's own fills and strokes become objects among its members, which are expanded too. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids}",
             can_expand,
             expand_appearance
         ),
@@ -119,9 +119,13 @@ fn edit_effects(
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.apply";
     let id = str_param(p, "effect").or_else(|| str_param(p, "id")).ok_or_else(|| bad(C, "missing `effect` id"))?;
-    let params = p.get("params").cloned().unwrap_or(Value::Null);
+    let mut params = p.get("params").cloned().unwrap_or(Value::Null);
     if !params.is_null() && !params.is_object() {
         return Err(bad(C, "`params` must be an object"));
+    }
+    // Crop Marks take their style from the preferences when applied.
+    if id == effects::CROP_MARKS && params.get("style").is_none() {
+        params["style"] = json!(s.crop_mark_style().id());
     }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
@@ -368,6 +372,22 @@ fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush
     let Some(n) = d.node(id).cloned() else { return };
     let container = is_container(&n);
     if !expandable(&n) {
+        return;
+    }
+    // Crop Marks: a group of the object and its marks, then the object expands on its own.
+    if let Some(mut m) = effects::crop_marks_art(&n) {
+        let mut seen = std::collections::HashSet::from([id]);
+        for c in m.children_mut().into_iter().flatten() {
+            effects::fresh_ids(d, Arc::make_mut(c), &mut seen);
+        }
+        let object = m.children().and_then(|c| c.first()).map(|c| c.id);
+        if let Some(slot) = d.node_mut(id) {
+            *slot = m;
+            out.push(id);
+        }
+        if let Some(object) = object {
+            expand_node(d, object, brushes, out);
+        }
         return;
     }
     let image = raster_image(d, &n);

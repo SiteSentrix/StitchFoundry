@@ -253,8 +253,13 @@ impl Exporter<'_> {
         Some(SeparationSpace::new(SeparationColorant::Custom(sw.name.clone()), alt))
     }
 
-    /// A solid paint, in the Separation colour space at its tint when it's linked to a spot swatch.
+    /// A solid paint, in the Separation colour space at its tint when it's linked to a spot swatch
+    /// or to Registration (`/All`: every plate).
     fn solid(&mut self, c: &Color, link: Option<&str>, tint: f32) -> krilla::color::Color {
+        if link == Some(vectorcraft_color::swatch::REGISTRATION) {
+            let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(255, 255, 255, 255));
+            return SepColor::new(q(tint), SeparationSpace::new(SeparationColorant::AllColorants, alt)).into();
+        }
         match link.and_then(|n| self.separation(n)) {
             Some(space) => SepColor::new(q(tint), space).into(),
             None => self.col(c),

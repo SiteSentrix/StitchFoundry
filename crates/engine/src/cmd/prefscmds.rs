@@ -294,6 +294,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("overrideCharColor", "Type", "Graphic Styles", "Override Character Color", bool),
     // Object → Pattern → Tile Edge Color
     p!("patternTileEdgeColor", "Guides & Grid", "Pattern Editing", "Tile Edge Color", color),
+    // Object → Create Trim Marks, Effect → Crop Marks
+    p!("japaneseCropMarks", "General", "Options", "Use Japanese Crop Marks", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

@@ -27,6 +27,7 @@ mod bake;
 mod clip;
 mod distort;
 mod group;
+mod marks;
 mod raster;
 mod reshape;
 pub mod stroke;
@@ -46,6 +47,7 @@ pub use clip::clip_outline;
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, pathfinder_children,
 };
+pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use raster::{RasterFx, outset, raster_effects};
 pub use reshape::{expand_outlined, needs_outline, outline_art, outline_text, reshape};
 pub use warp::{WarpStyle, warp_point};
@@ -228,6 +230,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
     for (id, label, _) in PATHFINDER_EFFECTS {
         v.push(g(id, label, PATHFINDER, "{} (groups and layers: live Pathfinder over the members)", json!({})));
     }
+    v.push(g(
+        CROP_MARKS,
+        "Crop Marks",
+        &["Effect"],
+        "{style?: \"roman\"|\"japanese\" (default: the japaneseCropMarks preference when applied)} trim marks in [Registration] around the object's bounds, following it",
+        json!({}),
+    ));
     v
 }
 
@@ -272,9 +281,9 @@ pub fn is_raster(id: &str) -> bool {
     matches!(id, "stylize.dropShadow" | "stylize.innerGlow" | "stylize.outerGlow" | "stylize.feather" | "blur.gaussian")
 }
 
-/// Does `id` change geometry?
+/// Does `id` change geometry? (Crop Marks adds art of its own instead, [`crop_marks_art`].)
 pub fn is_geometry(id: &str) -> bool {
-    !is_raster(id) && !is_pathfinder(id) && catalog_index().contains_key(id)
+    !is_raster(id) && !is_pathfinder(id) && id != CROP_MARKS && catalog_index().contains_key(id)
 }
 
 /// Any visible geometry effect in the list?

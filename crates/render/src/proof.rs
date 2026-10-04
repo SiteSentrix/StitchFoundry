@@ -6,7 +6,8 @@
 //!   into process inks (colour-managed), or a spot ink at the colour's tint when it's linked to a
 //!   spot swatch (solid colours and gradient stops alike). With one plate visible the plate
 //!   renders as greyscale ink coverage (black = 100%); with several, the visible inks are
-//!   composited through the proof profile, spots multiplied on top.
+//!   composited through the proof profile, spots multiplied on top. Colours linked to the
+//!   Registration swatch print their tint on every plate, spot plates included.
 //!   Placed raster images are not separated (limitation).
 //! * **Overprint Preview** (and Separations Preview, which implies it): fills and strokes that
 //!   overprint ([`vectorcraft_doc::FillLayer::overprint`], characters' too) are drawn with
@@ -21,6 +22,7 @@ use std::sync::{Arc, RwLock};
 
 use vectorcraft_color::cms::{self, Cms, PROCESS_PLATES};
 pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
+use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind};
 
@@ -33,6 +35,19 @@ pub struct Inks {
     pub cmyk: [f32; 4],
     /// Spot ink (swatch name, tint 0..1).
     pub spot: Option<(String, f32)>,
+    /// Registration: the tint (every process ink's) prints on every spot plate too.
+    pub registration: bool,
+}
+
+impl Inks {
+    /// The tint this colour prints on spot plate `name`.
+    pub fn spot_tint(&self, name: &str) -> f32 {
+        match &self.spot {
+            _ if self.registration => self.cmyk[0],
+            Some((n, t)) if n == name => *t,
+            _ => 0.0,
+        }
+    }
 }
 
 /// A printing plate.
@@ -77,14 +92,17 @@ fn spot_swatch<'a>(doc: &'a Document, name: &str) -> Option<&'a Color> {
 pub type Link<'a> = Option<(&'a str, f32)>;
 
 /// Separate one colour into inks. A colour linked to a spot swatch prints on that plate only, at
-/// its tint.
+/// its tint; one linked to the Registration swatch prints its tint on every plate.
 pub fn inks(doc: &Document, c: &Cms, color: &Color, link: Link, intent: Intent) -> Inks {
+    if let Some((REGISTRATION, tint)) = link {
+        return Inks { cmyk: [tint.clamp(0.0, 1.0); 4], spot: None, registration: true };
+    }
     if let Some((name, tint)) = link
         && spot_swatch(doc, name).is_some()
     {
-        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint.clamp(0.0, 1.0))) };
+        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint.clamp(0.0, 1.0))), registration: false };
     }
-    Inks { cmyk: c.to_cmyk(color, intent), spot: None }
+    Inks { cmyk: c.to_cmyk(color, intent), spot: None, registration: false }
 }
 
 fn map_paint(p: &mut Paint, f: &mut dyn FnMut(&Color, Link) -> Color) {
@@ -169,7 +187,7 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
         let name = &visible[0];
         let v = match PROCESS_PLATES.iter().position(|p| p == name) {
             Some(i) => ink.cmyk[i],
-            None => ink.spot.as_ref().filter(|(n, _)| n == name).map_or(0.0, |s| s.1),
+            None => ink.spot_tint(name),
         };
         [1.0 - v; 3]
     } else {
@@ -180,13 +198,15 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
             }
         }
         let mut rgb = c.proof_cmyk_to_srgb(cmyk, proof);
-        if let Some((name, t)) = &ink.spot
-            && visible.contains(name)
-            && let Some(sc) = spot_swatch(doc, name)
-        {
-            let s = c.display_rgb(sc);
-            for i in 0..3 {
-                rgb[i] *= 1.0 - t * (1.0 - s[i]);
+        for name in visible.iter().filter(|v| !PROCESS_PLATES.contains(&v.as_str())) {
+            let t = ink.spot_tint(name);
+            if t > 0.0
+                && let Some(sc) = spot_swatch(doc, name)
+            {
+                let s = c.display_rgb(sc);
+                for i in 0..3 {
+                    rgb[i] *= 1.0 - t * (1.0 - s[i]);
+                }
             }
         }
         rgb

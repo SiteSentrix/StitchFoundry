@@ -581,3 +581,18 @@ paths and compound paths, and `path.reverse {reversed?}` makes subpaths run coun
 {"name":"run_command","arguments":{"command":"attributes.set","params":{"ids":[12],"url":"https://example.com","imageMap":"rectangle"}}}
 {"name":"run_command","arguments":{"command":"path.setFillRule","params":{"rule":"evenOdd"}}}
 ```
+
+## Registration and trim marks
+
+Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on
+every plate, process and spot. `paint.setStroke {swatch: "[Registration]"}` applies it; it can't be edited, moved,
+duplicated, merged or deleted. Separations Preview shows it on each plate and PDF export writes it as
+`/Separation /All`. `object.createTrimMarks {style?, allArtboards?}` draws trim marks in Registration around the
+selection, or around every artboard when nothing is selected; `effect.apply {effect: "cropMarks"}` adds live crop
+marks that follow the object. Both use Japanese marks (double lines at the trim and bleed edges, centre marks) when
+the preference `japaneseCropMarks` is on or `style: "japanese"` is given.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"japaneseCropMarks","value":true}}}
+{"name":"run_command","arguments":{"command":"object.createTrimMarks","params":{}}}
+```
