@@ -47,8 +47,8 @@ pub fn freeform_json(f: &Freeform) -> Value {
 }
 
 /// A gradient paint as the `gradient` param of `paint.setFill` / `swatch.new`: kind, stops (with
-/// opacity and midpoint), angle, the linked swatch and, once placed, the vector and aspect (%)
-/// and the freeform points.
+/// opacity and midpoint), angle, the linked swatch and, once placed, the vector, aspect (%) and
+/// focal point, and the freeform points.
 pub fn gradient_params(g: &GradientPaint) -> Value {
     let mut v = json!({
         "kind": g.gradient.kind.label().to_lowercase(),
@@ -59,6 +59,9 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
         v["start"] = json!([geom.start.x, geom.start.y]);
         v["end"] = json!([geom.end.x, geom.end.y]);
         v["aspect"] = json!(geom.aspect * 100.0);
+        if let Some(f) = geom.focal {
+            v["focal"] = json!([f.x, f.y]);
+        }
     }
     if let Some(s) = &g.swatch {
         v["swatch"] = json!(s);
@@ -82,7 +85,7 @@ mod tests {
         assert_eq!(v["kind"], "radial");
         assert!(v.get("start").is_none() && v.get("aspect").is_none());
         assert_eq!(v["stops"][0]["midpoint"], json!(0.5));
-        g.geom = Some(GradientGeom { start: Point::new(1.0, 2.0), end: Point::new(3.0, 4.0), aspect: 0.5 });
+        g.geom = Some(GradientGeom { start: Point::new(1.0, 2.0), end: Point::new(3.0, 4.0), aspect: 0.5, focal: None });
         g.swatch = Some("Sky".into());
         let v = gradient_params(&g);
         assert_eq!((v["start"].clone(), v["end"].clone(), v["aspect"].clone()), (json!([1.0, 2.0]), json!([3.0, 4.0]), json!(50.0)));

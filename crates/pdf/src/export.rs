@@ -458,17 +458,14 @@ impl Exporter<'_> {
                     }
                     GradientKind::Radial => {
                         let r = geom.length().max(1e-6) as f32;
-                        let angle = (geom.end - geom.start).atan2();
-                        let t = Affine::translate(geom.start.to_vec2())
-                            * Affine::rotate(angle)
-                            * Affine::scale_non_uniform(1.0, geom.aspect.max(1e-3))
-                            * Affine::rotate(-angle)
-                            * Affine::translate(-geom.start.to_vec2());
+                        let t = geom.radial_squash();
                         let (cx, cy) = (geom.start.x as f32, geom.start.y as f32);
+                        // An off-centre focal point: a two-point radial shading from it.
+                        let f = t.inverse() * geom.focal_point();
                         Some(
                             RadialGradient {
-                                fx: cx,
-                                fy: cy,
+                                fx: f.x as f32,
+                                fy: f.y as f32,
                                 fr: 0.0,
                                 cx,
                                 cy,

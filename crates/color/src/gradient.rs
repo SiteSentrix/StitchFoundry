@@ -236,7 +236,14 @@ pub struct GradientGeom {
     /// Radial aspect ratio (height / width), 1 = circle.
     #[serde(default = "one64")]
     pub aspect: f64,
+    /// A radial gradient's focal point, where its first stop sits (an off-centre radial), in the
+    /// same space; inside the extent ellipse. None: the centre (`start`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub focal: Option<Point>,
 }
+
+/// How far out a focal point may sit, as a fraction of the extent ellipse.
+const FOCAL_MAX: f64 = 0.99;
 
 fn one64() -> f64 {
     1.0
@@ -250,11 +257,11 @@ impl GradientGeom {
         let a = angle_deg.to_radians();
         let d = Vec2::new(a.cos(), -a.sin());
         match kind {
-            GradientKind::Radial => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0 },
+            GradientKind::Radial => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0, focal: None },
             _ => {
                 // Project the box corners onto the direction to cover the whole box.
                 let half = (b.width() * d.x.abs() + b.height() * d.y.abs()) / 2.0;
-                Self { start: c - d * half, end: c + d * half, aspect: 1.0 }
+                Self { start: c - d * half, end: c + d * half, aspect: 1.0, focal: None }
             }
         }
     }
@@ -266,6 +273,8 @@ impl GradientGeom {
     /// (the radius along the vector, `aspect` × the radius across it); its principal axes give the
     /// new end (on the axis nearest the mapped vector) and aspect.
     pub fn transform(&mut self, a: Affine, kind: GradientKind) {
+        // The focal point is a point like any other.
+        self.focal = self.focal.map(|f| a * f);
         let [m0, m1, m2, m3, _, _] = a.as_coeffs();
         let lin = |v: Vec2| Vec2::new(m0 * v.x + m2 * v.y, m1 * v.x + m3 * v.y);
         let perp = |v: Vec2| Vec2::new(-v.y, v.x);
@@ -312,21 +321,76 @@ impl GradientGeom {
     pub fn rebase(&mut self, from: Rect, to: Rect) {
         self.start = rebase_point(self.start, from, to);
         self.end = rebase_point(self.end, from, to);
+        self.focal = self.focal.map(|f| rebase_point(f, from, to));
     }
 
     /// The gradient parameter (0 at the start, 1 at the end) at document point `p`: the projection
-    /// onto the vector for linear gradients, the elliptical radius (honouring `aspect`) for radial.
+    /// onto the vector for linear gradients, the elliptical radius (honouring `aspect`) for radial,
+    /// measured from the focal point (each level is the ellipse scaled about the line from the
+    /// focal point to the centre).
     pub fn param_at(&self, kind: GradientKind, p: Point) -> f64 {
         let u = self.end - self.start;
-        let l2 = u.hypot2();
-        if l2 < 1e-18 {
+        if u.hypot2() < 1e-18 {
             return 0.0;
         }
-        let d = p - self.start;
-        let along = d.dot(u) / l2;
-        match kind {
-            GradientKind::Radial => along.hypot(d.cross(u) / (l2 * self.aspect.max(1e-9))),
-            _ => along,
+        if kind != GradientKind::Radial {
+            return (p - self.start).dot(u) / u.hypot2();
+        }
+        let Some(to_unit) = self.unit_frame().map(|m| m.inverse()) else { return 0.0 };
+        let q = (to_unit * p).to_vec2();
+        let Some(f) = self.focal.map(|f| (to_unit * f).to_vec2()) else { return q.hypot() };
+        // The level t through q: |q - f(1 - t)| = t, the root at t >= 0 (|f| < 1).
+        let d = q - f;
+        let a = f.hypot2() - 1.0;
+        if a.abs() < 1e-12 {
+            return q.hypot();
+        }
+        let b = d.dot(f);
+        (-b - (b * b - a * d.hypot2()).max(0.0).sqrt()) / a
+    }
+
+    /// The map from the unit circle onto a radial's extent ellipse: (1, 0) to the end, (0, 1) to
+    /// `aspect` × the radius across the vector. None when the ellipse is flat (no inverse).
+    pub fn unit_frame(&self) -> Option<Affine> {
+        let u = self.end - self.start;
+        (u.hypot2() * self.aspect.abs() > 1e-18).then(|| Affine::new([u.x, u.y, -u.y * self.aspect, u.x * self.aspect, self.start.x, self.start.y]))
+    }
+
+    /// The map that squashes a radial gradient's circle (centre `start`, radius the vector's
+    /// length) into its extent ellipse: by `aspect` across the vector, about the centre.
+    pub fn radial_squash(&self) -> Affine {
+        let angle = (self.end - self.start).atan2();
+        let c = self.start.to_vec2();
+        Affine::translate(c)
+            * Affine::rotate(angle)
+            * Affine::scale_non_uniform(1.0, self.aspect.max(1e-3))
+            * Affine::rotate(-angle)
+            * Affine::translate(-c)
+    }
+
+    /// Where a radial gradient's first stop sits: its focal point, else its centre.
+    pub fn focal_point(&self) -> Point {
+        self.focal.unwrap_or(self.start)
+    }
+
+    /// Set the focal point, pulled inside the extent ellipse; one on the centre (or a gradient
+    /// with no extent) has none.
+    pub fn set_focal(&mut self, f: Option<Point>) {
+        self.focal = f.and_then(|f| {
+            let m = self.unit_frame()?;
+            let q = (m.inverse() * f).to_vec2();
+            let r = q.hypot();
+            (r > 1e-6).then(|| if r > FOCAL_MAX { m * (q * (FOCAL_MAX / r)).to_point() } else { f })
+        });
+    }
+
+    /// After a change of the vector or aspect from `before`, put the focal point back where it
+    /// was relative to the extent ellipse.
+    pub fn keep_focal_from(&mut self, before: &GradientGeom) {
+        let rel = before.focal.zip(before.unit_frame()).map(|(f, m)| m.inverse() * f);
+        self.focal = None;
+        if let (Some(q), Some(m)) = (rel, self.unit_frame()) {
+            self.set_focal(Some(m * q));
         }
     }
     pub fn angle_deg(&self) -> f64 {
@@ -481,7 +545,7 @@ mod tests {
     }
 
     fn linear(start: (f64, f64), end: (f64, f64)) -> GradientGeom {
-        GradientGeom { start: start.into(), end: end.into(), aspect: 1.0 }
+        GradientGeom { start: start.into(), end: end.into(), aspect: 1.0, focal: None }
     }
 
     #[test]
@@ -503,12 +567,12 @@ mod tests {
 
     #[test]
     fn non_uniform_scale_turns_a_circle_into_an_ellipse() {
-        let mut g = GradientGeom { start: Point::new(10.0, 10.0), end: Point::new(20.0, 10.0), aspect: 1.0 };
+        let mut g = GradientGeom { start: Point::new(10.0, 10.0), end: Point::new(20.0, 10.0), aspect: 1.0, focal: None };
         g.transform(Affine::scale_non_uniform(2.0, 1.0), GradientKind::Radial);
         assert!(close(g.start, Point::new(20.0, 10.0)) && close(g.end, Point::new(40.0, 10.0)), "{g:?}");
         assert!((g.aspect - 0.5).abs() < 1e-9);
         // A vertical vector keeps its axis: the ellipse is twice as wide as the vector is long.
-        let mut v = GradientGeom { start: Point::ZERO, end: Point::new(0.0, -10.0), aspect: 1.0 };
+        let mut v = GradientGeom { start: Point::ZERO, end: Point::new(0.0, -10.0), aspect: 1.0, focal: None };
         v.transform(Affine::scale_non_uniform(2.0, 1.0), GradientKind::Radial);
         assert!(close(v.end, Point::new(0.0, -10.0)) && (v.aspect - 2.0).abs() < 1e-9, "{v:?}");
     }
@@ -517,7 +581,7 @@ mod tests {
     fn samples_follow_shear_and_rotation() {
         let shear = Affine::new([1.0, 0.3, 0.7, 1.2, 15.0, -4.0]) * Affine::rotate(0.4);
         for kind in [GradientKind::Linear, GradientKind::Radial] {
-            let g = GradientGeom { start: Point::new(30.0, 40.0), end: Point::new(80.0, 55.0), aspect: 0.6 };
+            let g = GradientGeom { start: Point::new(30.0, 40.0), end: Point::new(80.0, 55.0), aspect: 0.6, focal: None };
             let mut m = g;
             m.transform(shear, kind);
             for p in [Point::new(30.0, 40.0), Point::new(55.0, 70.0), Point::new(90.0, 10.0), Point::new(-20.0, 48.0)] {
@@ -532,7 +596,7 @@ mod tests {
         let b = Rect::new(0.0, 0.0, 100.0, 60.0);
         let g = GradientGeom::fit(GradientKind::Radial, b, 90.0);
         assert!(close(g.start, Point::new(50.0, 30.0)) && close(g.end, Point::new(50.0, -20.0)), "end above the centre: {g:?}");
-        let e = GradientGeom { start: Point::ZERO, end: Point::new(10.0, 0.0), aspect: 0.5 };
+        let e = GradientGeom { start: Point::ZERO, end: Point::new(10.0, 0.0), aspect: 0.5, focal: None };
         assert!((e.param_at(GradientKind::Radial, Point::new(0.0, 5.0)) - 1.0).abs() < 1e-12);
         assert!((e.param_at(GradientKind::Radial, Point::new(5.0, 0.0)) - 0.5).abs() < 1e-12);
         assert!((e.param_at(GradientKind::Linear, Point::new(5.0, 7.0)) - 0.5).abs() < 1e-12);
@@ -611,11 +675,11 @@ mod tests {
 
     #[test]
     fn rebase_keeps_relative_positions() {
-        let mut g = GradientGeom { start: Point::new(110.0, 150.0), end: Point::new(190.0, 120.0), aspect: 0.5 };
+        let mut g = GradientGeom { start: Point::new(110.0, 150.0), end: Point::new(190.0, 120.0), aspect: 0.5, focal: None };
         g.rebase(Rect::new(100.0, 100.0, 200.0, 200.0), Rect::new(500.0, 0.0, 700.0, 50.0));
         assert!(close(g.start, Point::new(520.0, 25.0)) && close(g.end, Point::new(680.0, 10.0)) && g.aspect == 0.5, "{g:?}");
         // A box without height (a horizontal line) keeps the offset from its centre line.
-        let mut h = GradientGeom { start: Point::new(0.0, 12.0), end: Point::new(10.0, 10.0), aspect: 1.0 };
+        let mut h = GradientGeom { start: Point::new(0.0, 12.0), end: Point::new(10.0, 10.0), aspect: 1.0, focal: None };
         h.rebase(Rect::new(0.0, 10.0, 10.0, 10.0), Rect::new(0.0, 0.0, 20.0, 40.0));
         assert!(close(h.start, Point::new(0.0, 22.0)) && close(h.end, Point::new(20.0, 20.0)), "{h:?}");
         // Unplaced paints have nothing to move.
@@ -633,5 +697,69 @@ mod tests {
         assert_eq!(p.geom, Some(GradientGeom::fit(GradientKind::Linear, b, 90.0)));
         p.pin(Rect::new(0.0, 0.0, 1.0, 1.0));
         assert_eq!(p.geom, Some(GradientGeom::fit(GradientKind::Linear, b, 90.0)));
+    }
+
+    /// A 100 pt circle at (200, 200) with its focal point 40 pt left of the centre.
+    fn off_centre() -> GradientGeom {
+        let mut g = GradientGeom { start: Point::new(200.0, 200.0), end: Point::new(300.0, 200.0), aspect: 1.0, focal: None };
+        g.set_focal(Some(Point::new(160.0, 200.0)));
+        g
+    }
+
+    #[test]
+    fn focal_round_trips_through_serde_and_defaults_to_none() {
+        let g = off_centre();
+        let s = serde_json::to_string(&g).unwrap();
+        assert!(s.contains("\"focal\""), "{s}");
+        assert_eq!(serde_json::from_str::<GradientGeom>(&s).unwrap(), g);
+        // Placements saved before focal points existed load centred, and centred ones write none.
+        let old: GradientGeom = serde_json::from_str(r#"{"start":{"x":0.0,"y":0.0},"end":{"x":1.0,"y":0.0}}"#).unwrap();
+        assert_eq!((old.focal, old.aspect), (None, 1.0));
+        assert!(!serde_json::to_string(&old).unwrap().contains("focal"));
+    }
+
+    #[test]
+    fn focal_follows_transforms_and_rebases() {
+        let mut g = off_centre();
+        let a = Affine::translate((10.0, -5.0)) * Affine::rotate(0.7) * Affine::scale_non_uniform(2.0, 0.5);
+        let f = a * g.focal.unwrap();
+        g.transform(a, GradientKind::Radial);
+        assert!(close(g.focal.unwrap(), f), "{g:?}");
+        // Still at the same parameter: the first stop.
+        assert!(g.param_at(GradientKind::Radial, f).abs() < 1e-9);
+        let mut h = off_centre();
+        h.rebase(Rect::new(100.0, 100.0, 300.0, 300.0), Rect::new(0.0, 0.0, 100.0, 100.0));
+        assert!(close(h.focal.unwrap(), Point::new(30.0, 50.0)) && close(h.start, Point::new(50.0, 50.0)), "{h:?}");
+    }
+
+    #[test]
+    fn param_runs_from_the_focal_point_to_the_ellipse() {
+        let g = off_centre();
+        let t = |x: f64, y: f64| g.param_at(GradientKind::Radial, Point::new(x, y));
+        assert!(t(160.0, 200.0).abs() < 1e-9);
+        // The extent circle is the last stop all round.
+        for a in [0.0f64, 1.0, 2.5, 4.0] {
+            let p = Point::new(200.0 + 100.0 * a.cos(), 200.0 + 100.0 * a.sin());
+            assert!((g.param_at(GradientKind::Radial, p) - 1.0).abs() < 1e-9, "{a}");
+        }
+        // The centre lies on the level-2/7 circle: centred 2/7 of the way back to the focal point
+        // (0.4 of the radius off), with a radius of 2/7.
+        assert!((t(200.0, 200.0) - 2.0 / 7.0).abs() < 1e-9, "{}", t(200.0, 200.0));
+        assert!(t(180.0, 200.0) < t(220.0, 200.0), "nearer the focal side is earlier");
+        assert_eq!(GradientGeom { focal: None, ..g }.param_at(GradientKind::Radial, Point::new(250.0, 200.0)), 0.5);
+    }
+
+    #[test]
+    fn focal_is_kept_inside_the_ellipse_and_follows_its_reshaping() {
+        let mut g = off_centre();
+        g.set_focal(Some(Point::new(500.0, 200.0)));
+        assert!(close(g.focal.unwrap(), Point::new(299.0, 200.0)), "pulled inside: {g:?}");
+        g.set_focal(Some(Point::new(200.0, 200.0)));
+        assert_eq!(g.focal, None, "on the centre: centred");
+        // A new vector and aspect keep it in its place in the ellipse.
+        let before = off_centre();
+        let mut h = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(0.0, 50.0), aspect: 0.5, focal: None };
+        h.keep_focal_from(&before);
+        assert!(close(h.focal.unwrap(), Point::new(0.0, -20.0)), "{h:?}");
     }
 }

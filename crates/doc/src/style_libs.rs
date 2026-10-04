@@ -200,7 +200,7 @@ fn linear(angle: f64, stops: &[(f32, &str, f32)]) -> Paint {
 /// A radial gradient placed in the unit box (each object gets it at the same place relative to its
 /// bounds): centred at `(x, y)` with `radius`.
 fn radial_at(x: f64, y: f64, radius: f64, stops: &[(f32, &str, f32)]) -> Paint {
-    let geom = GradientGeom { start: Point::new(x, y), end: Point::new(x + radius, y), aspect: 1.0 };
+    let geom = GradientGeom { start: Point::new(x, y), end: Point::new(x + radius, y), aspect: 1.0, focal: None };
     Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(gradient(GradientKind::Radial, stops)) }))
 }
 

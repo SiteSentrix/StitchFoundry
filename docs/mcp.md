@@ -155,6 +155,17 @@ delete it, hold Alt to copy it), dragging the end handle changes the vector. The
 {"name":"press_key","arguments":{"key":"Delete"}}
 ```
 
+A radial gradient's annotator also draws its extent: a dashed ellipse around the centre (the start, drawn as a ring)
+with a dot on it across the bar (drag it to change the aspect ratio); dragging the ellipse elsewhere rotates it.
+The dot inside the centre ring is the focal point, where the first stop sits: drag it for an off-centre radial, back
+onto the centre to centre it. `paint.setGradientGeom` sets the same things directly (`aspect` in %, `focal` in
+document coordinates or `null`; `start`/`end` may be left out), and they export as SVG `fx`/`fy` and PDF two-point
+radial shadings:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.setGradientGeom","params":{"aspect":60,"focal":[130,140]}}}
+```
+
 Freeform gradients: `paint.editGradient {kind: "freeform"}` places four or more colour points inside each selected
 object (coloured along the stops; `mode: "points"|"lines"` is the Draw toggle). `paint.freeform.get` lists the points
 (document coordinates), lines and the selected point; `paint.freeform.addPoint {at, color?, opacity?, spread?,

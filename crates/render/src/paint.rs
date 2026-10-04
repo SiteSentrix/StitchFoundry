@@ -1,7 +1,7 @@
 //! Paint conversion (solid, gradients, patterns) and image decoding.
 
 use vectorcraft_color::{GradientKind, Paint};
-use vectorcraft_geom::{Affine, Rect, Vec2};
+use vectorcraft_geom::{Rect, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko::{self, ColorStop};
 
@@ -26,16 +26,15 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
             let grad = match g.gradient.kind {
                 GradientKind::Radial => {
                     let r = geom.length().max(1e-6) as f32;
-                    let angle = (geom.end - geom.start).atan2();
-                    // Aspect ratio squashes the circle along the perpendicular of the gradient vector.
-                    ctx.set_paint_transform(
-                        Affine::translate(geom.start.to_vec2())
-                            * Affine::rotate(angle)
-                            * Affine::scale_non_uniform(1.0, geom.aspect.max(1e-3))
-                            * Affine::rotate(-angle)
-                            * Affine::translate(-geom.start.to_vec2()),
-                    );
-                    peniko::Gradient::new_radial(geom.start, r).with_stops(stops.as_slice())
+                    // The aspect ratio squashes the circle across the gradient vector.
+                    let squash = geom.radial_squash();
+                    ctx.set_paint_transform(squash);
+                    let g = match geom.focal {
+                        // An off-centre focal point: a two-point radial from it to the extent circle.
+                        Some(f) => peniko::Gradient::new_two_point_radial(squash.inverse() * f, 0.0, geom.start, r),
+                        None => peniko::Gradient::new_radial(geom.start, r),
+                    };
+                    g.with_stops(stops.as_slice())
                 }
                 _ => {
                     ctx.reset_paint_transform();

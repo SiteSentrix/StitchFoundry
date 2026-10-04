@@ -314,10 +314,11 @@ fn breaks(g: &Gradient, t0: f64, t1: f64, max_gap: f64) -> Vec<(f64, (Color, f32
 /// A linear or radial gradient's geometry over an object's box: its start, the vector to its
 /// end, the vector across it (radial: the ellipse's other axis), and the parameter ranges that
 /// cover the box (linear: along the vector `t0..t1` and across it `s0..s1` in points; radial:
-/// `0..t1`).
+/// `0..t1`, each level's ellipse centred on the way from the focal point to the start).
 struct Frame {
     radial: bool,
     start: Point,
+    focal: Point,
     along: Vec2,
     across: Vec2,
     t0: f64,
@@ -344,13 +345,17 @@ impl Frame {
         }
         // Keep a sliver of span so the art maps back invertibly.
         t1 = t1.max(t0 + 1e-6);
-        Self { radial, start: geom.start, along, across, t0, t1, s0, s1 }
+        Self { radial, start: geom.start, focal: geom.focal_point(), along, across, t0, t1, s0, s1 }
     }
 
     /// Linear: the point at parameter `t` along and `s` across. Radial: the point at parameter `t`
     /// and angle `s` (radians).
     fn at(&self, t: f64, s: f64) -> Point {
-        if self.radial { self.start + (self.along * s.cos() + self.across * s.sin()) * t } else { self.start + self.along * t + self.across * s }
+        if self.radial {
+            self.focal + (self.start - self.focal + self.along * s.cos() + self.across * s.sin()) * t
+        } else {
+            self.start + self.along * t + self.across * s
+        }
     }
 
     /// A gradient mesh covering the box: columns (linear) or rings (radial) where the colour
@@ -371,7 +376,7 @@ impl Frame {
 
     /// `n` solid shapes covering the box in paint order, each coloured as the gradient in the
     /// middle of its band: for a linear gradient, rectangles from each band's start to the far
-    /// end, for a radial one, concentric ellipses (largest first). Each paints over the ones
+    /// end, for a radial one, nested ellipses (largest first). Each paints over the ones
     /// below except its band, so no seam shows between bands. With translucent stops each shape
     /// is just its band, so nothing doubles up.
     fn pieces(&self, g: &Gradient, n: usize) -> Vec<(PathData, (Color, f32))> {
@@ -380,7 +385,8 @@ impl Frame {
         let opaque = g.stops.iter().all(|s| s.opacity >= 1.0);
         if self.radial {
             let ellipse = |t: f64| {
-                let m = Affine::new([self.along.x * t, self.along.y * t, self.across.x * t, self.across.y * t, self.start.x, self.start.y]);
+                let c = self.focal + (self.start - self.focal) * t;
+                let m = Affine::new([self.along.x * t, self.along.y * t, self.across.x * t, self.across.y * t, c.x, c.y]);
                 shapes::ellipse(Rect::new(-1.0, -1.0, 1.0, 1.0)).transformed(m)
             };
             return (0..n)
