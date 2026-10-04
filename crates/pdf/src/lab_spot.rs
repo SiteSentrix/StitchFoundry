@@ -45,7 +45,7 @@ fn lab_separation(name: &str, lab: Lab) -> Vec<u8> {
     out
 }
 
-fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
+pub(crate) fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
     hay.get(from..)?.windows(needle.len()).position(|w| w == needle).map(|i| i + from)
 }
 
@@ -110,7 +110,7 @@ pub(crate) fn lab_alternates(pdf: Vec<u8>, spots: &[(String, Lab)]) -> Vec<u8> {
     out
 }
 
-fn rfind(hay: &[u8], needle: &[u8]) -> Option<usize> {
+pub(crate) fn rfind(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).rposition(|w| w == needle)
 }
 

@@ -159,6 +159,21 @@ pub fn composite(mode: BlendMode, backdrop: [f32; 4], source: [f32; 4]) -> [f32;
     [c(0) / ao, c(1) / ao, c(2) / ao, ao]
 }
 
+/// CMYK blending (CMYK documents). The formulas above work on additive values, so inks blend as
+/// their complements, as subtractive colour spaces blend in PDF: a CMYK colour splits into two
+/// additive planes, each blended with the formulas above, the complemented C, M and Y as one
+/// colour and the complemented K as a grey. Multiply then adds inks (cyan over magenta prints
+/// both: blue), and on the grey plane Hue, Saturation and Color keep the backdrop's black while
+/// Luminosity takes the source's, as PDF has it for K.
+pub fn cmyk_planes([c, m, y, k]: [f32; 4]) -> [[f32; 3]; 2] {
+    [[1.0 - c, 1.0 - m, 1.0 - y], [1.0 - k; 3]]
+}
+
+/// The inks of blended [`cmyk_planes`]: the C, M, Y plane and the K plane's grey.
+pub fn planes_cmyk(cmy: [f32; 3], k: f32) -> [f32; 4] {
+    [1.0 - cmy[0], 1.0 - cmy[1], 1.0 - cmy[2], 1.0 - k].map(|v| v.clamp(0.0, 1.0))
+}
+
 fn screen(b: f32, s: f32) -> f32 {
     b + s - b * s
 }
@@ -175,16 +190,17 @@ fn sat(c: [f32; 3]) -> f32 {
     c[0].max(c[1]).max(c[2]) - c[0].min(c[1]).min(c[2])
 }
 
-/// Bring a colour moved off the gamut by [`set_lum`] back in, keeping its luminance.
+/// Bring a colour moved off the gamut by [`set_lum`] back in, keeping its luminance. A grey (all
+/// components at its luminance, give or take rounding) is clamped instead of scaled by 0/0.
 fn clip_color(c: [f32; 3]) -> [f32; 3] {
     let l = lum(c);
     let (n, x) = (c[0].min(c[1]).min(c[2]), c[0].max(c[1]).max(c[2]));
     let mut c = c;
     if n < 0.0 {
-        c = c.map(|v| l + (v - l) * l / (l - n));
+        c = if l - n > f32::EPSILON { c.map(|v| l + (v - l) * l / (l - n)) } else { c.map(|v| v.max(0.0)) };
     }
     if x > 1.0 {
-        c = c.map(|v| l + (v - l) * (1.0 - l) / (x - l));
+        c = if x - l > f32::EPSILON { c.map(|v| l + (v - l) * (1.0 - l) / (x - l)) } else { c.map(|v| v.min(1.0)) };
     }
     c
 }
@@ -244,6 +260,12 @@ mod tests {
             assert!((lum(blend_rgb(m, b, s)) - lum(b)).abs() < 1e-5, "{m:?}");
         }
         assert!((lum(blend_rgb(BlendMode::Luminosity, b, s)) - lum(s)).abs() < 1e-5);
+        // Greys stay finite where rounding puts their luminance just off their components.
+        for m in [BlendMode::Hue, BlendMode::Saturation, BlendMode::Color, BlendMode::Luminosity] {
+            for (b, s) in [([0.7; 3], [0.0; 3]), ([0.0; 3], [0.3; 3]), ([1.0; 3], [0.9; 3]), ([0.9; 3], [1.0; 3])] {
+                assert!(blend_rgb(m, b, s).iter().all(|v| v.is_finite() && (-1e-6..=1.0 + 1e-6).contains(v)), "{m:?} {b:?} {s:?}");
+            }
+        }
         // Saturation of grey is 0: a grey source desaturates the backdrop to its luminance.
         let l = lum(b);
         assert!(near(blend_rgb(BlendMode::Saturation, b, [0.5; 3]), [l; 3]));
@@ -262,6 +284,27 @@ mod tests {
         // Over a transparent backdrop the source shows unblended.
         let o = composite(BlendMode::Difference, [0.3, 0.3, 0.3, 0.0], s);
         assert!(near([o[0], o[1], o[2]], [0.5; 3]) && (o[3] - 0.5).abs() < 1e-6, "{o:?}");
+    }
+
+    #[test]
+    fn cmyk_planes_blend_inks() {
+        let blend = |m: BlendMode, b: [f32; 4], s: [f32; 4]| {
+            let (pb, ps) = (cmyk_planes(b), cmyk_planes(s));
+            planes_cmyk(blend_rgb(m, pb[0], ps[0]), blend_rgb(m, pb[1], ps[1])[0])
+        };
+        let (cyan, magenta) = ([1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]);
+        // Multiply adds the inks: cyan over magenta prints both.
+        assert_eq!(blend(BlendMode::Multiply, magenta, cyan), [1.0, 1.0, 0.0, 0.0]);
+        // Screen keeps the lighter (less ink) per plate.
+        assert_eq!(blend(BlendMode::Screen, magenta, cyan), [0.0; 4]);
+        let (b, s) = ([0.2, 0.6, 0.1, 0.3], [0.7, 0.1, 0.5, 0.8]);
+        // K: backdrop's for Hue, Saturation and Color, the source's for Luminosity.
+        for m in [BlendMode::Hue, BlendMode::Saturation, BlendMode::Color] {
+            assert!((blend(m, b, s)[3] - b[3]).abs() < 1e-6, "{m:?}");
+        }
+        assert!((blend(BlendMode::Luminosity, b, s)[3] - s[3]).abs() < 1e-6);
+        let back = planes_cmyk(cmyk_planes(b)[0], cmyk_planes(b)[1][0]);
+        assert!(back.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-6), "{back:?}");
     }
 
     #[test]

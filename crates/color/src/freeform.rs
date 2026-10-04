@@ -214,7 +214,13 @@ impl Freeform {
     /// The colour field, with colours converted and lines tessellated once (for sampling many
     /// spots).
     pub fn field(&self, scale: f64) -> Field {
-        let src = |p: &FreeformPoint| Source { at: p.at, rgb: p.color.to_rgb(), opacity: p.opacity, radius: p.spread.clamp(0.0, 1.0) as f64 * scale };
+        self.field_with(scale, &Color::to_rgb)
+    }
+
+    /// [`Self::field`] with colours turned into the three blended values by `rgb` (CMYK
+    /// documents blend ink planes, see [`crate::blend::cmyk_planes`]).
+    pub fn field_with(&self, scale: f64, rgb: &dyn Fn(&Color) -> [f32; 3]) -> Field {
+        let src = |p: &FreeformPoint| Source { at: p.at, rgb: rgb(&p.color), opacity: p.opacity, radius: p.spread.clamp(0.0, 1.0) as f64 * scale };
         let points: Vec<Source> = self.points.iter().map(src).collect();
         let mut pieces = vec![];
         for (l, ix) in self.lines.iter().enumerate() {

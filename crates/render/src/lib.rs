@@ -10,6 +10,7 @@ mod brush_fx;
 mod freeform;
 mod fx;
 mod group;
+mod ink;
 mod live;
 mod paint;
 mod pattern;
@@ -25,6 +26,7 @@ use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
 use group::Composite;
+use ink::Ink;
 
 pub use brush_fx::instance_art;
 pub use effects::stroke::width_outline;
@@ -243,7 +245,7 @@ pub struct Renderer {
     /// Evaluated blends/envelopes and tessellated meshes.
     live: live::LiveCache,
     /// Blurred, tinted drop shadow / outer glow rasters per object and effect (see `fx`).
-    shadows: PtrMap<(usize, usize), fx::ShadowEntry>,
+    shadows: PtrMap<(usize, usize, Ink), fx::ShadowEntry>,
     /// Whether the group being drawn is a knockout group (what its neutral children inherit).
     knockout: bool,
     /// Address of the knockout-group element being drawn as its knockout shape: at full object
@@ -264,6 +266,8 @@ pub struct Renderer {
     clip_paths: Vec<(BezPath, FillRule, Affine)>,
     /// What clipping paths paint, per clipping path (see [`Self::clip_paint_of`]).
     clip_paints: PtrMap<usize, ClipPaintEntry>,
+    /// Placed images as painted in ink planes (see [`ink`]).
+    ink_images: ink::InkImages,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -290,6 +294,8 @@ struct Frame<'a> {
     /// Size of one output pixel in document units.
     px: f64,
     opts: &'a RenderOptions,
+    /// What colours paint as: screen colours, or one ink plane of a CMYK document (see [`ink`]).
+    ink: Ink,
 }
 
 impl Renderer {
@@ -319,6 +325,7 @@ impl Renderer {
             blends: PtrMap::default(),
             clip_paths: vec![],
             clip_paints: PtrMap::default(),
+            ink_images: Default::default(),
         }
     }
 
@@ -336,48 +343,24 @@ impl Renderer {
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
-        let frame = Frame { mt: threads > 0, doc, view, visible, px, opts };
+        let frame = Frame { mt: threads > 0, doc, view, visible, px, opts, ink: Ink::Display };
+        self.stamp += 1;
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.mask.as_deref()) {
-            self.stamp += 1;
             let pixels = self.mask_values(&frame, m, w, h).into_iter().flat_map(|v| [v, v, v, 255]).collect();
             self.stats.micros = now().saturating_sub(start);
             return Rendered { width: w as u32, height: h as u32, pixels };
         }
-        let slot = if threads == 0 { self.ctx_st.take() } else { self.ctx.take() };
-        let mut ctx = match slot {
-            Some(mut c) if c.width() == w && c.height() == h => {
-                c.reset();
-                c
-            }
-            _ => RenderContext::new_with(w, h, vello_cpu::RenderSettings { num_threads: threads, ..Default::default() }),
-        };
-        if let Some(bg) = opts.background {
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
-            ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, h as f64));
-        }
-        if opts.artboards && !opts.outline {
-            ctx.set_transform(view);
-            ctx.set_paint(peniko::Color::WHITE);
-            for ab in &doc.artboards {
-                ctx.fill_rect(&ab.rect);
-            }
-        }
-        self.stamp += 1;
-        (self.nested, self.backdrop) = (0, None);
-        self.clip_paths.clear();
-        if opts.trim && !doc.artboards.is_empty() {
-            let mut clip = BezPath::new();
-            for ab in &doc.artboards {
-                clip.extend(ab.rect.path_elements(0.1));
-            }
-            let blends = self.children_blend(&doc.layers);
-            let trim = Composite { clip: Some((&clip, FillRule::NonZero)), blends, ..Default::default() };
-            self.group(&mut ctx, &frame, trim, &mut |r, c, fr| r.draw_page(c, fr));
+        let mut pixels = if ink::blends_in_cmyk(doc, opts) {
+            // Blending in CMYK: one frame per ink plane, then their inks shown on screen.
+            let cmy = self.draw_frame(&Frame { ink: Ink::Cmy, ..frame }, w, h);
+            let stats = self.stats;
+            let k = self.draw_frame(&Frame { ink: Ink::K, ..frame }, w, h);
+            self.stats = stats;
+            ink::compose(&cmy, &k, opts.background)
         } else {
-            self.draw_page(&mut ctx, &frame);
-        }
+            self.draw_frame(&frame, w, h)
+        };
         // Drop cache entries not seen for a few frames.
         let g = self.stamp;
         if self.geom.len() > 1024 {
@@ -389,6 +372,48 @@ impl Renderer {
         if self.shadows.len() > 256 {
             self.shadows.retain(|_, e| g - e.stamp <= 3);
         }
+        proof::post(&mut pixels, opts);
+        self.stats.micros = now().saturating_sub(start);
+        Rendered { width: w as u32, height: h as u32, pixels }
+    }
+
+    /// Draw frame `f` (`w`×`h` pixels): the background, the artboards and the page's art.
+    fn draw_frame(&mut self, f: &Frame, w: u16, h: u16) -> Vec<u8> {
+        let (threads, opts) = (self.threads, f.opts);
+        let slot = if threads == 0 { self.ctx_st.take() } else { self.ctx.take() };
+        let mut ctx = match slot {
+            Some(mut c) if c.width() == w && c.height() == h => {
+                c.reset();
+                c
+            }
+            _ => RenderContext::new_with(w, h, vello_cpu::RenderSettings { num_threads: threads, ..Default::default() }),
+        };
+        if let Some(bg) = opts.background {
+            ctx.set_transform(Affine::IDENTITY);
+            ctx.set_paint(f.ink.fixed(bg));
+            ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, h as f64));
+        }
+        if opts.artboards && !opts.outline {
+            // Paper: white on screen, no ink on the ink planes.
+            ctx.set_transform(f.view);
+            ctx.set_paint(peniko::Color::WHITE);
+            for ab in &f.doc.artboards {
+                ctx.fill_rect(&ab.rect);
+            }
+        }
+        (self.nested, self.backdrop) = (0, None);
+        self.clip_paths.clear();
+        if opts.trim && !f.doc.artboards.is_empty() {
+            let mut clip = BezPath::new();
+            for ab in &f.doc.artboards {
+                clip.extend(ab.rect.path_elements(0.1));
+            }
+            let blends = self.children_blend(&f.doc.layers);
+            let trim = Composite { clip: Some((&clip, FillRule::NonZero)), blends, ..Default::default() };
+            self.group(&mut ctx, f, trim, &mut |r, c, fr| r.draw_page(c, fr));
+        } else {
+            self.draw_page(&mut ctx, f);
+        }
         ctx.flush();
         let mut pm = Pixmap::new(w, h);
         ctx.render(&mut pm, &mut self.resources);
@@ -397,10 +422,7 @@ impl Renderer {
         } else {
             self.ctx = Some(ctx);
         }
-        let mut pixels = pm.data_as_u8_slice().to_vec();
-        proof::post(&mut pixels, opts);
-        self.stats.micros = now().saturating_sub(start);
-        Rendered { width: w as u32, height: h as u32, pixels }
+        pm.data_as_u8_slice().to_vec()
     }
 
     /// The page's art: the layers (or the pattern being edited), inside the page group when the
@@ -456,7 +478,7 @@ impl Renderer {
             ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
         }
-        let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts: &RenderOptions::default() };
+        let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts: &RenderOptions::default(), ink: Ink::Display };
         (self.knockout, self.nested, self.backdrop) = (false, 0, None);
         self.clip_paths.clear();
         self.draw_node(&mut ctx, &frame, n, true);
@@ -588,10 +610,11 @@ impl Renderer {
     /// as luminance ([`mask_value`]).
     fn mask_values(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> Vec<u8> {
         let mut mctx = single_threaded_context(w, h);
-        // Mask art is a picture of its own: it takes no part in a knockout group around the object.
+        // Mask art is a picture of its own: it takes no part in a knockout group around the object,
+        // and its luminance is that of its screen colours.
         let outer =
             (std::mem::take(&mut self.knockout), std::mem::take(&mut self.nested), self.backdrop.take(), std::mem::take(&mut self.clip_paths));
-        self.draw_node(&mut mctx, &Frame { mt: false, ..*f }, &m.art, true);
+        self.draw_node(&mut mctx, &Frame { mt: false, ink: Ink::Display, ..*f }, &m.art, true);
         (self.knockout, self.nested, self.backdrop, self.clip_paths) = outer;
         mctx.flush();
         let mut pm = Pixmap::new(w, h);
@@ -798,7 +821,7 @@ impl Renderer {
         let mut screen = bp.clone();
         screen.apply_affine(f.view);
         ctx.set_stroke(kurbo::Stroke::new(1.0));
-        ctx.set_paint(peniko::Color::from_rgba8(rgba[0], rgba[1], rgba[2], rgba[3]));
+        ctx.set_paint(f.ink.fixed(rgba));
         ctx.stroke_path(&screen);
     }
 
@@ -829,8 +852,8 @@ impl Renderer {
                         ctx.push_layer(None, Some(blend_mode(fl.blend)), Some(fl.opacity), None, None);
                     }
                     ctx.set_transform(f.view);
-                    if paint::set_paint(ctx, &fl.paint, bounds, f.doc) {
-                        self.fold_alpha(ctx, &fl.paint);
+                    if paint::set_paint(ctx, &fl.paint, bounds, f) {
+                        self.fold_alpha(ctx, f.ink, &fl.paint);
                         ctx.set_fill_rule(fill_rule(rule));
                         ctx.fill_path(bp);
                     }
@@ -852,12 +875,11 @@ impl Renderer {
     }
 
     /// Multiply the folded object opacity into a solid paint.
-    fn fold_alpha(&self, ctx: &mut RenderContext, p: &vectorcraft_color::Paint) {
+    fn fold_alpha(&self, ctx: &mut RenderContext, ink: Ink, p: &vectorcraft_color::Paint) {
         if self.alpha < 1.0
             && let vectorcraft_color::Paint::Solid { color, .. } = p
         {
-            let [r, g, b, a] = color.to_rgba8(self.alpha);
-            ctx.set_paint(peniko::Color::from_rgba8(r, g, b, a));
+            ctx.set_paint(ink.color(color, self.alpha));
         }
     }
 
@@ -886,8 +908,8 @@ impl Renderer {
         }
         // One paint box for the line and the heads, so a gradient runs on into the heads.
         let paint_bounds = bounds.inflate(st.width / 2.0, st.width / 2.0);
-        if paint::set_paint(ctx, &st.paint, paint_bounds, f.doc) {
-            self.fold_alpha(ctx, &st.paint);
+        if paint::set_paint(ctx, &st.paint, paint_bounds, f) {
+            self.fold_alpha(ctx, f.ink, &st.paint);
             ctx.set_fill_rule(peniko::Fill::NonZero);
             match self.cached_stroke(f, &pieces.line, st, width) {
                 Some(o) => ctx.fill_path(&o),
@@ -994,8 +1016,8 @@ impl Renderer {
             }
             ctx.set_transform(xf);
             ctx.set_fill_rule(peniko::Fill::NonZero);
-            if paint::set_paint(ctx, &run.style.fill, g.bounds, f.doc) {
-                self.fold_alpha(ctx, &run.style.fill);
+            if paint::set_paint(ctx, &run.style.fill, g.bounds, f) {
+                self.fold_alpha(ctx, f.ink, &run.style.fill);
                 overprint(ctx, run.style.overprint_fill);
                 ctx.fill_path(path);
             }
@@ -1024,7 +1046,7 @@ impl Renderer {
                         ctx.push_layer(None, Some(blend_mode(fl.blend)), Some(fl.opacity), None, None);
                     }
                     ctx.set_transform(f.view);
-                    if paint::set_paint(ctx, &fl.paint, tb, f.doc) {
+                    if paint::set_paint(ctx, &fl.paint, tb, f) {
                         ctx.set_fill_rule(peniko::Fill::NonZero);
                         ctx.fill_path(all);
                     }
@@ -1060,6 +1082,7 @@ impl Renderer {
                 pm
             }
         };
+        let pm = self.ink_image(&im.key, &pm, f.ink);
         let sx = im.width as f64 / pm.width().max(1) as f64;
         let sy = im.height as f64 / pm.height().max(1) as f64;
         ctx.set_transform(f.view * im.xf);
@@ -1212,6 +1235,8 @@ mod tests_blend;
 mod tests_charstroke;
 #[cfg(test)]
 mod tests_clip;
+#[cfg(test)]
+mod tests_cmykblend;
 #[cfg(test)]
 mod tests_container;
 #[cfg(test)]

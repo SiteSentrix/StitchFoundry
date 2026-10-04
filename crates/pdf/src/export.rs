@@ -18,6 +18,7 @@ use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeKin
 use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 
+use crate::lab_spot::{find, rfind};
 use crate::{Compatibility, ExportReport, PdfError, PdfOptions};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
@@ -72,6 +73,12 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     pdf.set_metadata(meta);
 
     let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), brushes: None, knockout: doc.page_knockout, lab_spots: vec![] };
+    // CMYK documents blend in CMYK, as on screen: their groups' blending space is rewritten (see
+    // `cmyk_blending`), and transparency at the top of a page is put in a non-isolated group of
+    // its own (the PDF writer has no page group attributes).
+    let cmyk = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
+    let page_group = doc.page_isolate || doc.page_knockout;
+    let cmyk_page_group = cmyk && !page_group && doc.layers.iter().any(|l| l.shows_transparency());
     for i in indices {
         let ab = &doc.artboards[i];
         let r = ab.rect;
@@ -82,23 +89,87 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         s.push_transform(&xf(Affine::translate((-r.x0, -r.y0))));
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
         // writer has no page group attributes).
-        let page_group = doc.page_isolate || doc.page_knockout;
         if page_group {
             s.push_isolated();
+        } else if cmyk_page_group {
+            let all = constant_mask(&mut s, r, 1.0);
+            s.push_mask(all);
         }
         ex.children(&mut s, &doc.layers, r);
-        if page_group {
+        if page_group || cmyk_page_group {
             s.pop();
         }
         s.pop();
         s.finish();
         page.finish();
     }
-    let bytes = pdf.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
+    let mut bytes = pdf.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
+    if cmyk {
+        cmyk_blending(&mut bytes);
+    }
     let bytes = if ex.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &ex.lab_spots) };
     let mut warnings = ex.warnings;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
+}
+
+/// Make the transparency groups of `pdf` blend in DeviceCMYK. The PDF writer gives every group
+/// DeviceRGB as its blending space, so the group dictionaries are rewritten in place, keeping their
+/// length so the cross-reference offsets stay valid. Luminosity masks' groups keep RGB: mask
+/// luminance is that of screen colours, as on screen.
+fn cmyk_blending(pdf: &mut [u8]) {
+    let masks = luminosity_mask_groups(pdf);
+    let mut from = 0;
+    while let Some(at) = find(pdf, b"/Group<<", from).map(|i| i + b"/Group".len()) {
+        let end = find(pdf, b">>", at).map_or(pdf.len(), |i| i + 2);
+        if !object_number(&pdf[..at]).is_some_and(|n| masks.contains(&n)) {
+            cmyk_group(&mut pdf[at..end]);
+        }
+        from = end;
+    }
+}
+
+/// Rewrite transparency group dictionary `dict` (`<<…>>`) to blend in DeviceCMYK, at the same
+/// length: leaving out the optional `/Type/Group` makes room for the longer name, spaces pad the
+/// rest.
+fn cmyk_group(dict: &mut [u8]) {
+    let Ok(text) = std::str::from_utf8(dict) else { return };
+    if !(text.contains("/S/Transparency") && text.contains("/Type/Group") && text.contains("/CS/DeviceRGB")) {
+        return;
+    }
+    let body = text.replacen("/Type/Group", "", 1).replacen("/CS/DeviceRGB", "/CS/DeviceCMYK", 1);
+    let body = body.strip_suffix(">>").unwrap_or(&body);
+    let new = format!("{body}{}>>", " ".repeat(dict.len() - body.len() - 2));
+    dict.copy_from_slice(new.as_bytes());
+}
+
+/// Object numbers of the groups luminosity soft masks draw (`/G n 0 R` in their dictionaries).
+fn luminosity_mask_groups(pdf: &[u8]) -> Vec<u32> {
+    let mut out = vec![];
+    let mut from = 0;
+    while let Some(at) = find(pdf, b"/Type/Mask", from) {
+        let end = find(pdf, b">>", at).unwrap_or(pdf.len());
+        let dict = &pdf[at..end];
+        if find(dict, b"/S/Luminosity", 0).is_some()
+            && let Some(g) = find(dict, b"/G ", 0)
+        {
+            let rest = &dict[g + 3..];
+            out.extend(number(&rest[..rest.iter().take_while(|b| b.is_ascii_digit()).count()]));
+        }
+        from = end;
+    }
+    out
+}
+
+/// The number of the object whose dictionary `before` ends in (its last `n 0 obj` header).
+fn object_number(before: &[u8]) -> Option<u32> {
+    let at = rfind(before, b" 0 obj")?;
+    let digits = before[..at].iter().rev().take_while(|b| b.is_ascii_digit()).count();
+    number(&before[at - digits..at])
+}
+
+fn number(digits: &[u8]) -> Option<u32> {
+    std::str::from_utf8(digits).ok()?.parse().ok()
 }
 
 #[cfg(not(target_arch = "wasm32"))]

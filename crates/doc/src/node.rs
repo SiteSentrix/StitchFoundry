@@ -1046,6 +1046,28 @@ impl Node {
     }
 }
 
+impl Node {
+    /// Whether this object shows any transparency, itself or anything inside it: object, fill or
+    /// stroke opacity below 100%, a blend mode, an opacity mask, effects or transparent gradient
+    /// stops. Hidden objects show none.
+    pub fn shows_transparency(&self) -> bool {
+        use vectorcraft_color::Paint;
+        let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
+        let effects = |fx: &[crate::Effect]| fx.iter().any(|e| e.visible);
+        self.visible
+            && (self.opacity < 1.0
+                || self.blend != BlendMode::Normal
+                || self.mask.as_ref().is_some_and(|m| !m.disabled)
+                || effects(&self.appearance.effects)
+                || self
+                    .appearance
+                    .items
+                    .iter()
+                    .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
+                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency())))
+    }
+}
+
 /// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?
 fn keeps_gradient_fit(a: Affine) -> bool {
     let [m0, m1, m2, m3, _, _] = a.as_coeffs();
