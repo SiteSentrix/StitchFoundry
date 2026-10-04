@@ -48,8 +48,13 @@ fn moved_commands_keep_their_ids() {
         "swatch.duplicate",
         "swatch.sortByName",
     ];
+    let pos = |id: &str| command_specs().iter().position(|c| c.id == id).unwrap_or_else(|| panic!("{id}"));
+    let (paint_end, after_paint) = (pos("transparency.set"), pos("transparency.makeOpacityMask"));
     for id in ids {
         assert_eq!(command_specs().iter().filter(|c| c.id == id).count(), 1, "{id}");
+        // Registered right after `paint` (where they lived), so the command palette, which lists
+        // the first matches in registry order, still shows them (e.g. Stroke Options for "stroke").
+        assert!((paint_end..after_paint).contains(&pos(id)), "{id}");
     }
 }
 

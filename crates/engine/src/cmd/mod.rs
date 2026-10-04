@@ -153,6 +153,13 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(select::specs());
         v.extend(wand::specs());
         v.extend(paint::specs());
+        // Split out of `paint` (M3.8); kept next to it so lists in registry order (the command
+        // palette, `engine.commands`) show them where they always were.
+        v.extend(stroke::specs());
+        v.extend(appearance::specs());
+        v.extend(style::specs());
+        v.extend(swatch::specs());
+        v.extend(gradient::specs());
         v.extend(opacitymask::specs());
         v.extend(layer::specs());
         v.extend(draw2::specs());
@@ -184,11 +191,6 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(patterncmds::specs());
         v.extend(prefscmds::specs());
         v.extend(distortcmds::specs());
-        v.extend(appearance::specs());
-        v.extend(gradient::specs());
-        v.extend(stroke::specs());
-        v.extend(style::specs());
-        v.extend(swatch::specs());
         v
     })
 }
