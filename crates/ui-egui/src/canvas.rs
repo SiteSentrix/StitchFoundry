@@ -78,6 +78,11 @@ enum Drag {
     },
     /// Cmd held: temporary selection tool; restore this tool on release.
     TempSelect,
+    /// A Selection tool move dragged off the canvas: the panels get the art
+    /// ([`widgets::PanelDrag::Art`]); `temp` restores the tool Cmd switched from on release.
+    Art {
+        temp: bool,
+    },
 }
 
 fn drag_id() -> egui::Id {
@@ -427,7 +432,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         vm.rotation = vectorcraft_geom::normalize_deg(deg);
                     }
                 }
-                Drag::ZoomBox { .. } => {}
+                Drag::ZoomBox { .. } | Drag::Art { .. } => {}
+                Drag::Tool | Drag::TempSelect if drag_art_out(app, ui, resp, p, view) => {
+                    ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Art { temp: d == Drag::TempSelect }));
+                }
                 Drag::Tool | Drag::TempSelect => {
                     if pointer.delta() != egui::Vec2::ZERO {
                         let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
@@ -454,10 +462,12 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         }
                     }
                 }
-                Drag::Tool | Drag::TempSelect => {
-                    let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
-                    dispatch(app, &ev, view);
-                    if d == Drag::TempSelect
+                Drag::Tool | Drag::TempSelect | Drag::Art { .. } => {
+                    if !matches!(d, Drag::Art { .. }) {
+                        let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+                        dispatch(app, &ev, view);
+                    }
+                    if matches!(d, Drag::TempSelect | Drag::Art { temp: true })
                         && let Some(prev) = ui.data(|dd| dd.get_temp::<String>(temp_tool_id()))
                     {
                         app.select_tool(&prev);
@@ -481,6 +491,26 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     if drag.is_some() || pointer.is_moving() {
         ui.ctx().request_repaint();
     }
+}
+
+/// A Selection tool move dragged off the canvas (to `p`, over a panel) turns into a panel drag of
+/// the selected art ([`widgets::PanelDrag::Art`]): the move is dropped, so the art stays where it
+/// was, and the panel it is released on takes it (the Graphic Styles panel makes a style of it).
+fn drag_art_out(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, p: Pos2, view: vectorcraft_engine::ViewInfo) -> bool {
+    let off = !ui.clip_rect().contains(p) || ui.ctx().layer_id_at(p).is_some_and(|l| l != resp.layer_id);
+    let Some(st) = app.session.active().filter(|_| off && app.session.tool_id() == "selection") else { return false };
+    // The Selection tool's interaction while it moves (or Alt-copies) the selection.
+    if !st.interaction.as_ref().is_some_and(|i| i.label == "Move" || i.label == "Copy") {
+        return false;
+    }
+    let ids = st.selection.objects.clone();
+    if app.session.cancel_interaction().is_err() {
+        return false;
+    }
+    // With nothing left to commit, the tool's mouse-up just returns it to rest.
+    dispatch(app, &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), pressure: 1.0 }, view);
+    egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
+    true
 }
 
 /// Send a pointer event to the active tool and act on UI requests (dialogs, tool switches).
@@ -678,7 +708,8 @@ fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::
 /// selected or not: a paint (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail) goes
 /// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it), the
 /// Appearance panel's thumbnail gives the object (the topmost one hit) the appearance it carries
-/// (`appearance.copyFrom`). A chip follows the pointer meanwhile.
+/// (`appearance.copyFrom`), a graphic style is applied to it (`graphicStyle.apply`; with Alt, on
+/// top of its appearance). A chip follows the pointer meanwhile.
 fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
     crate::panels::swatches::drag_preview(app, ui.ctx());
     let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
@@ -707,6 +738,12 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
             }
             ("appearance.copyFrom", json!({"source": source.0, "ids": [target.0]}))
         }
+        widgets::PanelDrag::GraphicStyle(name) => {
+            let add = ui.input(|i| i.modifiers.alt);
+            ("graphicStyle.apply", json!({"name": name, "ids": [hit.top_object(st.isolation).0], "add": add}))
+        }
+        // Art dragged back onto the canvas: its move was already dropped.
+        widgets::PanelDrag::Art(_) => return,
     };
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
@@ -1196,5 +1233,68 @@ mod tests {
         drop(&mut app, Point::new(350.0, 250.0));
         drop(&mut app, Point::new(70.0, 70.0));
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo_len);
+    }
+
+    #[test]
+    fn a_graphic_style_dropped_on_art_applies_to_the_object_hit() {
+        use vectorcraft_doc::NodeId;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 400, "height": 300}));
+        let a = NodeId(run(&mut app, "shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+        let b = NodeId(run(&mut app, "shape.rectangle", json!({"x": 200, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap());
+        run(&mut app, "select.set", json!({ "ids": [a.0] }));
+        let name = app.session.active().unwrap().doc.graphic_styles[2].name.clone();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(250.0, 70.0));
+        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::GraphicStyle(name.clone()));
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![up]);
+        let st = app.session.active().unwrap();
+        let g = st.doc.graphic_style(&name).unwrap();
+        // `graphicStyle.apply` with the hit object's id: linked, the selection left alone.
+        assert_eq!(st.doc.node(b).unwrap().graphic_style, Some(g.id));
+        assert_eq!(st.doc.node(b).unwrap().appearance, g.appearance);
+        assert_eq!(st.doc.node(a).unwrap().graphic_style, None);
+        assert_eq!(st.selection.objects, [a]);
+    }
+
+    #[test]
+    fn art_moved_off_the_canvas_becomes_a_panel_drag_and_stays_put() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        let id = vectorcraft_doc::NodeId(id);
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let before = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let button = |pos: Pos2, pressed: bool| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        let start = xf.to_screen(Point::new(100.0, 100.0));
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start), button(start, true)]);
+        // Moving on the canvas moves the art...
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start + vec2(40.0, 0.0))]);
+        assert!(app.session.active().unwrap().interaction.is_some());
+        // ...until the pointer leaves it: the move is dropped and the panels get the art.
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(850.0, 100.0))]);
+        assert!(app.session.active().unwrap().interaction.is_none());
+        assert_eq!(*app.session.active().unwrap().doc, *before, "the art is back where it was");
+        assert_eq!(egui::DragAndDrop::payload::<widgets::PanelDrag>(&ctx).as_deref(), Some(&widgets::PanelDrag::Art(vec![id])));
+        assert!(!app.session.tool_busy());
+        // Released anywhere, nothing moves and nothing is recorded.
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start), button(start, false)]);
+        let st = app.session.active().unwrap();
+        assert_eq!(*st.doc, *before);
+        assert_eq!(st.history.undo.len(), undo);
     }
 }

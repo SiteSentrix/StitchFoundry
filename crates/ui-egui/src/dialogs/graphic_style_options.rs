@@ -1,8 +1,10 @@
 //! Graphic Style Options: the style's name. Opened on a style it renames it (`graphicStyle.rename`,
 //! linked objects stay linked); opened for New Graphic Style it names the style made from the
-//! selection (`graphicStyle.new`).
+//! selection (`graphicStyle.new`); opened for Merge Graphic Styles it names the style merged from
+//! the selected ones (`graphicStyle.merge`).
 //!
-//! Fields: `name` and `__style` (the style being renamed; empty for a new style).
+//! Fields: `name`, `__style` (the style being renamed; empty for a new style) and `__merge` (the
+//! styles to merge, if merging).
 
 use serde_json::{Value, json};
 
@@ -28,6 +30,19 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
     Ok(Value::Null)
 }
 
+/// Open Graphic Style Options to name the style Merge Graphic Styles makes of `names`.
+pub fn open_merge(app: &mut VectorcraftApp, names: Vec<String>) -> Result<Value, String> {
+    let d = &app.session.active().ok_or("no document open")?.doc;
+    if names.len() < 2 {
+        return Err("select two or more graphic styles to merge".into());
+    }
+    if let Some(n) = names.iter().find(|n| d.graphic_style(n).is_none()) {
+        return Err(format!("no graphic style `{n}`"));
+    }
+    app.ui.dialog = Some(Dialog::new(KIND, json!({ "name": d.new_graphic_style_name(), "__style": "", "__merge": names })));
+    Ok(Value::Null)
+}
+
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     grid(ui, |ui| {
         label(ui, "Style Name:");
@@ -37,10 +52,13 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: name the new style or rename the style. A name another style has keeps the dialog open.
+/// OK: name the new or merged style, or rename the style. A name another style has keeps the
+/// dialog open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (name, style) = (d.str("name"), d.str("__style"));
+    let merge = d.fields.get("__merge").filter(|m| m.as_array().is_some_and(|a| !a.is_empty()));
     let r = match style.as_str() {
+        "" if merge.is_some() => app.run("graphicStyle.merge", json!({ "names": merge, "name": name })),
         "" => app.run("graphicStyle.new", json!({ "name": name })),
         s if s == name => Ok(Value::Null),
         s => app.run("graphicStyle.rename", json!({ "name": s, "to": name })),

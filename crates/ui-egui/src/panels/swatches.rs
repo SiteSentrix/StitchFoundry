@@ -355,7 +355,7 @@ impl Drop {
         match d {
             PanelDrag::Paint { rows: Some(r), .. } => Some(Drop::Move { names: r.names.clone(), target, after }),
             PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace }),
-            PanelDrag::Appearance(_) => None,
+            _ => None,
         }
     }
 }
@@ -532,29 +532,43 @@ fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
 }
 
 /// While a panel drags something onto art, a chip follows the pointer: the dragged paint (swatches,
-/// a Fill/Stroke proxy, the Gradient panel's thumbnail), or the fill of the object whose
-/// appearance the Appearance panel's thumbnail carries.
+/// a Fill/Stroke proxy, the Gradient panel's thumbnail), the fill of the object whose appearance
+/// the Appearance panel's thumbnail carries (or of the first art dragged off the canvas), or the
+/// thumbnail of a dragged graphic style.
 pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
     let Some(d) = egui::DragAndDrop::payload::<PanelDrag>(ctx) else { return };
+    let fill_of = |id: &vectorcraft_doc::NodeId| app.session.active().and_then(|st| st.doc.node(*id)).map(|n| n.appearance.fill_paint());
     let (paint, registration) = match &*d {
         // Colour groups paint nothing.
         PanelDrag::Paint { params, .. } if params.is_null() => return,
         PanelDrag::Paint { paint, rows, .. } => (std::borrow::Cow::Borrowed(paint), rows.as_ref().is_some_and(|r| r.grabbed == REGISTRATION)),
-        PanelDrag::Appearance(id) => match app.session.active().and_then(|st| st.doc.node(*id)) {
-            Some(n) => (std::borrow::Cow::Owned(n.appearance.fill_paint()), false),
+        PanelDrag::Appearance(id) => match fill_of(id) {
+            Some(p) => (std::borrow::Cow::Owned(p), false),
             None => return,
         },
+        PanelDrag::Art(ids) => match ids.first().and_then(fill_of) {
+            Some(p) => (std::borrow::Cow::Owned(p), false),
+            None => return,
+        },
+        PanelDrag::GraphicStyle(name) => return pointer_chip(ctx, |ui, r| super::graphic_styles::paint_style(app, ui, r, name)),
     };
-    let Some(at) = ctx.pointer_hover_pos() else { return };
-    let area = egui::Area::new(egui::Id::new("swatch-drag-preview")).order(egui::Order::Tooltip).fixed_pos(at + vec2(12.0, 12.0));
-    area.interactable(false).show(ctx, |ui| {
-        let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+    pointer_chip(ctx, |ui, r| {
         if registration {
             draw_registration(ui, r);
         } else {
             swatch_tile(ui, r, &paint, false, false);
             pattern_thumb(app, ui, r.shrink(1.0), &paint);
         }
+    });
+}
+
+/// A 16-point chip `draw` paints, following the pointer.
+fn pointer_chip(ctx: &egui::Context, draw: impl FnOnce(&Ui, Rect)) {
+    let Some(at) = ctx.pointer_hover_pos() else { return };
+    let area = egui::Area::new(egui::Id::new("swatch-drag-preview")).order(egui::Order::Tooltip).fixed_pos(at + vec2(12.0, 12.0));
+    area.interactable(false).show(ctx, |ui| {
+        let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+        draw(ui, r);
     });
 }
 

@@ -306,6 +306,10 @@ pub struct Prefs {
     // Devices
     pub touch_workspace: bool,
     pub touch_gestures: bool,
+    // Graphic Styles panel
+    /// Override Character Color: a graphic style applied to type replaces its characters' fill
+    /// and stroke with the style's fills and strokes.
+    pub override_char_color: bool,
 }
 
 impl Default for Prefs {
@@ -418,6 +422,7 @@ impl Default for Prefs {
             black_output: s("accurate"),
             touch_workspace: true,
             touch_gestures: true,
+            override_char_color: true,
         }
     }
 }
@@ -810,6 +815,8 @@ mod tests_prefs;
 mod tests_strokegeom;
 #[cfg(test)]
 mod tests_strokeux;
+#[cfg(test)]
+mod tests_stylepanel;
 #[cfg(test)]
 mod tests_styles;
 #[cfg(test)]

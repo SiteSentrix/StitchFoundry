@@ -290,6 +290,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // Devices
     p!("touchWorkspace", "Devices", "", "Enable Touch Workspace", bool),
     p!("touchGestures", "Devices", "", "Enable Touch Gestures", bool),
+    // Graphic Styles panel menu
+    p!("overrideCharColor", "Type", "Graphic Styles", "Override Character Color", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

@@ -247,6 +247,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.userSwatchLibrary8", "User Swatch Library 8", "", "{} open the 8. User Defined swatch library"),
     ("window.userSwatchLibrary9", "User Swatch Library 9", "", "{} open the 9. User Defined swatch library"),
     ("window.userSwatchLibrary10", "User Swatch Library 10", "", "{} open the 10. User Defined swatch library"),
+    (
+        "ui.mergeGraphicStyles",
+        "Merge Graphic Styles…",
+        "",
+        "{names: [two or more styles]} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`) to name the style OK merges from them (graphicStyle.merge)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -590,6 +596,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(l) => crate::panels::swatches::open_library(app, &json!({ "library": l.id })),
             None => Err("no such user library".into()),
         },
+        "ui.mergeGraphicStyles" => {
+            let names = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            crate::dialogs::graphic_style_options::open_merge(app, names.unwrap_or_default())
+        }
         _ => return None,
     };
     Some(r)

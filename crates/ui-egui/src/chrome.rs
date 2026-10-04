@@ -2,7 +2,6 @@
 
 use egui::{CornerRadius, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
-use vectorcraft_color::Paint;
 use vectorcraft_doc::NodeKind;
 
 use crate::panels::stroke as stroke_panel;
@@ -59,14 +58,12 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
-fn chip_button(ui: &mut Ui, paint: &Paint, stroke_style: bool, tip: &str) -> egui::Response {
+/// A Control bar chip that opens something: `draw` paints the chip, a chevron follows it.
+fn chip_button(ui: &mut Ui, tip: &str, draw: impl FnOnce(&Ui, egui::Rect)) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(34.0, 22.0), Sense::click());
     let chip = egui::Rect::from_min_size(r.min + vec2(0.0, 2.0), vec2(18.0, 18.0));
-    paint_chip(ui, chip, paint);
-    if stroke_style {
-        ui.painter().rect_filled(chip.shrink(5.0), 0.0, t.panel);
-    }
+    draw(ui, chip);
     ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Outside);
     icons::paint(ui, "chevron-down", egui::Rect::from_min_size(r.min + vec2(21.0, 5.0), vec2(12.0, 12.0)), t.text_dim);
     resp.on_hover_text(tip)
@@ -105,12 +102,16 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let mixed = crate::panels::stroke_mixed(app, ui.ctx());
                 let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
                 let opacity = if first.is_some() { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
-                if chip_button(ui, &fill, false, "Fill").clicked() {
+                if chip_button(ui, "Fill", |ui, r| paint_chip(ui, r, &fill)).clicked() {
                     app.run("paint.toggleActive", json!({})).ok();
                     app.session.fill_active = true;
                     app.ui.open_panel = Some("swatches".into());
                 }
-                if chip_button(ui, &stroke, true, "Stroke").clicked() {
+                let stroke_chip = |ui: &Ui, r: egui::Rect| {
+                    paint_chip(ui, r, &stroke);
+                    ui.painter().rect_filled(r.shrink(5.0), 0.0, t.panel);
+                };
+                if chip_button(ui, "Stroke", stroke_chip).clicked() {
                     app.session.fill_active = false;
                     app.ui.open_panel = Some("swatches".into());
                 }
@@ -132,6 +133,15 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     && !sel.is_empty()
                 {
                     app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
+                }
+                if !sel.is_empty() {
+                    // Style picker: the selection's graphic style; its menu applies another.
+                    ui.add_space(4.0);
+                    if ui.link(egui::RichText::new("Style:").size(12.0).color(t.text).underline()).clicked() {
+                        app.ui.open_panel = Some("graphicStyles".into());
+                    }
+                    let resp = chip_button(ui, "Graphic Style", |ui, r| crate::panels::graphic_styles::paint_linked(app, ui, r));
+                    egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
                 }
                 ui.separator();
                 if sel.is_empty() {
