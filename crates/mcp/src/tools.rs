@@ -246,7 +246,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "open_file",
             "Open file",
-            "Open a .vectorcraft or .svg file as a new, active document.",
+            "Open a .vectorcraft, .svg, .pdf or PDF-compatible .ai file as a new, active document.",
             obj(json!({"path": string("File path")}), &["path"]),
             false,
         ),

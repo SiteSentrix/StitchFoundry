@@ -200,6 +200,18 @@ fn headless_end_to_end() {
     let r = call(&mut s, 9, "open_file", json!({"path": svg_path.to_str().unwrap()}));
     assert_eq!(r["isError"], false, "{r}");
 
+    // PDF and PDF-compatible .ai open headless too.
+    let pdf_path = tmp("out.pdf");
+    assert_eq!(call(&mut s, 20, "export", json!({"path": pdf_path.to_str().unwrap()}))["isError"], false);
+    let ai_path = tmp("out.ai");
+    std::fs::copy(&pdf_path, &ai_path).unwrap();
+    for (id, p) in [(21, &pdf_path), (22, &ai_path)] {
+        let r = call(&mut s, id, "open_file", json!({"path": p.to_str().unwrap()}));
+        assert_eq!(r["isError"], false, "{r}");
+        let doc: Value = serde_json::from_str(&text_of(&call(&mut s, id + 10, "inspect_document", json!({})))).unwrap();
+        assert!(doc["objects"].as_u64().unwrap() >= 2, "{doc}");
+    }
+
     // Resources.
     let v = rpc(&mut s, 10, "resources/list", json!({}));
     assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 2);

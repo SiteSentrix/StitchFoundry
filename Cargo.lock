@@ -4185,6 +4185,7 @@ dependencies = [
  "vectorcraft-engine",
  "vectorcraft-format",
  "vectorcraft-geom",
+ "vectorcraft-pdf",
  "vectorcraft-render",
  "vectorcraft-svg",
  "vectorcraft-testkit",

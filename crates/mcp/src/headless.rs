@@ -215,7 +215,7 @@ impl Headless {
         }
     }
 
-    /// `app.open {path}`: `.vectorcraft` or `.svg` as a new active document.
+    /// `app.open {path}`: `.vectorcraft`, `.svg`, `.pdf` or PDF-compatible `.ai` as a new active document.
     pub fn open(&mut self, p: &Value) -> Result<Value, String> {
         let path = s(p, "path").ok_or("missing `path`")?;
         let bytes = std::fs::read(path).map_err(|e| format!("read {path}: {e}"))?;
@@ -234,8 +234,15 @@ impl Headless {
             d.title = name.clone();
             warnings = w;
             (d, false)
+        } else if e == "pdf" || e == "ai" || bytes.starts_with(b"%PDF") {
+            // PDF, or the PDF-compatible part of an Illustrator `.ai`, as in the app's File ▸ Open.
+            let r = vectorcraft_pdf::import_with_report(&bytes, &vectorcraft_pdf::ImportOptions::default()).map_err(|e| e.to_string())?;
+            let mut d = r.document;
+            d.title = name.clone();
+            warnings = r.warnings;
+            (d, false)
         } else {
-            return Err(format!("headless mode can open .vectorcraft and .svg files, not .{e}"));
+            return Err(format!("headless mode can open .vectorcraft, .svg, .pdf and .ai files, not .{e}"));
         };
         let index = self.session.add_document(doc, keep_path.then(|| path.to_string()));
         Ok(json!({"index": index, "title": name, "warnings": warnings}))
