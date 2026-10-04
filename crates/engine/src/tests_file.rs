@@ -183,3 +183,26 @@ fn template_opens_as_untitled() {
     assert_eq!(st.doc.layers[0].children().unwrap().len(), 1);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn raster_export_too_large_is_an_error_not_a_crash() {
+    // The largest artboard (16383 pt) at 300 ppi is ~68 000 px a side: more than the rasteriser can
+    // address. The export used to panic inside the renderer (crashing the app or the MCP server).
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 16383, "height": 16383})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 100})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-raster-limit-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for format in ["png", "jpg", "webp"] {
+        let path = dir.join(format!("big.{format}"));
+        let e = s.execute("document.export", &json!({"path": path.to_string_lossy(), "scale": 300.0 / 72.0})).unwrap_err().to_string();
+        assert!(e.contains("pixels"), "{format}: {e}");
+        assert!(!path.exists(), "{format}");
+        assert!(s.execute("document.serialize", &json!({"format": format, "scale": 300.0 / 72.0})).is_err(), "{format}");
+    }
+    // A size within the limits still exports.
+    let path = dir.join("ok.png");
+    s.execute("document.export", &json!({"path": path.to_string_lossy(), "scale": 0.25})).unwrap();
+    assert!(std::fs::read(&path).unwrap().starts_with(b"\x89PNG"));
+    let _ = std::fs::remove_dir_all(dir);
+}

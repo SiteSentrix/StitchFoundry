@@ -282,7 +282,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             let Some(st) = app.session.active() else { return err("no document") };
             let doc = st.doc.clone();
             let Some(r) = doc.artboards.first().map(|a| a.rect) else { return err("no artboard") };
-            let img = app.canvas.renderer.render_region(&doc, r, p.get("scale").and_then(Value::as_f64).unwrap_or(1.0), true);
+            let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0);
+            if let Err(e) = vectorcraft_render::raster_size(r, scale) {
+                return err(e);
+            }
+            let img = app.canvas.renderer.render_region(&doc, r, scale, true);
             let png = img.to_png();
             match s("path") {
                 Some(path) => match app.services.write.as_mut() {

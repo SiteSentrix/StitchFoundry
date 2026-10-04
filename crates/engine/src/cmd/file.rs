@@ -134,7 +134,9 @@ fn encode_doc_with(doc: &vectorcraft_doc::Document, format: &str, scale: f64, ar
         "pdf" => super::rasterfx::export_pdf(doc, &vectorcraft_pdf::PdfOptions::default()).map_err(|e| EngineError::Other(e.to_string()))?,
         "png" | "jpg" | "jpeg" | "webp" => {
             let r = doc.artboards.get(artboard).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-            let img = vectorcraft_render::Renderer::new().render_region(doc, r, scale.clamp(0.01, 64.0), format != "png" && format != "webp");
+            let scale = scale.clamp(0.01, 64.0);
+            vectorcraft_render::raster_size(r, scale).map_err(EngineError::Other)?;
+            let img = vectorcraft_render::Renderer::new().render_region(doc, r, scale, format != "png" && format != "webp");
             match format {
                 "png" => img.to_png(),
                 "webp" => img.to_webp(),

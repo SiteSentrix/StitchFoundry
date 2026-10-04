@@ -204,6 +204,7 @@ impl Headless {
         let idx = p.get("artboard").and_then(Value::as_u64).unwrap_or(0) as usize;
         let r = doc.artboards.get(idx).map(|a| a.rect).ok_or("no such artboard")?;
         let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.01, 16.0);
+        vectorcraft_render::raster_size(r, scale)?;
         let img = self.renderer.render_region(&doc, r, scale, true);
         let png = img.to_png();
         match s(p, "path") {
@@ -269,6 +270,7 @@ impl Headless {
                 let idx = p.get("artboard").and_then(Value::as_u64).unwrap_or(0) as usize;
                 let r = doc.artboards.get(idx).map(|a| a.rect).ok_or("no such artboard")?;
                 let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.01, 16.0);
+                vectorcraft_render::raster_size(r, scale)?;
                 self.renderer.render_region(&doc, r, scale, false).to_png()
             }
             "vectorcraft" => vectorcraft_format::save_file(&doc),
