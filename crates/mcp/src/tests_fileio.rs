@@ -83,7 +83,7 @@ fn recording_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
 
 #[test]
 fn export_is_the_same_call_in_the_app_and_headless() {
-    let args = json!({"format": "png", "artboard": 1, "options": {"scale": 2, "artboard": 0}});
+    let args = json!({"format": "png", "artboard": 1, "options": {"scale": 2, "artboard": 0, "range": "1-2"}});
     let (addr, app) = recording_app();
     let mut remote = Remote::connect(&addr).unwrap();
     assert!(!call_tool(&mut remote, "export", &args).is_error);

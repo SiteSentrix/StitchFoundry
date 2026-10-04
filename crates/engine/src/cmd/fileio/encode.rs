@@ -12,6 +12,9 @@ use crate::EngineError;
 
 const C: &str = "document.export";
 
+/// The params that pick artboards (the fields of [`ArtboardPick`]).
+pub const ARTBOARD_PARAMS: [&str; 3] = ["artboard", "artboards", "range"];
+
 /// Which artboards an export covers: `range` (`"1-3, 5"`, 1-based) wins over `artboards`
 /// (0-based), which wins over `artboard`.
 #[derive(Debug, Default, Deserialize)]
@@ -80,6 +83,28 @@ fn options<T: DeserializeOwned + Default>(f: &Format, p: &Value) -> Result<T> {
     T::deserialize(p).map_err(|e| bad(C, format!("{} options: {e}", f.label)))
 }
 
+/// Most pixels a raster export renders (1 GiB of RGBA).
+const MAX_PIXELS: f64 = 268_435_456.0;
+
+/// Refuse a raster export the encoder can't write or memory can't hold (instead of writing an
+/// empty file or aborting).
+fn check_pixels(f: &Format, w: f64, h: f64) -> Result<()> {
+    // WebP stores sizes in 14 bits, JPEG in 16.
+    let side = if f.id == "webp" { 16383.0 } else { 65535.0 };
+    if w.round() > side || h.round() > side || w * h > MAX_PIXELS {
+        return Err(bad(
+            C,
+            format!(
+                "{}×{} px is too large for {} (at most {side} px a side, {MAX_PIXELS} px in all): lower the scale",
+                w.round(),
+                h.round(),
+                f.label
+            ),
+        ));
+    }
+    Ok(())
+}
+
 /// Encode `doc` as `format` (an id or extension from [`super::FORMATS`]) with that format's
 /// options from `p` (see `document.formats`). Raster formats leave template layers out.
 pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
@@ -102,6 +127,7 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
             let o: RasterOptions = options(f, p)?;
             let region = doc.artboards[boards(o.boards.one(n))?].rect;
             let scale = o.scale.unwrap_or(1.0).clamp(0.01, 64.0);
+            check_pixels(f, region.width() * scale, region.height() * scale)?;
             let img = vectorcraft_render::Renderer::new().render_region(doc, region, scale, f.id == "jpg");
             match f.id {
                 "png" => img.to_png(),

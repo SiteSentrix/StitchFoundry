@@ -2,7 +2,7 @@
 //! [`Backend`].
 
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::fileio::{FORMATS, OPEN_EXTS};
+use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS};
 
 use crate::backend::Backend;
 
@@ -736,8 +736,14 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "open_file" => j(b.call("app.open", json!({"path": req_str(a, "path")?}))?),
         "save_file" => j(b.call("app.save", json!({"path": a.get("path").and_then(Value::as_str)}))?),
         "export" => {
-            // One params object for every backend; the named arguments win over `options`.
+            // One params object for every backend; the named arguments win over `options` (a named
+            // artboard or range replaces every artboard choice in `options`).
             let mut params = a.get("options").and_then(Value::as_object).cloned().unwrap_or_default();
+            if ["artboard", "range"].iter().any(|k| a.get(*k).is_some_and(|v| !v.is_null())) {
+                for k in ARTBOARD_PARAMS {
+                    params.remove(k);
+                }
+            }
             for k in ["path", "format", "scale", "artboard", "range", "outlineText"] {
                 if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
                     params.insert(k.into(), v.clone());

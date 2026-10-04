@@ -278,3 +278,53 @@ fn export_for_screens_one_page_per_pdf_unique_names() {
     assert!(s.execute("document.exportForScreens", &json!({"formats": [{"format": "vectorcraft"}]})).is_err());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn template_sublayers_are_left_out_too() {
+    let mut s = session(100.0, 100.0, 1);
+    let sub = s.execute("layer.newSublayer", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("layer.setCurrent", &json!({"id": sub})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let red = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(s.doc().unwrap().doc.ancestry(vectorcraft_doc::NodeId(red)).unwrap().len(), 3, "the square is on a sublayer");
+    assert!(has_red(&b64(&s.execute("document.export", &json!({"format": "png"})).unwrap())));
+    s.execute("layer.setProps", &json!({"id": sub, "template": true})).unwrap();
+    assert!(!has_red(&b64(&s.execute("document.export", &json!({"format": "png"})).unwrap())), "a template sublayer is left out");
+    s.execute("select.set", &json!({"ids": [red]})).unwrap();
+    assert!(s.execute("document.exportSelection", &json!({"format": "png"})).is_err(), "nothing but template art is selected");
+}
+
+#[test]
+fn export_for_screens_vector_rows_drop_scale_suffixes_and_names_ignore_case() {
+    let mut s = session(100.0, 80.0, 3);
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "Icon"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "icon"})).unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards[2].name.clear();
+    // The dialog's second row starts as PNG @2x; switched to PDF it keeps that suffix text.
+    let formats =
+        json!([{"format": "png", "scale": 1, "suffix": ""}, {"format": "pdf", "scale": 2, "suffix": "@2x"}, {"format": "svg", "suffix": "-web"}]);
+    let r = s.execute("document.exportForScreens", &json!({"formats": formats})).unwrap();
+    let names: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
+    assert_eq!(
+        names,
+        [
+            "Icon.png",
+            "Icon.pdf",
+            "Icon-web.svg",
+            "icon-2.png",
+            "icon-2.pdf",
+            "icon-2-web.svg",
+            "Artboard-3.png",
+            "Artboard-3.pdf",
+            "Artboard-3-web.svg"
+        ]
+    );
+}
+
+#[test]
+fn oversized_raster_exports_are_refused() {
+    let mut s = session(2000.0, 2000.0, 1);
+    let e = s.execute("document.export", &json!({"format": "webp", "scale": 10})).unwrap_err().to_string();
+    assert!(e.contains("too large"), "{e}");
+    assert!(s.execute("document.export", &json!({"format": "png", "scale": 40})).is_err(), "80000 px a side");
+}

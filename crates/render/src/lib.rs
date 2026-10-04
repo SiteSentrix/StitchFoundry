@@ -298,8 +298,7 @@ impl Renderer {
         if !self.draw_pattern_edit(&mut ctx, &frame) {
             // While editing an opacity mask its art is seen only through the mask (Illustrator).
             let mask_layer = doc.mask_edit.map(|m| m.layer);
-            let skipped = |l: &Node| Some(l.id) == mask_layer || opts.skip_templates && matches!(l.kind, NodeKind::Layer { template: true, .. });
-            for layer in doc.layers.iter().filter(|l| !skipped(l)) {
+            for layer in doc.layers.iter().filter(|l| Some(l.id) != mask_layer) {
                 self.draw_arc(&mut ctx, &frame, layer);
             }
         }
@@ -407,7 +406,8 @@ impl Renderer {
     }
 
     fn draw_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
-        if !a.visible || f.opts.hidden.contains(&a.id) {
+        let skipped_template = f.opts.skip_templates && matches!(a.kind, NodeKind::Layer { template: true, .. });
+        if !a.visible || skipped_template || f.opts.hidden.contains(&a.id) {
             return;
         }
         match self.bounds_of(a) {

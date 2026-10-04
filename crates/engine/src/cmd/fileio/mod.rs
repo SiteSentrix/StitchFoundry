@@ -17,7 +17,7 @@ mod save;
 
 use serde_json::{Value, json};
 
-pub use encode::{ArtboardPick, encode};
+pub use encode::{ARTBOARD_PARAMS, ArtboardPick, encode};
 pub use load::{Loaded, RasterImage, detect, load, open_bytes, raster_image};
 
 use super::*;
@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export for Screens",
             ["File", "Export"],
             None,
-            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|pdf, scale?: 1 (raster only), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1)}], prefix?} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name get -2, -3…) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
+            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|pdf, scale?: 1 (raster only), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; svg/pdf drop @Nx suffixes)}], prefix?} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
             has_doc,
             export::export_for_screens
         ),

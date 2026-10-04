@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 
 use super::super::*;
-use super::{ArtboardPick, Format, create_dir, encode, writable, write_file, write_or_return};
+use super::{ARTBOARD_PARAMS, ArtboardPick, Format, create_dir, encode, writable, write_file, write_or_return};
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
@@ -30,7 +30,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
 fn without_artboards(p: &Value) -> Value {
     let mut q = p.clone();
     if let Some(o) = q.as_object_mut() {
-        for k in ["artboard", "artboards", "range"] {
+        for k in ARTBOARD_PARAMS {
             o.remove(k);
         }
     }
@@ -45,7 +45,9 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable(C, str_param(p, "format"), path)?;
     let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
-    let on_template = |id| st.doc.layer_of(id).and_then(|l| st.doc.node(l)).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
+    let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
+    // On a template layer or sublayer, at any depth.
+    let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
     let nodes: Vec<Arc<Node>> = ids.into_iter().filter(|id| !on_template(*id)).filter_map(|id| st.doc.node(id).cloned().map(Arc::new)).collect();
     let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b)).ok_or_else(|| bad(C, "select something to export"))?;
     let mut d = (*st.doc).clone();
@@ -79,15 +81,25 @@ fn screen_format(row: &Value) -> Result<ScreenFormat> {
     if format.id == "vectorcraft" {
         return Err(bad(C, "Export for Screens writes png, jpg, webp, svg or pdf"));
     }
-    // Vector formats have no pixel size: scale doesn't apply and adds no @Nx suffix.
+    // Vector formats have no pixel size: scale doesn't apply and adds no @Nx suffix (not even one
+    // left over from a raster row switched to SVG or PDF).
     let scale = if format.raster { f64_or(row, "scale", 1.0) } else { 1.0 };
-    let suffix =
-        str_param(row, "suffix").map(str::to_string).unwrap_or_else(|| if (scale - 1.0).abs() < 1e-9 { String::new() } else { format!("@{scale}x") });
+    let suffix = match str_param(row, "suffix") {
+        Some(s) if !format.raster && is_scale_suffix(s) => String::new(),
+        Some(s) => s.to_string(),
+        None if (scale - 1.0).abs() < 1e-9 => String::new(),
+        None => format!("@{scale}x"),
+    };
     let mut options = without_artboards(row);
     if let Some(o) = options.as_object_mut() {
         o.insert("scale".into(), json!(scale));
     }
     Ok(ScreenFormat { format, options, suffix })
+}
+
+/// A pixel-density suffix such as `@2x` or `@0.5x`.
+fn is_scale_suffix(s: &str) -> bool {
+    s.strip_prefix('@').and_then(|s| s.strip_suffix(['x', 'X'])).is_some_and(|n| n.parse::<f64>().is_ok())
 }
 
 /// File → Export for Screens: every chosen artboard in every format, one file each (a PDF holds
@@ -107,21 +119,25 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(dir) = folder {
         create_dir(dir)?;
     }
+    // Names are compared without case: `Icon` and `icon` are one file on most desktop file systems.
     let mut names = HashSet::new();
     let mut written = HashSet::new();
     let mut files = vec![];
     for b in boards {
-        let base: String = doc.artboards[b].name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
+        let mut base: String = doc.artboards[b].name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
+        if base.is_empty() {
+            base = format!("Artboard-{}", b + 1);
+        }
         let mut name = base.clone();
         for i in 2.. {
-            if names.insert(name.clone()) {
+            if names.insert(name.to_lowercase()) {
                 break;
             }
             name = format!("{base}-{i}");
         }
         for sf in &formats {
             let file = format!("{prefix}{name}{}.{}", sf.suffix, sf.format.extensions[0]);
-            if !written.insert(file.clone()) {
+            if !written.insert(file.to_lowercase()) {
                 continue; // the same file from two identical rows
             }
             let mut options = sf.options.clone();
