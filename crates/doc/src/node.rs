@@ -1075,6 +1075,15 @@ fn keeps_gradient_fit(a: Affine) -> bool {
     m0 > 0.0 && m1.abs() <= eps && m2.abs() <= eps && (m0 - m3).abs() <= eps
 }
 
+impl Node {
+    /// Whether a document point lies in this object's filled regions ([`Node::clip_shapes`]; true
+    /// everywhere for objects without them, such as type, whose boxes stand in).
+    pub fn contains_fn(&self) -> impl Fn(Point) -> bool + use<> {
+        let shapes = self.clip_shapes(None);
+        move |p| shapes.is_empty() || shapes.iter().any(|(bp, rule)| vectorcraft_geom::hit::fill_contains(bp, *rule, p))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

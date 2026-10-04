@@ -357,7 +357,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let b = item_paint_bounds(n, index, !stroke);
         // Only a gradient turning freeform needs the shape (its first points go inside it).
-        let inside = (freeform && b.is_some()).then(|| super::freeform::inside_fn(n));
+        let inside = (freeform && b.is_some()).then(|| n.contains_fn());
         let inside: &dyn Fn(Point) -> bool = match &inside {
             Some(f) => f,
             None => &|_| true,

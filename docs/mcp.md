@@ -170,6 +170,18 @@ selected point:
 {"name":"pointer_gesture","arguments":{"tool":"gradient","events":[{"kind":"down","x":180,"y":170},{"kind":"up","x":180,"y":170}]}}
 ```
 
+On the canvas the selected point also shows its spread as a dashed ring with a handle 16 px (or the spread, if larger)
+to its right: drag the ring or handle to change the spread. Dragging a point out of the object removes it, and
+double-clicking one opens its popover (dialog `gradientStop`, which on a freeform gradient edits the selected point:
+set `color`, `opacity` and `spread` and confirm). In Lines mode successive clicks on the art draw one smooth line
+through the points they add; a click on an existing point first continues the line from it, and `press_key` Escape
+(or a click off the art) ends it:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"gradient","events":[{"kind":"down","x":110,"y":190},{"kind":"up","x":110,"y":190},{"kind":"down","x":150,"y":170},{"kind":"up","x":150,"y":170}]}}
+{"name":"press_key","arguments":{"key":"Escape"}}
+```
+
 Raw protocol (for debugging):
 
 ```sh

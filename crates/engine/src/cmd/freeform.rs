@@ -5,7 +5,7 @@
 use serde_json::{Value, json};
 use vectorcraft_color::freeform::spread_scale;
 use vectorcraft_color::{Freeform, FreeformMode, FreeformPoint, GradientKind, Paint};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::NodeKind;
 use vectorcraft_geom::{Affine, Rect};
 
 use super::appearance::{edit_items, edits_stroke, index_param, item_target};
@@ -322,11 +322,4 @@ fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let mut v = vectorcraft_tools::params::freeform_json(&f);
     v["selected"] = json!(selected);
     Ok(v)
-}
-
-/// Whether `n`'s shape contains `p` (its filled regions; true for objects without them, such as
-/// type, whose boxes stand in).
-pub(crate) fn inside_fn(n: &Node) -> impl Fn(vectorcraft_geom::Point) -> bool + use<> {
-    let shapes = n.clip_shapes(None);
-    move |p| shapes.is_empty() || shapes.iter().any(|(bp, rule)| vectorcraft_geom::hit::fill_contains(bp, *rule, p))
 }

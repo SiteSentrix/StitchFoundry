@@ -188,6 +188,8 @@ pub struct GradientTool {
     gesture: Option<Gesture>,
     /// A press on a freeform gradient's annotator.
     free: Option<freeform::Gesture>,
+    /// The line Lines mode is drawing on a freeform gradient.
+    lines: freeform::Lines,
     /// Smart-guide feedback of the handle being dragged.
     guides: Vec<Overlay>,
 }
@@ -402,9 +404,14 @@ impl Tool for GradientTool {
             (PointerKind::Drag, Some(g)) => return freeform::drag(cx, g, ev.pos),
             (PointerKind::Up, Some(_)) => {
                 let g = self.free.take().expect("checked");
-                return freeform::release(cx, FreeformAnnotator::of(cx).as_ref(), g);
+                return freeform::release(cx, FreeformAnnotator::of(cx).as_ref(), g, &mut self.lines);
             }
-            (PointerKind::DoubleClick, free) if free.is_some() || FreeformAnnotator::of(cx).is_some() => return vec![],
+            (PointerKind::Move, None) => freeform::hover(cx, &mut self.lines, ev.pos),
+            (PointerKind::DoubleClick, _) => {
+                if let Some(a) = FreeformAnnotator::of(cx) {
+                    return freeform::double_click(cx, &a, ev.pos);
+                }
+            }
             _ => {}
         }
         match ev.kind {
@@ -423,7 +430,7 @@ impl Tool for GradientTool {
 
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         if let Some(a) = FreeformAnnotator::of(cx) {
-            return freeform::claims_key(cx, &a, key);
+            return freeform::claims_key(cx, &a, &self.lines, key);
         }
         matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Left | ToolKey::Right)
             && cx.gradient_stop.is_some_and(|i| Annotator::of(cx).is_some_and(|a| i < a.gradient.stops.len()))
@@ -432,15 +439,14 @@ impl Tool for GradientTool {
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.busy() {
             self.gesture = None;
-            self.free = None;
             self.guides.clear();
-            return vec![Action::Cancel];
+            return self.free.take().map_or_else(|| vec![Action::Cancel], |g| freeform::cancel(&g));
         }
         if self.busy() || !self.claims_key(cx, key) {
             return vec![];
         }
         if let Some(a) = FreeformAnnotator::of(cx) {
-            return freeform::key(cx, &a, key);
+            return freeform::key(cx, &a, &mut self.lines, key);
         }
         let (Some(a), Some(i)) = (Annotator::of(cx), cx.gradient_stop) else { return vec![] };
         let stops = &a.gradient.stops;
@@ -463,7 +469,7 @@ impl Tool for GradientTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if let Some(a) = FreeformAnnotator::of(cx) {
-            return a.overlays(cx);
+            return a.overlays(cx, &self.lines);
         }
         let mut o = match (Annotator::of(cx), self.gesture.as_ref().and_then(|g| g.vector)) {
             (Some(a), _) => annotator_overlays(cx, &a),

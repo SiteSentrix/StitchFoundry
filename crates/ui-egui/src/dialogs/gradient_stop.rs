@@ -2,34 +2,64 @@
 //! Gradient panel's slider) edits it next to its chip — its colour (the Color panel's controls,
 //! or a document swatch, which stays linked when it is a global or spot colour), opacity and
 //! location. It edits the selected stop (`gradient.selectStop`) through `paint.editGradient`, and
-//! closes on Escape or a click elsewhere.
+//! closes on Escape or a click elsewhere. On a freeform gradient it edits the selected point
+//! (`paint.freeform.selectPoint`) instead: its colour, opacity and spread, through
+//! `paint.freeform.setPoint`.
 //!
 //! Fields: `index`, `x`, `y` (the chip, document coordinates) or `screen` ([x, y], screen points,
 //! from the panel), and `tab` (`color` or `swatches`).
-//! Agents can set `color` (hex), `opacity` and `location` (percentages) and confirm.
+//! Agents can set `color` (hex), `opacity` and `location` (a point: `spread`) as percentages,
+//! and confirm.
 
 use egui::{Sense, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::move_stop;
-use vectorcraft_color::{Color, GradientStop, Paint};
+use vectorcraft_color::{Color, FreeformPoint, GradientKind, GradientStop, Paint};
 use vectorcraft_geom::Point;
+use vectorcraft_tools::params::color_json;
 
 use super::{DialogResult, DialogSpec};
 use crate::VectorcraftApp;
 use crate::canvas::Xf;
 use crate::panels::active_paint;
-use crate::panels::gradient::set_stops;
+use crate::panels::gradient::{edit_point, set_stops, shown_points};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets::{self, Live};
 
 pub(super) const SPEC: DialogSpec = DialogSpec::window(show, confirm);
 
-/// The stops of the gradient behind the active proxy and the selected stop's index.
-fn selected(app: &VectorcraftApp) -> Option<(Vec<GradientStop>, usize)> {
+/// What the popover edits: the selected stop of the gradient behind the active proxy (with all
+/// its stops), or the selected point of a freeform gradient.
+enum Target {
+    Stop(Vec<GradientStop>, usize),
+    Point(FreeformPoint, usize),
+}
+
+impl Target {
+    fn color(&self) -> Color {
+        match self {
+            Target::Stop(stops, i) => stops[*i].color,
+            Target::Point(p, _) => p.color,
+        }
+    }
+    fn opacity(&self) -> f32 {
+        match self {
+            Target::Stop(stops, i) => stops[*i].opacity,
+            Target::Point(p, _) => p.opacity,
+        }
+    }
+}
+
+fn selected(app: &VectorcraftApp) -> Option<Target> {
     let Paint::Gradient(g) = active_paint(app) else { return None };
+    if g.gradient.kind == GradientKind::Freeform {
+        let f = shown_points(&g);
+        let i = app.session.selected_freeform_point().filter(|i| *i < f.points.len())?;
+        return Some(Target::Point(f.points[i], i));
+    }
     let i = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len())?;
-    Some((g.gradient.stops, i))
+    Some(Target::Stop(g.gradient.stops, i))
 }
 
 /// `stops` with stop `i` given `color`, linked to `link` (a global swatch and tint) or unlinked.
@@ -47,8 +77,8 @@ fn swatch_colors(app: &VectorcraftApp) -> Vec<(String, Color)> {
 
 fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(d) = app.ui.dialog.clone() else { return };
-    // The stop went away (undo, another object selected): nothing left to edit.
-    let Some((stops, i)) = selected(app) else {
+    // The stop or point went away (undo, another object selected): nothing left to edit.
+    let Some(target) = selected(app) else {
         app.ui.dialog = None;
         return;
     };
@@ -78,24 +108,24 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 });
                 ui.add_space(6.0);
                 if swatches {
-                    swatch_grid(app, ui, &stops, i);
+                    swatch_grid(app, ui, &target);
                 } else {
-                    // The Color panel edits the selected stop of the active gradient.
+                    // The Color panel edits the selected stop (or point) of the active gradient.
                     crate::panels::color::show(app, ui);
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let s = &stops[i];
                     widgets::dim_label(ui, "Opacity:");
-                    if let Some(v) = widgets::plain_field(ui, "stop-pop-op", s.opacity as f64 * 100.0, "%", 0, 54.0) {
-                        let mut v2 = stops.clone();
-                        v2[i].opacity = (v / 100.0).clamp(0.0, 1.0) as f32;
-                        set_stops(app, &v2, Some(i), Live::Released);
+                    if let Some(v) = widgets::plain_field(ui, "stop-pop-op", target.opacity() as f64 * 100.0, "%", 0, 54.0) {
+                        apply(app, &target, &json!({ "opacity": v }));
                     }
-                    widgets::dim_label(ui, "Location:");
-                    if let Some(v) = widgets::plain_field(ui, "stop-pop-loc", s.offset as f64 * 100.0, "%", 1, 54.0) {
-                        let (v2, ni) = move_stop(&stops, i, (v / 100.0) as f32);
-                        set_stops(app, &v2, Some(ni), Live::Released);
+                    let (label, key, value) = match &target {
+                        Target::Stop(stops, i) => ("Location:", "location", stops[*i].offset),
+                        Target::Point(p, _) => ("Spread:", "spread", p.spread),
+                    };
+                    widgets::dim_label(ui, label);
+                    if let Some(v) = widgets::plain_field(ui, ("stop-pop", key), value as f64 * 100.0, "%", 1, 54.0) {
+                        apply(app, &target, &json!({ key: v }));
                     }
                 });
             });
@@ -111,45 +141,80 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// Document swatches as tiles: a click gives the stop that colour.
-fn swatch_grid(app: &mut VectorcraftApp, ui: &mut egui::Ui, stops: &[GradientStop], i: usize) {
+/// Document swatches as tiles: a click gives the stop (or point) that colour.
+fn swatch_grid(app: &mut VectorcraftApp, ui: &mut egui::Ui, target: &Target) {
     let colors = swatch_colors(app);
     if colors.is_empty() {
         widgets::dim_label(ui, "The document has no colour swatches.");
         return;
     }
+    let current = target.color();
     let mut pick = None;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
         for (name, c) in &colors {
             let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
-            widgets::swatch_tile(ui, r, &Paint::solid(*c), stops[i].color == *c, resp.hovered());
+            widgets::swatch_tile(ui, r, &Paint::solid(*c), current == *c, resp.hovered());
             if resp.on_hover_text(name).clicked() {
                 pick = Some((name.clone(), *c));
             }
         }
     });
-    // A global or spot colour (or a tint of one) stays linked.
-    if let Some((name, c)) = pick {
-        let link = crate::panels::gradient::dropped_link(app, &json!({ "swatch": name }));
-        set_stops(app, &recolor(stops.to_vec(), i, c, link), Some(i), Live::Released);
+    let Some((name, c)) = pick else { return };
+    match target {
+        // A global or spot colour (or a tint of one) stays linked.
+        Target::Stop(stops, i) => {
+            let link = crate::panels::gradient::dropped_link(app, &json!({ "swatch": name }));
+            set_stops(app, &recolor(stops.clone(), *i, c, link), Some(*i), Live::Released);
+        }
+        Target::Point(_, i) => edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": color_json(&c) })),
     }
 }
 
-/// OK (agents): apply the `color`, `opacity` and `location` fields that are set, then close.
+/// Apply the `color` (hex), `opacity` and `location` or `spread` (percentages) set in `f` to the
+/// target as one edit; returns the stop's (or point's) index after it.
+fn apply(app: &mut VectorcraftApp, target: &Target, f: &Value) -> usize {
+    let pct = |k: &str| f.get(k).and_then(Value::as_f64).map(|v| (v / 100.0).clamp(0.0, 1.0));
+    let color = f.get("color").and_then(Value::as_str).and_then(crate::panels::color::parse_hex);
+    match target {
+        Target::Stop(stops, i) => {
+            let (mut stops, mut i) = (stops.clone(), *i);
+            if let Some(c) = color {
+                stops = recolor(stops, i, c, None);
+            }
+            if let Some(o) = pct("opacity") {
+                stops[i].opacity = o as f32;
+            }
+            if let Some(l) = f.get("location").and_then(Value::as_f64) {
+                (stops, i) = move_stop(&stops, i, (l / 100.0) as f32);
+            }
+            set_stops(app, &stops, Some(i), Live::Released);
+            i
+        }
+        Target::Point(_, i) => {
+            let mut p = json!({ "index": i });
+            if let Some(c) = color {
+                p["color"] = color_json(&c);
+            }
+            for k in ["opacity", "spread"] {
+                if let Some(v) = pct(k) {
+                    p[k] = json!(v);
+                }
+            }
+            edit_point(app, "paint.freeform.setPoint", p);
+            *i
+        }
+    }
+}
+
+/// OK (agents): apply the `color`, `opacity` and `location` (a point: `spread`) fields that are
+/// set, then close.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let (mut stops, mut i) = selected(app).ok_or("no gradient stop is selected")?;
+    let target = selected(app).ok_or("no gradient stop or freeform point is selected")?;
     if let Some(hex) = d.fields.get("color").and_then(Value::as_str) {
-        let c = crate::panels::color::parse_hex(hex).ok_or_else(|| format!("bad colour `{hex}` (#rrggbb)"))?;
-        stops = recolor(stops, i, c, None);
+        crate::panels::color::parse_hex(hex).ok_or_else(|| format!("bad colour `{hex}` (#rrggbb)"))?;
     }
-    if d.fields.contains_key("opacity") {
-        stops[i].opacity = (d.f64("opacity", 100.0) / 100.0).clamp(0.0, 1.0) as f32;
-    }
-    if d.fields.contains_key("location") {
-        (stops, i) = move_stop(&stops, i, (d.f64("location", 0.0) / 100.0) as f32);
-    }
-    set_stops(app, &stops, Some(i), Live::Released);
+    let i = apply(app, &target, &Value::Object(d.fields.clone()));
     app.ui.dialog = None;
     Ok(json!({ "index": i }))
 }
@@ -175,7 +240,10 @@ mod tests {
     }
 
     fn stops(app: &VectorcraftApp) -> Vec<GradientStop> {
-        selected(app).unwrap().0
+        match selected(app) {
+            Some(Target::Stop(stops, _)) => stops,
+            _ => panic!("no stop selected"),
+        }
     }
 
     /// One headless frame of the dialog layer and the shortcuts.
@@ -265,5 +333,34 @@ mod tests {
         let before = stops(&app)[1].offset;
         frame(&mut app, vec![key(egui::Key::ArrowLeft)]);
         assert!((stops(&app)[1].offset - (before - 0.01)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn on_a_freeform_gradient_it_edits_the_selected_point() {
+        let mut app = app();
+        app.run("paint.editGradient", json!({"kind": "freeform"})).unwrap();
+        app.run("paint.freeform.addPoint", json!({"at": [150, 150], "color": "#0000ff"})).unwrap();
+        let point = |app: &VectorcraftApp| match selected(app) {
+            Some(Target::Point(p, i)) => (p, i),
+            _ => panic!("no point selected"),
+        };
+        let (p, i) = point(&app);
+        // Double-clicking the point opens the popover beside it.
+        let view = app.view_info();
+        crate::canvas::dispatch(&mut app, &PointerEvent { kind: PointerKind::DoubleClick, pos: p.at, mods: Default::default(), pressure: 1.0 }, view);
+        let d = app.ui.dialog.clone().expect("the popover opened");
+        assert_eq!((d.kind.as_str(), d.fields["index"].clone()), ("gradientStop", json!(i)));
+        frame(&mut app, vec![]);
+        app.ui.dialog.as_mut().unwrap().fields.insert("tab".into(), json!("swatches"));
+        frame(&mut app, vec![]);
+        assert!(app.ui.dialog.is_some(), "both tabs draw");
+        // Agents set its colour, opacity and spread.
+        for (k, v) in [("color", json!("#ff0000")), ("opacity", json!(40)), ("spread", json!(25))] {
+            app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+        }
+        assert_eq!(super::super::confirm(&mut app).unwrap(), json!({"index": i}));
+        let (p, _) = point(&app);
+        assert_eq!((p.color.to_hex(), p.opacity, p.spread), ("#ff0000".to_string(), 0.4, 0.25));
+        assert!(app.ui.dialog.is_none());
     }
 }

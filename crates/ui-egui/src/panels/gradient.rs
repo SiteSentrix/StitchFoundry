@@ -262,7 +262,7 @@ pub(crate) fn shown_points(g: &GradientPaint) -> std::borrow::Cow<'_, Freeform> 
 }
 
 /// Run a `paint.freeform.*` command on the paint behind the active proxy.
-fn edit_point(app: &mut VectorcraftApp, cmd: &str, mut params: Value) {
+pub(crate) fn edit_point(app: &mut VectorcraftApp, cmd: &str, mut params: Value) {
     params["stroke"] = json!(!app.session.fill_active);
     live_run(app, "Gradient", cmd, params, Live::Released);
 }
