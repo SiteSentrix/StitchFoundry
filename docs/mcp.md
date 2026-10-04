@@ -242,3 +242,17 @@ it (Alt-drag). `appearance.duplicateItem {index, to?}` / `{indices}` and `appear
 act on several fills/strokes at once, and `appearance.showAllHidden` makes every hidden fill, stroke and effect
 visible again. In remote mode, `effect.dialog {effect, index, item}` opens an applied effect's dialog prefilled
 (`ui.dialog.confirm` runs `effect.setParams`); see the control protocol for the "already applied" question.
+
+## Overprint
+
+Each fill and stroke (and each character's fill and stroke) can overprint: its inks print over the inks below instead
+of knocking them out. `object.setOverprint {fill?, stroke?, item?, ids?}` sets it (groups set their contents, type its
+characters too; `item` aims at one appearance item) and `attributes.info {ids?}` reads it back (`null` where the
+objects differ). Overprint Preview (`view.overprintPreview`) and Separations Preview show it; rendering approximates
+it by multiplying. Older files that listed Overprint Black objects in the document get the flags on load.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setOverprint","params":{"ids":[12],"stroke":true}}}
+{"name":"run_command","arguments":{"command":"attributes.info","params":{"ids":[12]}}}
+{"name":"run_command","arguments":{"command":"view.overprintPreview","params":{"on":true}}}
+```

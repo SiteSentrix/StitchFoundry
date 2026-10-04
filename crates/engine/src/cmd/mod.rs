@@ -24,6 +24,7 @@ pub(crate) mod maskedit;
 pub(crate) mod menucmds;
 mod object;
 mod opacitymask;
+mod overprint;
 mod paint;
 mod panelcmds;
 mod path;
@@ -192,6 +193,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(prefscmds::specs());
         v.extend(distortcmds::specs());
         v.extend(paint::proxy_specs());
+        v.extend(overprint::specs());
         v
     })
 }
@@ -349,3 +351,6 @@ pub use opacitymask::TransparencyInfo;
 
 /// What the Eyedropper copies (`Session::eyedropper`).
 pub use xform::EyedropperOptions;
+
+/// The Attributes panel's state ([`Session::attributes_info`]).
+pub use overprint::AttributesInfo;

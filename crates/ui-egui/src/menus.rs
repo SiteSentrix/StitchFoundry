@@ -788,7 +788,11 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Convert to Grayscale", "edit.colors.toGrayscale"),
                         c("Convert to RGB", "edit.colors.toRGB"),
                         c("Invert Colors", "edit.colors.invert"),
-                        c("Overprint Black…", "edit.colors.overprintBlack"),
+                        cp(
+                            "Overprint Black…",
+                            "edit.colors.overprintBlack",
+                            json!({"remove": false, "percentage": 100, "fill": true, "stroke": true, "includeCmyBlacks": false, "includeSpotBlacks": false}),
+                        ),
                         cp("Saturate…", "edit.colors.saturate", json!({"intensity": 20})),
                     ],
                 ),

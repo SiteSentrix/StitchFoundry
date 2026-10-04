@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use vectorcraft_doc::live::{self, GradientMesh, MeshQuad};
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
@@ -51,12 +51,7 @@ pub(crate) fn outline_text(n: &Node) -> Option<Node> {
     if out.appearance.items.is_empty()
         && let Some(r) = t.runs.first()
     {
-        let mut ap = Appearance::default();
-        ap.items.push(AppearanceItem::Fill(FillLayer::new(r.style.fill.clone())));
-        if !r.style.stroke.is_none() && r.style.stroke_width > 0.0 {
-            ap.items.push(AppearanceItem::Stroke(StrokeLayer::new(r.style.stroke.clone(), r.style.stroke_width)));
-        }
-        out.appearance = ap;
+        out.appearance = r.style.appearance();
     }
     out.opacity = n.opacity;
     out.blend = n.blend;

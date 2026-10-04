@@ -877,6 +877,14 @@ impl Renderer {
             return;
         }
         let tb = t.xf.transform_rect_bbox(g.bounds);
+        // Overprinting characters multiply per draw, like overprinting fills and strokes
+        // ([`proof`]); the object blend mode is Normal here or applied by an enclosing layer.
+        let overprints = proof::overprints(f.opts);
+        let overprint = |ctx: &mut RenderContext, on: bool| {
+            if overprints {
+                ctx.set_blend_mode(if on { blend_mode(vectorcraft_color::BlendMode::Multiply) } else { BlendMode::default() });
+            }
+        };
         // Object-level appearance fills/strokes apply on top of character fills (like Illustrator).
         for (i, run) in t.runs.iter().enumerate() {
             let Some(path) = g.runs.get(i) else { continue };
@@ -887,16 +895,19 @@ impl Renderer {
             ctx.set_fill_rule(peniko::Fill::NonZero);
             if paint::set_paint(ctx, &run.style.fill, g.bounds, f.doc) {
                 self.fold_alpha(ctx, &run.style.fill);
+                overprint(ctx, run.style.overprint_fill);
                 ctx.fill_path(path);
             }
             if !run.style.stroke.is_none()
                 && run.style.stroke_width > 0.0
                 && paint::set_paint(ctx, &run.style.stroke, stroke_paint_bounds(g.bounds, run.style.stroke_width), f.doc)
             {
+                overprint(ctx, run.style.overprint_stroke);
                 ctx.set_stroke(kurbo::Stroke::new(run.style.stroke_width));
                 ctx.stroke_path(path);
             }
         }
+        overprint(ctx, false);
         if !n.appearance.items.is_empty() {
             let mut all = g.all.clone();
             all.apply_affine(t.xf);

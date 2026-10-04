@@ -60,3 +60,7 @@ effects) prefilled with its values, and `ui.dialog.confirm` runs `effect.setPara
 `effect.apply`. Choosing an effect that the list already has returns `{"pending": "effectExists"}` and opens the
 `effectExists` question: `ui.dialog.confirm` opens the applied effect's dialog, `ui.dialog.set {field: "discard",
 value: true}` then confirm opens a fresh one that adds another, `ui.dialog.cancel` drops it.
+
+Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
+`edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
+`includeSpotBlacks`); `ui.dialog.set` then `ui.dialog.confirm` runs it on the selection.

@@ -59,6 +59,11 @@ pub struct CharStyle {
     /// Character style (Character Styles panel) these attributes come from; None = Normal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style_name: Option<String>,
+    /// Overprint Fill / Overprint Stroke of these characters (see [`crate::FillLayer::overprint`]).
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub overprint_fill: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub overprint_stroke: bool,
 }
 
 fn regular() -> String {
@@ -89,6 +94,8 @@ impl Default for CharStyle {
             all_caps: false,
             features: vec![],
             style_name: None,
+            overprint_fill: false,
+            overprint_stroke: false,
         }
     }
 }
@@ -96,6 +103,19 @@ impl Default for CharStyle {
 impl CharStyle {
     pub fn effective_leading(&self) -> f64 {
         self.leading.unwrap_or(self.size * 1.2)
+    }
+    /// These characters' paint as an object appearance (their outlines'): the fill, plus the
+    /// stroke when it is painted, overprinting as the characters do.
+    pub fn appearance(&self) -> crate::Appearance {
+        let mut fill = crate::FillLayer::new(self.fill.clone());
+        fill.overprint = self.overprint_fill;
+        let mut a = crate::Appearance { items: vec![crate::AppearanceItem::Fill(fill)], effects: vec![] };
+        if !self.stroke.is_none() && self.stroke_width > 0.0 {
+            let mut st = crate::StrokeLayer::new(self.stroke.clone(), self.stroke_width);
+            st.overprint = self.overprint_stroke;
+            a.items.push(crate::AppearanceItem::Stroke(st));
+        }
+        a
     }
 }
 

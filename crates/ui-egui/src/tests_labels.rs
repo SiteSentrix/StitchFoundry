@@ -13,8 +13,9 @@ fn app() -> VectorcraftApp {
     app
 }
 
-/// Every string painted by `f` in one headless frame, one per line.
-fn painted_text(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> String {
+/// Every string painted by `f` in a headless frame (app fonts installed), one per line. The second
+/// of two frames: windows size themselves invisibly in their first.
+pub(crate) fn painted_text(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> String {
     fn collect(s: &Shape, out: &mut String) {
         match s {
             Shape::Text(t) => {
@@ -26,6 +27,8 @@ fn painted_text(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp,
         }
     }
     let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.run_ui(egui::RawInput::default(), |ui| f(app, ui)).textures_delta.clear();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| f(app, ui));
     out.textures_delta.clear();
     let mut text = String::new();

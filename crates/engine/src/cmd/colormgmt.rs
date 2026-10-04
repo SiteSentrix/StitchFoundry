@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, ColorSettings, Intent, Model, ProofTarget};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
-use vectorcraft_render::proof::{self, OVERPRINT_KEY};
+use vectorcraft_render::proof;
 
 use super::*;
 
@@ -111,9 +111,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint Black…",
             ["Edit", "Edit Colors"],
             None,
-            "{remove?: false, percentage?: 100, ids?} mark (or unmark) objects whose fill or stroke is black-only ink ≥ percentage as overprinting (Overprint Preview, separations) → {changed}",
+            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
             has_doc,
-            overprint_black
+            super::overprint::overprint_black
         ),
         cmd!(
             "swatch.setSpot",
@@ -431,55 +431,6 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
     proof::set_view(v);
     touch_all(s);
     Ok(plates_json(s))
-}
-
-fn overprint_black(s: &mut Session, p: &Value) -> Result<Value> {
-    let remove = bool_or(p, "remove", false);
-    let pct = (f64_or(p, "percentage", 100.0) / 100.0).clamp(0.0, 1.0) as f32;
-    let ids = targets(s, p)?;
-    let doc = &s.doc()?.doc;
-    let black_only = |c: &Color| match *c {
-        Color::Cmyk { c, m, y, k } => k >= pct - 0.005 && c <= 0.005 && m <= 0.005 && y <= 0.005,
-        Color::Gray { k } => k >= pct - 0.005,
-        Color::Rgb { .. } => false,
-    };
-    let mut hits: Vec<u64> = vec![];
-    for id in &ids {
-        if let Some(n) = doc.node(*id) {
-            n.walk(&mut |m: &vectorcraft_doc::Node| {
-                let bl = m.appearance.items.iter().any(|it| match it {
-                    vectorcraft_doc::AppearanceItem::Fill(l) => l.paint.color().is_some_and(|c| black_only(&c)),
-                    vectorcraft_doc::AppearanceItem::Stroke(l) => l.paint.color().is_some_and(|c| black_only(&c)),
-                });
-                if bl {
-                    hits.push(m.id.0);
-                }
-            });
-        }
-    }
-    let mut list: Vec<u64> = proof::overprint_ids(doc).into_iter().map(|i| i.0).collect();
-    let before = list.clone();
-    if remove {
-        list.retain(|i| !hits.contains(i));
-    } else {
-        for h in &hits {
-            if !list.contains(h) {
-                list.push(*h);
-            }
-        }
-    }
-    let changed = if remove { before.len() - list.len() } else { list.len() - before.len() };
-    if changed > 0 {
-        s.edit("Overprint Black", |d, _| {
-            if list.is_empty() {
-                d.unknown.remove(OVERPRINT_KEY);
-            } else {
-                d.unknown.insert(OVERPRINT_KEY.into(), json!(list));
-            }
-            Ok(())
-        })?;
-    }
-    Ok(json!({ "changed": changed }))
 }
 
 fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
