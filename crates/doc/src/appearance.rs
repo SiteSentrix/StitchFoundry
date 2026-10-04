@@ -384,6 +384,38 @@ pub struct StrokeLayer {
     /// Overprint Stroke (see [`FillLayer::overprint`]).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub overprint: bool,
+    /// How a gradient paint maps onto the stroke (within, along or across it).
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub gradient_mode: StrokeGradientMode,
+}
+
+/// How a gradient on a stroke is laid out (the Gradient panel's Stroke buttons). Saved by variant
+/// name: new modes are appended, never renamed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StrokeGradientMode {
+    /// Placed on the page like a fill's gradient and seen through the stroke.
+    #[default]
+    Within,
+    /// From the start of each subpath to its end, following the path.
+    Along,
+    /// From the stroke's left edge to its right edge (left of the path's direction), all along it.
+    Across,
+}
+
+impl StrokeGradientMode {
+    pub const ALL: [StrokeGradientMode; 3] = [StrokeGradientMode::Within, StrokeGradientMode::Along, StrokeGradientMode::Across];
+    /// The name commands use (`within`, `along`, `across`).
+    pub fn name(self) -> &'static str {
+        match self {
+            StrokeGradientMode::Within => "within",
+            StrokeGradientMode::Along => "along",
+            StrokeGradientMode::Across => "across",
+        }
+    }
+    /// Parse a mode name (any case).
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|m| m.name().eq_ignore_ascii_case(s))
+    }
 }
 
 /// How far any arrowhead reaches from its tip, in units of its weight (the open arrow's arms are
@@ -424,6 +456,7 @@ impl StrokeLayer {
             effects: vec![],
             arrow_align: ArrowAlign::Extend,
             overprint: false,
+            gradient_mode: StrokeGradientMode::Within,
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
@@ -475,6 +508,18 @@ impl StrokeLayer {
     /// The box an unplaced gradient on this stroke fits to (see [`stroke_paint_bounds`]).
     pub fn paint_bounds(&self, geometric: vectorcraft_geom::Rect) -> vectorcraft_geom::Rect {
         stroke_paint_bounds(geometric, self.width)
+    }
+    /// The gradient this stroke lays along or across its path: its linear or radial gradient
+    /// paint when [`Self::gradient_mode`] isn't Within (freeform gradients always paint within).
+    pub fn path_gradient(&self) -> Option<&vectorcraft_color::GradientPaint> {
+        match &self.paint {
+            Paint::Gradient(g)
+                if self.gradient_mode != StrokeGradientMode::Within && g.gradient.kind != vectorcraft_color::GradientKind::Freeform =>
+            {
+                Some(g)
+            }
+            _ => None,
+        }
     }
 }
 

@@ -10,6 +10,10 @@
 //! editing the swatch recolours the stop. The thumbnail menu marks the gradient swatch the
 //! gradient was applied from. Hide Options leaves the thumbnail, the proxy and the slider.
 //!
+//! With the Stroke proxy in front, the Stroke buttons lay a linear or radial gradient within the
+//! stroke (placed on the page like a fill's), along it or across it (angle and aspect ratio then
+//! don't apply).
+//!
 //! A freeform gradient shows its section instead of the angle, aspect and slider: the Draw
 //! toggle (Points or Lines: how the Gradient tool adds points) and the selected point's colour
 //! (edited in the Color panel), opacity and spread, with Delete Point.
@@ -20,7 +24,7 @@ use vectorcraft_color::gradient::{
     MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
 };
 use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::NodeId;
+use vectorcraft_doc::{NodeId, StrokeGradientMode};
 
 use super::{active_paint, live_run, pstate, set_pstate};
 use crate::state::Dialog;
@@ -205,17 +209,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         return;
     }
+    // How the gradient lies on the stroke behind the Stroke proxy (a linear or radial one).
+    let stroke_mode = (!app.session.fill_active && is_grad && !freeform).then(|| app.session.shown_stroke().map(|st| st.gradient_mode)).flatten();
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, "Stroke:");
-        for (icon, tip) in [
-            ("dc-stroke-center", "Gradient inside stroke"),
-            ("dc-stroke-outside", "Gradient along stroke (on the roadmap)"),
-            ("dc-stroke-inside", "Gradient across stroke (on the roadmap)"),
+        for (m, icon, tip) in [
+            (StrokeGradientMode::Within, "dc-grad-stroke-within", "Gradient within stroke"),
+            (StrokeGradientMode::Along, "dc-grad-stroke-along", "Gradient along stroke"),
+            (StrokeGradientMode::Across, "dc-grad-stroke-across", "Gradient across stroke"),
         ] {
-            widgets::icon_button_enabled(ui, icon, tip, icon == "dc-stroke-center" && !app.session.fill_active, false, 22.0);
+            let on = stroke_mode == Some(m);
+            if widgets::icon_button_enabled(ui, icon, tip, on, stroke_mode.is_some(), 22.0).clicked() && !on {
+                edit(app, json!({"strokeMode": m.name()}), Live::Released);
+            }
         }
     });
+    // Along and across, the gradient follows the path: its angle and aspect ratio don't apply.
+    let placed = stroke_mode.is_none_or(|m| m == StrokeGradientMode::Within);
     if freeform {
         freeform_section(app, ui, &g);
         return;
@@ -226,16 +237,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_space(4.0);
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                icons::icon(ui, "rotate-ccw", 15.0, t.icon).on_hover_text("Angle");
+                icons::icon(ui, "rotate-ccw", 15.0, if placed { t.icon } else { t.text_disabled }).on_hover_text("Angle");
                 let angle = g.geom.map_or(g.angle, |x| x.angle_deg());
-                if let Some(a) = widgets::spin_plain(ui, "grad-angle", (angle * 10.0).round() / 10.0, "°", 1, 104.0, 1.0, -180.0, &ANGLE_PRESETS) {
+                let set = ui
+                    .add_enabled_ui(placed, |ui| {
+                        widgets::spin_plain(ui, "grad-angle", (angle * 10.0).round() / 10.0, "°", 1, 104.0, 1.0, -180.0, &ANGLE_PRESETS)
+                    })
+                    .inner;
+                if let Some(a) = set {
                     edit(app, json!({"angle": a}), Live::Released);
                 }
                 if widgets::icon_button_enabled(ui, "dc-reverse", "Reverse Gradient", false, is_grad, 22.0).clicked() {
                     edit(app, json!({"reverse": true}), Live::Released);
                 }
             });
-            let radial = kind == GradientKind::Radial;
+            let radial = kind == GradientKind::Radial && placed;
             ui.horizontal(|ui| {
                 icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text("Aspect Ratio");
                 let asp = g.geom.map_or(100.0, |x| (x.aspect * 1000.0).round() / 10.0);
@@ -773,6 +789,24 @@ mod tests {
             self.frame(app, vec![], Modifiers::NONE)
         }
 
+        /// The `size`-square widgets right of `at` on its row (last frame), left to right.
+        fn row_after(&self, at: Pos2, size: f32) -> Vec<Rect> {
+            let mut v: Vec<Rect> = self.ctx.viewport(|vp| {
+                vp.prev_pass
+                    .widgets
+                    .layers()
+                    .flat_map(|(_, w)| w.iter())
+                    .map(|w| w.rect)
+                    .filter(|r| {
+                        (r.width() - size).abs() < 0.5 && (r.height() - size).abs() < 0.5 && (r.center().y - at.y).abs() < 8.0 && r.left() > at.x
+                    })
+                    .collect()
+            });
+            v.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            v.dedup();
+            v
+        }
+
         /// Press at `from`, move to `to` in steps and release there, with `m` held.
         fn drag(&mut self, app: &mut VectorcraftApp, from: Pos2, to: Pos2, m: Modifiers) {
             let b = |at, pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: m };
@@ -812,6 +846,31 @@ mod tests {
         p.click(&mut app, fill.left_top() + vec2(2.0, 2.0));
         assert!(app.session.fill_active, "the proxy works with the options hidden");
         p.widget(("grad-stop", 1));
+    }
+
+    #[test]
+    fn the_stroke_buttons_lay_the_gradient_within_along_or_across_the_stroke() {
+        let mut app = app(json!({"gradient": {}}));
+        app.run("paint.setStroke", json!({"gradient": {}, "focus": false})).unwrap();
+        assert!(app.session.fill_active);
+        let mode = |app: &VectorcraftApp| app.session.shown_stroke().unwrap().gradient_mode;
+        let mut p = Panel::new();
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        let label = texts.iter().find(|(t, _)| t == "Stroke:").expect("the Stroke buttons").1;
+        // With the Fill proxy in front they are off.
+        let buttons = p.row_after(label, 22.0);
+        assert_eq!(buttons.len(), 3);
+        p.click(&mut app, buttons[1].center());
+        assert_eq!(mode(&app), StrokeGradientMode::Within);
+        let stroke = p.widget("stroke-proxy");
+        p.click(&mut app, stroke.right_bottom() - vec2(2.0, 2.0));
+        assert!(!app.session.fill_active);
+        for (i, want) in [(1, StrokeGradientMode::Along), (2, StrokeGradientMode::Across), (0, StrokeGradientMode::Within)] {
+            p.click(&mut app, buttons[i].center());
+            assert_eq!(mode(&app), want);
+        }
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(mode(&app), StrokeGradientMode::Across, "one undo step per click");
     }
 
     #[test]

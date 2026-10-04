@@ -938,6 +938,8 @@ mod tests_scalestrokes;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]
+mod tests_strokegradient;
+#[cfg(test)]
 mod tests_strokereach;
 #[cfg(test)]
 mod tests_strokeux;

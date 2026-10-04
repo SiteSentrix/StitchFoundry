@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::appearance::stroke_paint_bounds;
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind, StrokeGradientMode};
 use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_tools::params::color_json;
 
@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform (freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), stops?: [{offset 0..1, color? (needed without swatch), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within)} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -339,6 +339,12 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = edits_stroke(s, p, item, !s.fill_active)?;
     let item = item.of_kind(s, !stroke);
     let ids = item.targets(s, p)?;
+    // How the gradient lies on a stroke (the panel's Stroke buttons).
+    let mode = match str_param(p, "strokeMode") {
+        None => None,
+        Some(_) if !stroke => return Err(bad(C, "`strokeMode` applies to strokes (stroke: true)")),
+        Some(m) => Some(StrokeGradientMode::parse(m).ok_or_else(|| bad(C, format!("strokeMode must be within|along|across, got {m}")))?),
+    };
     // Stops naming swatches take their colours from them.
     let p = &link_stops(&s.doc()?.doc, p).map_err(|e| bad(C, e))?;
     // Validate against the defaults first so bad params fail without touching the document.
@@ -365,8 +371,19 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         };
         let np = apply_gradient_edit_in(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), p, b, inside).map_err(|e| bad(C, e))?;
         n.appearance.set_paint_at(index, !stroke, np);
+        if let Some(m) = mode
+            && let Some(st) = n.appearance.stroke_at_mut(index)
+        {
+            st.gradient_mode = m;
+        }
         Ok(())
     })?;
+    if let Some(m) = mode
+        && ids.is_empty()
+        && p.get("ids").is_none()
+    {
+        s.new_art_stroke_mut().gradient_mode = m;
+    }
     // The last gradient is the one the first object now shows (the defaults' without objects).
     let shown = match ids.first() {
         Some(id) => s.doc()?.doc.node(*id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, C).ok().flatten())),

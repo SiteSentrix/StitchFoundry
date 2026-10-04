@@ -22,7 +22,7 @@ struct AreaLine<'t> {
     hyphenated: bool,
 }
 
-pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> String {
+pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
@@ -49,6 +49,7 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> String {
         knockout: doc.page_knockout,
         anonymous: false,
         knockout_filter: None,
+        warnings: vec![],
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -97,7 +98,7 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> String {
     out.push_str(&w.body);
     out.push_str("</svg>");
     out.push_str(nl);
-    out
+    (out, w.warnings)
 }
 
 struct Writer<'a> {
@@ -123,6 +124,8 @@ struct Writer<'a> {
     knockout_filter: Option<String>,
     /// The brush library, parsed when the first brushed stroke is written.
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
+    /// Features written approximately (once each).
+    warnings: Vec<String>,
 }
 
 /// How one stroke is written.
@@ -619,6 +622,14 @@ impl Writer<'_> {
                             let a = self.attrs(&p);
                             self.line(&format!("<path d=\"{d}\"{a}{side}/>"));
                         }
+                        WrittenShape::Fill(outlines) if s.path_gradient().is_some() => {
+                            // A gradient along or across the stroke: slices clipped to its outlines.
+                            if let Some(ws) = bp.as_ref().and_then(|bp| stroke::written_slices(bp, rule, s, outlines)) {
+                                p.extend((s.opacity < 1.0).then(|| ("opacity", fmt_num(s.opacity as f64, 3))));
+                                p.extend(blend);
+                                self.sliced(&ws, &p, &side);
+                            }
+                        }
                         WrittenShape::Fill(outlines) => {
                             let paint = self.paint(&s.paint, paint_bounds(s));
                             let ds: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
@@ -652,6 +663,38 @@ impl Writer<'_> {
         }
         self.depth -= 1;
         self.line("</g>");
+    }
+
+    /// A stroke whose gradient runs along or across it ([`stroke::written_slices`]): a group (with
+    /// `props` and the `side` attribute) of its slices, clipped to its outlines.
+    fn sliced(&mut self, ws: &stroke::WrittenSlices, props: &Props, side: &str) {
+        self.warn("gradients along or across strokes are written as slices of linear gradients");
+        let cid = self.fresh_id("clip-path");
+        let clip = self.path_d(&PathData::from_bezpath(&ws.clip), self.xf);
+        self.def(1, &format!("<clipPath id=\"{cid}\">"));
+        self.def(2, &format!("<path d=\"{clip}\"/>"));
+        self.def(1, "</clipPath>");
+        let a = self.attrs(props);
+        self.line(&format!("<g{a}{side}>"));
+        self.depth += 1;
+        self.line(&format!("<g clip-path=\"url(#{cid})\">"));
+        self.depth += 1;
+        for (shape, paint) in &ws.slices {
+            let fill = self.paint(paint, None);
+            let fill = self.attrs(&vec![("fill", fill)]);
+            let d = self.path_d(&PathData::from_bezpath(shape), self.xf);
+            self.line(&format!("<path d=\"{d}\"{fill}/>"));
+        }
+        self.depth -= 1;
+        self.line("</g>");
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
+    fn warn(&mut self, w: &str) {
+        if !self.warnings.iter().any(|x| x == w) {
+            self.warnings.push(w.to_string());
+        }
     }
 
     /// An object with an opacity mask: `<g mask="url(#…)">` around the unmasked object. The mask

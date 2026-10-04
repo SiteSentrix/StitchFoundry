@@ -137,6 +137,32 @@ impl Gradient {
     pub fn sort(&mut self) {
         self.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
     }
+    /// The part of the gradient from `from` to `to` (0..1, either way round) as a linear gradient
+    /// of its own running 0 → 1: the same colours (midpoints become stops, as in
+    /// [`Self::expanded_stops`]). One colour throughout when `from == to`.
+    pub fn span(&self, from: f32, to: f32) -> Gradient {
+        if to < from {
+            let mut g = self.span(to, from);
+            g.reverse();
+            return g;
+        }
+        let stop = |offset: f32, t: f32| {
+            let (color, opacity) = self.sample(t);
+            GradientStop { opacity, ..GradientStop::new(offset, color) }
+        };
+        let d = to - from;
+        let mut stops = vec![stop(0.0, from)];
+        if d > 1e-6 {
+            stops.extend(
+                self.expanded_stops()
+                    .into_iter()
+                    .filter(|(t, ..)| *t > from && *t < to)
+                    .map(|(t, color, opacity)| GradientStop { opacity, ..GradientStop::new((t - from) / d, color) }),
+            );
+        }
+        stops.push(stop(1.0, to));
+        Gradient { kind: GradientKind::Linear, stops }
+    }
 }
 
 // ---------- stop editing (the Gradient panel, the annotator and agents share these) ----------

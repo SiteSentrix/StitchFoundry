@@ -4,14 +4,15 @@
 //! by `Arc` identity of the live node (so the steps keep stable `Arc`s and hit the geometry cache
 //! frame after frame). Gradient meshes are tessellated into many small solid-colour quads (vello
 //! has no mesh shading), with the density chosen from the on-screen patch size; each quad is
-//! grown by half a device pixel so neighbours overlap and no antialiasing seams show.
+//! grown by half a device pixel along its edges so neighbours overlap and no antialiasing seams
+//! show.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use vectorcraft_doc::live::{self, GradientMesh, MeshQuad};
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::{BezPath, PathData, Point};
+use vectorcraft_geom::{BezPath, PathData, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
 
@@ -158,12 +159,16 @@ impl Renderer {
             if q.opacity <= 0.0 {
                 continue;
             }
-            let c = Point::new((q.pts[0].x + q.pts[1].x + q.pts[2].x + q.pts[3].x) / 4.0, (q.pts[0].y + q.pts[1].y + q.pts[2].y + q.pts[3].y) / 4.0);
             let mut bp = BezPath::new();
             for (i, p) in q.pts.iter().enumerate() {
-                let d = *p - c;
-                let len = d.hypot();
-                let p2 = if len > 1e-12 { *p + d * (grow / len) } else { *p };
+                // Out along both edges at the corner, so thin quads grow across too.
+                let d: Vec2 = [q.pts[(i + 3) % 4], q.pts[(i + 1) % 4]]
+                    .iter()
+                    .map(|n| *p - *n)
+                    .filter(|e| e.hypot() > 1e-12)
+                    .map(|e| e / e.hypot())
+                    .fold(Vec2::ZERO, |a, e| a + e);
+                let p2 = *p + d * grow;
                 if i == 0 {
                     bp.move_to(p2);
                 } else {
