@@ -36,3 +36,7 @@ fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern
 `swatches`); `ui.dialog.confirm` runs `swatch.new` / `swatch.newGroup`.
 
 The Color Picker is a dialog too: `engine.execute {command: "ui.colorPicker", params: {stroke?, color?}}` opens it for the fill (or stroke) proxy; `ui.dialog.set {field: "hex", value: "00FF00"}` (or `color`, `channel`, `webOnly`, `swatches`) then `ui.dialog.confirm` applies the colour through `paint.setFill` / `paint.setStroke`.
+
+Graphic styles: `ui.graphicStyleOptions {name}` opens the `graphicStyleOptions` dialog (field `name`) for a style and
+`ui.dialog.confirm` renames it with `graphicStyle.rename` (a name another style has returns an error and keeps the
+dialog open); without `name` it names a new style made from the selection (`graphicStyle.new`).

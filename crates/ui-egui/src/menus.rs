@@ -189,6 +189,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
     ),
+    (
+        "ui.graphicStyleOptions",
+        "Graphic Style Options…",
+        "",
+        "{name?} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`): for style `name` OK renames it (graphicStyle.rename); without, OK makes a new style of that name from the selection (graphicStyle.new)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -524,6 +530,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
         }
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
+        "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
         _ => return None,
     };
     Some(r)
@@ -687,6 +694,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "file.export.pdf" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
+        "ui.graphicStyleOptions" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1077,14 +1085,14 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "Same",
                     vec![
                         c("Appearance", "select.same.appearance"),
-                        todo("Appearance Attribute"),
+                        c("Appearance Attribute", "select.same.appearanceAttribute"),
                         c("Blending Mode", "select.same.blendingMode"),
                         c("Fill & Stroke", "select.same.fillAndStroke"),
                         c("Fill Color", "select.same.fillColor"),
                         c("Opacity", "select.same.opacity"),
                         c("Stroke Color", "select.same.strokeColor"),
                         c("Stroke Weight", "select.same.strokeWeight"),
-                        todo("Graphic Style"),
+                        c("Graphic Style", "select.same.graphicStyle"),
                         c("Shape", "select.same.shapeType"),
                         c("Symbol Instance", "select.same.symbolInstance"),
                         Sep,

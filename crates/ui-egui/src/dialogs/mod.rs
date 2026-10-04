@@ -17,6 +17,7 @@ mod effect;
 mod export_for_screens;
 mod form;
 mod gradient_stop;
+pub mod graphic_style_options;
 pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
@@ -140,6 +141,7 @@ registry! {
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
+    GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

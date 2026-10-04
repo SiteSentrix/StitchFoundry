@@ -175,12 +175,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
         let mixed = mixed_appearances(app);
         let label = if mixed { "Mixed Appearances" } else { object_label(app) };
+        // A linked object names its graphic style ("Rectangle: Sunshine").
+        let label = match app.session.selection_graphic_style() {
+            Some((g, true)) if !mixed => std::borrow::Cow::Owned(format!("{label}: {}", g.name)),
+            _ => std::borrow::Cow::Borrowed(label),
+        };
         if !hide_thumb {
             let th = Rect::from_min_size(r.left_center() + vec2(6.0, -12.0), vec2(24.0, 24.0));
             let fill = node.as_ref().map(|n| n.appearance.fill_paint()).unwrap_or_else(|| app.session.paint.fill.clone());
             chip(ui, th, &fill);
         }
-        text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), label, true);
+        text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), &label, true);
         match &node {
             // Objects that differ have no common stack to list.
             Some(_) if mixed => {}
@@ -582,7 +587,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_pstate(ui.ctx(), "ap-hide-thumb", !hide);
     }
     ui.separator();
-    menu_item(ui, "Redefine Graphic Style", false, false);
+    let style = app.session.selection_graphic_style().map(|(g, _)| g.name.clone());
+    let redefine = style.as_ref().map_or_else(|| "Redefine Graphic Style".into(), |n| format!("Redefine Graphic Style \u{201c}{n}\u{201d}"));
+    if menu_item(ui, &redefine, style.is_some(), false) {
+        app.run("graphicStyle.redefine", json!({})).ok();
+    }
     menu_item(ui, "Show All Hidden Attributes", false, false);
 }
 

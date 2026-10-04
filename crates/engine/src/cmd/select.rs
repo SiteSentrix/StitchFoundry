@@ -75,6 +75,24 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("select.object.openPaths", "Open Paths", ["Select", "Object"], None, "{}", has_doc, |s, _| by_kind(s, |n| n
             .path_data()
             .is_some_and(|p| !p.is_closed()))),
+        cmd!(
+            "select.same.graphicStyle",
+            "Graphic Style",
+            ["Select", "Same"],
+            None,
+            "{} the objects linked to the graphic style the first selected object is linked to",
+            has_selection,
+            same_graphic_style
+        ),
+        cmd!(
+            "select.same.appearanceAttribute",
+            "Appearance Attribute",
+            ["Select", "Same"],
+            None,
+            "{item?: appearance item index} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill",
+            has_selection,
+            same_attribute
+        ),
     ]
 }
 
@@ -224,18 +242,66 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
 fn same(s: &mut Session, cmd: &str, eq: fn(&Node, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().ok_or_else(|| bad(cmd, "nothing selected"))?;
+    select_where(s, cmd, &json!({}), |_, n| !n.is_container() && eq(n, &refn))
+}
+
+/// Select the visible, unlocked objects in visible, unlocked layers that `f` accepts (not looking
+/// inside accepted ones); Select > Reselect repeats `cmd` with `p`.
+fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
+    fn visit(d: &Document, n: &Node, f: &impl Fn(&Document, &Node) -> bool, ids: &mut Vec<NodeId>) {
+        if n.visible && !n.locked && !n.is_layer() && f(d, n) {
+            return ids.push(n.id);
+        }
+        for c in n.children().into_iter().flatten() {
+            visit(d, c, f, ids);
+        }
+    }
+    let st = s.doc()?;
     let mut ids = vec![];
     for l in st.doc.layers.iter().filter(|l| l.visible && !l.locked) {
-        l.walk(&mut |n| {
-            if !n.is_container() && n.visible && !n.locked && eq(n, &refn) {
-                ids.push(n.id);
-            }
-        });
+        visit(&st.doc, l, &f, &mut ids);
     }
-    let c = cmd.to_string();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
-    s.doc_mut()?.last_selection_cmd = Some((c, json!({})));
+    s.doc_mut()?.last_selection_cmd = Some((cmd.to_string(), p.clone()));
     Ok(json!({ "count": ids.len() }))
+}
+
+fn same_graphic_style(s: &mut Session, _: &Value) -> Result<Value> {
+    let cmd = "select.same.graphicStyle";
+    let st = s.doc()?;
+    let id = st
+        .selection
+        .objects
+        .first()
+        .and_then(|id| super::style::linked_style(&st.doc, st.doc.node(*id)?))
+        .map(|g| g.id)
+        .ok_or_else(|| bad(cmd, "the selection has no graphic style"))?;
+    select_where(s, cmd, &json!({}), |d, n| n.graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
+}
+
+/// An appearance attribute Select > Same > Appearance Attribute matches.
+enum Attribute {
+    Item(vectorcraft_doc::AppearanceItem),
+    Effect(vectorcraft_doc::Effect),
+}
+
+fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "select.same.appearanceAttribute";
+    let st = s.doc()?;
+    let refn = st.selection.objects.first().and_then(|id| st.doc.node(*id)).ok_or_else(|| bad(cmd, "nothing selected"))?;
+    let ap = &refn.appearance;
+    let item = p.get("item").and_then(Value::as_u64).map(|i| i as usize).or(s.appearance_item());
+    let attr = match (item.and_then(|i| ap.items.get(i)), ap.effects.first()) {
+        (Some(it), _) => Attribute::Item(it.clone()),
+        (None, Some(e)) => Attribute::Effect(e.clone()),
+        (None, None) => {
+            Attribute::Item(ap.items.iter().rev().find(|i| i.is_fill()).cloned().ok_or_else(|| bad(cmd, "the object has no fill, stroke or effect"))?)
+        }
+    };
+    select_where(s, cmd, p, |_, n| match &attr {
+        Attribute::Item(it) => n.appearance.items.contains(it),
+        Attribute::Effect(e) => n.appearance.effects.iter().any(|x| x.id == e.id && x.params == e.params),
+    })
 }
 
 fn same_layers(s: &mut Session, _: &Value) -> Result<Value> {

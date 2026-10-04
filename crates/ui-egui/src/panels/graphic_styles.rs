@@ -241,6 +241,9 @@ mod tests {
             show(&mut app, ui);
             menu(&mut app, ui);
         });
+        // The Appearance panel names the style the object is linked to.
+        let shown = frame(&ctx, |ui| super::super::appearance::show(&mut app, ui));
+        assert!(shown.iter().any(|t| t == "Rectangle: Mine"), "{shown:?}");
         assert!(texts.iter().any(|t| t == "Mine") && texts.iter().any(|t| t == "Sunshine"), "{texts:?}");
         // Select All Unused picks every style but the one the rectangle is linked to.
         let unused: Vec<String> = serde_json::from_value(app.session.execute("graphicStyle.unused", &json!({})).unwrap()["names"].clone()).unwrap();

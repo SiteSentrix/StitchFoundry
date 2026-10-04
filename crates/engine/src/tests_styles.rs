@@ -198,10 +198,14 @@ fn deleting_a_style_unlinks_and_renaming_keeps_links() {
     let (_, b, c) = linked_three(&mut s);
     run(&mut s, "graphicStyle.rename", json!({"name": "S", "to": "T"}));
     assert_eq!(linked(&mut s, "T").len(), 3);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert_eq!(run(&mut s, "select.same.graphicStyle", json!({}))["count"], 3);
     let look = node(&s, c).appearance;
     run(&mut s, "graphicStyle.delete", json!({"name": "T"}));
     assert_eq!((node(&s, b).graphic_style, node(&s, c).graphic_style), (None, None));
     assert_eq!(node(&s, c).appearance, look);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert!(s.execute("select.same.graphicStyle", &json!({})).is_err());
 }
 
 #[test]
@@ -217,4 +221,33 @@ fn unused_styles_and_sort_by_name() {
     run(&mut s, "graphicStyle.sortByName", json!({}));
     let names: Vec<String> = s.doc().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect();
     assert_eq!(names, ["Default Graphic Style", "Black Outline", "Heavy Ink", "S", "Sunshine"]);
+}
+
+#[test]
+fn select_same_appearance_attribute() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    let b = rect(&mut s, 100.0);
+    set_fill(&mut s, b, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    let c = rect(&mut s, 200.0);
+    // The shared effect.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+    // The shared stroke (item 1).
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({"item": 1}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b, c]);
+}
+
+#[test]
+fn document_info_lists_style_names() {
+    let mut s = session();
+    let (a, ..) = linked_three(&mut s);
+    let i = run(&mut s, "document.info", json!({}));
+    assert_eq!(i["graphicStyleNames"].as_array().unwrap().len(), 5);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert_eq!(run(&mut s, "document.info", json!({"selectionOnly": true}))["graphicStyleNames"], json!(["S"]));
 }
