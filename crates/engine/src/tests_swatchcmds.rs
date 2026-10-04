@@ -191,3 +191,53 @@ fn ungroup_and_sort_by_kind_are_one_undo_step_each() {
     assert_eq!((n[0].as_str(), n[1].as_str()), ("[None]", "White"), "the order within a kind is kept");
     assert_eq!(n[n.iter().position(|x| x == "Orange").unwrap() + 1], "Ocean", "the spot colour comes after the process ones, then the gradients");
 }
+
+#[test]
+fn a_cmyk_document_starts_with_cmyk_swatches_and_stores_new_colours_as_cmyk() {
+    use vectorcraft_color::Color;
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": "cmyk"}));
+    assert_eq!(doc(&s).color_mode, vectorcraft_doc::ColorMode::Cmyk);
+    assert!(doc(&s).swatches_iter().filter_map(|w| w.paint.color()).all(|c| !matches!(c, Color::Rgb { .. })));
+    assert_eq!(doc(&s).swatch("Black").and_then(|w| w.paint.color()), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    let a = rect_filled(&mut s, json!({"color": "#ff0000"}));
+    assert_eq!(fill(&s, a), Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
+    // Gray stays Gray; keepModel keeps RGB; gradient stops follow the document too.
+    run(&mut s, "paint.setFill", json!({"ids": [a.0], "color": {"gray": 0.4}}));
+    assert_eq!(fill(&s, a), Paint::solid(Color::gray(0.4)));
+    run(&mut s, "paint.setFill", json!({"ids": [a.0], "color": "#ff0000", "keepModel": true}));
+    assert_eq!(fill(&s, a), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    run(
+        &mut s,
+        "paint.setFill",
+        json!({"ids": [a.0], "gradient": {"stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#0000ff"}]}}),
+    );
+    let Paint::Gradient(g) = fill(&s, a) else { panic!("a gradient") };
+    assert!(g.gradient.stops.iter().all(|st| matches!(st.color, Color::Cmyk { .. })));
+    // A swatch made from a hex colour is CMYK as well; the document round-trips natively.
+    let name = run(&mut s, "swatch.new", json!({"color": "#00ff00"}))["name"].clone();
+    assert_eq!(name, "C=100 M=0 Y=100 K=0");
+    let json = serde_json::to_string(doc(&s)).unwrap();
+    assert_eq!(serde_json::from_str::<vectorcraft_doc::Document>(&json).unwrap(), *doc(&s));
+}
+
+#[test]
+fn rgb_documents_keep_colours_as_given_and_edits_keep_the_source_model() {
+    use vectorcraft_color::Color;
+    let mut s = session();
+    assert_eq!(doc(&s).swatch("Black").and_then(|w| w.paint.color()), Some(Color::rgb(0.0, 0.0, 0.0)));
+    let a = rect_filled(&mut s, json!({"color": "#ff0000"}));
+    assert_eq!(fill(&s, a), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let b = rect_filled(&mut s, json!({"color": {"c": 0.0, "m": 1.0, "y": 0.0, "k": 0.0}}));
+    assert_eq!(fill(&s, b), Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), "an RGB document doesn't convert CMYK either");
+    // Recolor Artwork keeps the replaced colour's model.
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let hex = Color::cmyk(0.0, 1.0, 0.0, 0.0).to_hex();
+    run(&mut s, "recolor.apply", json!({"map": {hex: "#00ff00"}}));
+    assert!(matches!(fill(&s, b).color(), Some(Color::Cmyk { .. })));
+    // Blending ends of different models gives the document's model.
+    let c = rect_filled(&mut s, json!({"color": "#808080"}));
+    run(&mut s, "select.set", json!({"ids": [a.0, c.0, b.0]}));
+    run(&mut s, "edit.colors.blendFrontToBack", json!({}));
+    assert!(matches!(fill(&s, c).color(), Some(Color::Rgb { .. })));
+}
