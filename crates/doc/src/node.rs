@@ -426,6 +426,30 @@ impl Node {
             _ => None,
         }
     }
+    /// The path a path's or compound path's own strokes follow (a compound's members' together).
+    pub fn stroke_path(&self) -> Option<vectorcraft_geom::BezPath> {
+        match &self.kind {
+            NodeKind::Path { path, .. } => Some(path.to_bezpath()),
+            NodeKind::Compound { children, .. } => {
+                let mut bp = vectorcraft_geom::BezPath::new();
+                children.iter().filter_map(|c| c.path_data()).for_each(|pd| bp.extend(pd.to_bezpath()));
+                Some(bp)
+            }
+            _ => None,
+        }
+    }
+    /// A quick box round everything the object can paint, for culling clicks: paths and compound
+    /// paths grow their geometric bounds by the farthest their strokes can reach from any path
+    /// ([`Appearance::outset`]) instead of measuring along their shape.
+    pub fn reach_bounds(&self) -> Option<Rect> {
+        match &self.kind {
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+                let o = self.appearance.outset();
+                self.geometric_bounds().map(|b| b.inflate(o, o))
+            }
+            _ => self.visual_bounds(),
+        }
+    }
     /// Geometric bounds (no stroke), recursively. Clip groups are bounded by their clip path.
     pub fn geometric_bounds(&self) -> Option<Rect> {
         match &self.kind {
@@ -449,7 +473,8 @@ impl Node {
             NodeKind::Repeat(r) => r.bounds(),
         }
     }
-    /// Visual bounds (includes stroke outset).
+    /// Visual bounds: what the object paints, its strokes included (paths and compound paths
+    /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]).
     pub fn visual_bounds(&self) -> Option<Rect> {
         match &self.kind {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
@@ -468,6 +493,10 @@ impl Node {
             NodeKind::Envelope { content, .. } | NodeKind::Repeat(RepeatSpec { source: content, .. }) => {
                 let o = crate::live::max_outset(content);
                 self.geometric_bounds().map(|b| b.inflate(o, o))
+            }
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+                let b = self.geometric_bounds()?;
+                Some(self.appearance.stroked_bounds(b, || self.stroke_path().unwrap_or_default()))
             }
             _ => {
                 let o = self.appearance.outset();

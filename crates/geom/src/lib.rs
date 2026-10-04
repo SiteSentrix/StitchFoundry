@@ -7,6 +7,7 @@
 //! Coordinates are document points (1/72 in), y pointing down.
 #![forbid(unsafe_code)]
 
+pub mod bez;
 pub mod hit;
 pub mod path;
 pub mod recognize;

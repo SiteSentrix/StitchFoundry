@@ -99,7 +99,7 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
         if !c.visible || c.locked {
             continue;
         }
-        if let Some(b) = c.visual_bounds()
+        if let Some(b) = c.reach_bounds()
             && !b.inflate(opt.tol, opt.tol).contains(p)
         {
             continue;
@@ -117,13 +117,22 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
     None
 }
 
+/// A click on the strokes of a path or compound path `n` along `bp`: what any visible stroke
+/// paints there (arrowheads, alignment, width profile, projecting caps, miter spikes), else its
+/// outline within the tolerance. Outline mode hits the outline only.
+fn hit_stroke(n: &Node, bp: &vectorcraft_geom::BezPath, rule: vectorcraft_geom::FillRule, p: Point, opt: HitOptions) -> Option<HitKind> {
+    if !opt.outline && n.appearance.stroke_hit(bp, rule, p, opt.tol) {
+        return Some(HitKind::Stroke);
+    }
+    stroke_contains(bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
+}
+
 fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
     match &n.kind {
         NodeKind::Path { path, rule, .. } => {
             let bp = path.to_bezpath();
-            let sw = n.appearance.stroke_width();
-            if stroke_contains(&bp, if opt.outline { 0.0 } else { sw }, opt.tol, p) {
-                return Some(if opt.outline || sw == 0.0 { HitKind::Outline } else { HitKind::Stroke });
+            if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
+                return Some(k);
             }
             let filled = !n.appearance.fill_paint().is_none();
             if !opt.outline && !opt.path_only && filled && fill_contains(&bp, *rule, p) {
@@ -131,15 +140,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
             }
             None
         }
-        NodeKind::Compound { children, rule } => {
-            let mut bp = vectorcraft_geom::BezPath::new();
-            for c in children {
-                if let Some(pd) = c.path_data() {
-                    bp.extend(pd.to_bezpath());
-                }
-            }
-            if stroke_contains(&bp, n.appearance.stroke_width(), opt.tol, p) {
-                return Some(HitKind::Stroke);
+        NodeKind::Compound { rule, .. } => {
+            let bp = n.stroke_path()?;
+            if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
+                return Some(k);
             }
             (!opt.outline && fill_contains(&bp, *rule, p)).then_some(HitKind::Fill)
         }

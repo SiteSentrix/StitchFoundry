@@ -366,6 +366,10 @@ pub struct StrokeLayer {
     pub overprint: bool,
 }
 
+/// How far any arrowhead reaches from its tip, in units of its weight (the open arrow's arms are
+/// cut square a little behind its 4 × 4 box).
+pub(crate) const HEAD_REACH: f64 = 4.6;
+
 fn ten() -> f64 {
     10.0
 }
@@ -403,16 +407,50 @@ impl StrokeLayer {
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
-    /// a quarter point. A head of weight `hw` is `4·hw` long and wide.
+    /// a quarter point. A head of weight `hw` fits a box about `4·hw` long and wide.
     pub fn arrow_weight(&self, end: bool) -> f64 {
         let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
         (self.width * pct / 100.0).max(0.25)
     }
-    /// How far the arrowheads can reach from the path's end points (0 without heads): the
-    /// head's diagonal, or with [`ArrowAlign::Extend`] its length plus the cap past the end.
+    /// How far the start (`end == false`) or end arrowhead can reach from its end point (0
+    /// without one): the head's diagonal, or with [`ArrowAlign::Extend`] its length, plus the cap.
+    pub fn head_reach(&self, end: bool) -> f64 {
+        let head = if end { self.end_arrow } else { self.start_arrow };
+        head.map_or(0.0, |_| HEAD_REACH * self.arrow_weight(end) + self.width / 2.0)
+    }
+    /// How far the arrowheads can reach from the path's end points (0 without heads).
     pub fn arrow_reach(&self) -> f64 {
-        let reach = |head: Option<Arrowhead>, end: bool| head.map_or(0.0, |_| 4.5 * self.arrow_weight(end) + self.width / 2.0);
-        reach(self.start_arrow, false).max(reach(self.end_arrow, true))
+        self.head_reach(false).max(self.head_reach(true))
+    }
+    /// The widest the width profile makes the stroke, as a factor of its weight (1 without one).
+    pub fn profile_max(&self) -> f64 {
+        self.profile.as_ref().and_then(|p| p.points.iter().map(|&(_, l, r)| l.max(r)).reduce(f64::max)).unwrap_or(1.0).max(0.0)
+    }
+    /// The stroke's body across a path that is `closed` or open: how far it reaches from the path
+    /// at full width (half the weight centred; the whole weight on one side when aligned inside or
+    /// outside a closed path, which open paths ignore), and for aligned strokes which side it
+    /// paints (`Some(true)`: inside).
+    pub fn body(&self, closed: bool) -> (f64, Option<bool>) {
+        match self.align {
+            StrokeAlign::Outside if closed => (self.width, Some(false)),
+            StrokeAlign::Inside if closed => (self.width, Some(true)),
+            _ => (self.width / 2.0, None),
+        }
+    }
+    /// How far the body paints outside a path that is `closed` or open, at the profile's widest.
+    pub fn side_reach(&self, closed: bool) -> f64 {
+        match self.body(closed) {
+            (_, Some(true)) => 0.0,
+            (half, _) => half * self.profile_max(),
+        }
+    }
+    /// The farthest this stroke can paint from any path: its body, miter spikes up to the miter
+    /// limit, projecting caps' corners and the arrowheads ([`Appearance::outset`]).
+    pub fn reach(&self) -> f64 {
+        let side = self.side_reach(true).max(self.side_reach(false));
+        let miter = if self.join == LineJoin::Miter { self.miter_limit.max(1.0) } else { 1.0 };
+        let cap = if self.cap == LineCap::Square { std::f64::consts::SQRT_2 } else { 1.0 };
+        (side * miter.max(cap)).max(self.arrow_reach())
     }
     /// The box an unplaced gradient on this stroke fits to (see [`stroke_paint_bounds`]).
     pub fn paint_bounds(&self, geometric: vectorcraft_geom::Rect) -> vectorcraft_geom::Rect {
@@ -656,22 +694,17 @@ impl Appearance {
             Some(i) => self.items.get_mut(i).map(AppearanceItem::effects_mut),
         }
     }
-    /// Largest distance the painted area extends beyond the geometry (for visual bounds).
+    /// The visible strokes that paint something.
+    pub fn painted_strokes(&self) -> impl Iterator<Item = &StrokeLayer> {
+        self.items.iter().filter_map(|i| match i {
+            AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(s),
+            _ => None,
+        })
+    }
+    /// Largest distance the painted area can extend beyond any geometry (see
+    /// [`StrokeLayer::reach`]); paths measure their own with [`Self::stroked_bounds`].
     pub fn outset(&self) -> f64 {
-        self.items
-            .iter()
-            .filter_map(|i| match i {
-                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(
-                    match s.align {
-                        StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
-                        StrokeAlign::Outside => s.width,
-                        StrokeAlign::Inside => 0.0,
-                    }
-                    .max(s.arrow_reach()),
-                ),
-                _ => None,
-            })
-            .fold(0.0, f64::max)
+        self.painted_strokes().map(StrokeLayer::reach).fold(0.0, f64::max)
     }
     /// Scale stroke weights (Scale Strokes & Effects).
     pub fn scale_strokes(&mut self, s: f64) {
@@ -1067,8 +1100,9 @@ mod tests {
         st.arrow_scale = (100.0, 200.0);
         assert_eq!(st.arrow_weight(false), 4.0);
         assert_eq!(st.arrow_weight(true), 8.0);
+        assert_eq!((st.head_reach(false), st.head_reach(true)), (0.0, HEAD_REACH * 8.0 + 2.0));
         // A 32 pt head whose tip sits up to its length (plus the cap) past the end point.
-        assert_eq!(a.outset(), 4.5 * 8.0 + 2.0);
+        assert_eq!(a.outset(), HEAD_REACH * 8.0 + 2.0);
         a.stroke_mut().unwrap().width = 0.01;
         assert_eq!(a.stroke().unwrap().arrow_weight(true), 0.25, "heads keep a minimum size");
     }
@@ -1080,8 +1114,28 @@ mod tests {
         assert_eq!(a.outset(), 5.0);
         a.stroke_mut().unwrap().align = StrokeAlign::Outside;
         assert_eq!(a.outset(), 10.0);
+        // Open paths stroke inside-aligned strokes centred.
         a.stroke_mut().unwrap().align = StrokeAlign::Inside;
-        assert_eq!(a.outset(), 0.0);
+        assert_eq!(a.outset(), 5.0);
+        assert_eq!((a.stroke().unwrap().side_reach(true), a.stroke().unwrap().body(true)), (0.0, (10.0, Some(true))));
+    }
+
+    #[test]
+    fn outset_covers_miter_spikes_projecting_caps_and_profile_maxima() {
+        let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
+        // Miter joins can spike out to the limit × half the weight.
+        assert_eq!(a.outset(), 10.0);
+        let st = a.stroke_mut().unwrap();
+        st.join = LineJoin::Bevel;
+        st.cap = LineCap::Square;
+        assert!((a.outset() - std::f64::consts::SQRT_2).abs() < 1e-12, "a projecting cap's corner");
+        let st = a.stroke_mut().unwrap();
+        st.cap = LineCap::Round;
+        st.profile = Some(WidthProfile { points: vec![(0.0, 0.5, 2.5), (1.0, 1.0, 1.0)] });
+        assert_eq!(st.profile_max(), 2.5);
+        assert_eq!(a.outset(), 2.5);
+        a.stroke_mut().unwrap().paint = Paint::None;
+        assert_eq!(a.outset(), 0.0, "an unpainted stroke");
     }
 
     #[test]

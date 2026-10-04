@@ -507,3 +507,10 @@ none): arrows (`Arrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Rig
 `Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`, `Diamond`, `Hexagon`, `Star`,
 the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`, `Bracket`, `Fork`, `Cross`,
 `Plus`). Each head fits a box about four times its weight (stroke weight × `arrowScale`) long and wide.
+
+## Stroke bounds and clicks
+
+Visual bounds (Fit to Selected Art, Rasterize, exporting all art) and clicks on the canvas take
+in the whole stroke as drawn: arrowheads, inside/outside alignment (an outside stroke is hit outside the path, an
+inside one inside it), the width profile's width where you click, projecting caps and miter spikes up to the miter
+limit. A rectangle's right-angle miters stay within half the weight of its edges.

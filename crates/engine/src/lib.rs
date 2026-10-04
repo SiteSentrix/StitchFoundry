@@ -846,6 +846,8 @@ mod tests_proxyitems;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]
+mod tests_strokereach;
+#[cfg(test)]
 mod tests_strokeux;
 #[cfg(test)]
 mod tests_stylepanel;

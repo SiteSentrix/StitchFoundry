@@ -13,6 +13,7 @@ pub mod node;
 pub mod overprint;
 pub mod pattern;
 mod pixels;
+mod reach;
 pub mod selection;
 pub mod swatches;
 pub mod text;
