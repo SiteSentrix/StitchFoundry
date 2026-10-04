@@ -249,9 +249,7 @@ fn expand_node(d: &mut vectorcraft_doc::Document, id: NodeId, out: &mut Vec<Node
     }
     let Some((path, rule)) = node_geometry(&n) else { return };
     let Some(bounds) = path.bounds() else { return };
-    let w = n.appearance.stroke_width();
-    let ctx = effects::GeomContext { stroke_width: if w > 0.0 { w } else { 1.0 } };
-    let baked = effects::apply_geometry_with(&n.appearance.effects, &path, bounds, &ctx);
+    let baked = effects::apply_geometry_with(&n.appearance.effects, &path, bounds, &effects::GeomContext::of(&n));
     let kind = if matches!(n.kind, NodeKind::Compound { .. }) || baked.subpaths.len() > 1 {
         let children = baked
             .subpaths

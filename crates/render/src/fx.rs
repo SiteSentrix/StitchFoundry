@@ -54,11 +54,6 @@ fn node_bezpath(n: &Node) -> Option<BezPath> {
     }
 }
 
-fn geom_ctx(n: &Node) -> GeomContext {
-    let w = n.appearance.stroke_width();
-    GeomContext { stroke_width: if w > 0.0 { w } else { 1.0 } }
-}
-
 fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return bp.clone();
@@ -68,7 +63,7 @@ fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
 
 /// The object-level effected geometry of `n` (base path `bp`).
 pub(crate) fn effected_path(n: &Node, bp: &BezPath) -> BezPath {
-    apply(&n.appearance.effects, bp, &geom_ctx(n))
+    apply(&n.appearance.effects, bp, &GeomContext::of(n))
 }
 
 fn item_effects(item: &AppearanceItem) -> &[Effect] {
@@ -81,13 +76,13 @@ fn item_effects(item: &AppearanceItem) -> &[Effect] {
 /// Visual bounds including geometry effects, stroke outsets and shadows/glows.
 pub(crate) fn visual_bounds(n: &Node) -> Option<Rect> {
     let bp = node_bezpath(n)?;
-    let ctx = geom_ctx(n);
+    let ctx = GeomContext::of(n);
     let g = effected_path(n, &bp);
     let mut r: Option<Rect> = (!g.elements().is_empty()).then(|| g.bounding_box());
     for item in &n.appearance.items {
         let fx = item_effects(item);
         if effects::has_geometry(fx) {
-            let ig = apply(fx, &g, &ctx);
+            let ig = apply(fx, &g, &ctx.item(item));
             if !ig.elements().is_empty() {
                 let b = ig.bounding_box();
                 r = Some(r.map_or(b, |r| r.union(b)));
@@ -298,7 +293,7 @@ impl Renderer {
             self.hairline(ctx, f, &g, [0, 0, 0, 255]);
             return;
         }
-        let gctx = geom_ctx(n);
+        let gctx = GeomContext::of(n);
         let rfx = effects::raster_effects(&n.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
@@ -452,7 +447,7 @@ impl Renderer {
     fn paint_items(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, g: &BezPath, rule: FillRule, gctx: &GeomContext) {
         let bounds = g.bounding_box();
         for item in &n.appearance.items {
-            let ig = apply(item_effects(item), g, gctx);
+            let ig = apply(item_effects(item), g, &gctx.item(item));
             let ib = if effects::has_geometry(item_effects(item)) && !ig.elements().is_empty() { ig.bounding_box() } else { bounds };
             match item {
                 AppearanceItem::Fill(fl) => {
