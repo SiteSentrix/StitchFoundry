@@ -367,7 +367,7 @@ impl Default for Prefs {
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
             scale_corners: false,
-            scale_strokes: true,
+            scale_strokes: false,
             zoom_with_mouse_wheel: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
