@@ -76,9 +76,15 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
         "svg" | "svgz" => {
             let text: Cow<[u8]> = if format.id == "svgz" { Cow::Owned(gunzip(bytes)?) } else { Cow::Borrowed(bytes) };
             let text = std::str::from_utf8(&text).map_err(|_| err("SVG is not UTF-8"))?;
-            let (d, w) = vectorcraft_svg::import_with_report(text).map_err(err)?;
-            warnings = w;
-            d
+            // An SVG saved with Preserve Editing carries the native document: open that.
+            match vectorcraft_svg::editing_data(text).and_then(|b64| vectorcraft_format::base64_decode(&b64)) {
+                Some(native) => vectorcraft_format::load(&native).map_err(err)?,
+                None => {
+                    let (d, w) = vectorcraft_svg::import_with_report(text).map_err(err)?;
+                    warnings = w;
+                    d
+                }
+            }
         }
         "pdf" | "ai" | "ait" => {
             let r = vectorcraft_pdf::import_with_report(bytes, &vectorcraft_pdf::ImportOptions::default()).map_err(err)?;

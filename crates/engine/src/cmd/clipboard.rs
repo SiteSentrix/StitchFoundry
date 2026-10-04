@@ -46,7 +46,10 @@ impl Session {
             *ch = self.clipboard.iter().cloned().map(Arc::new).collect();
         }
         d.layers = vec![Arc::new(layer)];
-        Some(vectorcraft_svg::export(&d, &vectorcraft_svg::ExportOptions { artboard: None, object_ids: false, ..Default::default() }))
+        Some(vectorcraft_svg::export(
+            &d,
+            &vectorcraft_svg::ExportOptions { artboard: None, object_ids: vectorcraft_svg::ObjectIds::Minimal, ..Default::default() },
+        ))
     }
 }
 

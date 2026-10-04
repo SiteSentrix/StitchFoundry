@@ -122,6 +122,13 @@ colour group (one undo step).
 {"name":"run_command","arguments":{"command":"colorTheme.addToSwatches","params":{"name":"Harbor"}}}
 ```
 
+SVG Options: `export` to SVG takes them in `options`, flat or as `{"svg": {…}}`: `styling` (`presentation`,
+`style`, `entities`, `css`), `outlineText`, `images` (`embed`, or `link`: embedded images are written next to the
+SVG, or returned as `linked`), `objectIds` (`layerNames`, `minimal`, `unique`), `decimals` (1–7), `minify`,
+`responsive`, `useArtboards`, `range: "all"` (one SVG per artboard, listed in `files`), `preserveEditing` (the SVG
+reopens as the full document) and `metadata`. Unknown keys inside `svg` are rejected; `run_command document.formats`
+lists every option with its default. `run_command document.save {path: "x.svg", svg: {…}}` saves as SVG.
+
 ## Resources
 
 | URI | Content |

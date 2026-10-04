@@ -36,6 +36,7 @@ pub mod save_style_library;
 pub mod save_swatch_library;
 mod shapes;
 pub mod spot_colors;
+pub(crate) mod svg_options;
 pub mod swatch_options;
 pub mod tile_edge_color;
 mod tools;
@@ -174,6 +175,7 @@ registry! {
     TransformEach: [transform_each::KIND] => transform_each::SPEC,
     WidthPoint: [width_point::KIND] => width_point::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
+    SvgOptions: [svg_options::KIND] => svg_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

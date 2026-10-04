@@ -10,7 +10,7 @@ use vectorcraft_doc::{CharStyle, Justify};
 use vectorcraft_effects::stroke::{self, Written, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
-use crate::{ExportOptions, Styling, base64_encode, fmt_num, xml_escape};
+use crate::{EDITING_NS, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Styling, base64_encode, fmt_num, fnv1a, xml_escape};
 
 type Props = Vec<(&'static str, String)>;
 
@@ -22,10 +22,21 @@ struct AreaLine<'t> {
     hyphenated: bool,
 }
 
-pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
+pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
+    if opts.object_ids != ObjectIds::Unique {
+        return write(doc, opts, native, "");
+    }
+    // Unique ids: every id and class name gets a prefix hashed from the output written without
+    // one, so the same document always gets the same ids and different ones never share any.
+    let plain = write(doc, opts, native, "");
+    let prefix = format!("u{:010x}-", fnv1a(plain.svg.as_bytes()) & 0xff_ffff_ffff);
+    write(doc, opts, native, &prefix)
+}
+
+fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix: &str) -> Output {
     let rect = opts
         .artboard
         .and_then(|i| doc.artboards.get(i))
@@ -50,6 +61,8 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<Strin
         anonymous: false,
         knockout_filter: None,
         warnings: vec![],
+        id_prefix,
+        linked: Vec::new(),
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -70,20 +83,28 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<Strin
     if !opts.minify {
         out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     }
+    if opts.styling == Styling::StyleEntities && !w.classes.is_empty() {
+        out.push_str("<!DOCTYPE svg [");
+        for (i, c) in w.classes.iter().enumerate() {
+            out.push_str(&format!("{nl}{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)));
+        }
+        out.push_str(&format!("{nl}]>{nl}"));
+    }
     let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
     out.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
     if !opts.responsive {
         out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
     }
     out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
-    if !w.defs.is_empty() || !w.classes.is_empty() {
+    let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();
+    if !w.defs.is_empty() || css {
         out.push_str(&w.indent(1));
         out.push_str(&format!("<defs>{nl}"));
-        if !w.classes.is_empty() {
+        if css {
             out.push_str(&w.indent(2));
             out.push_str("<style>");
             for (i, c) in w.classes.iter().enumerate() {
-                out.push_str(&format!("{nl}{}.cls-{}{{{}}}", w.indent(3), i + 1, xml_escape(c)));
+                out.push_str(&format!("{nl}{}.{id_prefix}cls-{}{{{}}}", w.indent(3), i + 1, xml_escape(c)));
             }
             out.push_str(&format!("{nl}{}</style>{nl}", w.indent(2)));
         }
@@ -95,10 +116,37 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<Strin
         out.push_str(&w.indent(1));
         out.push_str(&format!("<title>{}</title>{nl}", xml_escape(&doc.title)));
     }
+    w.metadata(&mut out, native);
     out.push_str(&w.body);
     out.push_str("</svg>");
     out.push_str(nl);
-    (out, w.warnings)
+    Output { svg: out, linked: w.linked, warnings: w.warnings }
+}
+
+/// A CSS declaration block as the literal value of an `<!ENTITY>`: quotes, `%` and markup
+/// characters become references that still read as themselves inside the `style` attribute.
+fn entity_value(decl: &str) -> String {
+    let mut o = String::with_capacity(decl.len());
+    for c in decl.chars() {
+        match c {
+            '"' => o.push_str("&#34;"),
+            '%' => o.push_str("&#37;"),
+            // Doubly escaped: the entity's replacement text is parsed again where it is used.
+            '&' => o.push_str("&#38;#38;"),
+            '<' => o.push_str("&#38;#60;"),
+            _ => o.push(c),
+        }
+    }
+    o
+}
+
+/// The usual file extension of an image MIME type.
+fn image_ext(mime: &str) -> &str {
+    match mime {
+        "image/jpeg" => "jpg",
+        "image/svg+xml" => "svg",
+        m => m.strip_prefix("image/").filter(|e| !e.is_empty() && e.chars().all(|c| c.is_ascii_alphanumeric())).unwrap_or("bin"),
+    }
 }
 
 struct Writer<'a> {
@@ -126,6 +174,10 @@ struct Writer<'a> {
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Features written approximately (once each).
     warnings: Vec<String>,
+    /// Prepended to every id and class name ([`ObjectIds::Unique`]).
+    id_prefix: &'a str,
+    /// Image files the SVG links to ([`ImageMode::Link`]).
+    linked: Vec<LinkedImage>,
 }
 
 /// How one stroke is written.
@@ -200,7 +252,7 @@ impl Writer<'_> {
     fn fresh_id(&mut self, prefix: &str) -> String {
         let mut i = 1;
         loop {
-            let id = format!("{prefix}-{i}");
+            let id = format!("{}{prefix}-{i}", self.id_prefix);
             if self.used_ids.insert(id.clone()) {
                 return id;
             }
@@ -209,13 +261,13 @@ impl Writer<'_> {
     }
     /// Reserve ids for every named object up front so generated def ids never collide with them.
     fn assign_name_ids(&mut self) {
-        if !self.opts.object_ids {
+        if self.opts.object_ids == ObjectIds::Minimal {
             return;
         }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
             if let Some(name) = &n.name {
-                named.push((n.id, sanitize_id(name)));
+                named.push((n.id, format!("{}{}", self.id_prefix, sanitize_id(name))));
             }
         });
         for (id, base) in named {
@@ -257,18 +309,53 @@ impl Writer<'_> {
                 s
             }
             Styling::InlineStyle => format!(" style=\"{}\"", xml_escape(&css(&props.iter().collect::<Vec<_>>()))),
+            Styling::StyleEntities => format!(" style=\"&st{};\"", self.class(css(&props.iter().collect::<Vec<_>>()))),
             Styling::InternalCss => {
-                let decl = css(&props.iter().collect::<Vec<_>>());
-                let i = match self.classes.iter().position(|c| *c == decl) {
-                    Some(i) => i,
-                    None => {
-                        self.classes.push(decl);
-                        self.classes.len() - 1
-                    }
-                };
-                format!(" class=\"cls-{}\"", i + 1)
+                let i = self.class(css(&props.iter().collect::<Vec<_>>()));
+                format!(" class=\"{}cls-{i}\"", self.id_prefix)
             }
         }
+    }
+
+    /// The 1-based number of a distinct declaration block (a CSS class or a style entity).
+    fn class(&mut self, decl: String) -> usize {
+        match self.classes.iter().position(|c| *c == decl) {
+            Some(i) => i + 1,
+            None => {
+                self.classes.push(decl);
+                self.classes.len()
+            }
+        }
+    }
+
+    /// `<metadata>`: the Dublin Core title and format ([`ExportOptions::metadata`]) and the native
+    /// document ([`ExportOptions::preserve_editing`]).
+    fn metadata(&self, out: &mut String, native: Option<&[u8]>) {
+        let native = native.filter(|_| self.opts.preserve_editing);
+        if !self.opts.metadata && native.is_none() {
+            return;
+        }
+        let nl = if self.opts.minify { "" } else { "\n" };
+        let mut line = |depth: usize, s: &str| {
+            out.push_str(&self.indent(depth));
+            out.push_str(s);
+            out.push_str(nl);
+        };
+        line(1, "<metadata>");
+        if self.opts.metadata {
+            line(2, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">");
+            line(3, "<rdf:Description rdf:about=\"\">");
+            line(4, "<dc:format>image/svg+xml</dc:format>");
+            if !self.doc.title.is_empty() {
+                line(4, &format!("<dc:title>{}</dc:title>", xml_escape(&self.doc.title)));
+            }
+            line(3, "</rdf:Description>");
+            line(2, "</rdf:RDF>");
+        }
+        if let Some(bytes) = native {
+            line(2, &format!("<vectorcraft:document xmlns:vectorcraft=\"{EDITING_NS}\">{}</vectorcraft:document>", base64_encode(bytes)));
+        }
+        line(1, "</metadata>");
     }
 
     fn node_props(n: &Node) -> Props {
@@ -912,8 +999,18 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
-                let href = match self.doc.images.get(&im.key) {
-                    Some(b) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
+                let link = self.opts.images == ImageMode::Link;
+                let href = match (im.link.as_ref().filter(|_| link), self.doc.images.get(&im.key)) {
+                    (Some(l), _) => l.clone(),
+                    (None, Some(b)) if !b.bytes.is_empty() && link => {
+                        // Named after the bytes: image keys ("raster-1"…) repeat across documents.
+                        let name = format!("{}.{}", b.content_key(), image_ext(&b.mime));
+                        if !self.linked.iter().any(|l| l.name == name) {
+                            self.linked.push(LinkedImage { name: name.clone(), bytes: b.bytes.clone() });
+                        }
+                        name
+                    }
+                    (None, Some(b)) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
                     _ => match &im.link {
                         Some(l) => l.clone(),
                         None => return,

@@ -260,6 +260,9 @@ pub struct UiState {
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
     pub color_guide_limit: String,
+    /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
+    #[serde(default)]
+    pub svg_options: Value,
 }
 
 impl UiState {
@@ -315,6 +318,7 @@ impl Default for UiState {
             library_panel: None,
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
+            svg_options: Value::Null,
         }
     }
 }

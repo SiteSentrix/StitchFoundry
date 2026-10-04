@@ -3,6 +3,7 @@
 //!
 //! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, raster images).
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
+//! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
 //! - `save`: `document.save`, `file.saveAsTemplate`.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
@@ -16,11 +17,14 @@ mod export;
 mod load;
 pub mod pdf;
 mod save;
+mod svg;
 
 use serde_json::{Value, json};
 
-pub use encode::{ARTBOARD_PARAMS, ArtboardPick, encode, encode_with_warnings};
+pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub use load::{Loaded, RasterImage, detect, load, open_bytes, raster_image};
+pub use save::{save_encoding, save_format};
+pub use svg::options_map as svg_options;
 
 use super::*;
 use crate::EngineError;
@@ -41,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?} native .vectorcraft (default: the document's path) → {path}; a never-saved document without path → {dataBase64} (stays modified)",
+            "{path?, format?: vectorcraft|svg (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}} (default path: the document's) → {path, linked?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with. A never-saved document without path → {dataBase64} (stays modified)",
             has_doc,
             save::save
         ),
@@ -50,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Serialize Document",
             [],
             None,
-            "{format?: vectorcraft (default)|svg|pdf|png|jpg|webp, …the format's options (see document.formats)} → {text, warnings} for svg, else {dataBase64, warnings}",
+            "{format?: vectorcraft (default)|svg|pdf|png|jpg|webp, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
             has_doc,
             export::serialize
         ),
@@ -59,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" (1-based; PDF writes one page per artboard, default all; the other formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), outlineText?: bool (svg), …the PDF options of document.exportPdf} → {path, format, bytes, warnings}; no path → {dataBase64, format, bytes, warnings}. Never changes the document's path",
+            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -167,12 +171,10 @@ const RANGE: FormatOption = FormatOption {
     name: "range",
     ty: "string",
     default: "null",
-    description: "1-based artboards such as \"1-3, 5\" (wins over artboards and artboard)",
+    description: "1-based artboards such as \"1-3, 5\", or \"all\" (wins over artboards and artboard)",
 };
 const SCALE: FormatOption = FormatOption { name: "scale", ty: "number", default: "1", description: "pixels per point (0.01–64)" };
 const QUALITY: FormatOption = FormatOption { name: "quality", ty: "integer", default: "90", description: "JPEG quality 1–100" };
-const OUTLINE_TEXT: FormatOption =
-    FormatOption { name: "outlineText", ty: "boolean", default: "false", description: "text as glyph outlines (viewable without the fonts)" };
 
 /// A format `document.open` reads but nothing writes yet.
 const fn reader(id: &'static str, label: &'static str, extensions: &'static [&'static str], mime: &'static str, raster: bool) -> Format {
@@ -191,16 +193,7 @@ pub const FORMATS: &[Format] = &[
         raster: false,
         options: &[],
     },
-    Format {
-        id: "svg",
-        label: "SVG",
-        extensions: &["svg"],
-        mime: "image/svg+xml",
-        read: true,
-        write: true,
-        raster: false,
-        options: &[ARTBOARD, OUTLINE_TEXT],
-    },
+    Format { id: "svg", label: "SVG", extensions: &["svg"], mime: "image/svg+xml", read: true, write: true, raster: false, options: svg::OPTIONS },
     reader("svgz", "SVG Compressed", &["svgz"], "image/svg+xml", false),
     Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: pdf::OPTIONS },
     reader("ai", "PDF-compatible .ai", &["ai"], "application/pdf", false),
@@ -322,22 +315,89 @@ pub(crate) fn create_dir(path: &str) -> Result<()> {
     Err(no_fs(path))
 }
 
+/// File-name parts for artboards `boards` of `doc`: the artboard's name with unsafe characters as
+/// `-`, `Artboard-N` when unnamed, and `-2`, `-3`… after a name already used (compared without
+/// case: `Icon` and `icon` are one file on most desktop file systems).
+pub fn artboard_file_names(doc: &vectorcraft_doc::Document, boards: &[usize]) -> Vec<String> {
+    let mut taken = std::collections::HashSet::new();
+    boards
+        .iter()
+        .map(|&b| {
+            let name = doc.artboards.get(b).map_or("", |a| a.name.as_str());
+            let mut base: String = name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
+            if base.is_empty() {
+                base = format!("Artboard-{}", b + 1);
+            }
+            let mut name = base.clone();
+            for i in 2.. {
+                if taken.insert(name.to_lowercase()) {
+                    break;
+                }
+                name = format!("{base}-{i}");
+            }
+            name
+        })
+        .collect()
+}
+
+/// Write an export's files for the destination `path` → `{path, bytes, files?, linked?, …extra}`
+/// (`files`: every file when there are several; `linked`: the images it links to); with no path
+/// → the same with `dataBase64` and `{name, dataBase64}` rows, named after `name`.
+fn write_encoded(path: Option<&str>, name: &str, doc: &vectorcraft_doc::Document, enc: &Encoded, extra: Value) -> Result<Value> {
+    let files = enc.named(doc, path.unwrap_or(name));
+    let (main, linked) = files.split_at(enc.files.len());
+    let row = |(name, bytes): &(String, &[u8])| match path {
+        Some(_) => json!(name),
+        None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }),
+    };
+    if path.is_some() {
+        for (p, bytes) in &files {
+            write_file(p, bytes)?;
+        }
+    }
+    let Some((first, bytes)) = main.first() else { return Err(EngineError::Other("the export wrote no file".into())) };
+    let mut out = match path {
+        Some(_) => json!({ "path": first, "bytes": bytes.len() }),
+        None => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes), "bytes": bytes.len() }),
+    };
+    if main.len() > 1 {
+        out["files"] = main.iter().map(row).collect();
+    }
+    if !linked.is_empty() {
+        out["linked"] = linked.iter().map(row).collect();
+    }
+    Ok(merge(out, extra))
+}
+
+/// `a` with the fields of `b`.
+fn merge(mut a: Value, b: Value) -> Value {
+    if let (Some(a), Value::Object(b)) = (a.as_object_mut(), b) {
+        a.extend(b);
+    }
+    a
+}
+
+/// A file name for bytes handed back without a path: the document's title with `ext`.
+fn default_name(doc: &vectorcraft_doc::Document, ext: &str) -> String {
+    let stem = std::path::Path::new(&doc.title).file_stem().map(|s| s.to_string_lossy().into_owned()).filter(|s| !s.is_empty());
+    format!("{}.{ext}", stem.as_deref().unwrap_or("Untitled"))
+}
+
 /// Write `bytes` to `path` → `{path, bytes, …extra}`; with no path → `{dataBase64, bytes, …extra}`.
 fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) -> Result<Value> {
-    let mut out = match path {
+    let out = match path {
         Some(path) => {
             write_file(path, bytes)?;
             json!({ "path": path, "bytes": bytes.len() })
         }
         None => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes), "bytes": bytes.len() }),
     };
-    if let (Some(o), Value::Object(e)) = (out.as_object_mut(), extra) {
-        o.extend(e);
-    }
-    Ok(out)
+    Ok(merge(out, extra))
 }
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_pdf;
+#[cfg(test)]
+mod tests_svg;

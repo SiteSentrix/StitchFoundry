@@ -1,8 +1,9 @@
 //! VectorCraft SVG import and export.
 //!
-//! * [`export`] writes a [`Document`] as SVG 1.1 with our own writer (presentation attributes,
-//!   inline styles or internal CSS classes; gradients in `<defs>` with `userSpaceOnUse`; clip groups as
-//!   `<clipPath>`; embedded images as `data:` URIs; text as `<text>`/`<tspan>`).
+//! * [`export`] / [`export_full`] write a [`Document`] as SVG 1.1 with our own writer, as set by
+//!   [`ExportOptions`] (presentation attributes, inline styles, style entities or internal CSS
+//!   classes; gradients in `<defs>` with `userSpaceOnUse`; clip groups as `<clipPath>`; images
+//!   embedded as `data:` URIs or linked; text as `<text>`/`<tspan>` or outlines).
 //! * [`import`] / [`import_with_report`] parse SVG with `usvg` and convert its normalized tree into
 //!   document nodes with all transforms baked into the geometry.
 //!
@@ -54,37 +55,85 @@
 mod export;
 mod import;
 
+use serde::{Deserialize, Serialize};
+
 pub use vectorcraft_doc::Document;
 pub use vectorcraft_doc::TextObject;
 
-/// How style properties are written (the "Styling" export option).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// How style properties are written (SVG Options → Styling).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Styling {
     /// `fill="#ff0000"` attributes.
     #[default]
+    #[serde(rename = "presentation")]
     PresentationAttributes,
     /// `style="fill:#ff0000"`.
+    #[serde(rename = "style")]
     InlineStyle,
+    /// `style="&st1;"`, each distinct declaration block an XML entity declared in the DOCTYPE.
+    #[serde(rename = "entities")]
+    StyleEntities,
     /// `class="cls-1"` with a `<style>` element in `<defs>`.
+    #[serde(rename = "css")]
     InternalCss,
 }
 
-/// SVG export options (Export As → SVG).
-#[derive(Clone, Debug, PartialEq)]
+/// Which `id` attributes objects get (SVG Options → Object IDs). Definitions other elements
+/// reference (gradients, clip paths, masks, patterns, filters) always have ids.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectIds {
+    /// Readable ids from layer and object names.
+    #[default]
+    LayerNames,
+    /// Only the ids that are referenced.
+    Minimal,
+    /// Every id carries a prefix derived from the content, so SVGs inlined in one page never
+    /// share an id.
+    Unique,
+}
+
+/// How raster images are written (SVG Options → Images).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ImageMode {
+    /// `data:` URIs inside the SVG.
+    #[default]
+    Embed,
+    /// `href` to an image file: a linked image's own file, an embedded one written next to the
+    /// SVG (see [`Output::linked`]).
+    Link,
+}
+
+/// SVG export options (SVG Options). Deserializes from camelCase JSON with every field optional;
+/// unknown fields are rejected.
+///
+/// These defaults are the library's and the engine's (`document.export` without options):
+/// presentation attributes and a fixed size, the most portable output. The SVG Options dialog
+/// starts from Internal CSS and Responsive instead, like the reference app's Export As.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExportOptions {
-    /// Artboard index to export (sets the viewBox); `None` = the bounds of all art.
+    /// Artboard index to export (sets the viewBox); `None` = the bounds of all art. Callers pick
+    /// it (the engine's `artboard`/`range`/`useArtboards` params), so it is not deserialized.
+    #[serde(skip)]
     pub artboard: Option<usize>,
     pub styling: Styling,
     /// Decimal places for coordinates (1–7 in the dialog; default 3).
     pub decimals: u8,
-    /// Write `id` attributes from layer and object names.
-    pub object_ids: bool,
+    pub object_ids: ObjectIds,
+    pub images: ImageMode,
     /// No indentation or newlines, no XML declaration.
     pub minify: bool,
     /// Omit `width`/`height` so the SVG scales to its container.
     pub responsive: bool,
     /// Fonts → Convert to Outlines: text becomes paths (portable, no font needed to view it).
     pub outline_text: bool,
+    /// Embed the native document (passed to [`export_full`]) in `<metadata>` so VectorCraft
+    /// reopens the SVG with nothing lost (see [`editing_data`]).
+    pub preserve_editing: bool,
+    /// Write `<metadata>` with the document's Dublin Core title and format.
+    pub metadata: bool,
 }
 
 impl Default for ExportOptions {
@@ -93,12 +142,47 @@ impl Default for ExportOptions {
             artboard: Some(0),
             styling: Styling::PresentationAttributes,
             decimals: 3,
-            object_ids: true,
+            object_ids: ObjectIds::LayerNames,
+            images: ImageMode::Embed,
             minify: false,
             responsive: false,
             outline_text: false,
+            preserve_editing: false,
+            metadata: false,
         }
     }
+}
+
+/// Decimal places the options accept.
+pub const DECIMALS: std::ops::RangeInclusive<u8> = 1..=7;
+
+impl ExportOptions {
+    /// Values outside what the options allow (the decimals range).
+    pub fn check(&self) -> Result<(), String> {
+        if DECIMALS.contains(&self.decimals) {
+            Ok(())
+        } else {
+            Err(format!("decimals must be {}–{} (got {})", DECIMALS.start(), DECIMALS.end(), self.decimals))
+        }
+    }
+}
+
+/// An export: the SVG text and the image files it links to.
+#[derive(Clone, Debug, Default)]
+pub struct Output {
+    pub svg: String,
+    /// [`ImageMode::Link`]: embedded images written as files next to the SVG, named after their
+    /// content (`img….png`), so exports of different documents into one folder never clash.
+    pub linked: Vec<LinkedImage>,
+    /// Features the export approximates.
+    pub warnings: Vec<String>,
+}
+
+/// An image file an exported SVG links to by `name`.
+#[derive(Clone, Debug)]
+pub struct LinkedImage {
+    pub name: String,
+    pub bytes: std::sync::Arc<Vec<u8>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -107,14 +191,37 @@ pub enum SvgError {
     Parse(String),
 }
 
-/// Export a document as an SVG string.
+/// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
 pub fn export(doc: &Document, opts: &ExportOptions) -> String {
-    export::export(doc, opts).0
+    export_full(doc, opts, None).svg
 }
 
 /// Export a document as an SVG string, also returning warnings about approximated features.
 pub fn export_with_report(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
-    export::export(doc, opts)
+    let o = export_full(doc, opts, None);
+    (o.svg, o.warnings)
+}
+
+/// Export a document as SVG plus the image files it links to. `native`: the document in the
+/// native format, embedded when [`ExportOptions::preserve_editing`] is on.
+pub fn export_full(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
+    export::export(doc, opts, native)
+}
+
+/// The XML namespace of the editing data [`ExportOptions::preserve_editing`] embeds.
+pub const EDITING_NS: &str = "urn:vectorcraft:editing";
+
+/// The native document an SVG carries (base64, as written with
+/// [`ExportOptions::preserve_editing`]), if any.
+pub fn editing_data(svg: &str) -> Option<String> {
+    if !svg.contains(EDITING_NS) {
+        return None;
+    }
+    let opts = usvg::roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
+    let xml = usvg::roxmltree::Document::parse_with_options(svg, opts).ok()?;
+    let el = xml.descendants().find(|n| n.tag_name().namespace() == Some(EDITING_NS) && n.tag_name().name() == "document")?;
+    let data: String = el.children().filter_map(|c| c.text()).flat_map(|t| t.chars().filter(|c| !c.is_whitespace())).collect();
+    Some(data).filter(|d| !d.is_empty())
 }
 
 /// Import an SVG document.
@@ -125,6 +232,11 @@ pub fn import(svg: &str) -> Result<Document, SvgError> {
 /// Import an SVG document, also returning warnings about unsupported or approximated features.
 pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     import::import(svg)
+}
+
+/// FNV-1a: a stable content hash (image keys, unique id prefixes).
+pub(crate) fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf29ce484222325, |h, b| (h ^ *b as u64).wrapping_mul(0x100000001b3))
 }
 
 /// Standard base64 (RFC 4648, with padding).

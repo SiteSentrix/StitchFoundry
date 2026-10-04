@@ -7,7 +7,7 @@ use proptest::prelude::*;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::Appearance;
 use vectorcraft_geom::{PathData, Rect, shapes};
-use vectorcraft_svg::{ExportOptions, Styling, export, import};
+use vectorcraft_svg::{ExportOptions, ObjectIds, Styling, export, import};
 use vectorcraft_testkit::fixtures::{self, DocBuilder, art_nodes};
 use vectorcraft_testkit::invariants::check_document;
 use vectorcraft_testkit::raster::{assert_similar, render_artboard};
@@ -15,9 +15,11 @@ use vectorcraft_testkit::strategies::{arb_closed_shape, arb_ops, arb_path_data};
 
 fn all_options() -> Vec<ExportOptions> {
     let mut v = vec![];
-    for styling in [Styling::PresentationAttributes, Styling::InlineStyle, Styling::InternalCss] {
-        for (minify, decimals, object_ids, responsive) in [(false, 3, true, false), (true, 1, false, true), (false, 7, true, true)] {
-            v.push(ExportOptions { artboard: Some(0), styling, decimals, object_ids, minify, responsive, outline_text: false });
+    for styling in [Styling::PresentationAttributes, Styling::InlineStyle, Styling::StyleEntities, Styling::InternalCss] {
+        for (minify, decimals, object_ids, responsive) in
+            [(false, 3, ObjectIds::LayerNames, false), (true, 1, ObjectIds::Minimal, true), (false, 7, ObjectIds::Unique, true)]
+        {
+            v.push(ExportOptions { artboard: Some(0), styling, decimals, object_ids, minify, responsive, ..Default::default() });
         }
     }
     v.push(ExportOptions { artboard: None, ..Default::default() });

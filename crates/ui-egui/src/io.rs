@@ -1,12 +1,13 @@
 //! File I/O through the injected services (pick, read, write, download); the engine's `fileio`
 //! decodes and encodes every format.
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use vectorcraft_doc::{ImageObject, Node, NodeKind};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_geom::Affine;
 
 use crate::VectorcraftApp;
+use crate::dialogs::svg_options;
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
 /// graphic style library files open in the library panel and flattener presets files are imported.
@@ -81,21 +82,58 @@ fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &str) -> Res
     }
 }
 
-/// File → Save / Save As (native format).
-pub fn save(app: &mut VectorcraftApp, path: Option<String>, save_as: bool) -> Result<String, String> {
+/// Write every file of an export (one per artboard, linked images) for the destination `path`.
+fn write_encoded(app: &mut VectorcraftApp, doc: &vectorcraft_doc::Document, path: &str, enc: &fileio::Encoded) -> Result<(), String> {
+    for (p, bytes) in enc.named(doc, path) {
+        write_out(app, &p, bytes)?;
+    }
+    Ok(())
+}
+
+fn format_param(p: &Value) -> Option<&str> {
+    p.get("format").and_then(Value::as_str)
+}
+
+/// File → Save / Save As: native, or SVG for an .svg path (with the SVG options in `params`, else
+/// the ones the document was last saved with).
+pub fn save(app: &mut VectorcraftApp, path: Option<String>, save_as: bool, params: &Value) -> Result<String, String> {
     let st = app.session.active().ok_or("no document")?;
     let existing = if save_as { None } else { st.path.clone() };
     let path = target_path(app, path.or(existing), vectorcraft_format::EXTENSION)?;
-    let doc = app.session.active().ok_or("no document")?.doc.clone();
-    let bytes = fileio::encode(&doc, "vectorcraft", &Value::Null).map_err(|e| e.to_string())?;
-    write_out(app, &path, &bytes)?;
+    let f = fileio::save_format(format_param(params), Some(&path))?;
+    let st = app.session.active().ok_or("no document")?;
+    let (enc, opts) = fileio::save_encoding(st, f, params).map_err(|e| e.to_string())?;
+    let doc = st.doc.clone();
+    write_encoded(app, &doc, &path, &enc)?;
     if let Some(st) = app.session.active_mut() {
         st.path = Some(path.clone());
+        st.save_options = opts;
         st.mark_saved();
     }
     app.status(format!("Saved {path}"));
     note_recent(app, &path);
     Ok(path)
+}
+
+/// File → Save As / Save a Copy: the path (asked for when missing); an SVG path without SVG
+/// options in `p` opens SVG Options, whose OK saves. A copy leaves the document's path alone.
+pub fn save_as(app: &mut VectorcraftApp, copy: bool, p: &Value) -> Result<Value, String> {
+    let path = target_path(app, p.get("path").and_then(Value::as_str).map(str::to_string), vectorcraft_format::EXTENSION)?;
+    let f = fileio::save_format(format_param(p), Some(&path))?;
+    let given = p.get("svg").is_some_and(|v| !v.is_null()) || !fileio::svg_options(p)?.is_empty();
+    if f.id != "vectorcraft" && !given {
+        let mode = if copy { svg_options::Mode::SaveCopy } else { svg_options::Mode::Save };
+        svg_options::open(app, mode, Some(&path));
+        return Ok(json!({ "dialog": svg_options::KIND, "path": path }));
+    }
+    if !copy {
+        return save(app, Some(path), true, p).map(|p| json!({ "path": p }));
+    }
+    let doc = app.session.active().ok_or("no document")?.doc.clone();
+    let enc = fileio::encode_all(&doc, f.id, p).map_err(|e| e.to_string())?;
+    write_encoded(app, &doc, &path, &enc)?;
+    app.status(format!("Saved a copy as {path}"));
+    Ok(json!({ "path": path }))
 }
 
 /// Put `path` at the top of File → Open Recent Files (capped by Preferences → Recent Files).
@@ -107,13 +145,14 @@ pub fn note_recent(app: &mut VectorcraftApp, path: &str) {
 }
 
 /// Export the active document in `format` (default: the path's extension, else PNG) with the
-/// `document.export` options in `params` (artboard, range, scale…). The document keeps its path.
+/// `document.export` options in `params` (artboard, range, scale, SVG options…): every file it
+/// writes (an SVG per artboard, linked images) goes next to `path`. The document keeps its path.
 pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<String>, params: &Value) -> Result<String, String> {
     let f = fileio::writable_format(format, path.as_deref())?;
     let doc = app.session.active().ok_or("no document")?.doc.clone();
     let path = target_path(app, path, f.extensions[0])?;
-    let bytes = fileio::encode(&doc, f.id, params).map_err(|e| e.to_string())?;
-    write_out(app, &path, &bytes)?;
+    let enc = fileio::encode_all(&doc, f.id, params).map_err(|e| e.to_string())?;
+    write_encoded(app, &doc, &path, &enc)?;
     app.status(format!("Exported {path}"));
     Ok(path)
 }
@@ -204,7 +243,7 @@ pub fn place_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result
         let nodes: Vec<Node> = src.layers.iter().flat_map(|l| l.children().cloned().unwrap_or_default()).map(|n| (*n).clone()).collect();
         app.session.clipboard = nodes;
         // Straight to the engine: `app.run` would let the system clipboard replace these nodes.
-        app.session.execute("edit.pasteInPlace", &serde_json::json!({})).map_err(|e| e.to_string())?;
+        app.session.execute("edit.pasteInPlace", &json!({})).map_err(|e| e.to_string())?;
         app.sync_views();
         return Ok(());
     }

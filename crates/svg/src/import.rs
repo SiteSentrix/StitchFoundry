@@ -12,7 +12,7 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2, shapes};
 
-use crate::SvgError;
+use crate::{SvgError, fnv1a};
 use css::XNode;
 use text::TextSlots;
 
@@ -255,15 +255,6 @@ fn bezpath(p: &usvg::tiny_skia_path::Path, m: Affine) -> BezPath {
         }
     }
     bp
-}
-
-fn fnv1a(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
-    for b in bytes {
-        h ^= *b as u64;
-        h = h.wrapping_mul(0x100000001b3);
-    }
-    h
 }
 
 fn rule(r: usvg::FillRule) -> FillRule {

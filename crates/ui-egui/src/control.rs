@@ -15,7 +15,7 @@
 //! - `ui.dialog.set {field, value}` / `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?}`
 //! - `ui.render {path?, scale?}`: render the active artboard headlessly (PNG)
-//! - `app.open {path}` (any readable format) / `app.save {path?}` / `app.quit`
+//! - `app.open {path}` (any readable format) / `app.save {path?, svg?: {…SVG options}}` / `app.quit`
 //!   (`file.close`, `file.closeAll` and `app.quit` first open a `saveChanges` dialog for each
 //!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
 //! - `app.export {path?, format?, …document.export options}`: encoded by the engine, written through
@@ -302,7 +302,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             }
         }
         "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
-        "app.save" => wrap(app.run("file.save", json!({"path": s("path")}))),
+        "app.save" => wrap(app.run("file.save", if p.is_object() { p.clone() } else { json!({}) })),
         "app.export" => match s("path") {
             Some(path) => wrap(crate::io::export(app, s("format"), Some(path.to_string()), p).map(|p| json!({"path": p}))),
             // No save dialog for an agent: the bytes come back, as in headless mode.
