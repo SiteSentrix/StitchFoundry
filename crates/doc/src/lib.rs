@@ -15,6 +15,7 @@ pub mod pattern;
 mod pixels;
 mod reach;
 pub mod selection;
+pub mod style_libs;
 pub mod swatches;
 pub mod text;
 
@@ -45,6 +46,7 @@ pub use node::Knockout;
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use selection::{AnchorRef, Selection};
+pub use style_libs::StyleLibrary;
 pub use text::{
     AreaOptions, CharStyle, FirstBaseline, Justify, ParaStyle, PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
     WrapShape,

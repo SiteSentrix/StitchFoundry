@@ -76,26 +76,46 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// The libraries beyond the built-in ones: User Defined (the library files in the user library
-/// folder, as last scanned) and loaded ones (`swatch.library.load`).
+/// folder, as last scanned) and loaded ones (`swatch.library.load`). Graphic style libraries use
+/// the same with [`vectorcraft_doc::StyleLibrary`] ([`super::stylelib`]).
 #[derive(Clone, Debug, Default)]
-pub struct Libraries {
+pub struct Libraries<L = SwatchLibrary> {
     /// The user library folder. The desktop app sets it; without one (the web, headless sessions)
     /// there are no User Defined libraries.
     user_dir: Option<String>,
-    extra: Vec<Extra>,
+    extra: Vec<Extra<L>>,
 }
 
 #[derive(Clone, Debug)]
-struct Extra {
+struct Extra<L> {
     info: LibraryInfo,
     path: Option<String>,
-    lib: Arc<SwatchLibrary>,
+    lib: Arc<L>,
+}
+
+/// A kind of library that lives in files ([`Libraries`]).
+pub trait LibraryFile: Sized {
+    /// The extensions of its files (lower case).
+    const EXTS: &'static [&'static str];
+    /// Read a library file whose name without the extension is `stem` (an unnamed library's name).
+    fn read(text: &str, stem: &str) -> std::result::Result<Self, String>;
+    fn name(&self) -> &str;
+}
+
+impl LibraryFile for SwatchLibrary {
+    const EXTS: &'static [&'static str] = LIBRARY_EXTS;
+    fn read(text: &str, stem: &str) -> std::result::Result<Self, String> {
+        palette_io::read(text, stem)
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 /// The extensions of library files [`palette_io::read`] reads.
 pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl"];
 
-impl Libraries {
+impl<L: LibraryFile> Libraries<L> {
     pub fn user_dir(&self) -> Option<&str> {
         self.user_dir.as_deref()
     }
@@ -110,28 +130,88 @@ impl Libraries {
     pub fn rescan(&mut self) {
         self.extra.retain(|e| e.info.category != "user");
         let Some(dir) = self.user_dir.clone() else { return };
-        for path in library_files(&dir) {
+        for path in library_files(&dir, L::EXTS) {
             let file = file_name(&path);
-            let Some(lib) = read_file(&path).ok().and_then(|b| palette_io::read(&String::from_utf8_lossy(&b), stem(&file)).ok()) else { continue };
-            let info = LibraryInfo { id: format!("user/{file}"), name: lib.name.clone(), category: "user" };
+            let Some(lib) = read_file(&path).ok().and_then(|b| L::read(&String::from_utf8_lossy(&b), stem(&file)).ok()) else { continue };
+            let info = LibraryInfo { id: format!("user/{file}"), name: lib.name().to_string(), category: "user" };
             self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
         }
     }
 
-    /// Add (or replace, by id) a loaded library.
-    fn put(&mut self, e: Extra) {
-        self.extra.retain(|x| x.info.id != e.info.id);
-        self.extra.push(e);
+    /// The User Defined and loaded libraries, in menu order.
+    pub fn infos(&self) -> impl Iterator<Item = &LibraryInfo> {
+        self.extra.iter().map(|e| &e.info)
+    }
+
+    /// The User Defined or loaded library `id`.
+    pub fn get(&self, id: &str) -> Option<(LibraryInfo, Arc<L>)> {
+        self.extra.iter().find(|e| e.info.id == id).map(|e| (e.info.clone(), e.lib.clone()))
+    }
+
+    /// The file library `id` was read from.
+    pub fn path(&self, id: &str) -> Option<&str> {
+        self.extra.iter().find(|e| e.info.id == id).and_then(|e| e.path.as_deref())
+    }
+
+    /// Write library file `text` as the save commands do: into the user library folder as
+    /// `name`.`ext` with `user: true` (→ `path`, and `library`: its id), to `path`, else back as
+    /// `data`; the results go into `out`.
+    pub(crate) fn write(&mut self, p: &Value, name: &str, ext: &str, text: String, out: &mut Value, cmd: &str) -> Result<()> {
+        if bool_or(p, "user", false) {
+            let dir = self
+                .user_dir()
+                .ok_or_else(|| bad(cmd, "no user library folder here (save with a path, or without one to get the data)"))?
+                .to_string();
+            // A file name from the library's name, without characters file systems reject.
+            let base: String = name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
+            let file = format!("{}.{ext}", base.trim_matches(['.', ' ']));
+            let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
+            create_dir(&dir)?;
+            write_file(&path, text.as_bytes())?;
+            self.rescan();
+            out["path"] = json!(path);
+            out["library"] = json!(format!("user/{file}"));
+        } else if let Some(path) = str_param(p, "path") {
+            write_file(path, text.as_bytes())?;
+            out["path"] = json!(path);
+        } else {
+            out["data"] = json!(text);
+        }
+        Ok(())
+    }
+
+    /// Load a library from `p` (`path`, `data` or `dataBase64`; `name`: the file's name) as the
+    /// load commands do, `parse(bytes, file name)` reading it. A file of the user library folder is
+    /// its User Defined library; others are listed as loaded until the app quits.
+    pub(crate) fn load(&mut self, p: &Value, cmd: &str, parse: impl FnOnce(&[u8], &str) -> Result<L>) -> Result<(LibraryInfo, Arc<L>)> {
+        let path = str_param(p, "path");
+        let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
+            (Some(path), ..) => read_file(path)?,
+            (None, Some(text), _) => text.as_bytes().to_vec(),
+            (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
+            _ => return Err(bad(cmd, "give `path`, `data` or `dataBase64`")),
+        };
+        let file = str_param(p, "name").map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
+        let lib = parse(&bytes, &file)?;
+        self.rescan();
+        if let Some(e) = path.and_then(|p| self.extra.iter().find(|e| e.info.category == "user" && e.path.as_deref() == Some(p))) {
+            return Ok((e.info.clone(), e.lib.clone()));
+        }
+        let info = LibraryInfo { id: format!("loaded/{}", path.unwrap_or(&file)), name: lib.name().to_string(), category: "loaded" };
+        let lib = Arc::new(lib);
+        self.extra.retain(|x| x.info.id != info.id);
+        self.extra.push(Extra { info: info.clone(), path: path.map(str::to_string), lib: lib.clone() });
+        Ok((info, lib))
     }
 }
 
-/// The library files in folder `dir`, sorted by name.
+/// The library files with extensions `exts` in folder `dir`, sorted by name.
 #[cfg(not(target_arch = "wasm32"))]
-fn library_files(dir: &str) -> Vec<String> {
+fn library_files(dir: &str, exts: &[&str]) -> Vec<String> {
     let Ok(rd) = std::fs::read_dir(dir) else { return vec![] };
     let mut files: Vec<String> = rd
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| LIBRARY_EXTS.contains(&x.to_string_lossy().to_ascii_lowercase().as_str())))
+        .filter(|p| p.extension().is_some_and(|x| exts.contains(&x.to_string_lossy().to_ascii_lowercase().as_str())))
         .map(|p| p.to_string_lossy().to_string())
         .collect();
     files.sort_by_key(|f| f.to_lowercase());
@@ -139,7 +219,7 @@ fn library_files(dir: &str) -> Vec<String> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn library_files(_: &str) -> Vec<String> {
+fn library_files(_: &str, _: &[&str]) -> Vec<String> {
     vec![]
 }
 
@@ -147,7 +227,8 @@ fn file_name(path: &str) -> String {
     std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().to_string())
 }
 
-fn stem(name: &str) -> &str {
+/// `name` without its extension.
+pub(crate) fn stem(name: &str) -> &str {
     name.rsplit_once('.').map_or(name, |(s, _)| s)
 }
 
@@ -171,13 +252,13 @@ fn builtin_info((category, b): (&'static str, &BuiltinLibrary)) -> LibraryInfo {
 
 /// Every library, in menu order: built-in, gradients, User Defined, loaded.
 pub fn libraries(s: &Session) -> Vec<LibraryInfo> {
-    builtins().map(builtin_info).chain(s.swatch_libraries.extra.iter().map(|e| e.info.clone())).collect()
+    builtins().map(builtin_info).chain(s.swatch_libraries.infos().cloned()).collect()
 }
 
 /// Library `key` (an id, or a name in any case) with its info.
 pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary>)> {
-    if let Some(e) = s.swatch_libraries.extra.iter().find(|e| e.info.id == key) {
-        return Some((e.info.clone(), e.lib.clone()));
+    if let Some(found) = s.swatch_libraries.get(key) {
+        return Some(found);
     }
     if let Some(b) = builtins().find(|(_, b)| b.id == key) {
         return Some((builtin_info(b), builtin_library(key)?));
@@ -193,12 +274,11 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.swatch_libraries.rescan();
-    let path = |id: &str| s.swatch_libraries.extra.iter().find(|e| e.info.id == id).and_then(|e| e.path.clone());
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": path(&l.id)})
+            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.swatch_libraries.path(&l.id)})
         })
         .collect();
     Ok(json!({ "libraries": libs, "userFolder": s.swatch_libraries.user_dir() }))
@@ -237,61 +317,22 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let lib = document_library(&st.doc, &str_list(p, "names"), name, C)?;
     let (count, text) = (lib.len(), palette_io::write(&lib, format));
     let mut out = json!({"format": format.id(), "count": count});
-    if bool_or(p, "user", false) {
-        let dir = s
-            .swatch_libraries
-            .user_dir()
-            .ok_or_else(|| bad(C, "no user library folder here (save with a path, or without one to get the data)"))?
-            .to_string();
-        // A file name from the library's name, without characters file systems reject.
-        let base: String = lib.name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
-        let file = format!("{}.{}", base.trim_matches(['.', ' ']), format.id());
-        let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
-        create_dir(&dir)?;
-        write_file(&path, text.as_bytes())?;
-        s.swatch_libraries.rescan();
-        out["path"] = json!(path);
-        out["library"] = json!(format!("user/{file}"));
-    } else if let Some(path) = path {
-        write_file(path, text.as_bytes())?;
-        out["path"] = json!(path);
-    } else {
-        out["data"] = json!(text);
-    }
+    s.swatch_libraries.write(p, &lib.name, format.id(), text, &mut out, C)?;
     Ok(out)
 }
 
 fn load(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.load";
-    let path = str_param(p, "path");
-    let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
-        (Some(path), ..) => read_file(path)?,
-        (None, Some(text), _) => text.as_bytes().to_vec(),
-        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(C, "bad dataBase64"))?,
-        _ => return Err(bad(C, "give `path`, `data` or `dataBase64`")),
-    };
-    let file = str_param(p, "name").map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
-    // A library file, or a document whose swatches become the library.
-    let text = std::str::from_utf8(&bytes).ok().filter(|t| palette_io::sniff(t));
-    let lib = match text {
-        Some(t) => palette_io::read(t, stem(&file)).map_err(|e| bad(C, e))?,
-        None => {
-            let doc = super::fileio::load(&file, &bytes).map_err(|e| bad(C, e.to_string()))?.doc;
-            document_library(&doc, &[], stem(&file).to_string(), C)?
+    let (info, lib) = s.swatch_libraries.load(p, C, |bytes, file| {
+        // A library file, or a document whose swatches become the library.
+        match std::str::from_utf8(bytes).ok().filter(|t| palette_io::sniff(t)) {
+            Some(t) => palette_io::read(t, stem(file)).map_err(|e| bad(C, e)),
+            None => {
+                let doc = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?.doc;
+                document_library(&doc, &[], stem(file).to_string(), C)
+            }
         }
-    };
-    // A file of the user library folder is its User Defined library.
-    s.swatch_libraries.rescan();
-    let user = path.and_then(|p| s.swatch_libraries.extra.iter().find(|e| e.info.category == "user" && e.path.as_deref() == Some(p)));
-    let info = match user {
-        Some(e) => e.info.clone(),
-        None => {
-            let id = format!("loaded/{}", path.unwrap_or(&file));
-            let info = LibraryInfo { id, name: lib.name.clone(), category: "loaded" };
-            s.swatch_libraries.put(Extra { info: info.clone(), path: path.map(str::to_string), lib: Arc::new(lib.clone()) });
-            info
-        }
-    };
+    })?;
     Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
 }
 

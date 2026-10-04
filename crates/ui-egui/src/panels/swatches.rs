@@ -14,7 +14,7 @@ use vectorcraft_color::{Color, GradientKind, Paint, Swatch, SwatchLibrary};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::swatchlib;
 
-use super::library_panel::{self, LibraryKind, LibraryRef, OpenLibrary, Row};
+use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::{active_paint, pstate, set_pstate};
 use crate::menus::Item;
 use crate::theme::Tokens;
@@ -960,13 +960,8 @@ impl LibraryKind for SwatchLibraries {
     type Item = Swatch;
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
-        let submenu = |category: &str| match category {
-            "gradients" => Some("Gradients"),
-            "user" => Some("User Defined"),
-            "loaded" => Some("Other Libraries"),
-            _ => None,
-        };
-        swatchlib::libraries(&app.session).into_iter().map(|l| LibraryRef { submenu: submenu(l.category), id: l.id, name: l.name }).collect()
+        let libs = swatchlib::libraries(&app.session).into_iter();
+        libs.map(|l| LibraryRef { submenu: library_panel::submenu(l.category), id: l.id, name: l.name }).collect()
     }
     fn get(app: &VectorcraftApp, id: &str) -> Option<(String, Self::Lib)> {
         swatchlib::library(&app.session, id).map(|(info, lib)| (info.name, lib))
@@ -1037,14 +1032,9 @@ fn add_from_library(app: &mut VectorcraftApp, params: Value) {
 /// `window.swatchLibrary {library}`: open a swatch library in the library panel (`library` null
 /// closes it).
 pub(crate) fn open_library(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let Some(key) = p.get("library").filter(|v| !v.is_null()) else {
-        app.ui.library_panel = None;
-        return Ok(json!({ "open": null }));
-    };
-    let key = key.as_str().ok_or("`library` is a library id or name (see swatch.library.list)")?;
-    let (info, lib) = swatchlib::library(&app.session, key).ok_or_else(|| format!("no swatch library `{key}` (see swatch.library.list)"))?;
-    app.ui.library_panel = Some(OpenLibrary { kind: SwatchLibraries::KIND.into(), id: info.id.clone() });
-    Ok(json!({"open": info.id, "name": info.name, "count": lib.len()}))
+    library_panel::open_command::<SwatchLibraries>(app, p, "swatch.library.list", |app, key| {
+        swatchlib::library(&app.session, key).map(|(info, lib)| (info.id, info.name, lib.len()))
+    })
 }
 
 /// `swatch.library.load` params, then open the library in the panel.
@@ -1056,14 +1046,10 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 /// Other Library…: load the library (or document) at `path`, else one picked in an open dialog
 /// (on the web the picked file arrives later and opens through [`crate::io::open_bytes`]).
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    if path.is_none()
-        && let Some(f) = app.services.open_async.as_mut()
-    {
-        f();
-        return Ok(Value::Null);
+    match library_panel::pick_library_file(app, path)? {
+        Some(path) => load_library(app, json!({ "path": path })),
+        None => Ok(Value::Null),
     }
-    let path = path.or_else(|| app.services.pick_open.as_mut().and_then(|f| f())).ok_or("cancelled")?;
-    load_library(app, json!({ "path": path }))
 }
 
 /// The id prefix of the Window → Swatch Libraries → User Defined slots.
@@ -1071,8 +1057,7 @@ pub(crate) const USER_SLOT: &str = "window.userSwatchLibrary";
 
 /// The User Defined library slot `id` (`window.userSwatchLibrary3`) stands for.
 pub(crate) fn user_library(app: &VectorcraftApp, id: &str) -> Option<swatchlib::LibraryInfo> {
-    let n: usize = id.strip_prefix(USER_SLOT)?.parse().ok()?;
-    swatchlib::libraries(&app.session).into_iter().filter(|l| l.category == "user").nth(n.checked_sub(1)?)
+    library_panel::user_slot(id, USER_SLOT, swatchlib::libraries(&app.session))
 }
 
 /// Window → Swatch Libraries.

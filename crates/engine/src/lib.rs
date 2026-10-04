@@ -493,6 +493,8 @@ pub struct Session {
     /// The selected freeform gradient point (`paint.freeform.selectPoint`) and whose gradient it
     /// was selected on: read it with [`Session::selected_freeform_point`].
     pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
+    /// User Defined and loaded graphic style libraries (Window → Graphic Style Libraries); not saved.
+    pub style_libraries: cmd::stylelib::Libraries,
 }
 
 impl Default for Session {
@@ -526,6 +528,7 @@ impl Session {
             pending_paint: None,
             swatch_libraries: Default::default(),
             freeform_point: None,
+            style_libraries: Default::default(),
         }
     }
 
@@ -849,6 +852,8 @@ mod tests_strokegeom;
 mod tests_strokereach;
 #[cfg(test)]
 mod tests_strokeux;
+#[cfg(test)]
+mod tests_stylelib;
 #[cfg(test)]
 mod tests_stylepanel;
 #[cfg(test)]

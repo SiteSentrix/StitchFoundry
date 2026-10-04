@@ -166,9 +166,11 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             let mut app = VectorcraftApp::new(Session::new(), services());
             load_prefs(&mut app);
-            // User Defined swatch libraries live next to the preferences.
+            // User Defined swatch and graphic style libraries live next to the preferences.
             let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
             app.session.swatch_libraries.set_user_dir(swatches);
+            let styles = prefs_path().and_then(|p| Some(p.parent()?.join("Graphic Styles").to_string_lossy().to_string()));
+            app.session.style_libraries.set_user_dir(styles);
             app.integrated_titlebar = cfg!(target_os = "macos");
             app.custom_titlebar = CUSTOM_TITLEBAR;
             if let Some(port) = control_port {

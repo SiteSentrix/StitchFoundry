@@ -92,6 +92,16 @@ opening a `.vcswatches` or `.gpl` file with `app.open` does the same. `ui.saveSw
 `saveSwatchLibrary` dialog (fields `name`, `format`: `vcswatches`/`gpl`/`css`, `user`: save to the user library
 folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `swatch.library.save` (to a file it asks for a path).
 
+Graphic style libraries open in the same panel: `window.graphicStyleLibrary {library}` (`library_panel: {kind:
+"graphicStyles", id}`; `library: null` closes it). Clicking a style there runs `graphicStyle.addFromLibrary {library,
+name, apply: true, add}` (`add` with Alt), adding and applying it in one undo step; Shift/Cmd-clicks select styles
+for Add to Graphic Styles. `window.graphicStyleLibrary.other {path?}` loads a `.vcstyles` file (or another
+document's graphic styles) and opens it there; opening a `.vcstyles` file with `app.open` does the same. The User
+Defined libraries are `window.userGraphicStyleLibrary1`…`10` in Window → Graphic Style Libraries.
+`ui.saveGraphicStyleLibrary {names?}` opens the `saveGraphicStyleLibrary` dialog (fields `name`, `user`: save to the
+user library folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `graphicStyle.saveLibrary` (to a file it
+asks for a path).
+
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.

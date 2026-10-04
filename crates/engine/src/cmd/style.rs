@@ -405,27 +405,33 @@ fn style_list(s: &mut Session, _: &Value) -> Result<Value> {
         .graphic_styles
         .iter()
         .map(|g| {
-            let ap = &g.appearance;
-            let count = |fill: bool| ap.items.iter().filter(|i| i.is_fill() == fill).count();
-            json!({
-                "id": g.id,
-                "name": g.name,
-                "fill": ap.fill_paint().label(),
-                "stroke": ap.stroke_paint().label(),
-                "strokeWidth": ap.stroke_width(),
-                "fills": count(true),
-                "strokes": count(false),
-                "effects": ap.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(),
-                "opacity": (g.opacity * 100.0).round(),
-                "blend": g.blend.label(),
-                "isolate": g.isolate,
-                "knockout": g.knockout.label(),
-                "linked": links.get(&g.id).map(|v| v.iter().map(|i| i.0).collect::<Vec<_>>()).unwrap_or_default(),
-            })
+            let mut v = style_json(g);
+            v["id"] = json!(g.id);
+            v["linked"] = json!(links.get(&g.id).map(|v| v.iter().map(|i| i.0).collect::<Vec<_>>()).unwrap_or_default());
+            v
         })
         .collect();
     let selected = s.selection_graphic_style().filter(|(_, linked)| *linked).map(|(g, _)| g.name.clone());
     Ok(json!({ "styles": styles, "selected": selected, "overrideCharColor": s.prefs.override_char_color }))
+}
+
+/// Style `g` described as `graphicStyle.list` lists it (without `id` and `linked`).
+pub(crate) fn style_json(g: &GraphicStyle) -> Value {
+    let ap = &g.appearance;
+    let count = |fill: bool| ap.items.iter().filter(|i| i.is_fill() == fill).count();
+    json!({
+        "name": g.name,
+        "fill": ap.fill_paint().label(),
+        "stroke": ap.stroke_paint().label(),
+        "strokeWidth": ap.stroke_width(),
+        "fills": count(true),
+        "strokes": count(false),
+        "effects": ap.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(),
+        "opacity": (g.opacity * 100.0).round(),
+        "blend": g.blend.label(),
+        "isolate": g.isolate,
+        "knockout": g.knockout.label(),
+    })
 }
 
 fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {

@@ -5,6 +5,9 @@
 //! Fields: `name`, `format` (`vcswatches`, `gpl` or `css`), `user` (save to the user library
 //! folder), `selectedOnly` and `names` (the swatches selected in the Swatches panel), `__user`
 //! (there is a user library folder).
+//!
+//! The name and Save To rows and the saving are shared with Save Graphic Style Library
+//! ([`super::save_style_library`]).
 
 use serde_json::{Value, json};
 use vectorcraft_color::palette_io::PaletteFormat;
@@ -21,54 +24,39 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Save Swatch Libra
 
 /// Open Save Swatch Library for the document's swatches (`names`: the ones selected in the panel).
 pub fn open(app: &mut VectorcraftApp, names: Vec<String>) -> Result<Value, String> {
+    let mut fields = fields(app, app.session.swatch_libraries.user_dir().is_some(), names)?;
+    fields["format"] = json!(PaletteFormat::Native.id());
+    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    Ok(Value::Null)
+}
+
+/// The fields a Save … Library dialog opens with: the document's name, Save To the user library
+/// folder when there is one (`user`), and the panel's selected `names`.
+pub(super) fn fields(app: &VectorcraftApp, user: bool, names: Vec<String>) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     let title = st.title();
     let name = title.rsplit_once('.').map_or(title.as_str(), |(s, _)| s).to_string();
-    let user = app.session.swatch_libraries.user_dir().is_some();
-    let fields = json!({
-        "name": name, "format": PaletteFormat::Native.id(), "user": user, "__user": user,
-        "selectedOnly": false, "names": names,
-    });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
-    Ok(Value::Null)
+    Ok(json!({"name": name, "user": user, "__user": user, "selectedOnly": false, "names": names}))
 }
 
 fn format_of(d: &Dialog) -> PaletteFormat {
     PaletteFormat::parse(&d.str("format")).unwrap_or(PaletteFormat::Native)
 }
 
+fn set(d: &mut Dialog, key: &str, v: Value) {
+    d.fields.insert(key.into(), v);
+}
+
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let labels = PaletteFormat::ALL.map(PaletteFormat::label);
-    let names = d.fields.get("names").and_then(Value::as_array).map_or(0, Vec::len);
-    let set = |d: &mut Dialog, key: &str, v: Value| {
-        d.fields.insert(key.into(), v);
-    };
     grid(ui, |ui| {
-        label(ui, "Name:");
-        form::text(ui, d, "name", 220.0);
-        ui.end_row();
+        name_row(ui, d);
         label(ui, "Format:");
         if let Some(i) = widgets::dropdown(ui, "library-format", format_of(d).label(), &labels, 230.0) {
             set(d, "format", json!(PaletteFormat::ALL[i].id()));
         }
         ui.end_row();
-        label(ui, "Save To:");
-        let (user, has_user) = (d.bool("user"), d.bool("__user"));
-        if widgets::radio(ui, "User Defined Libraries", user, has_user) {
-            set(d, "user", json!(true));
-        }
-        ui.end_row();
-        ui.label("");
-        if widgets::radio(ui, "A File…", !user, true) {
-            set(d, "user", json!(false));
-        }
-        ui.end_row();
-        ui.label("");
-        let only = d.bool("selectedOnly");
-        if widgets::check(ui, &format!("Selected Swatches Only ({names})"), only, names > 0) {
-            set(d, "selectedOnly", json!(!only));
-        }
-        ui.end_row();
+        destination(ui, d, "Selected Swatches Only");
     });
     if format_of(d) == PaletteFormat::Gpl {
         widgets::dim_label(ui, "GPL palettes keep solid colours only, as RGB.");
@@ -76,22 +64,60 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// `swatch.library.save` parameters from the fields.
-fn params(d: &Dialog) -> Value {
-    let mut p = json!({"name": d.str("name"), "format": format_of(d).id(), "user": d.bool("user") && d.bool("__user")});
+/// The Name row of a Save … Library dialog's [`grid`].
+pub(super) fn name_row(ui: &mut egui::Ui, d: &mut Dialog) {
+    label(ui, "Name:");
+    form::text(ui, d, "name", 220.0);
+    ui.end_row();
+}
+
+/// The Save To rows of a Save … Library dialog's [`grid`]: the user library folder (when there is
+/// one) or a file, and `only` (Selected Swatches Only) with the number of selected items.
+pub(super) fn destination(ui: &mut egui::Ui, d: &mut Dialog, only: &str) {
+    let names = d.fields.get("names").and_then(Value::as_array).map_or(0, Vec::len);
+    label(ui, "Save To:");
+    let (user, has_user) = (d.bool("user"), d.bool("__user"));
+    if widgets::radio(ui, "User Defined Libraries", user, has_user) {
+        set(d, "user", json!(true));
+    }
+    ui.end_row();
+    ui.label("");
+    if widgets::radio(ui, "A File…", !user, true) {
+        set(d, "user", json!(false));
+    }
+    ui.end_row();
+    ui.label("");
+    let selected = d.bool("selectedOnly");
+    if widgets::check(ui, &format!("{only} ({names})"), selected, names > 0) {
+        set(d, "selectedOnly", json!(!selected));
+    }
+    ui.end_row();
+}
+
+/// The save command's parameters from the shared fields: `name`, `user` and the selected `names`.
+pub(super) fn params(d: &Dialog) -> Value {
+    let mut p = json!({"name": d.str("name"), "user": d.bool("user") && d.bool("__user")});
     if d.bool("selectedOnly") {
         p["names"] = d.fields.get("names").cloned().unwrap_or_else(|| json!([]));
     }
     p
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let p = params(d);
+/// Run save command `cmd` with `p`: into the user library folder, else to a file the user picks
+/// (extension `ext`).
+pub(super) fn save(app: &mut VectorcraftApp, d: &Dialog, cmd: &str, ext: &str, p: Value) -> Result<Value, String> {
     if p["user"] == json!(true) {
-        let r = run_and_close(app, "swatch.library.save", p)?;
+        let r = run_and_close(app, cmd, p)?;
         app.status(format!("Saved to User Defined: {}", d.str("name")));
         return Ok(r);
     }
     app.ui.dialog = None;
-    crate::io::save_command_output(app, "swatch.library.save", format_of(d).id(), p).map(|path| json!({ "path": path }))
+    crate::io::save_command_output(app, cmd, ext, p).map(|path| json!({ "path": path }))
+}
+
+fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let format = format_of(d).id();
+    let mut p = params(d);
+    p["format"] = json!(format);
+    save(app, d, "swatch.library.save", format, p)
 }

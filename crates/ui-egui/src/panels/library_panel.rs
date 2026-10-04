@@ -1,14 +1,16 @@
-//! The library panel: a floating, read-only view of one library (swatch libraries; any kind of
-//! library implementing [`LibraryKind`]) with thumbnail and list views, a find field, the
-//! libraries menu and previous / next arrows. A plain click on an item adds it to the document and
-//! applies it; Shift and Cmd/Ctrl-clicks select items (and folders) for Add to ….
+//! The library panel: a floating, read-only view of one library (swatch and graphic style
+//! libraries; any kind of library implementing [`LibraryKind`]) with thumbnail and list views, a
+//! find field, the libraries menu and previous / next arrows. A plain click on an item adds it to
+//! the document and applies it; Shift and Cmd/Ctrl-clicks select items (and folders) for Add to ….
 //!
-//! Which library is open lives in `UiState::library_panel` (`window.swatchLibrary` opens one), so
-//! agents can open and read it; the view, find text and selection are panel state.
+//! Which library is open lives in `UiState::library_panel` (`window.swatchLibrary` and
+//! `window.graphicStyleLibrary` open one), so agents can open and read it; the view, find text and
+//! selection are panel state.
 
 use egui::{CornerRadius, Rect, Sense, Ui, vec2};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 
 use super::swatches::{View, click_selection, folder_tile, list_row, list_row_name, tile_grid};
 use super::{pstate, set_pstate};
@@ -49,6 +51,8 @@ pub(crate) trait LibraryKind {
     const MENU: &'static str;
     /// What adding the selection is called ("Add to Swatches").
     const ADD: &'static str;
+    /// The view the panel shows until another is picked.
+    const VIEW: View = View::MediumThumb;
     /// A library's contents, cheap to clone.
     type Lib;
     type Item;
@@ -79,6 +83,11 @@ fn key<K: LibraryKind>(key: &str) -> String {
     format!("{}-library-{key}", K::KIND)
 }
 
+/// The view of `K`'s panel.
+fn view<K: LibraryKind>(ctx: &egui::Context) -> View {
+    pstate::<Option<View>>(ctx, &key::<K>("view")).unwrap_or(K::VIEW)
+}
+
 /// The interaction id of the tile or row of `name`.
 pub(crate) fn tile_id<K: LibraryKind>(name: &str) -> egui::Id {
     egui::Id::new(("library-tile", K::KIND, name))
@@ -89,8 +98,57 @@ pub fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(open) = app.ui.library_panel.clone() else { return };
     match open.kind.as_str() {
         super::swatches::SwatchLibraries::KIND => window::<super::swatches::SwatchLibraries>(app, ctx, &open.id),
+        super::graphic_styles::GraphicStyleLibraries::KIND => window::<super::graphic_styles::GraphicStyleLibraries>(app, ctx, &open.id),
         _ => app.ui.library_panel = None,
     }
+}
+
+/// The submenu of the libraries menu that lists libraries of `category` (`None`: the top level).
+pub(crate) fn submenu(category: &str) -> Option<&'static str> {
+    match category {
+        "gradients" => Some("Gradients"),
+        "user" => Some("User Defined"),
+        "loaded" => Some("Other Libraries"),
+        _ => None,
+    }
+}
+
+/// The opener of library `K`'s libraries (`window.swatchLibrary {library}`): open library `library`
+/// (an id or a name; `list`: the command listing them) in the panel, `null` closing it. `found`
+/// looks a library up: its id, name and item count. → {open, name, count}
+pub(crate) fn open_command<K: LibraryKind>(
+    app: &mut VectorcraftApp,
+    p: &Value,
+    list: &str,
+    found: impl FnOnce(&VectorcraftApp, &str) -> Option<(String, String, usize)>,
+) -> Result<Value, String> {
+    let Some(key) = p.get("library").filter(|v| !v.is_null()) else {
+        app.ui.library_panel = None;
+        return Ok(json!({ "open": null }));
+    };
+    let key = key.as_str().ok_or_else(|| format!("`library` is a library id or name (see {list})"))?;
+    let (id, name, count) = found(app, key).ok_or_else(|| format!("no library `{key}` (see {list})"))?;
+    app.ui.library_panel = Some(OpenLibrary { kind: K::KIND.into(), id: id.clone() });
+    Ok(json!({"open": id, "name": name, "count": count}))
+}
+
+/// Other Library…: the library file at `path`, else one picked in an open dialog; `None` when the
+/// pick is asynchronous (on the web the picked file arrives later through [`crate::io::open_bytes`]).
+pub(crate) fn pick_library_file(app: &mut VectorcraftApp, path: Option<String>) -> Result<Option<String>, String> {
+    if path.is_none()
+        && let Some(f) = app.services.open_async.as_mut()
+    {
+        f();
+        return Ok(None);
+    }
+    path.or_else(|| app.services.pick_open.as_mut().and_then(|f| f())).map(Some).ok_or_else(|| "cancelled".into())
+}
+
+/// The User Defined library a Window menu slot (`prefix` and a number from 1) stands for, of
+/// `libraries`.
+pub(crate) fn user_slot(id: &str, prefix: &str, libraries: Vec<LibraryInfo>) -> Option<LibraryInfo> {
+    let n: usize = id.strip_prefix(prefix)?.parse().ok()?;
+    libraries.into_iter().filter(|l| l.category == "user").nth(n.checked_sub(1)?)
 }
 
 /// The panel's window: a tab strip with the library's name, the panel menu and a close button, then
@@ -150,7 +208,7 @@ fn set_selection<K: LibraryKind>(ctx: &egui::Context, id: &str, sel: Vec<String>
 
 /// Find field, thumbnails or list rows, and the bottom bar.
 fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, lib: &K::Lib) {
-    let view: View = pstate(ui.ctx(), &key::<K>("view"));
+    let view = view::<K>(ui.ctx());
     let query = if pstate::<bool>(ui.ctx(), &key::<K>("hide-find")) {
         String::new()
     } else {
@@ -256,10 +314,10 @@ fn panel_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         K::add(app, id, selected);
     }
     ui.separator();
-    let view: View = pstate(ui.ctx(), &key::<K>("view"));
+    let view = view::<K>(ui.ctx());
     for (v, label) in View::ALL {
         if menu_item(ui, label, true, v == view) {
-            set_pstate(ui.ctx(), &key::<K>("view"), v);
+            set_pstate(ui.ctx(), &key::<K>("view"), Some(v));
         }
     }
     ui.separator();
@@ -408,7 +466,7 @@ mod tests {
         let mut app = app();
         let ctx = context();
         app.run("window.swatchLibrary", json!({"library": "web-safe-216"})).unwrap();
-        set_pstate(&ctx, &key::<SwatchLibraries>("view"), View::SmallList);
+        set_pstate(&ctx, &key::<SwatchLibraries>("view"), Some(View::SmallList));
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(key::<SwatchLibraries>("find")), "#FF00".to_string()));
         frame(&mut app, &ctx, vec![], Modifiers::NONE, 0.0);
         frame(&mut app, &ctx, vec![], Modifiers::NONE, 0.5);

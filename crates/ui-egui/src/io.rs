@@ -8,21 +8,24 @@ use vectorcraft_geom::Affine;
 
 use crate::VectorcraftApp;
 
-/// Open bytes of any readable format as a new document (templates open untitled); swatch library
-/// files open in the library panel and flattener presets files are imported.
+/// Open bytes of any readable format as a new document (templates open untitled); swatch and
+/// graphic style library files open in the library panel and flattener presets files are imported.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<(), String> {
-    if vectorcraft_engine::cmd::flatten::PRESET_EXTS.contains(&fileio::extension(name).as_str()) {
+    let ext = fileio::extension(name);
+    if vectorcraft_engine::cmd::flatten::PRESET_EXTS.contains(&ext.as_str()) {
         let r = app.run("flattener.presets.import", serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
         let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
         app.status(format!("Imported flattener presets: {}", names.join(", ")));
         return Ok(());
     }
-    if vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&fileio::extension(name).as_str()) {
+    let swatches = vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&ext.as_str());
+    if swatches || ext == vectorcraft_doc::style_libs::STYLES_EXT {
         let p = match path {
             Some(path) => serde_json::json!({ "path": path }),
             None => serde_json::json!({"name": name, "data": String::from_utf8_lossy(bytes)}),
         };
-        return crate::panels::swatches::load_library(app, p).map(|_| ());
+        let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
+        return load(app, p).map(|_| ());
     }
     let r = fileio::open_bytes(&mut app.session, name, bytes, path).map_err(|e| e.to_string())?;
     app.sync_views();
