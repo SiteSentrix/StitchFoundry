@@ -760,6 +760,8 @@ mod tests_menucmds;
 #[cfg(test)]
 mod tests_opacitymask;
 #[cfg(test)]
+mod tests_outlinestroke;
+#[cfg(test)]
 mod tests_paintproxy;
 #[cfg(test)]
 mod tests_panelcmds;

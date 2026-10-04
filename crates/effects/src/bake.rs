@@ -101,8 +101,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
 
 fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
     let (base, rule) = geometry(n)?;
-    let w = n.appearance.stroke_width();
-    let ctx = GeomContext { stroke_width: if w > 0.0 { w } else { 1.0 } };
+    let ctx = GeomContext::of(n);
     let g = apply(&n.appearance.effects, &base, &ctx);
     let mut m = n.clone();
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
@@ -117,7 +116,7 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
         .items
         .iter()
         .map(|item| {
-            let ig = apply(item_effects(item), &g, &ctx);
+            let ig = apply(item_effects(item), &g, &ctx.item(item));
             let mut it = item.clone();
             clear_item_effects(&mut it);
             let id = d.alloc_id();

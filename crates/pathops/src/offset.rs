@@ -46,11 +46,31 @@ pub fn outline_stroke(path: &PathData, width: f64, cap: Cap, join: Join, miter_l
     if width <= 0.0 || !width.is_finite() || path.is_empty() {
         return PathData::default();
     }
-    let s = stroke_bez(&path.to_bezpath(), width, cap, join, miter_limit);
-    if s.elements().is_empty() {
+    stroke_region(&[stroke_bez(&path.to_bezpath(), width, cap, join, miter_limit)])
+}
+
+/// The area covered by stroke outlines (each filled with the non-zero rule, open subpaths
+/// closed) as one clean path: overlaps removed and the stroker's pieces refitted.
+pub fn stroke_region(outlines: &[BezPath]) -> PathData {
+    let tidy = Tidy::free(DEFAULT_PRECISION);
+    let parts: Vec<BezPath> = outlines.iter().map(close_all).filter(|o| !o.elements().is_empty()).collect();
+    if let [one] = &parts[..] {
+        return normalize_bez(one, FillRule::NonZero).map(|c| all_contours_to_path(&c, &tidy)).unwrap_or_default();
+    }
+    // Each outline is normalised on its own first: a hollow arrowhead may wind against the line
+    // it overlaps, and the raw windings would cancel there under the non-zero rule.
+    let mut all = BezPath::new();
+    for p in &parts {
+        if let Ok(c) = normalize_bez(p, FillRule::NonZero) {
+            for ct in c.contours() {
+                all.extend(ct.path.iter());
+            }
+        }
+    }
+    if all.elements().is_empty() {
         return PathData::default();
     }
-    normalize_bez(&s, FillRule::NonZero).map(|c| all_contours_to_path(&c, &Tidy::free(DEFAULT_PRECISION))).unwrap_or_default()
+    normalize_bez(&all, FillRule::NonZero).map(|c| all_contours_to_path(&c, &tidy)).unwrap_or_default()
 }
 
 /// Object → Path → Offset Path. Positive `delta` grows the filled area, negative insets it.
@@ -153,4 +173,23 @@ fn deep_point(bp: &BezPath) -> Option<kurbo::Point> {
 fn dist_to(bp: &BezPath, p: kurbo::Point) -> f64 {
     use kurbo::ParamCurveNearest;
     bp.segments().map(|s| s.nearest(p, 1e-6).distance_sq).fold(f64::INFINITY, f64::min).sqrt()
+}
+
+#[cfg(test)]
+mod tests {
+    use kurbo::Shape;
+
+    use super::*;
+
+    #[test]
+    fn stroke_region_unites_outlines_whatever_their_winding() {
+        // A bar, and a square ring wound the other way that the bar runs into.
+        let bar = kurbo::Rect::new(0.0, 0.0, 20.0, 4.0).to_path(0.1);
+        let mut ring = kurbo::Rect::new(10.0, -8.0, 26.0, 12.0).to_path(0.1).reverse_subpaths();
+        ring.extend(kurbo::Rect::new(14.0, -4.0, 22.0, 8.0).to_path(0.1).iter());
+        let region = stroke_region(&[bar, ring]);
+        let area = crate::area(&region, FillRule::NonZero);
+        // Ring 16·20 − 8·12 = 224, plus the bar outside it (10·4) and inside its hole (6·4).
+        assert!((area - (224.0 + 40.0 + 24.0)).abs() < 1e-6, "{area}");
+    }
 }

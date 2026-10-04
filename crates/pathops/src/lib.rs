@@ -16,7 +16,7 @@ pub use boolean::{BoolOp, DEFAULT_PRECISION, area, boolean, boolean_n, normalize
 pub use edit::{
     AverageAxis, SimplifyOptions, add_anchor_points, average, join, remove_redundant_points, simplify, simplify_with, smooth, split_into_grid,
 };
-pub use offset::{Cap, Join, offset_path, outline_stroke};
+pub use offset::{Cap, Join, offset_path, outline_stroke, stroke_region};
 pub use pathfinder::{PathfinderOp, Region, Shape, merge_regions, pathfinder, region_at, regions};
 
 /// Errors from fallible operations.
