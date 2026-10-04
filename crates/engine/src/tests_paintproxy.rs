@@ -1,0 +1,172 @@
+//! Fill/Stroke proxy commands: invert, complement, last colour/gradient, swap/default on type and
+//! the Session's recent colours.
+
+use serde_json::json;
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::NodeKind;
+
+use super::*;
+
+fn session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s
+}
+
+fn rect(s: &mut Session) -> NodeId {
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+fn node(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
+    s.doc().unwrap().doc.node(id).unwrap().clone()
+}
+
+fn hexes(s: &Session) -> Vec<String> {
+    s.recent_colors.iter().map(Color::to_hex).collect()
+}
+
+#[test]
+fn complement_of_red_on_the_fill_only_gives_cyan() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let r = s.execute("paint.complement", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1);
+    let n = node(&s, id);
+    assert_eq!(n.appearance.fill_paint().color().unwrap().to_hex(), "#00ffff");
+    assert_eq!(n.appearance.stroke_paint().color().unwrap().to_hex(), "#ff0000");
+    // One undo step, and the new colour is remembered.
+    assert_eq!(s.last_solid.to_hex(), "#00ffff");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, id).appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+    // `stroke: true` picks the stroke whatever proxy is in front.
+    s.execute("paint.complement", &json!({"stroke": true})).unwrap();
+    assert_eq!(node(&s, id).appearance.stroke_paint().color().unwrap().to_hex(), "#00ffff");
+}
+
+#[test]
+fn invert_keeps_cmyk_and_acts_on_defaults_without_selection() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": {"c": 0.0, "m": 1.0, "y": 1.0, "k": 0.0}})).unwrap();
+    s.execute("paint.invert", &json!({})).unwrap();
+    let c = node(&s, id).appearance.fill_paint().color().unwrap();
+    assert!(matches!(c, Color::Cmyk { .. }), "{c:?}");
+    assert_ne!(c, Color::cmyk(0.0, 1.0, 1.0, 0.0));
+    // A CMYK complement stays CMYK too (K kept).
+    s.execute("paint.setFill", &json!({"color": {"c": 0.0, "m": 1.0, "y": 1.0, "k": 0.25}})).unwrap();
+    s.execute("paint.complement", &json!({})).unwrap();
+    assert_eq!(node(&s, id).appearance.fill_paint().color(), Some(Color::cmyk(1.0, 0.0, 0.0, 0.25)));
+    // Nothing selected: the default fill changes and the document doesn't.
+    s.execute("select.none", &json!({})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    s.paint.fill = Paint::solid(Color::rgb(1.0, 1.0, 0.0));
+    s.execute("paint.invert", &json!({})).unwrap();
+    assert_eq!(s.paint.fill.color().unwrap().to_hex(), "#0000ff");
+    assert_eq!(s.doc().unwrap().doc, before);
+}
+
+#[test]
+fn last_color_and_gradient_are_reapplied() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute(
+        "paint.setFill",
+        &json!({"gradient": {"kind": "radial", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}}),
+    )
+    .unwrap();
+    s.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
+    assert_eq!(node(&s, id).appearance.fill_paint().color().unwrap().to_hex(), "#336699");
+    // `.` brings back the gradient after a solid colour, `,` the colour after the gradient.
+    s.execute("paint.lastGradient", &json!({})).unwrap();
+    let Paint::Gradient(g) = node(&s, id).appearance.fill_paint() else { panic!("not a gradient") };
+    assert_eq!(g.gradient.stops[0].color.to_hex(), "#ff0000");
+    assert!(g.geom.is_none(), "fitted to the object");
+    s.execute("paint.lastColor", &json!({})).unwrap();
+    assert_eq!(node(&s, id).appearance.fill_paint().color().unwrap().to_hex(), "#336699");
+    // On the stroke proxy they paint the stroke and focus it.
+    s.execute("paint.lastColor", &json!({"stroke": true})).unwrap();
+    assert_eq!(node(&s, id).appearance.stroke_paint().color().unwrap().to_hex(), "#336699");
+    assert!(!s.fill_active);
+    let r = s.execute("paint.recent", &json!({})).unwrap();
+    assert_eq!(r["lastColor"]["hex"], "#336699");
+    assert_eq!(r["lastGradient"]["gradient"]["kind"], "Radial");
+}
+
+#[test]
+fn swap_and_default_work_on_type() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let style = |s: &Session| match &node(s, id).kind {
+        NodeKind::Text(t) => t.first_style(),
+        _ => panic!("not text"),
+    };
+    s.execute("paint.swap", &json!({})).unwrap();
+    let st = style(&s);
+    assert_eq!(st.fill, Paint::None);
+    assert_eq!(st.stroke.color().unwrap().to_hex(), "#ff0000");
+    assert!(st.stroke_width > 0.0, "a painted stroke is visible");
+    s.execute("paint.default", &json!({})).unwrap();
+    let st = style(&s);
+    assert_eq!(st.fill, Paint::solid(Color::BLACK));
+    assert_eq!(st.stroke, Paint::None);
+}
+
+#[test]
+fn recent_colors_are_fed_by_every_paint_command() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(hexes(&s)[..2], ["#ff0000", "#00ff00"]);
+    // The eyedropper's colour sample goes through the same path.
+    s.execute("paint.sampleColor", &json!({"color": "#0000ff", "stroke": false})).unwrap();
+    assert_eq!(hexes(&s)[0], "#0000ff");
+    // None and gradients don't add colours.
+    s.execute("paint.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    assert_eq!(hexes(&s).len(), 3);
+    // The list holds the newest `RECENT_MAX` colours.
+    for i in 0..20u8 {
+        s.execute("paint.setFill", &json!({"color": Color::rgb8(i, 0, 0).to_hex()})).unwrap();
+    }
+    assert_eq!(s.recent_colors.len(), Session::RECENT_MAX);
+    assert_eq!(s.recent_colors[0].to_hex(), "#130000");
+    let r = s.execute("paint.recent", &json!({})).unwrap();
+    assert_eq!(r["colors"][0]["hex"], "#130000");
+    let _ = id;
+}
+
+#[test]
+fn live_previews_remember_only_the_committed_colour() {
+    let mut s = session();
+    rect(&mut s);
+    s.begin_interaction("Color").unwrap();
+    for hex in ["#100000", "#200000", "#300000"] {
+        s.preview("paint.setFill", &json!({"color": hex})).unwrap();
+    }
+    assert!(s.recent_colors.is_empty(), "nothing is remembered while dragging");
+    s.commit_interaction().unwrap();
+    assert_eq!(hexes(&s), ["#300000"]);
+    s.begin_interaction("Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#400000"})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(hexes(&s), ["#300000"], "a cancelled preview is forgotten");
+}
+
+#[test]
+fn focus_false_keeps_the_active_proxy() {
+    let mut s = session();
+    let id = rect(&mut s);
+    assert!(s.fill_active);
+    s.execute("paint.setStroke", &json!({"color": "#ff0000", "focus": false})).unwrap();
+    assert!(s.fill_active);
+    assert_eq!(node(&s, id).appearance.stroke_paint().color().unwrap().to_hex(), "#ff0000");
+}

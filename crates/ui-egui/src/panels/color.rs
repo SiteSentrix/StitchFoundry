@@ -6,7 +6,7 @@ use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
 
-use super::{active_paint, color_json, live_run, paint_target, pstate, push_recent, set_pstate};
+use super::{active_paint, color_json, live_run, paint_target, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, Live, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -172,7 +172,7 @@ fn target(app: &VectorcraftApp, ui: &Ui) -> Target {
     }
 }
 
-fn apply(app: &mut VectorcraftApp, ui: &Ui, tgt: &Target, c: Color, phase: Live) {
+fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live) {
     match tgt {
         Target::Paint(_) => {
             let cmd = paint_target(app);
@@ -188,9 +188,6 @@ fn apply(app: &mut VectorcraftApp, ui: &Ui, tgt: &Target, c: Color, phase: Live)
                 live_run(app, "Gradient", "paint.editGradient", params, phase);
             }
         }
-    }
-    if phase == Live::Released {
-        push_recent(ui.ctx(), c);
     }
 }
 
@@ -366,7 +363,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some((c, phase, comps2)) = new {
         let key = (c.to_hex(), mode as u8);
         set_pstate(ui.ctx(), "color-comps", Some((key, comps2)));
-        apply(app, ui, &tgt, c, phase);
+        apply(app, &tgt, c, phase);
     }
 }
 
@@ -390,21 +387,28 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             if let Some(c) = color {
                 let conv = from_components(if m == Mode::Hsb { Mode::Rgb } else { m }, &components(if m == Mode::Hsb { Mode::Rgb } else { m }, &c));
                 if conv != c {
-                    apply(app, ui, &tgt, conv, Live::Released);
+                    apply(app, &tgt, conv, Live::Released);
                 }
             }
         }
     }
     ui.separator();
-    if menu_item(ui, "Invert", color.is_some(), false)
-        && let Some(c) = color
-    {
-        apply(app, ui, &tgt, c.invert(), Live::Released);
-    }
-    if menu_item(ui, "Complement", color.is_some(), false)
-        && let Some(c) = color
-    {
-        apply(app, ui, &tgt, c.complement(), Live::Released);
+    // Solid colours go through the proxy commands (each selected object keeps its colour model);
+    // a gradient stop is recoloured in place.
+    for (label, cmd, f) in [
+        ("Invert", "paint.invert", Color::invert_keep_model as fn(&Color) -> Color),
+        ("Complement", "paint.complement", Color::complement_keep_model),
+    ] {
+        if menu_item(ui, label, color.is_some(), false)
+            && let Some(c) = color
+        {
+            match &tgt {
+                Target::Paint(_) => {
+                    app.run(cmd, json!({})).ok();
+                }
+                Target::Stop { .. } => apply(app, &tgt, f(&c), Live::Released),
+            }
+        }
     }
     ui.separator();
     if menu_item(ui, "Create New Swatch…", color.is_some(), false)

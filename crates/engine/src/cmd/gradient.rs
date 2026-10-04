@@ -118,6 +118,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
     let new_default = apply_gradient_edit(&default_paint, p, None).map_err(|e| bad(C, e))?;
     if ids.is_empty() {
+        s.remember_paint(&new_default);
         if stroke {
             s.paint.stroke = new_default;
         } else {
@@ -158,6 +159,10 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
             None => Ok(()),
         }
     })?;
+    // The last gradient is the one the first object now shows.
+    if let Some(shown) = s.doc()?.doc.node(ids[0]).map(|n| super::paint::proxy_paint(n, stroke)) {
+        s.remember_paint(&shown);
+    }
     if stroke {
         s.paint.stroke = new_default;
     } else {

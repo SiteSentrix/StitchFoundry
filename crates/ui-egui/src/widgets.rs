@@ -183,36 +183,41 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
             let [r, g, b, _] = color.to_rgba8(1.0);
             p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
         }
-        Paint::Gradient(gp) => {
-            if gp.gradient.kind == vectorcraft_color::GradientKind::Radial {
-                // Outer colour fills the corners beyond the largest circle.
-                let (c, _) = gp.gradient.sample(1.0);
-                let [r, g, b, _] = c.to_rgba8(1.0);
-                p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
-            }
-            let n = 24;
-            let w = rect.width() / n as f32;
-            for i in 0..n {
-                let tt = (i as f32 + 0.5) / n as f32;
-                let (c, _) = gp.gradient.sample(tt);
-                let [r, g, b, _] = c.to_rgba8(1.0);
-                let rr = Rect::from_min_size(pos2(rect.left() + i as f32 * w, rect.top()), vec2(w + 0.5, rect.height()));
-                if gp.gradient.kind == vectorcraft_color::GradientKind::Radial {
-                    let (c, _) = gp.gradient.sample(1.0 - tt);
-                    let [r, g, b, _] = c.to_rgba8(1.0);
-                    let s = rect.width().min(rect.height()) * tt / 2.0;
-                    p.circle_filled(rect.center(), s.max(0.5), Color32::from_rgb(r, g, b));
-                } else {
-                    p.rect_filled(rr, 0.0, Color32::from_rgb(r, g, b));
-                }
-            }
-        }
+        Paint::Gradient(gp) => gradient_chip(ui, rect, &gp.gradient),
         Paint::Pattern { .. } => {
             p.rect_filled(rect, 0.0, Color32::from_gray(200));
             for i in 0..4 {
                 let x = rect.left() + rect.width() * i as f32 / 4.0;
                 p.line_segment([pos2(x, rect.bottom()), pos2(x + rect.width() / 4.0, rect.top())], Stroke::new(1.0, Color32::from_gray(90)));
             }
+        }
+    }
+}
+
+/// Draw a gradient preview into `rect` (linear left to right; radial from the centre).
+pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient) {
+    let p = ui.painter();
+    let radial = gradient.kind == vectorcraft_color::GradientKind::Radial;
+    if radial {
+        // Outer colour fills the corners beyond the largest circle.
+        let (c, _) = gradient.sample(1.0);
+        let [r, g, b, _] = c.to_rgba8(1.0);
+        p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
+    }
+    let n = 24;
+    let w = rect.width() / n as f32;
+    for i in 0..n {
+        let tt = (i as f32 + 0.5) / n as f32;
+        if radial {
+            let (c, _) = gradient.sample(1.0 - tt);
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            let s = rect.width().min(rect.height()) * tt / 2.0;
+            p.circle_filled(rect.center(), s.max(0.5), Color32::from_rgb(r, g, b));
+        } else {
+            let (c, _) = gradient.sample(tt);
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            let rr = Rect::from_min_size(pos2(rect.left() + i as f32 * w, rect.top()), vec2(w + 0.5, rect.height()));
+            p.rect_filled(rr, 0.0, Color32::from_rgb(r, g, b));
         }
     }
 }

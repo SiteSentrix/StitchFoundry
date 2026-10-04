@@ -5,7 +5,7 @@ use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
 use vectorcraft_color::Paint;
 
-use super::{active_paint, paint_target, pstate, push_recent, set_pstate};
+use super::{active_paint, paint_target, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item, swatch_tile};
 use crate::{VectorcraftApp, icons};
@@ -112,19 +112,15 @@ fn entries(app: &VectorcraftApp, kind: Kind) -> Vec<Entry> {
     out
 }
 
-fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
+fn apply(app: &mut VectorcraftApp, e: &Entry) {
     let target = paint_target(app);
     match e {
         Entry::Registration => {
             app.run(target, json!({"color": {"c": 1.0, "m": 1.0, "y": 1.0, "k": 1.0}})).ok();
         }
         Entry::Swatch { name, paint, .. } => {
-            let r = if paint.is_none() { app.run(target, json!({"none": true})) } else { app.run(target, json!({"swatch": name})) };
-            if r.is_ok()
-                && let Some(c) = paint.color()
-            {
-                push_recent(ui.ctx(), c);
-            }
+            let params = if paint.is_none() { json!({"none": true}) } else { json!({"swatch": name}) };
+            app.run(target, params).ok();
         }
         Entry::Folder(_) => {}
     }
@@ -343,7 +339,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Entry::Folder(n) => n.clone(),
         };
         set_pstate(ui.ctx(), "swatch-selected", Some(name));
-        apply(app, ui, &e);
+        apply(app, &e);
     }
     bottom(app, ui);
 }

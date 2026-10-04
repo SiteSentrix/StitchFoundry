@@ -147,9 +147,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Command shortcuts.
     let mut fire: Option<&'static str> = None;
     for (sc, id) in all_shortcuts() {
-        // Letter / slash keys without Cmd/Alt/Ctrl are handled below as text (tool shortcuts, X, D, /).
+        // Letter / punctuation keys without Cmd/Alt/Ctrl are handled below as text (tool shortcuts,
+        // X, D, /, `,` and `.`).
         let plain = !(sc.modifiers.command || sc.modifiers.alt || sc.modifiers.ctrl);
-        if plain && (sc.logical_key.name().len() == 1 || sc.logical_key == Key::Slash) {
+        if plain && (sc.logical_key.name().len() == 1 || matches!(sc.logical_key, Key::Slash | Key::Comma | Key::Period)) {
             continue;
         }
         if app.native_shortcuts.contains(id) {

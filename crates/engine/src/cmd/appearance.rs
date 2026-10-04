@@ -210,6 +210,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     };
     s.paint.fill = appearance.fill_paint();
     s.paint.stroke = appearance.stroke_paint();
+    s.remember_paint(&s.paint.fill.clone());
     if appearance.stroke().is_some() {
         s.paint.stroke_width = appearance.stroke_width();
     }

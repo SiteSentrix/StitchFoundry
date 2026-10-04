@@ -191,6 +191,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(patterncmds::specs());
         v.extend(prefscmds::specs());
         v.extend(distortcmds::specs());
+        v.extend(paint::proxy_specs());
         v
     })
 }

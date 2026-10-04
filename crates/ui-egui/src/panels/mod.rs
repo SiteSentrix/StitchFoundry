@@ -229,27 +229,15 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(("panel-state", key)), v));
 }
 
-/// Recently applied colours (Swatches / Color panels "Recent Colors" row), newest first.
-pub(crate) fn recent_colors(ctx: &egui::Context) -> Vec<Color> {
-    pstate::<Vec<Color>>(ctx, "recent-colors")
-}
-pub(crate) fn push_recent(ctx: &egui::Context, c: Color) {
-    let mut v = recent_colors(ctx);
-    v.retain(|x| x.to_hex() != c.to_hex());
-    v.insert(0, c);
-    v.truncate(10);
-    set_pstate(ctx, "recent-colors", v);
-}
-
-/// "Recent Colors" header + a row of chips; clicking one applies it to the active proxy.
+/// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
+/// command feeds); clicking one applies it to the active proxy.
 pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, "Recent Colors");
-    let recent = recent_colors(ui.ctx());
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     let mut chosen = None;
-    for (i, c) in recent.iter().enumerate() {
+    for (i, c) in app.session.recent_colors.iter().enumerate() {
         let cell = Rect::from_min_size(r.min + vec2(3.0 + i as f32 * 19.0, 3.0), vec2(16.0, 16.0));
         if cell.right() > r.right() - 2.0 {
             break;
