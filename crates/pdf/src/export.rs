@@ -545,8 +545,8 @@ impl Exporter<'_> {
             }
             _ => {}
         }
-        let dash = st.dash.as_ref().filter(|d| d.pattern.iter().any(|v| *v > 0.0)).map(|d| {
-            let mut pat: Vec<f32> = d.pattern.iter().map(|v| v.max(0.0) as f32).collect();
+        let dash = st.dash.as_ref().filter(|d| d.is_dashed()).map(|d| {
+            let mut pat: Vec<f32> = d.pattern.iter().map(|v| *v as f32).collect();
             if pat.len() % 2 == 1 {
                 pat.extend(pat.clone());
             }

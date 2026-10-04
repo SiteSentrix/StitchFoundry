@@ -12,7 +12,7 @@ use vectorcraft_geom::kurbo::{self, BezPath, PathEl, Point, Vec2};
 /// The outline to fill instead of stroking, when `st` has a width profile (and no dashes).
 pub(crate) fn outline_for(bp: &BezPath, st: &StrokeLayer, tol: f64) -> Option<BezPath> {
     let profile = st.profile.as_ref()?;
-    if st.dash.as_ref().is_some_and(|d| d.pattern.iter().any(|v| *v > 0.0)) {
+    if st.dash.as_ref().is_some_and(|d| d.is_dashed()) {
         return None;
     }
     let closed = bp.elements().last().is_some_and(|e| matches!(e, PathEl::ClosePath));

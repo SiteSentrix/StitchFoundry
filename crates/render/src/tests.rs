@@ -322,3 +322,29 @@ fn blend_mode_on_a_single_fill_is_exact_without_a_layer() {
         assert_eq!(img.pixel(10, 50), [255, 0, 0, 255]);
     }
 }
+
+#[test]
+fn invalid_dash_pattern_strokes_solid() {
+    // A negative dash value makes the pattern invalid (PDF `d`, SVG `stroke-dasharray`): the stroke
+    // is drawn solid. [-5, 3] used to send the dasher into an endless loop.
+    let line = |dash: Option<Vec<f64>>| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut bp = BezPath::new();
+        bp.move_to((10.0, 50.0));
+        bp.line_to((90.0, 50.0));
+        let id = d.alloc_id();
+        let mut n = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 6.0));
+        n.appearance.stroke_mut().unwrap().dash = dash.map(|pattern| vectorcraft_doc::Dash { pattern, ..Default::default() });
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        d
+    };
+    let solid = render(&line(None));
+    for pattern in [vec![-5.0, 3.0], vec![3.0, -5.0], vec![4.0, f64::NAN], vec![0.0, 0.0]] {
+        let d = line(Some(pattern.clone()));
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || tx.send(render(&d)).ok());
+        let img = rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("rendering dash {pattern:?} did not finish"));
+        assert_eq!(img.pixels, solid.pixels, "dash {pattern:?}");
+    }
+}
