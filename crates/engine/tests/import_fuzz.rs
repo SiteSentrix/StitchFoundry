@@ -1,14 +1,26 @@
-//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG and PDF input
-//! must import as an error or as a document that then renders and exports, without a panic.
+//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG and PDF input,
+//! and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
+//! (`.vcflattener`) libraries, must load as an error or as a document that then renders and
+//! exports, without a panic.
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
+use serde_json::{Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::rich_session;
+
+/// 64 cases each, unless `PROPTEST_CASES` asks for more.
+fn config() -> ProptestConfig {
+    let mut c = ProptestConfig { failure_persistence: None, ..ProptestConfig::default() };
+    if std::env::var_os("PROPTEST_CASES").is_none() {
+        c.cases = 64;
+    }
+    c
+}
 
 /// Import must not panic; whatever comes back must render and export without panicking either.
 fn survive(what: &str, import: impl FnOnce() -> Option<Document>) -> Result<(), TestCaseError> {
@@ -99,6 +111,12 @@ fn arb_svg_attr() -> impl Strategy<Value = String> {
         "viewBox",
         "transform",
         "d",
+        "fill",
+        "stroke",
+        "stop-color",
+        "mask-type",
+        "data-vectorcraft-mask",
+        "href",
     ]);
     let value = prop_oneof![
         arb_num(),
@@ -108,6 +126,10 @@ fn arb_svg_attr() -> impl Strategy<Value = String> {
         prop::collection::vec((prop::sample::select(vec!["M", "L", "C", "Q", "A", "Z", "H", "V", "S", "T", "m", "a"]), arb_num()), 0..12)
             .prop_map(|v| v.iter().map(|(c, n)| format!("{c}{n} {n}")).collect::<Vec<_>>().join(" ")),
         prop::collection::vec(arb_num(), 0..2).prop_map(|v| format!("{}%", v.join(""))),
+        // Colours (Lab too), mask options and links.
+        prop::collection::vec(arb_num(), 0..4).prop_map(|v| format!("lab({})", v.join(" "))),
+        prop::sample::select(vec!["noclip invert", "invert", "noclip", "alpha", "luminance", "url(#e)", "#e", "#zz", "none", "currentColor"])
+            .prop_map(str::to_string),
     ];
     (names, value).prop_map(|(n, v)| format!(" {n}=\"{v}\""))
 }
@@ -137,6 +159,7 @@ fn arb_svg_element(depth: u32) -> BoxedStrategy<String> {
         "defs",
         "svg",
         "marker",
+        "a",
     ]);
     let attrs = || prop::collection::vec(arb_svg_attr(), 0..6).prop_map(|v| v.concat());
     let leaf = (tag.clone(), attrs(), "[a-z ]{0,6}").prop_map(|(t, a, txt)| format!("<{t} id=\"e\"{a} href=\"#e\">{txt}</{t}>"));
@@ -164,7 +187,7 @@ fn mutate_text(src: &str, cut: usize, edits: &[(usize, char)]) -> String {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 64, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(config())]
 
     #[test]
     fn svg_garbage_never_panics(s in ".{0,300}") {
@@ -250,7 +273,7 @@ fn arb_resources() -> impl Strategy<Value = String> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 64, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(config())]
 
     #[test]
     fn pdf_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..600)) {
@@ -281,5 +304,81 @@ proptest! {
         }
         b.truncate(cut.min(b.len()).max(9));
         survive("mutated pdf", || vectorcraft_pdf::import(&b).ok())?;
+    }
+}
+
+// ---------- library files ----------
+
+/// The `data` of a library file `cmd` writes for the rich document.
+fn saved(cmd: &str, params: Value) -> String {
+    rich_session().execute(cmd, &params).unwrap()["data"].as_str().unwrap().to_string()
+}
+
+/// Library file `data` loaded with `load`; what it holds is then used on the rich document
+/// (`then`, given the load's result), which renders and exports.
+fn survive_library(what: &str, load: &str, data: &str, then: impl FnOnce(&mut vectorcraft_engine::Session, &Value)) -> Result<(), TestCaseError> {
+    survive(what, || {
+        let mut s = rich_session();
+        let r = s.execute(load, &json!({"data": data, "name": "fuzz"})).ok()?;
+        then(&mut s, &r);
+        Some((*s.doc().ok()?.doc).clone())
+    })
+}
+
+fn swatches(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "swatch.library.load", data, |s, r| {
+        let _ = s.execute("swatch.library.add", &json!({"library": r["library"], "apply": "fill"}));
+    })
+}
+
+fn styles(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "graphicStyle.loadLibrary", data, |s, r| {
+        let _ = s.execute("select.all", &json!({}));
+        let _ = s.execute("graphicStyle.addFromLibrary", &json!({"library": r["library"], "apply": true}));
+    })
+}
+
+fn flattener_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "flattener.presets.import", data, |s, r| {
+        let _ = s.execute("select.all", &json!({}));
+        if let Some(name) = r["imported"].get(0) {
+            let _ = s.execute("flattener.preview", &json!({"preset": name, "highlight": "allAffected"}));
+            let _ = s.execute("object.flattenTransparency", &json!({"preset": name, "lineArtPpi": 36, "gradientPpi": 36}));
+        }
+    })
+}
+
+/// Characters that break JSON and GPL palettes.
+fn arb_edit() -> impl Strategy<Value = (usize, char)> {
+    (0usize..20_000, prop::sample::select(vec!['{', '}', '[', ']', '"', ':', ',', '-', '9', 'e', '.', ' ', '\n', '#', 'n', 'x', '\t']))
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn library_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "GIMP Palette\n","{\"format\": \"vcswatches\", ", "{\"format\": \"vcstyles\", ", "{\"format\": \"vcflattener\", "])) {
+        let data = format!("{head}{s}");
+        swatches("swatch library garbage", &data)?;
+        styles("style library garbage", &data)?;
+        flattener_presets("flattener preset garbage", &data)?;
+    }
+
+    #[test]
+    fn mutated_swatch_libraries_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10), gpl in any::<bool>()) {
+        let text = saved("swatch.library.save", json!({"format": if gpl { "gpl" } else { "vcswatches" }}));
+        swatches("mutated swatch library", &mutate_text(&text, cut, &edits))?;
+    }
+
+    #[test]
+    fn mutated_style_libraries_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        let text = saved("graphicStyle.saveLibrary", json!({}));
+        styles("mutated style library", &mutate_text(&text, cut, &edits))?;
+    }
+
+    #[test]
+    fn mutated_flattener_presets_never_panic(cut in 0usize..5_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        let text = saved("flattener.presets.export", json!({"names": ["high", "medium", "low"]}));
+        flattener_presets("mutated flattener presets", &mutate_text(&text, cut, &edits))?;
     }
 }
