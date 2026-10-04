@@ -503,9 +503,10 @@ impl RepeatSpec {
         self.transforms().into_iter().fold(None, |acc, m| vectorcraft_geom::union_opt(acc, Some(m.transform_rect_bbox(b))))
     }
     /// Apply a document transform (source + arrangement parameters).
-    pub fn transform(&mut self, a: Affine, scale_strokes: bool) {
+    pub fn transform(&mut self, a: Affine, scaling: impl Into<crate::node::Scaling>) {
+        let scaling = scaling.into();
         for c in self.source.iter_mut() {
-            Arc::make_mut(c).transform(a, scale_strokes);
+            Arc::make_mut(c).transform(a, scaling);
         }
         let s = a.determinant().abs().sqrt();
         match &mut self.kind {

@@ -84,6 +84,7 @@ impl Session {
             constrain_angle: self.prefs.constrain_angle,
             freeform_point: self.selected_freeform_point(),
             raster_sample: self.prefs.eyedropper.sample_size,
+            preview_bounds: self.prefs.use_preview_bounds,
         };
         f(self.tool.as_mut(), &cx)
     }

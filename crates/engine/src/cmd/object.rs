@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, FillRule, Point, Rect, Vec2};
 
 use super::edit::{duplicate_in, selected_roots};
@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform",
             [],
             None,
-            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?} apply an affine to the selection (or ids)",
+            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool} apply an affine to the selection (or ids); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences)",
             has_doc,
             transform
         ),
@@ -34,7 +34,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             rotate
         ),
-        cmd!("object.scale", "Scale…", ["Object", "Transform"], None, "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool}", has_selection, scale),
+        cmd!(
+            "object.scale",
+            "Scale…",
+            ["Object", "Transform"],
+            None,
+            "{sx: %, sy?: %, origin?: [x,y], copy?, strokes?: bool (Scale Strokes & Effects: stroke weights, dashes and effect distances scale; off keeps them, type strokes included), corners?: bool (Scale Corners: live corner radii scale)} (strokes/corners default to the preferences)",
+            has_selection,
+            scale
+        ),
         cmd!(
             "object.reflect",
             "Reflect…",
@@ -140,7 +148,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Align",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\"}",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", to?: \"selection\"|\"artboard\"|\"key\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
             has_selection,
             align
         ),
@@ -149,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute",
             ["Window", "Align"],
             None,
-            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\"}",
+            "{horizontal?: \"left\"|\"center\"|\"right\", vertical?: \"top\"|\"center\"|\"bottom\", bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
             has_multi,
             distribute
         ),
@@ -158,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Distribute Spacing",
             ["Window", "Align"],
             None,
-            "{axis: \"horizontal\"|\"vertical\", spacing?: pt}",
+            "{axis: \"horizontal\"|\"vertical\", spacing?: pt, bounds?: \"preview\"|\"geometric\" (default: the Use Preview Bounds preference; preview bounds take in strokes)}",
             has_multi,
             distribute_spacing
         ),
@@ -167,7 +175,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Bounds",
             [],
             None,
-            "{x?, y?, width?, height?, reference?: 0..8 (9-point grid), proportional?} (Transform panel)",
+            "{x?, y?, width?, height?, reference?: 0..8 (9-point grid), proportional?, strokes?, corners?} (Transform panel; with Use Preview Bounds the values measure the visual bounds; strokes/corners as object.scale)",
             has_selection,
             set_bounds
         ),
@@ -180,17 +188,30 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     if let Some(o) = point_param(p, "origin") {
         return Ok(o);
     }
-    s.doc()?.doc.bounds_of(ids, false).map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
+    s.transform_bounds(ids).map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
 }
 
-/// Apply `xf` to `ids` (copy = duplicate first). Records Transform Again.
-pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, copy: bool) -> Result<Value> {
-    let scale_strokes = s.prefs.scale_strokes;
+/// What a transform command scales besides geometry: Scale Strokes & Effects and Scale Corners from
+/// its `strokes` and `corners` params, else the preferences. The values join the command's journal
+/// entry, so replaying it scales the same way whatever the preferences are then.
+pub(crate) fn scaling(s: &mut Session, p: &Value) -> Scaling {
+    let strokes = bool_or(p, "strokes", s.prefs.scale_strokes);
+    let corners = bool_or(p, "corners", s.prefs.scale_corners);
+    s.note_journal("strokes", json!(strokes));
+    s.note_journal("corners", json!(corners));
+    Scaling { strokes, effects: strokes.then_some(vectorcraft_render::effects::scale_effect), keep_type_strokes: !strokes, keep_corners: !corners }
+}
+
+/// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`]).
+/// Records Transform Again.
+pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value) -> Result<Value> {
+    let copy = bool_or(p, "copy", false);
+    let sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
     let ids = s.edit(label, |d, sel| {
         let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
         for id in &targets {
             if let Some(n) = d.node_mut(*id) {
-                n.transform(xf, scale_strokes);
+                n.transform(xf, sc);
             }
         }
         Ok(targets)
@@ -208,12 +229,12 @@ fn transform(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => v,
         None => selected_roots(s)?,
     };
-    apply_transform(s, "Transform", ids, m, bool_or(p, "copy", false))
+    apply_transform(s, "Transform", ids, m, p)
 }
 
 fn move_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), bool_or(p, "copy", false))
+    apply_transform(s, "Move", ids, Affine::translate((f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0))), p)
 }
 
 fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
@@ -224,7 +245,7 @@ fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         return super::path::move_anchors(s, &json!({ "dx": dx, "dy": dy }));
     }
     let ids = selected_roots(s)?;
-    apply_transform(s, "Move", ids, Affine::translate((dx, dy)), bool_or(p, "copy", false))
+    apply_transform(s, "Move", ids, Affine::translate((dx, dy)), p)
 }
 
 fn about(o: Point, a: Affine) -> Affine {
@@ -236,7 +257,7 @@ fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
     let o = origin_of(s, p, &ids)?;
     // Illustrator angles are counter-clockwise; y is down, so negate.
     let a = about(o, Affine::rotate(-f64_or(p, "angle", 0.0).to_radians()));
-    apply_transform(s, "Rotate", ids, a, bool_or(p, "copy", false))
+    apply_transform(s, "Rotate", ids, a, p)
 }
 
 fn scale(s: &mut Session, p: &Value) -> Result<Value> {
@@ -247,13 +268,7 @@ fn scale(s: &mut Session, p: &Value) -> Result<Value> {
     if sx == 0.0 || sy == 0.0 {
         return Err(bad("object.scale", "scale must be non-zero"));
     }
-    let prev = s.prefs.scale_strokes;
-    if let Some(b) = p.get("strokes").and_then(Value::as_bool) {
-        s.prefs.scale_strokes = b;
-    }
-    let r = apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), bool_or(p, "copy", false));
-    s.prefs.scale_strokes = prev;
-    r
+    apply_transform(s, "Scale", ids, about(o, Affine::scale_non_uniform(sx, sy)), p)
 }
 
 fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
@@ -267,7 +282,7 @@ fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => Affine::scale_non_uniform(-1.0, 1.0),
     };
-    apply_transform(s, "Reflect", ids, about(o, m), bool_or(p, "copy", false))
+    apply_transform(s, "Reflect", ids, about(o, m), p)
 }
 
 fn shear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -276,13 +291,13 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
     let m =
         if str_param(p, "axis") == Some("vertical") { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
-    apply_transform(s, "Shear", ids, about(o, m), bool_or(p, "copy", false))
+    apply_transform(s, "Shear", ids, about(o, m), p)
 }
 
 fn transform_again(s: &mut Session, _: &Value) -> Result<Value> {
     let (m, copy) = s.doc()?.last_transform.ok_or_else(|| EngineError::Other("no previous transform".into()))?;
     let ids = selected_roots(s)?;
-    apply_transform(s, "Transform Again", ids, m, copy)
+    apply_transform(s, "Transform Again", ids, m, &json!({ "copy": copy }))
 }
 
 enum Arrange {
@@ -695,34 +710,58 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn reference_rect(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Rect> {
+impl Session {
+    /// The bounds of `ids` the Transform panel, the bounding box, Align and Distribute measure:
+    /// visual bounds (strokes included) with Use Preview Bounds on, else geometric bounds.
+    pub fn transform_bounds(&self, ids: &[NodeId]) -> Option<Rect> {
+        self.doc().ok()?.doc.bounds_of(ids, self.prefs.use_preview_bounds)
+    }
+}
+
+/// Measure with preview (visual) bounds? The `bounds` param, else Use Preview Bounds.
+fn preview_bounds(s: &Session, p: &Value, cmd: &str) -> Result<bool> {
+    match str_param(p, "bounds") {
+        None => Ok(s.prefs.use_preview_bounds),
+        Some("preview") => Ok(true),
+        Some("geometric") => Ok(false),
+        Some(b) => Err(bad(cmd, format!("bounds must be \"preview\" or \"geometric\", not `{b}`"))),
+    }
+}
+
+/// `ids` with their bounds (`preview`: visual bounds).
+fn items_bounds(d: &Document, ids: &[NodeId], preview: bool) -> Vec<(NodeId, Rect)> {
+    ids.iter().filter_map(|id| Some((*id, d.bounds_of(&[*id], preview)?))).collect()
+}
+
+fn reference_rect(s: &Session, p: &Value, ids: &[NodeId], preview: bool) -> Result<Rect> {
     let st = s.doc()?;
     match str_param(p, "to") {
         Some("artboard") => {
-            let b = st.doc.bounds_of(ids, false).unwrap_or_default();
+            let b = st.doc.bounds_of(ids, preview).unwrap_or_default();
             let i = st.doc.artboard_at(b.center()).unwrap_or(0);
             Ok(st.doc.artboards.get(i).map(|a| a.rect).unwrap_or(b))
         }
         Some("key") => {
             let k = st.selection.key.ok_or_else(|| EngineError::Other("no key object".into()))?;
-            st.doc.node(k).and_then(|n| n.geometric_bounds()).ok_or(EngineError::NoNode(k))
+            st.doc.bounds_of(&[k], preview).ok_or(EngineError::NoNode(k))
         }
-        _ => st.doc.bounds_of(ids, false).ok_or_else(|| EngineError::Other("nothing to align".into())),
+        _ => st.doc.bounds_of(ids, preview).ok_or_else(|| EngineError::Other("nothing to align".into())),
     }
 }
 
 fn align(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    let r = reference_rect(s, p, &ids)?;
+    let preview = preview_bounds(s, p, "object.align")?;
+    let r = reference_rect(s, p, &ids, preview)?;
     let h = str_param(p, "horizontal");
     let v = str_param(p, "vertical");
     let key = s.doc()?.selection.key;
     let moves: Vec<(NodeId, Vec2)> = {
         let d = &s.doc()?.doc;
-        ids.iter()
-            .filter(|id| Some(**id) != key || str_param(p, "to") != Some("key"))
-            .filter_map(|id| {
-                let b = d.node(*id)?.geometric_bounds()?;
+        items_bounds(d, &ids, preview)
+            .into_iter()
+            .filter(|(id, _)| Some(*id) != key || str_param(p, "to") != Some("key"))
+            .map(|(id, b)| {
                 let dx = match h {
                     Some("left") => r.x0 - b.x0,
                     Some("center") => r.center().x - b.center().x,
@@ -735,7 +774,7 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
                     Some("bottom") => r.y1 - b.y1,
                     _ => 0.0,
                 };
-                Some((*id, Vec2::new(dx, dy)))
+                (id, Vec2::new(dx, dy))
             })
             .collect()
     };
@@ -752,8 +791,8 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    let d0 = &s.doc()?.doc;
-    let mut items: Vec<(NodeId, Rect)> = ids.iter().filter_map(|id| Some((*id, d0.node(*id)?.geometric_bounds()?))).collect();
+    let preview = preview_bounds(s, p, "object.distribute")?;
+    let mut items = items_bounds(&s.doc()?.doc, &ids, preview);
     let (horiz, key): (bool, fn(&Rect, bool) -> f64) = match (str_param(p, "horizontal"), str_param(p, "vertical")) {
         (Some(h), _) => (
             true,
@@ -803,8 +842,8 @@ fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
 fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let horiz = str_param(p, "axis") != Some("vertical");
-    let d0 = &s.doc()?.doc;
-    let mut items: Vec<(NodeId, Rect)> = ids.iter().filter_map(|id| Some((*id, d0.node(*id)?.geometric_bounds()?))).collect();
+    let preview = preview_bounds(s, p, "object.distributeSpacing")?;
+    let mut items = items_bounds(&s.doc()?.doc, &ids, preview);
     items.sort_by(|a, b| if horiz { a.1.x0.total_cmp(&b.1.x0) } else { a.1.y0.total_cmp(&b.1.y0) });
     let n = items.len();
     let size = |r: &Rect| if horiz { r.width() } else { r.height() };
@@ -836,25 +875,40 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    let b = s.doc()?.doc.bounds_of(&ids, false).ok_or_else(|| EngineError::Other("no bounds".into()))?;
+    let d = &s.doc()?.doc;
+    let g = d.bounds_of(&ids, false).ok_or_else(|| EngineError::Other("no bounds".into()))?;
+    // With Use Preview Bounds the values measure the visual box, whose margins around the
+    // geometric box (left, top, right, bottom) scale with the strokes or stay.
+    let v = if s.prefs.use_preview_bounds { d.bounds_of(&ids, true).unwrap_or(g) } else { g };
+    let m = [g.x0 - v.x0, g.y0 - v.y0, v.x1 - g.x1, v.y1 - g.y1];
     let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
-    let rp = vectorcraft_geom::reference_point(b, refi);
-    let mut w = f64_or(p, "width", b.width());
-    let mut h = f64_or(p, "height", b.height());
+    let rp = vectorcraft_geom::reference_point(v, refi);
+    let mut w = f64_or(p, "width", v.width());
+    let mut h = f64_or(p, "height", v.height());
     if bool_or(p, "proportional", false) {
-        if p.get("width").is_some() && b.width() > 0.0 {
-            h = b.height() * w / b.width();
-        } else if p.get("height").is_some() && b.height() > 0.0 {
-            w = b.width() * h / b.height();
+        if p.get("width").is_some() && v.width() > 0.0 {
+            h = v.height() * w / v.width();
+        } else if p.get("height").is_some() && v.height() > 0.0 {
+            w = v.width() * h / v.height();
         }
     }
-    let sx = if b.width() > 1e-9 { w / b.width() } else { 1.0 };
-    let sy = if b.height() > 1e-9 { h / b.height() } else { 1.0 };
+    // The geometric scale that gives the visual size: margins grow by the strokes' scale `f`
+    // (exact for proportional scales, which scale the visual box alike).
+    let strokes = bool_or(p, "strokes", s.prefs.scale_strokes);
+    let ratio = |size: f64, geo: f64, margin: f64| if geo > 1e-9 { (size - margin) / geo } else { 1.0 };
+    let f = |sx: f64, sy: f64| if strokes { (sx * sy).abs().sqrt() } else { 1.0 };
+    let (lx, ly) = (ratio(w, v.width(), 0.0), ratio(h, v.height(), 0.0));
+    let f0 = f(if g.width() > 1e-9 { lx } else { 1.0 }, if g.height() > 1e-9 { ly } else { 1.0 });
+    let sx = ratio(w, g.width(), (m[0] + m[2]) * f0);
+    let sy = ratio(h, g.height(), (m[1] + m[3]) * f0);
     let scale = about(rp, Affine::scale_non_uniform(sx, sy));
-    let new_rp = scale * rp;
-    let tx = f64_or(p, "x", new_rp.x) - new_rp.x;
-    let ty = f64_or(p, "y", new_rp.y) - new_rp.y;
-    apply_transform(s, "Transform", ids, Affine::translate((tx, ty)) * scale, false)
+    // Move the new visual box's reference point to x, y (default: where it was): the geometric
+    // box's reference point moves with the art, the margin from it to the visual one by `f`.
+    let gp = vectorcraft_geom::reference_point(g, refi);
+    let new_rp = scale * gp + (rp - gp) * f(sx, sy);
+    let tx = f64_or(p, "x", rp.x) - new_rp.x;
+    let ty = f64_or(p, "y", rp.y) - new_rp.y;
+    apply_transform(s, "Transform", ids, Affine::translate((tx, ty)) * scale, p)
 }
 
 fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {

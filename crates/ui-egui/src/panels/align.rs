@@ -129,7 +129,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
         set_pstate(ui.ctx(), "align-hide-options", !hidden);
     }
-    menu_item(ui, "Use Preview Bounds", false, false);
+    let pb = app.session.prefs.use_preview_bounds;
+    if menu_item(ui, "Use Preview Bounds", true, pb) {
+        super::transform::set_pref(app, "usePreviewBounds", !pb);
+    }
     let to: AlignTo = pstate(ui.ctx(), "align-to");
     if menu_item(ui, "Cancel Key Object", to == AlignTo::Key, false) {
         set_pstate(ui.ctx(), "align-to", AlignTo::Selection);

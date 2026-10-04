@@ -179,7 +179,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 ui.separator();
                 // Transform fields.
-                let b = app.session.active().and_then(|s| s.doc.bounds_of(&s.selection.objects, false));
+                let b = app.session.active().and_then(|s| app.session.transform_bounds(&s.selection.objects));
                 if let Some(b) = b {
                     for (k, lbl, v) in
                         [("x", "X:", b.center().x), ("y", "Y:", b.center().y), ("width", "W:", b.width()), ("height", "H:", b.height())]

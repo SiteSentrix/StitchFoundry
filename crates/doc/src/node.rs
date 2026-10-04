@@ -138,6 +138,17 @@ impl LiveShape {
             }
         }
     }
+    /// Divide live corner radii by `k`, the mean scale of a transform just applied, so the corners
+    /// keep their size (Scale Corners off). False when nothing changed.
+    pub fn keep_corners(&mut self, k: f64) -> bool {
+        match self {
+            LiveShape::Rectangle { radii, .. } if radii.iter().any(|r| *r > 0.0) && k > 1e-12 => {
+                radii.iter_mut().for_each(|r| *r /= k);
+                true
+            }
+            _ => false,
+        }
+    }
     /// Rotation angle of the live shape in degrees (shown in the Properties panel).
     pub fn angle_deg(&self) -> f64 {
         match self {
@@ -147,6 +158,36 @@ impl LiveShape {
             }
             LiveShape::Line { a, b } => (b.y - a.y).atan2(b.x - a.x).to_degrees(),
         }
+    }
+}
+
+/// What a transform scales besides geometry, by its mean scale (the square root of its
+/// determinant). `Scaling::default()` (and `false`) scales nothing else; `true` scales stroke
+/// weights and dashes only. Transforms the user asks for take theirs from Scale Strokes & Effects
+/// and Scale Corners.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Scaling {
+    /// Stroke weights, dash lengths and dash offsets scale.
+    pub strokes: bool,
+    /// With `strokes`: scales an effect's distance parameters (the effects catalogue's).
+    pub effects: Option<fn(&mut crate::Effect, f64)>,
+    /// Type keeps its character strokes' weight (they otherwise scale with the type).
+    pub keep_type_strokes: bool,
+    /// Live corner radii keep their size.
+    pub keep_corners: bool,
+}
+
+impl Scaling {
+    /// The mean scale of `a` when it scales (isn't 1): what strokes, effects and corners scale by.
+    pub fn factor(a: Affine) -> Option<f64> {
+        let k = a.determinant().abs().sqrt();
+        ((k - 1.0).abs() > 1e-9).then_some(k)
+    }
+}
+
+impl From<bool> for Scaling {
+    fn from(strokes: bool) -> Self {
+        Self { strokes, ..Self::default() }
     }
 }
 
@@ -515,16 +556,23 @@ impl Node {
         }
     }
     /// Apply an affine transform to the geometry (and gradients) of this node and its descendants.
-    /// `scale_strokes` also scales stroke weights by the transform's mean scale.
-    pub fn transform(&mut self, a: Affine, scale_strokes: bool) {
+    /// `scaling` says what else scales by the transform's mean scale (a bool: stroke weights
+    /// only, see [`Scaling`]).
+    pub fn transform(&mut self, a: Affine, scaling: impl Into<Scaling>) {
+        self.transform_scaled(a, &scaling.into());
+    }
+    fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
         if !keeps_gradient_fit(a) {
             self.pin_gradients();
         }
-        if scale_strokes {
-            let det = a.determinant().abs().sqrt();
-            if (det - 1.0).abs() > 1e-9 {
-                self.appearance.scale_strokes(det);
+        let k = Scaling::factor(a);
+        if let Some(k) = k
+            && sc.strokes
+        {
+            self.appearance.scale_strokes(k);
+            if let Some(f) = sc.effects {
+                self.appearance.scale_effects(k, f);
             }
         }
         self.appearance.transform_gradients(a);
@@ -533,19 +581,33 @@ impl Node {
                 path.transform(a);
                 if let Some(l) = live {
                     l.transform(a);
+                    if sc.keep_corners
+                        && let Some(k) = k
+                        && l.keep_corners(k)
+                    {
+                        *path = l.to_path();
+                    }
                 }
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
                 for c in children.iter_mut() {
-                    Arc::make_mut(c).transform(a, scale_strokes);
+                    Arc::make_mut(c).transform_scaled(a, sc);
                 }
             }
-            NodeKind::Text(t) => t.transform(a),
+            NodeKind::Text(t) => {
+                t.transform(a);
+                // Character strokes scale with the type: undo that when strokes keep their weight.
+                if sc.keep_type_strokes
+                    && let Some(k) = k.filter(|k| *k > 1e-12)
+                {
+                    t.scale_char_strokes(1.0 / k);
+                }
+            }
             NodeKind::Image(im) => im.xf = a * im.xf,
             NodeKind::SymbolInstance { xf, .. } => *xf = a * *xf,
             NodeKind::Blend { children, spec } => {
                 for c in children.iter_mut() {
-                    Arc::make_mut(c).transform(a, scale_strokes);
+                    Arc::make_mut(c).transform_scaled(a, sc);
                 }
                 if let Some(s) = &mut spec.spine {
                     s.transform(a);
@@ -553,7 +615,7 @@ impl Node {
             }
             NodeKind::Envelope { content, kind, .. } => {
                 for c in content.iter_mut() {
-                    Arc::make_mut(c).transform(a, scale_strokes);
+                    Arc::make_mut(c).transform_scaled(a, sc);
                 }
                 match kind {
                     EnvelopeKind::Mesh { points, .. } => {
@@ -566,12 +628,12 @@ impl Node {
                 }
             }
             NodeKind::Mesh(m) => m.transform(a),
-            NodeKind::Repeat(r) => r.transform(a, scale_strokes),
+            NodeKind::Repeat(r) => r.transform(a, *sc),
         }
         if let Some(m) = &mut self.mask
             && m.linked
         {
-            Arc::make_mut(&mut m.art).transform(a, scale_strokes);
+            Arc::make_mut(&mut m.art).transform_scaled(a, sc);
         }
     }
     /// Visit this node and all descendants depth first (paint order).

@@ -610,3 +610,32 @@ the preference `japaneseCropMarks` is on or `style: "japanese"` is given.
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"japaneseCropMarks","value":true}}}
 {"name":"run_command","arguments":{"command":"object.createTrimMarks","params":{}}}
 ```
+
+## Scale Strokes & Effects
+
+`object.scale`, `object.transform` and `object.transformEach` take `strokes?: bool` (Scale Strokes & Effects) and
+`corners?: bool` (Scale Corners); without them the preferences `scaleStrokes` (default on) and `scaleCorners` (default
+off) apply (`prefs.set {key, value}`). With strokes on, a scale by k (the square root of the transform's determinant)
+multiplies stroke weights, dash lengths and dash offsets, and every distance parameter of the object's, its fills' and
+its strokes' effects (drop shadow offsets and blur, offsets, radii…; `effect.list` gives each effect's `lengths`;
+relative Roughen, Tweak and Zig Zag sizes stay percentages), in groups and layers too. With it off, nothing painted
+changes size, and type keeps its character strokes' weight. With Scale Corners off, live corner radii keep their
+size. The journal entry of a scaling command records the `strokes` and `corners` it used, so actions replay alike.
+
+```json
+{"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"strokes":true}}}
+{"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
+```
+
+## Use Preview Bounds
+
+With the preference `usePreviewBounds` on (`prefs.set {key: "usePreviewBounds", value: true}`; also the Align panel
+flyout's Use Preview Bounds), the Transform panel's and Control bar's X, Y, W and H, the bounding box, and
+`object.align`, `object.distribute` and `object.distributeSpacing` measure visual bounds, which take in the whole
+stroke (see Stroke bounds and clicks); off, they measure the paths. The three Align commands also take
+`bounds: "preview"|"geometric"` for one call. `object.setBounds` then sets the visual box: with Scale Strokes &
+Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets a 210 pt path.
+
+```json
+{"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","bounds":"preview"}}}
+```

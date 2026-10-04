@@ -51,10 +51,10 @@ pub fn matrix_json(a: Affine) -> Value {
     json!([c[0], c[1], c[2], c[3], c[4], c[5]])
 }
 
-/// Selection bounds used for the bounding box (geometric bounds, like Illustrator's default
-/// "Use Preview Bounds" off).
+/// Selection bounds used for the bounding box: visual bounds with Use Preview Bounds, else
+/// geometric bounds.
 pub fn selection_bounds(cx: &ToolContext) -> Option<Rect> {
-    cx.doc.bounds_of(&cx.selection.objects, false)
+    cx.doc.bounds_of(&cx.selection.objects, cx.preview_bounds)
 }
 
 impl SelectionTool {
@@ -143,9 +143,8 @@ impl Tool for SelectionTool {
                 }
                 let mut d = move_delta(start, p, m.shift);
                 if !began {
-                    let sel_ids: Vec<vectorcraft_doc::NodeId> = cx.selection.objects.clone();
-                    self.start_bounds = cx.doc.bounds_of(&sel_ids, false);
-                    self.targets = cx.smart_guides.then(|| crate::guides::Targets::collect(cx.doc, &sel_ids, None));
+                    self.start_bounds = selection_bounds(cx);
+                    self.targets = cx.smart_guides.then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
                 }
                 self.guides.clear();
                 if let (Some(t), Some(b)) = (&self.targets, self.start_bounds) {

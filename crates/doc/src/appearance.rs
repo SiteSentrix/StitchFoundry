@@ -46,6 +46,11 @@ impl Dash {
     pub fn is_dashed(&self) -> bool {
         self.pattern.iter().all(|v| v.is_finite() && *v >= 0.0) && self.pattern.iter().any(|v| *v > 0.0)
     }
+    /// Scale the dash and gap lengths and the offset by `s`.
+    pub fn scale(&mut self, s: f64) {
+        self.pattern.iter_mut().for_each(|v| *v *= s);
+        self.offset *= s;
+    }
 }
 
 /// An arrowhead shape. Saved by variant name: new shapes are appended, never renamed or reordered.
@@ -712,17 +717,23 @@ impl Appearance {
     pub fn outset(&self) -> f64 {
         self.painted_strokes().map(StrokeLayer::reach).fold(0.0, f64::max)
     }
-    /// Scale stroke weights (Scale Strokes & Effects).
+    /// Scale stroke weights, dash lengths and dash offsets (Scale Strokes & Effects).
     pub fn scale_strokes(&mut self, s: f64) {
         for i in &mut self.items {
             if let AppearanceItem::Stroke(st) = i {
                 st.width *= s;
                 if let Some(d) = &mut st.dash {
-                    for v in &mut d.pattern {
-                        *v *= s;
-                    }
+                    d.scale(s);
                 }
             }
+        }
+    }
+    /// Scale the distance parameters of every effect (the object's and each fill's and stroke's)
+    /// by `s` with `scale` (the effects catalogue knows which parameters are distances).
+    pub fn scale_effects(&mut self, s: f64, scale: fn(&mut Effect, f64)) {
+        let items = self.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+        for e in self.effects.iter_mut().chain(items) {
+            scale(e, s);
         }
     }
     /// Gradient paints of the fills and strokes.

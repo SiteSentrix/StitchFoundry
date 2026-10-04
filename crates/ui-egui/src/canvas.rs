@@ -915,7 +915,7 @@ fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     }
     // Bounding box with handles (Selection tool).
     if tool == "selection" && app.ui.view.bounding_box && !st.selection.is_empty() && st.selection.anchors.is_empty() {
-        let Some(b) = st.doc.bounds_of(&st.selection.objects, false) else { return };
+        let Some(b) = app.session.transform_bounds(&st.selection.objects) else { return };
         let color = c32(st.doc.layer_color(st.selection.objects[0]));
         p.add(Shape::closed_line(xf.quad(b), Stroke::new(1.0, color)));
         for h in vectorcraft_tools::bbox::Handle::ALL {

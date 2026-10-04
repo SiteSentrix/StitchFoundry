@@ -37,6 +37,8 @@ mod warp;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_scale;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
@@ -67,6 +69,37 @@ pub struct EffectInfo {
     pub defaults: Value,
     /// Raster (painted) rather than geometry effect.
     pub raster: bool,
+    /// The parameters that are distances in points (Scale Strokes & Effects scales them).
+    pub lengths: Lengths,
+}
+
+/// Which of an effect's parameters are distances in points.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Lengths {
+    /// Always distances.
+    pub always: &'static [&'static str],
+    /// Distances while the effect's `relative` parameter is false (percentages of the object's
+    /// size otherwise).
+    pub absolute: &'static [&'static str],
+}
+
+/// The distance parameters of effect `id` (none for unknown effects).
+fn lengths_of(id: &str) -> Lengths {
+    let always = |always| Lengths { always, absolute: &[] };
+    match id {
+        "convertToShape.rectangle" | "convertToShape.ellipse" => always(&["extraW", "extraH", "width", "height"]),
+        "convertToShape.roundedRectangle" => always(&["extraW", "extraH", "width", "height", "radius"]),
+        "distort.roughen" | "distort.zigZag" => Lengths { always: &[], absolute: &["size"] },
+        "distort.tweak" => Lengths { always: &[], absolute: &["h", "v"] },
+        "distort.transform" => always(&["moveH", "moveV"]),
+        "path.offsetPath" => always(&["offset"]),
+        "path.outlineStroke" => always(&["width"]),
+        "stylize.roundCorners" | "stylize.feather" | "blur.gaussian" => always(&["radius"]),
+        "stylize.scribble" => always(&["overlap", "strokeWidth", "spacing", "variation"]),
+        "stylize.dropShadow" => always(&["x", "y", "blur"]),
+        "stylize.innerGlow" | "stylize.outerGlow" => always(&["blur"]),
+        _ => Lengths::default(),
+    }
 }
 
 const WARP_DOC: &str =
@@ -100,8 +133,8 @@ pub const WARP_STYLES: [(&str, &str); 15] = [
 
 /// Every supported effect with its dialog defaults.
 pub fn effect_catalog() -> Vec<EffectInfo> {
-    let g = |id, label, menu, params, defaults| EffectInfo { id, label, menu, params, defaults, raster: false };
-    let r = |id, label, menu, params, defaults| EffectInfo { id, label, menu, params, defaults, raster: true };
+    let g = |id, label, menu, params, defaults| EffectInfo { id, label, menu, params, defaults, raster: false, lengths: lengths_of(id) };
+    let r = |id, label, menu, params, defaults| EffectInfo { id, label, menu, params, defaults, raster: true, lengths: lengths_of(id) };
     let mut v = vec![
         g(
             "convertToShape.rectangle",
@@ -274,6 +307,25 @@ pub fn merged_params(id: &str, params: &Value) -> Value {
 pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
     catalog_index().get(id)?;
     Some(Effect { id: id.to_string(), params: merged_params(id, params), visible: true })
+}
+
+/// Scale the distance parameters of `e` by `s` (Scale Strokes & Effects; see
+/// [`EffectInfo::lengths`]). A distance left at its default is written out scaled; one the
+/// effect doesn't have (Outline Stroke's weight following its stroke) stays absent.
+pub fn scale_effect(e: &mut Effect, s: f64) {
+    let Some(info) = catalog_index().get(e.id.as_str()) else { return };
+    let merged = merged_params(&e.id, &e.params);
+    let relative = util::flag(&merged, "relative", false);
+    let keys = info.lengths.always.iter().chain(if relative { &[][..] } else { info.lengths.absolute });
+    for k in keys {
+        let v = util::num(&merged, k, f64::NAN);
+        if v.is_finite() {
+            if !e.params.is_object() {
+                e.params = Value::Object(Map::new());
+            }
+            e.params[*k] = json!(v * s);
+        }
+    }
 }
 
 /// Is `id` a raster (painted) effect?

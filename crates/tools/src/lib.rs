@@ -171,6 +171,8 @@ pub struct ToolContext<'a> {
     /// Eyedropper Options' raster sample size: the pixels square averaged when the Eyedropper
     /// samples an image (1, 3 or 5).
     pub raster_sample: u32,
+    /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
+    pub preview_bounds: bool,
 }
 
 impl ToolContext<'_> {
@@ -357,6 +359,7 @@ pub(crate) mod testutil {
             constrain_angle: 0.0,
             freeform_point: None,
             raster_sample: 1,
+            preview_bounds: false,
         }
     }
 }
