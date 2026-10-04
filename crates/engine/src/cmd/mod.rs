@@ -240,7 +240,7 @@ pub fn matrix_param(p: &Value, key: &str) -> Option<Affine> {
     Some(Affine::new(c))
 }
 /// A colour from `"#rrggbb"`, `[r,g,b]` (0..1), `{"c":..,"m":..,"y":..,"k":..}` or `{"gray":..}`.
-pub(crate) fn color_value(v: &Value) -> Option<Color> {
+pub fn color_value(v: &Value) -> Option<Color> {
     match v {
         Value::String(s) => Color::from_hex(s),
         Value::Array(a) if a.len() >= 3 => Some(Color::rgb(a[0].as_f64()? as f32, a[1].as_f64()? as f32, a[2].as_f64()? as f32)),

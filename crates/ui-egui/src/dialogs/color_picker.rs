@@ -12,10 +12,11 @@ use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Lab};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
+use vectorcraft_engine::cmd::color_value;
 
 use super::DialogSpec;
 use crate::panels::color::{GAMUT_WARNING, WEB_WARNING, gamut_fix, hex_digits, is_web_safe, parse_hex, warning_chip, web_safe};
-use crate::panels::{c32, color_from_json, color_json};
+use crate::panels::{c32, color_json};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -132,7 +133,7 @@ fn picked(d: &Dialog) -> Picked {
     let hex = d.str("hex");
     let color = match parse_hex(&hex) {
         Some(c) if hex != d.str("__hex") => c,
-        _ => d.fields.get("color").and_then(color_from_json).unwrap_or(Color::WHITE),
+        _ => d.fields.get("color").and_then(color_value).unwrap_or(Color::WHITE),
     };
     let hsb = d.fields.get("__hsb").and_then(|v| serde_json::from_value::<[f32; 3]>(v.clone()).ok());
     let p = match hsb {
@@ -165,7 +166,7 @@ fn proxy_color(app: &VectorcraftApp, stroke: bool) -> Color {
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!app.session.fill_active);
     let color = match p.get("color") {
-        Some(v) => color_from_json(v).ok_or_else(|| format!("bad color {v}"))?,
+        Some(v) => color_value(v).ok_or_else(|| format!("bad color {v}"))?,
         None => proxy_color(app, stroke),
     };
     let mut d = Dialog::new(
@@ -182,7 +183,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let web = d.bool("webOnly");
     let swatches = d.bool("swatches");
     let p = picked(d);
-    let original = d.fields.get("original").and_then(color_from_json).unwrap_or(p.color);
+    let original = d.fields.get("original").and_then(color_value).unwrap_or(p.color);
     let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
     let mut pick: Option<Picked> = None;
     let mut new_channel = None;
@@ -481,6 +482,10 @@ mod tests {
         super::super::confirm(&mut app).unwrap();
         assert!(matches!(crate::panels::current_paints(&app).0.color(), Some(Color::Cmyk { .. })), "CMYK is kept");
         assert!(app.run("ui.colorPicker", json!({"color": "nope"})).is_err());
+        // Colours take every form the paint commands take (CMYK in percent too).
+        app.run("ui.colorPicker", json!({"stroke": false, "color": {"c": 0, "m": 100, "y": 100, "k": 0}})).unwrap();
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(crate::panels::current_paints(&app).0.color(), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
     }
 
     #[test]

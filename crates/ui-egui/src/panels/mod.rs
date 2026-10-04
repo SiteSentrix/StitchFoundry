@@ -282,19 +282,6 @@ pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// A colour from command JSON: `"#rrggbb"`, `[r,g,b]`, `{c,m,y,k}`, `{gray}` (inverse of
-/// [`color_json`]) or a serialized colour.
-pub(crate) fn color_from_json(v: &Value) -> Option<Color> {
-    let f = |v: Option<&Value>| v.and_then(Value::as_f64).map(|x| x as f32);
-    match v {
-        Value::String(s) => color::parse_hex(s),
-        Value::Array(a) if a.len() == 3 => Some(Color::rgb(f(a.first())?, f(a.get(1))?, f(a.get(2))?)),
-        Value::Object(o) if o.contains_key("gray") => Some(Color::gray(f(o.get("gray"))?)),
-        Value::Object(o) if !o.contains_key("model") => Some(Color::cmyk(f(o.get("c"))?, f(o.get("m"))?, f(o.get("y"))?, f(o.get("k"))?)),
-        _ => serde_json::from_value(v.clone()).ok(),
-    }
-}
-
 /// A colour as command JSON, keeping its model.
 pub(crate) fn color_json(c: &Color) -> Value {
     match *c {
