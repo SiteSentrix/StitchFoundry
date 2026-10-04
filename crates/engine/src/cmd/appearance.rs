@@ -6,6 +6,7 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, NodeKind, StrokeLayer};
 
 use super::edit::selected_roots;
+use super::opacitymask::percent;
 use super::paint::paint_from;
 use super::*;
 use crate::EngineError;
@@ -21,7 +22,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index, opacity?, blend?, visible?, color?|none?} edit one fill/stroke of the selection's appearance stack",
+            "{index, ids?, opacity?: 0..100, blend?, visible?, weight?, color?|none?|swatch?|gradient?} edit one fill/stroke of the appearance stack of the selection (or `ids`)",
             has_selection,
             set_item
         ),
@@ -115,7 +116,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
                 *pp = pa.clone();
             }
             if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
-                *op = if o > 1.0 { o / 100.0 } else { o }.clamp(0.0, 1.0) as f32;
+                *op = percent(o);
             }
             if let Some(b) = blend {
                 *bl = b;

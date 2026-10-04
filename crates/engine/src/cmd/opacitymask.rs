@@ -1,12 +1,19 @@
-//! Opacity masks (Transparency panel): make, release, enable/disable, link/unlink, clip, invert.
+//! Opacity masks (Transparency panel): make, release, enable/disable, link/unlink, clip, invert,
+//! and the panel's state (`transparency.info`).
 //!
 //! The mask art is stored on the masked object ([`vectorcraft_doc::OpacityMask`]), outside the
 //! layer tree, so it is never hit-tested or selected. Its luminance sets the object's opacity.
+//! Every command here (and `transparency.set`) acts on [`transparency_targets`]: explicit ids, else
+//! the object whose mask is being edited, else the selection.
+
+use std::collections::HashSet;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeId, OpacityMask};
+use vectorcraft_color::BlendMode;
+use vectorcraft_doc::{Document, Node, NodeId, OpacityMask, Selection};
 
 use super::edit::selected_roots;
+use super::maskedit::{begin, finish, mask_group, mask_parts, show_editing};
 use super::*;
 use crate::EngineError;
 
@@ -17,8 +24,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{clip?, invert?} the topmost selected object becomes the mask of the others (grouped if several) → {id}",
-            has_multi,
+            "{ids?, clip?, invert?} the topmost of the selected objects (or of `ids`) becomes the mask of the others (grouped if several). One object gets an empty mask and enters mask editing: draw the mask, then transparency.stopEditingOpacityMask → {id, editing}",
+            has_doc,
             make
         ),
         cmd!(
@@ -26,17 +33,22 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{} put the mask art back above each masked object",
-            has_mask,
+            "{id?|ids?} put the mask art back above each masked object (default: the selection, or the object whose mask is being edited, which leaves mask editing)",
+            has_doc,
             release
         ),
-        cmd!("transparency.disableOpacityMask", "Disable Opacity Mask", ["Window", "Transparency"], None, "{}", has_mask, |s, _| set_flags(
-            s,
+        cmd!(
+            "transparency.disableOpacityMask",
             "Disable Opacity Mask",
-            &json!({ "disabled": true })
-        )),
-        cmd!("transparency.enableOpacityMask", "Enable Opacity Mask", ["Window", "Transparency"], None, "{}", has_mask, |s, _| set_flags(
+            ["Window", "Transparency"],
+            None,
+            "{id?|ids?} keep the mask but stop applying it",
+            has_doc,
+            |s, p| set_flags(s, p, "Disable Opacity Mask", &json!({ "disabled": true }))
+        ),
+        cmd!("transparency.enableOpacityMask", "Enable Opacity Mask", ["Window", "Transparency"], None, "{id?|ids?}", has_doc, |s, p| set_flags(
             s,
+            p,
             "Enable Opacity Mask",
             &json!({ "disabled": false })
         )),
@@ -45,12 +57,13 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unlink Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{} the object moves without its mask",
-            has_mask,
-            |s, _| set_flags(s, "Unlink Opacity Mask", &json!({ "linked": false }))
+            "{id?|ids?} the object moves without its mask",
+            has_doc,
+            |s, p| set_flags(s, p, "Unlink Opacity Mask", &json!({ "linked": false }))
         ),
-        cmd!("transparency.linkOpacityMask", "Link Opacity Mask", ["Window", "Transparency"], None, "{}", has_mask, |s, _| set_flags(
+        cmd!("transparency.linkOpacityMask", "Link Opacity Mask", ["Window", "Transparency"], None, "{id?|ids?}", has_doc, |s, p| set_flags(
             s,
+            p,
             "Link Opacity Mask",
             &json!({ "linked": true })
         )),
@@ -59,9 +72,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Opacity Mask Options",
             [],
             None,
-            "{clip?, invert?, disabled?, linked?} change the selected objects' opacity masks",
-            has_mask,
-            |s, p| set_flags(s, "Opacity Mask Options", p)
+            "{id?|ids?, clip?, invert?, disabled?, linked?} change the opacity masks of `ids`, the selection, or the object whose mask is being edited",
+            has_doc,
+            |s, p| set_flags(s, p, "Opacity Mask Options", p)
         ),
         cmd!(
             "transparency.toggleNewMasksClipping",
@@ -81,35 +94,76 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             toggle_new_invert
         ),
-        cmd!(query "transparency.opacityMaskInfo", "Opacity Mask Info", [], None, "{} → [{id, clip, invert, disabled, linked}] masks of the selected objects", has_doc, info),
+        cmd!(
+            query "transparency.opacityMaskInfo",
+            "Opacity Mask Info",
+            [],
+            None,
+            "{id?|ids?} → [{id, clip, invert, disabled, linked, art}] the opacity masks of `ids`, the selection, or the object whose mask is being edited",
+            has_doc,
+            mask_info
+        ),
+        cmd!(
+            query "transparency.info",
+            "Transparency Info",
+            [],
+            None,
+            "{id?|ids?} → {ids, opacity: 0..100, blend, isolate, knockout, editingMask} the Transparency panel's values for `ids`, the selection, or the object whose mask is being edited. A value is null where those objects differ (or there are none); editingMask is the id of the object whose mask is being edited, or null",
+            has_doc,
+            info
+        ),
     ]
 }
 
-fn has_mask(s: &Session) -> std::result::Result<(), String> {
-    has_selection(s)?;
-    let st = s.active().unwrap();
-    if st.selection.in_paint_order(&st.doc).into_iter().any(|id| st.doc.node(id).is_some_and(|n| n.mask.is_some())) {
-        Ok(())
-    } else {
-        Err("no selected object has an opacity mask".into())
+/// The objects the Transparency panel's commands act on: `ids` / `id`, else the object whose
+/// opacity mask is being edited (the selection then is its mask art), else the selection.
+pub(crate) fn transparency_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    match s.doc()?.doc.mask_edit {
+        Some(me) if p.get("ids").is_none() && p.get("id").is_none() => Ok(vec![me.object]),
+        _ => targets(s, p),
     }
 }
 
-fn masked_ids(s: &Session) -> Result<Vec<NodeId>> {
-    let st = s.doc()?;
-    Ok(selected_roots(s)?.into_iter().filter(|id| st.doc.node(*id).is_some_and(|n| n.mask.is_some())).collect())
+/// An opacity parameter, in percent (0..100) everywhere, as the model's 0..1.
+pub(crate) fn percent(o: f64) -> f32 {
+    (o / 100.0).clamp(0.0, 1.0) as f32
+}
+
+/// The [`transparency_targets`] that have an opacity mask.
+fn masked_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let d = &s.doc()?.doc;
+    let ids: Vec<NodeId> = transparency_targets(s, p)?.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.mask.is_some())).collect();
+    if ids.is_empty() {
+        return Err(EngineError::Other("no target object has an opacity mask: select one or give `id`".into()));
+    }
+    Ok(ids)
 }
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
-    if ids.len() < 2 {
-        return Err(bad("transparency.makeOpacityMask", "select the art and, on top, the mask object"));
+    const C: &str = "transparency.makeOpacityMask";
+    let d = &s.doc()?.doc;
+    if d.mask_edit.is_some() {
+        return Err(bad(C, "stop editing the opacity mask first"));
     }
+    let ids = match ids_param(p, "ids") {
+        Some(ids) => {
+            if let Some(id) = ids.iter().find(|id| d.node(**id).is_none()) {
+                return Err(EngineError::NoNode(*id));
+            }
+            Selection { objects: ids, ..Default::default() }.in_paint_order(d)
+        }
+        None => selected_roots(s)?,
+    };
+    let Some((&top, below)) = ids.split_last() else { return Err(bad(C, "select the art and, on top of it, the mask object")) };
     let clip = bool_or(p, "clip", !s.menu.new_masks_unclipped);
     let invert = bool_or(p, "invert", s.menu.new_masks_inverted);
-    let (mask_id, art) = (ids[ids.len() - 1], &ids[..ids.len() - 1]);
-    let id = s.edit("Make Opacity Mask", |d, sel| {
-        let mask_art = (*d.remove(mask_id)?).clone();
+    // Several objects: the top one is the mask. One: an empty mask, drawn in mask editing.
+    let (art, mask_id) = if below.is_empty() { (&ids[..], None) } else { (below, Some(top)) };
+    let (id, layer) = s.edit("Make Opacity Mask", |d, sel| {
+        let mask_art = match mask_id {
+            Some(m) => (*d.remove(m)?).clone(),
+            None => mask_group(vec![]),
+        };
         // Several objects are grouped so they share one mask.
         let target = if let [one] = art {
             *one
@@ -131,36 +185,49 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         m.invert = invert;
         n.mask = Some(Box::new(m));
         sel.set([target]);
-        Ok(target)
+        let layer = if mask_id.is_none() { Some(begin(d, sel, target)?) } else { None };
+        Ok((target, layer))
     })?;
-    Ok(json!({ "id": id.0 }))
+    if layer.is_some() {
+        show_editing(s, layer)?;
+    }
+    Ok(json!({ "id": id.0, "editing": layer.is_some() }))
 }
 
-fn release(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = masked_ids(s)?;
+fn release(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = masked_targets(s, p)?;
+    let editing = s.doc()?.doc.mask_edit.is_some();
     s.edit("Release Opacity Mask", |d, sel| {
+        // Leave mask editing first: its art goes back into the mask, which is released below.
+        finish(d, sel);
         let mut out = vec![];
         for id in &ids {
             let Some(m) = d.node_mut(*id).and_then(|n| n.mask.take()) else { continue };
             let (par, idx, _) = d.position(*id).ok_or(EngineError::NoNode(*id))?;
-            // Fresh ids: copies of a masked object share the ids inside their mask art.
-            let art = d.reid(&m.art);
             out.push(*id);
-            out.push(d.insert(par, idx + 1, art)?);
+            for (k, part) in mask_parts(&m.art).iter().enumerate() {
+                // Fresh ids: copies of a masked object share the ids inside their mask art.
+                let art = d.reid(part);
+                out.push(d.insert(par, idx + 1 + k, art)?);
+            }
         }
         sel.set(out);
         Ok(())
     })?;
+    if editing {
+        show_editing(s, None)?;
+    }
     ok()
 }
 
-fn set_flags(s: &mut Session, label: &str, p: &Value) -> Result<Value> {
-    let ids = masked_ids(s)?;
+/// Set the mask flags given in `p` on the masked objects among `target`'s targets.
+fn set_flags(s: &mut Session, target: &Value, label: &str, p: &Value) -> Result<Value> {
     let get = |k: &str| p.get(k).and_then(Value::as_bool);
     let (clip, invert, disabled, linked) = (get("clip"), get("invert"), get("disabled"), get("linked"));
     if clip.is_none() && invert.is_none() && disabled.is_none() && linked.is_none() {
         return Err(bad("transparency.setOpacityMask", "give at least one of clip, invert, disabled, linked"));
     }
+    let ids = masked_targets(s, target)?;
     s.edit(label, |d, _| {
         for id in &ids {
             if let Some(m) = d.node_mut(*id).and_then(|n| n.mask.as_mut()) {
@@ -187,20 +254,85 @@ fn toggle_new_invert(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "value": v }))
 }
 
+/// The Transparency panel's values for its targets ([`Session::transparency_info`]). A value is
+/// `None` where the targets differ, or when there are none.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TransparencyInfo {
+    /// The targets (the selection, in selection order, by default).
+    pub ids: Vec<NodeId>,
+    /// Opacity in percent (0..100), to two decimals.
+    pub opacity: Option<f64>,
+    pub blend: Option<BlendMode>,
+    pub isolate: Option<bool>,
+    pub knockout: Option<bool>,
+}
+
+impl TransparencyInfo {
+    fn of(d: &Document, ids: Vec<NodeId>) -> Self {
+        let nodes = nodes_of(d, &ids);
+        fn same<T: PartialEq>(nodes: &[&Node], f: impl Fn(&Node) -> T) -> Option<T> {
+            let first = f(nodes.first()?);
+            nodes[1..].iter().all(|n| f(n) == first).then_some(first)
+        }
+        Self {
+            // Compared in hundredths of a percent, as shown.
+            opacity: same(&nodes, |n| (n.opacity as f64 * 10_000.0).round() as i64).map(|o| o as f64 / 100.0),
+            blend: same(&nodes, |n| n.blend),
+            isolate: same(&nodes, |n| n.isolate),
+            knockout: same(&nodes, |n| n.knockout),
+            ids,
+        }
+    }
+}
+
+/// The nodes of `ids` that exist: looked up one by one when few, else in one walk of the tree.
+fn nodes_of<'a>(d: &'a Document, ids: &[NodeId]) -> Vec<&'a Node> {
+    if ids.len() <= 8 {
+        return ids.iter().filter_map(|id| d.node(*id)).collect();
+    }
+    let set: HashSet<NodeId> = ids.iter().copied().collect();
+    let mut out = Vec::with_capacity(ids.len());
+    d.walk(|n| {
+        if set.contains(&n.id) {
+            out.push(n);
+        }
+    });
+    out
+}
+
 impl Session {
     /// Defaults for new opacity masks (clip, invert) from the Transparency panel menu.
     pub fn new_mask_defaults(&self) -> (bool, bool) {
         (!self.menu.new_masks_unclipped, self.menu.new_masks_inverted)
     }
+
+    /// The Transparency panel's values for the selection, or for the object whose mask is being
+    /// edited (`transparency.info` without ids).
+    pub fn transparency_info(&self) -> TransparencyInfo {
+        match (self.active(), transparency_targets(self, &Value::Null)) {
+            (Some(st), Ok(ids)) => TransparencyInfo::of(&st.doc, ids),
+            _ => TransparencyInfo::default(),
+        }
+    }
 }
 
-fn info(s: &mut Session, _: &Value) -> Result<Value> {
+fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let v: Vec<Value> = st
-        .selection
-        .in_paint_order(&st.doc)
+    let i = TransparencyInfo::of(&st.doc, transparency_targets(s, p)?);
+    Ok(json!({
+        "ids": i.ids.iter().map(|id| id.0).collect::<Vec<_>>(),
+        "opacity": i.opacity,
+        "blend": i.blend.map(BlendMode::label),
+        "isolate": i.isolate,
+        "knockout": i.knockout,
+        "editingMask": st.doc.mask_edit.map(|me| me.object.0),
+    }))
+}
+
+fn mask_info(s: &mut Session, p: &Value) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let v: Vec<Value> = nodes_of(d, &transparency_targets(s, p)?)
         .into_iter()
-        .filter_map(|id| st.doc.node(id))
         .filter_map(|n| {
             let m = n.mask.as_deref()?;
             Some(json!({ "id": n.id.0, "clip": m.clip, "invert": m.invert, "disabled": m.disabled, "linked": m.linked, "art": m.art.id.0 }))
@@ -232,6 +364,7 @@ mod tests {
         select(&mut s, &[a, b]);
         let r = s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
         assert_eq!(r["id"].as_u64(), Some(a));
+        assert_eq!(r["editing"], false);
         let d = &s.doc().unwrap().doc;
         assert!(d.node(NodeId(b)).is_none(), "mask art left the layer tree");
         let m = d.node(NodeId(a)).unwrap().mask.as_deref().unwrap();

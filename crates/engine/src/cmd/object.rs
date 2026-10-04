@@ -9,6 +9,7 @@ use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, Point, Rect, Vec2};
 
 use super::edit::{duplicate_in, selected_roots};
+use super::opacitymask::percent;
 use super::*;
 use crate::EngineError;
 
@@ -114,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Object Properties",
             [],
             None,
-            "{ids?|id?, name?, visible?, locked?, opacity?: 0..1 or %, blend?: \"Multiply\"…, isolate?, knockout?}",
+            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?}",
             has_doc,
             set_props
         ),
@@ -615,7 +616,7 @@ fn exit_isolation(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = targets(s, p)?;
-    let opacity = p.get("opacity").and_then(Value::as_f64).map(|o| if o > 1.0 { o / 100.0 } else { o }.clamp(0.0, 1.0) as f32);
+    let opacity = p.get("opacity").and_then(Value::as_f64).map(percent);
     let blend = match str_param(p, "blend") {
         Some(b) => Some(BlendMode::parse(b).ok_or_else(|| bad("object.setProps", format!("unknown blend mode `{b}`")))?),
         None => None,

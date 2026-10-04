@@ -725,6 +725,8 @@ mod tests_live;
 #[cfg(test)]
 mod tests_menucmds;
 #[cfg(test)]
+mod tests_opacitymask;
+#[cfg(test)]
 mod tests_panelcmds;
 #[cfg(test)]
 mod tests_pathops;

@@ -132,13 +132,27 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
 
 /// A plain number field (percent, degrees, counts) with optional suffix.
 pub fn plain_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: f64, suffix: &str, decimals: usize, width: f32) -> Option<f64> {
+    mixed_field(ui, id, Some(value), suffix, decimals, width)
+}
+
+/// [`plain_field`] for a value the selected objects may not share: `None` shows a blank field.
+pub fn mixed_field(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: Option<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
-    let shown = {
-        let s = format!("{:.*}", decimals, value);
-        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
-        format!("{s}{suffix}")
-    };
+    let shown = value
+        .map(|value| {
+            let s = format!("{:.*}", decimals, value);
+            let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
+            format!("{s}{suffix}")
+        })
+        .unwrap_or_default();
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
     let resp = ui

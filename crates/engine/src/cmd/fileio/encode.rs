@@ -106,9 +106,11 @@ fn check_pixels(f: &Format, w: f64, h: f64) -> Result<()> {
 }
 
 /// Encode `doc` as `format` (an id or extension from [`super::FORMATS`]) with that format's
-/// options from `p` (see `document.formats`). Raster formats leave template layers out.
+/// options from `p` (see `document.formats`). Raster formats leave template layers out, and no
+/// format writes the opacity-mask editing layer.
 pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
     let f = super::writable(C, Some(format), None)?;
+    let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     Ok(match f.id {
         "vectorcraft" => vectorcraft_format::save_file(doc),

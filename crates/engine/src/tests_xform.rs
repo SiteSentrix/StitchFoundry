@@ -162,7 +162,7 @@ fn eyedropper_copies_appearance_to_selection_and_defaults() {
     let src = rect(&mut s, 300.0, 300.0, 50.0, 50.0);
     s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     s.execute("stroke.set", &json!({"weight": 4})).unwrap();
-    s.execute("object.setProps", &json!({"opacity": 0.5})).unwrap();
+    s.execute("object.setProps", &json!({"opacity": 50})).unwrap();
     let dst = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
     s.execute("paint.default", &json!({})).unwrap();
     s.execute("select.set", &json!({"ids": [dst.0]})).unwrap();

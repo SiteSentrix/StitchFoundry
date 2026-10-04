@@ -119,6 +119,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     let e = st.history.undo.pop().ok_or_else(|| EngineError::Other("nothing to undo".into()))?;
     let label = e.label.clone();
+    let editing = st.doc.mask_edit.map(|m| m.layer);
     st.history.redo.push(crate::HistoryEntry {
         label: e.label,
         doc: std::mem::replace(&mut st.doc, e.doc),
@@ -126,6 +127,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     });
     st.revision += 1;
     st.selection.prune(&st.doc);
+    super::maskedit::follow_history(st, editing);
     Ok(json!({ "undone": label }))
 }
 
@@ -133,6 +135,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     let e = st.history.redo.pop().ok_or_else(|| EngineError::Other("nothing to redo".into()))?;
     let label = e.label.clone();
+    let editing = st.doc.mask_edit.map(|m| m.layer);
     st.history.undo.push(crate::HistoryEntry {
         label: e.label,
         doc: std::mem::replace(&mut st.doc, e.doc),
@@ -140,6 +143,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     });
     st.revision += 1;
     st.selection.prune(&st.doc);
+    super::maskedit::follow_history(st, editing);
     Ok(json!({ "redone": label }))
 }
 

@@ -342,3 +342,6 @@ pub(crate) fn parse_range(s: &str, count: usize) -> std::result::Result<Vec<usiz
     }
     Ok(out)
 }
+
+/// The Transparency panel's state ([`Session::transparency_info`]).
+pub use opacitymask::TransparencyInfo;

@@ -134,7 +134,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, 56.0)
                     && !sel.is_empty()
                 {
-                    app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0) / 100.0})).ok();
+                    app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
                 }
                 ui.separator();
                 if sel.is_empty() {

@@ -34,8 +34,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{opacity?: 0..100, blend?: name, isolate?, knockout?}",
-            has_selection,
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?} for `ids`, the selection, or the object whose opacity mask is being edited",
+            has_doc,
             transparency
         ),
     ]
@@ -171,9 +171,11 @@ fn default_paint(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
-    let mut q = p.clone();
-    if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
-        q["opacity"] = json!(o / 100.0);
+    let ids = super::opacitymask::transparency_targets(s, p)?;
+    if ids.is_empty() {
+        return Err(bad("transparency.set", "select objects or give ids"));
     }
+    let mut q = if p.is_object() { p.clone() } else { json!({}) };
+    q["ids"] = json!(ids.iter().map(|id| id.0).collect::<Vec<_>>());
     s.execute("object.setProps", &q)
 }

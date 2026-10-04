@@ -299,7 +299,7 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.label(egui::RichText::new("Opacity").size(12.0));
         ui.add_space(8.0);
         if let Some(o) = widgets::plain_field(ui, "ap-op", n.opacity as f64 * 100.0, "%", 0, 64.0) {
-            app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0) / 100.0})).ok();
+            app.run("object.setProps", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
         }
         if widgets::icon_button(ui, "ellipsis", "Transparency", false, 22.0).clicked() {
             app.ui.open_panel = Some("transparency".into());
