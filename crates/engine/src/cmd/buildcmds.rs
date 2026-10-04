@@ -570,9 +570,10 @@ fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
         };
         let fid =
             d.node(gid).and_then(|n| face_at(n, pt)).map(|f| f.id).ok_or_else(|| EngineError::Other("no Live Paint face at that point".into()))?;
-        d.node_mut(fid).ok_or(EngineError::NoNode(fid))?.appearance.set_fill(paint);
+        d.node_mut(fid).ok_or(EngineError::NoNode(fid))?.appearance.set_fill(paint.clone());
         Ok((gid, fid))
     })?;
+    s.remember_paint(&paint);
     Ok(json!({ "group": g.0, "face": face.0 }))
 }
 
@@ -590,12 +591,13 @@ fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
         let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad(C, format!("{g} is not a Live Paint group")))?;
         let eid = edge_near(n, pt, tol).map(|e| e.id).ok_or_else(|| EngineError::Other("no Live Paint edge near that point".into()))?;
         let e = d.node_mut(eid).ok_or(EngineError::NoNode(eid))?;
-        e.appearance.set_stroke(paint);
+        e.appearance.set_stroke(paint.clone());
         if let Some(st) = e.appearance.stroke_mut() {
             st.width = width;
         }
         Ok(eid)
     })?;
+    s.remember_paint(&paint);
     Ok(json!({ "group": g.0, "edge": edge.0 }))
 }
 

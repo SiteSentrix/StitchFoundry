@@ -40,6 +40,11 @@ explicit `ids`.
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).
+The Fill/Stroke proxy commands run through `run_command`: `paint.invert` and `paint.complement` recolour the active
+proxy keeping each colour's model, `paint.lastColor` / `paint.lastGradient` re-apply the last solid colour or gradient,
+and `paint.recent` returns the recent colours that every paint command (and the eyedropper) feeds.
+`paint.proxies` returns what the proxies show: the fill and stroke, which one is active, and whether the selected
+objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" proxy).
 
 | Tool | Arguments | Notes |
 |---|---|---|
@@ -72,7 +77,8 @@ Appearance stacks: an object can carry several fills and strokes (`appearance.ad
 in paint order (0 is painted first, the bottom row of the Appearance panel). `paint.setFill`, `paint.setStroke`,
 `stroke.set`, `stroke.setAdvanced`, `paint.editGradient`, `paint.setGradientGeom` and `transparency.set` take
 `item` to edit one of them; `run_command appearance.setActiveItem {"index": n}` makes that row the target of later
-calls that omit `item` (as clicking the row in the Appearance panel does) until the selection changes.
+calls that omit `item` (as clicking the row in the Appearance panel does) until the selection changes; the proxy of
+its kind (`paint.proxies`) and the Gradient tool's annotator then show that row.
 `inspect_document` reports it as `paint.appearanceItem`. Live effects take the same `item` to apply to one fill or
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;

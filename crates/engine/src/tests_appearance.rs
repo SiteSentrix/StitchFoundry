@@ -103,6 +103,9 @@ fn active_item_targets_paint_and_proxies_and_clears_on_selection_change() {
     // The stroke edits fall back to the top stroke while a fill row is active.
     run(&mut s, "paint.setStroke", json!({"color": "#00ff00"}));
     assert_eq!(stroke(&node(&s, id), 1).paint.color().unwrap().to_hex(), "#00ff00");
+    // The proxies show the active row for its kind and the top one for the other.
+    let (f, st) = s.proxy_paints();
+    assert_eq!((f.color().unwrap().to_hex(), st.color().unwrap().to_hex()), ("#ff0000".to_string(), "#00ff00".to_string()));
     // A stroke row brings the Stroke proxy forward.
     run(&mut s, "appearance.setActiveItem", json!({"index": 1}));
     assert!(!s.fill_active);

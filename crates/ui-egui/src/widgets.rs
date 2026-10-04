@@ -197,30 +197,7 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
             let [r, g, b, _] = color.to_rgba8(1.0);
             p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
         }
-        Paint::Gradient(gp) => {
-            if gp.gradient.kind == vectorcraft_color::GradientKind::Radial {
-                // Outer colour fills the corners beyond the largest circle.
-                let (c, _) = gp.gradient.sample(1.0);
-                let [r, g, b, _] = c.to_rgba8(1.0);
-                p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
-            }
-            let n = 24;
-            let w = rect.width() / n as f32;
-            for i in 0..n {
-                let tt = (i as f32 + 0.5) / n as f32;
-                let (c, _) = gp.gradient.sample(tt);
-                let [r, g, b, _] = c.to_rgba8(1.0);
-                let rr = Rect::from_min_size(pos2(rect.left() + i as f32 * w, rect.top()), vec2(w + 0.5, rect.height()));
-                if gp.gradient.kind == vectorcraft_color::GradientKind::Radial {
-                    let (c, _) = gp.gradient.sample(1.0 - tt);
-                    let [r, g, b, _] = c.to_rgba8(1.0);
-                    let s = rect.width().min(rect.height()) * tt / 2.0;
-                    p.circle_filled(rect.center(), s.max(0.5), Color32::from_rgb(r, g, b));
-                } else {
-                    p.rect_filled(rr, 0.0, Color32::from_rgb(r, g, b));
-                }
-            }
-        }
+        Paint::Gradient(gp) => gradient_chip(ui, rect, &gp.gradient),
         Paint::Pattern { .. } => {
             p.rect_filled(rect, 0.0, Color32::from_gray(200));
             for i in 0..4 {
@@ -231,8 +208,48 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
     }
 }
 
-/// The Fill/Stroke proxy pair (Illustrator's overlapping squares). Returns (fill clicked, stroke clicked, swap, default).
-pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active: bool, size: f32) -> (bool, bool, bool, bool) {
+/// Draw a gradient preview into `rect` (linear left to right; radial from the centre).
+pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient) {
+    let p = ui.painter();
+    let radial = gradient.kind == vectorcraft_color::GradientKind::Radial;
+    if radial {
+        // Outer colour fills the corners beyond the largest circle.
+        let (c, _) = gradient.sample(1.0);
+        let [r, g, b, _] = c.to_rgba8(1.0);
+        p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
+    }
+    let n = 24;
+    let w = rect.width() / n as f32;
+    for i in 0..n {
+        let tt = (i as f32 + 0.5) / n as f32;
+        if radial {
+            let (c, _) = gradient.sample(1.0 - tt);
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            let s = rect.width().min(rect.height()) * tt / 2.0;
+            p.circle_filled(rect.center(), s.max(0.5), Color32::from_rgb(r, g, b));
+        } else {
+            let (c, _) = gradient.sample(tt);
+            let [r, g, b, _] = c.to_rgba8(1.0);
+            let rr = Rect::from_min_size(pos2(rect.left() + i as f32 * w, rect.top()), vec2(w + 0.5, rect.height()));
+            p.rect_filled(rr, 0.0, Color32::from_rgb(r, g, b));
+        }
+    }
+}
+
+/// What the user did on a [`fill_stroke_proxy`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ProxyClicks {
+    pub fill: bool,
+    pub stroke: bool,
+    pub swap: bool,
+    pub default: bool,
+    /// Double-clicked a square: open the Color Picker for it (`true` = the stroke).
+    pub pick: Option<bool>,
+}
+
+/// The Fill/Stroke proxy pair (two overlapping squares). `mixed` (fill, stroke) draws a "?" square
+/// for a selection whose objects differ.
+pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool, bool), fill_active: bool, size: f32) -> ProxyClicks {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
     let s = size * 0.62;
@@ -240,16 +257,31 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active:
     let stroke_r = Rect::from_min_size(rect.max - Vec2::splat(s), Vec2::splat(s));
     let stroke_resp = ui.interact(stroke_r, ui.id().with("stroke-proxy"), Sense::click());
     let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click());
+    let question = |ui: &Ui, r: Rect, color: Color32| {
+        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(r.height() * 0.8), color);
+    };
     let draw_fill = |ui: &Ui| {
-        paint_chip(ui, fill_r, fill);
+        if mixed.0 {
+            ui.painter().rect_filled(fill_r, 0.0, Color32::WHITE);
+            question(ui, fill_r, Color32::BLACK);
+        } else {
+            paint_chip(ui, fill_r, fill);
+        }
         ui.painter().rect_stroke(fill_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(fill_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
     };
     let draw_stroke = |ui: &Ui| {
         let w = s * 0.28;
-        paint_chip(ui, stroke_r, stroke);
+        if mixed.1 {
+            ui.painter().rect_filled(stroke_r, 0.0, Color32::WHITE);
+        } else {
+            paint_chip(ui, stroke_r, stroke);
+        }
         let inner = stroke_r.shrink(w);
         ui.painter().rect_filled(inner, 0.0, t.panel);
+        if mixed.1 {
+            question(ui, inner, t.text_strong);
+        }
         ui.painter().rect_stroke(stroke_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Outside);
         ui.painter().rect_stroke(stroke_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
@@ -273,12 +305,20 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active:
     ui.painter().rect_stroke(b, 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
     ui.painter().rect_filled(a, 0.0, Color32::WHITE);
     ui.painter().rect_stroke(a, 0.0, Stroke::new(1.0, Color32::BLACK), StrokeKind::Inside);
-    (
-        fill_resp.on_hover_text("Fill (X)").clicked(),
-        stroke_resp.on_hover_text("Stroke (X)").clicked(),
-        swap.on_hover_text("Swap Fill and Stroke (Shift+X)").clicked(),
-        def.on_hover_text("Default Fill and Stroke (D)").clicked(),
-    )
+    let pick = if fill_resp.double_clicked() {
+        Some(false)
+    } else if stroke_resp.double_clicked() {
+        Some(true)
+    } else {
+        None
+    };
+    ProxyClicks {
+        fill: fill_resp.on_hover_text("Fill (X), double-click for the Color Picker").clicked(),
+        stroke: stroke_resp.on_hover_text("Stroke (X), double-click for the Color Picker").clicked(),
+        swap: swap.on_hover_text("Swap Fill and Stroke (Shift+X)").clicked(),
+        default: def.on_hover_text("Default Fill and Stroke (D)").clicked(),
+        pick,
+    }
 }
 
 /// A compact dropdown. Returns the chosen index.
@@ -648,12 +688,7 @@ pub fn color_slider(
     let (rect, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
     let bar = Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0));
     let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
-    let n = (bar.width() / 2.0).ceil().max(2.0) as usize;
-    let seg = bar.width() / n as f32;
-    for i in 0..n {
-        let r = Rect::from_min_size(pos2(bar.left() + i as f32 * seg, bar.top()), vec2(seg + 0.6, bar.height()));
-        ui.painter().rect_filled(r, 0.0, track((i as f32 + 0.5) / n as f32));
-    }
+    gradient_strip(ui, bar, (bar.width() / 2.0).ceil().max(2.0) as usize, false, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let v = value.clamp(0.0, 1.0);
     let x = bar.left() + v * bar.width();
@@ -661,15 +696,141 @@ pub fn color_slider(
     let thumb = vec![tip, pos2(x + 5.5, tip.y + 6.0), pos2(x + 5.5, tip.y + 10.0), pos2(x - 5.5, tip.y + 10.0), pos2(x - 5.5, tip.y + 6.0)];
     let fill = if resp.dragged() || resp.hovered() { Color32::WHITE } else { t.icon };
     ui.painter().add(egui::Shape::convex_polygon(thumb, fill, Stroke::new(1.0, t.border)));
-    let mut out = None;
-    let mut phase = Live::Idle;
-    if (resp.dragged() || resp.clicked() || resp.drag_stopped())
-        && let Some(p) = resp.interact_pointer_pos()
-    {
-        out = Some(((p.x - bar.left()) / bar.width()).clamp(0.0, 1.0));
-        phase = if resp.dragged() && !resp.drag_stopped() { Live::Dragging } else { Live::Released };
+    match pointer_phase(&resp) {
+        Some((p, phase)) => (Some(((p.x - bar.left()) / bar.width()).clamp(0.0, 1.0)), phase),
+        None => (None, Live::Idle),
     }
-    (out, phase)
+}
+
+/// The pointer of a click or drag on `resp` and its phase (dragging, or released on click/drop).
+pub(crate) fn pointer_phase(resp: &Response) -> Option<(Pos2, Live)> {
+    if !(resp.dragged() || resp.clicked() || resp.drag_stopped()) {
+        return None;
+    }
+    let p = resp.interact_pointer_pos()?;
+    Some((p, if resp.dragged() && !resp.drag_stopped() { Live::Dragging } else { Live::Released }))
+}
+
+/// A gradient strip into `rect`: `n` bands along x (or up y when `vertical`), each filled with
+/// `track(t)` at its centre.
+fn gradient_strip(ui: &Ui, rect: Rect, n: usize, vertical: bool, track: &dyn Fn(f32) -> Color32) {
+    let len = if vertical { rect.height() } else { rect.width() };
+    let seg = len / n as f32;
+    for i in 0..n {
+        let r = if vertical {
+            Rect::from_min_size(pos2(rect.left(), rect.bottom() - (i + 1) as f32 * seg), vec2(rect.width(), seg + 0.6))
+        } else {
+            Rect::from_min_size(pos2(rect.left() + i as f32 * seg, rect.top()), vec2(seg + 0.6, rect.height()))
+        };
+        ui.painter().rect_filled(r, 0.0, track((i as f32 + 0.5) / n as f32));
+    }
+}
+
+/// The Color Picker's 2D colour field: `color_at(x, y)` gives the colour at a point (0..1 each, y
+/// down) and a ring marks `pos`. Returns the clicked or dragged point and the phase.
+pub fn color_field(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    size: Vec2,
+    pos: (f32, f32),
+    color_at: &dyn Fn(f32, f32) -> Color32,
+) -> (Option<(f32, f32)>, Live) {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
+    let painter = ui.painter_at(rect.expand(6.0));
+    painter.add(color_mesh(rect, (32, 32), color_at));
+    painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
+    let c = pos2(rect.left() + pos.0.clamp(0.0, 1.0) * rect.width(), rect.top() + pos.1.clamp(0.0, 1.0) * rect.height());
+    painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
+    painter.circle_stroke(c, 4.0, Stroke::new(1.0, Color32::WHITE));
+    match pointer_phase(&resp) {
+        Some((p, phase)) => {
+            let f = |v: f32, lo: f32, len: f32| ((v - lo) / len).clamp(0.0, 1.0);
+            (Some((f(p.x, rect.left(), rect.width()), f(p.y, rect.top(), rect.height()))), phase)
+        }
+        None => (None, Live::Idle),
+    }
+}
+
+/// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1
+/// each, y down) at its vertices.
+pub fn color_mesh(rect: Rect, (cols, rows): (u32, u32), color_at: &dyn Fn(f32, f32) -> Color32) -> egui::Shape {
+    let mut mesh = egui::Mesh::default();
+    let row = cols + 1;
+    mesh.reserve_vertices((row * (rows + 1)) as usize);
+    mesh.reserve_triangles((cols * rows * 2) as usize);
+    for j in 0..=rows {
+        for i in 0..=cols {
+            let (x, y) = (i as f32 / cols as f32, j as f32 / rows as f32);
+            mesh.colored_vertex(pos2(rect.left() + x * rect.width(), rect.top() + y * rect.height()), color_at(x, y));
+        }
+    }
+    for j in 0..rows {
+        for i in 0..cols {
+            let a = j * row + i;
+            mesh.add_triangle(a, a + 1, a + row);
+            mesh.add_triangle(a + 1, a + row + 1, a + row);
+        }
+    }
+    egui::Shape::mesh(mesh)
+}
+
+/// The Color Picker's vertical channel slider: `track(t)` gives the colour at 0..1 (bottom to top)
+/// and arrows on both sides mark `value`. Returns the new value and the phase.
+pub fn channel_slider(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: f32,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Option<f32>, Live) {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
+    let bar = rect.shrink2(vec2(6.0, 0.0));
+    gradient_strip(ui, bar, (bar.height() / 2.0).ceil().max(2.0) as usize, true, track);
+    ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
+    let y = bar.bottom() - value.clamp(0.0, 1.0) * bar.height();
+    let fill = if resp.dragged() || resp.hovered() { t.text_strong } else { t.icon };
+    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)] {
+        let tip = pos2(x + d * 5.0, y);
+        ui.painter().add(egui::Shape::convex_polygon(vec![tip, pos2(x, y + 4.0 * d), pos2(x, y - 4.0 * d)], fill, Stroke::NONE));
+    }
+    match pointer_phase(&resp) {
+        Some((p, phase)) => (Some(((bar.bottom() - p.y) / bar.height()).clamp(0.0, 1.0)), phase),
+        None => (None, Live::Idle),
+    }
+}
+
+/// A hex colour field (`E67828`, no `#`) after a `#` label. Returns the text on commit when it
+/// changed.
+pub fn hex_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, hex: &str) -> Option<String> {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new("#").size(15.0).color(t.text));
+    let id = ui.id().with(id);
+    let editing = ui.memory(|m| m.has_focus(id));
+    let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
+    let resp = egui::Frame::NONE
+        .fill(t.input)
+        .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
+        .corner_radius(2)
+        .inner_margin(egui::Margin::symmetric(6, 4))
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut buf)
+                    .id(id)
+                    .frame(egui::Frame::NONE)
+                    .desired_width(62.0)
+                    .char_limit(7)
+                    .font(egui::FontId::proportional(12.5))
+                    .text_color(t.text_strong),
+            )
+        })
+        .inner;
+    let commit = resp.lost_focus() && buf != hex;
+    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    commit.then_some(buf)
 }
 
 /// One swatch tile (Illustrator: 1 px dark frame, white inset on hover/selection).

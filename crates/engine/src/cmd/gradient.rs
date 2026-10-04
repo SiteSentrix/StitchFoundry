@@ -43,18 +43,11 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// The gradient behind the active proxy: the first selected object's (see
-/// `Node::proxy_paint`; the Appearance panel's active item when it is of the proxy's kind), else
-/// the default paint for new art.
+/// The gradient behind the active proxy ([`Session::proxy_paints`]).
 pub(crate) fn active_gradient(s: &Session) -> Option<GradientPaint> {
-    let stroke = !s.fill_active;
-    let first = s.active().and_then(|d| d.selection.objects.first().and_then(|id| d.doc.node(*id)));
-    let paint = match first {
-        Some(n) => n.proxy_paint(stroke, s.appearance_item()).map(|(p, ..)| p.clone()),
-        None => Some(if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() }),
-    };
-    match paint {
-        Some(Paint::Gradient(g)) => Some(*g),
+    let (fill, stroke) = s.proxy_paints();
+    match if s.fill_active { fill } else { stroke } {
+        Paint::Gradient(g) => Some(*g),
         _ => None,
     }
 }
@@ -281,12 +274,27 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         n.appearance.set_paint_at(index, !stroke, np);
         Ok(())
     })?;
+    // The last gradient is the one the first object now shows (the defaults' without objects).
+    let shown = match ids.first() {
+        Some(id) => s.doc()?.doc.node(*id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, C).ok().flatten())),
+        None => Some(new_default.clone()),
+    };
+    if let Some(shown) = shown {
+        s.remember_paint(&shown);
+    }
     if stroke {
         s.paint.stroke = new_default;
     } else {
         s.paint.fill = new_default;
     }
     Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+}
+
+/// A painted stroke on a type run without a weight gets 1 pt.
+pub(crate) fn run_stroke_weight(style: &mut vectorcraft_doc::CharStyle) {
+    if style.stroke_width == 0.0 {
+        style.stroke_width = 1.0;
+    }
 }
 
 /// A type run's fill or stroke paint and the box (text space) an unplaced gradient on it fits:
@@ -377,8 +385,8 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
         {
             let (xf, lb) = (t.xf, t.local_bounds());
             for r in &mut t.runs {
-                if stroke && r.style.stroke_width == 0.0 {
-                    r.style.stroke_width = 1.0;
+                if stroke {
+                    run_stroke_weight(&mut r.style);
                 }
                 let (paint, b) = run_paint_mut(r, stroke, lb);
                 if let Some(np) = vector_paint(paint, start, end, xf, Some(b)) {

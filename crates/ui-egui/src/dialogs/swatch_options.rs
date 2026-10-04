@@ -65,7 +65,7 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
             Ok(Value::Null)
         }
         Paint::Gradient(_) => {
-            app.run(crate::panels::paint_target(app), json!({"swatch": name}))?;
+            app.run(crate::panels::proxy_cmd(app, false), json!({"swatch": name}))?;
             app.ui.open_panel = Some("gradient".into());
             Ok(Value::Null)
         }

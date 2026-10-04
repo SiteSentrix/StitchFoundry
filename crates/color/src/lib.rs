@@ -167,6 +167,38 @@ impl Color {
         let [r, g, b] = self.to_rgb();
         Color::rgb(1.0 - r, 1.0 - g, 1.0 - b)
     }
+    /// The RGB inverse expressed in the colour's own model (CMYK through the profile-free
+    /// [`Color::to_cmyk`]; a grey's ink is inverted).
+    pub fn invert_keep_model(&self) -> Self {
+        match *self {
+            Color::Rgb { .. } => self.invert(),
+            Color::Cmyk { .. } => {
+                let [c, m, y, k] = self.invert().to_cmyk();
+                Color::Cmyk { c, m, y, k }
+            }
+            Color::Gray { k } => Color::Gray { k: 1.0 - k },
+        }
+    }
+    /// Complement in the colour's own model: each component becomes (highest + lowest) − itself,
+    /// over R, G, B or over C, M, Y (K kept). For RGB this is the hue turned by 180°; a grey is its
+    /// own complement.
+    pub fn complement_keep_model(&self) -> Self {
+        let flip = |v: [f32; 3]| {
+            let s = v[0].max(v[1]).max(v[2]) + v[0].min(v[1]).min(v[2]);
+            v.map(|x| (s - x).clamp(0.0, 1.0))
+        };
+        match *self {
+            Color::Rgb { r, g, b } => {
+                let [r, g, b] = flip([r, g, b]);
+                Color::Rgb { r, g, b }
+            }
+            Color::Cmyk { c, m, y, k } => {
+                let [c, m, y] = flip([c, m, y]);
+                Color::Cmyk { c, m, y, k }
+            }
+            Color::Gray { .. } => *self,
+        }
+    }
     /// Linear interpolation in display RGB.
     pub fn lerp(&self, other: &Color, t: f32) -> Color {
         let a = self.to_rgb();
@@ -275,6 +307,19 @@ mod tests {
     fn complement_and_invert() {
         assert_eq!(Color::rgb(1.0, 0.0, 0.0).complement().to_hex(), "#00ffff");
         assert_eq!(Color::rgb(1.0, 0.0, 0.0).invert().to_hex(), "#00ffff");
+    }
+
+    #[test]
+    fn complement_keeps_the_model() {
+        assert_eq!(Color::rgb(1.0, 0.0, 0.0).complement_keep_model(), Color::rgb(0.0, 1.0, 1.0));
+        // Same as turning the hue by 180° for RGB.
+        let c = Color::rgb8(204, 102, 51);
+        assert_eq!(c.complement_keep_model().to_hex(), c.complement().to_hex());
+        assert_eq!(Color::cmyk(0.0, 1.0, 1.0, 0.2).complement_keep_model(), Color::cmyk(1.0, 0.0, 0.0, 0.2));
+        assert_eq!(Color::gray(0.3).complement_keep_model(), Color::gray(0.3));
+        assert_eq!(Color::gray(0.25).invert_keep_model(), Color::gray(0.75));
+        assert!(matches!(Color::cmyk(0.0, 1.0, 1.0, 0.0).invert_keep_model(), Color::Cmyk { .. }));
+        assert_eq!(Color::rgb(1.0, 1.0, 0.0).invert_keep_model(), Color::rgb(0.0, 0.0, 1.0));
     }
 
     #[test]

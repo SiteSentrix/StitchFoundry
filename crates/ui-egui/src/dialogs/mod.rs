@@ -9,6 +9,7 @@
 mod about;
 mod all_tools;
 mod artboard_options;
+mod color_picker;
 mod command;
 pub mod confirm;
 mod document_setup;
@@ -29,6 +30,7 @@ mod transform;
 
 use serde_json::{Value, json};
 
+pub use color_picker::open as open_color_picker;
 pub use tools::open_tool_dialog;
 
 use crate::state::Dialog;
@@ -137,6 +139,7 @@ registry! {
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
+    ColorPicker: [color_picker::KIND] => color_picker::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

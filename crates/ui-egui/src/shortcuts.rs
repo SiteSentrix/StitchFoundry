@@ -158,9 +158,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Command shortcuts.
     let mut fire: Option<&'static str> = None;
     for (sc, id) in all_shortcuts() {
-        // Letter / slash keys without Cmd/Alt/Ctrl are handled below as text (tool shortcuts, X, D, /).
+        // Letter / punctuation keys without Cmd/Alt/Ctrl are handled below as text (tool shortcuts,
+        // X, D, /, `,` and `.`).
         let plain = !(sc.modifiers.command || sc.modifiers.alt || sc.modifiers.ctrl);
-        if plain && (sc.logical_key.name().len() == 1 || sc.logical_key == Key::Slash) {
+        if plain && (sc.logical_key.name().len() == 1 || matches!(sc.logical_key, Key::Slash | Key::Comma | Key::Period)) {
             continue;
         }
         if app.native_shortcuts.contains(id) {
@@ -252,6 +253,20 @@ mod tests {
         // Plain text is not art: nothing is pasted from it (the internal clipboard is reused).
         frame(&mut app, vec![egui::Event::Paste("hello".into())]);
         assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 8);
+    }
+
+    #[test]
+    fn comma_and_period_reapply_the_last_colour_and_gradient() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.session.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+        app.session.execute("paint.setFill", &json!({"color": "#336699"})).unwrap();
+        let fill = |app: &VectorcraftApp| crate::panels::current_paints(app).0;
+        frame(&mut app, vec![egui::Event::Text(".".into())]);
+        assert!(matches!(fill(&app), vectorcraft_color::Paint::Gradient(_)), "`.` applies the last gradient");
+        frame(&mut app, vec![egui::Event::Text(",".into())]);
+        assert_eq!(fill(&app).color().unwrap().to_hex(), "#336699", "`,` applies the last colour");
     }
 
     #[test]

@@ -13,7 +13,7 @@ mod tooling;
 use std::sync::Arc;
 
 use serde_json::Value;
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{Color, GradientPaint, Paint};
 use vectorcraft_doc::{Document, NodeId, NodeKind, Selection};
 use vectorcraft_geom::Affine;
 use vectorcraft_tools::{PaintDefaults, Tool};
@@ -450,6 +450,15 @@ pub struct Session {
     /// The Appearance panel's active fill/stroke row (`appearance.setActiveItem`); not saved. Read
     /// it through [`Session::appearance_item`], which drops it once the selection changes.
     pub(crate) active_appearance_item: Option<cmd::appearance::ActiveItem>,
+    /// The last solid colour applied (the toolbar's Color button; `,` applies it again).
+    pub last_solid: Color,
+    /// The last gradient applied (the toolbar's Gradient button; `.` applies it again).
+    pub last_gradient: GradientPaint,
+    /// Recently applied solid colours, newest first (the Recent Colors rows), fed by every paint
+    /// command whichever frontend runs it.
+    pub recent_colors: Vec<Color>,
+    /// A paint applied by a live preview: remembered when the interaction commits.
+    pub(crate) pending_paint: Option<Paint>,
 }
 
 impl Default for Session {
@@ -477,6 +486,10 @@ impl Session {
             menu: Default::default(),
             gradient_stop: None,
             active_appearance_item: None,
+            last_solid: Color::WHITE,
+            last_gradient: GradientPaint::new(Default::default()),
+            recent_colors: vec![],
+            pending_paint: None,
         }
     }
 
@@ -673,6 +686,9 @@ impl Session {
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
+        if let Some(p) = self.pending_paint.take() {
+            self.remember_paint_now(&p);
+        }
         let st = self.doc_mut()?;
         let Some(it) = st.interaction.take() else { return Ok(()) };
         let Some(preview) = it.preview else { return Ok(()) };
@@ -693,6 +709,7 @@ impl Session {
     }
 
     pub fn cancel_interaction(&mut self) -> Result<()> {
+        self.pending_paint = None;
         let st = self.doc_mut()?;
         if let Some(it) = st.interaction.take() {
             st.doc = it.doc;
@@ -742,6 +759,8 @@ mod tests_live;
 mod tests_menucmds;
 #[cfg(test)]
 mod tests_opacitymask;
+#[cfg(test)]
+mod tests_paintproxy;
 #[cfg(test)]
 mod tests_panelcmds;
 #[cfg(test)]
