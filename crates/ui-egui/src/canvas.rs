@@ -136,6 +136,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     handle_input(app, ui, &resp, rect);
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
+    paint_drop(app, ui, &resp, &xf);
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
@@ -667,14 +668,38 @@ fn node_outline(n: &Node) -> BezPath {
     bp
 }
 
+/// The topmost editable object under document point `p` at `zoom` (3 px tolerance).
+fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::hit::Hit> {
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / zoom, outline: app.ui.view.outline, path_only: false };
+    vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, p, opt)
+}
+
+/// Swatches and Fill/Stroke proxies dropped on art paint the object under the pointer (the active
+/// proxy's fill or stroke); a chip of the dragged paint follows the pointer meanwhile.
+fn paint_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
+    use crate::panels::swatches;
+    swatches::drag_preview(app, ui.ctx());
+    let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
+    // Not through a floating panel over the canvas.
+    if ui.ctx().layer_id_at(pos).is_some_and(|l| l != resp.layer_id) {
+        return;
+    }
+    let Some(mut params) = swatches::released_paint(app, resp) else { return };
+    let Some(hit) = hit_at(app, xf.to_doc(pos), xf.zoom) else { return };
+    params["ids"] = json!([hit.leaf.0]);
+    params["focus"] = json!(false);
+    if let Err(e) = app.run(crate::panels::proxy_cmd(app, false), params) {
+        app.status(e);
+    }
+}
+
 fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
     if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
         return;
     }
     let Some(st) = app.session.active() else { return };
-    let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / xf.zoom, outline: app.ui.view.outline, path_only: false };
-    let Some(hit) = vectorcraft_doc::hit::hit_test(&st.doc, h, opt) else { return };
+    let Some(hit) = hit_at(app, h, xf.zoom) else { return };
     let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
     if st.selection.contains(id) {
         return;
@@ -1080,5 +1105,37 @@ mod tests {
         frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(300.0, 200.0))]);
         assert_eq!(app.view().unwrap().center, after.center);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
+    }
+    #[test]
+    fn swatches_and_proxy_paints_dropped_on_art_fill_the_object_hit() {
+        use crate::panels::swatches::SwatchDrag;
+        use vectorcraft_color::{Color, Paint};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let release = |at: Pos2| {
+            vec![
+                egui::Event::PointerMoved(at),
+                egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() },
+            ]
+        };
+        let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+        let drag = SwatchDrag { grabbed: "Red".into(), names: vec!["Red".into()], groups: false };
+        // Off the art nothing happens.
+        egui::DragAndDrop::set_payload(&ctx, drag.clone());
+        frame(&mut app, &ctx, release(xf.to_screen(Point::new(300.0, 250.0))));
+        assert_eq!(fill(&app), Paint::solid(Color::WHITE));
+        egui::DragAndDrop::set_payload(&ctx, drag);
+        frame(&mut app, &ctx, release(xf.to_screen(Point::new(100.0, 100.0))));
+        assert_eq!(fill(&app), Paint::solid(Color::from_hex("#ed1c24").unwrap()), "paint.setFill with the hit id");
+        assert!(app.session.active().unwrap().selection.is_empty(), "the selection stays as it was");
+        // A proxy's paint works the same.
+        egui::DragAndDrop::set_payload(&ctx, Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+        frame(&mut app, &ctx, release(xf.to_screen(Point::new(60.0, 60.0))));
+        assert_eq!(fill(&app), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
     }
 }

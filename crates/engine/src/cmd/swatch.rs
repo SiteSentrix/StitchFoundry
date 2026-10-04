@@ -59,6 +59,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             swatch_list
         ),
+        cmd!(
+            "swatch.move",
+            "Move Swatch",
+            ["Window", "Swatches"],
+            None,
+            "{name? | names?: [swatch names, in order; or colour group names to reorder the groups], to?: index in the destination (they go before the swatch or group now there; default: the end), group?: destination colour group (default: the ungrouped swatches; groups hold solid colours only)} reorder swatches or move them into or out of colour groups, as one undo step → {moved}",
+            has_doc,
+            swatch_move
+        ),
     ]
 }
 
@@ -101,8 +110,8 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "name": name }))
 }
 
-fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "swatch.delete";
+/// The `names` list and `name` parameters, without repeats; at least one is required.
+fn names_param(p: &Value, cmd: &str) -> Result<Vec<String>> {
     let mut names: Vec<String> = vec![];
     for n in str_list(p, "names").into_iter().chain(str_param(p, "name").map(str::to_string)) {
         if !names.contains(&n) {
@@ -110,8 +119,14 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     if names.is_empty() {
-        return Err(bad(C, "give `name` or `names`"));
+        return Err(bad(cmd, "give `name` or `names`"));
     }
+    Ok(names)
+}
+
+fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.delete";
+    let names = names_param(p, C)?;
     let d = &s.doc()?.doc;
     // Global swatches going away (named ones and those in named groups): their links are dropped.
     let mut global: Vec<String> = vec![];
@@ -221,6 +236,67 @@ fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
         Ok((name, members, linked))
     })?;
     Ok(json!({"name": name, "swatches": members, "linked": linked}))
+}
+
+/// The name of the item that items moving to index `to` of `list` go before: the first one at or
+/// after `to` that isn't moving (`None`: the end).
+fn anchor<T>(list: &[T], to: Option<usize>, moving: &[String], name: impl Fn(&T) -> &str) -> Option<String> {
+    list.iter().skip(to?).map(&name).find(|n| !moving.iter().any(|m| m == n)).map(str::to_string)
+}
+
+/// Insert `items` into `list` before the item named `anchor` (at the end without one).
+fn insert_before<T>(list: &mut Vec<T>, items: Vec<T>, anchor: Option<&str>, name: impl Fn(&T) -> &str) {
+    let at = anchor.and_then(|a| list.iter().position(|x| name(x) == a)).unwrap_or(list.len());
+    list.splice(at..at, items);
+}
+
+fn swatch_move(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.move";
+    let names = names_param(p, C)?;
+    let to = p.get("to").and_then(Value::as_u64).map(|v| v as usize);
+    let group = str_param(p, "group").map(str::to_string);
+    let moved = names.len();
+    s.edit("Move Swatch", |d, _| {
+        let is_group = |d: &Document, n: &str| d.swatch_groups.iter().any(|g| g.name == n);
+        if names.iter().all(|n| is_group(d, n)) {
+            if group.is_some() {
+                return Err(bad(C, "colour groups can't go into colour groups"));
+            }
+            let at = anchor(&d.swatch_groups, to, &names, |g| &g.name);
+            let mut items = vec![];
+            for n in &names {
+                if let Some(i) = d.swatch_groups.iter().position(|g| g.name == *n) {
+                    items.push(d.swatch_groups.remove(i));
+                }
+            }
+            insert_before(&mut d.swatch_groups, items, at.as_deref(), |g| &g.name);
+            return Ok(());
+        }
+        for n in &names {
+            let sw = d.swatch(n).ok_or_else(|| bad(C, format!("no swatch `{n}` (swatches and colour groups move separately)")))?;
+            if sw.paint.is_none() {
+                return Err(bad(C, format!("`{n}` can't be moved")));
+            }
+            if group.is_some() && sw.paint.color().is_none() {
+                return Err(bad(C, format!("`{n}`: colour groups hold solid colours only")));
+            }
+        }
+        let dest = match &group {
+            Some(g) => Some(d.swatch_groups.iter().position(|x| x.name == *g).ok_or_else(|| bad(C, format!("no colour group `{g}`")))?),
+            None => None,
+        };
+        fn list(d: &mut Document, dest: Option<usize>) -> &mut Vec<Swatch> {
+            match dest {
+                Some(i) => &mut d.swatch_groups[i].swatches,
+                None => &mut d.swatches,
+            }
+        }
+        let at = anchor(list(d, dest), to, &names, |w| &w.name);
+        let items: Vec<Swatch> = names.iter().filter_map(|n| d.remove_swatch(n)).collect();
+        insert_before(list(d, dest), items, at.as_deref(), |w| &w.name);
+        Ok(())
+    })?;
+    Ok(json!({ "moved": moved }))
 }
 
 fn swatch_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
