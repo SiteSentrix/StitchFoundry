@@ -298,7 +298,7 @@ fn overprint_black_multiplies_in_preview() {
     assert!(over[2] as i32 > over[0] as i32 + 10, "overprint lets the cyan through: {over:?}");
     assert!(over[2] < knock[2] + 60 && over[2] <= 128, "and stays dark: {over:?}");
     s.execute("edit.colors.overprintBlack", &json!({"remove": true})).unwrap();
-    assert!(vectorcraft_render::proof::overprint_ids(&s.doc().unwrap().doc).is_empty());
+    assert!(!s.doc().unwrap().doc.node(k).unwrap().has_overprint());
 }
 
 #[test]

@@ -99,6 +99,8 @@ pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
     }
     // Saved mid-edit by an older version: drop the opacity-mask editing layer.
     doc.drop_edit_modes();
+    // Saved before per-fill/stroke overprint: the Overprint Black list becomes overprint flags.
+    doc.migrate_overprint_black();
     doc.fix_next_id();
     Ok(doc)
 }

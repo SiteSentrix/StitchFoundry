@@ -184,11 +184,15 @@ pub struct FillLayer {
     pub visible: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    /// Overprint Fill: on press the fill's inks print over the inks below instead of knocking
+    /// them out (Overprint Preview and Separations Preview show it).
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub overprint: bool,
 }
 
 impl FillLayer {
     pub fn new(paint: Paint) -> Self {
-        Self { paint, opacity: 1.0, blend: BlendMode::Normal, visible: true, effects: vec![] }
+        Self { paint, opacity: 1.0, blend: BlendMode::Normal, visible: true, effects: vec![], overprint: false }
     }
 }
 
@@ -230,6 +234,9 @@ pub struct StrokeLayer {
     /// Arrowhead placement at both ends.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub arrow_align: ArrowAlign,
+    /// Overprint Stroke (see [`FillLayer::overprint`]).
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub overprint: bool,
 }
 
 fn ten() -> f64 {
@@ -265,6 +272,7 @@ impl StrokeLayer {
             visible: true,
             effects: vec![],
             arrow_align: ArrowAlign::Extend,
+            overprint: false,
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
@@ -342,6 +350,19 @@ impl AppearanceItem {
         match self {
             AppearanceItem::Fill(f) => &mut f.effects,
             AppearanceItem::Stroke(s) => &mut s.effects,
+        }
+    }
+    /// Whether this fill or stroke overprints.
+    pub fn overprint(&self) -> bool {
+        match self {
+            AppearanceItem::Fill(f) => f.overprint,
+            AppearanceItem::Stroke(s) => s.overprint,
+        }
+    }
+    pub fn overprint_mut(&mut self) -> &mut bool {
+        match self {
+            AppearanceItem::Fill(f) => &mut f.overprint,
+            AppearanceItem::Stroke(s) => &mut s.overprint,
         }
     }
 }

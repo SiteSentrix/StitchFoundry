@@ -7,10 +7,10 @@
 //!   plate visible the plate renders as greyscale ink coverage (black = 100%); with several, the
 //!   visible inks are composited through the proof profile, spots multiplied on top.
 //!   Placed raster images are not separated (limitation).
-//! * **Overprint Preview:** the document model has no per-object overprint attribute, so
-//!   overprinting is limited to objects listed in `Document.unknown["overprintBlack"]` (set by
-//!   Edit → Edit Colors → Overprint Black) whose fill or stroke is 100% K. Such objects are drawn
-//!   with Multiply, which is what overprinting black ink does to the inks below.
+//! * **Overprint Preview** (and Separations Preview, which implies it): fills and strokes that
+//!   overprint ([`vectorcraft_doc::FillLayer::overprint`], characters' too) are drawn with
+//!   Multiply, which approximates their inks printing over the inks below: a zero ink lets the
+//!   inks below show through, where a knockout would replace them.
 //!
 //! The app's current view state lives in [`view`] / [`set_view`]; the canvas copies it into
 //! [`crate::RenderOptions`] with [`active_proof`] and [`overprint_preview_on`].
@@ -21,12 +21,9 @@ use std::sync::{Arc, RwLock};
 use vectorcraft_color::cms::{self, Cms, PROCESS_PLATES};
 pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind};
 
 use crate::RenderOptions;
-
-/// `Document.unknown` key listing the ids of objects marked Overprint Black.
-pub const OVERPRINT_KEY: &str = "overprintBlack";
 
 /// Ink coverage of one paint colour.
 #[derive(Clone, Debug, PartialEq)]
@@ -141,25 +138,28 @@ pub fn map_document_colors(doc: &mut Document, f: &mut dyn FnMut(&Color, Option<
     }
 }
 
-/// Ids marked Overprint Black.
-pub fn overprint_ids(doc: &Document) -> Vec<NodeId> {
-    doc.unknown.get(OVERPRINT_KEY).and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|v| v.as_u64()).map(NodeId).collect()).unwrap_or_default()
+/// Whether overprinting shows: Overprint Preview, or Separations Preview (which implies it).
+pub(crate) fn overprints(opts: &RenderOptions) -> bool {
+    opts.overprint_preview || opts.proof.as_ref().is_some_and(|p| p.separations.is_some())
 }
 
-/// 100% black ink with no other process ink.
-pub fn is_pure_black(c: &Color) -> bool {
-    match *c {
-        Color::Cmyk { c, m, y, k } => k >= 0.995 && c <= 0.005 && m <= 0.005 && y <= 0.005,
-        Color::Gray { k } => k >= 0.995,
-        Color::Rgb { .. } => false,
+/// Draw the overprinting fills and strokes of `a`'s subtree with Multiply (those with a blend
+/// mode of their own keep it), copying only the nodes on the way to them.
+fn multiply_overprints(a: &mut Arc<Node>) {
+    if !a.has_overprint() {
+        return;
     }
-}
-
-fn has_pure_black(n: &Node) -> bool {
-    n.appearance.items.iter().any(|it| match it {
-        AppearanceItem::Fill(l) => l.paint.color().is_some_and(|c| is_pure_black(&c)),
-        AppearanceItem::Stroke(l) => l.paint.color().is_some_and(|c| is_pure_black(&c)),
-    })
+    let n = Arc::make_mut(a);
+    for it in &mut n.appearance.items {
+        match it {
+            AppearanceItem::Fill(l) if l.overprint && l.blend == BlendMode::Normal => l.blend = BlendMode::Multiply,
+            AppearanceItem::Stroke(l) if l.overprint && l.blend == BlendMode::Normal => l.blend = BlendMode::Multiply,
+            _ => {}
+        }
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        multiply_overprints(c);
+    }
 }
 
 fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], color: &Color, swatch: Option<&str>) -> Color {
@@ -197,18 +197,17 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
 /// The document as it should be drawn for these options (overprints, separations).
 pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions) -> Cow<'a, Document> {
     let seps = opts.proof.as_ref().and_then(|p| p.separations.as_ref().map(|s| (p, s)));
-    let overprint = opts.overprint_preview || seps.is_some();
-    let ids = if overprint { overprint_ids(doc) } else { vec![] };
-    if ids.is_empty() && seps.is_none() {
+    let overprint = overprints(opts) && (doc.layers.iter().any(|l| l.has_overprint()) || doc.symbols.iter().any(|s| s.art.has_overprint()));
+    if !overprint && seps.is_none() {
         return Cow::Borrowed(doc);
     }
     let mut d = doc.clone();
-    for id in ids {
-        if let Some(n) = d.node_mut(id)
-            && n.blend == BlendMode::Normal
-            && has_pure_black(n)
-        {
-            n.blend = BlendMode::Multiply;
+    if overprint {
+        for l in &mut d.layers {
+            multiply_overprints(l);
+        }
+        for s in &mut d.symbols {
+            multiply_overprints(&mut s.art);
         }
     }
     if let Some((proof, visible)) = seps {

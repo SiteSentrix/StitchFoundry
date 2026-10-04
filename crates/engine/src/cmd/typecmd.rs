@@ -8,7 +8,7 @@ use vectorcraft_doc::{Document, Justify, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::PathData;
 
 use super::edit::selected_roots;
-use super::pathops::{num_param, shape_node, text_style_appearance};
+use super::pathops::{num_param, shape_node};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -103,7 +103,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 }
                 let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
                 let mut node = shape_node(d, path, None);
-                node.appearance = text_style_appearance(&st.fill, &st.stroke, st.stroke_width);
+                node.appearance = st.appearance();
                 children.push(Arc::new(node));
             }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;

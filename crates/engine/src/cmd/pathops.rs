@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_color::BlendMode;
 use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{FillRule, PathData};
@@ -227,21 +227,9 @@ pub(crate) fn text_outline(t: &TextObject) -> PathData {
     PathData::from_bezpath(&lay.to_bezpath()).transformed(t.xf)
 }
 
-/// Appearance a text object's outlines take: the first run's fill and stroke.
-pub(crate) fn text_style_appearance(fill: &Paint, stroke: &Paint, width: f64) -> Appearance {
-    let mut a = Appearance { items: vec![AppearanceItem::Fill(vectorcraft_doc::appearance::FillLayer::new(fill.clone()))], effects: vec![] };
-    if !stroke.is_none() && width > 0.0 {
-        a.items.push(AppearanceItem::Stroke(StrokeLayer::new(stroke.clone(), width)));
-    }
-    a
-}
-
 fn style_of(n: &Node) -> Style {
     match &n.kind {
-        NodeKind::Text(t) => {
-            let st = t.first_style();
-            Style { appearance: text_style_appearance(&st.fill, &st.stroke, st.stroke_width), opacity: n.opacity, blend: n.blend }
-        }
+        NodeKind::Text(t) => Style { appearance: t.first_style().appearance(), opacity: n.opacity, blend: n.blend },
         _ => Style::of(n),
     }
 }
@@ -492,6 +480,7 @@ fn outlined_stroke(d: &mut Document, brushes: &[vectorcraft_brush::Brush], path:
         opacity: st.opacity,
         blend: st.blend,
         effects: st.effects.clone(),
+        overprint: st.overprint,
         ..vectorcraft_doc::appearance::FillLayer::new(st.paint.clone())
     };
     n.appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], effects: vec![] };

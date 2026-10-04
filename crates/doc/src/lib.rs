@@ -10,6 +10,7 @@ pub mod graph;
 pub mod hit;
 pub mod live;
 pub mod node;
+pub mod overprint;
 pub mod pattern;
 pub mod selection;
 pub mod swatches;
