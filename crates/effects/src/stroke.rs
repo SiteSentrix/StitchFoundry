@@ -196,4 +196,6 @@ pub(crate) fn segments(els: &[PathEl]) -> Vec<PathSeg> {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_arrows;
+#[cfg(test)]
 mod tests_fit;

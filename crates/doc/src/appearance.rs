@@ -48,6 +48,7 @@ impl Dash {
     }
 }
 
+/// An arrowhead shape. Saved by variant name: new shapes are appended, never renamed or reordered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Arrowhead {
     Triangle,
@@ -60,21 +61,130 @@ pub enum Arrowhead {
     Diamond,
     Arrow,
     ArrowOpen,
+    Barbed,
+    /// One barb, on the left of the direction the head points.
+    HalfArrowLeft,
+    /// One barb, on the right of the direction the head points.
+    HalfArrowRight,
+    Concave,
+    DoubleBar,
+    Feather,
+    DotOnBar,
+    Chevron,
+    DoubleArrow,
+    Target,
+    Star,
+    Cross,
+    Plus,
+    Hexagon,
+    HexagonOpen,
+    Tag,
+    TagOpen,
+    HalfCircle,
+    Drop,
+    Slash,
+    DoubleSlash,
+    DiamondOpen,
+    TriangleReverse,
+    Swallowtail,
+    Bracket,
+    Fork,
+    Leaf,
+    Kite,
+    TriangleBar,
+    Oval,
 }
 
 impl Arrowhead {
-    pub const ALL: [Arrowhead; 10] = [
+    /// Every arrowhead, in menu order (arrows, then outlined shapes, then bars and marks).
+    pub const ALL: [Arrowhead; 40] = [
         Arrowhead::Arrow,
         Arrowhead::ArrowOpen,
+        Arrowhead::Barbed,
+        Arrowhead::Concave,
+        Arrowhead::DoubleArrow,
+        Arrowhead::HalfArrowLeft,
+        Arrowhead::HalfArrowRight,
+        Arrowhead::Chevron,
+        Arrowhead::Feather,
+        Arrowhead::Swallowtail,
         Arrowhead::Triangle,
         Arrowhead::TriangleOpen,
+        Arrowhead::TriangleReverse,
+        Arrowhead::TriangleBar,
+        Arrowhead::Kite,
+        Arrowhead::Leaf,
+        Arrowhead::Drop,
         Arrowhead::Circle,
         Arrowhead::CircleOpen,
+        Arrowhead::HalfCircle,
+        Arrowhead::Oval,
+        Arrowhead::Target,
         Arrowhead::Square,
         Arrowhead::SquareOpen,
+        Arrowhead::Tag,
+        Arrowhead::TagOpen,
         Arrowhead::Diamond,
+        Arrowhead::DiamondOpen,
+        Arrowhead::Hexagon,
+        Arrowhead::HexagonOpen,
+        Arrowhead::Star,
+        Arrowhead::Cross,
+        Arrowhead::Plus,
         Arrowhead::Bar,
+        Arrowhead::DoubleBar,
+        Arrowhead::DotOnBar,
+        Arrowhead::Slash,
+        Arrowhead::DoubleSlash,
+        Arrowhead::Bracket,
+        Arrowhead::Fork,
     ];
+
+    /// The name the arrowhead menus show.
+    pub fn label(self) -> &'static str {
+        match self {
+            Arrowhead::Triangle => "Triangle",
+            Arrowhead::TriangleOpen => "Triangle (open)",
+            Arrowhead::Circle => "Circle",
+            Arrowhead::CircleOpen => "Circle (open)",
+            Arrowhead::Square => "Square",
+            Arrowhead::SquareOpen => "Square (open)",
+            Arrowhead::Bar => "Bar",
+            Arrowhead::Diamond => "Diamond",
+            Arrowhead::Arrow => "Arrow",
+            Arrowhead::ArrowOpen => "Arrow (open)",
+            Arrowhead::Barbed => "Barbed",
+            Arrowhead::HalfArrowLeft => "Half Arrow (left)",
+            Arrowhead::HalfArrowRight => "Half Arrow (right)",
+            Arrowhead::Concave => "Concave",
+            Arrowhead::DoubleBar => "Double Bar",
+            Arrowhead::Feather => "Feather",
+            Arrowhead::DotOnBar => "Dot on Bar",
+            Arrowhead::Chevron => "Chevron",
+            Arrowhead::DoubleArrow => "Double Arrow",
+            Arrowhead::Target => "Target",
+            Arrowhead::Star => "Star",
+            Arrowhead::Cross => "Cross",
+            Arrowhead::Plus => "Plus",
+            Arrowhead::Hexagon => "Hexagon",
+            Arrowhead::HexagonOpen => "Hexagon (open)",
+            Arrowhead::Tag => "Tag",
+            Arrowhead::TagOpen => "Tag (open)",
+            Arrowhead::HalfCircle => "Half Circle",
+            Arrowhead::Drop => "Drop",
+            Arrowhead::Slash => "Slash",
+            Arrowhead::DoubleSlash => "Double Slash",
+            Arrowhead::DiamondOpen => "Diamond (open)",
+            Arrowhead::TriangleReverse => "Reverse Triangle",
+            Arrowhead::Swallowtail => "Swallowtail",
+            Arrowhead::Bracket => "Bracket",
+            Arrowhead::Fork => "Fork",
+            Arrowhead::Leaf => "Leaf",
+            Arrowhead::Kite => "Kite",
+            Arrowhead::TriangleBar => "Triangle to Bar",
+            Arrowhead::Oval => "Oval",
+        }
+    }
 }
 
 /// Where an arrowhead sits relative to the end of its path. In both modes the stroke stops under
@@ -878,6 +988,60 @@ mod tests {
         assert_eq!(WidthProfile::id_of(Some(&WidthProfile { points: vec![(0.0, 0.3, 0.3)] })), "custom");
         assert!(WidthProfile::preset("nope").is_none());
         assert_eq!(WidthProfile::lens().points, vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]);
+    }
+
+    #[test]
+    fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
+        // Saved files store these names: they may only ever be appended to.
+        const SAVED: [&str; 40] = [
+            "Triangle",
+            "TriangleOpen",
+            "Circle",
+            "CircleOpen",
+            "Square",
+            "SquareOpen",
+            "Bar",
+            "Diamond",
+            "Arrow",
+            "ArrowOpen",
+            "Barbed",
+            "HalfArrowLeft",
+            "HalfArrowRight",
+            "Concave",
+            "DoubleBar",
+            "Feather",
+            "DotOnBar",
+            "Chevron",
+            "DoubleArrow",
+            "Target",
+            "Star",
+            "Cross",
+            "Plus",
+            "Hexagon",
+            "HexagonOpen",
+            "Tag",
+            "TagOpen",
+            "HalfCircle",
+            "Drop",
+            "Slash",
+            "DoubleSlash",
+            "DiamondOpen",
+            "TriangleReverse",
+            "Swallowtail",
+            "Bracket",
+            "Fork",
+            "Leaf",
+            "Kite",
+            "TriangleBar",
+            "Oval",
+        ];
+        for name in SAVED {
+            let a: Arrowhead = serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(serde_json::to_value(a).unwrap(), name);
+            assert_eq!(Arrowhead::ALL.iter().filter(|x| **x == a).count(), 1, "{name} in the menu once");
+        }
+        let labels: std::collections::HashSet<&str> = Arrowhead::ALL.iter().map(|a| a.label()).collect();
+        assert_eq!(labels.len(), Arrowhead::ALL.len(), "labels are distinct");
     }
 
     #[test]

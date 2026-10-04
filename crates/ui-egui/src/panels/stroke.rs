@@ -1,9 +1,10 @@
 //! Stroke panel: weight spinner + presets, cap / corner / align toggles, miter limit, dashed line
-//! with three dash/gap pairs, arrowheads with drawn previews, arrow scale, width profiles.
+//! with three dash/gap pairs, arrowheads with rendered previews, arrow scale, width profiles.
 
-use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign, StrokeLayer, WidthProfile};
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, LineCap, LineJoin, Node, StrokeAlign, StrokeLayer, WidthProfile};
 use vectorcraft_engine::inspect::StrokeMixed;
 
 use super::{character, current_stroke, pstate, set_pstate, stroke_mixed};
@@ -64,14 +65,8 @@ pub fn dash_pattern(fields: &[Option<f64>; 6]) -> Vec<f64> {
     out
 }
 
-fn arrow_label(a: Option<Arrowhead>) -> String {
-    match a {
-        None => "None".into(),
-        Some(a) => {
-            let s = format!("{a:?}");
-            s.replace("Open", " (open)")
-        }
-    }
+fn arrow_label(a: Option<Arrowhead>) -> &'static str {
+    a.map_or("None", Arrowhead::label)
 }
 
 /// Apply Stroke panel options (`stroke.set` params): while the Type tool edits text, to the
@@ -284,31 +279,34 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
-/// Draw an arrowhead preview: a line with the head at the left (`start`) or right end.
+/// The document an arrowhead preview renders: a `w`×`h` pt line with head `a` at its left
+/// (`start`) or right end, its tip on the end point, drawn white (the preview is tinted).
+pub(super) fn arrow_doc(a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Option<Document> {
+    let mut doc = Document::new(w, h);
+    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 1.5);
+    let st = ap.stroke_mut()?;
+    // Heads of weight 2.5 pt: 10 pt long and wide.
+    st.arrow_scale = (500.0 / 3.0, 500.0 / 3.0);
+    st.arrow_align = ArrowAlign::Tip;
+    if start {
+        st.start_arrow = a
+    } else {
+        st.end_arrow = a
+    }
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((3.0, h / 2.0));
+    bp.line_to((w - 3.0, h / 2.0));
+    let (id, l) = (doc.alloc_id(), doc.layers[0].id);
+    doc.insert(Some(l), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), ap)).ok()?;
+    Some(doc)
+}
+
+/// Draw an arrowhead preview (the head as the canvas draws it) in `r`: a line with the head at the
+/// left (`start`) or right end.
 fn paint_arrow(ui: &Ui, r: Rect, a: Option<Arrowhead>, start: bool, color: Color32) {
-    let y = r.center().y;
-    let (tip_x, back) = if start { (r.left() + 4.0, 1.0) } else { (r.right() - 4.0, -1.0) };
-    let s = Stroke::new(1.5, color);
-    let line_from = if a.is_some() { tip_x + back * 8.0 } else { tip_x };
-    let other = if start { r.right() - 4.0 } else { r.left() + 4.0 };
-    ui.painter().line_segment([pos2(line_from, y), pos2(other, y)], s);
-    let Some(a) = a else { return };
-    let p = |dx: f32, dy: f32| -> Pos2 { pos2(tip_x + back * dx, y + dy) };
-    let solid = |pts: Vec<Pos2>| egui::Shape::convex_polygon(pts, color, Stroke::NONE);
-    let open = |pts: Vec<Pos2>| egui::Shape::closed_line(pts, s);
-    let shape = match a {
-        Arrowhead::Triangle => solid(vec![p(0.0, 0.0), p(9.0, -4.5), p(9.0, 4.5)]),
-        Arrowhead::TriangleOpen => open(vec![p(0.0, 0.0), p(9.0, -4.5), p(9.0, 4.5)]),
-        Arrowhead::Arrow => solid(vec![p(0.0, 0.0), p(10.0, -5.0), p(7.0, 0.0), p(10.0, 5.0)]),
-        Arrowhead::ArrowOpen => egui::Shape::line(vec![p(9.0, -5.0), p(0.0, 0.0), p(9.0, 5.0)], s),
-        Arrowhead::Circle => egui::Shape::circle_filled(p(4.5, 0.0), 4.5, color),
-        Arrowhead::CircleOpen => egui::Shape::circle_stroke(p(4.5, 0.0), 4.0, s),
-        Arrowhead::Square => egui::Shape::rect_filled(Rect::from_center_size(p(4.5, 0.0), vec2(8.0, 8.0)), 0.0, color),
-        Arrowhead::SquareOpen => egui::Shape::rect_stroke(Rect::from_center_size(p(4.5, 0.0), vec2(8.0, 8.0)), 0.0, s, StrokeKind::Middle),
-        Arrowhead::Diamond => solid(vec![p(0.0, 0.0), p(5.0, -5.0), p(10.0, 0.0), p(5.0, 5.0)]),
-        Arrowhead::Bar => egui::Shape::line_segment([p(0.0, -6.0), p(0.0, 6.0)], Stroke::new(2.0, color)),
-    };
-    ui.painter().add(shape);
+    if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{a:?}:{start}"), r.size(), |w, h| arrow_doc(a, start, w, h)) {
+        ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), color);
+    }
 }
 
 /// Dropdown whose button and items show drawn arrowhead previews. Returns Some(choice).
@@ -323,28 +321,29 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) ->
     let resp = resp.on_hover_text(if start { "Start arrowhead" } else { "End arrowhead" });
     let mut out = None;
     egui::Popup::menu(&resp).id(egui::Id::new(("arrow-pop", id))).show(|ui| {
-        ui.set_min_width(140.0);
-        let opts: Vec<Option<Arrowhead>> = std::iter::once(None).chain(Arrowhead::ALL.iter().copied().map(Some)).collect();
-        for a in opts {
-            let (row, rr) = ui.allocate_exact_size(vec2(140.0, 22.0), Sense::click());
-            if a == cur {
-                ui.painter().rect_filled(row, 0.0, t.row_selected);
-            } else if rr.hovered() {
-                ui.painter().rect_filled(row, 0.0, t.hover);
+        ui.set_min_width(170.0);
+        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+            for a in std::iter::once(None).chain(Arrowhead::ALL.map(Some)) {
+                let (row, rr) = ui.allocate_exact_size(vec2(170.0, 22.0), Sense::click());
+                if a == cur {
+                    ui.painter().rect_filled(row, 0.0, t.row_selected);
+                } else if rr.hovered() {
+                    ui.painter().rect_filled(row, 0.0, t.hover);
+                }
+                paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
+                ui.painter().text(
+                    row.left_center() + vec2(66.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    arrow_label(a),
+                    egui::FontId::proportional(11.5),
+                    t.text,
+                );
+                if rr.clicked() {
+                    out = Some(a);
+                    ui.close();
+                }
             }
-            paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
-            ui.painter().text(
-                row.left_center() + vec2(66.0, 0.0),
-                egui::Align2::LEFT_CENTER,
-                arrow_label(a),
-                egui::FontId::proportional(11.5),
-                t.text,
-            );
-            if rr.clicked() {
-                out = Some(a);
-                ui.close();
-            }
-        }
+        });
     });
     out
 }

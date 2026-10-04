@@ -87,3 +87,34 @@ fn dropdown_lists_saved_profiles_and_applies_them() {
     click(&ctx, &mut app, text_rect(&t, "Mine").center(), stroke::show);
     assert_eq!(profile_points(&app), Some(custom().points));
 }
+
+#[test]
+fn every_arrowhead_preview_draws_its_head() {
+    use vectorcraft_doc::Arrowhead;
+    // Rendered on transparent: the head adds ink to its half of the preview.
+    let ink = |a: Option<Arrowhead>, start: bool| {
+        let d = stroke::arrow_doc(a, start, 56.0, 22.0).unwrap();
+        let img = vectorcraft_render::Renderer::new().render_region(&d, vectorcraft_geom::Rect::new(0.0, 0.0, 56.0, 22.0), 2.0, false);
+        let xs = if start { 0..56 } else { 56..112 };
+        xs.flat_map(|x| (0..44).map(move |y| (x, y))).filter(|&(x, y)| img.pixel(x, y)[3] > 64).count()
+    };
+    let plain = (ink(None, false), ink(None, true));
+    for a in Arrowhead::ALL {
+        assert!(ink(Some(a), false) > plain.0 + 20, "{a:?} at the end");
+        assert!(ink(Some(a), true) > plain.1 + 20, "{a:?} at the start");
+    }
+}
+
+#[test]
+fn arrowhead_dropdown_offers_the_new_heads() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_line();
+    let t = frame_events(&ctx, &mut app, vec![], stroke::show);
+    // The end-arrowhead dropdown is the second 64 pt button right of the "Arrowheads:" label.
+    let label = text_rect(&t, "Arrowheads:");
+    let sp = ctx.global_style().spacing.item_spacing.x;
+    click(&ctx, &mut app, egui::pos2(label.right() + 2.0 * sp + 64.0 + 32.0, label.center().y), stroke::show);
+    let t = frame_events(&ctx, &mut app, vec![], stroke::show);
+    click(&ctx, &mut app, text_rect(&t, "Barbed").center(), stroke::show);
+    assert_eq!(current_stroke(&app).and_then(|s| s.end_arrow), Some(vectorcraft_doc::Arrowhead::Barbed));
+}

@@ -1,14 +1,16 @@
-//! Arrowheads. A head of weight `hw` (stroke weight × scale) is `4·hw` long and `4·hw` wide.
-//! Hollow kinds are rings (`hw/2` walls) or, for the open arrow, a chevron with `hw` arms. The
-//! stroke ends under the head at the head's *inset* from the tip: halfway into solid heads, in
-//! the back wall of hollow ones (with the cap kept out of the hole) and at the chevron's inner
+//! Arrowheads. A head of weight `hw` (stroke weight × scale) fits a box `4·hw` long and `4·hw`
+//! wide. Hollow kinds are rings (`hw/2` walls) or, for the open arrow, a chevron with `hw` arms.
+//! The stroke ends under the head at the head's *inset* from the tip: halfway into solid heads,
+//! in the back wall of hollow ones (with the cap kept out of the hole) and at the chevron's inner
 //! corner. With [`ArrowAlign::Tip`] the tip sits on the end point and the stroke is shortened by
 //! the inset; with [`ArrowAlign::Extend`] the path keeps its length and the tip sits the inset
-//! past the end point.
+//! past the end point. Heads added after the first ten are drawn in local units ([`local`]).
 
 use std::borrow::Cow;
 
-use kurbo::{BezPath, ParamCurve, ParamCurveArclen, PathSeg, Point, Shape, Vec2};
+use std::f64::consts::{FRAC_PI_2, PI};
+
+use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen, PathSeg, Point, Shape, Vec2};
 use vectorcraft_doc::{ArrowAlign, Arrowhead, StrokeLayer};
 
 use super::{ARCLEN_ACCURACY, StrokePieces, cap_extent, push_seg, segments, subpaths, tangent, unit};
@@ -185,6 +187,10 @@ fn inset(kind: Arrowhead, hw: f64, cap: f64) -> f64 {
         Arrowhead::TriangleOpen | Arrowhead::CircleOpen | Arrowhead::SquareOpen => hollow(l),
         // The inner corner of the chevron: arm / sin(half angle).
         Arrowhead::ArrowOpen => (arm(hw) * (l * l + l * l / 4.0).sqrt() / (l / 2.0)).max(cap),
+        _ => match local_stop(kind) {
+            Stop::At(u) => (u * hw).max(cap),
+            Stop::Wall(back) => hollow(back * hw),
+        },
     }
 }
 
@@ -224,6 +230,150 @@ fn shape(kind: Arrowhead, tip: Point, dir: Vec2, hw: f64) -> BezPath {
             let t = bar(hw);
             polygon(&mut p, &[tip + n * half, tip + n * half - dir * t, tip - n * half - dir * t, tip - n * half]);
         }
+        _ => {
+            // Local x runs back from the tip, y across to the right of `dir`; a unit is `hw`.
+            p = local(kind);
+            p.apply_affine(Affine::new([-dir.x * hw, -dir.y * hw, n.x * hw, n.y * hw, tip.x, tip.y]));
+        }
+    }
+    p
+}
+
+/// Where the stroke ends under a head drawn in local units.
+enum Stop {
+    /// This many units back from the tip (or as far as the cap needs).
+    At(f64),
+    /// In the back wall of a ring whose back is this many units from the tip.
+    Wall(f64),
+}
+
+/// Flat-to-flat length of the hexagons (their corners touch the sides of the 4-unit box).
+const HEX: f64 = 2.0 * 1.732_050_807_568_877_2;
+/// Flattening tolerance of the curved local heads, in units.
+const LOCAL_TOL: f64 = 1e-3;
+
+fn local_stop(kind: Arrowhead) -> Stop {
+    match kind {
+        Arrowhead::Target | Arrowhead::TagOpen | Arrowhead::DiamondOpen => Stop::Wall(4.0),
+        Arrowhead::HexagonOpen => Stop::Wall(HEX),
+        Arrowhead::DoubleBar | Arrowhead::DotOnBar => Stop::At(0.375),
+        Arrowhead::Bracket => Stop::At(0.3),
+        Arrowhead::Fork => Stop::At(2.7),
+        Arrowhead::HalfArrowLeft | Arrowhead::HalfArrowRight | Arrowhead::Feather => Stop::At(1.3),
+        Arrowhead::Swallowtail => Stop::At(1.4),
+        Arrowhead::Chevron => Stop::At(1.0),
+        Arrowhead::Slash => Stop::At(1.2),
+        Arrowhead::DoubleSlash => Stop::At(1.05),
+        Arrowhead::DoubleArrow => Stop::At(1.7),
+        Arrowhead::HalfCircle => Stop::At(1.0),
+        Arrowhead::Concave => Stop::At(2.6),
+        Arrowhead::Hexagon => Stop::At(HEX / 2.0),
+        _ => Stop::At(2.0),
+    }
+}
+
+/// The outline of a head added after the first ten, in local units: x from the tip (0) back
+/// along the line (to at most 4), y across it (−2 to 2, positive to the right of the direction
+/// the head points). Every shape is generated here.
+fn local(kind: Arrowhead) -> BezPath {
+    let mut p = BezPath::new();
+    let poly = |p: &mut BezPath, pts: &[(f64, f64)]| polygon(p, &pts.iter().map(|&q| Point::from(q)).collect::<Vec<_>>());
+    let ring_poly = |p: &mut BezPath, pts: &[(f64, f64)]| ring_polygon(p, &pts.iter().map(|&q| Point::from(q)).collect::<Vec<_>>(), ring(1.0));
+    let circle = |p: &mut BezPath, c: (f64, f64), r: f64| p.extend(kurbo::Circle::new(c, r).path_elements(LOCAL_TOL));
+    // A regular polygon of `n` corners around `c`, the first at angle `a0`, alternating radii.
+    let star = |c: (f64, f64), radii: &[f64], n: usize, a0: f64| -> Vec<(f64, f64)> {
+        (0..n).map(|i| (a0 + i as f64 * 2.0 * PI / n as f64, radii[i % radii.len()])).map(|(a, r)| (c.0 + r * a.cos(), c.1 + r * a.sin())).collect()
+    };
+    // A plus of arms `h` long and `k` thick round (2, 0), turned by `turn`.
+    let plus = |h: f64, k: f64, turn: f64| -> Vec<(f64, f64)> {
+        let arm = [(k, h), (k, k), (h, k)];
+        let (sin, cos) = turn.sin_cos();
+        (0..4)
+            .flat_map(|q| arm.iter().map(move |&(x, y)| [(x, y), (y, -x), (-x, -y), (-y, x)][q]))
+            .map(|(x, y)| (2.0 + x * cos - y * sin, x * sin + y * cos))
+            .collect()
+    };
+    let hexagon = star((HEX / 2.0, 0.0), &[2.0], 6, PI / 6.0);
+    match kind {
+        Arrowhead::Barbed => poly(&mut p, &[(0.0, 0.0), (3.6, 2.0), (2.6, 0.55), (4.0, 0.55), (4.0, -0.55), (2.6, -0.55), (3.6, -2.0)]),
+        Arrowhead::HalfArrowLeft => poly(&mut p, &[(0.0, 0.0), (4.0, -2.0), (3.0, -0.5), (3.0, 0.5), (1.0, 0.5)]),
+        Arrowhead::HalfArrowRight => poly(&mut p, &[(0.0, 0.0), (4.0, 2.0), (3.0, 0.5), (3.0, -0.5), (1.0, -0.5)]),
+        Arrowhead::Concave => {
+            p.move_to((0.0, 0.0));
+            p.quad_to((2.4, 0.4), (4.0, 2.0));
+            p.line_to((4.0, -2.0));
+            p.quad_to((2.4, -0.4), (0.0, 0.0));
+            p.close_path();
+        }
+        Arrowhead::DoubleBar => {
+            poly(&mut p, &[(0.0, -2.0), (0.75, -2.0), (0.75, 2.0), (0.0, 2.0)]);
+            poly(&mut p, &[(1.5, -2.0), (2.25, -2.0), (2.25, 2.0), (1.5, 2.0)]);
+        }
+        Arrowhead::Feather => poly(&mut p, &[(0.0, 0.5), (1.4, 2.0), (4.0, 2.0), (2.6, 0.5), (2.6, -0.5), (4.0, -2.0), (1.4, -2.0), (0.0, -0.5)]),
+        Arrowhead::DotOnBar => {
+            poly(&mut p, &[(0.0, -2.0), (0.75, -2.0), (0.75, 2.0), (0.0, 2.0)]);
+            circle(&mut p, (2.5, 0.0), 1.25);
+        }
+        Arrowhead::Chevron => poly(&mut p, &[(0.0, 0.0), (2.0, 2.0), (4.0, 2.0), (2.0, 0.0), (4.0, -2.0), (2.0, -2.0)]),
+        Arrowhead::DoubleArrow => poly(&mut p, &[(0.0, 0.0), (2.2, 1.8), (1.9, 0.5), (4.0, 2.0), (3.4, 0.0), (4.0, -2.0), (1.9, -0.5), (2.2, -1.8)]),
+        Arrowhead::Target => {
+            circle(&mut p, (2.0, 0.0), 2.0);
+            p.extend(kurbo::Circle::new((2.0, 0.0), 2.0 - ring(1.0)).to_path(LOCAL_TOL).reverse_subpaths());
+            circle(&mut p, (2.0, 0.0), 0.75);
+        }
+        Arrowhead::Star => poly(&mut p, &star((2.0, 0.0), &[2.0, 0.85], 10, PI)),
+        Arrowhead::Cross => poly(&mut p, &plus(2.2, 0.4, PI / 4.0)),
+        Arrowhead::Plus => poly(&mut p, &plus(1.9, 0.4, 0.0)),
+        Arrowhead::Hexagon => poly(&mut p, &hexagon),
+        Arrowhead::HexagonOpen => ring_poly(&mut p, &hexagon),
+        Arrowhead::Tag => poly(&mut p, &[(0.0, 0.0), (1.6, 2.0), (4.0, 2.0), (4.0, -2.0), (1.6, -2.0)]),
+        Arrowhead::TagOpen => ring_poly(&mut p, &[(0.0, 0.0), (1.6, 2.0), (4.0, 2.0), (4.0, -2.0), (1.6, -2.0)]),
+        Arrowhead::HalfCircle => {
+            p.move_to((2.0, 2.0));
+            p.extend(kurbo::Arc::new((2.0, 0.0), (2.0, 2.0), FRAC_PI_2, PI, 0.0).append_iter(LOCAL_TOL));
+            p.close_path();
+        }
+        Arrowhead::Drop => {
+            // Straight sides from the tip, tangent to a round back.
+            let (c, r) = (Point::new(2.6, 0.0), 1.4);
+            let a = PI - (r / c.x).acos();
+            p.move_to((0.0, 0.0));
+            p.line_to(c + Vec2::from_angle(a) * r);
+            p.extend(kurbo::Arc::new(c, (r, r), a, -2.0 * a, 0.0).append_iter(LOCAL_TOL));
+            p.close_path();
+        }
+        Arrowhead::Slash => poly(&mut p, &[(0.0, 2.0), (0.8, 2.0), (2.4, -2.0), (1.6, -2.0)]),
+        Arrowhead::DoubleSlash => {
+            poly(&mut p, &[(0.0, 2.0), (0.7, 2.0), (2.1, -2.0), (1.4, -2.0)]);
+            poly(&mut p, &[(1.6, 2.0), (2.3, 2.0), (3.7, -2.0), (3.0, -2.0)]);
+        }
+        Arrowhead::DiamondOpen => ring_poly(&mut p, &[(0.0, 0.0), (2.0, 2.0), (4.0, 0.0), (2.0, -2.0)]),
+        Arrowhead::TriangleReverse => poly(&mut p, &[(0.0, 2.0), (4.0, 0.0), (0.0, -2.0)]),
+        Arrowhead::Swallowtail => poly(&mut p, &[(0.0, 2.0), (4.0, 2.0), (2.8, 0.0), (4.0, -2.0), (0.0, -2.0)]),
+        Arrowhead::Bracket => poly(&mut p, &[(0.0, 2.0), (2.0, 2.0), (2.0, 1.4), (0.6, 1.4), (0.6, -1.4), (2.0, -1.4), (2.0, -2.0), (0.0, -2.0)]),
+        Arrowhead::Fork => poly(&mut p, &[(0.0, 2.0), (3.0, 2.0), (3.0, -2.0), (0.0, -2.0), (0.0, -1.4), (2.4, -1.4), (2.4, 1.4), (0.0, 1.4)]),
+        Arrowhead::Leaf => {
+            p.move_to((0.0, 0.0));
+            p.quad_to((2.0, 3.2), (4.0, 0.0));
+            p.quad_to((2.0, -3.2), (0.0, 0.0));
+            p.close_path();
+        }
+        Arrowhead::Kite => poly(&mut p, &[(0.0, 0.0), (1.3, 1.7), (4.0, 0.0), (1.3, -1.7)]),
+        Arrowhead::TriangleBar => {
+            poly(&mut p, &[(0.0, 2.0), (0.6, 2.0), (0.6, 0.25), (4.0, 1.8), (4.0, -1.8), (0.6, -0.25), (0.6, -2.0), (0.0, -2.0)])
+        }
+        Arrowhead::Oval => p.extend(kurbo::Ellipse::new((2.0, 0.0), (2.0, 1.2), 0.0).path_elements(LOCAL_TOL)),
+        // The first ten are drawn by `shape`.
+        Arrowhead::Triangle
+        | Arrowhead::TriangleOpen
+        | Arrowhead::Circle
+        | Arrowhead::CircleOpen
+        | Arrowhead::Square
+        | Arrowhead::SquareOpen
+        | Arrowhead::Bar
+        | Arrowhead::Diamond
+        | Arrowhead::Arrow
+        | Arrowhead::ArrowOpen => {}
     }
     p
 }

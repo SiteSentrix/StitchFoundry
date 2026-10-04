@@ -1027,3 +1027,33 @@ pub fn drag_source(ui: &Ui, resp: &Response, drag: impl FnOnce() -> PanelDrag) {
         egui::DragAndDrop::set_payload(ui.ctx(), drag());
     }
 }
+
+/// A small document rendered to a texture at the screen's pixel density (stroke previews: brushes,
+/// arrowheads), transparent where nothing paints. `build` makes the `w`×`h` pt document only when
+/// the texture for `key` at this size isn't cached yet.
+pub fn doc_preview(ui: &Ui, key: &str, size: Vec2, build: impl FnOnce(f64, f64) -> Option<vectorcraft_doc::Document>) -> Option<egui::TextureHandle> {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    thread_local! {
+        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
+        static CACHE: RefCell<HashMap<String, egui::TextureHandle>> = RefCell::new(HashMap::new());
+    }
+    let ppp = ui.ctx().pixels_per_point() as f64;
+    let (w, h) = (size.x as f64, size.y as f64);
+    let key = format!("{w}x{h}@{ppp}:{key}");
+    if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
+        return Some(t);
+    }
+    let doc = build(w, h)?;
+    let img = RENDERER.with(|r| r.borrow_mut().render_region(&doc, vectorcraft_geom::Rect::new(0.0, 0.0, w, h), ppp, false));
+    let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+    let tex = ui.ctx().load_texture(format!("preview-{key}"), color, egui::TextureOptions::LINEAR);
+    CACHE.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.len() > 256 {
+            c.clear();
+        }
+        c.insert(key, tex.clone());
+    });
+    Some(tex)
+}
