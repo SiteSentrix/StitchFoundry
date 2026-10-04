@@ -564,6 +564,23 @@ impl Appearance {
             }
         }
     }
+    /// Move placed gradients from an object whose geometric bounds are `from` to one whose bounds
+    /// are `to`, keeping them at the same place relative to the box (strokes: relative to their
+    /// stroke-inflated boxes, as they fit).
+    pub fn rebase_gradients(&mut self, from: vectorcraft_geom::Rect, to: vectorcraft_geom::Rect) {
+        for i in &mut self.items {
+            match i {
+                AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. }) => g.rebase(from, to),
+                AppearanceItem::Stroke(s) => {
+                    let (f, t) = (s.paint_bounds(from), s.paint_bounds(to));
+                    if let Paint::Gradient(g) = &mut s.paint {
+                        g.rebase(f, t);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
     /// Map placed gradients through `a`.
     pub fn transform_gradients(&mut self, a: vectorcraft_geom::Affine) {
         for g in self.gradients_mut() {
@@ -592,6 +609,25 @@ mod tests {
         assert!(a.is_basic());
         assert_eq!(a.fill_paint(), Paint::solid(Color::WHITE));
         assert_eq!(a.stroke_width(), 1.0);
+    }
+
+    #[test]
+    fn rebase_moves_fills_by_the_box_and_strokes_by_their_inflated_box() {
+        use vectorcraft_color::{Gradient, GradientGeom, GradientPaint};
+        use vectorcraft_geom::{Point, Rect};
+        let placed = |x: f64| {
+            let mut g = GradientPaint::new(Gradient::default());
+            g.geom = Some(GradientGeom { start: Point::new(x, 0.0), end: Point::new(x + 10.0, 0.0), aspect: 1.0 });
+            Paint::Gradient(Box::new(g))
+        };
+        let mut a = Appearance::basic(placed(0.0), placed(-5.0), 10.0);
+        a.rebase_gradients(Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(100.0, 0.0, 300.0, 100.0));
+        let start = |p: Paint| match p {
+            Paint::Gradient(g) => g.geom.unwrap().start,
+            _ => unreachable!(),
+        };
+        // The fill's start stays on the left edge; the stroke's on its inflated box's (−5 → 95).
+        assert_eq!((start(a.fill_paint()), start(a.stroke_paint())), (Point::new(100.0, 0.0), Point::new(95.0, 0.0)));
     }
 
     #[test]

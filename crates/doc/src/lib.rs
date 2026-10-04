@@ -259,6 +259,18 @@ impl Default for GridPrefs {
 pub struct GraphicStyle {
     pub name: String,
     pub appearance: Appearance,
+    /// Placed gradients are stored relative to the unit box (0, 0)–(1, 1), so applying the style
+    /// places them on each object's own bounds. Styles saved before this kept document
+    /// coordinates (false).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unit_box: bool,
+}
+
+impl GraphicStyle {
+    /// A style whose placed gradients (if any) are in unit-box space.
+    pub fn new(name: impl Into<String>, appearance: Appearance) -> Self {
+        Self { name: name.into(), appearance, unit_box: true }
+    }
 }
 
 /// A symbol definition.
@@ -636,16 +648,13 @@ impl Document {
 fn default_graphic_styles() -> Vec<GraphicStyle> {
     use vectorcraft_color::{Color, Paint};
     vec![
-        GraphicStyle { name: "Default Graphic Style".into(), appearance: Appearance::default_art() },
-        GraphicStyle { name: "Black Outline".into(), appearance: Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0) },
-        GraphicStyle {
-            name: "Heavy Ink".into(),
-            appearance: Appearance::basic(Paint::solid(Color::from_hex("#1b1464").unwrap()), Paint::solid(Color::BLACK), 4.0),
-        },
-        GraphicStyle {
-            name: "Sunshine".into(),
-            appearance: Appearance::basic(Paint::solid(Color::from_hex("#fbb03b").unwrap()), Paint::solid(Color::from_hex("#f15a24").unwrap()), 2.0),
-        },
+        GraphicStyle::new("Default Graphic Style", Appearance::default_art()),
+        GraphicStyle::new("Black Outline", Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0)),
+        GraphicStyle::new("Heavy Ink", Appearance::basic(Paint::solid(Color::from_hex("#1b1464").unwrap()), Paint::solid(Color::BLACK), 4.0)),
+        GraphicStyle::new(
+            "Sunshine",
+            Appearance::basic(Paint::solid(Color::from_hex("#fbb03b").unwrap()), Paint::solid(Color::from_hex("#f15a24").unwrap()), 2.0),
+        ),
     ]
 }
 

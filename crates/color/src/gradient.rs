@@ -280,6 +280,18 @@ impl GradientGeom {
         self.aspect = if len > 1e-12 { other / len } else { 1.0 };
     }
 
+    /// Move the placement from box `from` to box `to`: the start and end keep their position
+    /// relative to the box (along a side `from` has no extent on, their offset from its centre).
+    /// The aspect ratio is kept.
+    pub fn rebase(&mut self, from: Rect, to: Rect) {
+        let axis = |v: f64, a0: f64, a1: f64, b0: f64, b1: f64| {
+            if (a1 - a0).abs() > 1e-12 { b0 + (v - a0) / (a1 - a0) * (b1 - b0) } else { v - (a0 + a1) / 2.0 + (b0 + b1) / 2.0 }
+        };
+        let map = |p: Point| Point::new(axis(p.x, from.x0, from.x1, to.x0, to.x1), axis(p.y, from.y0, from.y1, to.y0, to.y1));
+        self.start = map(self.start);
+        self.end = map(self.end);
+    }
+
     /// The gradient parameter (0 at the start, 1 at the end) at document point `p`: the projection
     /// onto the vector for linear gradients, the elliptical radius (honouring `aspect`) for radial.
     pub fn param_at(&self, kind: GradientKind, p: Point) -> f64 {
@@ -330,6 +342,12 @@ impl GradientPaint {
     pub fn pin(&mut self, bounds: Rect) {
         if self.geom.is_none() {
             self.geom = Some(self.resolve(bounds));
+        }
+    }
+    /// Move a placed gradient from box `from` to box `to` (see [`GradientGeom::rebase`]).
+    pub fn rebase(&mut self, from: Rect, to: Rect) {
+        if let Some(g) = &mut self.geom {
+            g.rebase(from, to);
         }
     }
     /// Map a placed gradient through `a` (see [`GradientGeom::transform`]).
@@ -512,6 +530,21 @@ mod tests {
         assert_eq!(midpoint_from_pos(&g.stops, 1, 0.51).unwrap(), 0.13);
         let v = set_midpoint(&g.stops, 0, 0.99);
         assert_eq!(v[0].midpoint, 0.87);
+    }
+
+    #[test]
+    fn rebase_keeps_relative_positions() {
+        let mut g = GradientGeom { start: Point::new(110.0, 150.0), end: Point::new(190.0, 120.0), aspect: 0.5 };
+        g.rebase(Rect::new(100.0, 100.0, 200.0, 200.0), Rect::new(500.0, 0.0, 700.0, 50.0));
+        assert!(close(g.start, Point::new(520.0, 25.0)) && close(g.end, Point::new(680.0, 10.0)) && g.aspect == 0.5, "{g:?}");
+        // A box without height (a horizontal line) keeps the offset from its centre line.
+        let mut h = GradientGeom { start: Point::new(0.0, 12.0), end: Point::new(10.0, 10.0), aspect: 1.0 };
+        h.rebase(Rect::new(0.0, 10.0, 10.0, 10.0), Rect::new(0.0, 0.0, 20.0, 40.0));
+        assert!(close(h.start, Point::new(0.0, 22.0)) && close(h.end, Point::new(20.0, 20.0)), "{h:?}");
+        // Unplaced paints have nothing to move.
+        let mut p = GradientPaint::new(Gradient::default());
+        p.rebase(Rect::new(0.0, 0.0, 1.0, 1.0), Rect::new(5.0, 5.0, 9.0, 9.0));
+        assert_eq!(p.geom, None);
     }
 
     #[test]
