@@ -22,7 +22,7 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     // absolute units is that physical size (usvg resolves it to 96 px per inch, i.e. 4/3 px per pt).
     let (kx, ky) = physical_scale(svg);
     let doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
-    let mut im = Importer { doc, warnings: Vec::new() };
+    let mut im = Importer { doc, warnings: Vec::new(), mask_flags: mask_flags(svg) };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
@@ -85,6 +85,25 @@ fn physical_scale(svg: &str) -> (f64, f64) {
 struct Importer {
     doc: Document,
     warnings: Vec<String>,
+    /// Opacity-mask options our export wrote, by mask id (see [`mask_flags`]).
+    mask_flags: HashMap<String, (bool, bool)>,
+}
+
+/// The options [`crate::export::MASK_FLAGS`] records on exported `<mask>` elements, by mask id:
+/// (clip, invert).
+fn mask_flags(svg: &str) -> HashMap<String, (bool, bool)> {
+    let attr = crate::export::MASK_FLAGS;
+    if !svg.contains(attr) {
+        return HashMap::new();
+    }
+    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
+        return HashMap::new();
+    };
+    let flags = |n: roxmltree::Node| {
+        let has = |f: &str| n.attribute(attr).is_some_and(|v| v.split_whitespace().any(|x| x == f));
+        Some((n.attribute("id")?.to_string(), (!has("noclip"), has("invert"))))
+    };
+    xml.descendants().filter(|n| n.tag_name().name() == "mask" && n.has_attribute(attr)).filter_map(flags).collect()
 }
 
 fn aff(t: usvg::Transform) -> Affine {
@@ -223,7 +242,9 @@ impl Importer {
         Some(n)
     }
 
-    /// `<mask>` → opacity mask (luminance; alpha masks are approximated by their luminance).
+    /// `<mask>` → opacity mask (luminance; alpha masks are approximated by their luminance). A
+    /// mask our export wrote gets its options back ([`mask_flags`]) and its art without what
+    /// stands for them: the inverting filter group and the backdrop rectangle.
     fn opacity_mask(&mut self, m: &usvg::Mask, ts: Affine, label: &str) -> Option<Box<vectorcraft_doc::OpacityMask>> {
         if m.kind() == usvg::MaskType::Alpha {
             self.warn(format!("alpha mask on {label} imported as a luminance opacity mask"));
@@ -231,12 +252,28 @@ impl Importer {
         if m.mask().is_some() {
             self.warn(format!("nested mask on {label} ignored"));
         }
-        let children = self.children(m.root(), ts);
-        if children.is_empty() {
-            return None;
+        let (clip, invert) = self.mask_flags.get(m.id()).copied().unwrap_or((true, false));
+        let (mut nodes, mut ts) = (m.root().children(), ts);
+        if invert
+            && let [usvg::Node::Group(g)] = nodes
+            && !g.filters().is_empty()
+        {
+            (nodes, ts) = (g.children(), ts * aff(g.transform()));
         }
-        let art = self.named("", NodeKind::Group { children, clip: false });
-        Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)))
+        if (!clip || invert)
+            && let [usvg::Node::Path(_), rest @ ..] = nodes
+        {
+            nodes = rest;
+        }
+        let mut children: Vec<Arc<Node>> = nodes.iter().filter_map(|c| self.node(c, ts)).map(Arc::new).collect();
+        let art = match children.len() {
+            0 => return None,
+            1 => Arc::unwrap_or_clone(children.pop()?),
+            _ => self.named("", NodeKind::Group { children, clip: false }),
+        };
+        let mut mask = vectorcraft_doc::OpacityMask::new(art, clip);
+        mask.invert = invert;
+        Some(Box::new(mask))
     }
 
     fn clip_node(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
