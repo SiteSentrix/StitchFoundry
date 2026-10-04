@@ -33,7 +33,16 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     let (kx, ky) = units.k;
     let mut doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
     doc.units = units.unit;
-    let mut im = Importer { doc, warnings, mask_flags: mask_flags(&xml), links, slots, patterns: HashMap::new(), midpoints: midpoint_stops(&xml) };
+    let mut im = Importer {
+        doc,
+        warnings,
+        mask_flags: mask_flags(&xml),
+        links,
+        slots,
+        patterns: HashMap::new(),
+        midpoints: midpoint_stops(&xml),
+        labels: labels(&xml),
+    };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
@@ -69,7 +78,8 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
             children.extend(im.children(g, base * aff(g.transform())));
             let id = im.doc.alloc_id();
             let preset = (im.doc.layers.len() % vectorcraft_doc::LAYER_COLORS.len()) as u8;
-            let mut l = Node::layer(id, g.id(), LayerColor::Preset(preset));
+            let name = im.name_of(g.id()).to_string();
+            let mut l = Node::layer(id, &name, LayerColor::Preset(preset));
             if let Some(ch) = l.children_mut() {
                 *ch = children;
             }
@@ -142,6 +152,8 @@ struct Importer {
     patterns: HashMap<usize, String>,
     /// Midpoint stops by gradient id (see [`midpoint_stops`]).
     midpoints: HashMap<String, Vec<Option<f32>>>,
+    /// Object names by element id (see [`labels`]).
+    labels: HashMap<String, String>,
 }
 
 /// The stops our export added for midpoints (`data-vc-midpoint`), by gradient id: for each stop,
@@ -246,6 +258,24 @@ fn link(n: &mut Node, url: &str) {
     }
 }
 
+/// The names apps keep beside element ids, by id: `data-name`, `inkscape:label`, `serif:id` or
+/// `aria-label` (the first one present).
+fn labels(xml: &roxmltree::Document) -> HashMap<String, String> {
+    const INKSCAPE: &str = "http://www.inkscape.org/namespaces/inkscape";
+    const SERIF: &str = "http://www.serif.com/";
+    xml.descendants()
+        .filter_map(|n| {
+            let id = n.attribute("id").filter(|id| !id.is_empty())?;
+            let name = n
+                .attribute("data-name")
+                .or_else(|| n.attribute((INKSCAPE, "label")))
+                .or_else(|| n.attribute((SERIF, "id")))
+                .or_else(|| n.attribute("aria-label"))?;
+            Some((id.to_string(), name.to_string()))
+        })
+        .collect()
+}
+
 fn aff(t: usvg::Transform) -> Affine {
     Affine::new([t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64])
 }
@@ -325,11 +355,16 @@ impl Importer {
         gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice))
     }
 
+    /// The object name for an element id: its label (see [`labels`]), else the id itself.
+    fn name_of<'a>(&'a self, id: &'a str) -> &'a str {
+        self.labels.get(id).map_or(id, String::as_str)
+    }
+
     fn named(&mut self, id: &str, kind: NodeKind) -> Node {
         let nid = self.doc.alloc_id();
         let mut n = Node::new(nid, kind);
         if !id.is_empty() {
-            n.name = Some(id.to_string());
+            n.name = Some(self.name_of(id).to_string());
         }
         n
     }

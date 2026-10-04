@@ -91,10 +91,11 @@ fn groups_and_names_roundtrip() {
     assert!(s.contains("id=\"My_Group\"") && s.contains("id=\"Box_B\"") && s.contains("id=\"Layer_1\""), "{s}");
     let r = roundtrip(&d);
     assert_eq!(r.node_count(), d.node_count());
-    assert_eq!(r.layers[0].name.as_deref(), Some("Layer_1"));
+    // data-name carries the names back exactly.
+    assert_eq!(r.layers[0].name.as_deref(), Some("Layer 1"));
     let a = art(&r);
     assert!(matches!(a[0].kind, NodeKind::Group { clip: false, .. }));
-    assert_eq!(a[0].name.as_deref(), Some("My_Group"));
+    assert_eq!(a[0].name.as_deref(), Some("My Group"));
     assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 30.0, 10.0), 0.01));
 }
 

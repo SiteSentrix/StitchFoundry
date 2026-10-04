@@ -283,11 +283,17 @@ impl Writer<'_> {
             self.names.insert(id, cand);
         }
     }
+    /// ` id="…"` for a named object, plus ` data-name="…"` with the name itself when the id had to
+    /// differ from it (spaces, punctuation, duplicates, the unique prefix).
     fn id_attr(&self, n: &Node) -> String {
         if self.anonymous {
             return String::new();
         }
-        self.names.get(&n.id).map(|id| format!(" id=\"{}\"", xml_escape(id))).unwrap_or_default()
+        let Some(id) = self.names.get(&n.id) else { return String::new() };
+        match n.name.as_deref() {
+            Some(name) if name != id => format!(" id=\"{}\" data-name=\"{}\"", xml_escape(id), xml_escape(name)),
+            _ => format!(" id=\"{}\"", xml_escape(id)),
+        }
     }
     fn matrix(&self, m: Affine) -> String {
         let c = m.as_coeffs();
