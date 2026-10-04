@@ -225,6 +225,28 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{library: id or name (see swatch.library.list) | null (close)} open the read-only library panel on a swatch library (UI state `library_panel`); clicking a swatch there runs swatch.library.add with apply → {open, name, count}",
     ),
+    (
+        "window.swatchLibrary.other",
+        "Other Library…",
+        "",
+        "{path?} (default: pick a file) load a .vcswatches or .gpl library, or another document's swatches (engine: swatch.library.load), and open it in the library panel",
+    ),
+    (
+        "ui.saveSwatchLibrary",
+        "Save Swatch Library…",
+        "",
+        "{names?: [the swatches selected in the Swatches panel]} open Save Swatch Library (dialog `saveSwatchLibrary`: name, format: vcswatches|gpl|css, user: save to the user library folder, selectedOnly); OK runs swatch.library.save",
+    ),
+    ("window.userSwatchLibrary1", "User Swatch Library 1", "", "{} open the 1. User Defined swatch library (swatch.library.list, category user)"),
+    ("window.userSwatchLibrary2", "User Swatch Library 2", "", "{} open the 2. User Defined swatch library"),
+    ("window.userSwatchLibrary3", "User Swatch Library 3", "", "{} open the 3. User Defined swatch library"),
+    ("window.userSwatchLibrary4", "User Swatch Library 4", "", "{} open the 4. User Defined swatch library"),
+    ("window.userSwatchLibrary5", "User Swatch Library 5", "", "{} open the 5. User Defined swatch library"),
+    ("window.userSwatchLibrary6", "User Swatch Library 6", "", "{} open the 6. User Defined swatch library"),
+    ("window.userSwatchLibrary7", "User Swatch Library 7", "", "{} open the 7. User Defined swatch library"),
+    ("window.userSwatchLibrary8", "User Swatch Library 8", "", "{} open the 8. User Defined swatch library"),
+    ("window.userSwatchLibrary9", "User Swatch Library 9", "", "{} open the 9. User Defined swatch library"),
+    ("window.userSwatchLibrary10", "User Swatch Library 10", "", "{} open the 10. User Defined swatch library"),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -559,6 +581,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "window.swatchLibrary" => crate::panels::swatches::open_library(app, p),
+        "window.swatchLibrary.other" => crate::panels::swatches::other_library(app, s("path")),
+        "ui.saveSwatchLibrary" => {
+            let names = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            crate::dialogs::save_swatch_library::open(app, names.unwrap_or_default())
+        }
+        id if id.starts_with(crate::panels::swatches::USER_SLOT) => match crate::panels::swatches::user_library(app, id) {
+            Some(l) => crate::panels::swatches::open_library(app, &json!({ "library": l.id })),
+            None => Err("no such user library".into()),
+        },
         _ => return None,
     };
     Some(r)
@@ -651,8 +682,17 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         }
         "edit.undo" => app.session.active().and_then(|d| d.history.undo.last()).map(|h| format!("Undo {}", h.label)).unwrap_or_else(|| "Undo".into()),
         "edit.redo" => app.session.active().and_then(|d| d.history.redo.last()).map(|h| format!("Redo {}", h.label)).unwrap_or_else(|| "Redo".into()),
+        id if id.starts_with(crate::panels::swatches::USER_SLOT) => {
+            crate::panels::swatches::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
+        }
         _ => label.into(),
     }
+}
+
+/// Menu slots that are left out while they have nothing to show (unused saved views, User
+/// Defined swatch libraries).
+fn hidden_when_disabled(id: &str) -> bool {
+    id.starts_with("view.goto") || id.starts_with(crate::panels::swatches::USER_SLOT)
 }
 
 /// File → Open Recent Files slots.
@@ -724,6 +764,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.saveSwatchLibrary" => app.session.active().is_some(),
+        id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
         _ => true,
     }
 }
@@ -1385,7 +1427,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             Item::Cmd(label, id, p) => {
                 let en = enabled(app, id);
                 // Unused saved-view slots are hidden (Illustrator lists only the saved views).
-                if !en && id.starts_with("view.goto") {
+                if !en && hidden_when_disabled(id) {
                     continue;
                 }
                 let label = dynamic_label(app, id, label);
@@ -1564,7 +1606,7 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     fn walk(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
         for it in items {
             match it {
-                Item::Cmd(_, id, _) if id.starts_with("view.goto") && !enabled(app, id) => {}
+                Item::Cmd(_, id, _) if hidden_when_disabled(id) && !enabled(app, id) => {}
                 Item::Cmd(l, id, p) => out.push(MenuEntry {
                     path: path.clone(),
                     label: dynamic_label(app, id, l),

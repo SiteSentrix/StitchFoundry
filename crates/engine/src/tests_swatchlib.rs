@@ -129,3 +129,70 @@ fn reset_defaults_restores_missing_swatches_or_replaces_them() {
     assert_eq!(fill, Paint::solid(Color::from_hex("#abcdef").unwrap()));
     assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#abcdef").unwrap()), "the default fill is unlinked too");
 }
+
+/// A fresh scratch folder for one test.
+fn temp_dir(name: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("vc-swatchlib-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    d
+}
+
+#[test]
+fn save_and_load_round_trip_keeps_cmyk_spot_and_groups() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 1.0, "m": 0.5, "y": 0.0, "k": 0.2}, "spot": true}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#123456", "#abcdef"]}));
+    let r = run(&mut s, "swatch.library.save", json!({"names": ["Ink", "Brand", "Sunset"], "name": "Brand Kit"}));
+    assert_eq!((r["format"].as_str(), r["count"].as_u64()), (Some("vcswatches"), Some(4)));
+    let data = r["data"].as_str().unwrap().to_string();
+    let r = run(&mut s, "swatch.library.load", json!({"data": data, "name": "kit.vcswatches"}));
+    assert_eq!((r["name"].as_str(), r["count"].as_u64()), (Some("Brand Kit"), Some(4)));
+    let id = r["library"].as_str().unwrap().to_string();
+    let (_, lib) = cmd::swatchlib::library(&s, &id).unwrap();
+    let ink = lib.swatch("Ink").unwrap();
+    assert!(ink.spot && ink.global);
+    assert_eq!(ink.paint.color(), Some(Color::cmyk(1.0, 0.5, 0.0, 0.2)));
+    assert_eq!(lib.groups[0].name, "Brand");
+    assert_eq!(lib.groups[0].swatches.len(), 2);
+    assert!(matches!(lib.swatch("Sunset").unwrap().paint, Paint::Gradient(_)));
+    // Listed as loaded; adding from it works like any library.
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    assert!(list["libraries"].as_array().unwrap().iter().any(|l| l["id"] == id.as_str() && l["category"] == "loaded"));
+    assert!(s.execute("swatch.library.save", &json!({"names": ["Nope"]})).is_err());
+    assert!(s.execute("swatch.library.save", &json!({"user": true})).is_err(), "no user folder in a headless session");
+}
+
+#[test]
+fn libraries_saved_in_the_user_folder_are_user_defined() {
+    let dir = temp_dir("user");
+    let mut s = session();
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let r = run(&mut s, "swatch.library.save", json!({"user": true, "name": "My: Greys", "format": "gpl", "names": ["Grays"]}));
+    assert_eq!(r["library"], "user/My- Greys.gpl");
+    let path = r["path"].as_str().unwrap().to_string();
+    assert!(std::fs::read_to_string(&path).unwrap().starts_with("GIMP Palette\nName: My: Greys\n"));
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let user: Vec<&Value> = list["libraries"].as_array().unwrap().iter().filter(|l| l["category"] == "user").collect();
+    assert_eq!(user.len(), 1);
+    assert_eq!((user[0]["name"].as_str(), user[0]["count"].as_u64()), (Some("My: Greys"), Some(9)));
+    // Opening a file of the user folder gives its User Defined library.
+    let r = run(&mut s, "swatch.library.load", json!({ "path": path }));
+    assert_eq!(r["library"], "user/My- Greys.gpl");
+    // CSS by extension.
+    let css = dir.join("out.css").to_string_lossy().to_string();
+    run(&mut s, "swatch.library.save", json!({ "path": css }));
+    assert!(std::fs::read_to_string(&css).unwrap().contains("  --white: #ffffff;"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn another_documents_swatches_load_as_a_library() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Signal", "color": "#ff3300"}));
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let r = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Poster.vectorcraft"}));
+    assert_eq!(r["name"], "Poster");
+    let (_, lib) = cmd::swatchlib::library(&s, r["library"].as_str().unwrap()).unwrap();
+    assert!(lib.swatch("Signal").is_some() && lib.swatch("[None]").is_none());
+    assert!(s.execute("swatch.library.load", &json!({"data": "hello", "name": "x.txt"})).is_err());
+}

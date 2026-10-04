@@ -27,6 +27,7 @@ mod path_ops;
 mod recolor;
 pub mod saturate;
 mod save_changes;
+pub mod save_swatch_library;
 mod shapes;
 pub mod swatch_options;
 mod tools;
@@ -150,6 +151,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

@@ -1,13 +1,17 @@
 //! Swatch libraries (Window → Swatch Libraries, the Swatches panel's library button): read-only
 //! sets of swatches the library panel shows. The built-in libraries are computed in
-//! [`vectorcraft_color::libraries`]; `swatch.library.add` copies swatches into the document.
+//! [`vectorcraft_color::libraries`]; User Defined ones are the library files in the user library
+//! folder ([`Libraries`]), and Other Library… loads more from files. `swatch.library.add` copies
+//! swatches into the document; `swatch.library.save` writes the document's ([`palette_io`]).
 
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::libraries::{SWATCH_LIBRARIES, builtin_library};
-use vectorcraft_color::{Swatch, SwatchGroup, SwatchLibrary, default_swatches};
+use vectorcraft_color::palette_io::{self, PaletteFormat};
+use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 
+use super::fileio::{create_dir, read_file, write_file};
 use super::menucmds::squash;
 use super::swatch::{map_default_paints, str_list, swatch_json};
 use super::*;
@@ -19,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Libraries",
             [],
             None,
-            "{} → {libraries: [{id, name, category: \"builtIn\", count}]} every library the library panel opens, in menu order",
+            "{} → {libraries: [{id, name, category: \"builtIn\"|\"user\" (User Defined: the library files in the user library folder, rescanned now)|\"loaded\" (swatch.library.load), count, path?}], userFolder} every library the library panel opens, in menu order",
             always,
             list
         ),
@@ -50,7 +54,101 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             reset_defaults
         ),
+        cmd!(
+            "swatch.library.save",
+            "Save Swatch Library…",
+            ["Window", "Swatches"],
+            None,
+            "{path?, format?: \"vcswatches\" (lossless JSON: colour models, global, spot, gradients, groups) | \"gpl\" (8-bit RGB palette; groups as `# Group:` comments) | \"css\" (custom properties on :root) (default: the path's extension, else vcswatches), names?: [swatch or colour group names] (default: all; None and patterns are never saved), name?: library name (default: the document's), user?: false (save into the user library folder, listed under User Defined)} save the document's swatches as a library → {path, format, count, library?: id when saved to the user folder}; without path or user → {data: the file's text, format, count}",
+            has_doc,
+            save
+        ),
+        cmd!(
+            "swatch.library.load",
+            "Other Library…",
+            ["Window", "Swatch Libraries"],
+            None,
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches or .gpl library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits) → {library: id, name, count}",
+            always,
+            load
+        ),
     ]
+}
+
+/// The libraries beyond the built-in ones: User Defined (the library files in the user library
+/// folder, as last scanned) and loaded ones (`swatch.library.load`).
+#[derive(Clone, Debug, Default)]
+pub struct Libraries {
+    /// The user library folder. The desktop app sets it; without one (the web, headless sessions)
+    /// there are no User Defined libraries.
+    user_dir: Option<String>,
+    extra: Vec<Extra>,
+}
+
+#[derive(Clone, Debug)]
+struct Extra {
+    info: LibraryInfo,
+    path: Option<String>,
+    lib: Arc<SwatchLibrary>,
+}
+
+/// The extensions of library files [`palette_io::read`] reads.
+pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl"];
+
+impl Libraries {
+    pub fn user_dir(&self) -> Option<&str> {
+        self.user_dir.as_deref()
+    }
+
+    /// Set the user library folder and list its libraries.
+    pub fn set_user_dir(&mut self, dir: Option<String>) {
+        self.user_dir = dir;
+        self.rescan();
+    }
+
+    /// Re-read the library files of the user library folder (unreadable ones are skipped).
+    pub fn rescan(&mut self) {
+        self.extra.retain(|e| e.info.category != "user");
+        let Some(dir) = self.user_dir.clone() else { return };
+        for path in library_files(&dir) {
+            let file = file_name(&path);
+            let Some(lib) = read_file(&path).ok().and_then(|b| palette_io::read(&String::from_utf8_lossy(&b), stem(&file)).ok()) else { continue };
+            let info = LibraryInfo { id: format!("user/{file}"), name: lib.name.clone(), category: "user" };
+            self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
+        }
+    }
+
+    /// Add (or replace, by id) a loaded library.
+    fn put(&mut self, e: Extra) {
+        self.extra.retain(|x| x.info.id != e.info.id);
+        self.extra.push(e);
+    }
+}
+
+/// The library files in folder `dir`, sorted by name.
+#[cfg(not(target_arch = "wasm32"))]
+fn library_files(dir: &str) -> Vec<String> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return vec![] };
+    let mut files: Vec<String> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| LIBRARY_EXTS.contains(&x.to_string_lossy().to_ascii_lowercase().as_str())))
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    files.sort_by_key(|f| f.to_lowercase());
+    files
+}
+
+#[cfg(target_arch = "wasm32")]
+fn library_files(_: &str) -> Vec<String> {
+    vec![]
+}
+
+fn file_name(path: &str) -> String {
+    std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().to_string())
+}
+
+fn stem(name: &str) -> &str {
+    name.rsplit_once('.').map_or(name, |(s, _)| s)
 }
 
 /// A library as the menus and the library panel list it.
@@ -58,19 +156,24 @@ pub fn specs() -> Vec<CommandSpec> {
 pub struct LibraryInfo {
     pub id: String,
     pub name: String,
-    /// "builtIn".
+    /// "builtIn", "user" or "loaded".
     pub category: &'static str,
 }
 
-/// Every library, in menu order.
-pub fn libraries(_s: &Session) -> Vec<LibraryInfo> {
-    SWATCH_LIBRARIES.iter().map(|b| LibraryInfo { id: b.id.into(), name: b.name.into(), category: "builtIn" }).collect()
+/// Every library, in menu order: built-in, User Defined, loaded.
+pub fn libraries(s: &Session) -> Vec<LibraryInfo> {
+    let builtin = SWATCH_LIBRARIES.iter().map(|b| LibraryInfo { id: b.id.into(), name: b.name.into(), category: "builtIn" });
+    builtin.chain(s.swatch_libraries.extra.iter().map(|e| e.info.clone())).collect()
 }
 
 /// Library `key` (an id, or a name in any case) with its info.
 pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary>)> {
-    let info = libraries(s).into_iter().find(|l| l.id == key).or_else(|| libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key)))?;
-    let lib = builtin_library(&info.id)?;
+    let all = libraries(s);
+    let info = all.iter().find(|l| l.id == key).or_else(|| all.iter().find(|l| l.name.eq_ignore_ascii_case(key)))?.clone();
+    let lib = match s.swatch_libraries.extra.iter().find(|e| e.info.id == info.id) {
+        Some(e) => e.lib.clone(),
+        None => builtin_library(&info.id)?,
+    };
     Some((info, lib))
 }
 
@@ -80,14 +183,107 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 }
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
+    s.swatch_libraries.rescan();
+    let path = |id: &str| s.swatch_libraries.extra.iter().find(|e| e.info.id == id).and_then(|e| e.path.clone());
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count})
+            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": path(&l.id)})
         })
         .collect();
-    Ok(json!({ "libraries": libs }))
+    Ok(json!({ "libraries": libs, "userFolder": s.swatch_libraries.user_dir() }))
+}
+
+/// The document's swatches `names` (swatches or colour groups; empty: all) as a library named
+/// `name`, without None and patterns.
+fn document_library(d: &vectorcraft_doc::Document, names: &[String], name: String, cmd: &str) -> Result<SwatchLibrary> {
+    if let Some(n) = names.iter().find(|n| !d.swatch_name_taken(n)) {
+        return Err(bad(cmd, format!("no swatch or colour group `{n}`")));
+    }
+    let want = |n: &str| names.is_empty() || names.iter().any(|x| x == n);
+    let savable = |w: &&Swatch| matches!(w.paint, Paint::Solid { .. } | Paint::Gradient(_));
+    let swatches = d.swatches.iter().filter(savable).filter(|w| want(&w.name)).cloned().collect();
+    let groups = d
+        .swatch_groups
+        .iter()
+        .filter_map(|g| {
+            let all = want(&g.name);
+            let swatches: Vec<Swatch> = g.swatches.iter().filter(savable).filter(|w| all || want(&w.name)).cloned().collect();
+            (!swatches.is_empty() || (all && !names.is_empty())).then(|| SwatchGroup { name: g.name.clone(), swatches })
+        })
+        .collect();
+    Ok(SwatchLibrary { name, swatches, groups })
+}
+
+fn save(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.library.save";
+    let path = str_param(p, "path");
+    let format = match str_param(p, "format").or_else(|| path.map(|p| p.rsplit_once('.').map_or("", |(_, e)| e))).filter(|f| !f.is_empty()) {
+        Some(f) => PaletteFormat::parse(f).ok_or_else(|| bad(C, format!("unknown format `{f}` (vcswatches, gpl or css)")))?,
+        None => PaletteFormat::Native,
+    };
+    let st = s.doc()?;
+    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map_or_else(|| stem(&st.title()).to_string(), str::to_string);
+    let lib = document_library(&st.doc, &str_list(p, "names"), name, C)?;
+    let (count, text) = (lib.len(), palette_io::write(&lib, format));
+    let mut out = json!({"format": format.id(), "count": count});
+    if bool_or(p, "user", false) {
+        let dir = s
+            .swatch_libraries
+            .user_dir()
+            .ok_or_else(|| bad(C, "no user library folder here (save with a path, or without one to get the data)"))?
+            .to_string();
+        // A file name from the library's name, without characters file systems reject.
+        let base: String = lib.name.chars().map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '-' } else { c }).collect();
+        let file = format!("{}.{}", base.trim_matches(['.', ' ']), format.id());
+        let path = std::path::Path::new(&dir).join(&file).to_string_lossy().to_string();
+        create_dir(&dir)?;
+        write_file(&path, text.as_bytes())?;
+        s.swatch_libraries.rescan();
+        out["path"] = json!(path);
+        out["library"] = json!(format!("user/{file}"));
+    } else if let Some(path) = path {
+        write_file(path, text.as_bytes())?;
+        out["path"] = json!(path);
+    } else {
+        out["data"] = json!(text);
+    }
+    Ok(out)
+}
+
+fn load(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.library.load";
+    let path = str_param(p, "path");
+    let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => read_file(path)?,
+        (None, Some(text), _) => text.as_bytes().to_vec(),
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(C, "bad dataBase64"))?,
+        _ => return Err(bad(C, "give `path`, `data` or `dataBase64`")),
+    };
+    let file = str_param(p, "name").map(str::to_string).or_else(|| path.map(file_name)).unwrap_or_else(|| "Library".into());
+    // A library file, or a document whose swatches become the library.
+    let text = std::str::from_utf8(&bytes).ok().filter(|t| palette_io::sniff(t));
+    let lib = match text {
+        Some(t) => palette_io::read(t, stem(&file)).map_err(|e| bad(C, e))?,
+        None => {
+            let doc = super::fileio::load(&file, &bytes).map_err(|e| bad(C, e.to_string()))?.doc;
+            document_library(&doc, &[], stem(&file).to_string(), C)?
+        }
+    };
+    // A file of the user library folder is its User Defined library.
+    s.swatch_libraries.rescan();
+    let user = path.and_then(|p| s.swatch_libraries.extra.iter().find(|e| e.info.category == "user" && e.path.as_deref() == Some(p)));
+    let info = match user {
+        Some(e) => e.info.clone(),
+        None => {
+            let id = format!("loaded/{}", path.unwrap_or(&file));
+            let info = LibraryInfo { id, name: lib.name.clone(), category: "loaded" };
+            s.swatch_libraries.put(Extra { info: info.clone(), path: path.map(str::to_string), lib: Arc::new(lib.clone()) });
+            info
+        }
+    };
+    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {

@@ -890,7 +890,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     menu_item(ui, "Spot Colors…", false, false);
     ui.separator();
     ui.menu_button("Open Swatch Library", |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
-    menu_item(ui, "Save Swatch Library…", false, false);
+    if menu_item(ui, "Save Swatch Library…", true, false) {
+        app.run("ui.saveSwatchLibrary", json!({ "names": deletable(&selected) })).ok();
+    }
 }
 
 /// Swatch libraries in the library panel (engine: `swatch.library.*`).
@@ -905,7 +907,12 @@ impl LibraryKind for SwatchLibraries {
     type Item = Swatch;
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
-        swatchlib::libraries(&app.session).into_iter().map(|l| LibraryRef { id: l.id, name: l.name, submenu: None }).collect()
+        let submenu = |category: &str| match category {
+            "user" => Some("User Defined"),
+            "loaded" => Some("Other Libraries"),
+            _ => None,
+        };
+        swatchlib::libraries(&app.session).into_iter().map(|l| LibraryRef { submenu: submenu(l.category), id: l.id, name: l.name }).collect()
     }
     fn get(app: &VectorcraftApp, id: &str) -> Option<(String, Self::Lib)> {
         swatchlib::library(&app.session, id).map(|(info, lib)| (info.name, lib))
@@ -953,6 +960,18 @@ impl LibraryKind for SwatchLibraries {
         }
         ui.separator();
     }
+    fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
+        ui.separator();
+        if menu_item(ui, "Other Library…", true, false)
+            && let Err(e) = other_library(app, None)
+        {
+            app.status(e);
+        }
+        if menu_item(ui, "Save Swatch Library…", app.session.active().is_some(), false) {
+            let names = deletable(&selection(app, ui));
+            app.run("ui.saveSwatchLibrary", json!({ "names": names })).ok();
+        }
+    }
 }
 
 fn add_from_library(app: &mut VectorcraftApp, params: Value) {
@@ -974,11 +993,57 @@ pub(crate) fn open_library(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
     Ok(json!({"open": info.id, "name": info.name, "count": lib.len()}))
 }
 
+/// `swatch.library.load` params, then open the library in the panel.
+pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let r = app.run("swatch.library.load", params)?;
+    open_library(app, &json!({ "library": r["library"] }))
+}
+
+/// Other Library…: load the library (or document) at `path`, else one picked in an open dialog
+/// (on the web the picked file arrives later and opens through [`crate::io::open_bytes`]).
+pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
+    if path.is_none()
+        && let Some(f) = app.services.open_async.as_mut()
+    {
+        f();
+        return Ok(Value::Null);
+    }
+    let path = path.or_else(|| app.services.pick_open.as_mut().and_then(|f| f())).ok_or("cancelled")?;
+    load_library(app, json!({ "path": path }))
+}
+
+/// The id prefix of the Window → Swatch Libraries → User Defined slots.
+pub(crate) const USER_SLOT: &str = "window.userSwatchLibrary";
+
+/// The User Defined library slot `id` (`window.userSwatchLibrary3`) stands for.
+pub(crate) fn user_library(app: &VectorcraftApp, id: &str) -> Option<swatchlib::LibraryInfo> {
+    let n: usize = id.strip_prefix(USER_SLOT)?.parse().ok()?;
+    swatchlib::libraries(&app.session).into_iter().filter(|l| l.category == "user").nth(n.checked_sub(1)?)
+}
+
 /// Window → Swatch Libraries.
 pub(crate) fn window_menu() -> Vec<Item> {
+    const SLOTS: [&str; 10] = [
+        "window.userSwatchLibrary1",
+        "window.userSwatchLibrary2",
+        "window.userSwatchLibrary3",
+        "window.userSwatchLibrary4",
+        "window.userSwatchLibrary5",
+        "window.userSwatchLibrary6",
+        "window.userSwatchLibrary7",
+        "window.userSwatchLibrary8",
+        "window.userSwatchLibrary9",
+        "window.userSwatchLibrary10",
+    ];
     let mut items = vec![Item::Cmd("Default Swatches", "swatch.resetDefaults", Value::Null), Item::Sep];
     items.extend(SWATCH_LIBRARIES.iter().map(|b| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }))));
-    items.extend([Item::Sep, Item::Todo("User Defined", ""), Item::Sep, Item::Todo("Other Library…", "")]);
+    items.extend([
+        Item::Sep,
+        Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
+        Item::Sep,
+        Item::Cmd("Other Library…", "window.swatchLibrary.other", Value::Null),
+        Item::Cmd("Save Swatch Library…", "ui.saveSwatchLibrary", Value::Null),
+    ]);
     items
 }
 

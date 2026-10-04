@@ -446,4 +446,78 @@ mod tests {
         let defaults = crate::menus::menu_entries(&app).into_iter().any(|e| e.command.as_deref() == Some("swatch.resetDefaults"));
         assert!(defaults, "Default Swatches is listed");
     }
+
+    #[test]
+    fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
+        let dir = std::env::temp_dir().join(format!("vc-library-panel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = app();
+        app.session.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        let user_items = |app: &VectorcraftApp| -> Vec<(String, String)> {
+            crate::menus::menu_entries(app)
+                .into_iter()
+                .filter(|e| e.path == ["Window", "Swatch Libraries", "User Defined"])
+                .map(|e| (e.label, e.command.unwrap_or_default()))
+                .collect()
+        };
+        assert!(user_items(&app).is_empty(), "empty slots are hidden");
+        app.run("ui.saveSwatchLibrary", json!({"names": ["Brights"]})).unwrap();
+        let d = app.ui.dialog.as_mut().expect("Save Swatch Library opens");
+        assert_eq!((d.kind.as_str(), d.bool("user")), (crate::dialogs::save_swatch_library::KIND, true));
+        d.fields.insert("name".into(), json!("Loud"));
+        d.fields.insert("selectedOnly".into(), json!(true));
+        let ctx = context();
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))), ..Default::default() };
+        ctx.run_ui(input, |ui| crate::dialogs::show(&mut app, ui.ctx())).textures_delta.clear();
+        assert!(app.ui.dialog.is_some(), "the dialog draws and stays open");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(user_items(&app), [("Loud".to_string(), "window.userSwatchLibrary1".to_string())]);
+        app.run("window.userSwatchLibrary1", json!({})).unwrap();
+        assert_eq!(app.ui.library_panel.as_ref().map(|o| o.id.as_str()), Some("user/Loud.vcswatches"));
+        let (_, lib) = SwatchLibraries::get(&app, "user/Loud.vcswatches").unwrap();
+        assert_eq!((lib.groups.len(), lib.len()), (1, 5), "only the selected group");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn saving_to_a_file_and_opening_a_palette_file() {
+        let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
+        let w = written.clone();
+        let services = crate::Services {
+            pick_save: Some(Box::new(|name: &str| Some(format!("/tmp/{name}")))),
+            write: Some(Box::new(move |p: &str, b: &[u8]| {
+                w.borrow_mut().push((p.to_string(), b.to_vec()));
+                Ok(())
+            })),
+            ..Default::default()
+        };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.saveSwatchLibrary", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(!d.bool("user") && !d.bool("__user"), "no user folder: a file");
+        d.fields.insert("format".into(), json!("gpl"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let (path, bytes) = written.borrow()[0].clone();
+        assert!(path.ends_with(".gpl"), "{path}");
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(
+            text.starts_with(
+                "GIMP Palette
+"
+            ) && text.contains(
+                "	Red
+"
+            ),
+            "{text}"
+        );
+        // Opening a palette file opens it in the library panel.
+        crate::io::open_bytes(&mut app, "Saved.gpl", text.as_bytes(), None).unwrap();
+        let open = app.ui.library_panel.clone().unwrap();
+        assert!(open.id.starts_with("loaded/"), "{open:?}");
+        assert_eq!(app.session.documents().len(), 1, "not opened as a document");
+        let other = SwatchLibraries::list(&app).into_iter().find(|l| l.id == open.id).unwrap();
+        assert_eq!(other.submenu, Some("Other Libraries"));
+    }
 }

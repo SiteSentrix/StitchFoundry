@@ -9,6 +9,7 @@ pub mod cms;
 pub mod gradient;
 pub mod harmony;
 pub mod libraries;
+pub mod palette_io;
 pub mod swatch;
 
 pub use blend::BlendMode;
