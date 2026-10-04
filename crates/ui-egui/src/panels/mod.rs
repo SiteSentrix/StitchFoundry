@@ -356,3 +356,5 @@ mod tests {
 }
 #[cfg(test)]
 mod tests_appearance;
+#[cfg(test)]
+mod tests_stroke;

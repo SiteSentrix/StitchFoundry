@@ -3,8 +3,8 @@
 //!
 //! - [`stroke_pieces`]: the centre line (trimmed under the arrowheads) and the arrowheads as
 //!   filled outlines (hollow kinds are rings), placed by [`ArrowAlign`](vectorcraft_doc::ArrowAlign);
-//! - [`dash`]: the dash pattern; zero-length dashes become [`Dot`]s that a round or projecting cap
-//!   turns into discs or squares ([`dot_outline`]);
+//! - [`dash`]: the dash pattern, exact or fitted to corners and path ends; zero-length dashes
+//!   become [`Dot`]s that a round or projecting cap turns into discs or squares ([`dot_outline`]);
 //! - [`width_outline`]: variable-width (profile) strokes;
 //! - [`line_outline`]: the line part of a stroke as one filled outline (profile, dashes, dots,
 //!   caps and joins);
@@ -27,6 +27,8 @@ pub use width::width_outline;
 
 /// Arc-length accuracy for dashing and trimming (document points).
 const ARCLEN_ACCURACY: f64 = 1e-6;
+/// Tangents meeting at more than about 1° (this cosine) make a corner that fitted dashes centre on.
+const CORNER_COS: f64 = 0.9998;
 
 /// The geometry one stroke paints, in the coordinate space of its path.
 #[derive(Clone, Debug)]
@@ -112,6 +114,11 @@ pub fn line_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> B
     }
 }
 
+/// Do segments `a` and `b` (`b` following `a`) meet at a corner?
+pub(crate) fn kink(a: &PathSeg, b: &PathSeg) -> bool {
+    tangent(a, 1.0).dot(tangent(b, 0.0)) < CORNER_COS
+}
+
 /// Unit tangent of `s` at `t`, robust at ends where control points coincide with the end point.
 pub(crate) fn tangent(s: &PathSeg, t: f64) -> Vec2 {
     let d = match s {
@@ -183,3 +190,5 @@ pub(crate) fn segments(els: &[PathEl]) -> Vec<PathSeg> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_fit;

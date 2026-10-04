@@ -23,13 +23,13 @@ fn line(s: &mut Session, opts: Value) -> NodeId {
     id
 }
 
-fn outline(s: &mut Session) -> Node {
+pub(super) fn outline(s: &mut Session) -> Node {
     let r = s.execute("object.path.outlineStroke", &json!({})).unwrap();
     let id = NodeId(r["ids"][0].as_u64().unwrap());
     s.doc().unwrap().doc.node(id).cloned().unwrap()
 }
 
-fn path_of(n: &Node) -> PathData {
+pub(super) fn path_of(n: &Node) -> PathData {
     match &n.kind {
         NodeKind::Path { path, .. } => path.clone(),
         NodeKind::Compound { children, .. } => PathData::new(children.iter().flat_map(|c| c.path_data().unwrap().subpaths.clone()).collect()),

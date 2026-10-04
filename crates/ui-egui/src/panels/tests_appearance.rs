@@ -6,7 +6,7 @@ use vectorcraft_engine::Session;
 
 use super::*;
 
-fn app_with_rect() -> VectorcraftApp {
+pub(super) fn app_with_rect() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 100}))["id"].clone();
@@ -14,7 +14,7 @@ fn app_with_rect() -> VectorcraftApp {
     app
 }
 
-fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
+pub(super) fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
     app.session.execute(id, &p).unwrap_or_else(|e| panic!("{id}: {e}"))
 }
 
@@ -29,7 +29,7 @@ fn frame_in(ctx: &egui::Context, app: &mut VectorcraftApp, f: impl FnMut(&mut Ve
 }
 
 /// One headless frame with input `events`: every text drawn, with its screen rect.
-fn frame_events(
+pub(super) fn frame_events(
     ctx: &egui::Context,
     app: &mut VectorcraftApp,
     events: Vec<egui::Event>,
@@ -52,7 +52,7 @@ fn frame_events(
 }
 
 /// Click at `pos` over three frames of `f` (hover, press, release).
-fn click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) {
+pub(super) fn click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) {
     let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
         frame_events(ctx, app, vec![e], &mut f);
@@ -60,7 +60,7 @@ fn click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, mut f: 
 }
 
 /// The rect of the first drawn text equal to `s`.
-fn text_rect(texts: &[(String, egui::Rect)], s: &str) -> egui::Rect {
+pub(super) fn text_rect(texts: &[(String, egui::Rect)], s: &str) -> egui::Rect {
     texts.iter().find(|(t, _)| t == s).unwrap_or_else(|| panic!("`{s}` not drawn: {texts:?}")).1
 }
 

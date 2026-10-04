@@ -14,7 +14,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares), dashOffset?, alignDashes?, startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?}",
+            "{weight?, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?}",
             has_doc,
             stroke_set
         ),
@@ -90,13 +90,18 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
             Some(Value::Null) => st.dash = None,
             Some(Value::Array(a)) => {
                 let pattern: Vec<f64> = a.iter().filter_map(Value::as_f64).collect();
-                st.dash = if pattern.is_empty() {
-                    None
-                } else {
-                    Some(Dash { pattern, offset: f64_or(p, "dashOffset", 0.0), align_corners: bool_or(p, "alignDashes", false) })
-                };
+                // A new pattern keeps the offset and alignment of the one it replaces.
+                st.dash = (!pattern.is_empty()).then(|| Dash { pattern, ..st.dash.take().unwrap_or_default() });
             }
             _ => {}
+        }
+        if let Some(d) = st.dash.as_mut() {
+            if let Some(o) = p.get("dashOffset").and_then(Value::as_f64) {
+                d.offset = o;
+            }
+            if let Some(a) = p.get("alignDashes").and_then(Value::as_bool) {
+                d.align_corners = a;
+            }
         }
         if let Some(a) = sa {
             st.start_arrow = a;

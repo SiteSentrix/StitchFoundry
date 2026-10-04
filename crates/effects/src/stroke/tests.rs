@@ -90,7 +90,7 @@ fn dashes_follow_arc_length_and_join_across_the_start_of_closed_paths() {
 
 #[test]
 fn dot_outlines_take_the_cap_shape_and_wind_like_stroked_dashes() {
-    let dots = [Dot { at: Point::new(10.0, 0.0), dir: Vec2::new(1.0, 0.0) }];
+    let dots = [Dot { at: Point::new(10.0, 0.0), dir: Vec2::new(1.0, 0.0), t: 0.0 }];
     let round = dot_outline(&dots, 4.0, LineCap::Round, 1e-4);
     assert!(near(round.area(), std::f64::consts::PI * 4.0, 1e-3));
     let sq = dot_outline(&dots, 4.0, LineCap::Square, 1e-4);

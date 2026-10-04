@@ -746,6 +746,8 @@ mod tests_cmdsplit;
 #[cfg(test)]
 mod tests_colormgmt;
 #[cfg(test)]
+mod tests_dashalign;
+#[cfg(test)]
 mod tests_distort;
 #[cfg(test)]
 mod tests_draw2;
