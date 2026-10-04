@@ -801,6 +801,8 @@ mod tests_file;
 #[cfg(test)]
 mod tests_flatpresets;
 #[cfg(test)]
+mod tests_flatpreview;
+#[cfg(test)]
 mod tests_flatten;
 #[cfg(test)]
 mod tests_freeform;

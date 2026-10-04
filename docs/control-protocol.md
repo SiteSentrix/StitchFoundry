@@ -122,3 +122,9 @@ built-in presets don't change. New, Delete, Import… and Export… are `flatten
 `flattener.presets.delete`, `flattener.presets.import` and `flattener.presets.export`; `ui.dialog.confirm` closes.
 Opening a `.vcflattener` file with `app.open` imports its presets. In the Flatten Transparency dialog, Save Preset…
 keeps the dialog's options as a saved preset.
+
+Flattener Preview: `window.panel {panel: "flattenerPreview"}` shows the panel; `ui.flattenerPreview {highlight?,
+overprints?, preset?, options?, showOptions?}` sets it (a preset loads its options, `options` adjust them), shows it
+and refreshes its snapshot of the document, answering as `flattener.preview` does. `ui.inspect` reports the settings
+as `ui.flattener_preview`. The panel keeps its snapshot until Refresh (it notes when the document or the settings
+changed since); its preview greys the art and paints the highlighted objects or areas red.

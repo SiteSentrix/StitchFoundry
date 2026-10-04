@@ -85,16 +85,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     sync(d, saved);
     let current = options(d, saved);
     let presets = app.session.flattener_presets();
-    let shown = match &current {
-        Ok(o) => presets.iter().find(|p| p.name == d.str("preset") && p.options == *o).map_or(CUSTOM, |p| p.name.as_str()),
-        Err(_) => CUSTOM,
-    };
     ui.horizontal(|ui| {
         widgets::dim_label(ui, "Preset:");
-        let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
-        if let Some(i) = widgets::dropdown(ui, "flatten-preset", shown, &names, 220.0) {
-            put_options(&mut d.fields, &presets[i].options);
-            applied(d, &presets[i].name);
+        if let Some(p) = preset_dropdown(ui, "flatten-preset", &presets, &d.str("preset"), current.as_ref().ok(), 220.0) {
+            put_options(&mut d.fields, &p.options);
+            applied(d, &p.name);
         }
         if widgets::flat_button(ui, "Save Preset…", 100.0).clicked() {
             let open = !d.bool(SAVING);
@@ -155,6 +150,21 @@ fn save_preset(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let p = params(d, &app.session.prefs.flattener_presets)?;
     form::commit_preview(app, CMD, p)
+}
+
+/// The flattener preset dropdown: `presets` by name, showing `name` while `options` are that
+/// preset's, else [Custom]. Returns the preset chosen.
+pub(crate) fn preset_dropdown<'a>(
+    ui: &mut egui::Ui,
+    id: &str,
+    presets: &'a [FlattenerPreset],
+    name: &str,
+    options: Option<&FlattenOptions>,
+    width: f32,
+) -> Option<&'a FlattenerPreset> {
+    let shown = presets.iter().find(|p| p.name == name && Some(&p.options) == options).map_or(CUSTOM, |p| p.name.as_str());
+    let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
+    widgets::dropdown(ui, id, shown, &names, width).map(|i| &presets[i])
 }
 
 /// The width of the option value fields.

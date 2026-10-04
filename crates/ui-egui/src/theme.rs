@@ -81,6 +81,8 @@ pub struct Tokens {
     /// Window Close button (custom title bar) when hovered, and its glyph there.
     pub caption_close: Color32,
     pub caption_close_text: Color32,
+    /// What preview images mark (Flattener Preview highlights).
+    pub highlight: Color32,
 }
 
 impl Tokens {
@@ -121,6 +123,7 @@ impl Tokens {
             font_size: 13.0,
             caption_close: hex(0xc42b1c),
             caption_close_text: Color32::WHITE,
+            highlight: hex(0xff3030),
         };
         match b {
             Brightness::Dark => base,

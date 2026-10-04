@@ -271,6 +271,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{selected?: preset name} open the presets manager (dialog `flattenerPresets`, fields `selected`, then the selected preset's `name` and option keys: setting them on a saved preset saves it, a new `name` renames it; built-in presets don't change). New, Delete, Import… and Export… run flattener.presets.save / delete / import / export",
     ),
+    (
+        "ui.flattenerPreview",
+        "Flattener Preview",
+        "",
+        "{highlight?: none|rasterizedRegions|transparentObjects|allAffected|expandedPatterns|outlinedStrokes|outlinedText|allRasterized, overprints?: preserve|simulate|discard, preset?: name (loads its options), options?: {option keys, over the preset's}, showOptions?} set the Flattener Preview panel (ui.inspect: ui.flattener_preview), show it and refresh its snapshot → what flattener.preview answers for it",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -627,6 +633,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::flattener_presets::open(app, s("selected").as_deref());
             Ok(Value::Null)
         }
+        "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
         _ => return None,
     };
     Some(r)
@@ -1359,6 +1366,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
                 panel("Document Info", "docInfo"),
+                panel("Flattener Preview", crate::panels::flattener_preview::ID),
                 panel("Gradient", "gradient"),
                 panel("Graphic Styles", "graphicStyles"),
                 panel("History", "history"),

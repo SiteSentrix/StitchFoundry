@@ -473,3 +473,15 @@ the preferences and work as `preset` in `object.flattenTransparency` (and anywhe
 {"name":"run_command","arguments":{"command":"flattener.presets.save","params":{"name":"Press","preset":"high","balance":60}}}
 {"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"preset":"Press"}}}
 ```
+
+## Flattener Preview
+
+`flattener.preview {highlight?, overprints?, preset?, …options, ids?}` reports what flattening the document (or
+`ids`) would do without changing it: `counts` of transparent objects, all affected objects, patterns, outlined
+strokes and type, rasterized complex regions (areas the raster/vector balance rasterizes whole), all rasterized areas
+and flat-colour regions, plus `regions` (bounds, and `id` for objects) for the `highlight` asked for. `overprints:
+"discard"` or `"simulate"` flatten without preserving overprints.
+
+```json
+{"name":"run_command","arguments":{"command":"flattener.preview","params":{"highlight":"allRasterized","preset":"low"}}}
+```
