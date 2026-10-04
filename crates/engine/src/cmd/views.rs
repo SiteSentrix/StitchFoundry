@@ -1,4 +1,5 @@
-//! View → New View… / Edit Views…: saved views stored in the document.
+//! View → New View… / Edit Views…: saved views stored in the document; per-document view
+//! toggles (Show Transparency Grid).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::SavedView;
@@ -30,7 +31,22 @@ pub fn specs() -> Vec<CommandSpec> {
             edit_views
         ),
         cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation}]}", has_doc, list_views),
+        cmd!(
+            query "view.transparencyGrid",
+            "Show Transparency Grid",
+            ["View"],
+            Some("Cmd+Shift+D"),
+            "{on?: bool (default: toggle)} show the transparency grid behind the active document's artboards (each document has its own setting) → {on}",
+            has_doc,
+            transparency_grid
+        ),
     ]
+}
+
+fn transparency_grid(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc_mut()?;
+    st.transparency_grid = p.get("on").and_then(Value::as_bool).unwrap_or(!st.transparency_grid);
+    Ok(json!({ "on": st.transparency_grid }))
 }
 
 fn list_views(s: &mut Session, _: &Value) -> Result<Value> {

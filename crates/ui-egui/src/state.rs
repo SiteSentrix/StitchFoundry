@@ -115,7 +115,6 @@ pub struct ViewFlags {
     pub snap_to_grid: bool,
     pub snap_to_point: bool,
     pub artboards: bool,
-    pub transparency_grid: bool,
     pub edges: bool,
     /// View → Trim View: hide everything outside the artboards.
     pub trim_view: bool,
@@ -144,7 +143,6 @@ impl Default for ViewFlags {
             snap_to_grid: false,
             snap_to_point: true,
             artboards: true,
-            transparency_grid: false,
             edges: true,
             trim_view: false,
             corner_widgets: true,

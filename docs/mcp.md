@@ -230,6 +230,10 @@ then composite against the art below it). SVG has no non-isolated groups, so the
 mask is edited; called again it shows the artwork, still editing. It is view state of the open document: the canvas
 (and `ui.screenshot`) shows it, exports never do, and it ends when mask editing ends.
 
+`view.transparencyGrid {on?}` (View → Show Transparency Grid; default: toggle) is view state of each open document,
+like the mask view: the grid shows behind the artboards of the documents that turn it on, on the canvas and in
+`ui.screenshot`, never in exports. It returns `{on}`, isn't undoable and doesn't mark the document changed.
+
 ## Clipping masks
 
 `object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a

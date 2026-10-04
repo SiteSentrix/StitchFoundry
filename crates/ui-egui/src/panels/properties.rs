@@ -154,7 +154,8 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button(ui, "grid-3x3", "Show Grid (⌘')", v.grid, 26.0).clicked() {
             app.run("view.grid", json!({})).ok();
         }
-        if widgets::icon_button(ui, "square-dashed", "Show Transparency Grid", v.transparency_grid, 26.0).clicked() {
+        let transparency_grid = app.session.active().is_some_and(|d| d.transparency_grid);
+        if widgets::icon_button(ui, "square-dashed", "Show Transparency Grid", transparency_grid, 26.0).clicked() {
             app.run("view.transparencyGrid", json!({})).ok();
         }
     });

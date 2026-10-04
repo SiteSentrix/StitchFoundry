@@ -104,6 +104,8 @@ pub struct DocState {
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
     /// shows alone, in greyscale, while that mask is edited (see [`DocState::shown_mask`]).
     pub mask_view: Option<NodeId>,
+    /// View → Show Transparency Grid, per document (view state: not saved, not undoable).
+    pub transparency_grid: bool,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -126,6 +128,7 @@ impl DocState {
             last_selection_cmd: None,
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             mask_view: None,
+            transparency_grid: false,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -883,6 +886,8 @@ mod tests_textedit;
 mod tests_tileedge;
 #[cfg(test)]
 mod tests_tints;
+#[cfg(test)]
+mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_widthprofiles;
 #[cfg(test)]

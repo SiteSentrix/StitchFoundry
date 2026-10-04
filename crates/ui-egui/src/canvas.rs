@@ -157,7 +157,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let shift = |d: f32| q.iter().map(|p| *p + vec2(d, d)).collect::<Vec<_>>();
             painter.add(Shape::convex_polygon(shift(2.0), Color32::from_black_alpha(26), Stroke::NONE));
             painter.add(Shape::convex_polygon(shift(1.0), Color32::from_black_alpha(52), Stroke::NONE));
-            if app.ui.view.transparency_grid && xf.rot == 0.0 {
+            if st.transparency_grid && xf.rot == 0.0 {
                 checker(&painter, r);
             } else {
                 painter.add(Shape::convex_polygon(q, Color32::WHITE, Stroke::NONE));
