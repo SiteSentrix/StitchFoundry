@@ -358,3 +358,5 @@ mod tests {
 mod tests_appearance;
 #[cfg(test)]
 mod tests_effectedit;
+#[cfg(test)]
+mod tests_stroke;

@@ -90,7 +90,7 @@ fn dashes_follow_arc_length_and_join_across_the_start_of_closed_paths() {
 
 #[test]
 fn dot_outlines_take_the_cap_shape_and_wind_like_stroked_dashes() {
-    let dots = [Dot { at: Point::new(10.0, 0.0), dir: Vec2::new(1.0, 0.0) }];
+    let dots = [Dot { at: Point::new(10.0, 0.0), dir: Vec2::new(1.0, 0.0), t: 0.0 }];
     let round = dot_outline(&dots, 4.0, LineCap::Round, 1e-4);
     assert!(near(round.area(), std::f64::consts::PI * 4.0, 1e-3));
     let sq = dot_outline(&dots, 4.0, LineCap::Square, 1e-4);
@@ -117,12 +117,13 @@ fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     assert!(near(plain.area().abs(), 1000.0, 1e-6));
     let lens = line_outline(&l, &stroke(10.0, |s| s.profile = Some(WidthProfile::lens())), 10.0, 1e-3);
     assert!(near(lens.area().abs(), 500.0, 1e-6));
-    // Dashes take precedence over a profile (as before).
+    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0): the dash over
+    // 0..25 averages a quarter of the width, the one over 50..75 three quarters.
     let st = stroke(10.0, |s| {
         s.profile = Some(WidthProfile::lens());
         s.dash = Some(dashed(&[25.0, 25.0], 0.0));
     });
-    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 500.0, 1e-6));
+    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 62.5 + 187.5, 1e-6));
     assert!(line_outline(&BezPath::new(), &st, 10.0, 1e-3).elements().is_empty());
 }
 
