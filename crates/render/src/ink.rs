@@ -204,7 +204,7 @@ pub(crate) fn compose(cmy: &[u8], k: &[u8], background: Option<[u8; 4]>) -> Vec<
     let mut out = Vec::with_capacity(cmy.len());
     // Runs of one colour convert once.
     let mut last: Option<([u8; 8], [u8; 4])> = None;
-    for (p, q) in cmy.chunks_exact(4).zip(k.chunks_exact(4)) {
+    for (p, q) in cmy.as_chunks::<4>().0.iter().zip(k.as_chunks::<4>().0) {
         let key = [p[0], p[1], p[2], p[3], q[0], q[1], q[2], q[3]];
         let px = match (&last, &bg) {
             _ if p[3] == 0 => [0; 4],

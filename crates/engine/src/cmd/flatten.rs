@@ -938,7 +938,7 @@ fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Optio
             })
             .collect();
         let cover = r.render_region(&isolated_doc(doc, cover), region, scale, false);
-        for (px, c) in img.pixels.chunks_exact_mut(4).zip(cover.pixels.chunks_exact(4)) {
+        for (px, c) in img.pixels.as_chunks_mut::<4>().0.iter_mut().zip(cover.pixels.as_chunks::<4>().0) {
             let k = c[3];
             let k2 = if o.anti_alias || k == 0 || k == 255 {
                 k

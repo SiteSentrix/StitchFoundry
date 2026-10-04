@@ -108,7 +108,14 @@ fn assert_regions_match(s: &Session, before: &Rendered, group: u64, tol: u8, wha
 
 /// Share of pixels whose colour moved by more than 8/255.
 fn changed(a: &Rendered, b: &Rendered) -> f64 {
-    let n = a.pixels.chunks_exact(4).zip(b.pixels.chunks_exact(4)).filter(|(p, q)| p.iter().zip(q.iter()).any(|(x, y)| x.abs_diff(*y) > 8)).count();
+    let n = a
+        .pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.pixels.as_chunks::<4>().0)
+        .filter(|(p, q)| p.iter().zip(q.iter()).any(|(x, y)| x.abs_diff(*y) > 8))
+        .count();
     n as f64 / (a.pixels.len() / 4) as f64
 }
 
