@@ -47,7 +47,46 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("artboard.fitToArt", "Fit to Artwork Bounds", ["Object", "Artboards"], None, "{index?}", has_doc, artboard_fit_art),
         cmd!("artboard.fitToSelection", "Fit to Selected Art", ["Object", "Artboards"], None, "{index?}", has_selection, artboard_fit_sel),
+        cmd!(
+            "layer.clippingMask.toggle",
+            "Make/Release Clipping Mask",
+            ["Window", "Layers"],
+            None,
+            "{id?: layer or group (default: the one selected group, else the current layer)} make: its top object (a path, compound path or text, which loses its paint) clips the rest and moves to the bottom (new art added on top is clipped); release: it stops clipping, the clipping path stays unpainted → {clip}",
+            has_doc,
+            clip_toggle
+        ),
     ]
+}
+
+/// The Layers panel's clipping mask button: the top object of a layer (or group) clips the rest,
+/// or the clipping mask is released.
+fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    let group = match st.selection.objects.as_slice() {
+        [id] if matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Group { .. })) => Some(*id),
+        _ => None,
+    };
+    let id = id_param(p, "id").or(group).or(st.current_layer()).ok_or_else(|| bad("layer.clippingMask.toggle", "no layer"))?;
+    let clip = s.edit("Make/Release Clipping Mask", |d, _| {
+        let n = d.node(id).ok_or(EngineError::NoNode(id))?;
+        if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+            return Err(bad("layer.clippingMask.toggle", "not a layer or group"));
+        }
+        if n.clips() {
+            super::object::release_clip(d, id);
+            return Ok(false);
+        }
+        let top =
+            n.children().and_then(|c| c.last()).map(|c| c.id).ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
+        super::object::make_clipping_path(d, top)?;
+        d.move_node(top, Some(id), 0)?;
+        if let Some(n) = d.node_mut(id) {
+            n.set_clips(true);
+        }
+        Ok(true)
+    })?;
+    Ok(json!({ "clip": clip }))
 }
 
 fn new_layer(s: &mut Session, p: &Value) -> Result<Value> {

@@ -7,13 +7,13 @@ use vectorcraft_render::Rendered;
 
 use super::*;
 
-fn session() -> Session {
+pub(crate) fn session() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     s
 }
 
-fn id_of(v: &Value) -> NodeId {
+pub(crate) fn id_of(v: &Value) -> NodeId {
     NodeId(v["id"].as_u64().unwrap())
 }
 
@@ -21,16 +21,16 @@ fn ellipse(s: &mut Session, x: f64, w: f64) -> NodeId {
     id_of(&s.execute("shape.ellipse", &json!({"x": x, "y": x, "width": w, "height": w})).unwrap())
 }
 
-fn select(s: &mut Session, ids: &[NodeId]) {
+pub(crate) fn select(s: &mut Session, ids: &[NodeId]) {
     s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
 }
 
 /// The active document's 100×100 artboard, rendered transparent.
-fn render(s: &Session) -> Rendered {
+pub(crate) fn render(s: &Session) -> Rendered {
     vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 100, 100, Affine::IDENTITY, &Default::default())
 }
 
-fn opaque(r: &Rendered, x: u32, y: u32) -> bool {
+pub(crate) fn opaque(r: &Rendered, x: u32, y: u32) -> bool {
     r.pixel(x, y)[3] > 128
 }
 
@@ -43,7 +43,7 @@ fn reopened(s: &mut Session, format: &str) -> Rendered {
 }
 
 /// The same probes are opaque on screen and in the SVG and PDF output.
-fn assert_outputs_agree(s: &mut Session, probes: &[(u32, u32)]) {
+pub(crate) fn assert_outputs_agree(s: &mut Session, probes: &[(u32, u32)]) {
     let screen = render(s);
     for format in ["svg", "pdf"] {
         let out = reopened(s, format);
@@ -54,7 +54,7 @@ fn assert_outputs_agree(s: &mut Session, probes: &[(u32, u32)]) {
 }
 
 /// The leaf a click at (`x`, `y`) hits.
-fn hit(s: &Session, x: f64, y: f64) -> Option<NodeId> {
+pub(crate) fn hit(s: &Session, x: f64, y: f64) -> Option<NodeId> {
     vectorcraft_doc::hit::hit_test(&s.doc().unwrap().doc, vectorcraft_geom::Point::new(x, y), Default::default()).map(|h| h.leaf)
 }
 

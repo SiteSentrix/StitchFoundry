@@ -11,11 +11,11 @@ use std::sync::Arc;
 
 use vectorcraft_doc::live::{self, GradientMesh, MeshQuad};
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::{Affine, BezPath, PathData, Point};
+use vectorcraft_geom::{BezPath, PathData, Point};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
 
-use crate::{Frame, Renderer, blend_mode, text_geom};
+use crate::{Frame, Renderer, text_geom};
 
 type Expanded = Arc<Vec<Arc<Node>>>;
 type MeshEntry = (Arc<Node>, Arc<Vec<MeshQuad>>, u64);
@@ -113,14 +113,13 @@ impl Renderer {
         let stamp = self.stamp;
         self.live.tick(stamp);
         let opacity = self.opacity_of(a);
-        let layered = !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate);
-        if layered {
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, Some(blend_mode(a.blend)), Some(opacity), None, None);
-        }
-        self.draw_live_body(ctx, f, a, true);
-        if layered {
-            ctx.pop_layer();
+        if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate) {
+            let blends = self.blends_through(a);
+            let bounds = if blends { self.bounds_of(a) } else { None };
+            let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
+            self.group(ctx, f, comp, &mut |r, c, fr| r.draw_live_body(c, fr, a, true));
+        } else {
+            self.draw_live_body(ctx, f, a, true);
         }
         self.stats.drawn += 1;
     }

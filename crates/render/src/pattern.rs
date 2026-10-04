@@ -183,17 +183,15 @@ impl Renderer {
         let children: Vec<Arc<Node>> = layer.children().cloned().unwrap_or_default();
         if layer.visible && !children.is_empty() {
             let dim = (def.dim_copies / 100.0).clamp(0.0, 1.0);
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, None, Some(dim), None, None);
-            for o in def.preview_offsets() {
-                let view = f.view * Affine::translate(o);
-                let visible = f.visible - o;
-                let frame = Frame { view, visible, ..*f };
-                for c in &children {
-                    self.draw_arc(ctx, &frame, c);
+            let comp = crate::group::Composite { opacity: dim, ..Default::default() };
+            self.group(ctx, f, comp, &mut |r, c, fr| {
+                for o in def.preview_offsets() {
+                    let frame = Frame { view: fr.view * Affine::translate(o), visible: fr.visible - o, ..*fr };
+                    for a in &children {
+                        r.draw_arc(c, &frame, a);
+                    }
                 }
-            }
-            ctx.pop_layer();
+            });
         }
         self.draw_arc(ctx, f, layer);
         if def.show_tile_edge {

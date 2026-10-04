@@ -31,7 +31,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::ScrollArea::vertical().max_height(h).auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for l in doc.layers.iter().rev() {
-            row(ui, &doc, l, 0, &sel, current, &mut expanded, &mut actions, &t);
+            row(ui, &doc, l, 0, false, &sel, current, &mut expanded, &mut actions, &t);
         }
     });
     ui.data_mut(|d| d.insert_temp(expanded_id(), expanded));
@@ -64,7 +64,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         actions.push(("layer.newSublayer".into(), json!({})));
     }
     if widgets::icon_button(&mut child, "frame", "Make/Release Clipping Mask", false, 24.0).clicked() {
-        actions.push(("object.clippingMask.make".into(), json!({})));
+        actions.push(("layer.clippingMask.toggle".into(), json!({})));
     }
     if widgets::icon_button(&mut child, "search", "Locate Object", false, 24.0).clicked() {
         // Expand ancestors of the selection.
@@ -89,6 +89,7 @@ fn row(
     doc: &vectorcraft_doc::Document,
     n: &Node,
     depth: usize,
+    clip_path: bool,
     sel: &HashSet<NodeId>,
     current: Option<NodeId>,
     expanded: &mut HashSet<u64>,
@@ -199,7 +200,12 @@ fn row(
             }
         }
         _ => {
-            ui.painter().with_clip_rect(name_rect).text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name.clone(), font, t.text);
+            let painter = ui.painter().with_clip_rect(name_rect);
+            let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name.clone(), font, t.text);
+            // A clipping path's name is underlined.
+            if clip_path {
+                painter.line_segment([text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text));
+            }
         }
     }
     // Target circle and selection square.
@@ -269,8 +275,8 @@ fn row(
     }
 
     if has_children && expanded.contains(&n.id.0) {
-        for c in n.children().unwrap().iter().rev() {
-            row(ui, doc, c, depth + 1, sel, current, expanded, actions, t);
+        for (i, c) in n.children().unwrap().iter().enumerate().rev() {
+            row(ui, doc, c, depth + 1, i == 0 && n.clips(), sel, current, expanded, actions, t);
         }
     }
 }
@@ -373,5 +379,28 @@ mod tests {
         run(&mut app, "transparency.set", json!({"knockout": false}));
         run(&mut app, "appearance.addStroke", json!({}));
         assert_eq!(filled_targets(&mut app, &ctx), 1, "two strokes");
+    }
+
+    #[test]
+    fn a_layer_clipping_mask_underlines_its_clipping_path() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 25, "y": 25, "width": 50, "height": 50}));
+        run(&mut app, "select.none", json!({}));
+        let ctx = egui::Context::default();
+        let text = Tokens::get(&ctx).text;
+        // Line segments in the text colour: the underlines.
+        let underlines = |app: &mut VectorcraftApp| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::LineSegment { stroke, .. } if stroke.color == text)).count()
+        };
+        assert_eq!(underlines(&mut app), 0);
+        assert_eq!(run(&mut app, "layer.clippingMask.toggle", json!({}))["clip"], true);
+        assert_eq!(underlines(&mut app), 1);
+        run(&mut app, "layer.clippingMask.toggle", json!({}));
+        assert_eq!(underlines(&mut app), 0);
     }
 }

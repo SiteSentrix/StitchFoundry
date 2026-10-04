@@ -532,32 +532,49 @@ fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
+/// Make `top` (a path, compound path or text object) the clipping path: it loses its paint (it
+/// stays unpainted after Release).
+pub(super) fn make_clipping_path(d: &mut Document, top: NodeId) -> Result<()> {
+    let c = d.node_mut(top).ok_or(EngineError::NoNode(top))?;
+    if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
+        return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
+    }
+    c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+    match &mut c.kind {
+        NodeKind::Path { clipping, .. } => *clipping = true,
+        NodeKind::Text(t) => {
+            for r in &mut t.runs {
+                (r.style.fill, r.style.stroke) = (Paint::None, Paint::None);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Stop clip group or clipped layer `id` clipping; its clipping path stays, unpainted.
+pub(super) fn release_clip(d: &mut Document, id: NodeId) {
+    let Some(n) = d.node_mut(id).filter(|n| n.clips()) else { return };
+    n.set_clips(false);
+    let clip = n.children().and_then(|c| c.first()).map(|c| c.id);
+    if let Some(c) = clip.and_then(|c| d.node_mut(c))
+        && let NodeKind::Path { clipping, .. } = &mut c.kind
+    {
+        *clipping = false;
+    }
+}
+
 fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let top = *ids.last().unwrap();
     let gid = s.edit("Make Clipping Mask", |d, sel| {
-        if !matches!(d.node(top).map(|n| &n.kind), Some(NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_))) {
-            return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
-        }
+        make_clipping_path(d, top)?;
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let gid = d.alloc_id();
         d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![], clip: true }))?;
         d.move_node(top, Some(gid), 0)?;
         for id in &ids[..ids.len() - 1] {
             d.move_node(*id, Some(gid), usize::MAX)?;
-        }
-        if let Some(c) = d.node_mut(top) {
-            // The clipping path loses its paint (it stays unpainted after Release).
-            c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
-            match &mut c.kind {
-                NodeKind::Path { clipping, .. } => *clipping = true,
-                NodeKind::Text(t) => {
-                    for r in &mut t.runs {
-                        (r.style.fill, r.style.stroke) = (Paint::None, Paint::None);
-                    }
-                }
-                _ => {}
-            }
         }
         sel.set([gid]);
         Ok(gid)
@@ -569,18 +586,7 @@ fn clip_release(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     s.edit("Release Clipping Mask", |d, _| {
         for id in &ids {
-            let clip_child = match d.node(*id).map(|n| &n.kind) {
-                Some(NodeKind::Group { children, clip: true }) => children.first().map(|c| c.id),
-                _ => continue,
-            };
-            if let Some(NodeKind::Group { clip, .. }) = d.node_mut(*id).map(|n| &mut n.kind) {
-                *clip = false;
-            }
-            if let Some(c) = clip_child.and_then(|c| d.node_mut(c))
-                && let NodeKind::Path { clipping, .. } = &mut c.kind
-            {
-                *clipping = false;
-            }
+            release_clip(d, *id);
         }
         Ok(())
     })?;

@@ -127,7 +127,7 @@ pub(crate) fn visual_bounds(n: &Node) -> Option<Rect> {
 /// the subtree (a shadow can reach the view while its object is outside it).
 pub(crate) fn cull_bounds(n: &Node) -> Option<Rect> {
     match &n.kind {
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
+        NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
             children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(c)))
         }
         _ if has_fx(n) => visual_bounds(n),
@@ -284,7 +284,7 @@ impl Renderer {
                 // Silhouette (the object's painted alpha), offset by the shadow distance.
                 let mut off = crate::single_threaded_context(w, h);
                 let crop = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
-                paint(self, &mut off, &shifted(&crop, dx, dy));
+                self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
                 off.flush();
                 let mut pm = vello_cpu::Pixmap::new(w, h);
                 off.render(&mut pm, &mut self.resources);
@@ -343,11 +343,19 @@ impl Renderer {
     /// the art standing for the object's silhouette.
     pub(crate) fn draw_object_fx(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
         let opacity = self.opacity_of(a);
-        let layered = !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_doc::color::BlendMode::Normal || a.isolate);
-        if layered {
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, Some(blend_mode(a.blend)), Some(opacity), None, None);
+        if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_doc::color::BlendMode::Normal || a.isolate) {
+            let blends = self.blends_through(a);
+            let bounds = if blends { self.bounds_of(a) } else { None };
+            let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
+            self.group(ctx, f, comp, &mut |r, c, fr| r.draw_object_fx_art(c, fr, a, cache));
+        } else {
+            self.draw_object_fx_art(ctx, f, a, cache);
         }
+        self.stats.drawn += 1;
+    }
+
+    /// What [`Self::draw_object_fx`] draws inside the object's transparency group.
+    fn draw_object_fx_art(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
         let art = self.fx_art(f.doc, a, cache);
         let rfx = effects::raster_effects(&a.appearance.effects);
         match cull_bounds(&art) {
@@ -363,10 +371,6 @@ impl Renderer {
             }
             _ => self.draw_node(ctx, f, &art, true),
         }
-        if layered {
-            ctx.pop_layer();
-        }
-        self.stats.drawn += 1;
     }
 
     /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):
@@ -535,7 +539,7 @@ impl Renderer {
         draw: impl FnOnce(&mut Self, &mut RenderContext, &Frame, Option<(vectorcraft_doc::color::BlendMode, f32)>),
     ) {
         if !f.mt {
-            return draw(self, ctx, f, composite);
+            return self.inside_layer(|r| draw(r, ctx, f, composite));
         }
         // 3σ of the Gaussian (σ = blur / 2) in pixels, plus a pixel of antialiasing.
         let spread = blur.max(0.0) * 1.5 / f.px + 2.0;
@@ -549,7 +553,7 @@ impl Renderer {
         let (w, h) = (w as u16, h as u16);
         let mut off = crate::single_threaded_context(w, h);
         let shifted = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
-        draw(self, &mut off, &shifted, None);
+        self.inside_layer(|r| draw(r, &mut off, &shifted, None));
         off.flush();
         let mut pm = vello_cpu::Pixmap::new(w, h);
         off.render(&mut pm, &mut self.resources);
@@ -558,13 +562,10 @@ impl Renderer {
             ctx.set_transform(Affine::IDENTITY);
             ctx.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
         }
-        ctx.set_transform(Affine::translate((x0, y0)));
-        ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(std::sync::Arc::new(pm)), sampler: peniko::ImageSampler::default() });
-        ctx.fill_rect(&Rect::new(0.0, 0.0, w as f64, h as f64));
+        crate::group::draw_pixmap(ctx, std::sync::Arc::new(pm), (x0, y0));
         if layered {
             ctx.pop_layer();
         }
-        ctx.set_transform(Affine::IDENTITY);
     }
 
     /// Paint the fills and strokes of `n` on geometry `g`, applying per-item geometry effects and

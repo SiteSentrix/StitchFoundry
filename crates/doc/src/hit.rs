@@ -88,8 +88,8 @@ fn clip_contains(clip: &Node, p: Point) -> bool {
 
 fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId>) -> Option<Hit> {
     let children = parent.children()?;
-    // A clip group only hits inside its clipping path.
-    if let NodeKind::Group { clip: true, .. } = parent.kind
+    // A clip group (or a layer with a clipping mask) only hits inside its clipping path.
+    if parent.clips()
         && let Some(clip) = children.first()
         && !clip_contains(clip, p)
     {

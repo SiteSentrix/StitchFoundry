@@ -13,7 +13,7 @@ use vectorcraft_doc::{AppearanceItem, Document, Node, StrokeLayer};
 use vectorcraft_geom::{BezPath, Rect};
 use vello_cpu::RenderContext;
 
-use crate::{Frame, Renderer, blend_mode};
+use crate::{Frame, Renderer};
 
 struct Entry {
     path: BezPath,
@@ -98,16 +98,15 @@ impl Renderer {
                 pieces
             }
         };
-        let layered = st.opacity < 1.0 || st.blend != vectorcraft_color::BlendMode::Normal;
-        if layered {
-            ctx.set_transform(vectorcraft_geom::Affine::IDENTITY);
-            ctx.push_layer(None, Some(blend_mode(st.blend)), Some(st.opacity), None, None);
-        }
-        for p in pieces.iter() {
-            self.draw_node(ctx, f, p, true);
-        }
-        if layered {
-            ctx.pop_layer();
+        let mut draw = |r: &mut Self, c: &mut RenderContext, fr: &Frame| {
+            for p in pieces.iter() {
+                r.draw_node(c, fr, p, true);
+            }
+        };
+        if st.opacity < 1.0 || st.blend != vectorcraft_color::BlendMode::Normal {
+            self.group(ctx, f, crate::group::Composite { blend: st.blend, opacity: st.opacity, ..Default::default() }, &mut draw);
+        } else {
+            draw(self, ctx, f);
         }
         true
     }

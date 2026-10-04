@@ -8,6 +8,7 @@
 
 mod brush_fx;
 mod fx;
+mod group;
 mod live;
 mod paint;
 mod pattern;
@@ -22,6 +23,8 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
 use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
+
+use group::Composite;
 
 pub use effects::stroke::width_outline;
 pub use live::expand_live;
@@ -237,6 +240,17 @@ pub struct Renderer {
     shape_of: usize,
     /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
     fx_arts: PtrMap<usize, (Arc<Node>, Arc<Node>)>,
+    /// Layers open around the drawing point in the current context: a non-isolated group can copy
+    /// its backdrop only when there are none (see [`Self::group`]).
+    nested: u32,
+    /// Copy of the backdrop of the non-isolated group being drawn offscreen, in its context's
+    /// pixels: the elements of a non-isolated knockout group composite against it.
+    backdrop: Option<Arc<Pixmap>>,
+    /// [`Node::blends_through`] per container, keyed like `geom`.
+    blends: PtrMap<usize, (Arc<Node>, bool, u64)>,
+    /// Clip paths pushed on the current context (path, rule, transform): starting the context
+    /// again from a picture of it pushes them again (see [`Self::group`]).
+    clip_paths: Vec<(BezPath, FillRule, Affine)>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -287,6 +301,10 @@ impl Renderer {
             knockout: false,
             shape_of: 0,
             fx_arts: PtrMap::default(),
+            nested: 0,
+            backdrop: None,
+            blends: PtrMap::default(),
+            clip_paths: vec![],
         }
     }
 
@@ -327,40 +345,18 @@ impl Renderer {
             }
         }
         self.stamp += 1;
-        let trim = opts.trim && !doc.artboards.is_empty();
-        if trim {
+        (self.nested, self.backdrop) = (0, None);
+        self.clip_paths.clear();
+        if opts.trim && !doc.artboards.is_empty() {
             let mut clip = BezPath::new();
             for ab in &doc.artboards {
                 clip.extend(ab.rect.path_elements(0.1));
             }
-            ctx.set_transform(view);
-            ctx.push_clip_layer(&clip);
-        }
-        if !self.draw_pattern_edit(&mut ctx, &frame) {
-            // While editing an opacity mask its art is seen only through the mask (Illustrator).
-            let mask_layer = doc.mask_edit.map(|m| m.layer);
-            let layers = doc.layers.iter().filter(|l| Some(l.id) != mask_layer);
-            // Page Isolated Blending / Page Knockout Group: the page is a group of its own.
-            let page_group = !opts.outline && (doc.page_isolate || doc.page_knockout);
-            self.knockout = page_group && doc.page_knockout;
-            if page_group {
-                ctx.set_transform(Affine::IDENTITY);
-                ctx.push_layer(None, None, None, None, None);
-            }
-            if self.knockout {
-                self.draw_knockout(&mut ctx, &frame, &layers.cloned().collect::<Vec<_>>());
-            } else {
-                for layer in layers {
-                    self.draw_arc(&mut ctx, &frame, layer);
-                }
-            }
-            if page_group {
-                ctx.pop_layer();
-            }
-            self.knockout = false;
-        }
-        if trim {
-            ctx.pop_layer();
+            let blends = self.children_blend(&doc.layers);
+            let trim = Composite { clip: Some((&clip, FillRule::NonZero)), blends, ..Default::default() };
+            self.group(&mut ctx, &frame, trim, &mut |r, c, fr| r.draw_page(c, fr));
+        } else {
+            self.draw_page(&mut ctx, &frame);
         }
         // Drop cache entries not seen for a few frames.
         let g = self.stamp;
@@ -385,6 +381,32 @@ impl Renderer {
         proof::post(&mut pixels, opts);
         self.stats.micros = now().saturating_sub(start);
         Rendered { width: w as u32, height: h as u32, pixels }
+    }
+
+    /// The page's art: the layers (or the pattern being edited), inside the page group when the
+    /// page has one.
+    fn draw_page(&mut self, ctx: &mut RenderContext, f: &Frame) {
+        if self.draw_pattern_edit(ctx, f) {
+            return;
+        }
+        let doc = f.doc;
+        // While editing an opacity mask its art is seen only through the mask.
+        let mask_layer = doc.mask_edit.map(|m| m.layer);
+        let layers: Vec<Arc<Node>> = doc.layers.iter().filter(|l| Some(l.id) != mask_layer).cloned().collect();
+        // Page Isolated Blending / Page Knockout Group: the page is a group of its own.
+        let page_group = !f.opts.outline && (doc.page_isolate || doc.page_knockout);
+        let knockout = page_group && doc.page_knockout;
+        let mut draw = |r: &mut Self, c: &mut RenderContext, fr: &Frame| {
+            r.knockout = knockout;
+            r.draw_children(c, fr, &layers, knockout);
+            r.knockout = false;
+        };
+        if page_group {
+            let blends = self.children_blend(&layers);
+            self.group(ctx, f, Composite { isolated: doc.page_isolate, blends, ..Default::default() }, &mut draw);
+        } else {
+            draw(self, ctx, f);
+        }
     }
 
     /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white,
@@ -415,7 +437,8 @@ impl Renderer {
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
         }
         let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts: &RenderOptions::default() };
-        self.knockout = false;
+        (self.knockout, self.nested, self.backdrop) = (false, 0, None);
+        self.clip_paths.clear();
         self.draw_node(&mut ctx, &frame, n, true);
         ctx.flush();
         let mut pm = Pixmap::new(w, w);
@@ -433,7 +456,7 @@ impl Renderer {
             return e.bounds;
         }
         let b = match &a.kind {
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } if !fx::has_fx(a) => {
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_fx(a) => {
                 let mut acc: Option<Rect> = None;
                 for c in children {
                     if c.visible {
@@ -508,11 +531,11 @@ impl Renderer {
             && !f.opts.outline
             && !self.is_shape(a)
         {
-            let mask = self.opacity_mask(f, m, ctx.width(), ctx.height());
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, None, None, Some(mask), None);
-            self.draw_arc_body(ctx, f, a);
-            ctx.pop_layer();
+            // A masked object is a non-isolated group of its own.
+            let mask = Some(self.opacity_mask(f, m, ctx.width(), ctx.height()));
+            let blends = a.blend != vectorcraft_color::BlendMode::Normal || (!a.isolate && self.blends_through(a));
+            let bounds = if blends { self.bounds_of(a) } else { None };
+            self.group(ctx, f, Composite { mask, blends, bounds, ..Default::default() }, &mut |r, c, fr| r.draw_arc_body(c, fr, a));
             return;
         }
         self.draw_arc_body(ctx, f, a);
@@ -522,9 +545,10 @@ impl Renderer {
     fn opacity_mask(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> vello_cpu::Mask {
         let mut mctx = single_threaded_context(w, h);
         // Mask art is a picture of its own: it takes no part in a knockout group around the object.
-        let knockout = std::mem::take(&mut self.knockout);
+        let outer =
+            (std::mem::take(&mut self.knockout), std::mem::take(&mut self.nested), self.backdrop.take(), std::mem::take(&mut self.clip_paths));
         self.draw_node(&mut mctx, &Frame { mt: false, ..*f }, &m.art, true);
-        self.knockout = knockout;
+        (self.knockout, self.nested, self.backdrop, self.clip_paths) = outer;
         mctx.flush();
         let mut pm = Pixmap::new(w, h);
         mctx.render(&mut pm, &mut self.resources);
@@ -598,45 +622,44 @@ impl Renderer {
             return self.draw_object_fx(ctx, f, &Arc::new(n.clone()), false);
         }
         let outline = f.opts.outline;
-        let mut layers = 0;
         let template_dim = matches!(n.kind, NodeKind::Layer { template: true, .. }) && f.opts.dim_templates;
         let opacity = if template_dim { self.opacity_of(n) * 0.5 } else { self.opacity_of(n) };
-        // Whether this container's children knock each other out (a knockout group is isolated).
+        // Whether this container's children knock each other out.
         let knockout = !outline && n.knocks_out(self.knockout);
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         if !outline && (opacity < 1.0 || n.blend != vectorcraft_color::BlendMode::Normal || n.isolate || knockout) {
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, Some(blend_mode(n.blend)), Some(opacity), None, None);
-            layers += 1;
+            let blends = self.blends_through(n);
+            let bounds = if blends { self.node_bounds(n) } else { None };
+            let comp = Composite { blend: n.blend, opacity, isolated: n.isolate, blends, bounds, ..Default::default() };
+            self.group(ctx, f, comp, &mut |r, c, fr| r.draw_content(c, fr, n, knockout));
+        } else {
+            self.draw_content(ctx, f, n, knockout);
         }
+        self.knockout = enclosing;
+        self.stats.drawn += 1;
+    }
+
+    /// What `n` draws inside its transparency group (`knockout`: its children knock each other out).
+    fn draw_content(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, knockout: bool) {
         match &n.kind {
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } if knockout => self.draw_knockout(ctx, f, children),
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
-                for c in children {
-                    self.draw_arc(ctx, f, c);
-                }
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
+                self.draw_children(ctx, f, children, knockout)
             }
-            NodeKind::Group { children, clip: true } if outline => {
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } if f.opts.outline => {
                 for c in children {
                     self.draw_node(ctx, f, c, false);
                 }
             }
-            NodeKind::Group { children, clip: true } => {
-                // Nothing to clip by hides the clipped art (as in the SVG and PDF output).
+            NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+                // Nothing to clip by hides the clipped art (as in the SVG and PDF output). A clip
+                // group doesn't isolate: blending inside it reaches the art below.
                 if let Some((clip, rest)) = children.split_first()
                     && let Some(region) = self.clip_of(clip)
                 {
-                    ctx.set_transform(f.view);
-                    ctx.set_fill_rule(fill_rule(region.1));
-                    ctx.push_clip_layer(&region.0);
-                    if knockout {
-                        self.draw_knockout(ctx, f, rest);
-                    } else {
-                        for c in rest {
-                            self.draw_arc(ctx, f, c);
-                        }
-                    }
-                    ctx.pop_layer();
+                    let blends = self.blends_through(n);
+                    let bounds = if blends { Some(region.0.bounding_box()) } else { None };
+                    let comp = Composite { clip: Some((&region.0, region.1)), blends, bounds, ..Default::default() };
+                    self.group(ctx, f, comp, &mut |r, c, fr| r.draw_children(c, fr, rest, knockout));
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {
@@ -667,10 +690,25 @@ impl Renderer {
             }
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => self.draw_live_node(ctx, f, n),
         }
-        self.knockout = enclosing;
-        self.stats.drawn += 1;
-        for _ in 0..layers {
-            ctx.pop_layer();
+    }
+
+    /// The children of a group: as the elements of a knockout group when `knockout`.
+    fn draw_children(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>], knockout: bool) {
+        if knockout {
+            self.draw_knockout(ctx, f, children);
+        } else {
+            for c in children {
+                self.draw_arc(ctx, f, c);
+            }
+        }
+    }
+
+    /// Cull bounds of `n`: cached when it is a node of the tree being drawn.
+    fn node_bounds(&mut self, n: &Node) -> Option<Rect> {
+        match self.geom.get(&(n as *const Node as usize)) {
+            // The entry keeps its node alive, so the address is that node's.
+            Some(e) if std::ptr::eq(Arc::as_ptr(&e.node), n) => e.bounds,
+            _ => fx::cull_bounds(n),
         }
     }
 
@@ -678,21 +716,18 @@ impl Renderer {
     /// what the elements below it drew wherever it paints (its knockout shape: its coverage at full
     /// object opacity without its opacity mask, or as drawn when its opacity and mask define the
     /// knockout shape), then adds itself: it composites against the group's backdrop instead of
-    /// over the elements below it.
+    /// over the elements below it (the art below the group when the group is non-isolated and
+    /// drawn over a copy of it, see [`Self::group`]).
     fn draw_knockout(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>]) {
+        let backdrop = self.backdrop.take();
         for c in Node::knockout_elements(children) {
             if self.skipped(f, c) {
                 continue;
             }
-            for (compose, shape) in [(Compose::DestOut, !c.knockout_shape), (Compose::Plus, false)] {
-                ctx.set_transform(Affine::IDENTITY);
-                ctx.push_layer(None, Some(BlendMode::new(Mix::Normal, compose)), None, None, None);
-                self.shape_of = if shape { Arc::as_ptr(c) as usize } else { 0 };
-                self.draw_arc(ctx, f, c);
-                self.shape_of = 0;
-                ctx.pop_layer();
-            }
+            self.knockout_pass(ctx, f, c, Compose::DestOut, None);
+            self.knockout_pass(ctx, f, c, Compose::Plus, backdrop.as_ref());
         }
+        self.backdrop = backdrop;
     }
 
     /// Whether `n` is the knockout element being drawn as its shape (see [`Self::draw_knockout`]).
@@ -968,7 +1003,8 @@ impl Renderer {
 /// Opacity-mask coverage of one premultiplied pixel: luminance, with the area outside the mask
 /// art black (clip) or white (no clip), optionally inverted.
 fn mask_value(r: u8, g: u8, b: u8, a: u8, clip: bool, invert: bool) -> u8 {
-    let mut l = (0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32) / 255.0;
+    let [kr, kg, kb] = vectorcraft_color::blend::MASK_LUM;
+    let mut l = (kr * r as f32 + kg * g as f32 + kb * b as f32) / 255.0;
     if !clip {
         l += 1.0 - a as f32 / 255.0;
     }
@@ -1101,7 +1137,11 @@ fn now() -> u64 {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_blend;
+#[cfg(test)]
 mod tests_clip;
+#[cfg(test)]
+mod tests_isolation;
 #[cfg(test)]
 mod tests_knockout;
 #[cfg(test)]
