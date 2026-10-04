@@ -242,9 +242,12 @@ pub const FORMATS: &[Format] = &[
 pub const OPEN_EXTS: &[&str] =
     &["vectorcraft", "drawcraft", "svg", "svgz", "pdf", "ai", "ait", "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp"];
 
-/// Open-dialog filters: "All readable files" first, then one per readable format.
+/// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
+/// libraries (which open in the library panel).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once(("All readable files", OPEN_EXTS)).chain(FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions)))
+    std::iter::once(("All readable files", OPEN_EXTS))
+        .chain(FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions)))
+        .chain(std::iter::once(("Swatch libraries", super::swatchlib::LIBRARY_EXTS)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`).
@@ -291,17 +294,17 @@ fn formats(_: &mut Session, _: &Value) -> Result<Value> {
 // ---------- the file system (none on the web, where commands take and return bytes) ----------
 
 #[cfg(not(target_arch = "wasm32"))]
-fn read_file(path: &str) -> Result<Vec<u8>> {
+pub(crate) fn read_file(path: &str) -> Result<Vec<u8>> {
     std::fs::read(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
+pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
     std::fs::write(path, bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn create_dir(path: &str) -> Result<()> {
+pub(crate) fn create_dir(path: &str) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
@@ -311,17 +314,17 @@ fn no_fs(path: &str) -> EngineError {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn read_file(path: &str) -> Result<Vec<u8>> {
+pub(crate) fn read_file(path: &str) -> Result<Vec<u8>> {
     Err(no_fs(path))
 }
 
 #[cfg(target_arch = "wasm32")]
-fn write_file(path: &str, _: &[u8]) -> Result<()> {
+pub(crate) fn write_file(path: &str, _: &[u8]) -> Result<()> {
     Err(no_fs(path))
 }
 
 #[cfg(target_arch = "wasm32")]
-fn create_dir(path: &str) -> Result<()> {
+pub(crate) fn create_dir(path: &str) -> Result<()> {
     Err(no_fs(path))
 }
 

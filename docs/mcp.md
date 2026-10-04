@@ -303,4 +303,24 @@ filter on the whole group.
 {"name":"run_command","arguments":{"command":"appearance.moveItem","params":{"ids":[7],"from":"contents","to":1}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"ids":[2],"effect":"stylize.dropShadow"}}}
 {"name":"run_command","arguments":{"command":"appearance.addStroke","params":{"ids":[7],"target":"contents"}}}
+
+## Swatch libraries
+
+Swatch libraries are read-only sets of swatches computed in code (Web Safe 216, Grays and Neutrals, Earth Tones,
+Skin Tone Ramps, Pastels, Brights, Metallic Gradients, Perceptual Scales, Harmony Sets). `swatch.library.list` lists
+them (`id`, `name`, `category`, `count`) and `swatch.library.get {library}` returns one's swatches and colour groups
+in the `swatch.list` shape (`library` is an id or a name). `swatch.library.add {library, names?}` copies swatches
+into the document as one undo step: a colour group's name brings the whole group, a swatch's name the swatch alone,
+no names the whole library; swatches the document already has (same name and paint) are reported under `existing`
+and not added again. `apply: "fill"|"stroke"` also applies the first one, in the same undo step (what clicking a
+swatch in the library panel does). `swatch.resetDefaults {replace?}` brings back the missing default swatches.
+
+```json
+{"name":"run_command","arguments":{"command":"swatch.library.get","params":{"library":"earth-tones"}}}
+{"name":"run_command","arguments":{"command":"swatch.library.add","params":{"library":"earth-tones","names":["Clay"]}}}
 ```
+`swatch.library.save {path?, format?: "vcswatches"|"gpl"|"css", names?, name?, user?}` writes the document's swatches
+as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour groups; `.gpl` is 8-bit RGB;
+CSS writes custom properties); without `path` it returns `{data}`, and `user: true` saves into the user library
+folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
+dataBase64?, name?}` loads a `.vcswatches` or `.gpl` file, or another document's swatches, as a library to add from.

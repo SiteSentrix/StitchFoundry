@@ -462,6 +462,8 @@ pub struct Session {
     pub(crate) pending_paint: Option<Paint>,
     /// What the Eyedropper copies (`eyedropper.setOptions`); not saved.
     pub eyedropper: EyedropperOptions,
+    /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
+    pub swatch_libraries: cmd::swatchlib::Libraries,
 }
 
 impl Default for Session {
@@ -494,6 +496,7 @@ impl Session {
             recent_colors: vec![],
             pending_paint: None,
             eyedropper: Default::default(),
+            swatch_libraries: Default::default(),
         }
     }
 
@@ -801,6 +804,8 @@ mod tests_styles;
 mod tests_swatchcmds;
 #[cfg(test)]
 mod tests_swatches;
+#[cfg(test)]
+mod tests_swatchlib;
 #[cfg(test)]
 mod tests_textedit;
 #[cfg(test)]

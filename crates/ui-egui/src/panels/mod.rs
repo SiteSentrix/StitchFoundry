@@ -19,6 +19,7 @@ pub mod history;
 pub mod image_trace;
 pub mod info;
 pub mod layers;
+pub mod library_panel;
 pub mod magic_wand;
 pub mod navigator;
 pub mod opentype;

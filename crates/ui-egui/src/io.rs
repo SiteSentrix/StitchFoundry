@@ -8,8 +8,16 @@ use vectorcraft_geom::Affine;
 
 use crate::VectorcraftApp;
 
-/// Open bytes of any readable format as a new document (templates open untitled).
+/// Open bytes of any readable format as a new document (templates open untitled); swatch library
+/// files open in the library panel.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<(), String> {
+    if vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&fileio::extension(name).as_str()) {
+        let p = match path {
+            Some(path) => serde_json::json!({ "path": path }),
+            None => serde_json::json!({"name": name, "data": String::from_utf8_lossy(bytes)}),
+        };
+        return crate::panels::swatches::load_library(app, p).map(|_| ());
+    }
     let r = fileio::open_bytes(&mut app.session, name, bytes, path).map_err(|e| e.to_string())?;
     app.sync_views();
     if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
@@ -113,7 +121,9 @@ pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, mut pa
         }
     }
     let v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
-    let bytes = v["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode).ok_or("no data")?;
+    // Binary output comes as base64, text (swatch libraries) as is.
+    let bytes = v["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode).or_else(|| v["data"].as_str().map(|t| t.as_bytes().to_vec()));
+    let bytes = bytes.ok_or("no data")?;
     write_out(app, &path, &bytes)?;
     app.status(format!("Saved {path}"));
     Ok(path)

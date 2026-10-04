@@ -24,8 +24,9 @@
 Swatch editors: `engine.execute` with `ui.swatchOptions {name}` opens the `swatchOptions` dialog for a colour swatch
 (fields `name`, `spot`, `global`, `mode`: `gray`/`rgb`/`hsb`/`cmyk`/`web`, `color`: `"#rrggbb"` or a colour object,
 `preview`), which previews on the canvas while open; `ui.dialog.confirm` applies it with `swatch.edit` as one undo
-step and `ui.dialog.cancel` rolls the preview back. Gradient swatches open the Gradient panel and pattern swatches
-pattern editing instead.
+step and `ui.dialog.cancel` rolls the preview back. For a gradient swatch the dialog has `name` only (it shows the
+gradient) and OK renames it; pattern swatches open pattern editing instead. Dropping a gradient (or colour) on a
+swatch of its kind in the Swatches panel with Alt held replaces it (`swatch.edit {name, paint}`).
 
 Confirmations: deleting swatches from the Swatches panel opens a `confirm` dialog (fields `message`, `detail`);
 `ui.dialog.confirm` runs the command it asks about (here `swatch.delete`) and `ui.dialog.cancel` drops it.
@@ -77,3 +78,13 @@ Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`
 canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.colors.adjustBalance` /
 `edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global
 and spot colours exist; the dialog then stays open.
+
+Library panel: `engine.execute {command: "window.swatchLibrary", params: {library}}` opens the read-only library
+panel on a swatch library (`ui.inspect` shows it as `library_panel: {kind, id}`; `library: null` closes it).
+Clicking a swatch there runs `swatch.library.add {library, names: [name], apply}` (the active proxy, or the other
+one with Alt), so one undo step adds and applies it; Shift/Cmd-clicks select swatches and colour groups for
+Add to Swatches.
+`window.swatchLibrary.other {path?}` loads a library file (or another document's swatches) and opens it there;
+opening a `.vcswatches` or `.gpl` file with `app.open` does the same. `ui.saveSwatchLibrary {names?}` opens the
+`saveSwatchLibrary` dialog (fields `name`, `format`: `vcswatches`/`gpl`/`css`, `user`: save to the user library
+folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `swatch.library.save` (to a file it asks for a path).

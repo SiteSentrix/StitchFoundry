@@ -37,6 +37,7 @@ mod select;
 mod stroke;
 mod style;
 mod swatch;
+pub mod swatchlib;
 pub(crate) mod tabs;
 mod textedit;
 pub mod textstyles;
@@ -194,6 +195,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(distortcmds::specs());
         v.extend(paint::proxy_specs());
         v.extend(overprint::specs());
+        v.extend(swatchlib::specs());
         v
     })
 }
