@@ -4122,6 +4122,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-geom",
  "vectorcraft-pathops",
+ "vectorcraft-text",
 ]
 
 [[package]]

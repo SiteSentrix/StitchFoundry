@@ -88,8 +88,24 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("object.showAll", "Show All", ["Object"], Some("Cmd+Alt+3"), "{}", has_doc, show_all),
         cmd!("object.compoundPath.make", "Make", ["Object", "Compound Path"], Some("Cmd+8"), "{}", has_selection, compound_make),
         cmd!("object.compoundPath.release", "Release", ["Object", "Compound Path"], Some("Cmd+Alt+Shift+8"), "{}", has_selection, compound_release),
-        cmd!("object.clippingMask.make", "Make", ["Object", "Clipping Mask"], Some("Cmd+7"), "{}", has_multi, clip_make),
-        cmd!("object.clippingMask.release", "Release", ["Object", "Clipping Mask"], Some("Cmd+Alt+7"), "{}", has_selection, clip_release),
+        cmd!(
+            "object.clippingMask.make",
+            "Make",
+            ["Object", "Clipping Mask"],
+            Some("Cmd+7"),
+            "{} the topmost selected object (a path, compound path or text, which loses its paint) clips the others: compound holes, even-odd fills and glyph outlines clip as drawn → {id} of the clip group",
+            has_multi,
+            clip_make
+        ),
+        cmd!(
+            "object.clippingMask.release",
+            "Release",
+            ["Object", "Clipping Mask"],
+            Some("Cmd+Alt+7"),
+            "{} the selected clip groups become plain groups; their clipping path (path, compound path or text) stays, unpainted",
+            has_selection,
+            clip_release
+        ),
         cmd!(
             "object.clippingMask.editContents",
             "Edit Contents",
@@ -520,8 +536,8 @@ fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let top = *ids.last().unwrap();
     let gid = s.edit("Make Clipping Mask", |d, sel| {
-        if !matches!(d.node(top).map(|n| &n.kind), Some(NodeKind::Path { .. })) {
-            return Err(EngineError::Other("the top object must be a path to use as a clipping mask".into()));
+        if !matches!(d.node(top).map(|n| &n.kind), Some(NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_))) {
+            return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
         }
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let gid = d.alloc_id();
@@ -531,9 +547,16 @@ fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
             d.move_node(*id, Some(gid), usize::MAX)?;
         }
         if let Some(c) = d.node_mut(top) {
+            // The clipping path loses its paint (it stays unpainted after Release).
             c.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
-            if let NodeKind::Path { clipping, .. } = &mut c.kind {
-                *clipping = true;
+            match &mut c.kind {
+                NodeKind::Path { clipping, .. } => *clipping = true,
+                NodeKind::Text(t) => {
+                    for r in &mut t.runs {
+                        (r.style.fill, r.style.stroke) = (Paint::None, Paint::None);
+                    }
+                }
+                _ => {}
             }
         }
         sel.set([gid]);

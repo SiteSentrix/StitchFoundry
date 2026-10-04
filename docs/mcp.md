@@ -148,3 +148,15 @@ until `transparency.stopEditingOpacityMask`. Saves and exports never include the
 {"name":"run_command","arguments":{"command":"transparency.setOpacityMask","params":{"id":12,"clip":false}}}
 {"name":"run_command","arguments":{"command":"transparency.info","params":{"ids":[12,20]}}}
 ```
+
+## Clipping masks
+
+`object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a
+text object (it loses its paint). Compound holes, even-odd fills, glyph outlines and the union of a group's members
+clip alike on screen, in raster export and in SVG and PDF. `object.clippingMask.release` turns the clip group into a
+plain group and keeps the clipping path, unpainted.
+
+```json
+{"name":"run_command","arguments":{"command":"select.set","params":{"ids":[12,15]}}}
+{"name":"run_command","arguments":{"command":"object.clippingMask.make","params":{}}}
+```
