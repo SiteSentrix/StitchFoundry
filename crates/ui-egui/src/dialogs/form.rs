@@ -16,6 +16,11 @@ pub(super) fn field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
 
 /// A text field `width` wide bound to `d.fields[key]`. Returns true when it changed.
 pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> bool {
+    text_edit(ui, d, key, width).changed()
+}
+
+/// [`text`] returning the field's response (focus, Enter).
+pub(super) fn text_edit(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let mut s = d.str(key);
     let r = egui::Frame::NONE
@@ -24,11 +29,10 @@ pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> 
         .corner_radius(egui::CornerRadius::same(3))
         .inner_margin(egui::Margin::symmetric(6, 3))
         .show(ui, |ui| ui.add(egui::TextEdit::singleline(&mut s).frame(egui::Frame::NONE).desired_width(width)));
-    let changed = r.inner.changed();
-    if changed {
+    if r.inner.changed() {
         d.fields.insert(key.into(), Value::String(s));
     }
-    changed
+    r.inner
 }
 
 /// A checkbox bound to `d.fields[key]`.
@@ -171,11 +175,14 @@ pub(super) fn slider(
     }
 }
 
+/// The field where [`preview`] keeps the parameters it last previewed.
+pub(super) const PREVIEWED: &str = "__previewed";
+
 /// The Preview checkbox of a dialog that previews `cmd` on the canvas: while it is on, `params` run
 /// again on the interaction's snapshot whenever they differ from the last preview (whether a widget
 /// or `ui.dialog.set` changed them); turning it off rolls back.
 pub(super) fn preview(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, label: &str, cmd: &str, params: Value) {
-    const LAST: &str = "__previewed";
+    const LAST: &str = PREVIEWED;
     ui.add_space(8.0);
     let mut on = d.bool("preview");
     if crate::widgets::check(ui, "Preview", on, true) {

@@ -1,14 +1,15 @@
 //! Object → Flatten Transparency: a preset, the raster/vector balance, the resolutions and the
 //! outline and preserve options, previewed live on the canvas (off at first: flattening complex
-//! art takes a while); OK keeps the result as one undo step (`object.flattenTransparency`).
+//! art takes a while); OK keeps the result as one undo step (`object.flattenTransparency`). Save
+//! Preset… keeps the options as a saved preset (`flattener.presets.save`).
 //!
-//! Fields: `preset` (a preset's name: setting it loads its options), the option keys of
-//! [`FlattenOptions`] (`balance`, `lineArtPpi`, `gradientPpi`, `textToOutlines`,
+//! Fields: `preset` (a built-in or saved preset's name: setting it loads its options), the option
+//! keys of [`FlattenOptions`] (`balance`, `lineArtPpi`, `gradientPpi`, `textToOutlines`,
 //! `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`)
 //! and `preview`.
 
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::FlattenOptions;
+use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset};
 
 use super::{DialogSpec, form};
 use crate::state::Dialog;
@@ -22,6 +23,9 @@ const CMD: &str = "object.flattenTransparency";
 
 /// The preset whose options the fields hold (a `preset` set from outside loads its options).
 const APPLIED: &str = "__applied";
+/// Save Preset… is open, with the name typed in `__presetName`.
+const SAVING: &str = "__saving";
+const PRESET_NAME: &str = "__presetName";
 
 /// What the preset dropdown shows once the options differ from the preset's.
 const CUSTOM: &str = "[Custom]";
@@ -37,11 +41,6 @@ pub fn open(app: &mut VectorcraftApp) {
     app.ui.dialog = Some(d);
 }
 
-/// The presets the dropdown offers: (name, options).
-fn presets() -> Vec<(String, FlattenOptions)> {
-    FlattenOptions::PRESETS.iter().filter_map(|id| Some((FlattenOptions::preset_label(id)?.to_string(), FlattenOptions::preset(id)?))).collect()
-}
-
 /// Write `o` into the option fields.
 pub(crate) fn put_options(fields: &mut Map<String, Value>, o: &FlattenOptions) {
     if let Value::Object(m) = serde_json::to_value(o).unwrap_or_default() {
@@ -49,43 +48,63 @@ pub(crate) fn put_options(fields: &mut Map<String, Value>, o: &FlattenOptions) {
     }
 }
 
-/// The options the fields hold (a `preset` not loaded yet: its options, adjusted by none).
-fn options(d: &Dialog) -> Result<FlattenOptions, String> {
+/// The options the fields hold (a `preset` not loaded yet: its own).
+fn options(d: &Dialog, saved: &[FlattenerPreset]) -> Result<FlattenOptions, String> {
     if d.str("preset") != d.str(APPLIED) {
-        return FlattenOptions::from_params(&json!({ "preset": d.str("preset") }));
+        return FlattenOptions::from_params_with(&json!({ "preset": d.str("preset") }), saved);
     }
-    FlattenOptions::from_params(&Value::Object(d.fields.clone()))
+    FlattenOptions::from_params_with(&Value::Object(d.fields.clone()), saved)
+}
+
+/// `object.flattenTransparency` parameters: every option.
+fn params(d: &Dialog, saved: &[FlattenerPreset]) -> Result<Value, String> {
+    let mut fields = Map::new();
+    put_options(&mut fields, &options(d, saved)?);
+    Ok(Value::Object(fields))
 }
 
 /// Load the options of a preset set from outside (`ui.dialog.set`).
-fn sync(d: &mut Dialog) {
+fn sync(d: &mut Dialog, saved: &[FlattenerPreset]) {
     let name = d.str("preset");
     if name != d.str(APPLIED) {
-        if let Ok(o) = options(d) {
+        if let Ok(o) = options(d, saved) {
             put_options(&mut d.fields, &o);
         }
         d.fields.insert(APPLIED.into(), json!(name));
     }
 }
 
+/// Make `name` the preset the fields hold.
+fn applied(d: &mut Dialog, name: &str) {
+    d.fields.insert("preset".into(), json!(name));
+    d.fields.insert(APPLIED.into(), json!(name));
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    sync(d);
-    let presets = presets();
-    let current = options(d);
+    let saved = &app.session.prefs.flattener_presets;
+    sync(d, saved);
+    let current = options(d, saved);
+    let presets = app.session.flattener_presets();
     let shown = match &current {
-        Ok(o) => presets.iter().find(|(n, p)| *n == d.str("preset") && p == o).map_or(CUSTOM, |(n, _)| n.as_str()),
+        Ok(o) => presets.iter().find(|p| p.name == d.str("preset") && p.options == *o).map_or(CUSTOM, |p| p.name.as_str()),
         Err(_) => CUSTOM,
     };
     ui.horizontal(|ui| {
         widgets::dim_label(ui, "Preset:");
-        let names: Vec<&str> = presets.iter().map(|(n, _)| n.as_str()).collect();
+        let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
         if let Some(i) = widgets::dropdown(ui, "flatten-preset", shown, &names, 220.0) {
-            let (name, o) = &presets[i];
-            put_options(&mut d.fields, o);
-            d.fields.insert("preset".into(), json!(name));
-            d.fields.insert(APPLIED.into(), json!(name));
+            put_options(&mut d.fields, &presets[i].options);
+            applied(d, &presets[i].name);
+        }
+        if widgets::flat_button(ui, "Save Preset…", 100.0).clicked() {
+            let open = !d.bool(SAVING);
+            d.fields.insert(SAVING.into(), json!(open));
+            d.fields.insert(PRESET_NAME.into(), json!(app.session.new_preset_name()));
         }
     });
+    if d.bool(SAVING) {
+        save_row(app, ui, d);
+    }
     ui.add_space(10.0);
     let mut o = current.clone().unwrap_or_default();
     if options_editor(ui, "flatten-dialog", &mut o, true) {
@@ -94,23 +113,48 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if let Err(e) = &current {
         ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
     }
-    let p = params(d);
+    // Invalid values keep the last preview.
+    let p = params(d, &app.session.prefs.flattener_presets).unwrap_or_else(|_| d.fields.get(form::PREVIEWED).cloned().unwrap_or_default());
     form::preview(app, ui, d, "Flatten Transparency", CMD, p);
     false
 }
 
-/// `object.flattenTransparency` parameters: every option.
-fn params(d: &Dialog) -> Value {
-    let mut fields = Map::new();
-    put_options(&mut fields, &options(d).unwrap_or_default());
-    Value::Object(fields)
+/// Save Preset…: the new preset's name, Save and Cancel (Enter in the name saves).
+fn save_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, "Name:");
+        let r = form::text_edit(ui, d, PRESET_NAME, 180.0);
+        // Enter saves the preset instead of flattening.
+        let enter = r.lost_focus() && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+        if (widgets::flat_button(ui, "Save", 60.0).clicked() || enter)
+            && let Err(e) = save_preset(app, d)
+        {
+            app.status(e);
+        }
+        if widgets::flat_button(ui, "Cancel", 60.0).clicked() {
+            d.fields.insert(SAVING.into(), json!(false));
+        }
+    });
+    let name = d.str(PRESET_NAME);
+    if app.session.prefs.flattener_presets.iter().any(|p| p.name.eq_ignore_ascii_case(name.trim())) {
+        widgets::dim_label(ui, "Replaces the saved preset of that name.");
+    }
+}
+
+/// Keep the dialog's options as the saved preset `__presetName` and select it.
+fn save_preset(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    let mut p = params(d, &app.session.prefs.flattener_presets)?;
+    p["name"] = json!(d.str(PRESET_NAME));
+    let r = app.run("flattener.presets.save", p)?;
+    applied(d, r["name"].as_str().unwrap_or_default());
+    d.fields.insert(SAVING.into(), json!(false));
+    Ok(())
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let o = options(d)?;
-    let mut fields = Map::new();
-    put_options(&mut fields, &o);
-    form::commit_preview(app, CMD, Value::Object(fields))
+    let p = params(d, &app.session.prefs.flattener_presets)?;
+    form::commit_preview(app, CMD, p)
 }
 
 /// The width of the option value fields.
@@ -235,6 +279,31 @@ mod tests {
         st.doc.layers[0].walk(&mut |n| images += matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)) as usize);
         assert_eq!(images, 1, "balance 0 rasterizes");
         assert!(!transparent_left(&app));
+    }
+
+    #[test]
+    fn save_preset_keeps_the_options_and_lists_them() {
+        let mut app = scene();
+        app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert("balance".into(), json!(30));
+        d.fields.insert(PRESET_NAME.into(), json!("Thirty"));
+        save_preset(&mut app, &mut d).unwrap();
+        assert_eq!(d.str("preset"), "Thirty");
+        let saved = &app.session.prefs.flattener_presets;
+        assert_eq!((saved.len(), saved[0].name.as_str(), saved[0].options.balance), (1, "Thirty", 30.0));
+        // A saved preset set from outside loads like a built-in one.
+        d.fields.insert("preset".into(), json!("Low Resolution"));
+        app.ui.dialog = Some(d);
+        frame(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("balance", 0.0), 75.0);
+        app.ui.dialog.as_mut().unwrap().fields.insert("preset".into(), json!("Thirty"));
+        frame(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("balance", 0.0), 30.0);
+        // Built-in presets can't be replaced.
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert(PRESET_NAME.into(), json!("High Resolution"));
+        assert!(save_preset(&mut app, &mut d).is_err());
     }
 
     #[test]

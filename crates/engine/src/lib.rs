@@ -317,6 +317,11 @@ pub struct Prefs {
     /// Eyedropper Options (`eyedropper.setOptions`; a preference group, see
     /// [`cmd::prefscmds::PREF_GROUPS`]).
     pub eyedropper: EyedropperOptions,
+    /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
+    /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
+    /// edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub flattener_presets: Vec<cmd::FlattenerPreset>,
 }
 
 impl Default for Prefs {
@@ -435,6 +440,7 @@ impl Default for Prefs {
                 Color::rgb8(r, g, b).to_hex()
             },
             eyedropper: Default::default(),
+            flattener_presets: vec![],
         }
     }
 }
@@ -792,6 +798,8 @@ mod tests_expand;
 mod tests_eyedropper;
 #[cfg(test)]
 mod tests_file;
+#[cfg(test)]
+mod tests_flatpresets;
 #[cfg(test)]
 mod tests_flatten;
 #[cfg(test)]

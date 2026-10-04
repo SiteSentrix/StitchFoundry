@@ -265,6 +265,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Flatten Transparency for the selection (dialog `flattenTransparency`, fields `preset` (a preset name: setting it loads its options), balance 0..100, lineArtPpi, gradientPpi 1..2400, textToOutlines, strokesToOutlines, clipComplexRegions, antiAlias, preserveAlpha, preserveOverprints, `preview` (off at first)): OK runs object.flattenTransparency with those options as one undo step",
     ),
+    (
+        "ui.flattenerPresetsDialog",
+        "Transparency Flattener Presets…",
+        "",
+        "{selected?: preset name} open the presets manager (dialog `flattenerPresets`, fields `selected`, then the selected preset's `name` and option keys: setting them on a saved preset saves it, a new `name` renames it; built-in presets don't change). New, Delete, Import… and Export… run flattener.presets.save / delete / import / export",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -617,6 +623,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)
         }
+        "ui.flattenerPresetsDialog" => {
+            crate::dialogs::flattener_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
         _ => return None,
     };
     Some(r)
@@ -906,7 +916,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 todo("Edit Original"),
                 Sep,
-                todo("Transparency Flattener Presets…"),
+                c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 todo("Print Presets…"),
                 todo("PDF Presets…"),
                 cp("Perspective Grid Presets…", "perspective.grid.preset", json!({"kind": 2})),

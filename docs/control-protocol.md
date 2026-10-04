@@ -114,3 +114,11 @@ Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTranspare
 `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`; `preview`, off at first).
 With `preview` on it flattens on the canvas while open; `ui.dialog.confirm` keeps the result as one undo step and
 `ui.dialog.cancel` rolls it back. Out-of-range values answer with an error and the dialog stays open.
+
+Flattener presets: `ui.flattenerPresetsDialog {selected?}` opens Edit → Transparency Flattener Presets (dialog
+`flattenerPresets`). Fields: `selected` (a preset name), then the selected preset's `name` and option keys. On a saved
+preset, `ui.dialog.set` of an option saves it and a new `name` renames it (both through `flattener.presets.save`);
+built-in presets don't change. New, Delete, Import… and Export… are `flattener.presets.save {preset}`,
+`flattener.presets.delete`, `flattener.presets.import` and `flattener.presets.export`; `ui.dialog.confirm` closes.
+Opening a `.vcflattener` file with `app.open` imports its presets. In the Flatten Transparency dialog, Save Preset…
+keeps the dialog's options as a saved preset.

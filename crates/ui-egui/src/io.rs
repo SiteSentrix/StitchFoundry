@@ -9,8 +9,14 @@ use vectorcraft_geom::Affine;
 use crate::VectorcraftApp;
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch library
-/// files open in the library panel.
+/// files open in the library panel and flattener presets files are imported.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<(), String> {
+    if vectorcraft_engine::cmd::flatten::PRESET_EXTS.contains(&fileio::extension(name).as_str()) {
+        let r = app.run("flattener.presets.import", serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
+        let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        app.status(format!("Imported flattener presets: {}", names.join(", ")));
+        return Ok(());
+    }
     if vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&fileio::extension(name).as_str()) {
         let p = match path {
             Some(path) => serde_json::json!({ "path": path }),
