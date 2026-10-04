@@ -23,12 +23,7 @@ fn editing(app: &VectorcraftApp) -> Option<(PatternDef, Unit)> {
 }
 
 fn row(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui)) {
-    ui.horizontal(|ui| {
-        let (r, _) = ui.allocate_exact_size(egui::vec2(96.0, 24.0), egui::Sense::hover());
-        let t = crate::theme::Tokens::get(ui.ctx());
-        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
-        add(ui);
-    });
+    widgets::label_row(ui, label, 96.0, add);
 }
 
 fn set(app: &mut VectorcraftApp, name: &str, mut p: Value) {

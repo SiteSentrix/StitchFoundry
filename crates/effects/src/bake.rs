@@ -147,6 +147,8 @@ fn piece(d: &mut Document, n: &Node, path: PathData, rule: FillRule, item: Appea
         trace: None,
         wrap: None,
         graph: None,
+        // The group keeps the URL (one link around the pieces).
+        attrs: None,
         kind,
         ..n.clone()
     }

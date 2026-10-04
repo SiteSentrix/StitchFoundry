@@ -43,6 +43,7 @@ pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
 pub use node::Knockout;
+pub use node::{ImageMap, ObjectAttributes};
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use selection::{AnchorRef, Selection};

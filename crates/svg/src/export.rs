@@ -685,7 +685,7 @@ impl Writer<'_> {
         self.depth += 1;
         let mut bare = n.clone();
         bare.mask = None;
-        self.node(&bare);
+        self.node_body(&bare);
         self.depth -= 1;
         self.line("</g>");
     }
@@ -769,7 +769,21 @@ impl Writer<'_> {
         mid
     }
 
+    /// An object, inside `<a>` when it links to a URL (Attributes panel).
     fn node(&mut self, n: &Node) {
+        match n.url().filter(|_| n.visible && !self.anonymous) {
+            Some(url) => {
+                self.line(&format!("<a xlink:href=\"{}\">", xml_escape(url)));
+                self.depth += 1;
+                self.node_body(n);
+                self.depth -= 1;
+                self.line("</a>");
+            }
+            None => self.node_body(n),
+        }
+    }
+
+    fn node_body(&mut self, n: &Node) {
         if !n.visible {
             return;
         }
@@ -887,7 +901,7 @@ impl Writer<'_> {
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
                 let g = vectorcraft_doc::live::expand_deep(n, None);
-                self.node(&g);
+                self.node_body(&g);
             }
         }
     }
@@ -898,7 +912,7 @@ impl Writer<'_> {
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
         let opened = self.open_filters(n, &n.appearance.effects);
-        self.node(&inner);
+        self.node_body(&inner);
         self.close_filters(opened);
     }
 

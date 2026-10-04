@@ -15,6 +15,8 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Vec2};
 use crate::SvgError;
 
 pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
+    let (svg, links) = link_ids(svg);
+    let svg = svg.as_ref();
     let opt = usvg::Options::default();
     let tree = usvg::Tree::from_str(svg, &opt).map_err(|e| SvgError::Parse(e.to_string()))?;
     let size = tree.size();
@@ -22,7 +24,7 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     // absolute units is that physical size (usvg resolves it to 96 px per inch, i.e. 4/3 px per pt).
     let (kx, ky) = physical_scale(svg);
     let doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
-    let mut im = Importer { doc, warnings: Vec::new(), mask_flags: mask_flags(svg) };
+    let mut im = Importer { doc, warnings: Vec::new(), mask_flags: mask_flags(svg), links };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
@@ -37,8 +39,8 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
 
     // Top-level `<g id>` elements become layers (Illustrator does the same); otherwise all art goes
     // into "Layer 1".
-    let layer_mode =
-        !top.children().is_empty() && top.children().iter().all(|c| matches!(c, usvg::Node::Group(g) if !g.id().is_empty() && is_plain(g)));
+    let layer_mode = !top.children().is_empty()
+        && top.children().iter().all(|c| matches!(c, usvg::Node::Group(g) if !g.id().is_empty() && !im.links.contains_key(g.id()) && is_plain(g)));
     if layer_mode {
         im.doc.layers.clear();
         for (i, c) in top.children().iter().enumerate() {
@@ -87,6 +89,8 @@ struct Importer {
     warnings: Vec<String>,
     /// Opacity-mask options our export wrote, by mask id (see [`mask_flags`]).
     mask_flags: HashMap<String, (bool, bool)>,
+    /// The URL of each `<a href>`'s group, by its id ([`link_ids`]).
+    links: HashMap<String, String>,
 }
 
 /// The options [`crate::export::MASK_FLAGS`] records on exported `<mask>` elements, by mask id:
@@ -104,6 +108,61 @@ fn mask_flags(svg: &str) -> HashMap<String, (bool, bool)> {
         Some((n.attribute("id")?.to_string(), (!has("noclip"), has("invert"))))
     };
     xml.descendants().filter(|n| n.tag_name().name() == "mask" && n.has_attribute(attr)).filter_map(flags).collect()
+}
+
+/// Prefix of the ids [`link_ids`] gives the `<a>` elements that have none.
+const LINK_ID: &str = "vectorcraft-link-";
+
+/// The URL an `<a>` element links to.
+fn href<'a>(a: XNode<'a, '_>) -> Option<&'a str> {
+    a.attribute("href").or_else(|| a.attribute(("http://www.w3.org/1999/xlink", "href"))).filter(|h| !h.is_empty())
+}
+
+/// usvg reads `<a href>` as a plain group and drops the URL. So that the group can be found, every
+/// link without an id gets one ([`LINK_ID`]…); returns the SVG with those ids and the URLs by id.
+fn link_ids(svg: &str) -> (std::borrow::Cow<'_, str>, HashMap<String, String>) {
+    let mut links = HashMap::new();
+    if !svg.contains("<a") {
+        return (svg.into(), links);
+    }
+    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
+        return (svg.into(), links);
+    };
+    // Where to insert each new id: right after the tag name.
+    let mut inserts = vec![];
+    for a in xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "a") {
+        let Some(url) = href(a) else { continue };
+        let id = match a.attribute("id") {
+            Some(id) => id.to_string(),
+            None => {
+                let start = a.range().start;
+                let end = svg[start + 1..].find(|c: char| c.is_whitespace() || c == '/' || c == '>').map_or(start + 2, |i| start + 1 + i);
+                let id = format!("{LINK_ID}{}", inserts.len());
+                inserts.push((end, id.clone()));
+                id
+            }
+        };
+        links.insert(id, url.to_string());
+    }
+    if inserts.is_empty() {
+        return (svg.into(), links);
+    }
+    let mut out = String::with_capacity(svg.len() + inserts.len() * 32);
+    let mut last = 0;
+    for (at, id) in inserts {
+        out.push_str(&svg[last..at]);
+        out.push_str(&format!(" id=\"{id}\""));
+        last = at;
+    }
+    out.push_str(&svg[last..]);
+    (out.into(), links)
+}
+
+/// Make `n` link to `url`, unless it links somewhere already (an inner link wins).
+fn link(n: &mut Node, url: &str) {
+    if n.url().is_none() {
+        n.edit_attrs(|a| a.url = url.to_string());
+    }
 }
 
 fn aff(t: usvg::Transform) -> Affine {
@@ -199,8 +258,19 @@ impl Importer {
     }
 
     fn group(&mut self, g: &usvg::Group, acc: Affine) -> Option<Node> {
+        let url = self.links.get(g.id()).cloned();
+        let mut n = self.group_node(g, acc)?;
+        if let Some(url) = url {
+            link(&mut n, &url);
+        }
+        Some(n)
+    }
+
+    fn group_node(&mut self, g: &usvg::Group, acc: Affine) -> Option<Node> {
         let ts = acc * aff(g.transform());
-        let label = if g.id().is_empty() { "a group".to_string() } else { format!("'{}'", g.id()) };
+        // The made-up ids of links aren't names.
+        let id = if g.id().starts_with(LINK_ID) { "" } else { g.id() };
+        let label = if id.is_empty() { "a group".to_string() } else { format!("'{id}'") };
         let mask = g.mask().and_then(|m| self.opacity_mask(m, ts, &label));
         if !g.filters().is_empty() {
             self.warn(format!("filter on {label} ignored"));
@@ -213,14 +283,14 @@ impl Importer {
             let clip = self.clip_node(cp, ts)?;
             let mut ch = vec![Arc::new(clip)];
             ch.extend(children);
-            self.named(g.id(), NodeKind::Group { children: ch, clip: true })
+            self.named(id, NodeKind::Group { children: ch, clip: true })
         } else {
             if children.is_empty() {
                 return None;
             }
             // An id-less wrapper around a single object (usvg adds these for opacity/transform on
             // shapes): fold its opacity and blend into the object.
-            if g.id().is_empty()
+            if id.is_empty()
                 && mask.is_none()
                 && children.len() == 1
                 && (g.blend_mode() == usvg::BlendMode::Normal || children[0].blend == BlendMode::Normal)
@@ -233,7 +303,7 @@ impl Importer {
                 c.isolate |= g.isolate();
                 return Some(c);
             }
-            self.named(g.id(), NodeKind::Group { children, clip: false })
+            self.named(id, NodeKind::Group { children, clip: false })
         };
         n.opacity = g.opacity().get();
         n.blend = blend(g.blend_mode());
@@ -799,6 +869,9 @@ fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, (kx, ky): (f64, f
         };
         obj.para.justify = justify;
         let mut node = im.named(t.attribute("id").unwrap_or(""), NodeKind::Text(Box::new(obj)));
+        if let Some(url) = chain.iter().filter(|a| a.tag_name().name() == "a").find_map(|a| href(*a)) {
+            link(&mut node, url);
+        }
         if let Some(o) = ctx.own(t, "opacity").and_then(|o| o.trim().parse::<f32>().ok()) {
             node.opacity = o.clamp(0.0, 1.0);
         }

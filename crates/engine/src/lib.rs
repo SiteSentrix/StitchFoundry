@@ -507,6 +507,8 @@ pub struct Session {
     pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
     /// User Defined and loaded graphic style libraries (Window → Graphic Style Libraries); not saved.
     pub style_libraries: cmd::stylelib::Libraries,
+    /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
+    pub recent_urls: Vec<String>,
 }
 
 impl Default for Session {
@@ -541,6 +543,7 @@ impl Session {
             swatch_libraries: Default::default(),
             freeform_point: None,
             style_libraries: Default::default(),
+            recent_urls: vec![],
         }
     }
 
@@ -786,6 +789,8 @@ impl Session {
 mod tests;
 #[cfg(test)]
 mod tests_appearance;
+#[cfg(test)]
+mod tests_attributes;
 #[cfg(test)]
 mod tests_brushsym;
 #[cfg(test)]

@@ -282,6 +282,9 @@ pub struct Node {
     /// that style's look: editing its appearance or transparency breaks the link.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graphic_style: Option<u32>,
+    /// Attributes panel: centre point display, image map, URL and note (`None`: all defaults).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attrs: Option<Box<ObjectAttributes>>,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -328,6 +331,7 @@ impl Node {
             graph: None,
             kind,
             graphic_style: None,
+            attrs: None,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
@@ -906,6 +910,77 @@ impl Node {
             NodeKind::Text(_) => Some("Characters"),
             _ => None,
         }
+    }
+}
+
+/// Window → Attributes: an object's settings that don't change how it prints.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectAttributes {
+    /// Show Center / Don't Show Center (`None`: the object kind's default, [`Node::shows_center`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_center: Option<bool>,
+    /// Image Map: the clickable area the URL covers in web output.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub image_map: ImageMap,
+    /// URL the object links to (SVG `<a href>`; empty: none).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub url: String,
+    /// The note shown in the Attributes panel.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+}
+
+/// The Attributes panel's Image Map shapes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageMap {
+    #[default]
+    None,
+    Rectangle,
+    Polygon,
+}
+
+impl ImageMap {
+    pub const ALL: [ImageMap; 3] = [ImageMap::None, ImageMap::Rectangle, ImageMap::Polygon];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ImageMap::None => "None",
+            ImageMap::Rectangle => "Rectangle",
+            ImageMap::Polygon => "Polygon",
+        }
+    }
+
+    /// Parse a label or serialized name, ignoring case.
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|m| m.label().eq_ignore_ascii_case(s))
+    }
+}
+
+impl Node {
+    /// The URL this object links to, if any.
+    pub fn url(&self) -> Option<&str> {
+        self.attrs.as_deref().map(|a| a.url.as_str()).filter(|u| !u.is_empty())
+    }
+
+    /// Whether the canvas shows this object's centre point when it is selected: as set in the
+    /// Attributes panel, else [`Self::shows_center_by_default`].
+    pub fn shows_center(&self) -> bool {
+        self.attrs.as_deref().and_then(|a| a.show_center).unwrap_or_else(|| self.shows_center_by_default())
+    }
+
+    /// Shapes drawn with the shape tools (live rectangles, ellipses and polygons) show their centre.
+    pub fn shows_center_by_default(&self) -> bool {
+        matches!(&self.kind, NodeKind::Path { live: Some(l), .. } if !matches!(l, LiveShape::Line { .. }))
+    }
+
+    /// Change this object's attributes with `f`; all-default attributes are dropped.
+    pub fn edit_attrs<R>(&mut self, f: impl FnOnce(&mut ObjectAttributes) -> R) -> R {
+        let mut a = self.attrs.take().unwrap_or_default();
+        let r = f(&mut a);
+        self.attrs = (*a != ObjectAttributes::default()).then_some(a);
+        r
     }
 }
 

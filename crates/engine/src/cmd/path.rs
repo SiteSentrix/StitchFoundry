@@ -49,7 +49,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             set_anchors
         ),
-        cmd!("path.reverse", "Reverse Path Direction", ["Object", "Path"], None, "{}", has_selection, reverse),
+        cmd!(
+            "path.reverse",
+            "Reverse Path Direction",
+            ["Object", "Path"],
+            None,
+            "{ids?, reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step → {changed: paths}",
+            has_doc,
+            reverse
+        ),
         cmd!(
             "path.join",
             "Join",
@@ -233,15 +241,46 @@ fn selected_paths(s: &Session) -> Result<Vec<NodeId>> {
     Ok(st.selection.objects.iter().copied().filter(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Path { .. }))).collect())
 }
 
-fn reverse(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_paths(s)?;
-    s.edit("Reverse Path Direction", |d, _| {
+/// The paths in the subtrees of `ids` (in groups and compound paths too), each once.
+pub(super) fn paths_in(d: &vectorcraft_doc::Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let mut out = BTreeSet::new();
+    for n in ids.iter().filter_map(|id| d.node(*id)) {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::Path { guide: false, .. }) {
+                out.insert(c.id);
+            }
+        });
+    }
+    out.into_iter().collect()
+}
+
+fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "path.reverse";
+    let want = p.get("reversed").map(|v| v.as_bool().ok_or_else(|| bad(C, "`reversed` must be true or false"))).transpose()?;
+    let ids = paths_in(&s.doc()?.doc, &targets(s, p)?);
+    if ids.is_empty() {
+        return Err(bad(C, "select paths"));
+    }
+    let changed = super::overprint::edit_counted(s, "Reverse Path Direction", |d| {
+        let mut changed = 0;
         for id in &ids {
-            path_mut(d, *id)?.reverse();
+            // The subpaths to flip: all, or those not yet running the wanted way.
+            let flip: Vec<bool> = d
+                .node(*id)
+                .and_then(|n| n.path_data())
+                .map_or(vec![], |pd| pd.subpaths.iter().map(|sp| want.is_none_or(|ccw| (sp.signed_area() < 0.0) != ccw)).collect());
+            if flip.contains(&true) {
+                for (sp, f) in path_mut(d, *id)?.subpaths.iter_mut().zip(flip) {
+                    if f {
+                        sp.reverse();
+                    }
+                }
+                changed += 1;
+            }
         }
-        Ok(())
+        Ok(changed)
     })?;
-    ok()
+    Ok(json!({ "changed": changed }))
 }
 
 fn join(s: &mut Session, _: &Value) -> Result<Value> {

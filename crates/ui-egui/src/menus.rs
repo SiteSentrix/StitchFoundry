@@ -315,6 +315,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Expand for the selection (dialog `expand`, fields object, fill, stroke (all on; one the selection has nothing for is disabled, see object.expand.info), gradient: objects|mesh, steps 1..1000 (255)): OK runs object.expand with them as one undo step",
     ),
+    (
+        "attributes.openUrl",
+        "Browser",
+        "",
+        "{url?} open url, else the selection's URL (attributes.info), in the web browser (the Attributes panel's Browser button) → {url}",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -682,6 +688,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("no such user library".into()),
         },
         "ui.expandDialog" => crate::dialogs::expand::open(app),
+        "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         _ => return None,
     };
     Some(r)
@@ -1417,7 +1424,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Appearance", "appearance"),
                 panel("Artboards", "artboards"),
                 todo("Asset Export"),
-                todo("Attributes"),
+                panel("Attributes", "attributes"),
                 panel("Brushes", "brushes"),
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
