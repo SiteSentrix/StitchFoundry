@@ -25,23 +25,16 @@ impl Default for Headless {
 /// Commands the desktop app adds on top of the engine; the headless backend implements them too so
 /// `run_command` behaves the same in both modes.
 const HOST_COMMANDS: &[(&str, &str, &str)] = &[
-    ("file.open", "Open…", "{path} open a .vectorcraft or .svg file as a new document"),
+    ("file.open", "Open…", "{path} open any readable file (see document.formats) as a new document; templates open untitled"),
     ("file.save", "Save", "{path?} save as .vectorcraft (default: the document's path)"),
     ("file.saveAs", "Save As…", "{path}"),
-    ("file.export", "Export…", "{format?: svg|png|vectorcraft, path, scale?, artboard?}"),
+    ("file.export", "Export…", "{path?, format?, artboard?, range?, scale?, …} = document.export (no path → dataBase64)"),
+    ("file.exportForScreens", "Export for Screens…", "{folder?, artboards? | range?, formats?, prefix?} = document.exportForScreens"),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),
 ];
 
 fn s<'a>(p: &'a Value, k: &str) -> Option<&'a str> {
     p.get(k).and_then(Value::as_str)
-}
-
-fn ext_of(path: &str) -> String {
-    std::path::Path::new(path).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default()
-}
-
-fn file_name(path: &str) -> String {
-    std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string())
 }
 
 pub(crate) fn pointer_kind(k: &str) -> Option<PointerKind> {
@@ -111,6 +104,7 @@ impl Headless {
             "file.open" => self.open(params),
             "file.save" | "file.saveAs" => self.save(params),
             "file.export" => self.export(params),
+            "file.exportForScreens" => self.session.execute("document.exportForScreens", params).map_err(|e| e.to_string()),
             "tool.select" => self.select_tool(params),
             _ => self.session.execute(id, params).map_err(|e| e.to_string()),
         }
@@ -215,72 +209,24 @@ impl Headless {
         }
     }
 
-    /// `app.open {path}`: `.vectorcraft` or `.svg` as a new active document.
+    /// `app.open {path}`: any readable file as a new active document (`document.open`).
     pub fn open(&mut self, p: &Value) -> Result<Value, String> {
         let path = s(p, "path").ok_or("missing `path`")?;
-        let bytes = std::fs::read(path).map_err(|e| format!("read {path}: {e}"))?;
-        let name = file_name(path);
-        let e = ext_of(path);
-        let mut warnings = vec![];
-        let (doc, keep_path) = if vectorcraft_format::is_native_ext(&e) || vectorcraft_format::sniff(&bytes) {
-            let mut d = vectorcraft_format::load(&bytes).map_err(|e| e.to_string())?;
-            if d.title.is_empty() {
-                d.title = name.clone();
-            }
-            (d, true)
-        } else if e == "svg" || bytes.starts_with(b"<?xml") || bytes.starts_with(b"<svg") {
-            let text = std::str::from_utf8(&bytes).map_err(|_| "SVG is not UTF-8".to_string())?;
-            let (mut d, w) = vectorcraft_svg::import_with_report(text).map_err(|e| e.to_string())?;
-            d.title = name.clone();
-            warnings = w;
-            (d, false)
-        } else {
-            return Err(format!("headless mode can open .vectorcraft and .svg files, not .{e}"));
-        };
-        let index = self.session.add_document(doc, keep_path.then(|| path.to_string()));
-        Ok(json!({"index": index, "title": name, "warnings": warnings}))
+        self.session.execute("document.open", &json!({"path": path})).map_err(|e| e.to_string())
     }
 
     /// `app.save {path?}`: native format; remembers the path and clears the dirty flag.
     pub fn save(&mut self, p: &Value) -> Result<Value, String> {
         let st = self.session.active().ok_or("no document")?;
-        let path = s(p, "path").map(str::to_string).or_else(|| st.path.clone()).ok_or("missing `path` (document was never saved)")?;
-        let bytes = vectorcraft_format::save_file(&st.doc);
-        std::fs::write(&path, bytes).map_err(|e| format!("write {path}: {e}"))?;
-        if let Some(st) = self.session.active_mut() {
-            st.path = Some(path.clone());
-            st.mark_saved();
+        if s(p, "path").is_none() && st.path.is_none() {
+            return Err("missing `path` (document was never saved)".into());
         }
-        Ok(json!({"path": path}))
+        self.session.execute("document.save", p).map_err(|e| e.to_string())
     }
 
-    /// `app.export {format?, path, scale?, artboard?}`: svg | png | pdf | jpg | webp | vectorcraft (format defaults to the extension).
+    /// `app.export {path?, format?, …}`: `document.export` (format defaults to the path's extension).
     pub fn export(&mut self, p: &Value) -> Result<Value, String> {
-        let path = s(p, "path").ok_or("missing `path`")?;
-        let fmt = s(p, "format").map(str::to_ascii_lowercase).unwrap_or_else(|| ext_of(path));
-        let st = self.session.active().ok_or("no document")?;
-        let doc = st.doc.clone();
-        let bytes = match fmt.as_str() {
-            "svg" => {
-                let ab = p.get("artboard").and_then(Value::as_u64).unwrap_or(0) as usize;
-                vectorcraft_svg::export(&doc, &vectorcraft_svg::ExportOptions { artboard: Some(ab), ..Default::default() }).into_bytes()
-            }
-            "png" => {
-                let idx = p.get("artboard").and_then(Value::as_u64).unwrap_or(0) as usize;
-                let r = doc.artboards.get(idx).map(|a| a.rect).ok_or("no such artboard")?;
-                let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.01, 16.0);
-                self.renderer.render_region(&doc, r, scale, false).to_png()
-            }
-            "vectorcraft" => vectorcraft_format::save_file(&doc),
-            // pdf, jpg, webp…: the engine's exporter (same bytes as the app).
-            other => {
-                let params = json!({"path": path, "format": other, "scale": p.get("scale"), "artboard": p.get("artboard")});
-                let r = self.session.execute("document.export", &params).map_err(|e| e.to_string())?;
-                return Ok(json!({"path": path, "format": fmt, "bytes": r["bytes"]}));
-            }
-        };
-        std::fs::write(path, &bytes).map_err(|e| format!("write {path}: {e}"))?;
-        Ok(json!({"path": path, "format": fmt, "bytes": bytes.len()}))
+        self.session.execute("document.export", p).map_err(|e| e.to_string())
     }
 }
 

@@ -2,6 +2,7 @@
 //! [`Backend`].
 
 use serde_json::{Map, Value, json};
+use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS};
 
 use crate::backend::Backend;
 
@@ -246,7 +247,10 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "open_file",
             "Open file",
-            "Open a .vectorcraft or .svg file as a new, active document.",
+            &format!(
+                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document.",
+                OPEN_EXTS.join(", .")
+            ),
             obj(json!({"path": string("File path")}), &["path"]),
             false,
         ),
@@ -260,16 +264,19 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "export",
             "Export",
-            "Export the active document: svg (artboard viewBox), pdf, png/jpg/webp (rendered artboard) or vectorcraft (native). `selection: true` exports only the selected objects, cropped to their bounds. Live effects are kept (geometry baked, SVG filters for shadows/glows/blur).",
+            "Export the active document with the engine's document.export (the same bytes in the app and headless): svg (artboard viewBox), pdf (one page per artboard: all, or `artboard` / `range`), png/jpg/webp (one rendered artboard) or vectorcraft (a native copy; the document keeps its path). `selection: true` exports only the selected objects, cropped to their bounds. Template layers are left out; live effects are kept (geometry baked, SVG filters for shadows/glows/blur). Without `path` the bytes come back as dataBase64.",
             obj(
                 json!({
-                    "format": {"type": "string", "enum": ["svg", "png", "pdf", "jpg", "webp", "vectorcraft"], "description": "Default: from the path's extension"},
-                    "path": string("Destination file"),
-                    "scale": num("PNG pixels per point (default 1)"),
+                    "format": {"type": "string", "enum": FORMATS.iter().filter(|f| f.write).map(|f| f.id).collect::<Vec<_>>(), "description": "Default: from the path's extension"},
+                    "path": string("Destination file (omit to get dataBase64)"),
+                    "scale": num("Raster pixels per point (default 1)"),
+                    "artboard": {"type": "integer", "minimum": 0, "description": "0-based artboard (default: the first; PDF default: all)"},
+                    "range": string("1-based artboards such as \"1-3, 5\" (PDF: one page each; other formats take one)"),
                     "selection": {"type": "boolean", "description": "Export only the selection, cropped to it"},
                     "outlineText": {"type": "boolean", "description": "SVG: text as outlines (viewable without the fonts)"},
+                    "options": {"type": "object", "description": "More format options, passed through (see run_command document.formats), e.g. {\"quality\": 80} for jpg"},
                 }),
-                &["path"],
+                &[],
             ),
             false,
         ),
@@ -729,31 +736,21 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "open_file" => j(b.call("app.open", json!({"path": req_str(a, "path")?}))?),
         "save_file" => j(b.call("app.save", json!({"path": a.get("path").and_then(Value::as_str)}))?),
         "export" => {
-            let path = req_str(a, "path")?;
-            let fmt = a
-                .get("format")
-                .and_then(Value::as_str)
-                .map(str::to_ascii_lowercase)
-                .unwrap_or_else(|| std::path::Path::new(path).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default());
-            if !["svg", "png", "pdf", "jpg", "jpeg", "webp", "vectorcraft"].contains(&fmt.as_str()) {
-                return Err(format!("unknown export format `{fmt}` (svg, png, pdf, jpg, webp, vectorcraft)"));
+            // One params object for every backend; the named arguments win over `options` (a named
+            // artboard or range replaces every artboard choice in `options`).
+            let mut params = a.get("options").and_then(Value::as_object).cloned().unwrap_or_default();
+            if ["artboard", "range"].iter().any(|k| a.get(*k).is_some_and(|v| !v.is_null())) {
+                for k in ARTBOARD_PARAMS {
+                    params.remove(k);
+                }
             }
-            let scale = a.get("scale").and_then(Value::as_f64).unwrap_or(1.0);
-            if a.get("selection").and_then(Value::as_bool) == Some(true) {
-                return j(exec(
-                    b,
-                    "document.exportSelection",
-                    json!({"path": path, "format": fmt, "scale": scale, "outlineText": a.get("outlineText")}),
-                )?);
+            for k in ["path", "format", "scale", "artboard", "range", "outlineText"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
+                    params.insert(k.into(), v.clone());
+                }
             }
-            if a.get("outlineText").and_then(Value::as_bool) == Some(true) {
-                return j(exec(b, "document.export", json!({"path": path, "format": fmt, "scale": scale, "outlineText": true}))?);
-            }
-            // The desktop app exports native files through Save (which also sets the document path).
-            if fmt == "vectorcraft" && b.has_ui() {
-                return j(b.call("app.save", json!({"path": path}))?);
-            }
-            j(b.call("app.export", json!({"format": fmt, "path": path, "scale": scale}))?)
+            let cmd = if a.get("selection").and_then(Value::as_bool) == Some(true) { "document.exportSelection" } else { "document.export" };
+            j(exec(b, cmd, Value::Object(params))?)
         }
         "add_text" => j(add_text(b, a)?),
         "apply_effect" => {
