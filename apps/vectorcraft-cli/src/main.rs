@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless]
-//! vectorcraft-cli run [--in file.vectorcraft|file.svg] [--cmd id [--params '{json}']]... [--export out.svg|.png|.pdf|.jpg|.webp|.vectorcraft]... [--scale 2]
+//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg|.png|.pdf|.jpg|.webp|.vectorcraft]... [--scale 2]
 //! vectorcraft-cli commands
 //! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0] [--outline-text]
 //! vectorcraft-cli info FILE
@@ -28,27 +28,32 @@ USAGE:
       (vectorcraft --control 7979), falling back to a headless in-process session.
 
   vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON]]... [--export FILE]... [--scale N]
-      Headless batch: open FILE (.vectorcraft/.svg) or start a new document, run commands in
+      Headless batch: open FILE (any readable format) or start a new document, run commands in
       order, export (.svg, .png, .pdf, .jpg, .webp, .vectorcraft by extension). Prints one JSON result per step.
 
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
   vectorcraft-cli convert IN OUT [--scale N] [--artboard I] [--outline-text]
-      Open IN (.vectorcraft, .svg, .pdf/.ai, images) and export OUT by extension (.svg, .pdf, .png,
-      .jpg, .webp, .vectorcraft). Live effects are kept; --outline-text writes SVG text as paths.
+      Open IN (any readable format) and export OUT by extension (.svg, .pdf, .png, .jpg, .webp,
+      .vectorcraft). Live effects are kept; --outline-text writes SVG text as paths.
 
   vectorcraft-cli info FILE
       Print a JSON summary: title, colour mode, units, artboards, object counts by kind, fonts.
 
   vectorcraft-cli bench FILE [--size WxH] [--iters N]
-      Render FILE (.vectorcraft/.svg) fitted to WxH (default 2880x1800) and print ms per frame
+      Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
 
   vectorcraft-cli perf [--paths N]
       Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder) on a
       synthetic N-path document (default 50000). Exits non-zero if a budget is exceeded.
 ";
+
+/// The usage text plus the formats `document.open` reads.
+fn usage() -> String {
+    format!("{USAGE}\nReadable formats: .{}\n", vectorcraft_engine::cmd::fileio::OPEN_EXTS.join(", ."))
+}
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -61,14 +66,14 @@ fn main() -> ExitCode {
         Some("bench") => bench(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
         Some("-h" | "--help" | "help") | None => {
-            print!("{USAGE}");
+            print!("{}", usage());
             Ok(())
         }
         Some("-V" | "--version") => {
             println!("vectorcraft-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        Some(other) => Err(format!("unknown subcommand `{other}`\n\n{USAGE}")),
+        Some(other) => Err(format!("unknown subcommand `{other}`\n\n{}", usage())),
     };
     match r {
         Ok(()) => ExitCode::SUCCESS,

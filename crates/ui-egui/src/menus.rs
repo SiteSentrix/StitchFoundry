@@ -83,8 +83,8 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.clearRecent", "Clear Recent Files", "", "{}"),
     ("type.findFont", "Find Font…", "", "{} open the Find Font dialog (engine: text.fonts / text.replaceFont / select.font)"),
     ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
-    ("file.export.svg", "Export As SVG…", "", "{path?}"),
-    ("file.export.png", "Export As PNG…", "", "{path?, scale?: 1}"),
+    ("file.export.svg", "Export As SVG…", "", "{path?, artboard?, outlineText?} (document.export options)"),
+    ("file.export.png", "Export As PNG…", "", "{path?, scale?: 1, artboard?} (document.export options)"),
     ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{path?, scale?}"),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
@@ -231,7 +231,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 None => Err("cancelled".into()),
             }
         }
-        "file.export.svg" => io::export(app, "svg", s("path"), 1.0).map(|p| json!({"path": p})),
+        "file.export.svg" => io::export(app, Some("svg"), s("path"), p).map(|p| json!({"path": p})),
         "file.exportForScreens" if p.get("path").is_none() && p.get("scale").is_none() => {
             let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
@@ -241,9 +241,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             ));
             Ok(Value::Null)
         }
-        "file.export.png" | "file.exportForScreens" => {
-            io::export(app, "png", s("path"), p.get("scale").and_then(Value::as_f64).unwrap_or(1.0)).map(|p| json!({"path": p}))
-        }
+        "file.export.png" | "file.exportForScreens" => io::export(app, Some("png"), s("path"), p).map(|p| json!({"path": p})),
         "file.documentSetup" => {
             let units = app.session.active().map(|d| d.doc.units.label()).unwrap_or("Points");
             app.ui.dialog = Some(crate::state::Dialog::new("documentSetup", json!({"units": units})));
@@ -457,7 +455,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some((e, params)) => app.run("effect.apply", json!({"effect": e, "params": params})),
             None => Err("no effect applied yet".into()),
         },
-        "file.export.pdf" => io::export(app, "pdf", s("path"), 1.0).map(|p| json!({"path": p})),
+        "file.export.pdf" => io::export(app, Some("pdf"), s("path"), p).map(|p| json!({"path": p})),
         "help.about" => {
             app.ui.about = true;
             Ok(Value::Null)

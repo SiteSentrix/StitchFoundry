@@ -2,6 +2,7 @@
 //! [`Backend`].
 
 use serde_json::{Map, Value, json};
+use vectorcraft_engine::cmd::fileio::OPEN_EXTS;
 
 use crate::backend::Backend;
 
@@ -246,7 +247,10 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "open_file",
             "Open file",
-            "Open a .vectorcraft or .svg file as a new, active document.",
+            &format!(
+                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document.",
+                OPEN_EXTS.join(", .")
+            ),
             obj(json!({"path": string("File path")}), &["path"]),
             false,
         ),

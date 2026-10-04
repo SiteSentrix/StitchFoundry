@@ -57,7 +57,7 @@ or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
 | `open_panel` | `{panel}` | Remote only. |
 | `screenshot` | `{path?, scale?, artboard?, window?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard; `window:true` captures the app window (remote only). |
-| `open_file` | `{path}` | Opens `.vectorcraft` or `.svg` as a new active document. |
+| `open_file` | `{path}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, PNG, JPEG, GIF, WebP, TIFF, BMP (an image opens as a document of its pixel size). Templates open as a new untitled document. `run_command document.formats` lists the formats. |
 | `save_file` | `{path?}` | Saves in the native `.vectorcraft` format. |
 | `export` | `{path, format?, scale?, selection?}` | `svg`, `pdf`, `png`, `jpg`, `webp` or `vectorcraft`. When `format` is omitted, it comes from the path's extension. `selection: true` exports the selected objects cropped to their bounds; `outlineText: true` writes SVG text as paths. Live effects are kept. |
 | `add_text` | `{text, x?, y?, width?, height?, path?, mode?, pathEffect?, size?, font?, color?}` | Point type at (x, y); area type with `width`/`height`; or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`). |
@@ -131,4 +131,5 @@ vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
 
 `run` prints one JSON line per step (`open`, `cmd`, `export`) and exits non-zero on the first failure. `--params`
 applies to the `--cmd` just before it. `run` also accepts the host commands `file.open`, `file.save`, `file.export`
-and `tool.select`.
+and `tool.select`. `run --in`, `convert` and `info` read every format `document.open` reads
+(`vectorcraft-cli --help` lists them).

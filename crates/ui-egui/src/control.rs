@@ -15,9 +15,11 @@
 //! - `ui.dialog.set {field, value}` / `ui.dialog.confirm` / `ui.dialog.cancel`
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?}`
 //! - `ui.render {path?, scale?}`: render the active artboard headlessly (PNG)
-//! - `app.open {path}` / `app.save {path?}` / `app.export {format, path, scale?}` / `app.quit`
+//! - `app.open {path}` (any readable format) / `app.save {path?}` / `app.quit`
 //!   (`file.close`, `file.closeAll` and `app.quit` first open a `saveChanges` dialog for each
 //!   modified document: `ui.dialog.confirm` saves, set `discard: true` then confirm to discard)
+//! - `app.export {path?, format?, …document.export options}`: encoded by the engine, written through
+//!   the host (a download on the web); the document keeps its path
 
 use std::sync::mpsc::Sender;
 
@@ -294,13 +296,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         }
         "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
         "app.save" => wrap(app.run("file.save", json!({"path": s("path")}))),
-        "app.export" => {
-            let f = s("format").unwrap_or("png");
-            wrap(
-                crate::io::export(app, f, s("path").map(str::to_string), p.get("scale").and_then(Value::as_f64).unwrap_or(1.0))
-                    .map(|p| json!({"path": p})),
-            )
-        }
+        "app.export" => wrap(crate::io::export(app, s("format"), s("path").map(str::to_string), p).map(|p| json!({"path": p}))),
         "app.quit" => {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             ok(Value::Null)
