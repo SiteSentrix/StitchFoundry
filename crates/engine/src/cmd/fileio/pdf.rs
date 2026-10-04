@@ -1,6 +1,6 @@
 //! PDF export settings for every PDF path (`document.export {format: pdf}`, Export for Screens,
-//! `document.exportPdf` and the Save PDF dialog): presets, the options parsed over them and the
-//! warnings that come back.
+//! `document.exportPdf` and the Save PDF dialog): presets, the options parsed over them, the
+//! warnings that come back, and `document.pdfSettings` (the dialog's Summary).
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -33,15 +33,26 @@ pub(super) const OPTIONS: &[FormatOption] = &[
 ];
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
-        "document.exportPdf",
-        "Export PDF",
-        [],
-        None,
-        "{path?, preset?: \"VectorCraft Default\", artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), standard?: none|pdfA2b|pdfX1a|pdfX3|pdfX4, compatibility?: 1.4|1.5|1.6|1.7 (default)|2.0, preserveEditing?, thumbnails?, fastWebView?, viewAfterSaving?, createLayers?, compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength}, compressText?: true}, marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6}, bleed?: {useDocument, top, bottom, left, right} (pt), output?: {conversion: none|destination|preserveNumbers, destination, profiles: none|all|destination|taggedSource, outputIntent, outputCondition, outputConditionId, registry, trapped}, advanced?: {fontSubsetPercent: 100, outlineText: true, overprint: preserve|discard}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; PDF/X, passwords and PDF/A-2b at 2.0 are refused. document.export {format: pdf} takes the same options",
-        has_doc,
-        export_pdf
-    )]
+    vec![
+        cmd!(
+            "document.exportPdf",
+            "Export PDF",
+            [],
+            None,
+            "{path?, preset?: \"VectorCraft Default\", artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), standard?: none|pdfA2b|pdfX1a|pdfX3|pdfX4, compatibility?: 1.4|1.5|1.6|1.7 (default)|2.0, preserveEditing?, thumbnails?, fastWebView?, viewAfterSaving? (the app opens the written file), createLayers?, compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength}, compressText?: true}, marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6}, bleed?: {useDocument, top, bottom, left, right} (pt), output?: {conversion: none|destination|preserveNumbers, destination, profiles: none|all|destination|taggedSource, outputIntent, outputCondition, outputConditionId, registry, trapped}, advanced?: {fontSubsetPercent: 100, outlineText: true, overprint: preserve|discard}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; PDF/X, passwords and PDF/A-2b at 2.0 are refused. document.export {format: pdf} takes the same options",
+            has_doc,
+            export_pdf
+        ),
+        cmd!(
+            query "document.pdfSettings",
+            "PDF Settings",
+            [],
+            None,
+            "{preset?, includeDocument?: false, …document.exportPdf options} → {settings (the preset with the options applied), presets: [name…], changed: [{option: \"compression.compressText\", value}] (what differs from the defaults), warnings}; includeDocument also exports the active document in memory and adds its warnings (pattern strokes, effects left out…)",
+            always,
+            pdf_settings
+        ),
+    ]
 }
 
 /// Every preset name (built-in first).
@@ -116,4 +127,32 @@ pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<Stri
 fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     let (bytes, warnings) = encode(C, &s.doc()?.doc, p)?;
     write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": warnings }))
+}
+
+/// `(path, value)` for every leaf of `v` that differs from `default` (`compression.color.ppi`).
+fn changed(prefix: &str, v: &Value, default: &Value, out: &mut Vec<Value>) {
+    match (v, default) {
+        (Value::Object(o), Value::Object(d)) => {
+            for (k, x) in o {
+                let path = if prefix.is_empty() { k.clone() } else { format!("{prefix}.{k}") };
+                changed(&path, x, d.get(k).unwrap_or(&Value::Null), out);
+            }
+        }
+        _ if v != default => out.push(json!({ "option": prefix, "value": v })),
+        _ => {}
+    }
+}
+
+fn pdf_settings(s: &mut Session, p: &Value) -> Result<Value> {
+    const Q: &str = "document.pdfSettings";
+    let set = settings(Q, p)?;
+    let v = serde_json::to_value(&set).map_err(|e| EngineError::Other(e.to_string()))?;
+    let default = serde_json::to_value(PdfSettings::default()).map_err(|e| EngineError::Other(e.to_string()))?;
+    let mut diff = vec![];
+    changed("", &v, &default, &mut diff);
+    let warnings = match s.active() {
+        Some(st) if bool_or(p, "includeDocument", false) => encode(Q, &st.doc, p)?.1,
+        _ => set.warnings(),
+    };
+    Ok(json!({ "settings": v, "presets": presets(), "changed": diff, "warnings": warnings }))
 }

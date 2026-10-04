@@ -19,7 +19,7 @@ mod save;
 
 use serde_json::{Value, json};
 
-pub use encode::{ARTBOARD_PARAMS, ArtboardPick, encode};
+pub use encode::{ARTBOARD_PARAMS, ArtboardPick, encode, encode_with_warnings};
 pub use load::{Loaded, RasterImage, detect, load, open_bytes, raster_image};
 
 use super::*;
@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Serialize Document",
             [],
             None,
-            "{format?: vectorcraft (default)|svg|pdf|png|jpg|webp, …the format's options (see document.formats)} → {text} for svg, else {dataBase64}",
+            "{format?: vectorcraft (default)|svg|pdf|png|jpg|webp, …the format's options (see document.formats)} → {text, warnings} for svg, else {dataBase64, warnings}",
             has_doc,
             export::serialize
         ),
@@ -59,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" (1-based; PDF writes one page per artboard, default all; the other formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), outlineText?: bool (svg), …the PDF options of document.exportPdf} → {path, format, bytes}; no path → {dataBase64, format, bytes}. Never changes the document's path",
+            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" (1-based; PDF writes one page per artboard, default all; the other formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), outlineText?: bool (svg), …the PDF options of document.exportPdf} → {path, format, bytes, warnings}; no path → {dataBase64, format, bytes, warnings}. Never changes the document's path",
             has_doc,
             export::export
         ),

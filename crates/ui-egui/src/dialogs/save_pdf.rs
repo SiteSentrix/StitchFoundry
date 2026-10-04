@@ -1,9 +1,10 @@
 //! File → Save as PDF: the Save PDF dialog. Preset, Standard and Compatibility on top, then the
-//! sections General, Compression, Marks and Bleeds, Output, Advanced and Security.
+//! sections General, Compression, Marks and Bleeds, Output, Advanced, Security and Summary.
 //!
 //! The fields are the `document.exportPdf` options (sections are objects such as `compression`),
 //! plus `preset`, `range`, `path?` and UI-only `__` keys, so agents fill the dialog with
-//! `ui.dialog.set`. OK runs `document.exportPdf` through [`io::export_pdf`].
+//! `ui.dialog.set`. OK runs `document.exportPdf` through [`io::export_pdf`]; the Summary is
+//! `document.pdfSettings`.
 
 use std::sync::LazyLock;
 
@@ -24,7 +25,7 @@ pub(super) const KIND: &str = "savePdf";
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Save PDF".into(), body, confirm, ok: Some("Save PDF"), ..DialogSpec::FORM };
 
-const SECTIONS: [&str; 6] = ["General", "Compression", "Marks and Bleeds", "Output", "Advanced", "Security"];
+const SECTIONS: [&str; 7] = ["General", "Compression", "Marks and Bleeds", "Output", "Advanced", "Security", "Summary"];
 
 /// The default settings as JSON: what a field an agent left out reads as.
 static DEFAULTS: LazyLock<Value> = LazyLock::new(|| serde_json::to_value(PdfSettings::default()).unwrap_or_default());
@@ -32,6 +33,9 @@ static DEFAULTS: LazyLock<Value> = LazyLock::new(|| serde_json::to_value(PdfSett
 /// Trim mark weights offered (pt).
 const WEIGHTS: [f64; 3] = [0.125, 0.25, 0.5];
 const WEIGHT_LABELS: [&str; 3] = ["0.125 pt", "0.25 pt", "0.5 pt"];
+
+/// The Destination entry for the document's own profile (stored as "").
+const DOCUMENT_PROFILE: &str = "Document profile";
 
 const LABEL_WIDTH: f32 = 150.0;
 /// Width of the section list (its frame adds 6 px a side).
@@ -156,20 +160,17 @@ fn choice_index<T: Choice>(d: &Dialog, path: &str) -> Option<usize> {
 
 /// The choice at `path`.
 fn choice<T: Choice>(d: &Dialog, path: &str) -> Option<T> {
-    choice_index::<T>(d, path).map(|i| T::ALL[i])
+    choice_index::<T>(d, path).and_then(|i| T::ALL.get(i).copied())
 }
 
 /// A dropdown of the choices `T` (options for which `enabled` is false are greyed).
 fn pick<T: Choice>(ui: &mut egui::Ui, d: &mut Dialog, path: &str, width: f32, enabled: impl Fn(T) -> bool) -> bool {
     let current = choice_index::<T>(d, path);
-    let label = current.map_or("", |i| T::LABELS[i]);
-    match widgets::dropdown_with(ui, path, label, T::LABELS, width, |i| enabled(T::ALL[i])) {
-        Some(i) => {
-            set(d, path, json!(T::IDS[i]));
-            true
-        }
-        None => false,
-    }
+    let label = current.and_then(|i| T::LABELS.get(i)).copied().unwrap_or_default();
+    let chosen = widgets::dropdown_with(ui, path, label, T::LABELS, width, |i| T::ALL.get(i).is_some_and(|c| enabled(*c)));
+    let Some(id) = chosen.and_then(|i| T::IDS.get(i)) else { return false };
+    set(d, path, json!(id));
+    true
 }
 
 fn number(ui: &mut egui::Ui, d: &mut Dialog, path: &str, suffix: &str, enabled: bool) {
@@ -206,7 +207,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let presets: Vec<&str> =
             d.fields.get("__presets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
         let current = d.str("preset");
-        let chosen = widgets::dropdown(ui, "pdf-preset", &current, &presets, 300.0).map(|i| presets[i].to_string());
+        let chosen = widgets::dropdown(ui, "pdf-preset", &current, &presets, 300.0).and_then(|i| presets.get(i)).map(|p| p.to_string());
         if let Some(name) = chosen {
             apply_preset(app, d, &name);
         }
@@ -250,6 +251,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 "Output" => output(ui, d),
                 "Advanced" => advanced(ui, d),
                 "Security" => security(ui, d),
+                "Summary" => summary(app, ui, d),
                 _ => general(ui, d),
             });
         });
@@ -351,9 +353,10 @@ fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     row(ui, "Trim mark weight:", |ui| {
         let w = get(d, "marks.weight").as_f64().unwrap_or(0.25);
-        let current = WEIGHTS.iter().position(|x| (x - w).abs() < 1e-9).map_or_else(|| format!("{w} pt"), |i| WEIGHT_LABELS[i].to_string());
-        if let Some(i) = widgets::dropdown(ui, "marks.weight", &current, &WEIGHT_LABELS, 130.0) {
-            set(d, "marks.weight", json!(WEIGHTS[i]));
+        let current =
+            WEIGHTS.iter().zip(WEIGHT_LABELS).find(|(x, _)| (*x - w).abs() < 1e-9).map_or_else(|| format!("{w} pt"), |(_, l)| l.to_string());
+        if let Some(x) = widgets::dropdown(ui, "marks.weight", &current, &WEIGHT_LABELS, 130.0).and_then(|i| WEIGHTS.get(i)) {
+            set(d, "marks.weight", json!(x));
         }
     });
     row(ui, "Offset:", |ui| length(ui, d, "marks.offset", unit, true));
@@ -379,11 +382,11 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     let converting = get(d, "output.conversion") != ColorConversion::None.id();
     row(ui, "Destination:", |ui| {
         let profiles = vectorcraft_color::cms::profiles();
-        let names: Vec<&str> = std::iter::once("Document profile").chain(profiles.iter().map(|p| p.name.as_str())).collect();
-        let current = get(d, "output.destination").as_str().filter(|s| !s.is_empty()).unwrap_or(names[0]).to_string();
+        let names: Vec<&str> = std::iter::once(DOCUMENT_PROFILE).chain(profiles.iter().map(|p| p.name.as_str())).collect();
+        let current = get(d, "output.destination").as_str().filter(|s| !s.is_empty()).unwrap_or(DOCUMENT_PROFILE).to_string();
         ui.add_enabled_ui(converting, |ui| {
             if let Some(i) = widgets::dropdown(ui, "output.destination", &current, &names, 300.0) {
-                set(d, "output.destination", json!(if i == 0 { "" } else { names[i] }));
+                set(d, "output.destination", json!(if i == 0 { "" } else { names.get(i).copied().unwrap_or_default() }));
             }
         });
     });
@@ -445,6 +448,79 @@ fn security(ui: &mut egui::Ui, d: &mut Dialog) {
     flag(ui, d, "security.plaintextMetadata", "Enable plaintext metadata", false);
 }
 
+/// The section a changed option belongs to (for the Summary's order).
+fn section_of(option: &str) -> usize {
+    match option.split('.').next().unwrap_or_default() {
+        "compression" => 1,
+        "marks" | "bleed" => 2,
+        "output" => 3,
+        "advanced" => 4,
+        "security" => 5,
+        _ => 0,
+    }
+}
+
+/// `compression.color.abovePpi` → "Compression › Color › Above Ppi": the section, then the keys
+/// (without the section's own object), `thumbnails` → "General › Thumbnails".
+fn option_label(option: &str) -> String {
+    let section = SECTIONS.get(section_of(option)).copied().unwrap_or(SECTIONS[0]);
+    let mut keys = option.split('.').peekable();
+    keys.next_if(|k| k.eq_ignore_ascii_case(section));
+    std::iter::once(section.to_string()).chain(keys.map(|k| form::humanize(k).trim_end_matches(':').to_string())).collect::<Vec<_>>().join(" › ")
+}
+
+/// `document.pdfSettings` for the dialog with the document's warnings (an export in memory),
+/// cached until a field or the document changes.
+fn summary_of(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Result<Value, String> {
+    let revision = app.session.active().map_or(0, |s| s.revision);
+    let stamp = egui::Id::new((p.to_string(), revision));
+    let key = egui::Id::new("save-pdf-summary");
+    if let Some((s, v)) = ctx.data(|m| m.get_temp::<(egui::Id, Result<Value, String>)>(key))
+        && s == stamp
+    {
+        return v;
+    }
+    let mut q = p.clone();
+    q["includeDocument"] = json!(true);
+    let v = app.session.execute("document.pdfSettings", &q).map_err(|e| e.to_string());
+    ctx.data_mut(|m| m.insert_temp(key, (stamp, v.clone())));
+    v
+}
+
+fn summary(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    let t = Tokens::get(ui.ctx());
+    let v = match summary_of(app, ui.ctx(), &params(d)) {
+        Ok(v) => v,
+        Err(e) => {
+            heading(ui, "Error");
+            ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
+            return;
+        }
+    };
+    heading(ui, "Options");
+    let mut changed: Vec<&Value> = v["changed"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
+    changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()));
+    if changed.is_empty() {
+        note(ui, "Every option is at its default.");
+    }
+    for c in changed {
+        let value = match &c["value"] {
+            Value::Bool(b) => if *b { "On" } else { "Off" }.to_string(),
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        ui.label(egui::RichText::new(format!("{}: {value}", option_label(c["option"].as_str().unwrap_or_default()))).color(t.text));
+    }
+    heading(ui, "Warnings");
+    let warnings = v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default();
+    if warnings.is_empty() {
+        note(ui, "None.");
+    }
+    for w in warnings {
+        ui.label(egui::RichText::new(format!("⚠ {}", w.as_str().unwrap_or_default())).color(t.text));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
@@ -457,21 +533,22 @@ mod tests {
 
     type Log = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
-    /// An app with three artboards whose writer records what it gets.
-    fn app() -> (VectorcraftApp, Log) {
-        let written = Log::default();
-        let w = written.clone();
+    /// An app with two artboards whose writer and URL opener record what they get.
+    fn app() -> (VectorcraftApp, Log, Log) {
+        let (written, opened) = (Log::default(), Log::default());
+        let (w, o) = (written.clone(), opened.clone());
         let services = Services {
             write: Some(Box::new(move |p: &str, b: &[u8]| {
                 w.borrow_mut().push((p.to_string(), b.to_vec()));
                 Ok(())
             })),
+            open_url: Some(Box::new(move |u: &str| o.borrow_mut().push((u.to_string(), vec![])))),
             ..Default::default()
         };
         let mut app = VectorcraftApp::new(Session::new(), services);
         app.run("file.new", json!({"width": 120, "height": 90, "artboards": 3})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
-        (app, written)
+        (app, written, opened)
     }
 
     /// One headless frame of the dialog layer.
@@ -488,7 +565,7 @@ mod tests {
 
     #[test]
     fn every_section_draws() {
-        let (mut app, _) = app();
+        let (mut app, _, _) = app();
         app.run("file.export.pdf", json!({})).unwrap();
         assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
         assert_eq!(super::super::DialogKind::of(KIND), Some(super::super::DialogKind::SavePdf));
@@ -497,15 +574,22 @@ mod tests {
             frame(&mut app);
             assert!(app.ui.dialog.is_some(), "{s} closed the dialog");
         }
+        // The Summary lists what changed and the warnings for options not applied yet.
+        set_field(&mut app, "thumbnails", json!(true));
+        let p = params(app.ui.dialog.as_ref().unwrap());
+        let v = summary_of(&mut app, &egui::Context::default(), &p).unwrap();
+        assert_eq!(v["changed"][0]["option"], "thumbnails");
+        assert!(v["warnings"][0].as_str().unwrap().contains("thumbnails"));
     }
 
     #[test]
     fn confirm_runs_export_pdf_with_the_dialog_options() {
-        let (mut app, written) = app();
+        let (mut app, written, opened) = app();
         app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.5"})).unwrap();
         set_field(&mut app, "__allArtboards", json!(false));
         set_field(&mut app, "range", json!("1,3"));
         set_field(&mut app, "compression.compressText", json!(false));
+        set_field(&mut app, "viewAfterSaving", json!(true));
         let r = super::super::confirm(&mut app).unwrap();
         assert!(app.ui.dialog.is_none(), "closes after saving");
         assert_eq!(r["path"], "/tmp/out.pdf");
@@ -516,16 +600,20 @@ mod tests {
         assert!(w[0].1.starts_with(b"%PDF-1.5"), "compatibility reaches the writer");
         assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 2, "range 1,3");
         assert!(!String::from_utf8_lossy(&w[0].1).contains("/FlateDecode"), "uncompressed content");
-        assert_eq!(app.ui.status, "Saved /tmp/out.pdf");
+        assert_eq!(opened.borrow().len(), 1, "View PDF after Saving opens the file once");
+        let url = &opened.borrow()[0].0;
+        assert!(url.starts_with("file:///") && url.ends_with("/tmp/out.pdf"), "the written file as a URL: {url}");
+        assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
     }
 
     #[test]
-    fn errors_keep_the_dialog_open_and_agents_export_directly() {
-        let (mut app, written) = app();
+    fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
+        let (mut app, written, opened) = app();
         app.run("ui.savePdfDialog", json!({"path": "/tmp/w.pdf"})).unwrap();
         set_field(&mut app, "marks.trim", json!(true));
-        let r = super::super::confirm(&mut app).unwrap();
-        assert!(r["warnings"][0].as_str().unwrap().contains("marks"), "options not applied yet warn: {r}");
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.status.contains("1 note(s)") && app.ui.status.contains("marks"), "{}", app.ui.status);
+        assert!(opened.borrow().is_empty(), "not opened unless asked");
         app.run("ui.savePdfDialog", json!({"path": "/tmp/bad.pdf"})).unwrap();
         set_field(&mut app, "__allArtboards", json!(false));
         set_field(&mut app, "range", json!("7"));
@@ -554,7 +642,7 @@ mod tests {
 
     #[test]
     fn presets_reset_the_settings_and_fields_fall_back_to_defaults() {
-        let (mut app, _) = app();
+        let (mut app, _, _) = app();
         app.run("ui.savePdfDialog", json!({"compatibility": "1.4", "marks": {"trim": true}})).unwrap();
         let d = app.ui.dialog.as_mut().unwrap();
         assert_eq!(get(d, "compatibility"), "1.4");
@@ -566,5 +654,15 @@ mod tests {
         assert_eq!(get(&d, "compatibility"), "1.7");
         assert_eq!(get(&d, "marks.trim"), false);
         assert!(app.run("ui.savePdfDialog", json!({"compatibility": "1.0"})).is_err(), "bad options are refused");
+    }
+
+    #[test]
+    fn option_labels_read_well() {
+        assert_eq!(option_label("compression.color.abovePpi"), "Compression › Color › Above Ppi");
+        assert_eq!(option_label("compression.compressText"), "Compression › Compress Text");
+        assert_eq!(option_label("thumbnails"), "General › Thumbnails");
+        assert_eq!(option_label("bleed.top"), "Marks and Bleeds › Bleed › Top");
+        assert_eq!(section_of("bleed.top"), 2);
+        assert_eq!(SECTIONS[section_of("standard")], "General");
     }
 }

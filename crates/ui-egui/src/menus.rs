@@ -169,7 +169,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.export.pdf",
         "Save as PDF…",
         "",
-        "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing) → {path, bytes, warnings}",
+        "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing; viewAfterSaving opens the file) → {path, bytes, warnings}",
     ),
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),

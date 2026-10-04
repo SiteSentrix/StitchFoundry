@@ -391,9 +391,11 @@ impl Exporter<'_> {
     }
 
     /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect.
-    fn warn_raster(&mut self, effects: &[vectorcraft_doc::Effect]) {
+    /// Warn when `effects` has a raster effect: the app renders them to images before export
+    /// (`vectorcraft_engine::export_pdf`), so the ones still here (on `what`) can't be written.
+    fn warn_raster(&mut self, effects: &[vectorcraft_doc::Effect], what: impl FnOnce() -> String) {
         if effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
-            self.warn("raster effects (shadows, glows, blur, feather) are not exported to PDF yet");
+            self.warn(format!("raster effects (shadows, glows, blur, feather) on {} are left out of the PDF", what()));
         }
     }
 
@@ -586,7 +588,7 @@ impl Exporter<'_> {
             None if !n.is_container() => return,
             _ => {}
         }
-        self.warn_raster(&n.appearance.effects);
+        self.warn_raster(&n.appearance.effects, || format!("{} objects", n.kind_label().to_lowercase()));
         let container = n.is_container() && !matches!(n.kind, NodeKind::Compound { .. });
         // Whether this container's children knock each other out (a knockout group is written as a group).
         let knockout = n.knocks_out(self.knockout);
@@ -681,7 +683,7 @@ impl Exporter<'_> {
                     if !fl.visible || fl.paint.is_none() {
                         continue;
                     }
-                    self.warn_raster(&fl.effects);
+                    self.warn_raster(&fl.effects, || "fills".into());
                     // Pattern fills: the tile instances covering the shape, clipped to it.
                     let doc = self.doc;
                     if let Paint::Pattern { pattern, xf } = &fl.paint
@@ -716,7 +718,7 @@ impl Exporter<'_> {
                     if !st.visible || st.paint.is_none() || st.width <= 0.0 {
                         continue;
                     }
-                    self.warn_raster(&st.effects);
+                    self.warn_raster(&st.effects, || "strokes".into());
                     self.stroke(s, bp, &path, r, st, page, bounds);
                 }
             }

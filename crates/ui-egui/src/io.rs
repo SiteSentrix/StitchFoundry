@@ -159,12 +159,38 @@ fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value)
 }
 
 /// File → Save as PDF: `document.exportPdf` with `params` (the Save PDF dialog's options), written
-/// to `path` (else a picked or suggested name) → `{path, bytes, warnings}`.
+/// to `path` (else a picked or suggested name) → `{path, bytes, warnings}`. With
+/// `viewAfterSaving`, the written file opens in the system viewer (not on the web, which
+/// downloads it).
 pub fn export_pdf(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false);
     let (path, mut v) = run_to_file(app, "document.exportPdf", "pdf", params)?;
-    app.status(format!("Saved {path}"));
+    if view && app.services.download.is_none() {
+        app.open_url(&file_url(&path));
+    }
+    let warnings: Vec<&str> = v["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    app.status(match warnings.first() {
+        Some(first) => format!("Saved {path} with {} note(s): {first}", warnings.len()),
+        None => format!("Saved {path}"),
+    });
     v["path"] = Value::String(path);
     Ok(v)
+}
+
+/// `path` as an absolute `file://` URL for the system opener (bytes other than letters, digits and
+/// `/-._~:` percent-encoded).
+fn file_url(path: &str) -> String {
+    let abs = std::path::absolute(path).map_or_else(|_| path.to_string(), |p| p.to_string_lossy().into_owned());
+    let abs = abs.replace('\\', "/");
+    let mut url = String::from(if abs.starts_with('/') { "file://" } else { "file:///" });
+    for b in abs.bytes() {
+        if b.is_ascii_alphanumeric() || b"/-._~:".contains(&b) {
+            url.push(char::from(b));
+        } else {
+            url.push_str(&format!("%{b:02X}"));
+        }
+    }
+    url
 }
 
 /// File → Place… (embed an image or SVG into the active document).
@@ -309,6 +335,13 @@ mod tests {
         let w = written.borrow();
         assert!(String::from_utf8_lossy(&w[0].1).contains("<svg"), "SVG from the picked name");
         assert_eq!(&w[1].1[1..4], b"PNG", "PNG from the given path");
+    }
+
+    #[test]
+    fn written_files_open_as_file_urls() {
+        let url = super::file_url("/tmp/My Art #1.pdf");
+        assert!(url.starts_with("file:///") && url.ends_with("/tmp/My%20Art%20%231.pdf"), "{url}");
+        assert!(!url.contains('\\'), "{url}");
     }
 
     #[test]

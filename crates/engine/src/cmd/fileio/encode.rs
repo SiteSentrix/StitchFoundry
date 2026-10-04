@@ -101,10 +101,19 @@ fn check_format_size(f: &Format, w: f64, h: f64) -> Result<()> {
 /// options from `p` (see `document.formats`). Raster formats leave template layers out, and no
 /// format writes the opacity-mask editing layer.
 pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
+    encode_with_warnings(doc, format, p).map(|(bytes, _)| bytes)
+}
+
+/// Like [`encode`], also returning the encoder's warnings (PDF: options not applied yet, features
+/// approximated or left out; the other formats have none).
+pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     let f = super::writable(C, Some(format), None)?;
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
-    Ok(match f.id {
+    if f.id == "pdf" {
+        return super::pdf::encode(C, doc, p);
+    }
+    let bytes = match f.id {
         "vectorcraft" => vectorcraft_format::save_file(doc),
         "svg" => {
             let o: SvgOptions = options(f, p)?;
@@ -112,7 +121,6 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
             let opts = vectorcraft_svg::ExportOptions { artboard, outline_text: o.outline_text.unwrap_or(false), ..Default::default() };
             vectorcraft_svg::export(doc, &opts).into_bytes()
         }
-        "pdf" => super::pdf::encode(C, doc, p)?.0,
         "png" | "jpg" | "webp" => {
             let o: RasterOptions = options(f, p)?;
             let region = doc.artboards[boards(o.boards.one(n))?].rect;
@@ -128,5 +136,6 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
             .map_err(EngineError::Other)?
         }
         _ => return Err(bad(C, format!("no encoder for {} yet", f.label))),
-    })
+    };
+    Ok((bytes, vec![]))
 }
