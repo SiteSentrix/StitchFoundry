@@ -5,8 +5,8 @@
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
-//! - `save`: `document.save`, Save As / a Copy / as Template, Revert and the per-format options
-//!   (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
+//! - `save`: `document.save`, Save As / a Copy / as Template, New from Template, Revert and the
+//!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
 //! - `pdfimport`: the PDF pages, box and password `document.open` and Place read, `document.pdfInfo`.
 //!
@@ -30,9 +30,9 @@ pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, enc
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 use load::err;
 pub(crate) use load::source;
-pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, raster_image};
+pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
 pub use pdfimport::{LoadOptions, page_document};
-pub use save::{SAVE_FORMATS, SaveMode, SavePlan, save_filters, save_format, save_plan, save_with, stamp_save_dates};
+pub use save::{SAVE_FORMATS, SaveMode, SavePlan, save_filters, save_format, save_plan, save_with, stamp_save_dates, templates_folder};
 pub use svg::options_map as svg_options;
 
 use super::*;

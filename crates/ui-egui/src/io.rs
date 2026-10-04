@@ -9,6 +9,9 @@ use crate::dialogs::svg_options;
 use crate::state::Dialog;
 use crate::{FilePick, Services, VectorcraftApp, dialogs};
 
+/// Template extensions New from Template's open dialog lists first.
+const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"];
+
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
 /// graphic style library files open in the library panel and flattener and PDF presets files are
 /// imported.
@@ -75,6 +78,25 @@ pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
     open_bytes(app, path, &bytes, Some(path.to_string()))?;
     note_recent(app, path);
     Ok(())
+}
+
+/// File → New from Template…: a template (or any readable file) as a new untitled document. Without
+/// a path the open dialog starts in the Templates folder. On the web the browser's file picker
+/// opens it (`.vctemplate`, `.ait` and template files open untitled there too).
+pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
+    let path = match path {
+        Some(p) => p,
+        None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
+        None => {
+            let filters = std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::open_filters()).collect();
+            pick_open(app, &FilePick { folder: fileio::templates_folder(&app.session.prefs), filters, ..Default::default() })?
+        }
+    };
+    let bytes = read(app, &path)?;
+    let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
+    app.sync_views();
+    crate::dialogs::missing_links::after_open(app, &r);
+    Ok(r)
 }
 
 /// Web: download `bytes` under `path`'s file name; desktop: write them to `path`.

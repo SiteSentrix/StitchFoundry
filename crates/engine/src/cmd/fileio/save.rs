@@ -1,5 +1,5 @@
-//! Saving: `document.save`, `file.saveAs`, `file.saveCopy`, `file.saveAsTemplate`, `file.revert`
-//! and `file.formatOptions`.
+//! Saving: `document.save`, `file.saveAs`, `file.saveCopy`, `file.saveAsTemplate`,
+//! `file.newFromTemplate`, `file.revert` and `file.formatOptions`.
 //!
 //! Every frontend saves the same way: [`save_plan`] resolves where and how (path, format, options,
 //! a suggested name and folder when there is no path), then [`save_with`] encodes, writes through
@@ -11,7 +11,7 @@ use vectorcraft_doc::Document;
 
 use super::super::*;
 use super::{Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, write_encoded, write_file};
-use crate::DocState;
+use crate::{DocState, Prefs};
 
 /// The formats Save As offers, in menu order (append-only). The other writable formats are exports:
 /// they never become the document's own file.
@@ -68,9 +68,9 @@ pub struct SavePlan {
     pub format: &'static Format,
     /// The format's options (only those its encoder reads).
     pub options: Map<String, Value>,
-    /// Suggested file name: `<name>.<ext>` or `<name> copy.<ext>`.
+    /// Suggested file name: `<name>.<ext>`, `<name> copy.<ext>` or `<name> template.vctemplate`.
     pub name: String,
-    /// Suggested folder: the document's own.
+    /// Suggested folder: the document's own, or the Templates folder for a template.
     pub folder: Option<String>,
 }
 
@@ -89,6 +89,16 @@ pub fn stamp_save_dates(st: &mut DocState) {
     let d = std::sync::Arc::make_mut(&mut st.doc);
     d.metadata.created.get_or_insert(now);
     d.metadata.modified = Some(now);
+}
+
+/// The Templates folder: the `templatesFolder` preference, else `Documents/VectorCraft Templates`
+/// in the user's home (none where there is no home folder, as on the web).
+pub fn templates_folder(prefs: &Prefs) -> Option<String> {
+    if !prefs.templates_folder.is_empty() {
+        return Some(prefs.templates_folder.clone());
+    }
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok().filter(|h| !h.is_empty())?;
+    Some(std::path::Path::new(&home).join("Documents").join("VectorCraft Templates").to_string_lossy().to_string())
 }
 
 /// The folder of a path (`None` for a bare file name).
@@ -154,9 +164,13 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     let ext = format.extensions[0];
     let name = match mode {
         SaveMode::Copy => format!("{stem} copy.{ext}"),
-        SaveMode::Save | SaveMode::SaveAs | SaveMode::Template => format!("{stem}.{ext}"),
+        SaveMode::Template => format!("{stem} template.{ext}"),
+        SaveMode::Save | SaveMode::SaveAs => format!("{stem}.{ext}"),
     };
-    let folder = st.path.as_deref().and_then(parent_folder);
+    let folder = match mode {
+        SaveMode::Template => templates_folder(&s.prefs),
+        _ => st.path.as_deref().and_then(parent_folder),
+    };
     Ok(SavePlan { mode, path, format, options, name, folder })
 }
 
@@ -338,9 +352,18 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save as Template…",
             ["File"],
             None,
-            "{path?} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name>.vctemplate\", folder?, warnings}",
+            "{path?} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.vctemplate\", folder: the Templates folder (preference templatesFolder), warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
+        ),
+        cmd!(
+            "file.newFromTemplate",
+            "New from Template…",
+            ["File"],
+            Some("Cmd+Shift+N"),
+            "{path} or {name, dataBase64}: open a template (or any readable file) as a new untitled document → {index, title, format, warnings}",
+            always,
+            super::load::new_from_template
         ),
         cmd!(
             "file.revert",

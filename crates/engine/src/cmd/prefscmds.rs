@@ -315,6 +315,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("japaneseCropMarks", "General", "Options", "Use Japanese Crop Marks", bool),
     // Appearance panel menu
     p!("newArtBasic", "General", "Appearance Panel", "New Art Has Basic Appearance", bool),
+    // File Handling (continued)
+    p!("templatesFolder", "File Handling", "Files", "Templates Folder", text),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

@@ -151,11 +151,22 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let Loaded { mut doc, format, warnings, restored } = load_with(name, bytes, &opts)?;
+    open_loaded(s, load_with(name, bytes, &opts)?, path, &opts, false)
+}
+
+/// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
+/// from there) as a new untitled document.
+pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value> {
+    open_loaded(s, load(name, bytes)?, path.map(str::to_string), &LoadOptions::default(), true)
+}
+
+/// Make a loaded file the new active document; `opts` are the options it was read with.
+fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
+    let Loaded { mut doc, format, warnings, restored } = loaded;
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.
-    let template = doc.template || matches!(format.id, "ait" | "template");
+    let template = as_template || doc.template || matches!(format.id, "ait" | "template");
     if template {
         doc.template = false;
         doc.title = s.next_untitled();
@@ -198,6 +209,11 @@ pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
 pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
     let src = source(p, "document.open")?;
     open_bytes_with(s, src.name, &src.bytes, src.path.map(str::to_string), p)
+}
+
+pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
+    let src = source(p, "file.newFromTemplate")?;
+    open_template(s, src.name, &src.bytes, src.path)
 }
 
 /// Decode an image's header (and, for formats stored as PNG, its pixels).

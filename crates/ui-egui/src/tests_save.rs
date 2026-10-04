@@ -74,3 +74,14 @@ fn revert_asks_then_reloads_in_the_same_tab_keeping_every_zoom() {
     assert!(app.run("file.revert", json!({})).is_err() && app.ui.dialog.is_none());
     let _ = std::fs::remove_dir_all(d);
 }
+
+#[test]
+fn new_from_template_takes_bytes_from_agents() {
+    let mut app = app();
+    app.run("file.new", json!({})).unwrap();
+    let bytes = app.session.execute("document.serialize", &json!({"format": "template"})).unwrap();
+    let r = app.run("file.newFromTemplate", json!({"name": "flyer.vctemplate", "dataBase64": bytes["dataBase64"]})).unwrap();
+    assert!(r["title"].as_str().is_some_and(|t| t.starts_with("Untitled-")), "{r}");
+    assert_eq!((app.session.documents().len(), app.views.len()), (2, 2));
+    assert_eq!(app.session.active().unwrap().path, None);
+}

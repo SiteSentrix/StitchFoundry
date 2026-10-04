@@ -119,7 +119,13 @@ fn services() -> Services {
                 .map(|p| p.to_string_lossy().to_string())
                 .collect()
         })),
-        pick_save: Some(Box::new(|pick: &FilePick| file_dialog(pick).save_file().map(|p| p.to_string_lossy().to_string()))),
+        pick_save: Some(Box::new(|pick: &FilePick| {
+            // The Templates folder may not exist yet.
+            if let Some(folder) = &pick.folder {
+                let _ = std::fs::create_dir_all(folder);
+            }
+            file_dialog(pick).save_file().map(|p| p.to_string_lossy().to_string())
+        })),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).

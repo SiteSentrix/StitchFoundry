@@ -56,7 +56,6 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+S",
         "{path?, format?, options?, svg?: {…SVG options}} = document.save, written through the app (a document saved as SVG, PDF or .ai, or opened from one Save can write back, saves as that again, with the same options); with no path known (never saved) the Save As panel asks first",
     ),
-    ("file.newFromTemplate", "New from Template…", "Cmd+Shift+N", "{path?} open a template as a new untitled document"),
     (
         "file.place",
         "Place…",
@@ -438,10 +437,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "document.exportSelection" => {
             io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
         }
-        "file.newFromTemplate" => match s("path") {
-            Some(path) => io::open_path(app, &path).map(|_| Value::Null),
-            None => io::open_dialog(app).map(|_| Value::Null),
-        },
+        // Bytes sent by an agent go straight to the engine; a path or nothing opens it here.
+        "file.newFromTemplate" if p.get("dataBase64").is_none() => io::new_from_template(app, s("path")),
         "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
         id if id.starts_with("file.openRecent") => {
             let n: usize = id["file.openRecent".len()..].parse().unwrap_or(0);

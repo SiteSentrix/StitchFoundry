@@ -372,6 +372,9 @@ pub struct Prefs {
     /// not a Preferences dialog field: resetting the preferences keeps it; `pdf.preset.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub pdf_presets: Vec<vectorcraft_pdf::PdfPreset>,
+    // File Handling (continued)
+    /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
+    pub templates_folder: String,
 }
 
 impl Default for Prefs {
@@ -498,6 +501,7 @@ impl Default for Prefs {
             new_doc_presets: vec![],
             recent_new_docs: vec![],
             pdf_presets: vec![],
+            templates_folder: String::new(),
         }
     }
 }

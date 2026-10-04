@@ -1,5 +1,5 @@
-//! The save pipeline: Save writes a document's own format, Save As / a Copy / as Template and
-//! Revert.
+//! The save pipeline: Save writes a document's own format, Save As / a Copy / as Template, Revert
+//! and templates.
 
 use std::path::PathBuf;
 
@@ -158,6 +158,40 @@ fn revert_reloads_the_saved_file_in_the_same_tab() {
     s.set_active(1);
     rect(&mut s);
     assert!(s.execute("file.revert", &json!({})).is_err());
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn templates_suggest_a_name_in_the_templates_folder_and_open_untitled() {
+    let d = dir("tpl");
+    let mut s = session();
+    let source = path(&d, "flyer.vectorcraft");
+    s.execute("document.save", &json!({"path": source})).unwrap();
+    s.prefs.templates_folder = path(&d, "Templates");
+    let r = s.execute("file.saveAsTemplate", &json!({})).unwrap();
+    assert_eq!(r["name"], "flyer template.vctemplate");
+    assert_eq!(r["folder"].as_str(), Some(s.prefs.templates_folder.as_str()));
+    assert_ne!(r["name"].as_str(), std::path::Path::new(&source).file_name().and_then(|n| n.to_str()), "never the source file");
+    // Writing it leaves the document alone; opening it gives an untitled document.
+    rect(&mut s);
+    let tpl = path(&d, "flyer template.vctemplate");
+    s.execute("file.saveAsTemplate", &json!({"path": tpl})).unwrap();
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(source.as_str()));
+    assert!(s.doc().unwrap().is_dirty());
+    let r = s.execute("document.open", &json!({"path": tpl})).unwrap();
+    assert_eq!(r["format"], "template");
+    assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
+    assert_eq!(s.doc().unwrap().path, None);
+    assert!(!s.doc().unwrap().doc.template);
+    // New from Template opens any file untitled.
+    let r = s.execute("file.newFromTemplate", &json!({"path": source})).unwrap();
+    assert!(r["title"].as_str().unwrap().starts_with("Untitled-"), "{r}");
+    assert_eq!(s.doc().unwrap().path, None);
+    // With no preference the folder is under the user's home (where there is one).
+    s.prefs.templates_folder.clear();
+    if let Some(f) = crate::cmd::fileio::templates_folder(&s.prefs) {
+        assert!(f.ends_with("VectorCraft Templates"), "{f}");
+    }
     let _ = std::fs::remove_dir_all(d);
 }
 

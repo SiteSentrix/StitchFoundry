@@ -141,7 +141,8 @@ markup around it: if another app changed the SVG since, `document.open` reads it
 
 Saving beyond `save_file` goes through `run_command`: `file.saveAs {path?, format?, options?, svg?}` (the document takes
 on the new file and format), `file.saveCopy` (the document keeps its path, title and modified state),
-`file.saveAsTemplate` (a `.vctemplate` that opens untitled), `file.revert` and `file.formatOptions {format?}` (a format's options
+`file.saveAsTemplate` (a `.vctemplate` that opens untitled; the suggested name and the Templates folder come back
+without a path), `file.newFromTemplate {path}`, `file.revert` and `file.formatOptions {format?}` (a format's options
 with the values a save would use). Without a path the save commands return `{dataBase64, name, folder?, warnings}`. A document saved as SVG or PDF
 remembers its options, so the next save reuses them. A PDF opened with `pages`, `cropTo` or `password` is only part
 of the file, so Save asks for a new name instead of writing it back.
