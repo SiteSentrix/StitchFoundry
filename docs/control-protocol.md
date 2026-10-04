@@ -53,8 +53,9 @@ active proxy) with the paint's params and the object's `ids`; a colour dropped o
 a stop.
 
 Tool options: double-clicking a tool button runs `tool.options {tool}`. For `gradient` it opens the Gradient panel;
-for `eyedropper` it opens Eyedropper Options, a `command` dialog (fields `appearance`, `transparency`) whose
-`ui.dialog.confirm` runs `eyedropper.setOptions` (what `appearance.copyFrom` copies). Gradient tool handles snap to
+for `eyedropper` it opens Eyedropper Options, an `eyedropperOptions` dialog (fields `sampleSize` 1/3/5, `pickUp` and
+`apply`, the attribute trees of `eyedropper.setOptions`) whose `ui.dialog.confirm` runs `eyedropper.setOptions` (what
+`appearance.copyFrom` copies). Gradient tool handles snap to
 anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.
 
 Effect dialogs: `engine.execute {command: "effect.dialog", params: {effect, index?, item?}}` opens the `effect` dialog

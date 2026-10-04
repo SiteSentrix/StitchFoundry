@@ -314,6 +314,9 @@ pub struct Prefs {
     /// Object → Pattern → Tile Edge Color (`#rrggbb`): the tile edge and swatch bounds in pattern
     /// editing mode.
     pub pattern_tile_edge_color: String,
+    /// Eyedropper Options (`eyedropper.setOptions`; a preference group, see
+    /// [`cmd::prefscmds::PREF_GROUPS`]).
+    pub eyedropper: EyedropperOptions,
 }
 
 impl Default for Prefs {
@@ -431,6 +434,7 @@ impl Default for Prefs {
                 let [r, g, b] = vectorcraft_doc::LAYER_COLORS[0].1;
                 Color::rgb8(r, g, b).to_hex()
             },
+            eyedropper: Default::default(),
         }
     }
 }
@@ -473,8 +477,6 @@ pub struct Session {
     pub recent_colors: Vec<Color>,
     /// A paint applied by a live preview: remembered when the interaction commits.
     pub(crate) pending_paint: Option<Paint>,
-    /// What the Eyedropper copies (`eyedropper.setOptions`); not saved.
-    pub eyedropper: EyedropperOptions,
     /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
     pub swatch_libraries: cmd::swatchlib::Libraries,
     /// The selected freeform gradient point (`paint.freeform.selectPoint`) and whose gradient it
@@ -511,7 +513,6 @@ impl Session {
             last_gradient: GradientPaint::new(Default::default()),
             recent_colors: vec![],
             pending_paint: None,
-            eyedropper: Default::default(),
             swatch_libraries: Default::default(),
             freeform_point: None,
         }
@@ -785,6 +786,8 @@ mod tests_draw2;
 mod tests_editcolors;
 #[cfg(test)]
 mod tests_effectedit;
+#[cfg(test)]
+mod tests_eyedropper;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]

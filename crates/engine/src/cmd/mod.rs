@@ -355,8 +355,8 @@ pub(crate) fn parse_range(s: &str, count: usize) -> std::result::Result<Vec<usiz
 /// The Transparency panel's state ([`Session::transparency_info`]).
 pub use opacitymask::TransparencyInfo;
 
-/// What the Eyedropper copies (`Session::eyedropper`).
-pub use xform::EyedropperOptions;
+/// Eyedropper Options (`Prefs::eyedropper`).
+pub use xform::{AppearanceAttrs, EyedropperAttrs, EyedropperOptions, FillAttrs, StrokeAttrs};
 
 /// The Attributes panel's state ([`Session::attributes_info`]).
 pub use overprint::AttributesInfo;

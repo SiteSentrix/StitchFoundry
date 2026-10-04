@@ -168,6 +168,9 @@ pub struct ToolContext<'a> {
     /// The selected freeform gradient point (`paint.freeform.selectPoint`), marked on the
     /// freeform annotator.
     pub freeform_point: Option<usize>,
+    /// Eyedropper Options' raster sample size: the pixels square averaged when the Eyedropper
+    /// samples an image (1, 3 or 5).
+    pub raster_sample: u32,
 }
 
 impl ToolContext<'_> {
@@ -353,6 +356,7 @@ pub(crate) mod testutil {
             appearance_item: None,
             constrain_angle: 0.0,
             freeform_point: None,
+            raster_sample: 1,
         }
     }
 }
