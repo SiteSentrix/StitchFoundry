@@ -381,8 +381,9 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(m) = mode
         && ids.is_empty()
         && p.get("ids").is_none()
+        && let Some(st) = s.new_art_stroke_mut()
     {
-        s.new_art_stroke_mut().gradient_mode = m;
+        st.gradient_mode = m;
     }
     // The last gradient is the one the first object now shows (the defaults' without objects).
     let shown = match ids.first() {

@@ -38,7 +38,13 @@ fn render(s: &Session) -> vectorcraft_render::Rendered {
 
 /// Pixels (of 200×200) whose colour differs by more than `tol` in any channel.
 fn differing(a: &vectorcraft_render::Rendered, b: &vectorcraft_render::Rendered, tol: u8) -> usize {
-    a.pixels.chunks_exact(4).zip(b.pixels.chunks_exact(4)).filter(|(p, q)| p.iter().zip(q.iter()).any(|(x, y)| x.abs_diff(*y) > tol)).count()
+    a.pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.pixels.as_chunks::<4>().0)
+        .filter(|(p, q)| p.iter().zip(q.iter()).any(|(x, y)| x.abs_diff(*y) > tol))
+        .count()
 }
 
 fn expandable(s: &Session) -> bool {

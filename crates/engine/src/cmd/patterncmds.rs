@@ -212,11 +212,11 @@ fn unique_pattern_name(d: &Document, base: &str) -> String {
     if d.pattern(base).is_none() && d.swatch(base).is_none() {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap()
+    (2..).map(|i| format!("{base} {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap_or_else(|| base.to_string())
 }
 
 fn next_pattern_name(d: &Document) -> String {
-    (1..).map(|i| format!("New Pattern {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap()
+    (1..).map(|i| format!("New Pattern {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap_or_else(|| "New Pattern".to_string())
 }
 
 /// Add pattern `def` and its swatch.
@@ -633,11 +633,8 @@ fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<No
         return Ok(json!({ "id": r.0 }));
     }
     let roots = roots(s, p)?;
-    if roots.is_empty() {
-        return Err(EngineError::Other("select the art to repeat".into()));
-    }
+    let Some(&top) = roots.last() else { return Err(EngineError::Other("select the art to repeat".into())) };
     let id = s.edit(label, |d, sel| {
-        let top = *roots.last().unwrap();
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| d.node(*id).cloned()).map(Arc::new).collect();
         let id = d.alloc_id();

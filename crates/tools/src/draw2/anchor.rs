@@ -128,10 +128,12 @@ impl Tool for AnchorTool {
                         *began = true;
                     }
                 }
-                out.push(match self.state {
-                    State::Convert { id, si, ai, .. } => {
-                        Action::Preview("path.convertAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}))
-                    }
+                let preview = match self.state {
+                    State::Idle => return out,
+                    State::Convert { id, si, ai, .. } => Action::Preview(
+                        "path.convertAnchor".into(),
+                        json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
+                    ),
                     State::Handle { id, si, ai, out, .. } => Action::Preview(
                         "path.setHandle".into(),
                         json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": p.x, "y": p.y, "independent": true}),
@@ -140,8 +142,8 @@ impl Tool for AnchorTool {
                         "path.reshapeSegment".into(),
                         json!({"id": id.0, "subpath": si, "segment": seg, "t": t, "dx": p.x - start.x, "dy": p.y - start.y}),
                     ),
-                    State::Idle => unreachable!(),
-                });
+                };
+                out.push(preview);
                 out
             }
             ("anchorPoint", PointerKind::Up) => {

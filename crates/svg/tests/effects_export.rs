@@ -1,5 +1,7 @@
 //! Live effects in SVG export: a fill or stroke's own raster effects become filters on that item's
 //! element, and geometry effects on type are baked through its outlines.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};

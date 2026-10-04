@@ -247,7 +247,7 @@ pub(crate) fn post(pixels: &mut [u8], opts: &RenderOptions) {
     let lut = cms::active().proof_lut(proof);
     let mut last_in = [0u8; 4];
     let mut last_out = [0u8; 4];
-    for px in pixels.chunks_exact_mut(4) {
+    for px in pixels.as_chunks_mut::<4>().0 {
         let a = px[3];
         if a == 0 {
             continue;

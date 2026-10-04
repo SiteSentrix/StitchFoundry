@@ -217,8 +217,8 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     // With nothing selected the Stroke panel sets up the next object drawn.
-    if new_art {
-        set(s.new_art_stroke_mut());
+    if new_art && let Some(st) = s.new_art_stroke_mut() {
+        set(st);
     }
     edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
         if index.is_none()
@@ -360,8 +360,11 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     // As stroke.set: with nothing selected, for the next object drawn.
-    if no_targets(&ids, p) && (scale.is_some() || swap || flip.is_some()) {
-        arrows_and_profile(s.new_art_stroke_mut());
+    if no_targets(&ids, p)
+        && (scale.is_some() || swap || flip.is_some())
+        && let Some(st) = s.new_art_stroke_mut()
+    {
+        arrows_and_profile(st);
     }
     edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
         let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };

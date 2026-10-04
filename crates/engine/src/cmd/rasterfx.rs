@@ -94,19 +94,21 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
     let mut img = render(out, vec![whole.clone()], region, scale);
     if let Some(bare) = knockout {
         let obj = render(out, vec![bare.clone()], region, scale);
-        for (px, o) in img.pixels.chunks_exact_mut(4).zip(obj.pixels.chunks_exact(4)) {
+        for (px, o) in img.pixels.as_chunks_mut::<4>().0.iter_mut().zip(obj.pixels.as_chunks::<4>().0) {
             let keep = 1.0 - o[3] as f32 / 255.0;
             for c in px.iter_mut() {
                 *c = (*c as f32 * keep).round() as u8;
             }
         }
     }
+    // Can't encode: keep the object as it is (vector, effects ignored) rather than fail the export.
+    let png = img.to_png().ok()?;
     let id = out.alloc_id();
     let mut key = format!("raster-effect-{}", id.0);
     while out.images.contains_key(&key) {
         key.push('+');
     }
-    out.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(img.to_png()) });
+    out.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     let mut image = Node::new(id, NodeKind::Image(ImageObject { key, width: img.width, height: img.height, xf, link: None }));
     image.name = Some("Raster effect".into());

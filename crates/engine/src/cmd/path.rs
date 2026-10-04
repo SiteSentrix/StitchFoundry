@@ -283,6 +283,11 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "changed": changed }))
 }
 
+/// First and last anchor points of a subpath.
+fn end_points(sp: &SubPath) -> Option<(Point, Point)> {
+    Some((sp.anchors.first()?.p, sp.anchors.last()?.p))
+}
+
 fn join(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_paths(s)?;
     match ids.as_slice() {
@@ -292,9 +297,12 @@ fn join(s: &mut Session, _: &Value) -> Result<Value> {
                 let path = path_mut(d, id)?;
                 let sp = path.subpaths.iter_mut().find(|s| !s.closed).ok_or_else(|| EngineError::Other("path is already closed".into()))?;
                 // Merge coincident end points.
-                if sp.anchors.len() > 2 && sp.anchors[0].p.distance(sp.anchors.last().unwrap().p) < 1e-6 {
-                    let last = sp.anchors.pop().unwrap();
-                    sp.anchors[0].h_in = last.h_in;
+                if sp.anchors.len() > 2
+                    && end_points(sp).is_some_and(|(f, l)| f.distance(l) < 1e-6)
+                    && let Some(last) = sp.anchors.pop()
+                    && let Some(first) = sp.anchors.first_mut()
+                {
+                    first.h_in = last.h_in;
                 }
                 sp.closed = true;
                 Ok(())
@@ -310,21 +318,26 @@ fn join(s: &mut Session, _: &Value) -> Result<Value> {
                 };
                 let mut x = pa.subpaths[sa].clone();
                 let mut y = pb.subpaths[sb].clone();
-                let (xf, xl) = (x.anchors[0].p, x.anchors.last().unwrap().p);
-                let (yf, yl) = (y.anchors[0].p, y.anchors.last().unwrap().p);
+                let (Some((xf, xl)), Some((yf, yl))) = (end_points(&x), end_points(&y)) else {
+                    return Err(EngineError::Other("join needs open paths".into()));
+                };
                 // Pick the closest pair of ends.
                 let cands =
                     [(xl.distance(yf), false, false), (xl.distance(yl), false, true), (xf.distance(yf), true, false), (xf.distance(yl), true, true)];
-                let (_, rx, ry) = cands.into_iter().min_by(|p, q| p.0.total_cmp(&q.0)).unwrap();
+                let (_, rx, ry) = cands.into_iter().min_by(|p, q| p.0.total_cmp(&q.0)).unwrap_or((0.0, false, false));
                 if rx {
                     x.reverse();
                 }
                 if ry {
                     y.reverse();
                 }
-                if x.anchors.last().unwrap().p.distance(y.anchors[0].p) < 1e-6 {
+                if let (Some(xe), Some(ys)) = (x.anchors.last().map(|a| a.p), y.anchors.first().map(|a| a.p))
+                    && xe.distance(ys) < 1e-6
+                {
                     let first = y.anchors.remove(0);
-                    x.anchors.last_mut().unwrap().h_out = first.h_out;
+                    if let Some(l) = x.anchors.last_mut() {
+                        l.h_out = first.h_out;
+                    }
                 }
                 x.anchors.extend(y.anchors);
                 pa.subpaths[sa] = x;

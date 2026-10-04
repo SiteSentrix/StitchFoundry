@@ -218,8 +218,9 @@ pub fn dabs(points: &[Point], spacing: f64) -> Vec<Point> {
             break;
         }
     }
-    let end = *points.last().unwrap();
-    if end.distance(last) > spacing * 0.25 {
+    if let Some(&end) = points.last()
+        && end.distance(last) > spacing * 0.25
+    {
         out.push(end);
     }
     out

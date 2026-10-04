@@ -229,7 +229,7 @@ pub fn preset(name: &str) -> Option<TraceParams> {
 
 /// All built-in presets in panel order.
 pub fn presets() -> Vec<(&'static str, TraceParams)> {
-    PRESET_NAMES.iter().map(|n| (*n, preset(n).expect("built-in preset"))).collect()
+    PRESET_NAMES.iter().filter_map(|n| Some((*n, preset(n)?))).collect()
 }
 
 /// One traced shape: an outer contour plus its holes, filled with `color`.

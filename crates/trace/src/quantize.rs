@@ -19,7 +19,7 @@ fn luma(p: [u8; 4]) -> u8 {
 
 /// Reduce `img` to a palette according to `params.mode`.
 pub fn quantize(img: &Raster, params: &TraceParams) -> Quantized {
-    let px = img.rgba.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]);
+    let px = img.rgba.as_chunks::<4>().0.iter().map(|c| [c[0], c[1], c[2], c[3]]);
     match params.mode {
         Mode::BlackAndWhite => {
             let t = params.threshold;
@@ -38,7 +38,7 @@ pub fn quantize(img: &Raster, params: &TraceParams) -> Quantized {
         }
         Mode::Grayscale => {
             let mut hist = [0u64; 256];
-            for p in img.rgba.chunks_exact(4) {
+            for p in img.rgba.as_chunks::<4>().0 {
                 if p[3] >= 128 {
                     hist[luma([p[0], p[1], p[2], p[3]]) as usize] += 1;
                 }
@@ -58,7 +58,7 @@ pub fn quantize(img: &Raster, params: &TraceParams) -> Quantized {
         Mode::Color => {
             // 15-bit colour histogram with per-bin sums (exact bin means).
             let mut bins: Vec<Bin> = vec![Bin::default(); 1 << 15];
-            for p in img.rgba.chunks_exact(4) {
+            for p in img.rgba.as_chunks::<4>().0 {
                 if p[3] >= 128 {
                     let b = &mut bins[key(p[0], p[1], p[2])];
                     b.n += 1;

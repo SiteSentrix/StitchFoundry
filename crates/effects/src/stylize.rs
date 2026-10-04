@@ -131,7 +131,7 @@ pub fn scribble(path: &PathData, b: Rect, p: &Value) -> PathData {
             }
         }
         xs.sort_by(f64::total_cmp);
-        let mut spans: Vec<(f64, f64)> = xs.chunks_exact(2).map(|s| (s[0] - overlap, s[1] + overlap)).collect();
+        let mut spans: Vec<(f64, f64)> = xs.as_chunks::<2>().0.iter().map(|s| (s[0] - overlap, s[1] + overlap)).collect();
         if row % 2 == 1 {
             spans.reverse();
         }

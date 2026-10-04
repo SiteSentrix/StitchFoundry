@@ -463,7 +463,7 @@ fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
                 && !blends.iter().any(|b| st.doc.ancestry(*id).unwrap_or_default().contains(b))
         })
         .ok_or_else(|| EngineError::Other("Replace Spine: select a blend and a path".into()))?;
-    let b = *blends.first().unwrap();
+    let Some(&b) = blends.first() else { return Err(EngineError::Other("Replace Spine: select a blend and a path".into())) };
     s.edit("Replace Spine", |d, sel| {
         let spine = d.node(path).and_then(|n| n.path_data().cloned()).ok_or(EngineError::NoNode(path))?;
         d.remove(path)?;
@@ -576,9 +576,9 @@ fn env_make_top(s: &mut Session, p: &Value) -> Result<Value> {
     if roots.len() < 2 {
         return Err(bad(C, "select the content and a path on top"));
     }
-    let top = *roots.last().unwrap();
+    let Some((&top, content)) = roots.split_last() else { return Err(bad(C, "select the content and a path on top")) };
+    let content = content.to_vec();
     let path = s.doc()?.doc.node(top).and_then(outline_of).filter(|p| p.bounds().is_some()).ok_or_else(|| bad(C, "the top object must be a path"))?;
-    let content = roots[..roots.len() - 1].to_vec();
     let id = s.edit("Make Envelope", |d, sel| {
         let id = wrap(d, sel, &content, |id, content| envelope(id, content, EnvelopeKind::TopObject { path }))?;
         d.remove(top)?;

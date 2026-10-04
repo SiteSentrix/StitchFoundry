@@ -158,7 +158,7 @@ fn poly_intervals(polys: &[Vec<Point>], y: f64) -> Vec<(f64, f64)> {
         }
     }
     xs.sort_by(f64::total_cmp);
-    xs.chunks_exact(2).map(|c| (c[0], c[1])).collect()
+    xs.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect()
 }
 
 /// Union of sorted-or-not intervals.

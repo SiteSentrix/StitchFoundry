@@ -325,7 +325,11 @@ pub fn unique_name(lib: &[Brush], base: &str) -> String {
     if !lib.iter().any(|b| b.name == base) {
         return base.to_string();
     }
-    (2..).map(|i| format!("{base} {i}")).find(|n| !lib.iter().any(|b| &b.name == n)).unwrap()
+    // At most `lib.len()` names are taken, so one of the first `lib.len() + 1` candidates is free.
+    (2..=lib.len() + 2)
+        .map(|i| format!("{base} {i}"))
+        .find(|n| !lib.iter().any(|b| &b.name == n))
+        .unwrap_or_else(|| format!("{base} {}", lib.len() + 2))
 }
 
 // ---------- geometry ----------

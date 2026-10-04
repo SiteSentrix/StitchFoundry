@@ -645,10 +645,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
-        "file.close" => match p.get("index").and_then(Value::as_u64).map(|i| i as usize).or(app.session.active_index()) {
-            Some(i) => crate::unsaved::close(app, i),
-            None => return None,
-        },
+        "file.close" => {
+            let i = p.get("index").and_then(Value::as_u64).map(|i| i as usize).or(app.session.active_index())?;
+            crate::unsaved::close(app, i)
+        }
         "file.closeAll" => crate::unsaved::close_all(app, "closeAll"),
         "app.quit" => crate::unsaved::close_all(app, "quit"),
         "ui.swatchOptions" => match s("name") {
@@ -1742,7 +1742,11 @@ pub fn pretty_shortcut(s: &str) -> String {
     if cfg!(target_os = "macos") {
         let mut mods = String::new();
         let parts: Vec<&str> = s.split('+').collect();
-        let (key, ms) = if s.ends_with("++") { ("+", &parts[..parts.len() - 2]) } else { (*parts.last().unwrap(), &parts[..parts.len() - 1]) };
+        let (key, ms): (&str, &[&str]) = if s.ends_with("++") {
+            ("+", parts.get(..parts.len().saturating_sub(2)).unwrap_or_default())
+        } else {
+            parts.split_last().map_or(("", &[][..]), |(k, rest)| (*k, rest))
+        };
         for m in ["Ctrl", "Alt", "Shift", "Cmd"] {
             if ms.contains(&m) {
                 mods.push_str(match m {

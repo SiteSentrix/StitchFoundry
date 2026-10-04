@@ -133,7 +133,7 @@ pub struct FlattenOptions {
 
 impl Default for FlattenOptions {
     fn default() -> Self {
-        Self::preset("medium").expect("built-in preset")
+        Self::builtin("medium")
     }
 }
 
@@ -155,12 +155,17 @@ impl FlattenOptions {
     pub fn preset(name: &str) -> Option<Self> {
         let key = name.trim().to_ascii_lowercase();
         let id = Self::PRESETS.into_iter().find(|id| key == *id || Self::preset_label(id).is_some_and(|l| l.eq_ignore_ascii_case(&key)))?;
+        Some(Self::builtin(id))
+    }
+
+    /// The built-in preset `id` (one of [`Self::PRESETS`]; anything else is low).
+    fn builtin(id: &str) -> Self {
         let (balance, line_art_ppi, gradient_ppi, clip_complex_regions, anti_alias) = match id {
             "high" => (100.0, 1200.0, 300.0, true, false),
             "medium" => (75.0, 300.0, 300.0, false, true),
             _ => (75.0, 300.0, 150.0, false, true),
         };
-        Some(Self {
+        Self {
             balance,
             line_art_ppi,
             gradient_ppi,
@@ -170,7 +175,7 @@ impl FlattenOptions {
             anti_alias,
             preserve_alpha: false,
             preserve_overprints: true,
-        })
+        }
     }
 
     /// The built-in presets, finest first.
@@ -231,7 +236,7 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other("Flatten Transparency: select objects to flatten".into()));
     }
     let src = s.doc()?.doc.clone();
-    let plan = plan(&src, &roots, &o, true);
+    let plan = plan(&src, &roots, &o, true)?;
     let options = serde_json::to_value(&o).unwrap_or_default();
     if plan.flat.is_empty() && !plan.kept.iter().any(|id| src.node(*id).is_some_and(|n| kept_work(n, &o))) {
         return Ok(json!({ "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": 0, "vector": 0, "options": options }));
@@ -635,8 +640,8 @@ impl FlattenReport {
 }
 
 /// What flattening `roots` of `doc` with `o` would do.
-pub fn report(doc: &Document, roots: &[NodeId], o: &FlattenOptions) -> FlattenReport {
-    let plan = plan(doc, roots, o, false);
+pub fn report(doc: &Document, roots: &[NodeId], o: &FlattenOptions) -> Result<FlattenReport> {
+    let plan = plan(doc, roots, o, false)?;
     let mut r = FlattenReport { transparent: plan.transparent, ..Default::default() };
     // Every object under `id` (but a compound path's own pieces), visible ones only.
     fn visit(n: &Node, f: &mut dyn FnMut(&Node)) {
@@ -685,7 +690,7 @@ pub fn report(doc: &Document, roots: &[NodeId], o: &FlattenOptions) -> FlattenRe
         });
     }
     r.affected.sort_by_key(|id| doc.index_path(*id));
-    r
+    Ok(r)
 }
 
 impl Session {
@@ -704,7 +709,7 @@ impl Session {
             let layers: Vec<u64> = self.doc()?.doc.layers.iter().map(|l| l.id.0).collect();
             target_roots(self, &json!({ "ids": layers }))?
         };
-        let r = report(&self.doc()?.doc, &roots, &o);
+        let r = report(&self.doc()?.doc, &roots, &o)?;
         Ok((o, r))
     }
 }
@@ -778,8 +783,8 @@ struct Raster {
 }
 
 /// The flattening of `roots` with `o`; `render` renders the images (the preview only needs where
-/// they go).
-fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render: bool) -> Plan {
+/// they go). Fails only when an image can't be encoded.
+fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render: bool) -> Result<Plan> {
     let tmp = isolated_doc(src, roots.iter().filter_map(|id| src.node(*id).cloned()).collect());
     // Geometry effects first: what is left on the art are raster effects.
     let baked = effects::bake_document(&tmp).unwrap_or(tmp);
@@ -792,19 +797,24 @@ fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render: bool) -> P
     let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
     for g in overlapping(&reaches) {
         let ids: Vec<NodeId> = g.iter().map(|&i| roots[i]).collect();
-        let flat = g.iter().any(|&i| see_through[i]).then(|| {
-            let art: Vec<Node> = g.iter().map(|&i| art[i].clone()).collect();
+        let group = g.iter().any(|&i| see_through[i]).then(|| {
             let plain: Vec<&Node> = g.iter().map(|&i| &plain[i]).collect();
-            let (regions, area) = flatten_group(&plain, o, cmyk)?;
-            let raster = area.as_ref().filter(|_| render).map(|a| render_raster(&baked, &art, a.rect, a.ppi, a.clip.clone(), o));
-            Some(Flat { roots: ids.clone(), regions, area, raster })
+            flatten_group(&plain, o, cmyk)
         });
-        match flat.flatten() {
-            Some(f) => out.flat.push(f),
-            None => out.kept.extend(ids),
-        }
+        let Some((regions, area)) = group.flatten() else {
+            out.kept.extend(ids);
+            continue;
+        };
+        let raster = match area.as_ref().filter(|_| render) {
+            Some(a) => {
+                let art: Vec<Node> = g.iter().map(|&i| art[i].clone()).collect();
+                Some(render_raster(&baked, &art, a.rect, a.ppi, a.clip.clone(), o)?)
+            }
+            None => None,
+        };
+        out.flat.push(Flat { roots: ids, regions, area, raster });
     }
-    out
+    Ok(out)
 }
 
 /// The regions and the image area replacing one group of overlapping objects (`plain`: the art as
@@ -902,8 +912,8 @@ fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions, cmyk: bool
 
 /// `art` rendered over `rect` at `ppi`: over white with the white the art doesn't cover taken out
 /// again (so blend modes see the white page), or over nothing with Preserve Alpha. The image and
-/// its `clip` reach a pixel further.
-fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Option<PathData>, o: &FlattenOptions) -> Raster {
+/// its `clip` reach a pixel further. Fails when the image can't be encoded.
+fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Option<PathData>, o: &FlattenOptions) -> Result<Raster> {
     let mut scale = ppi / 72.0;
     scale = scale.min((MAX_PIXELS / (rect.width() * rect.height()).max(1.0)).sqrt());
     let px = 1.0 / scale;
@@ -928,7 +938,7 @@ fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Optio
             })
             .collect();
         let cover = r.render_region(&isolated_doc(doc, cover), region, scale, false);
-        for (px, c) in img.pixels.chunks_exact_mut(4).zip(cover.pixels.chunks_exact(4)) {
+        for (px, c) in img.pixels.as_chunks_mut::<4>().0.iter_mut().zip(cover.pixels.as_chunks::<4>().0) {
             let k = c[3];
             let k2 = if o.anti_alias || k == 0 || k == 255 {
                 k
@@ -952,7 +962,8 @@ fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Optio
         }
     }
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-    Raster { png: img.to_png(), width: img.width, height: img.height, xf, clip }
+    let png = img.to_png().map_err(|e| EngineError::Other(format!("Flatten Transparency: {e}")))?;
+    Ok(Raster { png, width: img.width, height: img.height, xf, clip })
 }
 
 /// `n` at full opacity with Normal blending throughout (objects, fills and strokes).
@@ -978,6 +989,8 @@ fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: 
     let (mut vector, mut rasterized) = (0, 0);
     let mut ids = vec![];
     for f in plan.flat {
+        // A group always has objects.
+        let Some(&top) = f.roots.last() else { continue };
         let mut children = vec![];
         // The image goes under the regions, reaching a pixel past its own: their edges then fall on
         // matching pixels instead of on what is behind the group.
@@ -995,7 +1008,6 @@ fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: 
             children.push(Arc::new(n));
             vector += 1;
         }
-        let top = *f.roots.last().expect("a group has objects");
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let g = Node::group(d.alloc_id(), children);
         ids.push(d.insert(par, idx + 1, g)?);

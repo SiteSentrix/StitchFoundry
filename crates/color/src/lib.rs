@@ -516,7 +516,7 @@ mod tests {
             *t = 0.5;
             true
         });
-        let Paint::Gradient(g) = g else { unreachable!() };
+        let Paint::Gradient(g) = g else { panic!("a gradient") };
         assert!(g.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Ink") && s.tint == 0.5));
     }
 

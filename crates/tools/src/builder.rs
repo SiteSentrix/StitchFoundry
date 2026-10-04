@@ -229,7 +229,7 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
             }
         }
         xs.sort_by(f64::total_cmp);
-        for pair in xs.chunks_exact(2) {
+        for pair in xs.as_chunks::<2>().0 {
             out.move_to(unrot(Point::new(pair[0], y)));
             out.line_to(unrot(Point::new(pair[1], y)));
         }

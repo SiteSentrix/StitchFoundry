@@ -287,8 +287,11 @@ fn row(
         }
     }
 
-    if has_children && expanded.contains(&n.id.0) {
-        for (i, c) in n.children().unwrap().iter().enumerate().rev() {
+    if has_children
+        && expanded.contains(&n.id.0)
+        && let Some(children) = n.children()
+    {
+        for (i, c) in children.iter().enumerate().rev() {
             row(ui, doc, c, depth + 1, i == 0 && n.clips(), sel, target, current, expanded, actions, t);
         }
     }

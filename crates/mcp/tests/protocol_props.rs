@@ -1,6 +1,8 @@
 //! MCP server properties (in-process, headless backend): tool schemas are valid, every tool
 //! survives junk arguments, JSON-RPC framing always answers correctly, and random editing through
 //! MCP keeps the document valid.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
 use serde_json::{Value, json};

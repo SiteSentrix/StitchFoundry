@@ -1,5 +1,7 @@
 //! Strokes on type in SVG: character stroke options on live text (and back), runs that differ
 //! from the first, and the object's own strokes drawn over the glyph outlines.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{AppearanceItem, CharStyle, Dash, Document, LineCap, LineJoin, Node, NodeKind, StrokeLayer, TextObject, TextRun};

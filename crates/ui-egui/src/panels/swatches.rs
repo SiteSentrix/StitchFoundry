@@ -735,11 +735,10 @@ pub(crate) fn tile_grid<'a, T>(ui: &mut Ui, items: &'a [T], view: View, is_folde
     let per_row = ((w - 2.0) / pitch).floor().max(1.0) as usize;
     let mut rows: Vec<Vec<&T>> = vec![vec![]];
     for e in items {
-        let len = rows.last().map_or(0, Vec::len);
-        if len == per_row || (len > 0 && is_folder(e)) {
-            rows.push(vec![]);
+        match rows.last_mut() {
+            Some(row) if row.len() < per_row && (row.is_empty() || !is_folder(e)) => row.push(e),
+            _ => rows.push(vec![e]),
         }
-        rows.last_mut().expect("a row").push(e);
     }
     let mut out = Vec::with_capacity(items.len());
     for row in rows {

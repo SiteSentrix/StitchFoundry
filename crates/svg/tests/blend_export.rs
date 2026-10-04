@@ -1,5 +1,7 @@
 //! Blend modes and opacity masks in SVG export look as on the canvas: every mode follows the
 //! reference formulas when resvg draws the file, and masks take luminance the canvas's way.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vectorcraft_color::blend::blend_rgb;
 use vectorcraft_color::{BlendMode, Color, Paint};

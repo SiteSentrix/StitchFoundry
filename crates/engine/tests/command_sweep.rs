@@ -1,6 +1,8 @@
 //! Every-command sweep: each registered command, in three fixture states, with `{}` and with fuzzed
 //! junk params, must return Ok or Err (never panic), never leave an interaction open, and never
 //! corrupt the tree.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use serde_json::{Value, json};
 use vectorcraft_engine::{Session, command_specs};

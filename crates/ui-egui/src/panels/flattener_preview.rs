@@ -325,7 +325,7 @@ fn render(
             .highlight_art(&shot.doc, h)
             .map(|art| r.render(&art, w, hh, view, &RenderOptions { skip_templates: true, ..Default::default() }));
         let red = [color.r(), color.g(), color.b()].map(f32::from);
-        for (i, p) in img.pixels.chunks_exact_mut(4).enumerate() {
+        for (i, p) in img.pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             // A light grey of the art, so the highlight stands out.
             let luma = 0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32;
             let grey = 96.0 + luma * 0.62;

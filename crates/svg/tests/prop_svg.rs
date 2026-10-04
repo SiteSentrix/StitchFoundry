@@ -1,5 +1,7 @@
 //! SVG export/import properties: never panics, always re-imports, and plain art survives the round
 //! trip visually (render comparison with a perceptual tolerance).
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
 use vectorcraft_color::{Color, Paint};

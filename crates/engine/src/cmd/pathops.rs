@@ -324,11 +324,14 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
             if lv.is_empty() {
                 continue;
             }
-            if shape_mode && lv.len() > 1 {
+            if shape_mode
+                && lv.len() > 1
+                && let Some(top) = lv.last()
+            {
                 // A group acts as one shape (the union of its leaves) with its top leaf's style.
                 let parts: Vec<(PathData, FillRule)> = lv.iter().filter_map(node_path).collect();
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
-                push(po::unite_all(&refs), FillRule::NonZero, style_of(lv.last().unwrap()));
+                push(po::unite_all(&refs), FillRule::NonZero, style_of(top));
             } else {
                 for l in &lv {
                     if let Some((p, r)) = node_path(l) {
@@ -349,8 +352,10 @@ fn run_pf(s: &mut Session, op: PathfinderOp) -> Result<Value> {
         }
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let new_node = if shape_mode {
-            let r = results.into_iter().find(|r| !r.path.is_empty()).unwrap();
-            shape_node_styled(d, r.path, &styles[r.key as usize])
+            let r =
+                results.into_iter().find(|r| !r.path.is_empty()).ok_or_else(|| EngineError::Other(format!("{label} produced an empty result")))?;
+            let style = styles.get(r.key as usize).ok_or_else(|| EngineError::Other(format!("{label}: lost track of a shape's style")))?;
+            shape_node_styled(d, r.path, style)
         } else {
             let mut children = vec![];
             for r in results {
@@ -418,8 +423,11 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
             if made.is_empty() {
                 continue;
             }
-            let new = if made.len() == 1 && !matches!(n.kind, NodeKind::Group { .. }) {
-                made.pop().unwrap()
+            let new = if made.len() == 1
+                && !matches!(n.kind, NodeKind::Group { .. })
+                && let Some(one) = made.pop()
+            {
+                one
             } else {
                 let gid = d.alloc_id();
                 Node::group(gid, made.into_iter().map(Arc::new).collect())

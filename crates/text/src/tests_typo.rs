@@ -363,7 +363,7 @@ fn opentype_ligature_switches() {
 
 #[test]
 fn face_charmap_for_glyphs_panel() {
-    let f = db().face("Source Sans 3", "Regular");
+    let f = db().face("Source Sans 3", "Regular").unwrap();
     let chars = f.chars();
     assert!(chars.len() > 200, "{}", chars.len());
     assert!(chars.windows(2).all(|w| w[0].0 < w[1].0));

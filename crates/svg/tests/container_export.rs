@@ -1,6 +1,8 @@
 //! The appearance of groups and layers in SVG export: their own fills and strokes are baked into
 //! paths painting the members (below or above them as the contents slot says), their geometry
 //! effects into the members, and their raster effects filter the whole group.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::sync::Arc;
 

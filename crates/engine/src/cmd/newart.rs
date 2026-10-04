@@ -155,9 +155,9 @@ impl Session {
         st
     }
 
-    /// The template's top stroke for an edit (`stroke.set`): the template becomes the user's own
-    /// (an inherited one as new art takes it now), with a stroke to edit.
-    pub(crate) fn new_art_stroke_mut(&mut self) -> &mut StrokeLayer {
+    /// The template for an edit (`stroke.set`): it becomes the user's own (an inherited one as new
+    /// art takes it now), with a stroke to edit.
+    fn new_art_template_mut(&mut self) -> &mut Appearance {
         let own = self.template().map(Cow::into_owned);
         if self.basic_only() {
             (self.paint.opacity, self.paint.blend, self.paint.style) = (1.0, BlendMode::Normal, None);
@@ -167,7 +167,13 @@ impl Session {
         if t.stroke().is_none() {
             t.set_stroke(Paint::None);
         }
-        t.stroke_mut().expect("a stroke was just made")
+        t
+    }
+
+    /// The template's top stroke for an edit (see [`Session::new_art_template_mut`], which always
+    /// gives it one).
+    pub(crate) fn new_art_stroke_mut(&mut self) -> Option<&mut StrokeLayer> {
+        self.new_art_template_mut().stroke_mut()
     }
 
     /// A graphic style clicked with nothing selected: new art takes it (`add`: its fills, strokes
@@ -175,8 +181,7 @@ impl Session {
     pub(crate) fn new_art_style(&mut self, g: &GraphicStyle, add: bool) {
         let ap = if g.unit_box { g.appearance.clone() } else { unplace_all(g.appearance.clone()) };
         if add {
-            let _ = self.new_art_stroke_mut();
-            let t = self.paint.appearance.as_mut().expect("made by new_art_stroke_mut");
+            let t = self.new_art_template_mut();
             t.items.extend(ap.items);
             t.effects.extend(ap.effects);
             self.paint.style = None;

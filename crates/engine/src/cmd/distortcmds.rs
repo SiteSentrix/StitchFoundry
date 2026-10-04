@@ -356,7 +356,8 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &s.doc()?.doc;
     let leaves = if roots.is_empty() {
         // Nothing selected: everything the brush sweeps over.
-        let sweep = dab_pts.iter().map(|c| prm.brush_bounds(*c)).reduce(|a, b| a.union(b)).unwrap();
+        // No dabs sweep nothing.
+        let sweep = dab_pts.iter().map(|c| prm.brush_bounds(*c)).reduce(|a, b| a.union(b)).unwrap_or(vectorcraft_geom::Rect::ZERO);
         let mut all = vec![];
         doc.walk(|n| {
             if matches!(n.kind, NodeKind::Path { guide: false, .. })

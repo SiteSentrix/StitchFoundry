@@ -188,7 +188,7 @@ fn region_export_png() {
     d.insert(Some(l), 0, n).unwrap();
     let r = Renderer::new().render_region(&d, d.artboards[0].rect, 2.0, true);
     assert_eq!((r.width, r.height), (200, 200));
-    let png = r.to_png();
+    let png = r.to_png().unwrap();
     assert_eq!(&png[1..4], b"PNG");
 }
 

@@ -219,7 +219,7 @@ fn every_builtin_style_paints_visibly_on_a_rectangle() {
             run(&mut s, "graphicStyle.addFromLibrary", json!({"library": b.id, "name": g.name, "apply": true}));
             assert_eq!(doc(&s).node(id).unwrap().graphic_style, doc(&s).graphic_style(&g.name).map(|x| x.id), "{}", g.name);
             let img = renderer.render_region(doc(&s), Rect::new(0.0, 0.0, 100.0, 100.0), 0.5, true);
-            let painted = img.pixels.chunks_exact(4).filter(|p| p[..3] != [255, 255, 255]).count();
+            let painted = img.pixels.as_chunks::<4>().0.iter().filter(|p| p[..3] != [255, 255, 255]).count();
             assert!(painted > 40, "{} / {} paints {painted} pixels", b.id, g.name);
         }
     }

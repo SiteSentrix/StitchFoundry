@@ -131,6 +131,15 @@ pub(crate) fn to_gray(c: Color) -> Color {
     c.in_model(Model::Gray)
 }
 
+/// Grayscale ink amount (0 = white, 1 = black) of a colour.
+fn gray_level(c: Color) -> f32 {
+    match to_gray(c) {
+        Color::Gray { k } => k,
+        // `in_model(Gray)` always yields Gray.
+        _ => 0.0,
+    }
+}
+
 /// What a recolouring pass applies to a colour that can link to a swatch (a solid colour or a
 /// gradient stop): `(colour, link, tint)`, true when it changed them.
 pub(crate) type LinkMap<'a> = dyn Fn(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
@@ -416,10 +425,7 @@ fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
         }
         "gray" => {
             let dgray = g("gray");
-            Box::new(move |c| {
-                let Color::Gray { k } = to_gray(c) else { unreachable!() };
-                Color::gray(cl(k + dgray))
-            })
+            Box::new(move |c| Color::gray(cl(gray_level(c) + dgray)))
         }
         "global" => {
             // Each linked colour moves to the shifted tint of its global swatch's current colour.
@@ -506,8 +512,8 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         BlendOrder::Horizontal => ids.sort_by(|a, b| center(a).x.total_cmp(&center(b).x)),
         BlendOrder::Vertical => ids.sort_by(|a, b| center(a).y.total_cmp(&center(b).y)),
     }
-    let first = d.node(ids[0]).and_then(fill_color).unwrap_or_default();
-    let last = d.node(*ids.last().unwrap()).and_then(fill_color).unwrap_or_default();
+    let first = ids.first().and_then(|id| d.node(*id)).and_then(fill_color).unwrap_or_default();
+    let last = ids.last().and_then(|id| d.node(*id)).and_then(fill_color).unwrap_or_default();
     // Ends in one model blend in it; mixed ones give colours in the document's model.
     let model = if first.model() == last.model() { first.model() } else { d.color_mode.model() };
     let n = ids.len();

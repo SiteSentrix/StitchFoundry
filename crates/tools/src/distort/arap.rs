@@ -204,7 +204,7 @@ impl Mesh {
 
     /// Band width (in vertices) of the vertex adjacency.
     fn vertex_band(&self) -> usize {
-        self.tris.iter().map(|t| t.iter().max().unwrap() - t.iter().min().unwrap()).max().unwrap_or(0)
+        self.tris.iter().filter_map(|t| Some(t.iter().max()? - t.iter().min()?)).max().unwrap_or(0)
     }
 
     /// The triangle and barycentric coordinates of `p` (extrapolated from the nearest mesh cell
@@ -448,18 +448,18 @@ pub fn auto_pins(mesh: &Mesh, count: usize) -> Vec<Point> {
         return vec![];
     }
     let c = centres.iter().fold(Vec2::ZERO, |a, p| a + p.to_vec2()) / centres.len() as f64;
-    let first = *centres.iter().min_by(|a, b| a.distance_squared(c.to_point()).total_cmp(&b.distance_squared(c.to_point()))).unwrap();
+    let Some(&first) = centres.iter().min_by(|a, b| a.distance_squared(c.to_point()).total_cmp(&b.distance_squared(c.to_point()))) else {
+        return vec![];
+    };
     let mut out = vec![first];
     while out.len() < count.min(centres.len()) {
-        let next = centres
-            .iter()
-            .max_by(|a, b| {
-                let da = out.iter().map(|o| o.distance_squared(**a)).fold(f64::MAX, f64::min);
-                let db = out.iter().map(|o| o.distance_squared(**b)).fold(f64::MAX, f64::min);
-                da.total_cmp(&db)
-            })
-            .copied()
-            .unwrap();
+        let Some(&next) = centres.iter().max_by(|a, b| {
+            let da = out.iter().map(|o| o.distance_squared(**a)).fold(f64::MAX, f64::min);
+            let db = out.iter().map(|o| o.distance_squared(**b)).fold(f64::MAX, f64::min);
+            da.total_cmp(&db)
+        }) else {
+            break;
+        };
         out.push(next);
     }
     out

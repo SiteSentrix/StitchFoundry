@@ -23,9 +23,9 @@ impl Rng {
 }
 
 /// `n` mixed paths (ellipses with strokes, translucent rectangles, stroked stars) on a 1600×1200 page.
-pub fn synthetic(n: usize) -> Document {
+pub fn synthetic(n: usize) -> Result<Document, String> {
     let mut d = Document::new(1600.0, 1200.0);
-    let l = d.layers[0].id;
+    let l = d.layers.first().map(|l| l.id);
     let mut r = Rng(42);
     for i in 0..n {
         let (x, y, s) = (r.next() * 1600.0, r.next() * 1200.0, 3.0 + r.next() * 22.0);
@@ -43,9 +43,9 @@ pub fn synthetic(n: usize) -> Document {
         if i % 3 == 1 {
             node.opacity = 0.8;
         }
-        d.insert(Some(l), usize::MAX, node).expect("insert");
+        d.insert(l, usize::MAX, node).map_err(|e| format!("building the synthetic document: {e}"))?;
     }
-    d
+    Ok(d)
 }
 
 fn median_ms(runs: usize, mut f: impl FnMut()) -> f64 {
@@ -57,7 +57,7 @@ fn median_ms(runs: usize, mut f: impl FnMut()) -> f64 {
         })
         .collect();
     v.sort_by(f64::total_cmp);
-    v[v.len() / 2]
+    v.get(v.len() / 2).copied().unwrap_or(0.0)
 }
 
 /// 1-minute load average (macOS / Linux), if available.
@@ -87,7 +87,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         println!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
     }
     let t = Instant::now();
-    let doc = synthetic(n);
+    let doc = synthetic(n)?;
     println!("  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0);
 
     let mut rows: Vec<(&str, f64, f64)> = vec![];
@@ -123,18 +123,31 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     let mut bytes = vec![];
     rows.push(("save .vectorcraft", median_ms(3, || bytes = vectorcraft_format::save_file(&doc)), 300.0));
-    rows.push(("open .vectorcraft", median_ms(3, || drop(vectorcraft_format::load(&bytes).expect("load"))), 300.0));
+    let mut failed = None;
+    let open = median_ms(3, || {
+        if let Err(e) = vectorcraft_format::load(&bytes) {
+            failed = Some(format!("open .vectorcraft: {e}"));
+        }
+    });
+    rows.push(("open .vectorcraft", open, 300.0));
     let svg_opts = vectorcraft_svg::ExportOptions::default();
     rows.push(("export SVG", median_ms(3, || drop(vectorcraft_svg::export(&doc, &svg_opts))), 500.0));
 
     // Pathfinder Unite on 1,000 overlapping paths.
     let unite = median_ms(3, || {
         let mut s = vectorcraft_engine::Session::new();
-        s.add_document(synthetic(1000), None);
-        s.execute("select.all", &json!({})).expect("select");
-        s.execute("object.pathfinder.unite", &json!({})).expect("unite");
+        let r = synthetic(1000).and_then(|d| {
+            s.add_document(d, None);
+            s.execute("select.all", &json!({})).and_then(|_| s.execute("object.pathfinder.unite", &json!({}))).map_err(|e| e.to_string())
+        });
+        if let Err(e) = r {
+            failed = Some(format!("Pathfinder Unite: {e}"));
+        }
     });
     rows.push(("Pathfinder Unite, 1,000 paths", unite, 150.0));
+    if let Some(e) = failed {
+        return Err(e);
+    }
 
     let mut over = 0;
     println!("  {:<40} {:>10} {:>10}", "", "measured", "budget");

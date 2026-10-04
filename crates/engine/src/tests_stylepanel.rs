@@ -109,7 +109,7 @@ fn override_character_color_clears_the_run_fill() {
     let text = |s: &mut Session, y: f64| id_of(&run(s, "text.create", json!({"x": 10, "y": y, "text": "Hi", "size": 40})));
     let runs = |s: &Session, id: NodeId| match &s.doc().unwrap().doc.node(id).unwrap().kind {
         NodeKind::Text(t) => t.runs.iter().map(|r| (r.style.fill.clone(), r.style.stroke.clone())).collect::<Vec<_>>(),
-        _ => unreachable!(),
+        _ => panic!("type"),
     };
     // On by default: the characters' own colour gives way to the style's fill and stroke.
     assert_eq!(run(&mut s, "graphicStyle.setOptions", json!({}))["overrideCharColor"], true);

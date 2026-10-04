@@ -173,8 +173,9 @@ milestones, and honest time-to-parity estimates.
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
 the UI can be swapped without touching the engine.
 
-Agent and contributor rules (clean-room, the asset policy, quality gates) are in
-[`AGENTS.md`](AGENTS.md). Every bundled asset is listed with its licence in [`ASSETS.md`](ASSETS.md).
+Agent and contributor rules (clean-room, the asset policy, no panics in shipped code, quality gates) are in
+[`AGENTS.md`](AGENTS.md); [`docs/development.md`](docs/development.md#robustness-vectorcraft-never-crashes)
+explains how VectorCraft avoids crashing. Every bundled asset is listed with its licence in [`ASSETS.md`](ASSETS.md).
 
 ## The Crafting Apps
 

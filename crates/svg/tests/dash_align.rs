@@ -1,5 +1,7 @@
 //! Dashes fitted to corners export as the canvas's filled outlines (a dash array can't fit them);
 //! exact dashes stay a `stroke-dasharray`. Checked by rendering the exported SVG with resvg.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, Node, StrokeLayer};

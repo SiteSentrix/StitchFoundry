@@ -83,16 +83,17 @@ fn is_cjk(c: char) -> bool {
 
 /// Vertical metrics (points) of a style's resolved face: (ascent, descent, leading).
 pub(crate) fn style_metrics(db: &FontDb, st: &CharStyle) -> (f64, f64, f64) {
-    let face = db.face(&st.font_family, &st.font_style);
-    let k = st.size / face.upem;
     let vs = st.v_scale / 100.0;
+    let Some(face) = db.face(&st.font_family, &st.font_style) else { return (st.size * 0.8 * vs, st.size * 0.2 * vs, st.effective_leading()) };
+    let k = st.size / face.upem;
     (face.ascent * k * vs, face.descent * k * vs, st.effective_leading())
 }
 
 /// Cap height and x height (points) of a style's resolved face.
 pub(crate) fn cap_x_heights(db: &FontDb, st: &CharStyle) -> (f64, f64) {
-    let face = db.face(&st.font_family, &st.font_style);
-    let k = st.size / face.upem * st.v_scale / 100.0;
+    let vs = st.v_scale / 100.0;
+    let Some(face) = db.face(&st.font_family, &st.font_style) else { return (st.size * 0.7 * vs, st.size * 0.5 * vs) };
+    let k = st.size / face.upem * vs;
     (face.cap_height * k, face.x_height * k)
 }
 
@@ -111,7 +112,7 @@ pub(crate) fn shape_range(
         if a >= b {
             continue;
         }
-        let primary = db.face(&st.font_family, &st.font_style);
+        let Some(primary) = db.face(&st.font_family, &st.font_style) else { continue };
         let pmap = primary.skrifa().map(|f| f.charmap());
         // Split into segments by font coverage.
         let mut seg_start = a;

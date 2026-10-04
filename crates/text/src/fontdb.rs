@@ -400,21 +400,19 @@ impl FontDb {
     }
 
     /// Resolve a family + style to a face, falling back to the closest style of the family, then to
-    /// Source Sans 3 Regular.
-    pub fn face(&self, family: &str, style: &str) -> Arc<FontFace> {
+    /// Source Sans 3 Regular. `None` only if no font at all is loaded (the bundled fonts failed to
+    /// parse), in which case text has no glyphs.
+    pub fn face(&self, family: &str, style: &str) -> Option<Arc<FontFace>> {
         if let Some(f) = self.find(family, style) {
-            return f;
+            return Some(f);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if self.load_cataloged(family)
             && let Some(f) = self.find(family, style)
         {
-            return f;
+            return Some(f);
         }
-        self.find(FALLBACK_FAMILY, style)
-            .or_else(|| self.find(FALLBACK_FAMILY, "Regular"))
-            .or_else(|| self.read_faces().first().cloned())
-            .expect("bundled fonts are always present")
+        self.find(FALLBACK_FAMILY, style).or_else(|| self.find(FALLBACK_FAMILY, "Regular")).or_else(|| self.read_faces().first().cloned())
     }
 
     /// Is `family` available (loaded)?

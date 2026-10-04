@@ -112,7 +112,7 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         _ => st.doc.artboards.first().map(|a| a.rect),
     };
     let Some(target) = target else { return };
-    let v = app.view_mut().unwrap();
+    let Some(v) = app.view_mut() else { return };
     v.center = target.center();
     v.fitted = true;
     if how == "view.actualSize" {

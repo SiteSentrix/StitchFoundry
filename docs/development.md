@@ -27,3 +27,70 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 ## Vendor names gate
 
 `cargo xtask brands` (part of `cargo xtask ci`) fails when user-visible text names another vendor's products or company: string literals in Rust sources (command labels and params docs, menus, panels, MCP tool definitions), `Cargo.toml` descriptions and packaging files. Comments and test code are not checked. Say "the reference app" or name the feature itself. A line that must keep an old name, such as an alias that files or preferences from earlier versions still use, carries a `brand-ok` comment.
+
+## Robustness: VectorCraft never crashes
+
+A crash takes the user's unsaved work with it, and much of what the app reads is untrusted: SVG,
+PDF, `.ai` and `.vectorcraft` files, pasted data, MCP and control-channel messages, command
+parameters. Shipped code therefore never panics. Anything that can fail returns `Result` (or
+`Option`), the caller handles or propagates it, and the user sees an error message.
+
+### Enforced by lints
+
+`Cargo.toml` denies these clippy lints for the whole workspace, and `cargo xtask ci` runs clippy with
+`-D warnings`:
+
+| Banned in shipped code | Use instead |
+|---|---|
+| `x.unwrap()`, `x.expect("…")` | `x?`, `x.ok_or(err)?`, `let Some(v) = x else { return … }`, `if let`, `unwrap_or` / `unwrap_or_default` / `unwrap_or_else` |
+| `v.last().unwrap()`, `v.pop().unwrap()` | `if let Some(l) = v.last_mut()`, `let Some((last, rest)) = v.split_last() else { … }` |
+| `panic!`, `unreachable!()` in a match arm | return an error (`EngineError::Other`, `bad(C, "…")`) or a sensible default |
+| `todo!`, `unimplemented!` | don't merge unfinished paths; return an error that says what isn't supported |
+
+`clippy.toml` allows `unwrap`, `expect` and `panic` inside `#[test]` and `#[cfg(test)]` code.
+Integration-test files under `tests/` and `examples/`, and the `testkit` crate, opt out with
+`#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]`. Tests use `panic!("…")`
+instead of `unreachable!()`.
+
+### Not caught by lints: avoid implicit panics too
+
+- **Indexing and slicing:** `v[i]` and `&s[a..b]` panic when out of range. When the index comes from
+  data (a file, a parameter, another document), use `v.get(i)` / `s.get(a..b)`. Slicing a `&str` also
+  panics off a UTF-8 boundary.
+- **Arithmetic:** integer division or `%` by zero, `usize` subtraction that can go below zero (write
+  `i + 1 == n` instead of `i == n - 1`, or use `saturating_sub`), and `as` casts from non-finite floats.
+- **Unbounded work:** cap counts, sizes and allocations read from input. Image dimensions, repeat
+  counts, line breaks and recursion depth all need a limit.
+- **Encoders and decoders:** propagate their errors. Writing an empty file is a silent failure, not a fix.
+
+Don't silence the lint by discarding errors. `let _ = …` and `.ok()` are for failures that really
+don't matter, with a comment saying why.
+
+### The safety net
+
+`vectorcraft_engine::guard::catch_panic` wraps every entry point:
+
+- `Session::execute` restores the active document, selection and interaction as they were before
+  the top-level command and returns `EngineError::Internal`.
+- Tool events (`Session::pointer`, `tool_key`, `tool_text`) reset the tool and cancel its drag.
+- The MCP server answers the request with a JSON-RPC internal error and keeps serving.
+- `VectorcraftApp::logic` and `ui` lose one frame and show the error in the status bar; each
+  control-channel request is guarded on its own.
+
+The net exists for bugs, not as a substitute for `Result`. On wasm a panic aborts the app, so the
+web build has no net at all.
+
+### Fuzzing
+
+Untrusted input has property tests that must never panic:
+
+- `crates/engine/tests/import_fuzz.rs`: garbage, hostile and mutated SVG and PDF, and swatch
+  (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset (`.vcflattener`)
+  libraries, loaded and used, then rendered and exported.
+- `crates/engine/tests/command_sweep.rs`: every command with junk parameters.
+- `crates/format/tests/prop_format.rs`: garbage and mutated `.vectorcraft` files.
+- `crates/mcp/tests/protocol_props.rs`: malformed MCP messages.
+
+CI runs a few dozen cases each. Before touching an importer, run a deeper search, e.g.
+`PROPTEST_CASES=20000 cargo test --release -p vectorcraft-engine --test import_fuzz`. When it finds a
+panic, fix the code and add the input as a regular test.

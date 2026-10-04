@@ -11,6 +11,10 @@
 //! - [`geom`]: geometry assertions (approximate equality, curve sampling, Hausdorff distance).
 //!
 //! This crate may only be used as a dev-dependency (enforced by `cargo xtask layers`).
+// Test support only (a dev-dependency of every crate that uses it): a failed setup or assertion
+// must panic, like `assert!`, so the shipped-code ban on panicking (AGENTS.md › Robustness) doesn't
+// apply here.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![forbid(unsafe_code)]
 
 pub mod fixtures;
