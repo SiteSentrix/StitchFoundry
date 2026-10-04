@@ -42,3 +42,58 @@ fn every_blend_mode_is_written_under_its_pdf_name_and_read_back() {
         assert_eq!(found, mode);
     }
 }
+
+/// The backdrop and a 50% group (isolated or not) holding a Multiply square.
+fn half_group(isolate: bool) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    add(&mut d, rect(Rect::new(0.0, 0.0, 100.0, 100.0), (0.8, 0.6, 0.2)));
+    let mut m = rect(Rect::new(20.0, 20.0, 80.0, 80.0), (0.5, 0.5, 1.0));
+    (m.id, m.blend) = (d.alloc_id(), BlendMode::Multiply);
+    let mut g = Node::group(NodeId(0), vec![std::sync::Arc::new(m)]);
+    (g.opacity, g.isolate) = (0.5, isolate);
+    add(&mut d, g);
+    d
+}
+
+#[test]
+fn a_group_is_written_non_isolated_unless_it_isolates_blending() {
+    let open = text(&half_group(false));
+    // A transparency group without /I, its 50% carried by a constant alpha soft mask.
+    assert!(!open.contains("/Itrue"), "{open}");
+    assert!(open.contains("/SMask") && open.contains("/Alpha") && open.contains("/BM/Multiply"), "{open}");
+    let isolated = text(&half_group(true));
+    assert!(isolated.contains("/Itrue") && isolated.contains("/ca0.5"), "{isolated}");
+    assert!(!isolated.contains("/Alpha"), "{isolated}");
+    // Either way the child's blend mode reads back.
+    for d in [half_group(false), half_group(true)] {
+        let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap();
+        let mut bm = BlendMode::Normal;
+        back.walk(|n| {
+            if n.blend != BlendMode::Normal {
+                bm = n.blend;
+            }
+        });
+        assert_eq!(bm, BlendMode::Multiply);
+    }
+}
+
+#[test]
+fn groups_without_blending_inside_stay_isolated_groups() {
+    let mut d = half_group(false);
+    let g = d.layers[0].children().unwrap()[1].id;
+    let m = d.node(g).unwrap().children().unwrap()[0].id;
+    d.node_mut(m).unwrap().blend = BlendMode::Normal;
+    let t = text(&d);
+    assert!(t.contains("/Itrue") && t.contains("/ca0.5") && !t.contains("/SMask"), "{t}");
+}
+
+#[test]
+fn a_knockout_group_with_blending_elements_is_non_isolated_unless_isolated() {
+    for isolate in [false, true] {
+        let mut d = half_group(isolate);
+        let g = d.layers[0].children().unwrap()[1].id;
+        let n = d.node_mut(g).unwrap();
+        (n.opacity, n.knockout) = (1.0, vectorcraft_doc::Knockout::On);
+        assert_eq!(text(&d).contains("/Itrue"), isolate, "isolate {isolate}");
+    }
+}

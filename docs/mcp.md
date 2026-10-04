@@ -203,8 +203,12 @@ neutral, the default). In a knockout group each child hides what it covers of th
 pass the enclosing group's setting to their children, off groups never knock out. `knockoutShape: true` makes the
 object's opacity and opacity mask scale how much it knocks out. `transparency.togglePageKnockoutGroup` and
 `transparency.togglePageIsolatedBlending` (`{value?}`) treat the whole page as a knockout or isolated group; they are
-saved with the document and undoable, and `transparency.info` reports them. Knockout groups render as isolated groups;
-PDF and SVG write them as soft-masked groups with the same look (the PDF export reports a warning).
+saved with the document and undoable, and `transparency.info` reports them. PDF and SVG write knockout groups as
+soft-masked groups with the same look (the PDF export reports a warning).
+
+Groups are not isolated unless Isolate Blending is on: a blend mode inside a group with opacity, a blend mode, an
+opacity mask, knockout or a clip reaches the art below the group, on screen and in PDF (a knockout group's elements
+then composite against the art below it). SVG has no non-isolated groups, so there such groups stay isolated.
 
 ## Clipping masks
 

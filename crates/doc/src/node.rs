@@ -752,6 +752,26 @@ impl Node {
         push(children, &mut out);
         out
     }
+
+    /// Whether blending inside this object reaches the art below it unless the object isolates
+    /// it: a blend mode other than Normal on a child (or, in a leaf, on a fill or stroke),
+    /// directly or through children that don't isolate their own blending.
+    pub fn blends_through(&self) -> bool {
+        self.blends_through_with(&mut |c| c.blends_through())
+    }
+
+    /// [`Self::blends_through`], with `inner` answering it for the children (e.g. from a cache).
+    pub fn blends_through_with(&self, inner: &mut dyn FnMut(&Arc<Node>) -> bool) -> bool {
+        match self.children() {
+            Some(ch) if !matches!(self.kind, NodeKind::Compound { .. }) => Self::children_blend(ch, inner),
+            _ => self.appearance.items.iter().any(|i| i.visible() && i.blend() != BlendMode::Normal),
+        }
+    }
+
+    /// [`Self::blends_through`] of a group made of `children` (`inner` answers it for each child).
+    pub fn children_blend(children: &[Arc<Node>], inner: &mut dyn FnMut(&Arc<Node>) -> bool) -> bool {
+        children.iter().any(|c| c.visible && (c.blend != BlendMode::Normal || (!c.isolate && inner(c))))
+    }
 }
 
 /// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?

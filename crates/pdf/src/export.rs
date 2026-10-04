@@ -208,16 +208,23 @@ fn color(c: &Color) -> krilla::color::Color {
     }
 }
 
-/// Fill the page (with a margin) with an opaque grey level (0 = black, 255 = white): mask backdrops.
-fn cover(s: &mut Surface, page: Rect, level: u8) {
+/// Fill the page (with a margin) with a grey level (0 = black, 255 = white) at `opacity`: mask
+/// backdrops.
+fn cover(s: &mut Surface, page: Rect, level: u8, opacity: f32) {
     let Some(p) = to_path(&page.inflate(1.0, 1.0).to_path(0.1)) else { return };
     s.set_stroke(None);
-    s.set_fill(Some(Fill {
-        paint: rgb::Color::new(level, level, level).into(),
-        opacity: NormalizedF32::ONE,
-        rule: krilla::paint::FillRule::NonZero,
-    }));
+    s.set_fill(Some(Fill { paint: rgb::Color::new(level, level, level).into(), opacity: norm(opacity), rule: krilla::paint::FillRule::NonZero }));
     s.draw_path(&p);
+}
+
+/// An alpha mask of constant `alpha` over the page. A group drawn through it is a transparency
+/// group of that opacity that, unlike the writer's opacity groups, is not isolated.
+fn constant_mask(s: &mut Surface, page: Rect, alpha: f32) -> krilla::mask::Mask {
+    let mut sb = s.stream_builder();
+    let mut ms = sb.surface();
+    cover(&mut ms, page, 0, alpha);
+    ms.finish();
+    krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Alpha)
 }
 
 fn rects_overlap(a: Rect, b: Rect) -> bool {
@@ -356,7 +363,7 @@ impl Exporter<'_> {
         // An opaque backdrop when it matters: white outside the art (no clip), or black for the
         // inverting Difference pass below to turn white.
         if !m.clip || m.invert {
-            cover(&mut ms, page, if m.clip { 0 } else { 255 });
+            cover(&mut ms, page, if m.clip { 0 } else { 255 }, 1.0);
         }
         // Mask art is a picture of its own: it takes no part in a knockout group around the object.
         let knockout = std::mem::take(&mut self.knockout);
@@ -364,7 +371,7 @@ impl Exporter<'_> {
         self.knockout = knockout;
         if m.invert {
             ms.push_blend_mode(krilla::blend::BlendMode::Difference);
-            cover(&mut ms, page, 255);
+            cover(&mut ms, page, 255, 1.0);
             ms.pop();
         }
         ms.finish();
@@ -405,7 +412,7 @@ impl Exporter<'_> {
         let shape = if c.knockout_shape { c.clone() } else { Node { opacity: 1.0, mask: None, ..c.clone() } };
         let mut sb = s.stream_builder();
         let mut ms = sb.surface();
-        cover(&mut ms, page, 255);
+        cover(&mut ms, page, 255, 1.0);
         let alpha = {
             let mut ab = ms.stream_builder();
             let mut als = ab.surface();
@@ -414,7 +421,7 @@ impl Exporter<'_> {
             krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
         };
         ms.push_mask(alpha);
-        cover(&mut ms, page, 0);
+        cover(&mut ms, page, 0, 1.0);
         ms.pop();
         ms.finish();
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
@@ -434,7 +441,7 @@ impl Exporter<'_> {
         }
         self.warn_raster(&n.appearance.effects);
         let container = n.is_container() && !matches!(n.kind, NodeKind::Compound { .. });
-        // Whether this container's children knock each other out (a knockout group is isolated).
+        // Whether this container's children knock each other out (a knockout group is written as a group).
         let knockout = n.knocks_out(self.knockout);
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         let mut pushes = 0;
@@ -442,11 +449,16 @@ impl Exporter<'_> {
             s.push_blend_mode(blend(n.blend));
             pushes += 1;
         }
-        if n.opacity < 1.0 {
-            s.push_opacity(norm(n.opacity));
-            pushes += 1;
-        } else if container && (n.isolate || n.blend != BlendMode::Normal || knockout) {
-            s.push_isolated();
+        if n.opacity < 1.0 || (container && (n.isolate || n.blend != BlendMode::Normal || knockout)) {
+            if !n.isolate && n.blends_through() {
+                // Not isolated: blending inside reaches the art below the group.
+                let alpha = constant_mask(s, page, n.opacity);
+                s.push_mask(alpha);
+            } else if n.opacity < 1.0 {
+                s.push_opacity(norm(n.opacity));
+            } else {
+                s.push_isolated();
+            }
             pushes += 1;
         }
         if let Some(m) = n.mask.as_deref()
