@@ -314,6 +314,8 @@ fn view_toggles_redraw_without_dirtying() {
     assert_eq!(r["target"], "deuteranopia");
     assert_eq!(vectorcraft_render::proof::active_proof().unwrap().target, ProofTarget::Deuteranopia);
     assert!(s.execute("view.proofSetup", &json!({"target": "cmyk:Nope"})).is_err());
+    assert!(s.execute("view.proofSetup", &json!({"target": format!("cmyk:{}", cms::WIDE_GAMUT_RGB)})).is_err(), "an RGB profile");
+    s.execute("view.proofSetup", &json!({"target": format!("cmyk:{}", cms::DEVICE_CMYK)})).unwrap();
     s.execute("view.proofSetup", &json!({"target": "workingCmyk", "intent": "relative"})).unwrap();
     let r = s.execute("view.proofColors", &json!({"on": false})).unwrap();
     assert_eq!(r["proofColors"], false);
@@ -393,19 +395,19 @@ fn intents_reach_the_document_conversion() {
 #[test]
 fn legacy_profile_name_resolves_in_commands_and_files() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
-    const OLD: &str = "Adobe RGB (1998) compatible"; // brand-ok: legacy alias under test
+    let (old, _) = cms::LEGACY_NAMES[0];
     let mut s = session();
     let before = cms::active_settings();
-    let r = s.execute("edit.colorSettings", &json!({"rgb": OLD})).unwrap();
+    let r = s.execute("edit.colorSettings", &json!({"rgb": old})).unwrap();
     assert_eq!(r["rgb"], cms::WIDE_GAMUT_RGB);
     assert_eq!(cms::active_settings().rgb, cms::WIDE_GAMUT_RGB);
     let names: Vec<&str> = r["profiles"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
-    assert!(names.contains(&cms::WIDE_GAMUT_RGB) && !names.contains(&OLD));
-    let r = s.execute("edit.assignProfile", &json!({"rgb": OLD})).unwrap();
+    assert!(names.contains(&cms::WIDE_GAMUT_RGB) && !names.contains(&old));
+    let r = s.execute("edit.assignProfile", &json!({"rgb": old})).unwrap();
     assert_eq!(r["rgb"], cms::WIDE_GAMUT_RGB, "stored under the current name");
     // A document saved by an older version names the profile the old way.
     let mut d = (*s.doc().unwrap().doc).clone();
-    d.unknown.insert(cmd::colormgmt::PROFILES_KEY.into(), json!({"rgb": OLD, "cmyk": null}));
+    d.unknown.insert(cmd::colormgmt::PROFILES_KEY.into(), json!({"rgb": old, "cmyk": null}));
     let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
     assert_eq!(cmd::colormgmt::doc_profiles(&back), (Some(cms::WIDE_GAMUT_RGB.to_string()), None));
     cms::set_active(&before).unwrap();

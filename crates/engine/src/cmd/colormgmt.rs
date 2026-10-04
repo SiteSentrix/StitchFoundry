@@ -362,7 +362,7 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(t) = str_param(p, "target") {
         let t = ProofTarget::parse(t).ok_or_else(|| bad(C, format!("unknown proof target `{t}`")))?;
         if let ProofTarget::Cmyk(name) = &t
-            && !cms::profiles().iter().any(|k| &k.name == name && k.kind == cms::ProfileKind::Cmyk)
+            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
         {
             return Err(bad(C, format!("unknown CMYK profile `{name}`")));
         }

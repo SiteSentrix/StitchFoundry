@@ -152,14 +152,14 @@ fn wide_gamut_working_space() {
 
 #[test]
 fn legacy_profile_name_resolves() {
-    const OLD: &str = "Adobe RGB (1998) compatible"; // brand-ok: legacy alias under test
-    assert_eq!(canonical_name(OLD), WIDE_GAMUT_RGB);
+    let (old, _) = LEGACY_NAMES[0];
+    assert_eq!(canonical_name(old), WIDE_GAMUT_RGB);
     assert_eq!(canonical_name(SRGB), SRGB);
-    assert_eq!(profile(OLD).map(|p| (p.name, p.kind, p.builtin)), Some((WIDE_GAMUT_RGB.to_string(), ProfileKind::Rgb, true)));
+    assert_eq!(profile(old).map(|p| (p.name, p.kind, p.builtin)), Some((WIDE_GAMUT_RGB.to_string(), ProfileKind::Rgb, true)));
     assert!(profile("Nope").is_none());
-    assert!(profiles().iter().all(|p| p.name != OLD), "only the current name is listed");
+    assert!(profiles().iter().all(|p| p.name != old), "only the current name is listed");
     // Settings saved with the old name load as the current profile, under its current name.
-    let c = Cms::new(&ColorSettings { rgb: OLD.into(), ..Default::default() }).unwrap();
+    let c = Cms::new(&ColorSettings { rgb: old.into(), ..Default::default() }).unwrap();
     assert_eq!(c.settings().rgb, WIDE_GAMUT_RGB);
     let same = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
     assert_eq!(c.rgb_to_srgb([0.0, 1.0, 0.0]), same.rgb_to_srgb([0.0, 1.0, 0.0]));
