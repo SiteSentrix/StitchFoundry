@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use egui::{Color32, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::libraries::SWATCH_LIBRARIES;
+use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES};
 use vectorcraft_color::{Color, GradientKind, Paint, Swatch, SwatchLibrary};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::swatchlib;
@@ -343,17 +343,18 @@ enum Drop {
     /// at the end (`None`).
     Move { names: Vec<String>, target: Option<String>, after: bool },
     /// A paint from elsewhere (a Fill/Stroke proxy, the Gradient panel's thumbnail) dropped on row
-    /// `target` (or between rows) becomes a swatch.
-    New { paint: Paint, target: Option<String> },
+    /// `target` (or between rows) becomes a swatch; with Alt held (`replace`) it replaces swatch
+    /// `target` when that is of its kind.
+    New { paint: Paint, target: Option<String>, replace: bool },
 }
 
 impl Drop {
     /// What releasing `d` before or `after` row `target` (`None`: at the end) does: move the rows
     /// it carries, or make a swatch of a paint dragged from elsewhere (appearances: nothing).
-    fn of(d: &PanelDrag, target: Option<String>, after: bool) -> Option<Self> {
+    fn of(d: &PanelDrag, target: Option<String>, after: bool, replace: bool) -> Option<Self> {
         match d {
             PanelDrag::Paint { rows: Some(r), .. } => Some(Drop::Move { names: r.names.clone(), target, after }),
-            PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target }),
+            PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace }),
             PanelDrag::Appearance(_) => None,
         }
     }
@@ -440,7 +441,7 @@ fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvent
         ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
     }
     if resp.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Drop::of(&d, Some(name.to_string()), after);
+        ev.drop = Drop::of(&d, Some(name.to_string()), after, super::alt_held(ui));
     }
 }
 
@@ -452,7 +453,7 @@ fn zone_input(ui: &Ui, zone: &Response, ev: &mut TileEvents) {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
     }
     if zone.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Drop::of(&d, None, false);
+        ev.drop = Drop::of(&d, None, false, false);
     }
 }
 
@@ -497,6 +498,11 @@ fn move_params(d: &Document, names: &[String], target: Option<&str>, after: bool
     (!movable.is_empty()).then(|| json!({"names": movable, "to": to, "group": group}))
 }
 
+/// Are both paints colours, gradients or patterns?
+fn same_kind(a: &Paint, b: &Paint) -> bool {
+    std::mem::discriminant(a) == std::mem::discriminant(b) && !a.is_none()
+}
+
 /// Run a drop on the panel: move the swatches or make a swatch of the proxy's paint (a colour
 /// dropped on a folder or a grouped swatch joins that group).
 fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
@@ -506,7 +512,11 @@ fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             Some(p) => ("swatch.move", p),
             None => return,
         },
-        Drop::New { paint, target } => {
+        // Alt: an edited gradient (or colour) replaces the swatch it is dropped on.
+        Drop::New { paint, target: Some(t), replace: true } if d.swatch(&t).is_some_and(|w| same_kind(&w.paint, &paint)) => {
+            ("swatch.edit", json!({"name": t, "paint": super::paint_params(&paint)}))
+        }
+        Drop::New { paint, target, .. } => {
             let mut p = super::paint_params(&paint);
             if paint.color().is_some()
                 && let Some(g) = target.and_then(|t| group_of(d, &t))
@@ -908,6 +918,7 @@ impl LibraryKind for SwatchLibraries {
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
         let submenu = |category: &str| match category {
+            "gradients" => Some("Gradients"),
             "user" => Some("User Defined"),
             "loaded" => Some("Other Libraries"),
             _ => None,
@@ -1035,9 +1046,11 @@ pub(crate) fn window_menu() -> Vec<Item> {
         "window.userSwatchLibrary9",
         "window.userSwatchLibrary10",
     ];
+    let open = |b: &'static BuiltinLibrary| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }));
     let mut items = vec![Item::Cmd("Default Swatches", "swatch.resetDefaults", Value::Null), Item::Sep];
-    items.extend(SWATCH_LIBRARIES.iter().map(|b| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }))));
+    items.extend(SWATCH_LIBRARIES.iter().map(open));
     items.extend([
+        Item::Sub("Gradients", GRADIENT_LIBRARIES.iter().map(open).collect()),
         Item::Sep,
         Item::Sub("User Defined", SLOTS.iter().map(|id| Item::Cmd("User Library", id, Value::Null)).collect()),
         Item::Sep,
@@ -1154,10 +1167,15 @@ mod tests {
         crate::dialogs::cancel(&mut app);
         assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
         assert_eq!(app.session.doc().unwrap().doc, before);
-        // Gradients open the Gradient panel, patterns pattern editing, None nothing.
+        // A gradient opens Swatch Options with its name (and the gradient shown): OK renames it.
         double_click_tile(&mut app, &ctx, "Sunset");
-        assert!(app.ui.dialog.is_none());
-        assert_eq!(app.ui.open_panel.as_deref(), Some("gradient"));
+        let d = app.ui.dialog.as_mut().expect("Swatch Options for a gradient");
+        assert!(d.kind == KIND && d.fields.contains_key("__gradient") && !d.fields.contains_key("color"));
+        d.fields.insert("name".into(), json!("Evening"));
+        dialog_frame(&mut app, &ctx);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(matches!(app.session.doc().unwrap().doc.swatch("Evening").map(|w| &w.paint), Some(Paint::Gradient(_))));
+        // Patterns open pattern editing, None nothing.
         assert!(app.run("ui.swatchOptions", json!({"name": "[None]"})).is_err());
         assert!(app.run("ui.swatchOptions", json!({})).is_err());
     }
@@ -1370,6 +1388,36 @@ mod tests {
             "dropped on a group's colour: into that group"
         );
         assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+    }
+
+    #[test]
+    fn alt_dropping_a_gradient_on_a_gradient_swatch_replaces_it() {
+        let mut app = app();
+        let ctx = context();
+        frame(&mut app, &ctx, vec![], 0.0, show);
+        let grad = |c: &str| {
+            let stops = vec![
+                vectorcraft_color::GradientStop { offset: 0.0, color: Color::from_hex(c).unwrap(), opacity: 1.0, midpoint: 0.5 },
+                vectorcraft_color::GradientStop { offset: 1.0, color: Color::WHITE, opacity: 1.0, midpoint: 0.5 },
+            ];
+            Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient { kind: GradientKind::Radial, stops })))
+        };
+        let drop_on = |app: &mut VectorcraftApp, name: &str, paint: Paint, m: Modifiers, time: f64| {
+            let at = tile_center(&ctx, name);
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::paint(paint));
+            let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: m };
+            frame_with(app, &ctx, vec![Event::PointerMoved(at), release], m, time, show);
+        };
+        let count = app.session.doc().unwrap().doc.swatches_iter().count();
+        drop_on(&mut app, "Ocean", grad("#ff0000"), Modifiers::ALT, 1.0);
+        let d = &app.session.doc().unwrap().doc;
+        let Some(Paint::Gradient(g)) = d.swatch("Ocean").map(|w| &w.paint) else { panic!("Ocean is a gradient") };
+        assert_eq!((g.gradient.kind, d.swatches_iter().count()), (GradientKind::Radial, count), "replaced, not added");
+        // Without Alt, or on a swatch of another kind, it becomes a new swatch.
+        frame(&mut app, &ctx, vec![], 2.0, show);
+        drop_on(&mut app, "Red", grad("#00ff00"), Modifiers::ALT, 3.0);
+        assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 1);
+        assert!(app.session.doc().unwrap().doc.swatch("Red").is_some_and(|w| w.paint.color().is_some()));
     }
 
     #[test]

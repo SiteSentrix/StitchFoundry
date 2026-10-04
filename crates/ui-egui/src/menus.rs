@@ -169,7 +169,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.swatchOptions",
         "Swatch Options…",
         "",
-        "{name} edit a swatch: Swatch Options for a colour (dialog `swatchOptions`, engine: swatch.edit), the Gradient panel for a gradient, pattern editing for a pattern",
+        "{name} edit a swatch: Swatch Options for a colour (dialog `swatchOptions`, engine: swatch.edit) or a gradient (the same dialog with `name` only; it shows the gradient), pattern editing for a pattern",
     ),
     (
         "ui.newSwatch",

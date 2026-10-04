@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::libraries::{SWATCH_LIBRARIES, builtin_library};
+use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES, builtin_library};
 use vectorcraft_color::palette_io::{self, PaletteFormat};
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Libraries",
             [],
             None,
-            "{} → {libraries: [{id, name, category: \"builtIn\"|\"user\" (User Defined: the library files in the user library folder, rescanned now)|\"loaded\" (swatch.library.load), count, path?}], userFolder} every library the library panel opens, in menu order",
+            "{} → {libraries: [{id, name, category: \"builtIn\"|\"gradients\"|\"user\" (User Defined: the library files in the user library folder, rescanned now)|\"loaded\" (swatch.library.load), count, path?}], userFolder} every library the library panel opens, in menu order",
             always,
             list
         ),
@@ -156,25 +156,34 @@ fn stem(name: &str) -> &str {
 pub struct LibraryInfo {
     pub id: String,
     pub name: String,
-    /// "builtIn", "user" or "loaded".
+    /// "builtIn", "gradients", "user" or "loaded".
     pub category: &'static str,
 }
 
-/// Every library, in menu order: built-in, User Defined, loaded.
+/// The built-in libraries with their categories.
+fn builtins() -> impl Iterator<Item = (&'static str, &'static BuiltinLibrary)> {
+    SWATCH_LIBRARIES.iter().map(|b| ("builtIn", b)).chain(GRADIENT_LIBRARIES.iter().map(|b| ("gradients", b)))
+}
+
+fn builtin_info((category, b): (&'static str, &BuiltinLibrary)) -> LibraryInfo {
+    LibraryInfo { id: b.id.into(), name: b.name.into(), category }
+}
+
+/// Every library, in menu order: built-in, gradients, User Defined, loaded.
 pub fn libraries(s: &Session) -> Vec<LibraryInfo> {
-    let builtin = SWATCH_LIBRARIES.iter().map(|b| LibraryInfo { id: b.id.into(), name: b.name.into(), category: "builtIn" });
-    builtin.chain(s.swatch_libraries.extra.iter().map(|e| e.info.clone())).collect()
+    builtins().map(builtin_info).chain(s.swatch_libraries.extra.iter().map(|e| e.info.clone())).collect()
 }
 
 /// Library `key` (an id, or a name in any case) with its info.
 pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<SwatchLibrary>)> {
-    let all = libraries(s);
-    let info = all.iter().find(|l| l.id == key).or_else(|| all.iter().find(|l| l.name.eq_ignore_ascii_case(key)))?.clone();
-    let lib = match s.swatch_libraries.extra.iter().find(|e| e.info.id == info.id) {
-        Some(e) => e.lib.clone(),
-        None => builtin_library(&info.id)?,
-    };
-    Some((info, lib))
+    if let Some(e) = s.swatch_libraries.extra.iter().find(|e| e.info.id == key) {
+        return Some((e.info.clone(), e.lib.clone()));
+    }
+    if let Some(b) = builtins().find(|(_, b)| b.id == key) {
+        return Some((builtin_info(b), builtin_library(key)?));
+    }
+    let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
+    library(s, &id)
 }
 
 fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<SwatchLibrary>)> {

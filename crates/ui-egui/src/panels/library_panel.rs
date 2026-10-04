@@ -415,8 +415,9 @@ mod tests {
         assert!(ctx.read_response(tile_id::<SwatchLibraries>("#FF0033")).is_some());
         assert!(ctx.read_response(tile_id::<SwatchLibraries>("#00FF00")).is_none());
         let first = SWATCH_IDS[0];
-        let last = SWATCH_IDS[SWATCH_IDS.len() - 1];
-        assert_eq!(neighbour::<SwatchLibraries>(&app, first, -1).as_deref(), Some(last), "wraps around");
+        let last = SwatchLibraries::list(&app).pop().unwrap().id;
+        assert_eq!(last, "radial-glows", "gradient libraries come after the swatch libraries");
+        assert_eq!(neighbour::<SwatchLibraries>(&app, first, -1), Some(last), "wraps around");
         assert_eq!(neighbour::<SwatchLibraries>(&app, "web-safe-216", 1).as_deref(), Some(SWATCH_IDS[1]));
     }
 
@@ -440,9 +441,17 @@ mod tests {
             .filter(|e| e.path == ["Window", "Swatch Libraries"] && e.command.as_deref() == Some("window.swatchLibrary"))
             .map(|e| e.params["library"].clone())
             .collect();
-        let listed: Vec<String> = vectorcraft_engine::cmd::swatchlib::libraries(&app.session).into_iter().map(|l| l.id).collect();
-        assert_eq!(ids, listed.iter().map(|i| json!(i)).collect::<Vec<_>>());
-        assert_eq!(listed, SWATCH_IDS);
+        let all = vectorcraft_engine::cmd::swatchlib::libraries(&app.session);
+        let listed = |category: &str| all.iter().filter(|l| l.category == category).map(|l| json!(l.id)).collect::<Vec<_>>();
+        assert_eq!(ids, listed("builtIn"));
+        assert_eq!(ids, SWATCH_IDS.map(|i| json!(i)));
+        let gradients: Vec<Value> = crate::menus::menu_entries(&app)
+            .into_iter()
+            .filter(|e| e.path == ["Window", "Swatch Libraries", "Gradients"])
+            .map(|e| e.params["library"].clone())
+            .collect();
+        assert!(gradients.len() >= 5);
+        assert_eq!(gradients, listed("gradients"));
         let defaults = crate::menus::menu_entries(&app).into_iter().any(|e| e.command.as_deref() == Some("swatch.resetDefaults"));
         assert!(defaults, "Default Swatches is listed");
     }

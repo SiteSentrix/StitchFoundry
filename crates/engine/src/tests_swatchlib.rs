@@ -196,3 +196,28 @@ fn another_documents_swatches_load_as_a_library() {
     assert!(lib.swatch("Signal").is_some() && lib.swatch("[None]").is_none());
     assert!(s.execute("swatch.library.load", &json!({"data": "hello", "name": "x.txt"})).is_err());
 }
+
+#[test]
+fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradients() {
+    let mut s = session();
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let grads: Vec<&Value> = list["libraries"].as_array().unwrap().iter().filter(|l| l["category"] == "gradients").collect();
+    assert!(grads.len() >= 5 && grads.iter().any(|l| l["id"] == "sky-gradients"));
+    run(&mut s, "swatch.library.add", json!({"library": "sky-gradients", "names": ["Dawn"]}));
+    // Rename keeps the gradient.
+    let before = doc(&s).swatch("Dawn").unwrap().paint.clone();
+    run(&mut s, "swatch.edit", json!({"name": "Dawn", "newName": "Early"}));
+    assert_eq!(doc(&s).swatch("Early").unwrap().paint, before);
+    // An edited gradient replaces it, unplaced and unlinked; one undo step.
+    let undo = undo_len(&s);
+    let g =
+        json!({"gradient": {"kind": "radial", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}], "swatch": "Early"}});
+    run(&mut s, "swatch.edit", json!({"name": "Early", "paint": g}));
+    let Paint::Gradient(gp) = &doc(&s).swatch("Early").unwrap().paint else { panic!("a gradient") };
+    assert_eq!((gp.gradient.kind, gp.gradient.stops.len(), gp.swatch.clone(), gp.geom), (vectorcraft_color::GradientKind::Radial, 2, None, None));
+    assert_eq!(undo_len(&s), undo + 1);
+    // Kinds don't mix; a colour replaces a colour.
+    assert!(s.execute("swatch.edit", &json!({"name": "Early", "paint": {"color": "#00ff00"}})).is_err());
+    run(&mut s, "swatch.edit", json!({"name": "Red", "paint": {"color": "#00ff00"}}));
+    assert_eq!(doc(&s).swatch("Red").unwrap().paint.color().map(|c| c.to_hex()), Some("#00ff00".into()));
+}

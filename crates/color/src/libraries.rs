@@ -67,19 +67,32 @@ pub const SWATCH_LIBRARIES: &[BuiltinLibrary] = &[
     lib!("harmony-sets", "Harmony Sets", harmony_sets),
 ];
 
-/// Built-in library `id`, computed once.
+/// The built-in gradient libraries (Window → Swatch Libraries → Gradients), in menu order.
+pub const GRADIENT_LIBRARIES: &[BuiltinLibrary] = &[
+    lib!("spectrum-gradients", "Spectrum Gradients", spectrum_gradients),
+    lib!("sky-gradients", "Sky Gradients", sky_gradients),
+    lib!("neutral-gradients", "Neutral Gradients", neutral_gradients),
+    lib!("duotone-gradients", "Duotone Gradients", duotone_gradients),
+    lib!("radial-glows", "Radial Glows", radial_glows),
+];
+
+/// Every built-in library: the swatch libraries, then the gradient libraries.
+fn builtins() -> impl Iterator<Item = &'static BuiltinLibrary> {
+    SWATCH_LIBRARIES.iter().chain(GRADIENT_LIBRARIES)
+}
+
+/// Built-in library `id` (swatch or gradient library), computed once.
 pub fn builtin_library(id: &str) -> Option<Arc<SwatchLibrary>> {
     static LIBS: OnceLock<Vec<Arc<SwatchLibrary>>> = OnceLock::new();
     let libs = LIBS.get_or_init(|| {
-        SWATCH_LIBRARIES
-            .iter()
+        builtins()
             .map(|b| {
                 let (swatches, groups) = (b.make)();
                 Arc::new(SwatchLibrary { name: b.name.into(), swatches, groups })
             })
             .collect()
     });
-    SWATCH_LIBRARIES.iter().position(|b| b.id == id).map(|i| libs[i].clone())
+    builtins().position(|b| b.id == id).map(|i| libs[i].clone())
 }
 
 // ---------- colour construction ----------
@@ -287,6 +300,88 @@ fn metallic() -> (Vec<Swatch>, Vec<SwatchGroup>) {
 /// OKLCH `(l, c, h°)` anchors a scale passes through.
 type Anchors = &'static [(f64, f64, f64)];
 
+/// A linear gradient through evenly spaced, opaque `colors`.
+fn even(name: &str, kind: GradientKind, colors: &[Color]) -> Swatch {
+    let last = (colors.len() - 1).max(1) as f32;
+    let stops: Vec<(f32, Color, f32)> = colors.iter().enumerate().map(|(i, c)| (i as f32 / last, *c, 1.0)).collect();
+    gradient(name, kind, &stops)
+}
+
+/// OKLCH `(l, c, h°)` colours.
+fn lch(points: &[(f64, f64, f64)]) -> Vec<Color> {
+    points.iter().map(|&(l, c, h)| oklch(l, c, h)).collect()
+}
+
+/// Full-hue sweeps and hue-neighbour blends.
+fn spectrum_gradients() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    let wheel: Vec<Color> = (0..=6).map(|i| oklch(0.72, 0.4, 25.0 + i as f64 * 60.0)).collect();
+    let mut s = vec![
+        even("Spectrum", GradientKind::Linear, &wheel),
+        even("Soft Spectrum", GradientKind::Linear, &lch(&[(0.88, 0.08, 25.0), (0.9, 0.08, 145.0), (0.86, 0.08, 265.0), (0.88, 0.08, 25.0)])),
+    ];
+    // Each hue to the one two steps round the wheel.
+    s.extend((0..HUES.len()).map(|i| {
+        let ((a, ha), (b, hb)) = (HUES[i], HUES[(i + 2) % HUES.len()]);
+        even(&format!("{a} to {b}"), GradientKind::Linear, &[oklch(0.7, 0.4, ha), oklch(0.7, 0.4, hb)])
+    }));
+    (s, vec![])
+}
+
+fn sky_gradients() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    let skies: [(&str, Anchors); 6] = [
+        ("Dawn", &[(0.45, 0.08, 280.0), (0.72, 0.12, 350.0), (0.9, 0.09, 75.0)]),
+        ("Noon", &[(0.55, 0.13, 250.0), (0.78, 0.09, 235.0), (0.95, 0.03, 220.0)]),
+        ("Sunset", &[(0.35, 0.09, 300.0), (0.62, 0.18, 20.0), (0.85, 0.15, 70.0)]),
+        ("Dusk", &[(0.25, 0.07, 275.0), (0.48, 0.1, 310.0), (0.7, 0.1, 30.0)]),
+        ("Night", &[(0.15, 0.04, 270.0), (0.3, 0.07, 265.0)]),
+        ("Overcast", &[(0.62, 0.015, 240.0), (0.86, 0.01, 230.0)]),
+    ];
+    (skies.iter().map(|(n, p)| even(n, GradientKind::Linear, &lch(p))).collect(), vec![])
+}
+
+fn neutral_gradients() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    let (white, black) = (Color::gray(0.0), Color::gray(1.0));
+    let s = vec![
+        even("White to Black", GradientKind::Linear, &[white, black]),
+        even("Light Grays", GradientKind::Linear, &[white, Color::gray(0.4)]),
+        even("Dark Grays", GradientKind::Linear, &[Color::gray(0.6), black]),
+        even("Warm Grays", GradientKind::Linear, &lch(&[(0.95, 0.012, 70.0), (0.3, 0.012, 70.0)])),
+        even("Cool Grays", GradientKind::Linear, &lch(&[(0.95, 0.015, 250.0), (0.3, 0.015, 250.0)])),
+        gradient("Fade to Transparent", GradientKind::Linear, &[(0.0, black, 1.0), (1.0, black, 0.0)]),
+        gradient("White Fade", GradientKind::Linear, &[(0.0, white, 1.0), (1.0, white, 0.0)]),
+        gradient("Vignette", GradientKind::Radial, &[(0.0, black, 0.0), (0.6, black, 0.0), (1.0, black, 0.7)]),
+    ];
+    (s, vec![])
+}
+
+/// Pairs of hues from opposite sides of the wheel, at different lightness.
+fn duotone_gradients() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    let pairs = [
+        ("Coral", 0.7, 30.0, "Navy", 0.32, 265.0),
+        ("Plum", 0.38, 330.0, "Lime", 0.88, 125.0),
+        ("Teal", 0.5, 190.0, "Gold", 0.85, 90.0),
+        ("Indigo", 0.3, 280.0, "Peach", 0.86, 55.0),
+        ("Forest", 0.35, 150.0, "Rose", 0.8, 0.0),
+    ];
+    let s = pairs
+        .iter()
+        .map(|&(a, la, ha, b, lb, hb)| even(&format!("{a} and {b}"), GradientKind::Linear, &[oklch(la, 0.15, ha), oklch(lb, 0.15, hb)]))
+        .collect();
+    (s, vec![])
+}
+
+/// A bright centre fading to a transparent edge, per hue.
+fn radial_glows() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    let s = HUES
+        .iter()
+        .map(|(n, h)| {
+            let c = oklch(0.78, 0.2, *h);
+            gradient(&format!("{n} Glow"), GradientKind::Radial, &[(0.0, Color::WHITE, 1.0), (0.25, c, 1.0), (1.0, c, 0.0)])
+        })
+        .collect();
+    (s, vec![])
+}
+
 /// The sequential scales of [`perceptual`]: name and anchors of rising lightness.
 const SEQUENTIAL: [(&str, Anchors); 5] = [
     ("Ember", &[(0.22, 0.10, 300.0), (0.55, 0.18, 30.0), (0.93, 0.15, 100.0)]),
@@ -348,7 +443,7 @@ mod tests {
     use super::*;
 
     fn all() -> Vec<Arc<SwatchLibrary>> {
-        SWATCH_LIBRARIES.iter().map(|b| builtin_library(b.id).unwrap()).collect()
+        builtins().map(|b| builtin_library(b.id).unwrap()).collect()
     }
 
     /// Every component of every colour (solid or gradient stop).
@@ -370,10 +465,10 @@ mod tests {
     #[test]
     fn libraries_are_deterministic_unique_and_in_range() {
         let mut ids = std::collections::HashSet::new();
-        for (b, lib) in SWATCH_LIBRARIES.iter().zip(all()) {
+        for (b, lib) in builtins().zip(all()) {
             assert!(ids.insert(b.id), "duplicate id {}", b.id);
             assert_eq!(lib.name, b.name);
-            assert!(lib.len() >= 8, "{} has {}", b.id, lib.len());
+            assert!(lib.len() >= 5, "{} has {}", b.id, lib.len());
             // Recomputing gives the same library.
             let (s, g) = (b.make)();
             assert_eq!((s, g), (lib.swatches.clone(), lib.groups.clone()), "{} is deterministic", b.id);
@@ -420,6 +515,10 @@ mod tests {
 
     #[test]
     fn gradient_libraries_have_sorted_stops() {
+        for b in GRADIENT_LIBRARIES {
+            let lib = builtin_library(b.id).unwrap();
+            assert!(lib.iter().all(|s| matches!(s.paint, Paint::Gradient(_))), "{} holds gradients only", b.id);
+        }
         for lib in all() {
             for s in lib.iter() {
                 if let Paint::Gradient(g) = &s.paint {

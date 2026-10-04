@@ -24,8 +24,9 @@
 Swatch editors: `engine.execute` with `ui.swatchOptions {name}` opens the `swatchOptions` dialog for a colour swatch
 (fields `name`, `spot`, `global`, `mode`: `gray`/`rgb`/`hsb`/`cmyk`/`web`, `color`: `"#rrggbb"` or a colour object,
 `preview`), which previews on the canvas while open; `ui.dialog.confirm` applies it with `swatch.edit` as one undo
-step and `ui.dialog.cancel` rolls the preview back. Gradient swatches open the Gradient panel and pattern swatches
-pattern editing instead.
+step and `ui.dialog.cancel` rolls the preview back. For a gradient swatch the dialog has `name` only (it shows the
+gradient) and OK renames it; pattern swatches open pattern editing instead. Dropping a gradient (or colour) on a
+swatch of its kind in the Swatches panel with Alt held replaces it (`swatch.edit {name, paint}`).
 
 Confirmations: deleting swatches from the Swatches panel opens a `confirm` dialog (fields `message`, `detail`);
 `ui.dialog.confirm` runs the command it asks about (here `swatch.delete`) and `ui.dialog.cancel` drops it.

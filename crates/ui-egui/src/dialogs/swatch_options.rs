@@ -1,10 +1,12 @@
 //! Swatch Options: name, colour type (process or spot), Global, colour mode with sliders and hex,
 //! previewed live on the canvas (Cancel rolls the preview back). Double-clicking a swatch opens it
-//! for a solid colour; gradients open the Gradient panel and patterns pattern editing ([`open`]).
+//! for a solid colour; for a gradient it shows the name and the gradient; patterns open pattern
+//! editing ([`open`]).
 //!
 //! Fields: `__swatch` (the swatch being edited), `name`, `spot`, `global`, `mode` (`gray`, `rgb`,
 //! `hsb`, `cmyk` or `web`), `color` (`"#rrggbb"` or a colour object such as
-//! `{"model": "cmyk", "c": 0.1, "m": 0.2, "y": 0.3, "k": 0}`) and `preview`.
+//! `{"model": "cmyk", "c": 0.1, "m": 0.2, "y": 0.3, "k": 0}`) and `preview`; a gradient swatch has
+//! `name`, `preview` and `__gradient` (the gradient shown) only.
 
 use egui::vec2;
 use serde_json::{Value, json};
@@ -51,8 +53,8 @@ fn set_color(d: &mut Dialog, c: Color) {
     d.fields.insert("color".into(), json!(c));
 }
 
-/// Open the editor of swatch `name`: Swatch Options for a colour, the Gradient panel (with the
-/// gradient applied to the active proxy) for a gradient, pattern editing for a pattern.
+/// Open the editor of swatch `name`: Swatch Options for a colour or a gradient (its name only),
+/// pattern editing for a pattern.
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     let sw = app.session.active().and_then(|st| st.doc.swatch(name).cloned()).ok_or_else(|| format!("no swatch `{name}`"))?;
     match &sw.paint {
@@ -64,9 +66,9 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
             app.ui.dialog = Some(Dialog::new(KIND, fields));
             Ok(Value::Null)
         }
-        Paint::Gradient(_) => {
-            app.run(crate::panels::proxy_cmd(app, false), json!({"swatch": name}))?;
-            app.ui.open_panel = Some("gradient".into());
+        Paint::Gradient(g) => {
+            let fields = json!({"__swatch": name, "name": name, "__gradient": g.gradient, "preview": true});
+            app.ui.dialog = Some(Dialog::new(KIND, fields));
             Ok(Value::Null)
         }
         Paint::Pattern { pattern, .. } => {
@@ -78,8 +80,11 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     }
 }
 
-/// `swatch.edit` parameters from the fields.
+/// `swatch.edit` parameters from the fields (a gradient swatch only renames).
 fn edit_params(d: &Dialog) -> Value {
+    if d.fields.contains_key("__gradient") {
+        return json!({"name": d.str("__swatch"), "newName": d.str("name")});
+    }
     json!({
         "name": d.str("__swatch"),
         "newName": d.str("name"),
@@ -91,7 +96,16 @@ fn edit_params(d: &Dialog) -> Value {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let changed = editor(ui, d);
+    let changed = match d.fields.get("__gradient").and_then(|g| serde_json::from_value::<vectorcraft_color::Gradient>(g.clone()).ok()) {
+        Some(g) => {
+            let changed = grid(ui, |ui| name_row(ui, d));
+            ui.add_space(6.0);
+            let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), egui::Sense::hover());
+            widgets::gradient_chip(ui, r, &g);
+            changed
+        }
+        None => editor(ui, d),
+    };
     ui.add_space(8.0);
     let mut pv = d.bool("preview");
     let pv_changed = widgets::check(ui, "Preview", pv, true);

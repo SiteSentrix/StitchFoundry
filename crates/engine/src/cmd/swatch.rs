@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Options",
             ["Window", "Swatches"],
             None,
-            "{name, newName?, color?, mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global)} edit a swatch in any colour group, as one undo step. Fills, strokes and text linked to a global swatch take its new colour and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only → {name, relinked: paints changed}",
+            "{name, newName?, color?, mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient}, {swatch} or {pattern}) replacing the swatch's colour, gradient or pattern with one of the same kind} edit a swatch in any colour group, as one undo step. Fills, strokes and text linked to a global swatch take its new colour and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only → {name, relinked: paints changed}",
             has_doc,
             swatch_edit
         ),
@@ -474,9 +474,21 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     if solid.is_none() && (given("color") || given("mode") || bool_or(p, "spot", false)) {
         return Err(bad(C, "colour, mode and spot apply to solid-colour swatches only"));
     }
+    // A replacement paint of the swatch's kind (a dropped colour or edited gradient).
+    let paint = match p.get("paint").filter(|v| !v.is_null()) {
+        Some(v) => match (paint_from(s, v)?, &sw.paint) {
+            (Some(Paint::Solid { color, .. }), Paint::Solid { .. }) => Some(Paint::solid(color)),
+            (Some(Paint::Gradient(g)), Paint::Gradient(_)) => {
+                Some(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { geom: None, swatch: None, ..*g })))
+            }
+            (Some(new @ Paint::Pattern { .. }), Paint::Pattern { .. }) => Some(new),
+            _ => return Err(bad(C, format!("`{name}` takes a paint of its own kind (colour, gradient or pattern)"))),
+        },
+        None => None,
+    };
     let mut color = match p.get("color").filter(|v| !v.is_null()) {
         Some(v) => Some(color_value(v).ok_or_else(|| bad(C, format!("bad color {v}")))?),
-        None => solid,
+        None => paint.as_ref().and_then(Paint::color).or(solid),
     };
     if let (Some(c), Some(m)) = (color, str_param(p, "mode")) {
         color = Some(convert_to_mode(c, m, C)?);
@@ -490,8 +502,13 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
         w.name = to.clone();
         w.spot = spot;
         w.global = global;
-        if let (Some(c), Paint::Solid { color: wc, .. }) = (color, &mut w.paint) {
-            *wc = c;
+        match (color, &mut w.paint) {
+            (Some(c), Paint::Solid { color: wc, .. }) => *wc = c,
+            (_, wp) => {
+                if let Some(new) = paint {
+                    *wp = new;
+                }
+            }
         }
         Ok(d.map_solid_paints(&mut |c, l| relink.apply(c, l)))
     })?;
