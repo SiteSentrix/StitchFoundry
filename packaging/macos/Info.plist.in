@@ -45,7 +45,7 @@
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © the VectorCraft authors. MIT OR Apache-2.0.</string>
 
-  <!-- Vectorcraft's own format. -->
+  <!-- VectorCraft's own format (.drawcraft is its name from before the rename). -->
   <key>UTExportedTypeDeclarations</key>
   <array>
     <dict>
@@ -63,48 +63,11 @@
       <key>UTTypeTagSpecification</key>
       <dict>
         <key>public.filename-extension</key>
-        <array><string>pcraft</string></array>
+        <array><string>vectorcraft</string><string>drawcraft</string></array>
         <key>public.mime-type</key>
         <array><string>application/x-vectorcraft</string></array>
       </dict>
     </dict>
   </array>
-  <!-- Types macOS may not know; the system's own declaration wins when it has one. -->
-  <key>UTImportedTypeDeclarations</key>
-  <array>
-    <dict>
-      <key>UTTypeIdentifier</key>
-      <string>com.adobe.photoshop-large-image</string>
-      <key>UTTypeDescription</key>
-      <string>Photoshop Large Document</string>
-      <key>UTTypeConformsTo</key>
-      <array>
-        <string>public.data</string>
-        <string>public.image</string>
-      </array>
-      <key>UTTypeTagSpecification</key>
-      <dict>
-        <key>public.filename-extension</key>
-        <array><string>psb</string></array>
-      </dict>
-    </dict>
-    <dict>
-      <key>UTTypeIdentifier</key>
-      <string>ai.storyteller.vectorcraft.qoi</string>
-      <key>UTTypeDescription</key>
-      <string>QOI Image</string>
-      <key>UTTypeConformsTo</key>
-      <array>
-        <string>public.data</string>
-        <string>public.image</string>
-      </array>
-      <key>UTTypeTagSpecification</key>
-      <dict>
-        <key>public.filename-extension</key>
-        <array><string>qoi</string></array>
-      </dict>
-    </dict>
-  </array>
-
 </dict>
 </plist>

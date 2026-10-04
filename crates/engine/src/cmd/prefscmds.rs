@@ -269,12 +269,12 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // Clipboard Handling
     p!("copyAsSvg", "Clipboard Handling", "On Copy", "Include SVG Code", bool),
     p!("copyAsPdf", "Clipboard Handling", "On Copy", "PDF", bool),
-    p!("copyAicb", "Clipboard Handling", "On Copy", "AICB (no transparency support)", bool),
+    p!("copyAicb", "Clipboard Handling", "On Copy", "Legacy vector clipboard (no transparency)", bool),
     p!(
         "aicbMode",
         "Clipboard Handling",
         "On Copy",
-        "AICB",
+        "Legacy vector clipboard",
         choice(&[("preservePaths", "Preserve Paths"), ("preserveAppearance", "Preserve Appearance and Overprints")])
     ),
     p!(

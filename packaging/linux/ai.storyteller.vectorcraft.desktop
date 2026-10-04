@@ -10,5 +10,5 @@ Terminal=false
 StartupNotify=true
 StartupWMClass=ai.storyteller.vectorcraft
 Categories=Graphics;2DGraphics;VectorGraphics;
-Keywords=vector;illustration;svg;pdf;drawing;bezier;illustrator;
+Keywords=vector;illustration;svg;pdf;drawing;bezier;
 MimeType=image/svg+xml;application/pdf;
