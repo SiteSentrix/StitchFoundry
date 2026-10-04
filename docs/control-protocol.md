@@ -36,3 +36,10 @@ fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern
 `swatches`); `ui.dialog.confirm` runs `swatch.new` / `swatch.newGroup`.
 
 The Color Picker is a dialog too: `engine.execute {command: "ui.colorPicker", params: {stroke?, color?}}` opens it for the fill (or stroke) proxy; `ui.dialog.set {field: "hex", value: "00FF00"}` (or `color`, `channel`, `webOnly`, `swatches`) then `ui.dialog.confirm` applies the colour through `paint.setFill` / `paint.setStroke`.
+
+Effect dialogs: `engine.execute {command: "effect.dialog", params: {effect, index?, item?}}` opens the `effect` dialog
+(fields: the effect's parameters, `preview`). With `index` it edits that applied effect of `item` (null: the object's
+effects) prefilled with its values, and `ui.dialog.confirm` runs `effect.setParams`; otherwise confirm runs
+`effect.apply`. Choosing an effect that the list already has returns `{"pending": "effectExists"}` and opens the
+`effectExists` question: `ui.dialog.confirm` opens the applied effect's dialog, `ui.dialog.set {field: "discard",
+value: true}` then confirm opens a fresh one that adds another, `ui.dialog.cancel` drops it.

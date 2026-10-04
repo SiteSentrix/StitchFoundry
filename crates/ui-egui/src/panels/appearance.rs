@@ -1,6 +1,11 @@
-//! Appearance panel: the full stack like Illustrator — the object row, each stroke/fill row (eye,
-//! disclosure, link label, swatch, weight) with "Opacity: Default" sub-rows, fx rows with inline
-//! parameter editors (effect.setParams), the object's Opacity row and the bottom bar.
+//! Appearance panel: the full stack as in the reference app — the object row (its thumbnail drags
+//! the appearance onto art), each stroke/fill row (eye, disclosure, link label, swatch, weight,
+//! brush/dash/profile notes) with "Opacity: Default" sub-rows, fx rows (the name opens the
+//! effect's dialog; the disclosure an inline editor), the object's Opacity row and the bottom bar.
+//!
+//! Rows drag: a fill/stroke row reorders the stack, an effect row reorders its list or moves into
+//! another item (dropped on its row) or onto the object; Alt copies instead. Cmd-click and
+//! Shift-click select several fills/strokes for Duplicate and Delete.
 
 use std::sync::OnceLock;
 
@@ -10,6 +15,7 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeId};
 
 use super::{first_selected, live_run, pstate, set_pstate};
+use crate::panels::stroke::paint_profile;
 use crate::theme::Tokens;
 use crate::widgets::{self, TransparencyEdit, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -64,13 +70,62 @@ fn current_sel(app: &VectorcraftApp, ctx: &egui::Context, node: Option<&Node>) -
 }
 
 /// Select a row; its fill/stroke becomes the active item that paint and effect edits target.
+/// Other selected fills/strokes are deselected.
 pub(crate) fn select_row(app: &mut VectorcraftApp, ctx: &egui::Context, sel: Sel) {
     if app.session.appearance_item() != sel.item() {
         app.run("appearance.setActiveItem", json!({ "index": sel.item() })).ok();
     }
     let owner = app.session.active().and_then(|d| d.selection.objects.first().copied());
     set_pstate(ctx, "ap-sel", (owner, sel));
+    set_pstate(ctx, "ap-multi", (owner, sel.item().into_iter().collect::<Vec<usize>>()));
 }
+
+/// The selected fill/stroke rows of `n` (paint order, ascending): the active row plus those
+/// Cmd/Shift-clicked with it.
+fn selected_items(ctx: &egui::Context, n: Option<&Node>, sel: Sel) -> Vec<usize> {
+    let (Some(n), Sel::Item(active)) = (n, sel) else { return vec![] };
+    let (owner, mut set): (Option<NodeId>, Vec<usize>) = pstate(ctx, "ap-multi");
+    if owner != Some(n.id) || !set.contains(&active) {
+        return vec![active];
+    }
+    set.retain(|i| *i < n.appearance.items.len());
+    set.sort_unstable();
+    set.dedup();
+    set
+}
+
+/// Click on fill/stroke row `i`: Shift extends the selection from the active row, Cmd toggles
+/// the row, a plain click selects only it.
+fn click_item(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel, i: usize, m: egui::Modifiers) {
+    let mut set = selected_items(ctx, Some(n), sel);
+    let active = match sel {
+        Sel::Item(a) if m.shift => {
+            set = (a.min(i)..=a.max(i)).collect();
+            a
+        }
+        Sel::Item(a) if m.command => {
+            match set.iter().position(|x| *x == i) {
+                Some(p) if set.len() > 1 => {
+                    set.remove(p);
+                }
+                Some(_) => {}
+                None => set.push(i),
+            }
+            if set.contains(&a) { a } else { set[0] }
+        }
+        _ => {
+            set = vec![i];
+            i
+        }
+    };
+    select_row(app, ctx, Sel::Item(active));
+    set_pstate(ctx, "ap-multi", (Some(n.id), set));
+}
+
+/// Dragged from the object row's thumbnail and dropped on art: the object under the pointer takes
+/// this object's appearance (`appearance.copyFrom`, see `canvas::drop_appearance`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AppearanceDrag(pub NodeId);
 
 fn catalog() -> &'static [(String, String, Vec<String>)] {
     static C: OnceLock<Vec<(String, String, Vec<String>)>> = OnceLock::new();
@@ -179,18 +234,36 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let th = Rect::from_min_size(r.left_center() + vec2(6.0, -12.0), vec2(24.0, 24.0));
             let fill = node.as_ref().map(|n| n.appearance.fill_paint()).unwrap_or_else(|| app.session.paint.fill.clone());
             chip(ui, th, &fill);
+            if let Some(n) = node.as_ref().filter(|_| !mixed) {
+                thumbnail_drag(ui, th, n.id, &fill);
+            }
         }
         text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), label, true);
         match &node {
             // Objects that differ have no common stack to list.
             Some(_) if mixed => {}
-            Some(n) => stack(app, ui, n, sel),
+            Some(n) => stack(app, ui, n, sel, r),
             None => default_stack(app, ui),
         }
         // Spacer row like Illustrator's empty tail.
         ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
     });
     bottom(app, ui, node.as_ref(), sel);
+}
+
+/// The object row's thumbnail drags this object's appearance onto art (a chip follows the pointer).
+fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId, fill: &Paint) {
+    let resp = ui.interact(th, ui.id().with("ap-thumb"), Sense::drag()).on_hover_text("Drag onto art to apply this appearance");
+    resp.dnd_set_drag_payload(AppearanceDrag(id));
+    if resp.dragged()
+        && let Some(p) = ui.ctx().pointer_interact_pos()
+    {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        let layer = egui::LayerId::new(egui::Order::Tooltip, ui.id().with("ap-thumb-drag"));
+        let r = Rect::from_min_size(p + vec2(8.0, 8.0), vec2(18.0, 18.0));
+        let ghost = ui.new_child(egui::UiBuilder::new().layer_id(layer).max_rect(r.expand(1.0)));
+        chip(&ghost, r, fill);
+    }
 }
 
 /// The selection as the Control bar and the object row name it: "No Selection", "Mixed Objects"
@@ -229,16 +302,43 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     text(ui, r.left_center() + vec2(EYE_W + 24.0, 0.0), "Opacity: Default", false);
 }
 
-fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
+/// A stack row being dragged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Dragged {
+    Item(usize),
+    /// Effect `k` of fill/stroke `item` (`None`: of the object).
+    Effect(Option<usize>, usize),
+}
+
+/// What a stack row stands for when a dragged row is dropped on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Slot {
+    /// Fill/stroke row `index` (`sub`: one of its indented sub-rows).
+    Item { index: usize, sub: bool },
+    /// Effect `k` of fill/stroke `item` (`None`: of the object).
+    Effect(Option<usize>, usize),
+    /// The object row (`top`) or the object's Opacity row.
+    Object { top: bool },
+}
+
+fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: Rect) {
     let t = Tokens::get(ui.ctx());
-    let mut drop: Option<(usize, usize)> = None;
+    let ctx = ui.ctx().clone();
+    let dragging: Option<Dragged> = pstate(&ctx, "ap-drag");
+    let items = selected_items(&ctx, Some(n), sel);
+    let mut rows = vec![(Slot::Object { top: true }, object_row)];
     let mut stopped = false;
-    let dragging: Option<usize> = pstate(ui.ctx(), "ap-drag");
-    let mut row_rects = vec![];
+    // Starts or ends a row drag.
+    let mut track = |resp: &egui::Response, what: Dragged| {
+        if resp.drag_started() {
+            set_pstate(&ctx, "ap-drag", Some(what));
+        }
+        stopped |= resp.drag_stopped();
+    };
     for (i, it) in n.appearance.items.iter().enumerate().rev() {
         let open: bool = pstate(ui.ctx(), &format!("ap-open-{i}"));
-        let (r, resp) = row(ui, sel == Sel::Item(i));
-        row_rects.push((i, r));
+        let (r, resp) = row(ui, items.contains(&i));
+        rows.push((Slot::Item { index: i, sub: false }, r));
         let (visible, paint) = (it.visible(), it.paint());
         let is_stroke = !it.is_fill();
         if eye(ui, r, ("ap-eye", i), visible, true) {
@@ -256,11 +356,19 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
         } else {
             text(ui, pos2(lx, r.center().y), "Fill:", false);
         }
-        // Swatch with a swatches popup that sets this item's paint.
+        // Swatch with a swatches popup that sets this item's paint; Shift-click opens the Color
+        // panel's mixer on this row instead.
         let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0));
         chip(ui, cr, paint);
-        let cresp = ui.interact(cr.expand(2.0), ui.id().with(("ap-chip", i)), Sense::click()).on_hover_text("Click to choose a swatch");
-        egui::Popup::menu(&cresp).show(|ui| {
+        let cresp = ui
+            .interact(cr.expand(2.0), ui.id().with(("ap-chip", i)), Sense::click())
+            .on_hover_text("Click to choose a swatch, Shift-click to mix a colour");
+        let mixer = cresp.clicked() && ui.input(|inp| inp.modifiers.shift);
+        if mixer {
+            select_row(app, ui.ctx(), Sel::Item(i));
+            app.ui.open_panel = Some("color".into());
+        }
+        egui::Popup::menu(&cresp).open_memory((cresp.clicked() && !mixer).then_some(egui::SetOpenCommand::Toggle)).show(|ui| {
             swatch_picker(app, ui, i);
         });
         if let AppearanceItem::Stroke(st) = it {
@@ -269,67 +377,139 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
             if let Some(w) = widgets::num_field(&mut child, ("ap-w", i), Some(st.width), vectorcraft_doc::Unit::Points, 56.0) {
                 app.run("appearance.setItem", json!({"index": i, "weight": w})).ok();
             }
+            stroke_notes(ui, Rect::from_min_max(pos2(fr.right() + 6.0, r.top()), pos2(r.right() - 4.0, r.bottom())), st);
         }
         if resp.clicked() {
-            select_row(app, ui.ctx(), Sel::Item(i));
+            let m = ui.input(|inp| inp.modifiers);
+            click_item(app, ui.ctx(), n, sel, i, m);
         }
         if resp.double_clicked() {
             app.ui.open_panel = Some(if is_stroke { "stroke" } else { "color" }.into());
         }
-        if resp.drag_started() {
-            set_pstate(ui.ctx(), "ap-drag", Some(i));
-        }
-        if resp.drag_stopped() {
-            stopped = true;
-        }
+        track(&resp, Dragged::Item(i));
         if open {
-            opacity_row(app, ui, Some(i), it.opacity(), it.blend());
+            let r = opacity_row(app, ui, Some(i), it.opacity(), it.blend());
+            rows.push((Slot::Item { index: i, sub: true }, r));
             for (k, e) in it.effects().iter().enumerate() {
-                effect_row(app, ui, Some(i), k, e, sel == Sel::ItemEffect(i, k));
+                let (r, resp) = effect_row(app, ui, Some(i), k, e, sel == Sel::ItemEffect(i, k));
+                rows.push((Slot::Effect(Some(i), k), r));
+                track(&resp, Dragged::Effect(Some(i), k));
             }
-        }
-    }
-    if stopped
-        && let Some(from) = dragging
-        && let Some(p) = ui.ctx().pointer_interact_pos()
-    {
-        drop = Some((from, target_index(&row_rects, p.y)));
-    }
-    if dragging.is_some() && !ui.ctx().input(|i| i.pointer.any_down()) {
-        set_pstate::<Option<usize>>(ui.ctx(), "ap-drag", None);
-    }
-    if let Some(p) = ui.ctx().pointer_interact_pos()
-        && dragging.is_some()
-    {
-        // Insertion marker.
-        if let Some((_, r)) = row_rects.iter().find(|(_, r)| r.y_range().contains(p.y)) {
-            let y = if p.y < r.center().y { r.top() } else { r.bottom() };
-            ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], Stroke::new(2.0, t.accent));
         }
     }
     // Object-level effects.
     for (k, e) in n.appearance.effects.iter().enumerate() {
-        effect_row(app, ui, None, k, e, sel == Sel::Effect(k));
+        let (r, resp) = effect_row(app, ui, None, k, e, sel == Sel::Effect(k));
+        rows.push((Slot::Effect(None, k), r));
+        track(&resp, Dragged::Effect(None, k));
     }
-    opacity_row(app, ui, None, n.opacity, n.blend);
-    if let Some((from, to_row)) = drop
-        && from != to_row
+    let r = opacity_row(app, ui, None, n.opacity, n.blend);
+    rows.push((Slot::Object { top: false }, r));
+    let Some(what) = dragging else { return };
+    let pointer = ui.ctx().pointer_interact_pos();
+    if let Some(p) = pointer
+        && let Some((slot, r)) = slot_at(&rows, p)
     {
-        // The engine keeps the moved row active when it was.
-        app.run("appearance.moveItem", json!({"from": from, "to": to_row})).ok();
+        // Drop marker: a line where the row lands, or a frame round the row it goes into.
+        let stroke = Stroke::new(2.0, t.accent);
+        let line = |y: f32| {
+            ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], stroke);
+        };
+        match (what, slot) {
+            (Dragged::Effect(..), Slot::Effect(..)) => line(if p.y < r.center().y { r.top() } else { r.bottom() }),
+            (Dragged::Effect(..), _) => {
+                ui.painter().rect_stroke(r.shrink(1.0), 0.0, stroke, StrokeKind::Inside);
+            }
+            (Dragged::Item(from), _) => line(if item_at(n, slot) > from { r.top() } else { r.bottom() }),
+        }
+    }
+    if !ui.ctx().input(|i| i.pointer.any_down()) {
+        set_pstate::<Option<Dragged>>(ui.ctx(), "ap-drag", None);
+    }
+    if stopped
+        && let Some(p) = pointer
+        && let Some((cmd, params)) = drop_command(n, &rows, what, p, ui.input(|i| i.modifiers.alt))
+        && let Ok(r) = app.run(cmd, params)
+        && let Some(k) = r["index"].as_u64().filter(|_| cmd == "effect.move")
+    {
+        // The dropped effect becomes the selected row (a moved fill/stroke stays active in the engine).
+        let k = k as usize;
+        select_row(app, ui.ctx(), r["item"].as_u64().map_or(Sel::Effect(k), |i| Sel::ItemEffect(i as usize, k)));
     }
 }
 
-/// Paint-order index a drop at `y` lands on (rows are listed top = last item).
-fn target_index(rows: &[(usize, Rect)], y: f32) -> usize {
-    rows.iter().find(|(_, r)| r.y_range().contains(y)).map(|(i, _)| *i).unwrap_or_else(|| {
-        if rows.first().is_some_and(|(_, r)| y < r.top()) { rows.first().map(|r| r.0).unwrap_or(0) } else { rows.last().map(|r| r.0).unwrap_or(0) }
-    })
+/// The row under `p`.
+fn slot_at(rows: &[(Slot, Rect)], p: egui::Pos2) -> Option<(Slot, Rect)> {
+    rows.iter().find(|(_, r)| r.contains(p)).copied()
+}
+
+/// Paint-order index a dragged fill/stroke lands on when dropped on row `slot`: that row's item;
+/// the object row stands above the topmost item, the rows below the items under item 0.
+fn item_at(n: &Node, slot: Slot) -> usize {
+    match slot {
+        Slot::Item { index, .. } | Slot::Effect(Some(index), _) => index,
+        Slot::Object { top: true } => n.appearance.items.len().saturating_sub(1),
+        Slot::Object { top: false } | Slot::Effect(None, _) => 0,
+    }
+}
+
+/// The command a drop of `what` at `p` runs (`copy`: Alt held), or None when it would change
+/// nothing or lands outside the stack.
+fn drop_command(n: &Node, rows: &[(Slot, Rect)], what: Dragged, p: egui::Pos2, copy: bool) -> Option<(&'static str, Value)> {
+    let (slot, r) = slot_at(rows, p)?;
+    match what {
+        Dragged::Item(from) => {
+            let to = item_at(n, slot);
+            if copy {
+                // The copy goes where the row was dropped: above that row when dragged up, below it
+                // when dragged down.
+                let at = if to >= from { to + 1 } else { to };
+                Some(("appearance.duplicateItem", json!({"index": from, "to": at})))
+            } else {
+                (to != from).then(|| ("appearance.moveItem", json!({"from": from, "to": to})))
+            }
+        }
+        Dragged::Effect(from_item, k) => {
+            let (item, pos) = match slot {
+                Slot::Effect(item, k2) => (item, k2 + usize::from(p.y > r.center().y)),
+                Slot::Item { index, .. } => (Some(index), n.appearance.effects_at(Some(index))?.len()),
+                Slot::Object { .. } => (None, n.appearance.effects.len()),
+            };
+            // Within its own list the effect leaves its old place first.
+            let same = item == from_item && !copy;
+            let pos = if same && pos > k { pos - 1 } else { pos };
+            if same && pos == k {
+                return None;
+            }
+            Some(("effect.move", json!({"from": k, "fromItem": from_item, "to": pos, "toItem": item, "copy": copy})))
+        }
+    }
+}
+
+/// A stroke row's notes after the weight: its brush, "Dashed" and its width profile (drawn).
+fn stroke_notes(ui: &Ui, r: Rect, st: &vectorcraft_doc::StrokeLayer) {
+    let t = Tokens::get(ui.ctx());
+    let painter = ui.painter_at(r);
+    let dashed = st.dash.as_ref().is_some_and(|d| d.is_dashed()).then_some("Dashed");
+    let notes: Vec<&str> = st.brush.as_deref().into_iter().chain(dashed).collect();
+    let mut x = r.left();
+    if !notes.is_empty() {
+        let g = painter.layout_no_wrap(notes.join(", "), egui::FontId::proportional(11.5), t.text_dim);
+        x += g.size().x + 6.0;
+        painter.galley(pos2(r.left(), r.center().y - g.size().y / 2.0), g, t.text_dim);
+    }
+    if let Some(p) = st.profile.as_ref().filter(|p| p.preset_id() != Some("uniform")) {
+        let pr = Rect::from_min_size(pos2(x, r.center().y - 5.0), vec2(28.0, 10.0));
+        if pr.right() <= r.right() {
+            paint_profile(ui, pr, Some(p), t.text);
+        }
+    }
 }
 
 /// The Opacity row of the object (`item: None`) or, indented, of fill/stroke `item`. Clicking it
 /// opens a popup with the shared opacity and blend controls (`transparency.set` on that item).
-fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opacity: f32, blend: BlendMode) {
+/// Returns the row's rect.
+fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opacity: f32, blend: BlendMode) -> Rect {
     let (r, resp) = row(ui, false);
     eye(ui, r, ("ap-op-eye", item), true, false);
     let lx = r.left() + EYE_W + 24.0 + if item.is_some() { 12.0 } else { 0.0 };
@@ -345,15 +525,19 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opaci
             Some(TransparencyEdit::Opacity(o, phase)) => live_run(app, "Opacity", "transparency.set", json!({"item": item, "opacity": o}), phase),
             None => {}
         });
+    r
 }
 
 /// An effect row: of the object (`item: None`) or, indented under it, of fill/stroke `item`.
-fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect, selected: bool) {
+/// Clicking the name opens the effect's dialog to edit it (the disclosure: an inline editor).
+/// Returns the row's rect and response (for dragging).
+fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect, selected: bool) -> (Rect, egui::Response) {
     let t = Tokens::get(ui.ctx());
     let open_key = format!("ap-fx-open-{item:?}-{k}");
     let open: bool = pstate(ui.ctx(), &open_key);
     let this = item.map_or(Sel::Effect(k), |i| Sel::ItemEffect(i, k));
-    let (r, resp) = row(ui, selected);
+    let (row_rect, resp) = row(ui, selected);
+    let r = row_rect;
     if eye(ui, r, ("ap-fx-eye", item, k), e.visible, true) {
         app.run("effect.setParams", json!({"item": item, "index": k, "visible": !e.visible})).ok();
     }
@@ -364,8 +548,12 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     }
     let lx = r.left() + EYE_W + 24.0;
     if link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_label(&e.id)) {
-        set_pstate(ui.ctx(), &open_key, !open);
         select_row(app, ui.ctx(), this);
+        if has_options(&e.id) {
+            app.run("effect.dialog", json!({"effect": e.id, "index": k, "item": item})).ok();
+        } else {
+            set_pstate(ui.ctx(), &open_key, !open);
+        }
     }
     icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     if resp.clicked() {
@@ -377,6 +565,12 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     if open {
         effect_editor(app, ui, item, k, e);
     }
+    (row_rect, resp)
+}
+
+/// Does the effect have a dialog (any parameters)?
+fn has_options(id: &str) -> bool {
+    vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
 }
 
 /// Inline editor for an applied effect's parameters (numbers, booleans, strings, colours);
@@ -497,31 +691,31 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) 
         if widgets::icon_button_enabled(ui, "dc-clear", "Clear Appearance", false, has, 24.0).clicked() {
             app.run("appearance.clear", json!({})).ok();
         }
-        let can_dup = has && sel != Sel::None;
-        if widgets::icon_button_enabled(ui, "dc-new-item", "Duplicate Selected Item", false, can_dup, 24.0).clicked() {
-            duplicate_selected(app, sel);
+        let can = has && sel != Sel::None;
+        if widgets::icon_button_enabled(ui, "dc-new-item", "Duplicate Selected Item", false, can, 24.0).clicked() {
+            duplicate_selected(app, ui, node, sel);
         }
-        let can_del = has && sel != Sel::None;
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Selected Item", false, can_del, 24.0).clicked() {
-            delete_selected(app, ui, sel);
+        if widgets::icon_button_enabled(ui, "trash-2", "Delete Selected Item", false, can, 24.0).clicked() {
+            delete_selected(app, ui, node, sel);
         }
         let _ = basic;
     });
 }
 
-fn duplicate_selected(app: &mut VectorcraftApp, sel: Sel) {
-    match (sel, sel.effect()) {
-        (Sel::Item(i), _) => app.run("appearance.duplicateItem", json!({"index": i})).ok(),
-        (_, Some(fx)) => app.run("effect.duplicate", fx).ok(),
-        _ => None,
+/// Duplicate the selected fills/strokes (each copy right above its row) or the selected effect.
+fn duplicate_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: Sel) {
+    match sel.effect() {
+        Some(fx) => app.run("effect.duplicate", fx).ok(),
+        None if sel.item().is_some() => app.run("appearance.duplicateItem", json!({"indices": selected_items(ui.ctx(), node, sel)})).ok(),
+        None => None,
     };
 }
 
-fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, sel: Sel) {
-    let ok = match (sel, sel.effect()) {
-        (Sel::Item(i), _) => app.run("appearance.removeItem", json!({"index": i})).is_ok(),
-        (_, Some(fx)) => app.run("effect.remove", fx).is_ok(),
-        _ => false,
+fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: Sel) {
+    let ok = match sel.effect() {
+        Some(fx) => app.run("effect.remove", fx).is_ok(),
+        None if sel.item().is_some() => app.run("appearance.removeItem", json!({"indices": selected_items(ui.ctx(), node, sel)})).is_ok(),
+        None => false,
     };
     // Removing the active item clears it in the engine; a removed item effect leaves its item
     // selected.
@@ -530,8 +724,9 @@ fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, sel: Sel) {
     }
 }
 
-/// The fx menu: effects grouped by their Effect-menu submenu; opens the effect dialog.
-fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The fx menu (Appearance panel, Properties): effects grouped by their Effect-menu submenu;
+/// opens the effect dialog.
+pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
     for (id, label, menu) in catalog() {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());
@@ -564,10 +759,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, "Duplicate Item", has && sel != Sel::None, false) {
-        duplicate_selected(app, sel);
+        duplicate_selected(app, ui, node.as_ref(), sel);
     }
     if menu_item(ui, "Remove Item", has && sel != Sel::None, false) {
-        delete_selected(app, ui, sel);
+        delete_selected(app, ui, node.as_ref(), sel);
     }
     if menu_item(ui, "Clear Appearance", has, false) {
         app.run("appearance.clear", json!({})).ok();
@@ -583,7 +778,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     menu_item(ui, "Redefine Graphic Style", false, false);
-    menu_item(ui, "Show All Hidden Attributes", false, false);
+    if menu_item(ui, "Show All Hidden Attributes", node.as_ref().is_some_and(|n| n.appearance.has_hidden()), false) {
+        app.run("appearance.showAllHidden", json!({})).ok();
+    }
 }
 
 #[cfg(test)]
@@ -606,11 +803,42 @@ mod tests {
     }
 
     #[test]
-    fn drop_targets() {
-        let r = |y: f32| Rect::from_min_size(pos2(0.0, y), vec2(100.0, ROW));
-        let rows = vec![(2, r(0.0)), (1, r(30.0)), (0, r(60.0))];
-        assert_eq!(target_index(&rows, 45.0), 1);
-        assert_eq!(target_index(&rows, -10.0), 2);
-        assert_eq!(target_index(&rows, 500.0), 0);
+    fn drops_pick_the_command() {
+        use vectorcraft_doc::{Appearance, FillLayer};
+        let fx = |id: &str| Effect { id: id.into(), params: Value::Null, visible: true };
+        let mut n = Node::path(NodeId(1), vectorcraft_geom::PathData::default(), Appearance::default_art());
+        n.appearance.items.push(AppearanceItem::Fill(FillLayer::new(Paint::None))); // [F, S, F]
+        n.appearance.items[1].effects_mut().extend([fx("distort.twist"), fx("distort.roughen")]);
+        n.appearance.effects.push(fx("stylize.dropShadow"));
+        let slots = [
+            Slot::Object { top: true },
+            Slot::Item { index: 2, sub: false },
+            Slot::Item { index: 1, sub: false },
+            Slot::Effect(Some(1), 0),
+            Slot::Effect(Some(1), 1),
+            Slot::Item { index: 0, sub: false },
+            Slot::Effect(None, 0),
+            Slot::Object { top: false },
+        ];
+        let rows: Vec<(Slot, Rect)> =
+            slots.iter().enumerate().map(|(i, s)| (*s, Rect::from_min_size(pos2(0.0, i as f32 * ROW), vec2(200.0, ROW)))).collect();
+        // The upper or lower half of row `i`.
+        let at = |i: usize, lower: bool| pos2(50.0, i as f32 * ROW + if lower { ROW * 0.75 } else { ROW * 0.25 });
+        let drop = |what, p, copy| drop_command(&n, &rows, what, p, copy);
+        // Fill/stroke rows: moves, Alt copies to where it was dropped.
+        assert_eq!(drop(Dragged::Item(0), at(1, false), false), Some(("appearance.moveItem", json!({"from": 0, "to": 2}))));
+        assert_eq!(drop(Dragged::Item(0), at(0, false), true), Some(("appearance.duplicateItem", json!({"index": 0, "to": 3}))));
+        assert_eq!(drop(Dragged::Item(2), at(7, false), true), Some(("appearance.duplicateItem", json!({"index": 2, "to": 0}))));
+        assert_eq!(drop(Dragged::Item(1), at(3, false), false), None, "onto its own effect");
+        // Effects: within the list (below the next one), into a fill, out onto the object.
+        let mv = |from: usize, fi: Value, to: usize, ti: Value, copy: bool| {
+            Some(("effect.move", json!({"from": from, "fromItem": fi, "to": to, "toItem": ti, "copy": copy})))
+        };
+        assert_eq!(drop(Dragged::Effect(Some(1), 0), at(4, true), false), mv(0, json!(1), 1, json!(1), false));
+        assert_eq!(drop(Dragged::Effect(Some(1), 0), at(3, true), false), None, "dropped on itself");
+        assert_eq!(drop(Dragged::Effect(Some(1), 1), at(5, false), true), mv(1, json!(1), 0, json!(0), true));
+        assert_eq!(drop(Dragged::Effect(Some(1), 1), at(7, false), false), mv(1, json!(1), 1, Value::Null, false));
+        assert_eq!(drop(Dragged::Effect(None, 0), at(3, false), false), mv(0, Value::Null, 0, json!(1), false));
+        assert_eq!(drop(Dragged::Effect(None, 0), pos2(500.0, 10.0), false), None, "outside the stack");
     }
 }

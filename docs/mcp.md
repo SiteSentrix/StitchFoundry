@@ -196,3 +196,12 @@ plain group and keeps the clipping path, unpainted.
 {"name":"run_command","arguments":{"command":"select.set","params":{"ids":[12,15]}}}
 {"name":"run_command","arguments":{"command":"object.clippingMask.make","params":{}}}
 ```
+
+## Editing appearance stacks
+
+`effect.move {from, to, fromItem?, toItem?, copy?}` reorders an effect or moves it between the object's effects
+(`null`) and a fill's or stroke's (an item index), as dragging its row in the Appearance panel does; `copy: true` copies
+it (Alt-drag). `appearance.duplicateItem {index, to?}` / `{indices}` and `appearance.removeItem {index | indices}`
+act on several fills/strokes at once, and `appearance.showAllHidden` makes every hidden fill, stroke and effect
+visible again. In remote mode, `effect.dialog {effect, index, item}` opens an applied effect's dialog prefilled
+(`ui.dialog.confirm` runs `effect.setParams`); see the control protocol for the "already applied" question.

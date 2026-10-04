@@ -3,7 +3,7 @@
 
 use egui::{Color32, CornerRadius, Pos2, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, PathEl, Point, Rect};
 use vectorcraft_tools::{Cursor, Mods, Overlay, PointerEvent, PointerKind};
 
@@ -136,6 +136,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     handle_input(app, ui, &resp, rect);
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
+    if let Some(drag) = resp.dnd_release_payload::<crate::panels::appearance::AppearanceDrag>()
+        && let Some(p) = ui.ctx().pointer_interact_pos()
+    {
+        drop_appearance(app, drag.0, xf.to_doc(p), xf.zoom);
+    }
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
@@ -479,6 +484,19 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     }
     if drag.is_some() || pointer.is_moving() {
         ui.ctx().request_repaint();
+    }
+}
+
+/// The Appearance panel's thumbnail dropped at `pos` (at `zoom`): the object there takes the
+/// appearance of `source` (`appearance.copyFrom`).
+pub(crate) fn drop_appearance(app: &mut VectorcraftApp, source: NodeId, pos: Point, zoom: f64) {
+    let Some(st) = app.session.active() else { return };
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / zoom, outline: app.ui.view.outline, path_only: false };
+    let Some(target) = vectorcraft_doc::hit::hit_test(&st.doc, pos, opt).map(|h| h.top_object(st.isolation)) else { return };
+    if target != source
+        && let Err(e) = app.run("appearance.copyFrom", json!({"source": source.0, "ids": [target.0]}))
+    {
+        app.status(e);
     }
 }
 
@@ -1080,5 +1098,33 @@ mod tests {
         frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(300.0, 200.0))]);
         assert_eq!(app.view().unwrap().center, after.center);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
+    }
+    #[test]
+    fn dropping_the_appearance_thumbnail_on_art_copies_the_appearance() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 400, "height": 300}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
+        run(&mut app, "effect.apply", json!({"effect": "distort.twist"}));
+        run(&mut app, "transparency.set", json!({"opacity": 40}));
+        let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
+        run(&mut app, "select.set", json!({ "ids": [a] }));
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        // The Appearance panel's thumbnail (its drag payload) released over the second rectangle.
+        egui::DragAndDrop::set_payload(&ctx, crate::panels::appearance::AppearanceDrag(NodeId(a)));
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(250.0, 70.0));
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![up]);
+        let doc = &app.session.active().unwrap().doc;
+        let (na, nb) = (doc.node(NodeId(a)).unwrap(), doc.node(NodeId(b)).unwrap());
+        assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity));
+        assert_eq!(nb.appearance.effects[0].id, "distort.twist");
+        // Dropped on empty canvas: nothing changes.
+        let undo_len = app.session.active().unwrap().history.undo.len();
+        drop_appearance(&mut app, NodeId(a), Point::new(350.0, 250.0), 1.0);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo_len);
     }
 }

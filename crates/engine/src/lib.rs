@@ -750,6 +750,8 @@ mod tests_distort;
 #[cfg(test)]
 mod tests_draw2;
 #[cfg(test)]
+mod tests_effectedit;
+#[cfg(test)]
 mod tests_file;
 #[cfg(test)]
 mod tests_gradient;

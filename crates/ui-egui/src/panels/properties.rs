@@ -307,10 +307,9 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     ui.horizontal(|ui| {
-        let r = widgets::flat_button(ui, "fx", 34.0);
-        if r.on_hover_text("Effects").clicked() {
-            app.ui.open_panel = Some("appearance".into());
-        }
+        // The fx button opens the effect menu, as the Appearance panel's does.
+        let r = widgets::flat_button(ui, "fx", 34.0).on_hover_text("Add New Effect");
+        egui::Popup::menu(&r).show(|ui| super::appearance::fx_menu(app, ui));
         if widgets::icon_button(ui, "ellipsis", "Appearance panel", false, 22.0).clicked() {
             app.ui.open_panel = Some("appearance".into());
         }
