@@ -156,6 +156,8 @@ pub struct ToolContext<'a> {
     pub snap_to_point: bool,
     /// View → Show Corner Widget: live rectangles show draggable Live Corners widgets.
     pub corner_widgets: bool,
+    /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
+    pub fill_active: bool,
 }
 
 impl ToolContext<'_> {
@@ -325,6 +327,7 @@ pub(crate) mod testutil {
             snap_to_pixel: false,
             snap_to_point: true,
             corner_widgets: true,
+            fill_active: true,
         }
     }
 }

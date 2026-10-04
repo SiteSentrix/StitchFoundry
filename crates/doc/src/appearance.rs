@@ -213,11 +213,16 @@ impl StrokeLayer {
             effects: vec![],
         }
     }
-    /// The box an unplaced gradient on this stroke fits to: the object's geometric bounds grown by
-    /// half the weight (as the renderers resolve it).
+    /// The box an unplaced gradient on this stroke fits to (see [`stroke_paint_bounds`]).
     pub fn paint_bounds(&self, geometric: vectorcraft_geom::Rect) -> vectorcraft_geom::Rect {
-        geometric.inflate(self.width / 2.0, self.width / 2.0)
+        stroke_paint_bounds(geometric, self.width)
     }
+}
+
+/// The box an unplaced gradient on a stroke of `width` fits to: the geometric bounds grown by half
+/// the weight (object strokes and type strokes alike, on screen and in exports).
+pub fn stroke_paint_bounds(geometric: vectorcraft_geom::Rect, width: f64) -> vectorcraft_geom::Rect {
+    geometric.inflate(width / 2.0, width / 2.0)
 }
 
 /// One entry of the appearance stack.

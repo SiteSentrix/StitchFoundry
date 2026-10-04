@@ -1,12 +1,11 @@
 //! Gradient tool (G).
 //!
-//! Drag across selected objects to set the gradient vector of their fill (a solid fill becomes the
-//! default gradient). Shift constrains the angle to 45°. With nothing selected, the drag targets
+//! Drag across selected objects to set the gradient vector of the paint behind the active proxy
+//! (fill or stroke; type objects' runs), a solid paint becoming the default gradient. Shift constrains the angle to 45°. With nothing selected, the drag targets
 //! the object under the pointer. The overlay is the gradient annotator: a bar from a round start
 //! handle to a square end handle, with a tick for each colour stop.
 
 use serde_json::{Value, json};
-use vectorcraft_color::Paint;
 use vectorcraft_doc::hit::hit_test;
 use vectorcraft_geom::{Point, Vec2};
 
@@ -21,12 +20,11 @@ pub struct GradientTool {
     drag: Option<(Point, Point, bool)>,
 }
 
-/// Start/end/stop offsets of the gradient annotator for the first selected object with a gradient fill.
+/// Start/end/stop offsets of the gradient annotator: the gradient behind the active proxy (fill or
+/// stroke; a type object's runs) of the first selected object that has one, in document coordinates.
 pub fn annotator(cx: &ToolContext) -> Option<(Point, Point, Vec<f32>)> {
     cx.selection.objects.iter().find_map(|id| {
-        let n = cx.doc.node(*id)?;
-        let Paint::Gradient(g) = n.appearance.fill_paint() else { return None };
-        let geom = g.resolve(n.geometric_bounds()?);
+        let (g, geom) = cx.doc.node(*id)?.proxy_gradient(!cx.fill_active)?;
         Some((geom.start, geom.end, g.gradient.stops.iter().map(|s| s.offset).collect()))
     })
 }
@@ -83,7 +81,10 @@ impl Tool for GradientTool {
                 }
                 let end = if ev.mods.shift { start + vectorcraft_geom::constrain_angle(p - start, 45.0) } else { p };
                 self.drag = Some((start, end, true));
-                out.push(Action::Preview("paint.setGradientGeom".into(), json!({ "start": [start.x, start.y], "end": [end.x, end.y] })));
+                out.push(Action::Preview(
+                    "paint.setGradientGeom".into(),
+                    json!({ "start": [start.x, start.y], "end": [end.x, end.y], "stroke": !cx.fill_active }),
+                ));
                 out
             }
             PointerKind::Up => match self.drag.take() {
@@ -143,6 +144,28 @@ mod tests {
         // While dragging a solid-filled object the annotator follows the drag.
         assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Handle { p, .. } if p.x == 110.0)));
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 190.0, 150.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn stroke_proxy_drags_and_annotates_the_stroke() {
+        use vectorcraft_color::{Gradient, GradientPaint, Paint};
+        let (mut d, id) = doc_with_rect();
+        d.node_mut(id).unwrap().appearance.set_stroke(Paint::Gradient(Box::new(GradientPaint::new(Gradient::default()))));
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        // The fill is solid: with the Fill proxy in front there is no annotator.
+        assert!(GradientTool::default().overlays(&cx).is_empty());
+        cx.fill_active = false;
+        // The stroke's annotator spans the stroke-inflated box (1 pt stroke: 99.5..200.5).
+        let (a, b, stops) = annotator(&cx).unwrap();
+        assert_eq!((a, b, stops.len()), (Point::new(99.5, 150.0), Point::new(200.5, 150.0), 2));
+        let mut t = GradientTool::default();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 150.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 190.0, 150.0));
+        let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+        assert_eq!(v["stroke"], json!(true));
     }
 
     #[test]

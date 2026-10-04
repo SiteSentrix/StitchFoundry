@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, NodeKind};
 
-use super::gradient::place_paint;
+use super::gradient::{place_paint, place_run_paint, run_paint_mut};
 use super::*;
 use crate::EngineError;
 
@@ -15,7 +15,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector; both or neither), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, ids?} sets selection fill and the default",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, ids?} sets selection fill and the default",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -89,15 +89,13 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
             if let NodeKind::Text(t) = &mut n.kind {
+                let (xf, lb) = (t.xf, t.local_bounds());
                 for r in &mut t.runs {
-                    if fill {
-                        r.style.fill = paint.clone();
-                    } else {
-                        r.style.stroke = paint.clone();
-                        if r.style.stroke_width == 0.0 {
-                            r.style.stroke_width = 1.0;
-                        }
+                    if !fill && r.style.stroke_width == 0.0 {
+                        r.style.stroke_width = 1.0;
                     }
+                    let (cur, b) = run_paint_mut(r, !fill, lb);
+                    *cur = place_run_paint(&paint, p, xf, b);
                 }
                 continue;
             }

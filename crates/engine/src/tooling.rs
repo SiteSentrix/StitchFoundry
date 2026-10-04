@@ -78,6 +78,7 @@ impl Session {
             snap_to_pixel: view.snap_to_pixel,
             snap_to_point: view.snap_to_point,
             corner_widgets: view.corner_widgets,
+            fill_active: self.fill_active,
         };
         f(self.tool.as_mut(), &cx)
     }

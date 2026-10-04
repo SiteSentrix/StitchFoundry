@@ -17,6 +17,7 @@ mod width;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use vectorcraft_doc::appearance::stroke_paint_bounds;
 use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
@@ -790,7 +791,10 @@ impl Renderer {
                 self.fold_alpha(ctx, &run.style.fill);
                 ctx.fill_path(path);
             }
-            if !run.style.stroke.is_none() && run.style.stroke_width > 0.0 && paint::set_paint(ctx, &run.style.stroke, g.bounds, f.doc) {
+            if !run.style.stroke.is_none()
+                && run.style.stroke_width > 0.0
+                && paint::set_paint(ctx, &run.style.stroke, stroke_paint_bounds(g.bounds, run.style.stroke_width), f.doc)
+            {
                 ctx.set_stroke(kurbo::Stroke::new(run.style.stroke_width));
                 ctx.stroke_path(path);
             }
@@ -805,7 +809,7 @@ impl Renderer {
                         ctx.set_fill_rule(peniko::Fill::NonZero);
                         ctx.fill_path(&all);
                     }
-                    AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && paint::set_paint(ctx, &st.paint, tb, f.doc) => {
+                    AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && paint::set_paint(ctx, &st.paint, st.paint_bounds(tb), f.doc) => {
                         ctx.set_stroke(kurbo::Stroke::new(st.width));
                         ctx.stroke_path(&all);
                     }

@@ -13,6 +13,7 @@ use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, St
 use krilla::surface::Surface;
 use kurbo::{ParamCurve, ParamCurveDeriv, PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
+use vectorcraft_doc::appearance::stroke_paint_bounds;
 use vectorcraft_doc::{AppearanceItem, Arrowhead, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 
@@ -607,7 +608,7 @@ impl Exporter<'_> {
                 s.draw_path(&path);
             }
             if run.style.stroke_width > 0.0
-                && let Some(paint) = self.paint(&run.style.stroke, layout.bounds)
+                && let Some(paint) = self.paint(&run.style.stroke, stroke_paint_bounds(layout.bounds, run.style.stroke_width))
             {
                 s.set_fill(None);
                 s.set_stroke(Some(Stroke { paint, width: run.style.stroke_width as f32, ..Default::default() }));
@@ -631,7 +632,7 @@ impl Exporter<'_> {
                         }
                     }
                     AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {
-                        if let Some(paint) = self.paint(&st.paint, tb) {
+                        if let Some(paint) = self.paint(&st.paint, st.paint_bounds(tb)) {
                             s.set_fill(None);
                             s.set_stroke(Some(Stroke { paint, width: st.width as f32, opacity: norm(st.opacity), ..Default::default() }));
                             s.draw_path(&path);

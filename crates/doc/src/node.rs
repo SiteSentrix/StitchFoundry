@@ -529,6 +529,35 @@ impl Node {
             self.appearance.pin_gradients(b);
         }
     }
+    /// The paint behind the Fill (or Stroke) proxy, the map from its space to the document and
+    /// the box (in that space) an unplaced gradient fits. Type objects paint their runs (the first
+    /// run speaks for all) in text space, fitted to the layout bounds; everything else paints its
+    /// top fill or stroke in the document, fitted to the geometric bounds. Strokes fit the box
+    /// grown by half their weight.
+    pub fn proxy_paint(&self, stroke: bool) -> Option<(&vectorcraft_color::Paint, Affine, Rect)> {
+        if let NodeKind::Text(t) = &self.kind {
+            let st = &t.runs.first()?.style;
+            let b = t.local_bounds();
+            return Some(if stroke { (&st.stroke, t.xf, crate::appearance::stroke_paint_bounds(b, st.stroke_width)) } else { (&st.fill, t.xf, b) });
+        }
+        let b = self.geometric_bounds()?;
+        if stroke {
+            self.appearance.stroke().map(|s| (&s.paint, Affine::IDENTITY, s.paint_bounds(b)))
+        } else {
+            self.appearance.fill().map(|f| (&f.paint, Affine::IDENTITY, b))
+        }
+    }
+    /// The gradient behind the Fill (or Stroke) proxy and its placement in document coordinates
+    /// (see [`Node::proxy_paint`]): what the gradient annotator shows and edits.
+    pub fn proxy_gradient(&self, stroke: bool) -> Option<(&vectorcraft_color::GradientPaint, vectorcraft_color::GradientGeom)> {
+        let (paint, to_doc, b) = self.proxy_paint(stroke)?;
+        let vectorcraft_color::Paint::Gradient(g) = paint else { return None };
+        let mut geom = g.resolve(b);
+        if to_doc != Affine::IDENTITY {
+            geom.transform(to_doc, g.gradient.kind);
+        }
+        Some((g, geom))
+    }
 }
 
 /// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?

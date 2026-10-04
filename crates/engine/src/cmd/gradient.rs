@@ -2,7 +2,9 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::appearance::stroke_paint_bounds;
+use vectorcraft_doc::{AppearanceItem, NodeKind};
+use vectorcraft_geom::{Affine, Point, Rect};
 
 use super::edit::selected_roots;
 use super::*;
@@ -24,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient Vector",
             [],
             None,
-            "{start: [x,y], end: [x,y], ids?, stroke?: bool} set the gradient vector (solid paints become the default gradient)",
+            "{start: [x,y], end: [x,y] (document coordinates), ids?, stroke?: bool (default: the active proxy), index?: appearance item index (as appearance.setItem; targets that fill or stroke instead of the top one)} set the gradient vector (solid paints become the default gradient; type objects set it on their runs, in text space; the aspect ratio is kept)",
             has_doc,
             set_gradient_geom
         ),
@@ -100,7 +102,7 @@ fn aspect_param(p: &Value) -> Parsed<Option<f64>> {
 
 /// `paint` as applied to an object with `bounds`: a gradient given an `aspect` but no vector is
 /// placed on the bounds so the aspect sticks.
-pub(crate) fn place_paint(paint: &Paint, p: &Value, bounds: Option<vectorcraft_geom::Rect>) -> Paint {
+pub(crate) fn place_paint(paint: &Paint, p: &Value, bounds: Option<Rect>) -> Paint {
     match (paint, p.get("gradient").and_then(|g| g.get("aspect"))) {
         (Paint::Gradient(g), Some(a)) if g.geom.is_none() => {
             apply_gradient_edit(paint, &json!({ "aspect": a }), bounds).unwrap_or_else(|_| paint.clone())
@@ -110,7 +112,7 @@ pub(crate) fn place_paint(paint: &Paint, p: &Value, bounds: Option<vectorcraft_g
 }
 
 /// Apply the gradient edits in `p` to `paint` (pure; unit-tested).
-pub(crate) fn apply_gradient_edit(paint: &Paint, p: &Value, bounds: Option<vectorcraft_geom::Rect>) -> std::result::Result<Paint, String> {
+pub(crate) fn apply_gradient_edit(paint: &Paint, p: &Value, bounds: Option<Rect>) -> std::result::Result<Paint, String> {
     let mut gp = match paint {
         Paint::Gradient(g) => (**g).clone(),
         _ => GradientPaint::new(Gradient::default()),
@@ -184,9 +186,10 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
             if let NodeKind::Text(t) = &mut n.kind {
+                let lb = t.local_bounds();
                 for r in &mut t.runs {
-                    let cur = if stroke { &mut r.style.stroke } else { &mut r.style.fill };
-                    match apply_gradient_edit(cur, p, None) {
+                    let (cur, b) = run_paint_mut(r, stroke, lb);
+                    match apply_gradient_edit(cur, p, Some(b)) {
                         Ok(np) => *cur = np,
                         Err(e) => err = Some(e),
                     }
@@ -220,10 +223,66 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 
+/// A type run's fill or stroke paint and the box (text space) an unplaced gradient on it fits:
+/// the layout bounds `lb`, grown by half the run's stroke weight for strokes.
+pub(crate) fn run_paint_mut(r: &mut vectorcraft_doc::TextRun, stroke: bool, lb: Rect) -> (&mut Paint, Rect) {
+    if stroke {
+        let b = stroke_paint_bounds(lb, r.style.stroke_width);
+        (&mut r.style.stroke, b)
+    } else {
+        (&mut r.style.fill, lb)
+    }
+}
+
+/// `paint` as applied to a type run whose text space `xf` maps to the document: a vector given in
+/// document coordinates moves into text space, and an aspect without a vector places the gradient
+/// on the run's `bounds` (text space).
+pub(crate) fn place_run_paint(paint: &Paint, p: &Value, xf: Affine, bounds: Rect) -> Paint {
+    let mut out = place_paint(paint, p, Some(bounds));
+    if let (Paint::Gradient(src), Paint::Gradient(g)) = (paint, &mut out)
+        && src.geom.is_some()
+        && let Some(inv) = invert(xf)
+    {
+        g.transform(inv);
+        g.angle = g.geom.map_or(g.angle, |geom| geom.angle_deg());
+    }
+    out
+}
+
+/// The inverse of `a`, if it has one.
+fn invert(a: Affine) -> Option<Affine> {
+    (a.determinant().abs() > 1e-12).then(|| a.inverse())
+}
+
+/// `cur` as a gradient whose vector runs from `start` to `end` in the document. `to_doc` maps the
+/// paint's space (text space for type runs) to the document and `bounds` (in that space) fits an
+/// unplaced gradient, so the aspect ratio the document shows carries over.
+fn vector_paint(cur: &Paint, start: Point, end: Point, to_doc: Affine, bounds: Option<Rect>) -> Option<Paint> {
+    let from_doc = invert(to_doc)?;
+    let mut gp = match cur {
+        Paint::Gradient(g) => (**g).clone(),
+        _ => GradientPaint::new(Gradient::default()),
+    };
+    let kind = gp.gradient.kind;
+    let map = |mut g: GradientGeom, a: Affine| {
+        if a != Affine::IDENTITY {
+            g.transform(a, kind);
+        }
+        g
+    };
+    let aspect = gp.geom.or_else(|| bounds.map(|b| gp.resolve(b))).map_or(1.0, |g| map(g, to_doc).aspect);
+    let geom = map(GradientGeom { start, end, aspect }, from_doc);
+    gp.angle = geom.angle_deg();
+    gp.geom = Some(geom);
+    Some(Paint::Gradient(Box::new(gp)))
+}
+
 fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
-    let start = point_param(p, "start").ok_or_else(|| bad("paint.setGradientGeom", "missing start [x,y]"))?;
-    let end = point_param(p, "end").ok_or_else(|| bad("paint.setGradientGeom", "missing end [x,y]"))?;
-    let stroke = bool_or(p, "stroke", false);
+    const C: &str = "paint.setGradientGeom";
+    let start = point_param(p, "start").ok_or_else(|| bad(C, "missing start [x,y]"))?;
+    let end = point_param(p, "end").ok_or_else(|| bad(C, "missing end [x,y]"))?;
+    let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
+    let index = p.get("index").map(|v| v.as_u64().map(|i| i as usize).ok_or_else(|| bad(C, "`index` must be a whole number"))).transpose()?;
     let ids = match ids_param(p, "ids") {
         Some(v) => v,
         None => selected_roots(s)?,
@@ -233,27 +292,54 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other("nothing selected".into()));
     }
     s.edit("Gradient", |d, _| {
+        let mut hit = false;
         for id in &targets {
             let Some(n) = d.node_mut(*id) else { continue };
-            if matches!(n.kind, NodeKind::Text(_)) {
+            let b = n.geometric_bounds();
+            if let Some(i) = index {
+                let Some(item) = n.appearance.items.get_mut(i) else { continue };
+                let (paint, b) = match item {
+                    AppearanceItem::Fill(f) => (&mut f.paint, b),
+                    AppearanceItem::Stroke(st) => {
+                        let b = b.map(|b| st.paint_bounds(b));
+                        (&mut st.paint, b)
+                    }
+                };
+                if let Some(np) = vector_paint(paint, start, end, Affine::IDENTITY, b) {
+                    *paint = np;
+                    hit = true;
+                }
                 continue;
             }
-            let cur = if stroke { n.appearance.stroke_paint() } else { n.appearance.fill_paint() };
-            let mut gp = match cur {
-                Paint::Gradient(g) => *g,
-                _ => GradientPaint::new(Gradient::default()),
-            };
-            let aspect = gp.geom.map(|g| g.aspect).unwrap_or(1.0);
-            gp.geom = Some(GradientGeom { start, end, aspect });
-            gp.angle = GradientGeom { start, end, aspect }.angle_deg();
-            let paint = Paint::Gradient(Box::new(gp));
-            if stroke {
-                n.appearance.set_stroke(paint);
-            } else {
-                n.appearance.set_fill(paint);
+            if let NodeKind::Text(t) = &mut n.kind {
+                let (xf, lb) = (t.xf, t.local_bounds());
+                for r in &mut t.runs {
+                    if stroke && r.style.stroke_width == 0.0 {
+                        r.style.stroke_width = 1.0;
+                    }
+                    let (paint, b) = run_paint_mut(r, stroke, lb);
+                    if let Some(np) = vector_paint(paint, start, end, xf, Some(b)) {
+                        *paint = np;
+                        hit = true;
+                    }
+                }
+                continue;
+            }
+            let ap = &mut n.appearance;
+            let (cur, b) = if stroke { (ap.stroke_paint(), b.zip(ap.stroke()).map(|(b, st)| st.paint_bounds(b))) } else { (ap.fill_paint(), b) };
+            if let Some(np) = vector_paint(&cur, start, end, Affine::IDENTITY, b) {
+                if stroke {
+                    ap.set_stroke(np);
+                } else {
+                    ap.set_fill(np);
+                }
+                hit = true;
             }
         }
-        Ok(())
+        match (hit, index) {
+            (false, Some(i)) => Err(bad(C, format!("no appearance item at index {i}"))),
+            _ => Ok(()),
+        }
     })?;
     Ok(json!({ "ids": targets.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
