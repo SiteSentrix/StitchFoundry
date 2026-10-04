@@ -194,9 +194,17 @@ impl Renderer {
             });
         }
         self.draw_arc(ctx, f, layer);
+        let [r, g, b] = f.opts.tile_edge;
         if def.show_tile_edge {
-            let bp = def.tile.to_path(0.1);
-            self.hairline(ctx, f, &bp, [0x2d, 0x8c, 0xeb, 255]);
+            self.hairline(ctx, f, &def.tile.to_path(0.1), [r, g, b, 255]);
+        }
+        if def.show_swatch_bounds {
+            let mut bounds = def.swatch_bounds().to_path(0.1);
+            bounds.apply_affine(f.view);
+            ctx.set_transform(Affine::IDENTITY);
+            ctx.set_stroke(vello_cpu::kurbo::Stroke::new(1.0).with_dashes(0.0, [4.0, 3.0]));
+            ctx.set_paint(peniko::Color::from_rgba8(r, g, b, 255));
+            ctx.stroke_path(&bounds);
         }
         true
     }

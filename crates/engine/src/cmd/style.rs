@@ -8,10 +8,15 @@
 //! Styles keep placed gradients relative to the unit box ([`GraphicStyle::unit_box`]): a new or
 //! redefined style stores them relative to its source's bounds, and each object a style is applied
 //! to gets them at the same place relative to its own.
+//!
+//! With Override Character Color on ([`crate::Prefs::override_char_color`]), type a style is applied
+//! to loses its characters' own fill (stroke) when the style has fills (strokes), so the style's
+//! paint shows instead of the character colour under it.
 
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
+use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
@@ -53,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Graphic Styles",
             [],
             None,
-            "{} → {styles: [{id, name, fill, stroke, strokeWidth, fills, strokes, effects: [effect id…], opacity: 0..100, blend, isolate, knockout: \"on\"|\"off\"|\"neutral\", linked: [object ids]}], selected: the style the first selected object is linked to, or null}",
+            "{} → {styles: [{id, name, fill, stroke, strokeWidth, fills, strokes, effects: [effect id…], opacity: 0..100, blend, isolate, knockout: \"on\"|\"off\"|\"neutral\", linked: [object ids]}], selected: the style the first selected object is linked to, or null, overrideCharColor}",
             has_doc,
             style_list
         ),
@@ -101,6 +106,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} sort the styles by name (the Default Graphic Style stays first)",
             has_doc,
             style_sort
+        ),
+        cmd!(
+            "graphicStyle.merge",
+            "Merge Graphic Styles",
+            ["Window", "Graphic Styles"],
+            None,
+            "{names: [name…] (two or more), name?} add a style combining the styles' fills, strokes and effects (each style's on top of the ones before it) with the first one's opacity, blend mode, isolate and knockout → {name}",
+            has_doc,
+            style_merge
+        ),
+        cmd!(
+            "graphicStyle.move",
+            "Move Graphic Style",
+            [],
+            None,
+            "{name, to: index} move the style to position `to` of the list (0 = first, clamped), as dragging it in the Graphic Styles panel does",
+            has_doc,
+            style_move
+        ),
+        cmd!(
+            query "graphicStyle.setOptions",
+            "Graphic Styles Options",
+            [],
+            None,
+            "{overrideCharColor?: bool} Override Character Color (the preference `overrideCharColor`, on by default): applying a style to type replaces its characters' fill and stroke with the style's fills and strokes → {overrideCharColor}",
+            always,
+            style_set_options
         ),
     ]
 }
@@ -211,11 +243,35 @@ fn captured(n: &Node) -> Appearance {
     ap
 }
 
-/// Give `id` style `g` (a group or layer too: its own appearance, above its contents) and link it.
-fn apply_style(d: &mut Document, id: NodeId, g: &GraphicStyle) {
+/// Override Character Color: type taking appearance `ap` loses its characters' fill when `ap` has
+/// fills, and their stroke when it has strokes.
+fn override_chars(n: &mut Node, ap: &Appearance) {
+    let NodeKind::Text(t) = &mut n.kind else { return };
+    let (fills, strokes) = (ap.items.iter().any(|i| i.is_fill()), ap.items.iter().any(|i| !i.is_fill()));
+    for r in &mut t.runs {
+        if fills {
+            r.style.fill = Paint::None;
+        }
+        if strokes {
+            r.style.stroke = Paint::None;
+        }
+    }
+}
+
+/// Give `n` style `g`: its appearance (a group or layer too: its own, above its contents; type its
+/// characters' colour too with `chars`, Override Character Color) and transparency.
+fn style_node(n: &mut Node, g: &GraphicStyle, chars: bool) {
+    n.appearance = g.appearance_on(n).into_owned();
+    if chars {
+        override_chars(n, &g.appearance);
+    }
+    g.apply_transparency(n);
+}
+
+/// Give `id` style `g` ([`style_node`]) and link it.
+fn apply_style(d: &mut Document, id: NodeId, g: &GraphicStyle, chars: bool) {
     if let Some(n) = d.node_mut(id) {
-        n.appearance = g.appearance_on(n).into_owned();
-        g.apply_transparency(n);
+        style_node(n, g, chars);
         n.graphic_style = Some(g.id);
     }
 }
@@ -250,6 +306,14 @@ impl Session {
         let g = st.doc.graphic_style_by_id(n.graphic_style?)?;
         Some((g, in_sync(n, g)))
     }
+
+    /// A copy of `n` with style `g` applied as `graphicStyle.apply` applies it (Override Character
+    /// Color as set): the Graphic Styles panel's previews.
+    pub fn styled(&self, n: &Node, g: &GraphicStyle) -> Node {
+        let mut n = n.clone();
+        style_node(&mut n, g, self.prefs.override_char_color);
+        n
+    }
 }
 
 // ---------- commands ----------
@@ -258,6 +322,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_param(p, "name").ok_or_else(|| bad("graphicStyle.apply", "missing name"))?;
     let i = style_index(&s.doc()?.doc, name)?;
     let add = bool_or(p, "add", false);
+    let chars = s.prefs.override_char_color;
     let ids = super::appearance::appearance_targets(s, p)?;
     if ids.is_empty() {
         return Err(bad("graphicStyle.apply", "nothing selected (or pass `ids`)"));
@@ -277,7 +342,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             d.graphic_style_id(i);
             let g = d.graphic_styles[i].clone();
             for id in &ids {
-                apply_style(d, *id, &g);
+                apply_style(d, *id, &g, chars);
             }
         }
         Ok(())
@@ -360,7 +425,7 @@ fn style_list(s: &mut Session, _: &Value) -> Result<Value> {
         })
         .collect();
     let selected = s.selection_graphic_style().filter(|(_, linked)| *linked).map(|(g, _)| g.name.clone());
-    Ok(json!({ "styles": styles, "selected": selected }))
+    Ok(json!({ "styles": styles, "selected": selected, "overrideCharColor": s.prefs.override_char_color }))
 }
 
 fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
@@ -377,6 +442,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let look = GraphicStyle::of(String::new(), captured(n), n);
     let name = d.graphic_styles[i].name.clone();
+    let chars = s.prefs.override_char_color;
     s.edit(&format!("Redefine Graphic Style \u{201c}{name}\u{201d}"), |d, _| {
         let id = d.graphic_style_id(i);
         let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name: name.clone(), id, ..look });
@@ -387,7 +453,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
         set_link(d, &edited, None);
         let g = d.graphic_styles[i].clone();
         for nid in follow {
-            apply_style(d, nid, &g);
+            apply_style(d, nid, &g, chars);
         }
         set_link(d, &[src], Some(id));
         Ok(())
@@ -432,4 +498,57 @@ fn style_sort(s: &mut Session, _: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+fn style_merge(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "graphicStyle.merge";
+    let names: Vec<&str> = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    if names.len() < 2 {
+        return Err(bad(cmd, "give two or more style `names`"));
+    }
+    let d = &s.doc()?.doc;
+    let styles = names.iter().map(|n| style_index(d, n).map(|i| &d.graphic_styles[i])).collect::<Result<Vec<_>>>()?;
+    let name = match str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()) {
+        Some(n) => unique_name(n, |x| d.graphic_style(x).is_some()),
+        None => d.new_graphic_style_name(),
+    };
+    // The first style's contents slot (groups and type) stays where it was in its stack.
+    let mut ap = styles[0].appearance.clone();
+    for g in &styles[1..] {
+        ap.items.extend(g.appearance.items.iter().cloned());
+        ap.effects.extend(g.appearance.effects.iter().cloned());
+    }
+    // Styles saved before unit-box styles keep their placed gradients in document coordinates.
+    let unit_box = styles.iter().filter(|g| g.appearance.has_placed_gradient()).all(|g| g.unit_box);
+    let g = GraphicStyle { name: name.clone(), appearance: ap, id: d.next_graphic_style_id(), unit_box, ..styles[0].clone() };
+    s.edit("Merge Graphic Styles", |d, _| {
+        d.graphic_styles.push(g);
+        Ok(())
+    })?;
+    Ok(json!({ "name": name }))
+}
+
+fn style_move(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "graphicStyle.move";
+    let name = str_param(p, "name").ok_or_else(|| bad(cmd, "missing name"))?;
+    let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(cmd, "missing `to` (an index)"))?;
+    let d = &s.doc()?.doc;
+    let from = style_index(d, name)?;
+    let to = (to as usize).min(d.graphic_styles.len() - 1);
+    if from == to {
+        return ok();
+    }
+    s.edit("Move Graphic Style", |d, _| {
+        let g = d.graphic_styles.remove(from);
+        d.graphic_styles.insert(to, g);
+        Ok(())
+    })?;
+    ok()
+}
+
+fn style_set_options(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(on) = p.get("overrideCharColor").and_then(Value::as_bool) {
+        s.prefs.override_char_color = on;
+    }
+    Ok(json!({ "overrideCharColor": s.prefs.override_char_color }))
 }

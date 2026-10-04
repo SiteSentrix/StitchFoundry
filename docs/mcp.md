@@ -261,6 +261,12 @@ style is applied to gets them at the same place relative to its own bounds.
 {"name":"run_command","arguments":{"command":"graphicStyle.list","params":{}}}
 ```
 
+`graphicStyle.merge {names, name?}` adds a style stacking the fills, strokes and effects of two or more styles
+(each on top of the ones before it) with the first one's transparency; `graphicStyle.move {name, to}` reorders the
+list (what dragging a style in the panel does). Override Character Color (`graphicStyle.setOptions
+{overrideCharColor}`, the preference `overrideCharColor`, on by default) makes a style applied to type replace its
+characters' fill and stroke with the style's fills and strokes; off, the characters keep their colour under them.
+
 ## Editing appearance stacks
 
 `effect.move {from, to, fromItem?, toItem?, copy?}` reorders an effect or moves it between the object's effects
@@ -365,4 +371,14 @@ that split into many regions. The result reports `{ids, vector, rasterized, opti
 ```json
 {"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"ids":[12,15],"preset":"high"}}}
 {"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"balance":0,"lineArtPpi":150}}}
+
+## Pattern editing display
+
+In pattern editing mode the tile edge (`pattern.options {showTileEdge}`) and the swatch bounds (`pattern.options
+{showSwatchBounds}`: the part of the tiling the swatch repeats, dashed) are drawn in the preference
+`patternTileEdgeColor`.
+
+```json
+{"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"patternTileEdgeColor","value":"#ff4f4f"}}}
 ```

@@ -182,6 +182,10 @@ pub struct PatternDef {
     pub dim_copies: f32,
     #[serde(default = "yes")]
     pub show_tile_edge: bool,
+    /// Show Swatch Bounds: pattern editing mode outlines the part of the tiling the swatch repeats
+    /// (the tile, or the period of a brick or hex tiling), dashed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub show_swatch_bounds: bool,
 }
 
 impl PatternDef {
@@ -200,6 +204,7 @@ impl PatternDef {
             copies: 5,
             dim_copies: 70.0,
             show_tile_edge: true,
+            show_swatch_bounds: false,
         }
     }
     pub fn width(&self) -> f64 {
@@ -225,6 +230,11 @@ impl PatternDef {
     /// The rectangular period of the tiling (the super-tile).
     pub fn period(&self) -> (f64, f64) {
         tile_period(self.tile_type, self.width(), self.height())
+    }
+    /// The swatch bounds (Show Swatch Bounds): the period of the tiling from the tile's origin.
+    pub fn swatch_bounds(&self) -> Rect {
+        let (w, h) = self.period();
+        Rect::from_origin_size(self.tile.origin(), (w, h))
     }
     /// Maps the art's coordinates into pattern space for instance offset `o`.
     pub fn instance_xf(&self, o: Vec2) -> Affine {

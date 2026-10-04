@@ -30,6 +30,7 @@ mod save_changes;
 pub mod save_swatch_library;
 mod shapes;
 pub mod swatch_options;
+pub mod tile_edge_color;
 mod tools;
 mod transform;
 
@@ -152,6 +153,7 @@ registry! {
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
+    TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

@@ -306,6 +306,14 @@ pub struct Prefs {
     // Devices
     pub touch_workspace: bool,
     pub touch_gestures: bool,
+    // Graphic Styles panel
+    /// Override Character Color: a graphic style applied to type replaces its characters' fill
+    /// and stroke with the style's fills and strokes.
+    pub override_char_color: bool,
+    // Pattern editing
+    /// Object → Pattern → Tile Edge Color (`#rrggbb`): the tile edge and swatch bounds in pattern
+    /// editing mode.
+    pub pattern_tile_edge_color: String,
 }
 
 impl Default for Prefs {
@@ -418,6 +426,11 @@ impl Default for Prefs {
             black_output: s("accurate"),
             touch_workspace: true,
             touch_gestures: true,
+            override_char_color: true,
+            pattern_tile_edge_color: {
+                let [r, g, b] = vectorcraft_doc::LAYER_COLORS[0].1;
+                Color::rgb8(r, g, b).to_hex()
+            },
         }
     }
 }
@@ -811,6 +824,8 @@ mod tests_strokegeom;
 #[cfg(test)]
 mod tests_strokeux;
 #[cfg(test)]
+mod tests_stylepanel;
+#[cfg(test)]
 mod tests_styles;
 #[cfg(test)]
 mod tests_swatchcmds;
@@ -820,5 +835,7 @@ mod tests_swatches;
 mod tests_swatchlib;
 #[cfg(test)]
 mod tests_textedit;
+#[cfg(test)]
+mod tests_tileedge;
 #[cfg(test)]
 mod tests_xform;

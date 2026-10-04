@@ -957,8 +957,14 @@ pub enum PanelDrag {
     /// a swatch of a paint dragged from elsewhere.
     Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows> },
     /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
-    /// (`appearance.copyFrom`).
+    /// (`appearance.copyFrom`); the Graphic Styles panel makes a style of it.
     Appearance(vectorcraft_doc::NodeId),
+    /// A Graphic Styles panel style: art it is dropped on takes it (`graphicStyle.apply` with its
+    /// `ids`); the panel moves it to where it is dropped.
+    GraphicStyle(String),
+    /// The selected art, dragged off the canvas with the Selection tool: the Graphic Styles panel
+    /// makes a style of the first object (`graphicStyle.new`).
+    Art(Vec<vectorcraft_doc::NodeId>),
 }
 
 /// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour
@@ -988,7 +994,7 @@ impl PanelDrag {
     pub fn color(&self) -> Option<vectorcraft_color::Color> {
         match self {
             Self::Paint { paint, .. } => paint.color(),
-            Self::Appearance(_) => None,
+            _ => None,
         }
     }
 }

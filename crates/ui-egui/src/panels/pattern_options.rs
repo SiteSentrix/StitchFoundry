@@ -1,6 +1,6 @@
 //! Pattern Options panel: active in pattern editing mode (Object → Pattern → Make / Edit
 //! Pattern). Name, Tile Type, Brick Offset, Width/Height, Size Tile to Art with H/V spacing,
-//! Overlap, Copies, Dim Copies, Show Tile Edge; Save a Copy / Done / Cancel. Outside editing
+//! Overlap, Copies, Dim Copies, Show Tile Edge, Show Swatch Bounds; Save a Copy / Done / Cancel. Outside editing
 //! mode it lists the document's patterns with an Edit button.
 
 use egui::Ui;
@@ -140,6 +140,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, "Show Tile Edge", def.show_tile_edge, true) {
         set(app, &name, json!({"showTileEdge": !def.show_tile_edge}));
     }
+    if widgets::check(ui, "Show Swatch Bounds", def.show_swatch_bounds, true) {
+        set(app, &name, json!({"showSwatchBounds": !def.show_swatch_bounds}));
+    }
     widgets::divider(ui);
     ui.horizontal(|ui| {
         if widgets::flat_button(ui, "Save a Copy", 90.0).clicked()
@@ -213,4 +216,39 @@ pub fn repeat_fields(app: &VectorcraftApp) -> Option<Value> {
         }
         RepeatKind::Mirror { angle, .. } => json!({"angle": angle}),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_engine::Session;
+
+    /// One headless frame of the panel with `events`: where each text was drawn.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let mut v = vec![];
+        for c in &out.shapes {
+            if let egui::Shape::Text(t) = &c.shape {
+                v.push((t.galley.text().to_string(), t.visual_bounding_rect()));
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn show_swatch_bounds_toggles_the_pattern_option() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.run("object.pattern.make", json!({"name": "Dots"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let texts = frame(&mut app, &ctx, vec![]);
+        let at = texts.iter().find(|(t, _)| t == "Show Swatch Bounds").expect("the checkbox").1.center();
+        let click = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(true)]);
+        frame(&mut app, &ctx, vec![click(false)]);
+        assert!(app.session.active().unwrap().doc.pattern("Dots").unwrap().show_swatch_bounds);
+    }
 }
