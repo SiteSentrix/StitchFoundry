@@ -27,13 +27,14 @@ pub struct Dashed {
     pub dots: Vec<Dot>,
 }
 
-/// Apply dash pattern `d` to `bp`. `None` when the pattern has no positive length (the line is
-/// solid) or is too fine to draw (then the line is drawn solid too).
+/// Apply dash pattern `d` to `bp`. `None` when the pattern is invalid (a negative or non-finite
+/// entry, as in SVG and PDF) or has no positive length (the line is solid), or is too fine to draw
+/// (then the line is drawn solid too).
 pub fn dash(bp: &BezPath, d: &Dash) -> Option<Dashed> {
-    if d.pattern.iter().any(|v| !v.is_finite()) || !d.offset.is_finite() {
+    if d.pattern.iter().any(|v| !v.is_finite() || *v < 0.0) || !d.offset.is_finite() {
         return None;
     }
-    let mut pat: Vec<f64> = d.pattern.iter().map(|v| v.max(0.0)).collect();
+    let mut pat = d.pattern.clone();
     if !pat.iter().any(|v| *v > MIN_ENTRY) {
         return None;
     }
