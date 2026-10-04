@@ -4,62 +4,64 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint, keep_model};
-use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
+use vectorcraft_doc::swatches::node_colors;
+use vectorcraft_doc::{AppearanceItem, NodeKind};
 
+use super::colorcmds::{Recolor, Scope};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!(query "recolor.colors", "Artwork Colors", [], None, "{} → {colors: [{hex, count}]} unique colours used by the selection (fills, strokes, gradient stops, text)", has_selection, colors),
+        cmd!(
+            query "recolor.colors",
+            "Artwork Colors",
+            [],
+            None,
+            "{} → {colors: [{hex, count}]} unique colours used by the selection (fills, strokes, gradient stops, text, mesh points and the tiles of pattern fills and strokes), most used first",
+            has_selection,
+            colors
+        ),
         cmd!(
             "recolor.apply",
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: {\"#rrggbb\": \"#rrggbb\", …}} replace colours across the selection (gradients and text included); each new colour keeps the model of the one it replaces",
+            "{map: {\"#rrggbb\": \"#rrggbb\", …}, includeImages?: true (pixels of those colours in embedded images too; the image becomes a recoloured copy), includePatterns?: true (a pattern fill or stroke gets a recoloured copy as a new pattern swatch; the original pattern stays)} replace colours across the selection (gradients, text and meshes included; each new colour keeps the model of the one it replaces) as one undo step → {changed}",
             has_selection,
             apply
         ),
     ]
 }
 
-fn visit_paints(n: &mut Node, f: &mut impl FnMut(&mut Color)) {
-    let mut paint = |p: &mut Paint| match p {
-        Paint::Solid { color, .. } => f(color),
-        Paint::Gradient(g) => {
-            for s in &mut g.gradient.stops {
-                f(&mut s.color);
-            }
-        }
-        _ => {}
-    };
-    for it in &mut n.appearance.items {
-        match it {
-            AppearanceItem::Fill(fl) => paint(&mut fl.paint),
-            AppearanceItem::Stroke(st) => paint(&mut st.paint),
-        }
-    }
-    if let NodeKind::Text(t) = &mut n.kind {
-        for r in &mut t.runs {
-            paint(&mut r.style.fill);
-            paint(&mut r.style.stroke);
-        }
-    }
-    if let Some(ch) = n.children_mut() {
-        for c in ch.iter_mut() {
-            visit_paints(std::sync::Arc::make_mut(c), f);
-        }
-    }
-}
-
 fn colors(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
+    let d = &st.doc;
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    for id in &st.selection.objects {
-        if let Some(n) = st.doc.node(*id) {
-            let mut n = n.clone();
-            visit_paints(&mut n, &mut |c| *counts.entry(c.to_hex()).or_default() += 1);
-        }
+    let mut count = |c: &Color, _: Option<&str>| *counts.entry(c.to_hex()).or_default() += 1;
+    // The patterns used as fills or strokes: their tiles count once each.
+    let mut patterns: Vec<&str> = vec![];
+    for n in st.selection.objects.iter().filter_map(|id| d.node(*id)) {
+        node_colors(n, &mut count);
+        n.walk(&mut |m| {
+            let runs = match &m.kind {
+                NodeKind::Text(t) => t.runs.as_slice(),
+                _ => &[],
+            };
+            let items = m.appearance.items.iter().map(|it| match it {
+                AppearanceItem::Fill(l) => &l.paint,
+                AppearanceItem::Stroke(l) => &l.paint,
+            });
+            for p in items.chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke])) {
+                if let Paint::Pattern { pattern, .. } = p
+                    && !patterns.contains(&pattern.as_str())
+                {
+                    patterns.push(pattern);
+                }
+            }
+        });
+    }
+    for def in patterns.iter().filter_map(|p| d.pattern(p)) {
+        def.art.iter().for_each(|n| node_colors(n, &mut count));
     }
     let mut v: Vec<(String, usize)> = counts.into_iter().collect();
     v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
@@ -75,19 +77,8 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         .filter_map(|(k, v)| Some((Color::from_hex(k)?.to_hex(), color_value(v)?)))
         .collect();
     let ids = s.doc()?.selection.objects.clone();
-    let mut changed = 0usize;
-    s.edit("Recolor Artwork", |d, _| {
-        for id in &ids {
-            if let Some(n) = d.node_mut(*id) {
-                visit_paints(n, &mut |c| {
-                    if let Some(to) = map.get(&c.to_hex()) {
-                        *c = keep_model(*c, *to);
-                        changed += 1;
-                    }
-                });
-            }
-        }
-        Ok(())
-    })?;
+    let f = |c: Color| map.get(&c.to_hex()).map_or(c, |to| keep_model(c, *to));
+    let scope = Scope { fill: true, stroke: true, ..Scope::of(p) };
+    let changed = s.edit("Recolor Artwork", |d, _| Ok(Recolor::new(scope, &f).run(d, &ids)))?;
     Ok(json!({ "changed": changed }))
 }

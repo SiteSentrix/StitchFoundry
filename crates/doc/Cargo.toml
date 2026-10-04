@@ -12,6 +12,7 @@ workspace = true
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 kurbo = { workspace = true }
+image = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

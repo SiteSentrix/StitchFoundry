@@ -219,6 +219,12 @@ fn next_pattern_name(d: &Document) -> String {
     (1..).map(|i| format!("New Pattern {i}")).find(|n| d.pattern(n).is_none() && d.swatch(n).is_none()).unwrap()
 }
 
+/// Add pattern `def` and its swatch.
+pub(crate) fn add_pattern(d: &mut Document, def: PatternDef) {
+    d.swatches.push(vectorcraft_color::Swatch { name: def.name.clone(), paint: pattern_paint(&def.name), global: false, spot: false });
+    d.patterns.push(def);
+}
+
 /// Fresh-id deep copies of `nodes`.
 fn copies(d: &mut Document, nodes: &[Arc<Node>]) -> Vec<Node> {
     nodes.iter().map(|n| d.reid(n)).collect()
@@ -299,8 +305,7 @@ fn pattern_make(s: &mut Session, p: &Value) -> Result<Value> {
         def.tile_type = tt;
         let c = def.tile.center();
         def.tile = Rect::from_center_size(c, (w.unwrap_or(def.tile.width()).max(1e-3), h.unwrap_or(def.tile.height()).max(1e-3)));
-        d.patterns.push(def);
-        d.swatches.push(vectorcraft_color::Swatch { name: name.clone(), paint: pattern_paint(&name), global: false, spot: false });
+        add_pattern(d, def);
         if edit {
             enter_edit(d, sel, &name, None)?;
         }
@@ -393,8 +398,7 @@ fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
         if def.size_tile_to_art {
             def.fit_tile_to_art();
         }
-        d.patterns.push(def);
-        d.swatches.push(vectorcraft_color::Swatch { name: name.clone(), paint: pattern_paint(&name), global: false, spot: false });
+        add_pattern(d, def);
         Ok(name)
     })?;
     Ok(json!({ "name": name }))

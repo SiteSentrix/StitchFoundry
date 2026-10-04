@@ -2,6 +2,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::Node;
 
 use super::*;
 
@@ -80,4 +81,150 @@ fn balance_previews_and_commits_one_step() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(fill_of(&s, a).to_hex(), "#808080");
+}
+
+// ---------- meshes, images and patterns ----------
+
+fn mesh_colors(s: &Session, id: NodeId) -> Vec<Color> {
+    match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Mesh(m) => m.points.iter().map(|p| p.color).collect(),
+        _ => panic!("not a mesh"),
+    }
+}
+
+/// A selected 1×1 gradient mesh: red, with one green corner.
+fn mesh(s: &mut Session) -> NodeId {
+    let a = rect(s, json!("#ff0000"));
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 0, "color": "#00ff00"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    a
+}
+
+#[test]
+fn edit_colors_reach_mesh_points() {
+    let mut s = session();
+    let m = mesh(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("edit.colors.toGrayscale", &json!({})).unwrap();
+    let pts = mesh_colors(&s, m);
+    assert!(pts.iter().all(|c| matches!(c, Color::Gray { .. })), "a grey mesh: {pts:?}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.colors.invert", &json!({"fill": false})).unwrap();
+    assert_eq!(mesh_colors(&s, m), pts, "a mesh's points are fill colours");
+}
+
+#[test]
+fn blend_moves_a_mesh_to_the_blended_colour() {
+    let mut s = session();
+    let left = rect(&mut s, json!("#000000"));
+    let m = mesh(&mut s);
+    s.execute("object.transform", &json!({"ids": [m.0], "matrix": [1, 0, 0, 1, 100, 0]})).unwrap();
+    let right = rect(&mut s, json!("#ffffff"));
+    s.execute("object.transform", &json!({"ids": [right.0], "matrix": [1, 0, 0, 1, 200, 0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [left.0, m.0, right.0]})).unwrap();
+    let before = mesh_colors(&s, m);
+    s.execute("edit.colors.blendHorizontally", &json!({})).unwrap();
+    let after = mesh_colors(&s, m);
+    let mean = |cs: &[Color]| cs.iter().map(|c| c.to_rgb().iter().sum::<f32>() / 3.0).sum::<f32>() / cs.len() as f32;
+    assert!((mean(&after) - 0.5).abs() < 0.03, "{}", mean(&after));
+    assert_ne!(after[0], after[1], "the shading is kept");
+    assert_ne!(before, after);
+}
+
+/// A 2×2 RGBA image as a PNG.
+fn png(px: [[u8; 4]; 4]) -> Vec<u8> {
+    let img = image::RgbaImage::from_raw(2, 2, px.concat()).unwrap();
+    let mut out = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+fn pixels(s: &Session, id: NodeId) -> Vec<[u8; 4]> {
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::Image(im) = &d.node(id).unwrap().kind else { panic!("not an image") };
+    image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
+}
+
+/// A selected embedded 2×2 image.
+fn image_node(s: &mut Session) -> NodeId {
+    let bytes = png([[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [255, 255, 255, 128]]);
+    s.edit("Place", |d, sel| {
+        d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(bytes));
+        let id = d.alloc_id();
+        let im = vectorcraft_doc::ImageObject { key: "pic".into(), width: 2, height: 2, xf: Default::default(), link: None };
+        d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(im)))?;
+        sel.set([id]);
+        Ok(id)
+    })
+    .unwrap()
+}
+
+#[test]
+fn invert_recolours_an_embedded_image() {
+    let mut s = session();
+    let id = image_node(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("edit.colors.invert", &json!({})).unwrap();
+    assert_eq!(r["changed"], 1);
+    assert_eq!(pixels(&s, id), [[0, 255, 255, 255], [255, 0, 255, 255], [255, 255, 0, 255], [0, 0, 0, 128]], "inverted, alpha kept");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.images.contains_key("pic"), "the original image stays for undo and other objects");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(pixels(&s, id)[0], [255, 0, 0, 255]);
+    // Without images, nothing changes.
+    let r = s.execute("edit.colors.invert", &json!({"includeImages": false})).unwrap();
+    assert_eq!(r["changed"], 0);
+    // Recolor maps exact pixel colours.
+    s.execute("recolor.apply", &json!({"map": {"#ff0000": "#000000"}})).unwrap();
+    assert_eq!(pixels(&s, id)[..2], [[0, 0, 0, 255], [0, 255, 0, 255]]);
+}
+
+/// "Dots": a red square tile; a selected rectangle filled with it.
+fn pattern_fill(s: &mut Session) -> NodeId {
+    rect(s, json!("#ff0000"));
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    let r = id_of(&s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap());
+    s.execute("paint.setFill", &json!({"ids": [r.0], "swatch": "Dots"})).unwrap();
+    s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+    r
+}
+
+fn tile_fill(s: &Session, pattern: &str) -> String {
+    let d = &s.doc().unwrap().doc;
+    d.pattern(pattern).unwrap().art[0].appearance.fill_paint().color().unwrap().to_hex()
+}
+
+fn fill_pattern(s: &Session, id: NodeId) -> String {
+    match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        Paint::Pattern { pattern, .. } => pattern,
+        p => panic!("not a pattern fill: {p:?}"),
+    }
+}
+
+#[test]
+fn recolor_writes_a_new_pattern_swatch() {
+    let mut s = session();
+    let r = pattern_fill(&mut s);
+    let colors = s.execute("recolor.colors", &json!({})).unwrap();
+    assert!(colors["colors"].as_array().unwrap().iter().any(|c| c["hex"] == "#ff0000"), "the tile's colours are listed: {colors}");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("recolor.apply", &json!({"map": {"#ff0000": "#0000ff"}})).unwrap();
+    assert_eq!(fill_pattern(&s, r), "Dots 2");
+    assert_eq!(tile_fill(&s, "Dots 2"), "#0000ff");
+    assert_eq!(tile_fill(&s, "Dots"), "#ff0000", "the original pattern is untouched");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.swatch("Dots 2").is_some_and(|w| matches!(w.paint, Paint::Pattern { .. })), "a new pattern swatch");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(fill_pattern(&s, r), "Dots");
+    assert!(s.doc().unwrap().doc.pattern("Dots 2").is_none());
+    // Edit Colors recolour pattern fills the same way; patterns can be left out.
+    s.execute("edit.colors.invert", &json!({"includePatterns": false})).unwrap();
+    assert_eq!(fill_pattern(&s, r), "Dots");
+    s.execute("edit.colors.invert", &json!({})).unwrap();
+    assert_eq!((fill_pattern(&s, r), tile_fill(&s, "Dots 2")), ("Dots 2".to_string(), "#00ffff".to_string()));
 }

@@ -259,3 +259,18 @@ it by multiplying. Older files that listed Overprint Black objects in the docume
 {"name":"run_command","arguments":{"command":"attributes.info","params":{"ids":[12]}}}
 {"name":"run_command","arguments":{"command":"view.overprintPreview","params":{"on":true}}}
 ```
+
+## Edit Colors and Recolor Artwork
+
+`edit.colors.invert`, `edit.colors.toCMYK`, `edit.colors.toGrayscale`, `edit.colors.toRGB`, `edit.colors.saturate`,
+`edit.colors.adjustBalance` and `recolor.apply` recolour everything inside the selection (or `ids`) in one undo step:
+fills, strokes, text, gradient stops, gradient-mesh points, embedded images (a recoloured copy of the image; linked
+images are left alone) and the tiles of pattern fills and strokes (a recoloured copy saved as a new pattern swatch,
+e.g. "Dots 2"; the original pattern is untouched). `includeImages: false` / `includePatterns: false` leave images or
+patterns out. The Blend commands also grade gradient meshes, which keep their shading.
+
+```json
+{"name":"run_command","arguments":{"command":"recolor.colors","params":{}}}
+{"name":"run_command","arguments":{"command":"recolor.apply","params":{"map":{"#ff0000":"#0055ff"},"includeImages":false}}}
+{"name":"run_command","arguments":{"command":"edit.colors.adjustBalance","params":{"mode":"cmyk","m":-20,"k":10}}}
+```
