@@ -1,11 +1,12 @@
 //! Transparency panel: blend mode, opacity (field + slider popup), object/mask thumbnails with the
 //! opacity-mask controls (make/release, link, clip, invert; Shift-click the mask to disable it),
-//! Isolate Blending and Knockout Group.
+//! Isolate Blending, the three-state Knockout Group (on → neutral → off) and Opacity & Mask Define
+//! Knockout Shape; the menu's Page Isolated Blending and Page Knockout Group.
 
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Node, NodeId, OpacityMask};
+use vectorcraft_doc::{Knockout, Node, NodeId, OpacityMask};
 use vectorcraft_engine::cmd::TransparencyInfo;
 
 use super::{current_paints, current_transparency, live_run, pstate, selection_len, set_pstate};
@@ -40,7 +41,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing = app.session.active().and_then(|d| d.doc.mask_edit);
     let (info, n) = state(app, ui.ctx());
     let has = n.is_some();
-    let (isolate, knockout) = (info.isolate.unwrap_or(false), info.knockout.unwrap_or(false));
+    let (isolate, knockout_shape) = (info.isolate.unwrap_or(false), info.knockout_shape.unwrap_or(false));
     // Opacity and blend of the Appearance panel's active item (not while a mask is edited: the
     // panel then shows the masked object), else of the targets, blank where they differ; with no
     // target, the defaults for new art.
@@ -152,10 +153,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::check(ui, "Isolate Blending", isolate, has) {
             app.run("transparency.set", json!({"isolate": !isolate})).ok();
         }
-        if widgets::check(ui, "Knockout Group", knockout, has) {
-            app.run("transparency.set", json!({"knockout": !knockout})).ok();
+        // Neutral (and mixed) show a dash; a click moves on → neutral → off → on (mixed → on).
+        let shown = match info.knockout {
+            Some(Knockout::On) => Some(true),
+            Some(Knockout::Off) => Some(false),
+            _ => None,
+        };
+        if widgets::check3(ui, "Knockout Group", shown, has) {
+            let next = info.knockout.map_or(Knockout::On, Knockout::cycle);
+            app.run("transparency.set", json!({"knockout": next.label()})).ok();
         }
-        widgets::check(ui, "Opacity & Mask Define Knockout Shape", false, false);
+        if widgets::check(ui, "Opacity & Mask Define Knockout Shape", knockout_shape, has) {
+            app.run("transparency.set", json!({"knockoutShape": !knockout_shape})).ok();
+        }
     }
     if !has {
         widgets::dim_label(ui, if selection_len(app) == 0 { "No Selection" } else { "" });
@@ -190,8 +200,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("transparency.toggleNewMasksInverted", json!({})).ok();
     }
     ui.separator();
-    menu_item(ui, "Page Isolated Blending", false, false);
-    menu_item(ui, "Page Knockout Group", false, false);
+    let page = app.session.active().map(|d| (d.doc.page_isolate, d.doc.page_knockout));
+    let (isolate, knockout) = page.unwrap_or_default();
+    if menu_item(ui, "Page Isolated Blending", page.is_some(), isolate) {
+        app.run("transparency.togglePageIsolatedBlending", json!({})).ok();
+    }
+    if menu_item(ui, "Page Knockout Group", page.is_some(), knockout) {
+        app.run("transparency.togglePageKnockoutGroup", json!({})).ok();
+    }
 }
 
 /// The menu's opacity-mask rows (label, command, enabled) for the target's `mask`; Make needs a
@@ -345,5 +361,22 @@ mod tests {
         r(&mut app, "transparency.unlinkOpacityMask", json!({}));
         frame(&mut app);
         assert_eq!(app.session.execute("transparency.opacityMaskInfo", &json!({})).unwrap()[0]["disabled"], true);
+    }
+
+    #[test]
+    fn knockout_states_and_page_group_items() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        for k in ["on", "off", "neutral"] {
+            run(&mut app, "transparency.set", json!({"knockout": k, "knockoutShape": k == "on"}));
+            let texts = frame(&mut app);
+            assert!(texts.iter().any(|t| t == "Knockout Group") && texts.iter().any(|t| t == "Opacity & Mask Define Knockout Shape"));
+        }
+        assert!(frame(&mut app).iter().any(|t| t.ends_with(" Page Knockout Group") && !t.starts_with('✓')));
+        run(&mut app, "transparency.togglePageKnockoutGroup", json!({}));
+        run(&mut app, "transparency.togglePageIsolatedBlending", json!({}));
+        let texts = frame(&mut app);
+        assert!(texts.iter().any(|t| t == "✓ Page Knockout Group") && texts.iter().any(|t| t == "✓ Page Isolated Blending"), "{texts:?}");
     }
 }

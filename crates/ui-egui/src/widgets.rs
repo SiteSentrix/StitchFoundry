@@ -538,14 +538,27 @@ fn choice_row(ui: &mut Ui, label: &str, enabled: bool) -> (Rect, Response, Color
 
 /// Panel-style checkbox with a disabled state. Returns true when toggled.
 pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
+    check3(ui, label, Some(value), enabled)
+}
+
+/// Three-state [`check`]: `None` shows a dash (a neutral or mixed state). Returns true when clicked.
+pub fn check3(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> bool {
     let t = Tokens::get(ui.ctx());
     let (bx, resp, border) = choice_row(ui, label, enabled);
-    ui.painter().rect_filled(bx, CornerRadius::same(2), if value && enabled { t.accent_strong } else { t.input });
+    let checked = value == Some(true);
+    ui.painter().rect_filled(bx, CornerRadius::same(2), if checked && enabled { t.accent_strong } else { t.input });
     ui.painter().rect_stroke(bx, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
-    if value {
-        let c = if enabled { Color32::WHITE } else { t.text_disabled };
-        ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.center_bottom() + vec2(-1.0, -3.5)], Stroke::new(1.6, c));
-        ui.painter().line_segment([bx.center_bottom() + vec2(-1.0, -3.5), bx.right_top() + vec2(-3.0, 3.0)], Stroke::new(1.6, c));
+    match value {
+        Some(true) => {
+            let c = if enabled { Color32::WHITE } else { t.text_disabled };
+            ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.center_bottom() + vec2(-1.0, -3.5)], Stroke::new(1.6, c));
+            ui.painter().line_segment([bx.center_bottom() + vec2(-1.0, -3.5), bx.right_top() + vec2(-3.0, 3.0)], Stroke::new(1.6, c));
+        }
+        None => {
+            let c = if enabled { t.text } else { t.text_disabled };
+            ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.right_center() - vec2(3.0, 0.0)], Stroke::new(1.6, c));
+        }
+        Some(false) => {}
     }
     enabled && resp.clicked()
 }

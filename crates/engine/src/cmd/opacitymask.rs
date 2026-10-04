@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{Document, Node, NodeId, OpacityMask, Selection};
+use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask, Selection};
 
 use super::edit::selected_roots;
 use super::maskedit::{begin, finish, mask_group, mask_parts, show_editing};
@@ -108,9 +108,27 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency Info",
             [],
             None,
-            "{id?|ids?} → {ids, opacity: 0..100, blend, isolate, knockout, editingMask} the Transparency panel's values for `ids`, the selection, or the object whose mask is being edited. A value is null where those objects differ (or there are none); editingMask is the id of the object whose mask is being edited, or null",
+            "{id?|ids?} → {ids, opacity: 0..100, blend, isolate, knockout: \"on\"|\"off\"|\"neutral\", knockoutShape, editingMask, pageIsolatedBlending, pageKnockoutGroup} the Transparency panel's values for `ids`, the selection, or the object whose mask is being edited. A value is null where those objects differ (or there are none); editingMask is the id of the object whose mask is being edited, or null; the page values are the document's",
             has_doc,
             info
+        ),
+        cmd!(
+            "transparency.togglePageIsolatedBlending",
+            "Page Isolated Blending",
+            ["Window", "Transparency"],
+            None,
+            "{value?} make the page an isolated group (default: toggle): blend modes of top-level objects don't blend with what lies under the page; saved with the document and written to PDF → {value}",
+            has_doc,
+            |s, p| toggle_page(s, p, false)
+        ),
+        cmd!(
+            "transparency.togglePageKnockoutGroup",
+            "Page Knockout Group",
+            ["Window", "Transparency"],
+            None,
+            "{value?} make the page a knockout group (default: toggle): its layers (the contents of neutral layers) hide what they cover instead of showing it through their transparency; saved with the document and written to PDF → {value}",
+            has_doc,
+            |s, p| toggle_page(s, p, true)
         ),
     ]
 }
@@ -248,6 +266,24 @@ fn toggle_new_clip(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "value": v }))
 }
 
+/// Set (or toggle) the page's knockout group flag (`knockout`) or isolated blending flag, as one
+/// undo step; setting the current value changes nothing.
+fn toggle_page(s: &mut Session, p: &Value, knockout: bool) -> Result<Value> {
+    fn flag(d: &mut Document, knockout: bool) -> &mut bool {
+        if knockout { &mut d.page_knockout } else { &mut d.page_isolate }
+    }
+    let d = &s.doc()?.doc;
+    let cur = if knockout { d.page_knockout } else { d.page_isolate };
+    let v = bool_or(p, "value", !cur);
+    if v != cur {
+        s.edit(if knockout { "Page Knockout Group" } else { "Page Isolated Blending" }, |d, _| {
+            *flag(d, knockout) = v;
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "value": v }))
+}
+
 fn toggle_new_invert(s: &mut Session, p: &Value) -> Result<Value> {
     let v = bool_or(p, "value", !s.menu.new_masks_inverted);
     s.menu.new_masks_inverted = v;
@@ -264,7 +300,8 @@ pub struct TransparencyInfo {
     pub opacity: Option<f64>,
     pub blend: Option<BlendMode>,
     pub isolate: Option<bool>,
-    pub knockout: Option<bool>,
+    pub knockout: Option<Knockout>,
+    pub knockout_shape: Option<bool>,
 }
 
 impl TransparencyInfo {
@@ -280,6 +317,7 @@ impl TransparencyInfo {
             blend: same(&nodes, |n| n.blend),
             isolate: same(&nodes, |n| n.isolate),
             knockout: same(&nodes, |n| n.knockout),
+            knockout_shape: same(&nodes, |n| n.knockout_shape),
             ids,
         }
     }
@@ -324,8 +362,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "opacity": i.opacity,
         "blend": i.blend.map(BlendMode::label),
         "isolate": i.isolate,
-        "knockout": i.knockout,
+        "knockout": i.knockout.map(Knockout::label),
+        "knockoutShape": i.knockout_shape,
         "editingMask": st.doc.mask_edit.map(|me| me.object.0),
+        "pageIsolatedBlending": st.doc.page_isolate,
+        "pageKnockoutGroup": st.doc.page_knockout,
     }))
 }
 

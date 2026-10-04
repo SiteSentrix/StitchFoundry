@@ -55,11 +55,7 @@ pub(crate) fn mask_group(children: Vec<Arc<Node>>) -> Node {
 fn is_mask_group(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { clip: false, .. })
         && n.name.as_deref() == Some(MASK_GROUP)
-        && n.opacity >= 1.0
-        && n.blend == vectorcraft_doc::color::BlendMode::Normal
-        && !n.isolate
-        && !n.knockout
-        && n.mask.is_none()
+        && n.has_default_transparency()
         && n.appearance.items.is_empty()
         && n.appearance.effects.is_empty()
 }

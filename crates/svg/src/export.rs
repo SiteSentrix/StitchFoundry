@@ -46,10 +46,22 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> String {
         patterns: HashMap::new(),
         pattern_nest: 0,
         brushes: None,
+        knockout: doc.page_knockout,
+        anonymous: false,
+        knockout_filter: None,
     };
     w.assign_name_ids();
-    for l in &doc.layers {
-        w.node(l);
+    // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
+    let page_group = doc.page_isolate || doc.page_knockout;
+    if page_group {
+        let a = w.attrs(&vec![("isolation", "isolate".into())]);
+        w.line(&format!("<g{a}>"));
+        w.depth += 1;
+    }
+    w.children(&doc.layers);
+    if page_group {
+        w.depth -= 1;
+        w.line("</g>");
     }
 
     let nl = if opts.minify { "" } else { "\n" };
@@ -103,6 +115,12 @@ struct Writer<'a> {
     /// `<pattern>` def ids by pattern name + placement.
     patterns: HashMap<String, String>,
     pattern_nest: u32,
+    /// Whether the group being written is a knockout group (what its neutral children inherit).
+    knockout: bool,
+    /// Writing a copy of an object (a knockout mask): no object ids, so they stay unique.
+    anonymous: bool,
+    /// The filter that paints art black keeping its alpha (knockout masks), once defined.
+    knockout_filter: Option<String>,
     /// The brush library, parsed when the first brushed stroke is written.
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
 }
@@ -113,6 +131,9 @@ enum StrokePlan {
     Brush(Vec<Node>),
     Written(Written),
 }
+
+/// A region covering any artwork (mask and filter extents).
+const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
 
 pub(crate) fn blend_css(b: BlendMode) -> &'static str {
     match b {
@@ -199,6 +220,9 @@ impl Writer<'_> {
         }
     }
     fn id_attr(&self, n: &Node) -> String {
+        if self.anonymous {
+            return String::new();
+        }
         self.names.get(&n.id).map(|id| format!(" id=\"{}\"", xml_escape(id))).unwrap_or_default()
     }
     fn matrix(&self, m: Affine) -> String {
@@ -619,13 +643,11 @@ impl Writer<'_> {
     /// An object with an opacity mask: `<g mask="url(#…)">` around the unmasked object. The mask
     /// art goes in `<defs>`; no-clip adds a white backdrop and invert a colour-inverting filter.
     fn masked(&mut self, n: &Node, m: &vectorcraft_doc::OpacityMask) {
-        const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
         let mid = self.fresh_id("mask");
-        let (body, depth) = (std::mem::take(&mut self.body), self.depth);
-        self.depth = 2;
-        self.node(&m.art);
-        let art = std::mem::replace(&mut self.body, body);
-        self.depth = depth;
+        // Mask art is a picture of its own: it takes no part in a knockout group around the object.
+        let knockout = std::mem::take(&mut self.knockout);
+        let art = self.detached(2, |w| w.node(&m.art));
+        self.knockout = knockout;
         let inv = m.invert.then(|| {
             let fid = self.fresh_id("invert");
             self.def(1, &format!("<filter id=\"{fid}\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\" {BIG}>"));
@@ -655,6 +677,85 @@ impl Writer<'_> {
         self.line("</g>");
     }
 
+    /// What `write` writes to the body, taken out of it (written at `depth`, for `<defs>`).
+    fn detached(&mut self, depth: usize, write: impl FnOnce(&mut Self)) -> String {
+        let (body, saved) = (std::mem::take(&mut self.body), self.depth);
+        self.depth = depth;
+        write(self);
+        self.depth = saved;
+        std::mem::replace(&mut self.body, body)
+    }
+
+    /// Props of a group: a knockout group is isolated.
+    fn group_props(&self, n: &Node) -> Props {
+        let mut p = Self::node_props(n);
+        if !n.isolate && n.knocks_out(self.knockout) {
+            p.push(("isolation", "isolate".into()));
+        }
+        p
+    }
+
+    /// The children of group `n`, as the elements of a knockout group when it is one.
+    fn group_children(&mut self, n: &Node, children: &[std::sync::Arc<Node>]) {
+        let knockout = n.knocks_out(self.knockout);
+        let enclosing = std::mem::replace(&mut self.knockout, knockout);
+        self.children(children);
+        self.knockout = enclosing;
+    }
+
+    /// Children of the group being written. SVG has no knockout groups: in one, each element is
+    /// drawn through a mask of where the elements above it don't paint (the same look for Normal
+    /// blending). The masks nest, so element i sits inside the masks of elements i+1…n.
+    fn children(&mut self, children: &[std::sync::Arc<Node>]) {
+        if !self.knockout {
+            for c in children {
+                self.node(c);
+            }
+            return;
+        }
+        let elements = Node::knockout_elements(children);
+        let Some((first, rest)) = elements.split_first() else { return };
+        for c in rest.iter().rev() {
+            let mid = self.knockout_mask(c);
+            self.line(&format!("<g mask=\"url(#{mid})\">"));
+            self.depth += 1;
+        }
+        self.node(first);
+        for c in rest {
+            self.depth -= 1;
+            self.line("</g>");
+            self.node(c);
+        }
+    }
+
+    /// A mask that is 1 − the knockout shape of `c`: white, then `c` painted black (at full object
+    /// opacity without its own mask, unless those define its shape). Returns the mask id.
+    fn knockout_mask(&mut self, c: &Node) -> String {
+        let filter = match &self.knockout_filter {
+            Some(f) => f.clone(),
+            None => {
+                let f = self.fresh_id("knockout-shape");
+                self.def(1, &format!("<filter id=\"{f}\" filterUnits=\"userSpaceOnUse\" {BIG}>"));
+                self.def(2, "<feColorMatrix type=\"matrix\" values=\"0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0\"/>");
+                self.def(1, "</filter>");
+                self.knockout_filter = Some(f.clone());
+                f
+            }
+        };
+        let shape = if c.knockout_shape { c.clone() } else { Node { opacity: 1.0, mask: None, ..c.clone() } };
+        let anonymous = std::mem::replace(&mut self.anonymous, true);
+        let art = self.detached(3, |w| w.node(&shape));
+        self.anonymous = anonymous;
+        let mid = self.fresh_id("knockout");
+        self.def(1, &format!("<mask id=\"{mid}\" maskUnits=\"userSpaceOnUse\" {BIG}>"));
+        self.def(2, &format!("<rect {BIG} fill=\"white\"/>"));
+        self.def(2, &format!("<g filter=\"url(#{filter})\">"));
+        self.defs.push_str(&art);
+        self.def(2, "</g>");
+        self.def(1, "</mask>");
+        mid
+    }
+
     fn node(&mut self, n: &Node) {
         if !n.visible {
             return;
@@ -671,12 +772,10 @@ impl Writer<'_> {
             NodeKind::Layer { template: true, .. } => {}
             NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
                 let id = self.id_attr(n);
-                let a = self.attrs(&Self::node_props(n));
+                let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id}{a}>"));
                 self.depth += 1;
-                for c in children {
-                    self.node(c);
-                }
+                self.group_children(n, children);
                 self.depth -= 1;
                 self.line("</g>");
             }
@@ -693,12 +792,10 @@ impl Writer<'_> {
                 }
                 self.def(1, "</clipPath>");
                 let id = self.id_attr(n);
-                let a = self.attrs(&Self::node_props(n));
+                let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
                 self.depth += 1;
-                for c in rest {
-                    self.node(c);
-                }
+                self.group_children(n, rest);
                 self.depth -= 1;
                 self.line("</g>");
             }
@@ -746,7 +843,10 @@ impl Writer<'_> {
                 let a = self.attrs(&Self::node_props(n));
                 self.line(&format!("<g{id}{a}>"));
                 self.depth += 1;
+                // The symbol's art is the instance's own picture, outside any knockout around it.
+                let knockout = std::mem::take(&mut self.knockout);
                 self.node(&sym.art.clone());
+                self.knockout = knockout;
                 self.depth -= 1;
                 self.line("</g>");
                 self.xf = saved;

@@ -1417,6 +1417,7 @@ pub fn expanded_group(n: &Node, outline: Outliner) -> Node {
     g.blend = n.blend;
     g.isolate = n.isolate;
     g.knockout = n.knockout;
+    g.knockout_shape = n.knockout_shape;
     g
 }
 

@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{GraphicStyle, Node};
+use vectorcraft_doc::{GraphicStyle, Knockout, Node};
 
 use super::*;
 
@@ -53,11 +53,11 @@ fn styles_carry_opacity_and_blend_through_a_save() {
     run(&mut s, "transparency.set", json!({"item": null, "opacity": 50, "blend": "multiply", "knockout": true}));
     run(&mut s, "graphicStyle.new", json!({"name": "Half"}));
     let g = style(&s, "Half");
-    assert_eq!((g.opacity, g.blend, g.knockout), (0.5, BlendMode::Multiply, true));
+    assert_eq!((g.opacity, g.blend, g.knockout), (0.5, BlendMode::Multiply, Knockout::On));
     let b = rect(&mut s, 100.0);
     run(&mut s, "graphicStyle.apply", json!({"name": "Half"}));
     let nb = node(&s, b);
-    assert_eq!((nb.opacity, nb.blend, nb.knockout), (0.5, BlendMode::Multiply, true));
+    assert_eq!((nb.opacity, nb.blend, nb.knockout), (0.5, BlendMode::Multiply, Knockout::On));
     let l = run(&mut s, "graphicStyle.list", json!({}));
     let half = l["styles"].as_array().unwrap().iter().find(|g| g["name"] == "Half").unwrap();
     assert_eq!((half["opacity"].as_f64(), half["blend"].as_str()), (Some(50.0), Some("Multiply")));

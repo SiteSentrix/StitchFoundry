@@ -230,6 +230,11 @@ pub struct Renderer {
     live: live::LiveCache,
     /// Blurred, tinted drop shadow / outer glow rasters per object and effect (see `fx`).
     shadows: PtrMap<(usize, usize), fx::ShadowEntry>,
+    /// Whether the group being drawn is a knockout group (what its neutral children inherit).
+    knockout: bool,
+    /// Address of the knockout-group element being drawn as its knockout shape: at full object
+    /// opacity and without its opacity mask (see [`Self::draw_knockout`]); 0 = none.
+    shape_of: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -277,6 +282,8 @@ impl Renderer {
             brushes: Default::default(),
             shadows: PtrMap::default(),
             live: live::LiveCache::default(),
+            knockout: false,
+            shape_of: 0,
         }
     }
 
@@ -329,9 +336,25 @@ impl Renderer {
         if !self.draw_pattern_edit(&mut ctx, &frame) {
             // While editing an opacity mask its art is seen only through the mask (Illustrator).
             let mask_layer = doc.mask_edit.map(|m| m.layer);
-            for layer in doc.layers.iter().filter(|l| Some(l.id) != mask_layer) {
-                self.draw_arc(&mut ctx, &frame, layer);
+            let layers = doc.layers.iter().filter(|l| Some(l.id) != mask_layer);
+            // Page Isolated Blending / Page Knockout Group: the page is a group of its own.
+            let page_group = !opts.outline && (doc.page_isolate || doc.page_knockout);
+            self.knockout = page_group && doc.page_knockout;
+            if page_group {
+                ctx.set_transform(Affine::IDENTITY);
+                ctx.push_layer(None, None, None, None, None);
             }
+            if self.knockout {
+                self.draw_knockout(&mut ctx, &frame, &layers.cloned().collect::<Vec<_>>());
+            } else {
+                for layer in layers {
+                    self.draw_arc(&mut ctx, &frame, layer);
+                }
+            }
+            if page_group {
+                ctx.pop_layer();
+            }
+            self.knockout = false;
         }
         if trim {
             ctx.pop_layer();
@@ -389,6 +412,7 @@ impl Renderer {
             ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
         }
         let frame = Frame { mt: false, doc, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts: &RenderOptions::default() };
+        self.knockout = false;
         self.draw_node(&mut ctx, &frame, n, true);
         ctx.flush();
         let mut pm = Pixmap::new(w, w);
@@ -453,30 +477,33 @@ impl Renderer {
         Some(p)
     }
 
-    fn draw_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
+    /// Whether `a` is left out of this frame: hidden, a skipped template, or culled.
+    fn skipped(&mut self, f: &Frame, a: &Arc<Node>) -> bool {
         let skipped_template = f.opts.skip_templates && matches!(a.kind, NodeKind::Layer { template: true, .. });
         if !a.visible || skipped_template || f.opts.hidden.contains(&a.id) {
-            return;
+            return true;
         }
         match self.bounds_of(a) {
             Some(b) => {
                 let pad = f.px * 2.0;
-                if !rects_overlap(b.inflate(pad, pad), f.visible) {
-                    self.stats.culled += 1;
-                    return;
-                }
                 // Level of detail: leaves smaller than a quarter pixel are invisible.
-                if !a.is_container() && b.width() < f.px * 0.25 && b.height() < f.px * 0.25 {
-                    self.stats.culled += 1;
-                    return;
-                }
+                let culled =
+                    !rects_overlap(b.inflate(pad, pad), f.visible) || (!a.is_container() && b.width() < f.px * 0.25 && b.height() < f.px * 0.25);
+                self.stats.culled += culled as usize;
+                culled
             }
-            None if !a.is_container() => return,
-            None => {}
+            None => !a.is_container(),
+        }
+    }
+
+    fn draw_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
+        if self.skipped(f, a) {
+            return;
         }
         if let Some(m) = a.mask.as_deref()
             && !m.disabled
             && !f.opts.outline
+            && !self.is_shape(a)
         {
             let mask = self.opacity_mask(f, m, ctx.width(), ctx.height());
             ctx.set_transform(Affine::IDENTITY);
@@ -491,7 +518,10 @@ impl Renderer {
     /// Render an opacity mask's art offscreen and turn its luminance into a coverage mask.
     fn opacity_mask(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> vello_cpu::Mask {
         let mut mctx = single_threaded_context(w, h);
+        // Mask art is a picture of its own: it takes no part in a knockout group around the object.
+        let knockout = std::mem::take(&mut self.knockout);
         self.draw_node(&mut mctx, &Frame { mt: false, ..*f }, &m.art, true);
+        self.knockout = knockout;
         mctx.flush();
         let mut pm = Pixmap::new(w, h);
         mctx.render(&mut pm, &mut self.resources);
@@ -510,10 +540,10 @@ impl Renderer {
             && (!blended || single_plain_fill(a))
             && !a.isolate
             && !fx::has_fx(a)
-            && (a.opacity >= 1.0 || painted_items(a) == 1)
+            && (self.opacity_of(a) >= 1.0 || painted_items(a) == 1)
             && let Some(bp) = self.path_of(a)
         {
-            self.alpha = a.opacity.clamp(0.0, 1.0);
+            self.alpha = self.opacity_of(a).clamp(0.0, 1.0);
             self.cur = Some(a.clone());
             if blended {
                 ctx.set_blend_mode(blend_mode(a.blend));
@@ -528,7 +558,7 @@ impl Renderer {
             return;
         }
         if let NodeKind::Text(t) = &a.kind
-            && a.opacity >= 1.0
+            && self.opacity_of(a) >= 1.0
             && a.blend == vectorcraft_color::BlendMode::Normal
             && !fx::has_fx(a)
         {
@@ -561,13 +591,17 @@ impl Renderer {
         let outline = f.opts.outline;
         let mut layers = 0;
         let template_dim = matches!(n.kind, NodeKind::Layer { template: true, .. }) && f.opts.dim_templates;
-        let opacity = if template_dim { n.opacity * 0.5 } else { n.opacity };
-        if !outline && (opacity < 1.0 || n.blend != vectorcraft_color::BlendMode::Normal || n.isolate) {
+        let opacity = if template_dim { self.opacity_of(n) * 0.5 } else { self.opacity_of(n) };
+        // Whether this container's children knock each other out (a knockout group is isolated).
+        let knockout = !outline && n.knocks_out(self.knockout);
+        let enclosing = std::mem::replace(&mut self.knockout, knockout);
+        if !outline && (opacity < 1.0 || n.blend != vectorcraft_color::BlendMode::Normal || n.isolate || knockout) {
             ctx.set_transform(Affine::IDENTITY);
             ctx.push_layer(None, Some(blend_mode(n.blend)), Some(opacity), None, None);
             layers += 1;
         }
         match &n.kind {
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } if knockout => self.draw_knockout(ctx, f, children),
             NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
                 for c in children {
                     self.draw_arc(ctx, f, c);
@@ -586,8 +620,12 @@ impl Renderer {
                     ctx.set_transform(f.view);
                     ctx.set_fill_rule(fill_rule(region.1));
                     ctx.push_clip_layer(&region.0);
-                    for c in rest {
-                        self.draw_arc(ctx, f, c);
+                    if knockout {
+                        self.draw_knockout(ctx, f, rest);
+                    } else {
+                        for c in rest {
+                            self.draw_arc(ctx, f, c);
+                        }
                     }
                     ctx.pop_layer();
                 }
@@ -620,10 +658,42 @@ impl Renderer {
             }
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => self.draw_live_node(ctx, f, n),
         }
+        self.knockout = enclosing;
         self.stats.drawn += 1;
         for _ in 0..layers {
             ctx.pop_layer();
         }
+    }
+
+    /// The children of a knockout group ([`Node::knockout_elements`]). Each element first erases
+    /// what the elements below it drew wherever it paints (its knockout shape: its coverage at full
+    /// object opacity without its opacity mask, or as drawn when its opacity and mask define the
+    /// knockout shape), then adds itself: it composites against the group's backdrop instead of
+    /// over the elements below it.
+    fn draw_knockout(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>]) {
+        for c in Node::knockout_elements(children) {
+            if self.skipped(f, c) {
+                continue;
+            }
+            for (compose, shape) in [(Compose::DestOut, !c.knockout_shape), (Compose::Plus, false)] {
+                ctx.set_transform(Affine::IDENTITY);
+                ctx.push_layer(None, Some(BlendMode::new(Mix::Normal, compose)), None, None, None);
+                self.shape_of = if shape { Arc::as_ptr(c) as usize } else { 0 };
+                self.draw_arc(ctx, f, c);
+                self.shape_of = 0;
+                ctx.pop_layer();
+            }
+        }
+    }
+
+    /// Whether `n` is the knockout element being drawn as its shape (see [`Self::draw_knockout`]).
+    fn is_shape(&self, n: &Node) -> bool {
+        self.shape_of == n as *const Node as usize
+    }
+
+    /// The object opacity `n` is drawn with (full while it is drawn as its knockout shape).
+    pub(crate) fn opacity_of(&self, n: &Node) -> f32 {
+        if self.is_shape(n) { 1.0 } else { n.opacity }
     }
 
     fn hairline(&mut self, ctx: &mut RenderContext, f: &Frame, bp: &BezPath, rgba: [u8; 4]) {
@@ -1012,3 +1082,5 @@ fn now() -> u64 {
 mod tests;
 #[cfg(test)]
 mod tests_clip;
+#[cfg(test)]
+mod tests_knockout;

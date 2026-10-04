@@ -180,11 +180,14 @@ fn info_reports_mixed_values_as_null() {
     s.execute("transparency.set", &json!({"ids": [a.0, b.0], "blend": "Screen"})).unwrap();
     s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     let info = s.execute("transparency.info", &json!({})).unwrap();
-    assert_eq!(info, json!({"ids": [a.0, b.0], "opacity": null, "blend": "Screen", "isolate": null, "knockout": false, "editingMask": null}));
+    assert_eq!(
+        info,
+        json!({"ids": [a.0, b.0], "opacity": null, "blend": "Screen", "isolate": null, "knockout": "neutral", "knockoutShape": false, "editingMask": null, "pageIsolatedBlending": false, "pageKnockoutGroup": false})
+    );
     let one = s.execute("transparency.info", &json!({"id": a.0})).unwrap();
     assert_eq!((one["opacity"].clone(), one["isolate"].clone()), (json!(50.0), json!(true)));
     let i = s.transparency_info();
-    assert_eq!((i.opacity, i.blend, i.knockout), (None, Some(vectorcraft_color::BlendMode::Screen), Some(false)));
+    assert_eq!((i.opacity, i.blend, i.knockout), (None, Some(vectorcraft_color::BlendMode::Screen), Some(vectorcraft_doc::Knockout::Neutral)));
     s.execute("select.none", &json!({})).unwrap();
     assert_eq!(s.execute("transparency.info", &json!({})).unwrap()["opacity"], Value::Null);
     // Many targets are gathered in one walk of the tree.

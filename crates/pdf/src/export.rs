@@ -71,7 +71,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     }
     pdf.set_metadata(meta);
 
-    let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), brushes: None };
+    let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), brushes: None, knockout: doc.page_knockout };
     for i in indices {
         let ab = &doc.artboards[i];
         let r = ab.rect;
@@ -80,8 +80,15 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         let mut s = page.surface();
         // krilla's page space is y-down with the origin at the top-left corner, like ours.
         s.push_transform(&xf(Affine::translate((-r.x0, -r.y0))));
-        for layer in &doc.layers {
-            ex.node(&mut s, layer, r, false);
+        // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
+        // writer has no page group attributes).
+        let page_group = doc.page_isolate || doc.page_knockout;
+        if page_group {
+            s.push_isolated();
+        }
+        ex.children(&mut s, &doc.layers, r);
+        if page_group {
+            s.pop();
         }
         s.pop();
         s.finish();
@@ -132,6 +139,8 @@ struct Exporter<'a> {
     images: HashMap<String, Option<Image>>,
     /// The brush library, parsed when the first brushed stroke is written.
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
+    /// Whether the group being written is a knockout group (what its neutral children inherit).
+    knockout: bool,
 }
 
 fn xf(a: Affine) -> Transform {
@@ -197,6 +206,18 @@ fn color(c: &Color) -> krilla::color::Color {
         // VectorCraft grey is ink coverage (0 = white); PDF DeviceGray is lightness.
         Color::Gray { k } => luma::Color::new(q(1.0 - k)).into(),
     }
+}
+
+/// Fill the page (with a margin) with an opaque grey level (0 = black, 255 = white): mask backdrops.
+fn cover(s: &mut Surface, page: Rect, level: u8) {
+    let Some(p) = to_path(&page.inflate(1.0, 1.0).to_path(0.1)) else { return };
+    s.set_stroke(None);
+    s.set_fill(Some(Fill {
+        paint: rgb::Color::new(level, level, level).into(),
+        opacity: NormalizedF32::ONE,
+        rule: krilla::paint::FillRule::NonZero,
+    }));
+    s.draw_path(&p);
 }
 
 fn rects_overlap(a: Rect, b: Rect) -> bool {
@@ -323,30 +344,71 @@ impl Exporter<'_> {
     /// Opacity mask → luminosity soft mask. Outside the art the backdrop is black (clip) or white;
     /// invert is a white Difference rect on top (luminance is linear, so luma(1 − c) = 1 − luma(c)).
     fn soft_mask(&mut self, s: &mut Surface, m: &vectorcraft_doc::OpacityMask, page: Rect) -> krilla::mask::Mask {
-        let backdrop = to_path(&page.inflate(1.0, 1.0).to_path(0.1));
-        let white = || Fill { paint: rgb::Color::new(255, 255, 255).into(), opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero };
         let mut sb = s.stream_builder();
         let mut ms = sb.surface();
         // An opaque backdrop when it matters: white outside the art (no clip), or black for the
         // inverting Difference pass below to turn white.
-        if let Some(bp) = &backdrop
-            && (!m.clip || m.invert)
-        {
-            let c = if m.clip { rgb::Color::new(0, 0, 0) } else { rgb::Color::new(255, 255, 255) };
-            ms.set_stroke(None);
-            ms.set_fill(Some(Fill { paint: c.into(), opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
-            ms.draw_path(bp);
+        if !m.clip || m.invert {
+            cover(&mut ms, page, if m.clip { 0 } else { 255 });
         }
+        // Mask art is a picture of its own: it takes no part in a knockout group around the object.
+        let knockout = std::mem::take(&mut self.knockout);
         self.node(&mut ms, &m.art, page, true);
-        if let Some(bp) = &backdrop
-            && m.invert
-        {
+        self.knockout = knockout;
+        if m.invert {
             ms.push_blend_mode(krilla::blend::BlendMode::Difference);
-            ms.set_stroke(None);
-            ms.set_fill(Some(white()));
-            ms.draw_path(bp);
+            cover(&mut ms, page, 255);
             ms.pop();
         }
+        ms.finish();
+        krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
+    }
+
+    /// The children of a group, as the elements of a knockout group when it is one.
+    fn children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect) {
+        if !self.knockout {
+            for c in children {
+                self.node(s, c, page, false);
+            }
+            return;
+        }
+        // The PDF writer has no knockout groups: each element is drawn through a soft mask of
+        // where the elements above it don't paint (the same look for Normal blending). The masks
+        // nest, so element i sits inside the masks of elements i+1…n: open them outermost first.
+        self.warn("knockout groups are written as soft-masked groups (same look, but not editable as knockout groups)");
+        let elements: Vec<_> = Node::knockout_elements(children)
+            .into_iter()
+            .filter(|c| c.visual_bounds().is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
+            .collect();
+        let Some((first, rest)) = elements.split_first() else { return };
+        for c in rest.iter().rev() {
+            let mask = self.knockout_mask(s, c, page);
+            s.push_mask(mask);
+        }
+        self.node(s, first, page, false);
+        for c in rest {
+            s.pop();
+            self.node(s, c, page, false);
+        }
+    }
+
+    /// A luminosity mask that is 1 − the knockout shape of `c`: white, then black through an alpha
+    /// mask of `c` (at full object opacity without its own mask, unless those define its shape).
+    fn knockout_mask(&mut self, s: &mut Surface, c: &Node, page: Rect) -> krilla::mask::Mask {
+        let shape = if c.knockout_shape { c.clone() } else { Node { opacity: 1.0, mask: None, ..c.clone() } };
+        let mut sb = s.stream_builder();
+        let mut ms = sb.surface();
+        cover(&mut ms, page, 255);
+        let alpha = {
+            let mut ab = ms.stream_builder();
+            let mut als = ab.surface();
+            self.node(&mut als, &shape, page, false);
+            als.finish();
+            krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
+        };
+        ms.push_mask(alpha);
+        cover(&mut ms, page, 0);
+        ms.pop();
         ms.finish();
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
     }
@@ -367,6 +429,9 @@ impl Exporter<'_> {
             self.warn("raster effects (shadows, glows, blur, feather) are not exported to PDF yet");
         }
         let container = n.is_container() && !matches!(n.kind, NodeKind::Compound { .. });
+        // Whether this container's children knock each other out (a knockout group is isolated).
+        let knockout = n.knocks_out(self.knockout);
+        let enclosing = std::mem::replace(&mut self.knockout, knockout);
         let mut pushes = 0;
         if n.blend != BlendMode::Normal {
             s.push_blend_mode(blend(n.blend));
@@ -375,12 +440,9 @@ impl Exporter<'_> {
         if n.opacity < 1.0 {
             s.push_opacity(norm(n.opacity));
             pushes += 1;
-        } else if container && (n.isolate || n.blend != BlendMode::Normal) {
+        } else if container && (n.isolate || n.blend != BlendMode::Normal || knockout) {
             s.push_isolated();
             pushes += 1;
-        }
-        if n.knockout {
-            self.warn("knockout groups are exported as normal groups");
         }
         if let Some(m) = n.mask.as_deref()
             && !m.disabled
@@ -390,20 +452,14 @@ impl Exporter<'_> {
             pushes += 1;
         }
         match &n.kind {
-            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
-                for c in children {
-                    self.node(s, c, page, false);
-                }
-            }
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => self.children(s, children, page),
             NodeKind::Group { children, clip: true } => {
                 // The region every output clips to; nothing to clip by hides the clipped art.
                 if let Some((clip, rest)) = children.split_first()
                     && let Some((p, r)) = vectorcraft_effects::clip_outline(clip).and_then(|(bp, r)| to_path(&bp).map(|p| (p, r)))
                 {
                     s.push_clip_path(&p, &rule(r));
-                    for c in rest {
-                        self.node(s, c, page, false);
-                    }
+                    self.children(s, rest, page);
                     s.pop();
                 }
             }
@@ -438,6 +494,7 @@ impl Exporter<'_> {
                 }
             }
         }
+        self.knockout = enclosing;
         for _ in 0..pushes {
             s.pop();
         }

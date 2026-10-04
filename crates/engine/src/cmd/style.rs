@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Graphic Styles",
             [],
             None,
-            "{} → {styles: [{id, name, fill, stroke, strokeWidth, fills, strokes, effects: [effect id…], opacity: 0..100, blend, isolate, knockout, linked: [object ids]}], selected: the style the first selected object is linked to, or null}",
+            "{} → {styles: [{id, name, fill, stroke, strokeWidth, fills, strokes, effects: [effect id…], opacity: 0..100, blend, isolate, knockout: \"on\"|\"off\"|\"neutral\", linked: [object ids]}], selected: the style the first selected object is linked to, or null}",
             has_doc,
             style_list
         ),
@@ -342,7 +342,7 @@ fn style_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "opacity": (g.opacity * 100.0).round(),
                 "blend": g.blend.label(),
                 "isolate": g.isolate,
-                "knockout": g.knockout,
+                "knockout": g.knockout.label(),
                 "linked": links.get(&g.id).map(|v| v.iter().map(|i| i.0).collect::<Vec<_>>()).unwrap_or_default(),
             })
         })

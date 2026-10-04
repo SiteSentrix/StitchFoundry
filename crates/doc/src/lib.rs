@@ -38,6 +38,7 @@ pub use appearance::{
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
+pub use node::Knockout;
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use selection::{AnchorRef, Selection};
@@ -270,7 +271,7 @@ pub struct GraphicStyle {
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub isolate: bool,
     #[serde(default, skip_serializing_if = "skip::is_default")]
-    pub knockout: bool,
+    pub knockout: Knockout,
 }
 
 fn one() -> f32 {
@@ -283,7 +284,7 @@ pub const DEFAULT_GRAPHIC_STYLE: &str = "Default Graphic Style";
 impl GraphicStyle {
     /// A style with `appearance` and default transparency (no id yet).
     pub fn new(name: impl Into<String>, appearance: Appearance) -> Self {
-        Self { name: name.into(), appearance, id: 0, opacity: 1.0, blend: Default::default(), isolate: false, knockout: false }
+        Self { name: name.into(), appearance, id: 0, opacity: 1.0, blend: Default::default(), isolate: false, knockout: Knockout::Neutral }
     }
     /// A style capturing `n`'s transparency and `appearance`.
     pub fn of(name: impl Into<String>, appearance: Appearance, n: &Node) -> Self {
@@ -371,6 +372,14 @@ pub struct Document {
     /// Foreign data preserved on round-trip.
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub unknown: serde_json::Map<String, serde_json::Value>,
+    /// Transparency panel → Page Isolated Blending: the page is an isolated transparency group,
+    /// so top-level blend modes don't blend with what lies under the page.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub page_isolate: bool,
+    /// Transparency panel → Page Knockout Group: the page's elements (its layers; neutral layers
+    /// pass their contents through) knock each other out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub page_knockout: bool,
 }
 
 fn ppi72() -> f64 {
@@ -414,6 +423,8 @@ impl Document {
             mask_edit: None,
             next_id: 1,
             unknown: Default::default(),
+            page_isolate: false,
+            page_knockout: false,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
