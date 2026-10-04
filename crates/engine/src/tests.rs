@@ -295,6 +295,8 @@ fn every_command_has_unique_id_and_doc() {
 #[test]
 fn every_command_survives_empty_params() {
     // Robustness: no command may panic on {} (with and without a selection).
+    // The view toggles among them flip the process-wide proof view.
+    let _proof_view = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     for sel in [false, true] {
         for c in command_specs() {
             let mut s = session();

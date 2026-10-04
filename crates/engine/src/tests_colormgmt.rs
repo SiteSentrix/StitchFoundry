@@ -14,6 +14,9 @@ use vectorcraft_render::{RenderOptions, Renderer};
 use super::*;
 
 /// Every test here reads or changes the process-wide proof view or colour settings: one at a time.
+/// Tests that switch the Color Settings away from the defaults live in `tests/color_settings.rs`
+/// (their own process): every colour shown or rendered goes through them, so no lock could cover
+/// all the tests that would see the change.
 pub(crate) static GLOBAL: Mutex<()> = Mutex::new(());
 
 fn session() -> Session {
@@ -156,22 +159,6 @@ fn assign_profile_is_stored_and_undoable() {
     assert!(s.execute("edit.assignProfile", &json!({"rgb": cms::GENERIC_CMYK})).is_err(), "kind must match");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(cmd::colormgmt::doc_profiles(&s.doc().unwrap().doc), (None, None));
-}
-
-#[test]
-fn color_settings_lists_profiles_and_validates() {
-    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
-    let mut s = session();
-    let r = s.execute("edit.colorSettings", &json!({})).unwrap();
-    let names: Vec<&str> = r["profiles"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
-    assert!(names.contains(&cms::GENERIC_CMYK) && names.contains(&cms::SRGB) && names.contains(&cms::DEVICE_CMYK));
-    assert!(s.execute("edit.colorSettings", &json!({"cmyk": "Missing.icc"})).is_err());
-    assert_eq!(cms::active_settings().cmyk, r["cmyk"].as_str().unwrap(), "failed change leaves settings alone");
-    let before = r["bpc"].as_bool().unwrap();
-    let r2 = s.execute("edit.colorSettings", &json!({"bpc": !before})).unwrap();
-    assert_eq!(r2["bpc"], !before);
-    s.execute("edit.colorSettings", &json!({"bpc": before})).unwrap();
-    assert!(s.execute("color.loadProfile", &json!({"path": "/nonexistent/x.icc"})).is_err());
 }
 
 #[test]
@@ -390,25 +377,4 @@ fn intents_reach_the_document_conversion() {
     };
     assert_ne!(first(&a), first(&b));
     let _ = Intent::Perceptual;
-}
-
-#[test]
-fn legacy_profile_name_resolves_in_commands_and_files() {
-    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
-    let (old, _) = cms::LEGACY_NAMES[0];
-    let mut s = session();
-    let before = cms::active_settings();
-    let r = s.execute("edit.colorSettings", &json!({"rgb": old})).unwrap();
-    assert_eq!(r["rgb"], cms::WIDE_GAMUT_RGB);
-    assert_eq!(cms::active_settings().rgb, cms::WIDE_GAMUT_RGB);
-    let names: Vec<&str> = r["profiles"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
-    assert!(names.contains(&cms::WIDE_GAMUT_RGB) && !names.contains(&old));
-    let r = s.execute("edit.assignProfile", &json!({"rgb": old})).unwrap();
-    assert_eq!(r["rgb"], cms::WIDE_GAMUT_RGB, "stored under the current name");
-    // A document saved by an older version names the profile the old way.
-    let mut d = (*s.doc().unwrap().doc).clone();
-    d.unknown.insert(cmd::colormgmt::PROFILES_KEY.into(), json!({"rgb": old, "cmyk": null}));
-    let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
-    assert_eq!(cmd::colormgmt::doc_profiles(&back), (Some(cms::WIDE_GAMUT_RGB.to_string()), None));
-    cms::set_active(&before).unwrap();
 }

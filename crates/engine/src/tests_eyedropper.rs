@@ -163,10 +163,11 @@ fn clicking_an_image_samples_its_pixel() {
     .unwrap();
     let dst = rect(&mut s, 10.0);
     click(&mut s, 450.0, 50.0, Mods::default());
-    assert_eq!(node(&s, dst).appearance.fill_paint().color().unwrap().to_hex(), "#008080");
+    // Compared as stored (not as displayed through the working RGB space).
+    assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::rgb8(0, 128, 128)));
     s.execute("eyedropper.setOptions", &json!({"sampleSize": 5})).unwrap();
     click(&mut s, 350.0, 50.0, Mods::default());
-    assert_eq!(node(&s, dst).appearance.fill_paint().color().unwrap().to_hex(), "#808040", "5 x 5 average of both pixels");
+    assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::rgb8(128, 128, 64)), "5 x 5 average of both pixels");
 }
 
 #[test]
