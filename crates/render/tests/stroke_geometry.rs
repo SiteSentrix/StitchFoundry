@@ -1,5 +1,7 @@
 //! Pixel tests for the shared stroke geometry (`vectorcraft_effects::stroke`) on the canvas:
 //! dotted lines (zero-length dashes) and arrowheads (hollow kinds, alignment, compositing).
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Document, LineCap, StrokeLayer};

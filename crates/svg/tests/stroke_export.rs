@@ -1,6 +1,8 @@
 //! Strokes in SVG export look as on the canvas: arrowheads, width profiles, dots and brushes are
 //! written as the canvas's filled outlines or art, aligned strokes are clipped or masked, and open
 //! paths stroke centred. Checked by rendering the exported SVG with resvg.
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Arrowhead, Dash, Document, LineCap, LineJoin, Node, StrokeAlign, StrokeLayer, WidthProfile};

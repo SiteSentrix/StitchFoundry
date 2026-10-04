@@ -116,7 +116,7 @@ fn type_fills_go_above_or_below_the_characters() {
     // A new fill on type copies its characters' fill (it has none of its own).
     run(&mut s, "appearance.addFill", json!({}));
     let n = node(&s, t);
-    let NodeKind::Text(tx) = &n.kind else { unreachable!() };
+    let NodeKind::Text(tx) = &n.kind else { panic!("type") };
     assert_eq!(n.appearance.fill_paint(), tx.runs[0].style.fill);
     run(&mut s, "appearance.moveItem", json!({"from": "contents", "to": 1}));
     assert_eq!(node(&s, t).appearance.contents_at(), 1);

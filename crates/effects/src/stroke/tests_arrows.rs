@@ -32,7 +32,7 @@ fn contours(bp: &BezPath) -> Vec<Vec<Point>> {
                 c.pop();
             }
         }
-        _ => unreachable!("flattened"),
+        _ => panic!("flattened"),
     });
     out
 }

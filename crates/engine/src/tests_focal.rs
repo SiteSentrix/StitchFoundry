@@ -76,7 +76,7 @@ fn the_focal_point_round_trips_through_params_and_the_native_format() {
     s.execute("paint.setGradientGeom", &json!({"focal": [170, 190], "aspect": 80})).unwrap();
     let want = geom(&s, id);
     // Gradient params (what swatches and agents read) carry it, and give it back.
-    let Paint::Gradient(g) = s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() else { unreachable!() };
+    let Paint::Gradient(g) = s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
     let params = vectorcraft_tools::params::gradient_params(&g);
     assert_eq!(params["focal"], json!([170.0, 190.0]));
     s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();

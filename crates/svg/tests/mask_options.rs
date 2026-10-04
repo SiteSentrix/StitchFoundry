@@ -1,6 +1,8 @@
 //! Opacity-mask options survive SVG (M3.87): exported masks list the options that differ from the
 //! defaults in `data-vectorcraft-mask`, and import restores them and the original mask art (without
 //! the backdrop rectangle and inverting filter that draw the options in SVG).
+// Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, OpacityMask};
