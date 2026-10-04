@@ -117,18 +117,19 @@ impl Gradient {
     }
     /// Stops expanded so that midpoints are represented as explicit stops (for renderers without midpoints).
     pub fn expanded_stops(&self) -> Vec<(f32, Color, f32)> {
-        let mut out = Vec::new();
-        for (i, s) in self.stops.iter().enumerate() {
-            out.push((s.offset, s.color, s.opacity));
-            if let Some(n) = self.stops.get(i + 1)
-                && (s.midpoint - 0.5).abs() > 1e-3
-            {
+        self.expanded().map(|(t, c, o, _)| (t, c, o)).collect()
+    }
+    /// [`Self::expanded_stops`], each stop that stands for a midpoint with that midpoint (`None`
+    /// on the gradient's own stops).
+    pub fn expanded(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>)> + '_ {
+        self.stops.iter().enumerate().flat_map(move |(i, s)| {
+            let mid = self.stops.get(i + 1).filter(|_| (s.midpoint - 0.5).abs() > 1e-3).map(|n| {
                 let t = s.offset + (n.offset - s.offset) * s.midpoint;
                 let (c, o) = self.sample(t);
-                out.push((t, c, o));
-            }
-        }
-        out
+                (t, c, o, Some(s.midpoint))
+            });
+            std::iter::once((s.offset, s.color, s.opacity, None)).chain(mid)
+        })
     }
     pub fn reverse(&mut self) {
         self.stops.reverse();

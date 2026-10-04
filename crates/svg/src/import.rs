@@ -33,7 +33,7 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     let (kx, ky) = units.k;
     let mut doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
     doc.units = units.unit;
-    let mut im = Importer { doc, warnings, mask_flags: mask_flags(&xml), links, slots, patterns: HashMap::new() };
+    let mut im = Importer { doc, warnings, mask_flags: mask_flags(&xml), links, slots, patterns: HashMap::new(), midpoints: midpoint_stops(&xml) };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
@@ -140,6 +140,41 @@ struct Importer {
     slots: TextSlots,
     /// Pattern swatch made for each usvg pattern.
     patterns: HashMap<usize, String>,
+    /// Midpoint stops by gradient id (see [`midpoint_stops`]).
+    midpoints: HashMap<String, Vec<Option<f32>>>,
+}
+
+/// The stops our export added for midpoints (`data-vc-midpoint`), by gradient id: for each stop,
+/// the midpoint it stands for.
+fn midpoint_stops(xml: &roxmltree::Document) -> HashMap<String, Vec<Option<f32>>> {
+    xml.descendants()
+        .filter(|n| matches!(n.tag_name().name(), "linearGradient" | "radialGradient"))
+        .filter_map(|g| {
+            let id = g.attribute("id")?;
+            let marks: Vec<Option<f32>> = g
+                .children()
+                .filter(|c| c.tag_name().name() == "stop")
+                .map(|c| c.attribute("data-vc-midpoint").and_then(|v| v.parse().ok()))
+                .collect();
+            marks.iter().any(Option::is_some).then(|| (id.to_string(), marks))
+        })
+        .collect()
+}
+
+/// A gradient's stops, with the midpoint stops `marks` names folded back into the midpoints of
+/// the stops before them.
+fn gradient_stops(g: &usvg::BaseGradient, marks: Option<&[Option<f32>]>) -> Vec<GradientStop> {
+    let marks = marks.filter(|m| m.len() == g.stops().len());
+    let mut out: Vec<GradientStop> = Vec::with_capacity(g.stops().len());
+    for (i, s) in g.stops().iter().enumerate() {
+        if let (Some(mid), Some(prev)) = (marks.and_then(|m| m.get(i).copied().flatten()), out.last_mut()) {
+            prev.midpoint = mid.clamp(0.0, 1.0);
+            continue;
+        }
+        let c = s.color();
+        out.push(GradientStop { opacity: s.opacity().get(), ..GradientStop::new(s.offset().get(), Color::rgb8(c.red, c.green, c.blue)) });
+    }
+    out
 }
 
 /// The options [`crate::export::MASK_FLAGS`] records on exported `<mask>` elements, by mask id:
@@ -283,6 +318,11 @@ impl Importer {
             // Only present when usvg had fonts; text is read from the XML instead.
             usvg::Node::Text(_) => None,
         }
+    }
+
+    /// A gradient's stops, midpoints restored.
+    fn stops(&self, g: &usvg::BaseGradient) -> Vec<GradientStop> {
+        gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice))
     }
 
     fn named(&mut self, id: &str, kind: NodeKind) -> Node {
@@ -473,15 +513,6 @@ impl Importer {
     }
 
     fn paint(&mut self, p: &usvg::Paint, m: Affine) -> Paint {
-        let stops = |g: &usvg::BaseGradient| {
-            g.stops()
-                .iter()
-                .map(|s| {
-                    let c = s.color();
-                    GradientStop { opacity: s.opacity().get(), ..GradientStop::new(s.offset().get(), Color::rgb8(c.red, c.green, c.blue)) }
-                })
-                .collect::<Vec<_>>()
-        };
         let gp = |kind, stops, geom: GradientGeom| {
             Paint::Gradient(Box::new(GradientPaint {
                 gradient: Gradient { kind, stops },
@@ -504,7 +535,7 @@ impl Importer {
                     focal: None,
                 };
                 geom.transform(m * aff(lg.transform()), GradientKind::Linear);
-                gp(GradientKind::Linear, stops(lg), geom)
+                gp(GradientKind::Linear, self.stops(lg), geom)
             }
             usvg::Paint::RadialGradient(rg) => {
                 if rg.spread_method() != usvg::SpreadMethod::Pad {
@@ -518,7 +549,7 @@ impl Importer {
                 // A focal point outside the circle is pulled inside it.
                 geom.set_focal(Some(Point::new(rg.fx() as f64, rg.fy() as f64)));
                 geom.transform(m * aff(rg.transform()), GradientKind::Radial);
-                gp(GradientKind::Radial, stops(rg), geom)
+                gp(GradientKind::Radial, self.stops(rg), geom)
             }
             usvg::Paint::Pattern(pt) => self.pattern(pt, m),
         }
