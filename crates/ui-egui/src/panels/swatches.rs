@@ -713,6 +713,18 @@ fn editable(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
     }
 }
 
+/// The selected solid-colour swatches in selection order (Merge Swatches keeps the first).
+fn mergeable(app: &VectorcraftApp, sel: &[String]) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
+    sel.iter().filter(|n| st.doc.swatch(n).is_some_and(|w| w.paint.color().is_some())).cloned().collect()
+}
+
+/// The first selected colour group (Ungroup Color Group).
+fn selected_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
+    let d = &app.session.active()?.doc;
+    sel.iter().find(|n| d.swatch_groups.iter().any(|g| g.name == **n)).cloned()
+}
+
 /// Delete `names` (swatches and colour groups) after asking, or at once with `now` (Alt-click).
 fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
     let params = json!({"names": names});
@@ -801,18 +813,36 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.run("swatch.duplicate", json!({"name": n})).ok();
     }
-    menu_item(ui, "Merge Swatches", false, false);
+    // The first selected colour is kept.
+    let merge = mergeable(app, &selected);
+    if menu_item(ui, "Merge Swatches", merge.len() > 1, false) {
+        app.run("swatch.merge", json!({ "names": merge })).ok();
+    }
     if menu_item(ui, "Delete Swatch", !del.is_empty(), false) {
         delete(app, del, false);
     }
-    menu_item(ui, "Ungroup Color Group", false, false);
-    menu_item(ui, "Select All Unused", false, false);
-    menu_item(ui, "Add Used Colors", false, false);
+    let group = selected_group(app, &selected);
+    if menu_item(ui, "Ungroup Color Group", group.is_some(), false)
+        && let Some(g) = group
+    {
+        app.run("swatch.ungroup", json!({ "name": g })).ok();
+    }
+    if menu_item(ui, "Select All Unused", true, false)
+        && let Ok(r) = app.run("swatch.unused", json!({}))
+    {
+        let names: Vec<String> = r["names"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+        set_pstate(ui.ctx(), "swatch-selected", names);
+    }
+    if menu_item(ui, "Add Used Colors", true, false) {
+        app.run("swatch.addUsedColors", json!({})).ok();
+    }
     ui.separator();
     if menu_item(ui, "Sort by Name", true, false) {
         app.run("swatch.sortByName", json!({})).ok();
     }
-    menu_item(ui, "Sort by Kind", false, false);
+    if menu_item(ui, "Sort by Kind", true, false) {
+        app.run("swatch.sortByKind", json!({})).ok();
+    }
     ui.separator();
     for (v, label) in View::ALL {
         if menu_item(ui, label, true, v == view) {
@@ -1152,6 +1182,15 @@ mod tests {
             "dropped on a group's colour: into that group"
         );
         assert!(egui::DragAndDrop::payload::<Paint>(&ctx).is_none());
+    }
+
+    #[test]
+    fn menu_targets_follow_the_panel_selection() {
+        let app = app();
+        let sel: Vec<String> = ["Red", "Sunset", "Grays", "Orange", "Brights"].map(String::from).to_vec();
+        assert_eq!(mergeable(&app, &sel), ["Red", "Orange"], "Merge Swatches takes the selected colours, first kept");
+        assert_eq!(selected_group(&app, &sel).as_deref(), Some("Grays"));
+        assert_eq!(selected_group(&app, &sel[..2]), None);
     }
 
     #[test]
