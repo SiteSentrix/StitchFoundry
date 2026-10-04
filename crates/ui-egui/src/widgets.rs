@@ -1,7 +1,7 @@
 //! Shared widgets in Illustrator's panel style. Colours come from theme tokens.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
-use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::Unit;
 
 use crate::icons;
@@ -1084,4 +1084,104 @@ pub fn doc_preview(ui: &Ui, key: &str, size: Vec2, build: impl FnOnce(f64, f64) 
         c.insert(key, tex.clone());
     });
     Some(tex)
+}
+
+/// Position of hue `h` (degrees) and saturation `s` on a wheel of radius `r` around `c`.
+fn wheel_pos(c: Pos2, r: f32, h: f32, s: f32) -> Pos2 {
+    let a = h.to_radians();
+    c + vec2(a.cos(), -a.sin()) * r * s
+}
+
+/// The hue and saturation wheel at brightness `v`: hue around, saturation outwards.
+fn wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
+    const SEG: u32 = 72;
+    const RINGS: u32 = 8;
+    let mut mesh = egui::Mesh::default();
+    mesh.colored_vertex(c, crate::panels::c32(&Color::from_hsb(0.0, 0.0, v)));
+    for ring in 1..=RINGS {
+        let s = ring as f32 / RINGS as f32;
+        for k in 0..SEG {
+            let h = k as f32 * 360.0 / SEG as f32;
+            mesh.colored_vertex(wheel_pos(c, r, h, s), crate::panels::c32(&Color::from_hsb(h, s, v)));
+        }
+    }
+    let at = |ring: u32, k: u32| if ring == 0 { 0 } else { 1 + (ring - 1) * SEG + k % SEG };
+    for ring in 0..RINGS {
+        for k in 0..SEG {
+            if ring == 0 {
+                mesh.add_triangle(0, at(1, k), at(1, k + 1));
+            } else {
+                mesh.add_triangle(at(ring, k), at(ring + 1, k), at(ring + 1, k + 1));
+                mesh.add_triangle(at(ring, k), at(ring + 1, k + 1), at(ring, k + 1));
+            }
+        }
+    }
+    egui::Shape::mesh(mesh)
+}
+
+/// What a [`harmony_wheel`] did this frame.
+#[derive(Default)]
+pub struct WheelResponse {
+    /// The colour whose marker was pressed (it becomes the selected one).
+    pub pressed: Option<usize>,
+    /// A colour moved to a new hue, saturation and brightness (`[h°, s, v]`), by dragging its
+    /// marker or (the selected colour) the brightness slider.
+    pub moved: Option<(usize, [f32; 3])>,
+}
+
+/// The harmony wheel of Recolor Artwork's Edit tab and the Color Themes panel: a hue and saturation
+/// wheel `size` across (hue around, saturation outwards) at the selected colour's brightness, a
+/// marker per colour joined to the centre (the selected colour, `base`, larger) and a Brightness
+/// slider for the selected colour below it.
+pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
+    let t = Tokens::get(ui.ctx());
+    let mut out = WheelResponse::default();
+    let base_hsb = base.and_then(|b| colors.get(b)).map(Color::to_hsb);
+    let v = base_hsb.map_or(1.0, |c| c[2]);
+    ui.horizontal(|ui| {
+        ui.add_space(((ui.available_width() - size) / 2.0).max(0.0));
+        let (rect, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
+        let (c, r) = (rect.center(), size / 2.0 - 10.0);
+        let painter = ui.painter_at(rect);
+        painter.add(wheel_shape(c, r, v.max(0.15)));
+        painter.circle_stroke(c, r, Stroke::new(1.0, t.border));
+        let at = |col: &Color| {
+            let [h, s, _] = col.to_hsb();
+            wheel_pos(c, r, h, s)
+        };
+        for (i, col) in colors.iter().enumerate() {
+            let (p, big) = (at(col), Some(i) == base);
+            painter.line_segment([c, p], Stroke::new(1.0, Color32::from_white_alpha(160)));
+            painter.circle(p, if big { 8.0 } else { 5.5 }, crate::panels::c32(col), Stroke::new(1.5, Color32::WHITE));
+            painter.circle_stroke(p, if big { 9.0 } else { 6.5 }, Stroke::new(1.0, Color32::BLACK));
+        }
+        // Drag a marker: the nearest one within reach of the press.
+        let drag = ui.id().with((id, "drag"));
+        if (resp.drag_started() || resp.clicked())
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let near = colors.iter().map(at).enumerate().map(|(i, m)| (i, m.distance(p))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
+            out.pressed = near.map(|x| x.0);
+            ui.data_mut(|m| m.insert_temp(drag, out.pressed));
+        }
+        if resp.dragged()
+            && let (Some(i), Some(p)) = (ui.data(|m| m.get_temp::<Option<usize>>(drag)).flatten(), resp.interact_pointer_pos())
+            && let Some(old) = colors.get(i)
+        {
+            let dv = p - c;
+            let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
+            out.moved = Some((i, [h, (dv.length() / r).clamp(0.0, 1.0), old.to_hsb()[2]]));
+        }
+    });
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        ui.add_space(((ui.available_width() - size - 76.0) / 2.0).max(0.0));
+        ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new("Brightness").color(t.text_dim)));
+        if let (Some(b), Some([h, s, _])) = (base, base_hsb)
+            && let (Some(nv), _) = color_slider(ui, (id, "brightness"), v, size, &|x| crate::panels::c32(&Color::from_hsb(h, s, x)))
+        {
+            out.moved = Some((b, [h, s, nv]));
+        }
+    });
+    out
 }

@@ -3,14 +3,18 @@
 //! shades/cool/muted to the left and tints/warm/vivid to the right (steps and reach from Color
 //! Guide Options). The base colour stays put until "Set base color" takes the current colour. A
 //! click on a cell applies it to the active proxy and selects it; Shift- or Cmd/Ctrl-click adds
-//! cells to the selection that Save Colors as Swatches saves.
+//! cells to the selection that Save Colors as Swatches saves. Limit to Library (the library button,
+//! `ui.colorGuideLimit`) snaps every colour to a swatch library or the document's swatches; Edit or
+//! Apply Colors opens Recolor Artwork with the harmony colours, limited the same way.
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::harmony::{Guide, Harmony, Variation};
+use vectorcraft_color::harmony::{Guide, GuideOptions, Harmony, Variation};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_engine::cmd::swatchlib;
 
-use super::{active_paint, apply_click, c32, color_json, pstate, set_pstate};
+use super::swatches::{self, colour_libraries, limit_key, limit_name};
+use super::{active_paint, apply_click, c32, color_json, library_panel, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -41,8 +45,79 @@ fn clear_selection(ctx: &egui::Context) {
     set_pstate(ctx, "cg-sel", Vec::<(usize, usize)>::new());
 }
 
+/// What the panel's guide is made from: with a library limit, snapping every cell is too slow to
+/// redo each frame, so the guide is cached until one of these changes.
+#[derive(Clone, PartialEq)]
+struct GuideKey {
+    base: Color,
+    rule: Harmony,
+    opts: GuideOptions,
+    limit: String,
+    /// The document's identity and revision while limited to its swatches.
+    doc: Option<(u64, u64)>,
+}
+
+/// The guide the panel shows, limited to the Limit to Library colours.
 fn guide(app: &VectorcraftApp, ctx: &egui::Context) -> Guide {
-    Guide::new(base_color(app, ctx), rule(ctx), &app.ui.color_guide)
+    let (base, rule, opts) = (base_color(app, ctx), rule(ctx), app.ui.color_guide);
+    let limit = &app.ui.color_guide_limit;
+    if limit.is_empty() {
+        return Guide::new(base, rule, &opts);
+    }
+    let doc = app.session.active().filter(|_| limit == swatchlib::DOCUMENT_SWATCHES).map(|d| (d.uid, d.revision));
+    let key = GuideKey { base, rule, opts, limit: limit.clone(), doc };
+    if let Some((k, g)) = pstate::<Option<(GuideKey, Guide)>>(ctx, "cg-guide")
+        && k == key
+    {
+        return g;
+    }
+    let g = Guide::new(base, rule, &opts);
+    let g = match swatchlib::limit_palette(&app.session, limit) {
+        Some(p) => g.limited(&p),
+        None => g,
+    };
+    set_pstate(ctx, "cg-guide", Some((key, g.clone())));
+    g
+}
+
+/// `ui.colorGuideLimit {library}`: limit the panel's colours to a swatch library (an id or name),
+/// the document's swatches ("document"), or nothing (`""` or null). → {limitTo, name}
+pub(crate) fn set_limit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let key = match p.get("library").and_then(Value::as_str).unwrap_or_default() {
+        "" => String::new(),
+        l => limit_key(app, l)?,
+    };
+    let name = limit_name(app, &key);
+    app.ui.color_guide_limit = key;
+    Ok(json!({"limitTo": app.ui.color_guide_limit, "name": name}))
+}
+
+/// The Limit to Library popup: None, Document Swatches, then the colour libraries.
+fn limit_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    ui.set_min_width(200.0);
+    let cur = app.ui.color_guide_limit.clone();
+    let mut chosen = None;
+    for (key, label) in [("", "None"), (swatchlib::DOCUMENT_SWATCHES, swatches::DOCUMENT_SWATCHES)] {
+        if menu_item(ui, label, true, cur == key) {
+            chosen = Some(key.to_string());
+        }
+    }
+    ui.separator();
+    chosen = library_panel::library_items(ui, &colour_libraries(app), Some(&cur)).or(chosen);
+    if let Some(key) = chosen {
+        set_limit(app, &json!({ "library": key })).ok();
+        clear_selection(ui.ctx());
+    }
+}
+
+/// Edit or Apply Colors: Recolor Artwork with the harmony colours as the new colours (of the
+/// selected art, or of the colours alone), limited to the panel's library.
+fn edit_or_apply(app: &mut VectorcraftApp, g: &Guide) {
+    let mut p = json!({ "colors": g.colors.iter().map(color_json).collect::<Vec<_>>() });
+    if limit_name(app, &app.ui.color_guide_limit).is_some() {
+        p["library"] = json!(app.ui.color_guide_limit);
+    }
+    app.run("ui.recolorDialog", p).ok();
 }
 
 /// Save the selected cells' colours as swatches (one undo step).
@@ -125,18 +200,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let (left, right) = app.ui.color_guide.variation.sides();
+    let limit = limit_name(app, &app.ui.color_guide_limit);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, left);
-        ui.add_space((ui.available_width() - 40.0).max(0.0));
+        // The library the colours are limited to, centred between the ends.
+        let middle = ui.available_width() - 40.0;
+        let label = limit.as_deref().unwrap_or_default();
+        ui.add_sized([middle.max(0.0), 16.0], egui::Label::new(egui::RichText::new(label).size(11.0).color(t.text_dim)).truncate());
         widgets::dim_label(ui, right);
     });
     widgets::bottom_bar(ui, |ui| {
-        widgets::icon_button_enabled(ui, "library", "Limit to Swatch Library (on the roadmap)", false, false, 24.0);
+        let tip = match &limit {
+            Some(name) => format!("Limit colors to swatch library: {name}"),
+            None => "Limit colors to swatch library".into(),
+        };
+        let lr = widgets::icon_button(ui, "library", &tip, limit.is_some(), 24.0);
+        egui::Popup::menu(&lr).show(|ui| limit_menu(app, ui));
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
-        // Recolor Artwork with the harmony colours as the new colours (the selected art's, if any).
-        let art = app.session.active().is_some_and(|d| !d.selection.is_empty());
-        if widgets::icon_button_enabled(ui, "palette", "Edit or Apply Colors", false, art, 24.0).clicked() {
-            app.run("ui.recolorDialog", json!({ "colors": g.colors.iter().map(color_json).collect::<Vec<_>>() })).ok();
+        // Recolor Artwork with the harmony colours as the new colours: the selected art's, or
+        // (without art) the colours themselves, which OK saves as a colour group.
+        let doc = app.session.active().is_some();
+        if widgets::icon_button_enabled(ui, "palette", "Edit or Apply Colors", false, doc, 24.0).clicked() {
+            edit_or_apply(app, &g);
         }
         if widgets::icon_button_enabled(ui, "dc-new-item", "Save selected colors as swatches", false, !sel.is_empty(), 24.0).clicked() {
             save_selected(app, &ctx);
@@ -221,5 +306,76 @@ mod tests {
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
         let g = guide(&app, &ctx);
         assert_eq!(st.doc.swatches.last().unwrap().paint.color().map(|c| c.to_hex()), Some(g.grid[0][8].to_hex()));
+    }
+
+    /// Every colour of the panel's guide.
+    fn shown(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+        let g = guide(app, ctx);
+        g.grid.iter().flatten().chain(&g.colors).map(Color::to_hex).collect()
+    }
+
+    fn library_hexes(app: &VectorcraftApp, id: &str) -> Vec<String> {
+        let (_, lib) = swatchlib::library(&app.session, id).unwrap();
+        lib.iter().filter_map(|w| w.paint.color()).map(|c| c.to_hex()).collect()
+    }
+
+    #[test]
+    fn limit_to_library_snaps_the_panel_and_follows_the_document_swatches() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.run("paint.setFill", json!({"color": "#3a7bd5"})).unwrap();
+        frame(&mut app, &ctx);
+        assert!(shown(&app, &ctx).contains(&"#3a7bd5".to_string()), "no limit: the base itself");
+        let r = app.run("ui.colorGuideLimit", json!({"library": "Earth Tones"})).unwrap();
+        assert_eq!((r["limitTo"].as_str(), r["name"].as_str()), (Some("earth-tones"), Some("Earth Tones")));
+        frame(&mut app, &ctx);
+        let members = library_hexes(&app, "earth-tones");
+        assert!(shown(&app, &ctx).iter().all(|h| members.contains(h)), "every cell is a library colour");
+        // The document's swatches: the cached guide follows a new swatch.
+        app.run("ui.colorGuideLimit", json!({"library": "document"})).unwrap();
+        frame(&mut app, &ctx);
+        assert!(!shown(&app, &ctx).contains(&"#3a7bd4".to_string()));
+        app.run("swatch.new", json!({"colors": ["#3a7bd4"]})).unwrap();
+        frame(&mut app, &ctx);
+        let doc: Vec<String> = app.session.doc().unwrap().doc.swatches_iter().filter_map(|w| w.paint.color()).map(|c| c.to_hex()).collect();
+        let cells = shown(&app, &ctx);
+        assert!(cells.iter().all(|h| doc.contains(h)));
+        assert_eq!(guide(&app, &ctx).colors[0].to_hex(), "#3a7bd4", "the base snaps to the new swatch");
+        // The popup lists libraries with colours only, draws; unknown libraries are refused and ""
+        // lifts the limit.
+        let libs = colour_libraries(&app);
+        assert!(libs.iter().any(|l| l.id == "earth-tones") && !libs.iter().any(|l| l.id == "metallic-gradients"));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| limit_menu(&mut app, ui));
+        out.textures_delta.clear();
+        assert!(app.run("ui.colorGuideLimit", json!({"library": "nope"})).is_err());
+        assert_eq!(app.ui.color_guide_limit, "document");
+        assert_eq!(app.run("ui.colorGuideLimit", json!({"library": ""})).unwrap()["name"], Value::Null);
+        assert!(shown(&app, &ctx).contains(&"#3a7bd5".to_string()));
+    }
+
+    #[test]
+    fn edit_or_apply_without_art_saves_the_limited_colours_as_a_group() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.run("paint.setFill", json!({"color": "#c04020"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
+        frame(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        edit_or_apply(&mut app, &g);
+        let d = app.ui.dialog.as_ref().expect("Recolor opens on the colours alone");
+        assert_eq!((d.kind.as_str(), d.str("limitTo").as_str()), ("recolor", "web-safe-216"), "limited to the same library");
+        let groups = app.session.doc().unwrap().doc.swatch_groups.len();
+        crate::dialogs::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(doc.swatch_groups.len(), groups + 1, "OK saves a new colour group");
+        let made: Vec<String> = doc.swatch_groups.last().unwrap().swatches.iter().filter_map(|w| w.paint.color()).map(|c| c.to_hex()).collect();
+        assert_eq!(made, g.colors.iter().map(Color::to_hex).collect::<Vec<_>>());
+        let members = library_hexes(&app, "web-safe-216");
+        assert!(made.iter().all(|h| members.contains(h)));
+        // Colours from elsewhere snap to the library as the dialog opens.
+        app.run("ui.recolorDialog", json!({"colors": ["#123457"], "library": "web-safe-216"})).unwrap();
+        let to = app.ui.dialog.as_ref().unwrap().fields["rows"][0]["to"].clone();
+        assert_eq!(vectorcraft_engine::cmd::color_value(&to).map(|c| c.to_hex()).as_deref(), Some("#003366"));
     }
 }

@@ -90,6 +90,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("magicWand", "Magic Wand", "wand-sparkles"),
     (crate::panels::flattener_preview::ID, "Flattener Preview", "eye"),
     ("attributes", "Attributes", "settings"),
+    ("colorThemes", "Color Themes", "sun"),
 ];
 
 /// Groups of icon panels separated by dividers in the collapsed column.
@@ -255,6 +256,10 @@ pub struct UiState {
     /// Flattener Preview panel: highlight, overprints, preset and options (`ui.flattenerPreview`).
     #[serde(default)]
     pub flattener_preview: crate::panels::flattener_preview::Settings,
+    /// Color Guide panel: Limit to Library, a swatch library id, "document" (the document's
+    /// swatches) or "" (none) (`ui.colorGuideLimit`).
+    #[serde(default)]
+    pub color_guide_limit: String,
 }
 
 impl UiState {
@@ -309,6 +314,7 @@ impl Default for UiState {
             color_guide: Default::default(),
             library_panel: None,
             flattener_preview: Default::default(),
+            color_guide_limit: String::new(),
         }
     }
 }

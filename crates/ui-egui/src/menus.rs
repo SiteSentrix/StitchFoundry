@@ -162,7 +162,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.recolorDialog",
         "Recolor Artwork…",
         "",
-        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order), library?: id or name (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
+        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name, or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
     ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
     ("file.export.pdf", "Save as PDF…", "", "{path?, artboard? | artboards? | range?: \"1-3, 5\"} (document.export options)"),
@@ -343,6 +343,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Width Point Edit…",
         "",
         "{id, index} open Width Point Edit for width point `index` of path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; double-clicking a width point with the Width tool opens it too): OK runs stroke.widthPoint.set, discard: true (the Delete button) stroke.widthPoint.remove",
+    ),
+    (
+        "ui.colorGuideLimit",
+        "Limit Color Guide to Library",
+        "",
+        "{library: swatch library id or name (see swatch.library.list) | \"document\" (the document's swatches) | \"\" or null (no limit)} limit the Color Guide panel's colours to that library: every harmony colour and variation snaps to its nearest colour, as color.harmony {limitTo} answers (ui.inspect: ui.color_guide_limit) → {limitTo, name}",
     ),
 ];
 
@@ -714,6 +720,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
         },
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
+        "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         _ => return None,
     };
     Some(r)
@@ -1460,6 +1467,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Brushes", "brushes"),
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
+                panel("Color Themes", "colorThemes"),
                 panel("Document Info", "docInfo"),
                 panel("Flattener Preview", crate::panels::flattener_preview::ID),
                 panel("Gradient", "gradient"),

@@ -343,33 +343,38 @@ fn panel_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
 pub(crate) fn library_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui) {
     K::menu_head(app, ui);
     let current = app.ui.library_panel.as_ref().filter(|o| o.kind == K::KIND).map(|o| o.id.clone());
-    let all = K::list(app);
+    if let Some(id) = library_items(ui, &K::list(app), current.as_deref()) {
+        open::<K>(app, &id);
+    }
+    K::menu_tail(app, ui);
+}
+
+/// Menu rows for `libs`: the top-level ones, then a submenu per [`LibraryRef::submenu`], with
+/// `current` checked. Returns the id of the one clicked.
+pub(crate) fn library_items(ui: &mut Ui, libs: &[LibraryRef], current: Option<&str>) -> Option<String> {
     let mut chosen = None;
     let mut item = |ui: &mut Ui, l: &LibraryRef| {
-        if menu_item(ui, &l.name, true, current.as_deref() == Some(l.id.as_str())) {
+        if menu_item(ui, &l.name, true, current == Some(l.id.as_str())) {
             chosen = Some(l.id.clone());
         }
     };
-    for l in all.iter().filter(|l| l.submenu.is_none()) {
+    for l in libs.iter().filter(|l| l.submenu.is_none()) {
         item(ui, l);
     }
     let mut subs: Vec<&str> = vec![];
-    for s in all.iter().filter_map(|l| l.submenu) {
+    for s in libs.iter().filter_map(|l| l.submenu) {
         if !subs.contains(&s) {
             subs.push(s);
         }
     }
     for s in subs {
         ui.menu_button(s, |ui| {
-            for l in all.iter().filter(|l| l.submenu == Some(s)) {
+            for l in libs.iter().filter(|l| l.submenu == Some(s)) {
                 item(ui, l);
             }
         });
     }
-    if let Some(id) = chosen {
-        open::<K>(app, &id);
-    }
-    K::menu_tail(app, ui);
+    chosen
 }
 
 #[cfg(test)]

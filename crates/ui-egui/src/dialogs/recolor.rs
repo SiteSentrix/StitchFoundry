@@ -9,22 +9,26 @@
 //! scale together), a brightness slider and the harmony rules. The preset menu sets up a 1, 2 or 3
 //! colour job or a library. Opened on a colour group (Edit or Apply Color Group), OK also rewrites
 //! the group with the new colours (renamed by `groupName`); without art only the group changes.
+//! Opened on colours alone (the Color Guide's Edit or Apply Colors without art), OK saves the new
+//! colours as a colour group named `groupName`.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?}]), `colors` (null: Auto, or a
-//! count), `method`, `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo` (library id, "" for
-//! none), `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`,
-//! `preview`. Changing `colors`, a preserve flag or `limitTo` reduces the rows again.
+//! count), `method`, `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo` (library id,
+//! "document" for the document's swatches, "" for none), `group`, `groupName`, `tab` (`assign` or
+//! `edit`), `rule` (harmony id), `linked`, `preview`. Changing `colors`, a preserve flag or
+//! `limitTo` reduces the rows again.
 
-use egui::{Pos2, Rect, Sense, Ui, pos2, vec2};
+use egui::{Rect, Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::harmony::Harmony;
-use vectorcraft_color::recolor::{ColorKey, Method, Palette};
+use vectorcraft_color::harmony::{Harmony, move_on_wheel};
+use vectorcraft_color::recolor::{ColorKey, Method};
 use vectorcraft_color::{Color, keep_model};
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::swatchlib;
 
 use super::{DialogSpec, form};
 use crate::panels::c32;
+use crate::panels::swatches::{colour_libraries, limit_key, limit_name};
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
@@ -48,8 +52,9 @@ const PRESETS: [&str; 5] = ["Custom", "1 Color Job", "2 Color Job", "3 Color Job
 /// Open Recolor Artwork (`ui.recolorDialog {colors?, library?, group?}`) on the selected art and,
 /// with `group`, on that colour group: art is reduced to as many rows as the group has colours,
 /// which become their new colours; without art the rows are the group's colours. `colors` is a
-/// count (an n-colour job) or the new colours to assign; `library` limits to a library ("" picks
-/// the first).
+/// count (an n-colour job) or the new colours to assign (without art or a group they are the
+/// rows, which OK saves as a new colour group); `library` limits to a library or "document" (""
+/// picks the first library).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
@@ -61,14 +66,16 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
         None => None,
     };
-    if !art && group.is_none() {
-        return Err("select artwork (or a colour group) to recolor".into());
-    }
     let assign: Vec<Value> = match (&group_colors, p.get("colors")) {
         (Some(cs), _) => cs.iter().map(key).collect(),
         (None, Some(Value::Array(cs))) => cs.iter().filter_map(color_value).map(|c| key(&c)).collect(),
         _ => vec![],
     };
+    // Colours alone (no art, no group) become a new colour group.
+    let new_group = !art && group.is_none();
+    if new_group && assign.is_empty() {
+        return Err("select artwork (or a colour group) to recolor".into());
+    }
     let count = match p.get("colors").and_then(Value::as_u64) {
         Some(n) => json!(n.max(1)),
         None if !assign.is_empty() => json!(assign.len()),
@@ -76,18 +83,23 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let limit = match p.get("library").and_then(Value::as_str) {
         Some("") => first_library(app).unwrap_or_default(),
-        Some(l) => swatchlib::library(&app.session, l).map(|(info, _)| info.id).ok_or_else(|| format!("no swatch library `{l}`"))?,
+        Some(l) => limit_key(app, l)?,
         None => String::new(),
     };
     // Without art the rows are the group's colours, as they are.
-    let rows: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
+    let start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
     let fields = json!({
-        "rows": rows, "colors": count, "method": Method::ScaleTints.id(),
+        "rows": start, "colors": count, "method": Method::ScaleTints.id(),
         "preserveWhite": true, "preserveBlack": true, "preserveGrays": false, "limitTo": limit,
-        "group": group, "groupName": group, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
-        "preview": true, "__art": art, "__assign": assign,
+        "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
+        "preview": true, "__art": art, "__assign": assign, "__newGroup": new_group,
     });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let mut d = Dialog::new(KIND, fields);
+    // Without art the rows are there from the start: limit them now (art's rows snap as they reduce).
+    let mut rs = rows(&d);
+    snap(app, &d, &mut rs);
+    d.fields.insert("rows".into(), Value::Array(rs));
+    app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
 
@@ -95,13 +107,11 @@ fn key(c: &Color) -> Value {
     json!(ColorKey::of(c).to_string())
 }
 
-/// The libraries with colours, for Limit to Library: (id, name).
-fn colour_libraries(app: &VectorcraftApp) -> Vec<(String, String)> {
-    swatchlib::libraries(&app.session).into_iter().filter(|l| l.category != "gradients").map(|l| (l.id, l.name)).collect()
-}
+/// The name a new colour group (opened on colours alone) starts with.
+const NEW_GROUP: &str = "Color Group";
 
 fn first_library(app: &VectorcraftApp) -> Option<String> {
-    colour_libraries(app).into_iter().next().map(|l| l.0)
+    colour_libraries(app).into_iter().next().map(|l| l.id)
 }
 
 /// `recolor.reduce` parameters (Method only picks each row's colour, so changing it keeps the rows).
@@ -141,8 +151,7 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
 
 /// With Limit to Library, the rows' new colours snap to the library's nearest colours.
 fn snap(app: &VectorcraftApp, d: &Dialog, rows: &mut [Value]) {
-    let Some((_, lib)) = Some(d.str("limitTo")).filter(|l| !l.is_empty()).and_then(|l| swatchlib::library(&app.session, &l)) else { return };
-    let palette = Palette::new(lib.iter().filter_map(|w| w.paint.color()));
+    let Some(palette) = Some(d.str("limitTo")).filter(|l| !l.is_empty()).and_then(|l| swatchlib::limit_palette(&app.session, &l)) else { return };
     for r in rows {
         if let Some(c) = to_color(r) {
             r["to"] = key(&palette.nearest(c));
@@ -216,7 +225,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         snap(app, d, &mut rs);
         d.fields.insert("rows".into(), Value::Array(rs));
     }
-    if d.fields.get("group").is_some_and(Value::is_string) {
+    if d.fields.get("group").is_some_and(Value::is_string) || d.bool("__newGroup") {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Color Group:").color(t.text_dim));
@@ -230,10 +239,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: keep the previewed recolour as one undo step (or apply it, e.g. to a colour group only).
+/// OK: keep the previewed recolour as one undo step (or apply it, e.g. to a colour group only; or
+/// save colours opened alone as a new colour group).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     sync(app, &mut d);
+    if d.bool("__newGroup") {
+        let colors: Vec<Value> = rows(&d).into_iter().filter(|r| !excluded(r)).map(|r| r["to"].clone()).collect();
+        return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors}));
+    }
     form::commit_preview(app, CMD, apply_params(&d))
 }
 
@@ -407,12 +421,15 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         }
         ui.end_row();
         ui.label(egui::RichText::new("Limit to Library:").color(t.text_dim));
+        // None, the document's swatches, then the colour libraries.
         let libs = colour_libraries(app);
+        let keys: Vec<&str> = ["", swatchlib::DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.id.as_str())).collect();
+        let labels: Vec<String> = keys.iter().map(|k| limit_name(app, k).unwrap_or_else(|| "None".into())).collect();
         let cur = d.str("limitTo");
-        let name = libs.iter().find(|l| l.0 == cur).map_or("None", |l| l.1.as_str());
-        let labels: Vec<&str> = std::iter::once("None").chain(libs.iter().map(|l| l.1.as_str())).collect();
+        let name = keys.iter().position(|k| *k == cur).map_or("None", |i| labels[i].as_str());
+        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
         if let Some(i) = widgets::dropdown(ui, "recolor-library", name, &labels, 180.0) {
-            d.fields.insert("limitTo".into(), json!(if i == 0 { String::new() } else { libs[i - 1].0.clone() }));
+            d.fields.insert("limitTo".into(), json!(keys[i]));
         }
         ui.end_row();
     });
@@ -468,57 +485,23 @@ fn separate(rows: &mut Vec<Value>, sel: &[usize]) {
     *rows = out;
 }
 
-/// Position of hue `h` (degrees) and saturation `s` on a wheel of radius `r` around `c`.
-fn wheel_pos(c: Pos2, r: f32, h: f32, s: f32) -> Pos2 {
-    let a = h.to_radians();
-    c + vec2(a.cos(), -a.sin()) * r * s
+/// The rows the Edit tab shows: those with a new colour, not excluded.
+fn active_rows(rows: &[Value]) -> Vec<usize> {
+    (0..rows.len()).filter(|i| !excluded(&rows[*i]) && to_color(&rows[*i]).is_some()).collect()
 }
 
-/// The hue and saturation wheel at brightness `v`: hue around, saturation outwards.
-fn wheel_shape(c: Pos2, r: f32, v: f32) -> egui::Shape {
-    const SEG: u32 = 72;
-    const RINGS: u32 = 8;
-    let mut mesh = egui::Mesh::default();
-    mesh.colored_vertex(c, c32(&Color::from_hsb(0.0, 0.0, v)));
-    for ring in 1..=RINGS {
-        let s = ring as f32 / RINGS as f32;
-        for k in 0..SEG {
-            let h = k as f32 * 360.0 / SEG as f32;
-            mesh.colored_vertex(wheel_pos(c, r, h, s), c32(&Color::from_hsb(h, s, v)));
-        }
-    }
-    let at = |ring: u32, k: u32| if ring == 0 { 0 } else { 1 + (ring - 1) * SEG + k % SEG };
-    for ring in 0..RINGS {
-        for k in 0..SEG {
-            if ring == 0 {
-                mesh.add_triangle(0, at(1, k), at(1, k + 1));
-            } else {
-                mesh.add_triangle(at(ring, k), at(ring + 1, k), at(ring + 1, k + 1));
-                mesh.add_triangle(at(ring, k), at(ring + 1, k + 1), at(ring, k + 1));
-            }
-        }
-    }
-    egui::Shape::mesh(mesh)
-}
-
-/// Set row `i`'s new colour to hue/saturation/brightness `hsb` (keeping its model); with `linked`
-/// every other row turns by the same hue, scales its saturation and shifts its brightness alike.
-/// Excluded rows stay.
+/// Set row `i`'s new colour to hue/saturation/brightness `hsb` ([`move_on_wheel`]: with `linked`
+/// the other rows keep their relation to it). Excluded rows stay.
 fn move_color(rows: &mut [Value], i: usize, hsb: [f32; 3], linked: bool) {
-    let Some(old) = rows.get(i).and_then(to_color) else { return };
-    let [h0, s0, v0] = old.to_hsb();
-    let (dh, ratio, dv) = (hsb[0] - h0, if s0 > 0.01 { hsb[1] / s0 } else { 1.0 }, hsb[2] - v0);
-    for (j, row) in rows.iter_mut().enumerate() {
-        let Some(c) = to_color(row).filter(|_| !excluded(row)) else { continue };
-        let new = if j == i {
-            hsb
-        } else if linked {
-            let [h, s, v] = c.to_hsb();
-            [h + dh, (s * ratio).clamp(0.0, 1.0), (v + dv).clamp(0.0, 1.0)]
-        } else {
-            continue;
-        };
-        row["to"] = key(&keep_model(c, Color::from_hsb(new[0], new[1], new[2])));
+    let active = active_rows(rows);
+    let Some(k) = active.iter().position(|&j| j == i) else { return };
+    let before: Vec<Color> = active.iter().filter_map(|&j| to_color(&rows[j])).collect();
+    let mut colors = before.clone();
+    move_on_wheel(&mut colors, k, hsb, linked);
+    for ((&j, c), old) in active.iter().zip(&colors).zip(&before) {
+        if c != old {
+            rows[j]["to"] = key(c);
+        }
     }
 }
 
@@ -527,7 +510,7 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let linked = d.bool("linked");
-    let active: Vec<usize> = (0..rows.len()).filter(|i| !excluded(&rows[*i]) && to_color(&rows[*i]).is_some()).collect();
+    let active = active_rows(rows);
     let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("Harmony Rules:").color(t.text_dim));
@@ -549,62 +532,15 @@ fn edit_tab(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]) -> bool {
         });
     });
     ui.add_space(8.0);
-    let v = base.and_then(|b| to_color(&rows[b])).map_or(1.0, |c| c.to_hsb()[2]);
-    ui.horizontal(|ui| {
-        ui.add_space(((ui.available_width() - WHEEL) / 2.0).max(0.0));
-        let (rect, resp) = ui.allocate_exact_size(vec2(WHEEL, WHEEL), Sense::click_and_drag());
-        let (c, r) = (rect.center(), WHEEL / 2.0 - 10.0);
-        let painter = ui.painter_at(rect);
-        painter.add(wheel_shape(c, r, v.max(0.15)));
-        painter.circle_stroke(c, r, egui::Stroke::new(1.0, t.border));
-        let at = |rows: &[Value], i: usize| {
-            to_color(&rows[i]).map(|col| {
-                let [h, s, _] = col.to_hsb();
-                wheel_pos(c, r, h, s)
-            })
-        };
-        for &i in &active {
-            let (Some(p), Some(col)) = (at(rows, i), to_color(&rows[i])) else { continue };
-            let big = Some(i) == base;
-            painter.line_segment([c, p], egui::Stroke::new(1.0, egui::Color32::from_white_alpha(160)));
-            painter.circle(p, if big { 8.0 } else { 5.5 }, c32(&col), egui::Stroke::new(1.5, egui::Color32::WHITE));
-            painter.circle_stroke(p, if big { 9.0 } else { 6.5 }, egui::Stroke::new(1.0, egui::Color32::BLACK));
-        }
-        // Drag a marker: the nearest one within reach of the press.
-        let id = ui.id().with("recolor-wheel-drag");
-        if (resp.drag_started() || resp.clicked())
-            && let Some(p) = resp.interact_pointer_pos()
-        {
-            let near = active.iter().filter_map(|&i| Some((i, at(rows, i)?.distance(p)))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
-            ui.data_mut(|m| m.insert_temp(id, near.map(|x| x.0)));
-            if let Some((i, _)) = near {
-                d.fields.insert("__sel".into(), json!([i]));
-            }
-        }
-        if resp.dragged()
-            && let (Some(i), Some(p)) = (ui.data(|m| m.get_temp::<Option<usize>>(id)).flatten(), resp.interact_pointer_pos())
-            && let Some(old) = to_color(&rows[i])
-        {
-            let dv = p - c;
-            let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
-            move_color(rows, i, [h, (dv.length() / r).clamp(0.0, 1.0), old.to_hsb()[2]], linked);
-            changed = true;
-        }
-    });
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        ui.add_space(((ui.available_width() - WHEEL - 76.0) / 2.0).max(0.0));
-        ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new("Brightness").color(t.text_dim)));
-        if let Some(b) = base
-            && let Some(col) = to_color(&rows[b])
-        {
-            let [h, s, _] = col.to_hsb();
-            if let (Some(nv), _) = widgets::color_slider(ui, "recolor-brightness", v, WHEEL, &|x| c32(&Color::from_hsb(h, s, x))) {
-                move_color(rows, b, [h, s, nv], linked);
-                changed = true;
-            }
-        }
-    });
+    let colors: Vec<Color> = active.iter().filter_map(|&i| to_color(&rows[i])).collect();
+    let w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, base.and_then(|b| active.iter().position(|&i| i == b)));
+    if let Some(k) = w.pressed {
+        d.fields.insert("__sel".into(), json!([active[k]]));
+    }
+    if let Some((k, hsb)) = w.moved {
+        move_color(rows, active[k], hsb, linked);
+        changed = true;
+    }
     ui.add_space(6.0);
     // The new colours: click one to make it the base colour.
     ui.horizontal_wrapped(|ui| {

@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_color::recolor::{ColorKey, Method, Palette, Preserve, Rng, RowMap, cluster};
+use vectorcraft_color::recolor::{ColorKey, Method, Preserve, Rng, RowMap, cluster};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::swatches::node_colors;
 use vectorcraft_doc::{AppearanceItem, Document, NodeId, NodeKind};
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library (new colours snap to its nearest colour), group?: colour group rewritten with groupColors?: [colour] (default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces) and the group, as one undo step → {changed}",
+            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name, or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group rewritten with groupColors?: [colour] (default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces) and the group, as one undo step → {changed}",
             has_doc,
             apply
         ),
@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reduce Colors",
             [],
             None,
-            "{colors?: n (rows; default: one per colour, with the tints of a global swatch in its row), method?: as recolor.apply, default scaleTints (picks each row's colour), preserve?: {white?: true, black?: true, grays?: false} (left out of the rows), limitTo?: swatch library (new colours snap to it)} group the selection's colours into rows of similar colours (k-means in Lab, weighted by use) → {map: [{from: [keys, the row's colour first], to: key}], preserved: [keys], method}",
+            "{colors?: n (rows; default: one per colour, with the tints of a global swatch in its row), method?: as recolor.apply, default scaleTints (picks each row's colour), preserve?: {white?: true, black?: true, grays?: false} (left out of the rows), limitTo?: as recolor.apply (new colours snap to it)} group the selection's colours into rows of similar colours (k-means in Lab, weighted by use) → {map: [{from: [keys, the row's colour first], to: key}], preserved: [keys], method}",
             has_selection,
             reduce
         ),
@@ -134,17 +134,6 @@ fn method_param(p: &Value, cmd: &str, default: Method) -> Result<Method> {
     }
 }
 
-/// The colours of the `limitTo` library (`None` without one).
-fn palette_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Palette>> {
-    let Some(key) = str_param(p, "limitTo").filter(|k| !k.is_empty()) else { return Ok(None) };
-    let (_, lib) = super::swatchlib::library(s, key).ok_or_else(|| bad(cmd, format!("no swatch library `{key}` (see swatch.library.list)")))?;
-    let palette = Palette::new(lib.iter().filter_map(|w| w.paint.color()));
-    if palette.is_empty() {
-        return Err(bad(cmd, format!("swatch library `{key}` has no colours")));
-    }
-    Ok(Some(palette))
-}
-
 fn key_str(c: &Color) -> Value {
     json!(ColorKey::of(c).to_string())
 }
@@ -152,7 +141,7 @@ fn key_str(c: &Color) -> Value {
 fn reduce(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "recolor.reduce";
     let method = method_param(p, C, Method::ScaleTints)?;
-    let palette = palette_param(s, p, C)?;
+    let palette = super::swatchlib::limit_param(s, p, C)?;
     let def = Preserve::default();
     let flag = |k: &str, d: bool| p.get("preserve").map_or(d, |v| bool_or(v, k, d));
     let preserve = Preserve { white: flag("white", def.white), black: flag("black", def.black), grays: flag("grays", def.grays) };
@@ -297,7 +286,7 @@ impl ColorMap {
 fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "recolor.apply";
     let method = method_param(p, C, Method::Exact)?;
-    let palette = palette_param(s, p, C)?;
+    let palette = super::swatchlib::limit_param(s, p, C)?;
     let mut rows = parse_rows(p, C)?;
     if let Some(pl) = &palette {
         for r in &mut rows {

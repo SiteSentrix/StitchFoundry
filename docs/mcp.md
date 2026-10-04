@@ -106,7 +106,21 @@ Gray stays Gray, and `keepModel: true` keeps a colour as given. RGB documents ke
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
 `swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
 Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
-(shades, cool or muted on the left, tints, warm or vivid on the right).
+(shades, cool or muted on the left, tints, warm or vivid on the right). With `limitTo` (a swatch library id or name,
+or `"document"` for the document's swatches) every colour snaps to the library's nearest colour (ΔE 2000), as the
+panel's Limit to Library does (`ui.colorGuideLimit`); Recolor Artwork's `limitTo` takes the same values.
+
+Color Themes (local only: no online service) keeps five-colour themes in the preferences. `colorTheme.save
+{colors: [...]}` saves up to five colours as they are, `colorTheme.save {color, rule}` saves the five-colour theme a
+harmony rule makes from a base colour (base first; `name?` defaults to "Theme N", `replace: "<name>"` overwrites
+that theme in place). `colorTheme.list` answers `{themes: [{name, colors: [hex], keys: [colour keys], rule?}]}`,
+`colorTheme.delete {name}` removes one and `colorTheme.addToSwatches {name}` adds one to the Swatches panel as a
+colour group (one undo step).
+
+```json
+{"name":"run_command","arguments":{"command":"colorTheme.save","params":{"color":"#2266aa","rule":"splitComplementary","name":"Harbor"}}}
+{"name":"run_command","arguments":{"command":"colorTheme.addToSwatches","params":{"name":"Harbor"}}}
+```
 
 ## Resources
 
