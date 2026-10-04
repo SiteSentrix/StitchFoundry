@@ -377,14 +377,17 @@ impl Writer<'_> {
             GradientKind::Radial => {
                 let id = self.fresh_id("radial-gradient");
                 let r = (e - s).hypot();
+                // An off-centre focal point: `fx`/`fy`, in the gradient's own (unsquashed) space.
+                let focal = |f: Point| format!(" fx=\"{}\" fy=\"{}\"", self.num(f.x), self.num(f.y));
                 if (geom.aspect - 1.0).abs() < 1e-9 {
                     (
                         id.clone(),
                         format!(
-                            "<radialGradient id=\"{id}\" cx=\"{}\" cy=\"{}\" r=\"{}\" gradientUnits=\"userSpaceOnUse\">",
+                            "<radialGradient id=\"{id}\" cx=\"{}\" cy=\"{}\" r=\"{}\"{} gradientUnits=\"userSpaceOnUse\">",
                             self.num(s.x),
                             self.num(s.y),
-                            self.num(r)
+                            self.num(r),
+                            geom.focal.map(focal).unwrap_or_default()
                         ),
                         "radialGradient",
                     )
@@ -394,8 +397,9 @@ impl Writer<'_> {
                     (
                         id.clone(),
                         format!(
-                            "<radialGradient id=\"{id}\" cx=\"0\" cy=\"0\" r=\"{}\" gradientTransform=\"{}\" gradientUnits=\"userSpaceOnUse\">",
+                            "<radialGradient id=\"{id}\" cx=\"0\" cy=\"0\" r=\"{}\"{} gradientTransform=\"{}\" gradientUnits=\"userSpaceOnUse\">",
                             self.num(r),
+                            geom.focal.map(|f| focal(m.inverse() * f)).unwrap_or_default(),
                             self.matrix(m)
                         ),
                         "radialGradient",

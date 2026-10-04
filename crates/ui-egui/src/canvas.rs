@@ -1208,7 +1208,7 @@ mod tests {
         assert_eq!(fill(&app), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
         // A dragged gradient (the Gradient panel's thumbnail, a proxy) fits the object it lands on.
         let mut g = GradientPaint::new(Default::default());
-        g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0 });
+        g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: None });
         drop(&mut app, PanelDrag::paint(Paint::Gradient(Box::new(g))), Point::new(100.0, 100.0));
         assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()));
     }

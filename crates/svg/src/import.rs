@@ -406,8 +406,12 @@ impl Importer {
                 if lg.spread_method() != usvg::SpreadMethod::Pad {
                     self.warn(format!("gradient '{}': spreadMethod approximated as pad", lg.id()));
                 }
-                let mut geom =
-                    GradientGeom { start: Point::new(lg.x1() as f64, lg.y1() as f64), end: Point::new(lg.x2() as f64, lg.y2() as f64), aspect: 1.0 };
+                let mut geom = GradientGeom {
+                    start: Point::new(lg.x1() as f64, lg.y1() as f64),
+                    end: Point::new(lg.x2() as f64, lg.y2() as f64),
+                    aspect: 1.0,
+                    focal: None,
+                };
                 geom.transform(m * aff(lg.transform()), GradientKind::Linear);
                 gp(GradientKind::Linear, stops(lg), geom)
             }
@@ -415,11 +419,13 @@ impl Importer {
                 if rg.spread_method() != usvg::SpreadMethod::Pad {
                     self.warn(format!("gradient '{}': spreadMethod approximated as pad", rg.id()));
                 }
-                if (rg.fx() - rg.cx()).abs() > 1e-4 || (rg.fy() - rg.cy()).abs() > 1e-4 {
-                    self.warn(format!("gradient '{}': focal point ignored", rg.id()));
+                if rg.fr().get() > 1e-4 {
+                    self.warn(format!("gradient '{}': focal radius ignored", rg.id()));
                 }
                 let c = Point::new(rg.cx() as f64, rg.cy() as f64);
-                let mut geom = GradientGeom { start: c, end: c + Vec2::new(rg.r().get() as f64, 0.0), aspect: 1.0 };
+                let mut geom = GradientGeom { start: c, end: c + Vec2::new(rg.r().get() as f64, 0.0), aspect: 1.0, focal: None };
+                // A focal point outside the circle is pulled inside it.
+                geom.set_focal(Some(Point::new(rg.fx() as f64, rg.fy() as f64)));
                 geom.transform(m * aff(rg.transform()), GradientKind::Radial);
                 gp(GradientKind::Radial, stops(rg), geom)
             }

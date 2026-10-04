@@ -117,6 +117,8 @@ mod tests_cmykblend;
 #[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
+mod tests_focal;
+#[cfg(test)]
 mod tests_fx;
 #[cfg(test)]
 mod tests_stroke;

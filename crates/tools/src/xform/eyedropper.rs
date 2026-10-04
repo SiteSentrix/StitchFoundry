@@ -229,7 +229,7 @@ mod tests {
         let mut t = TextObject::point(Point::ZERO, "Gradient", CharStyle { size: 20.0, ..Default::default() });
         t.xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(std::f64::consts::FRAC_PI_2);
         let mut g = GradientPaint::new(Gradient::default());
-        g.geom = Some(GradientGeom { start: Point::ZERO, end: Point::new(100.0, 0.0), aspect: 1.0 });
+        g.geom = Some(GradientGeom { start: Point::ZERO, end: Point::new(100.0, 0.0), aspect: 1.0, focal: None });
         t.runs[0].style.fill = Paint::Gradient(Box::new(g));
         d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
         let (s, p) = (Selection::default(), paint());
@@ -246,7 +246,7 @@ mod tests {
             ..Default::default()
         });
         // Radius 100 along x, 50 across: 50 pt above the centre is already the outer (black) edge.
-        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::ZERO, end: Point::new(100.0, 0.0), aspect: 0.5 });
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::ZERO, end: Point::new(100.0, 0.0), aspect: 0.5, focal: None });
         let paint = Paint::Gradient(Box::new(g));
         assert_eq!(paint_color_at(&paint, None, Point::new(0.0, -50.0)).unwrap().to_hex(), "#000000");
         assert_eq!(paint_color_at(&paint, None, Point::new(50.0, 0.0)).unwrap().to_hex(), "#808080");

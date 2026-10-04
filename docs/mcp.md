@@ -155,6 +155,17 @@ delete it, hold Alt to copy it), dragging the end handle changes the vector. The
 {"name":"press_key","arguments":{"key":"Delete"}}
 ```
 
+A radial gradient's annotator also draws its extent: a dashed ellipse around the centre (the start, drawn as a ring)
+with a dot on it across the bar (drag it to change the aspect ratio); dragging the ellipse elsewhere rotates it.
+The dot inside the centre ring is the focal point, where the first stop sits: drag it for an off-centre radial, back
+onto the centre to centre it. `paint.setGradientGeom` sets the same things directly (`aspect` in %, `focal` in
+document coordinates or `null`; `start`/`end` may be left out), and they export as SVG `fx`/`fy` and PDF two-point
+radial shadings:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.setGradientGeom","params":{"aspect":60,"focal":[130,140]}}}
+```
+
 Freeform gradients: `paint.editGradient {kind: "freeform"}` places four or more colour points inside each selected
 object (coloured along the stops; `mode: "points"|"lines"` is the Draw toggle). `paint.freeform.get` lists the points
 (document coordinates), lines and the selected point; `paint.freeform.addPoint {at, color?, opacity?, spread?,
@@ -168,6 +179,18 @@ selected point:
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"kind":"freeform","mode":"lines"}}}
 {"name":"run_command","arguments":{"command":"paint.freeform.addPoint","params":{"at":[150,150],"color":"#ff3366","spread":20}}}
 {"name":"pointer_gesture","arguments":{"tool":"gradient","events":[{"kind":"down","x":180,"y":170},{"kind":"up","x":180,"y":170}]}}
+```
+
+On the canvas the selected point also shows its spread as a dashed ring with a handle 16 px (or the spread, if larger)
+to its right: drag the ring or handle to change the spread. Dragging a point out of the object removes it, and
+double-clicking one opens its popover (dialog `gradientStop`, which on a freeform gradient edits the selected point:
+set `color`, `opacity` and `spread` and confirm). In Lines mode successive clicks on the art draw one smooth line
+through the points they add; a click on an existing point first continues the line from it, and `press_key` Escape
+(or a click off the art) ends it:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"gradient","events":[{"kind":"down","x":110,"y":190},{"kind":"up","x":110,"y":190},{"kind":"down","x":150,"y":170},{"kind":"up","x":150,"y":170}]}}
+{"name":"press_key","arguments":{"key":"Escape"}}
 ```
 
 Raw protocol (for debugging):

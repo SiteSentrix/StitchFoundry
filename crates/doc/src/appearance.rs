@@ -779,6 +779,7 @@ impl Appearance {
                 && ga.start.distance(go.start) <= 1e-6
                 && ga.end.distance(go.end) <= 1e-6
                 && (ga.aspect - go.aspect).abs() <= 1e-6
+                && ga.focal_point().distance(go.focal_point()) <= 1e-6
             {
                 *ga = *go;
             }
@@ -971,7 +972,7 @@ mod tests {
         use vectorcraft_geom::{Point, Rect};
         let placed = |x: f64| {
             let mut g = GradientPaint::new(Gradient::default());
-            g.geom = Some(GradientGeom { start: Point::new(x, 0.0), end: Point::new(x + 10.0, 0.0), aspect: 1.0 });
+            g.geom = Some(GradientGeom { start: Point::new(x, 0.0), end: Point::new(x + 10.0, 0.0), aspect: 1.0, focal: None });
             Paint::Gradient(Box::new(g))
         };
         let mut a = Appearance::basic(placed(0.0), placed(-5.0), 10.0);

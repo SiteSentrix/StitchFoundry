@@ -32,4 +32,6 @@ mod tests;
 #[cfg(test)]
 mod tests_fileio;
 #[cfg(test)]
+mod tests_freeform;
+#[cfg(test)]
 mod tests_gradient;

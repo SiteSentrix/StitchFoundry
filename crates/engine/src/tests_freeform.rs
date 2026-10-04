@@ -61,7 +61,7 @@ fn the_first_application_places_points_inside_the_shape() {
     let g = fill_gradient(&s, id);
     assert_eq!(g.gradient.kind, GradientKind::Freeform);
     let f = g.freeform.as_ref().unwrap();
-    let inside = cmd::freeform::inside_fn(node(&s, id));
+    let inside = node(&s, id).contains_fn();
     assert!(f.points.len() >= 4 && f.points.iter().all(|p| inside(p.at)), "{:?}", f.points);
     // The stops follow the points' colours (swatch chips and exports show them).
     assert_eq!(g.gradient.stops.iter().map(|st| st.color).collect::<Vec<_>>(), f.points.iter().map(|p| p.color).collect::<Vec<_>>());

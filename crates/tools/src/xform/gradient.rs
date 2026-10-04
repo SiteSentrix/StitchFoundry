@@ -14,6 +14,12 @@
 //! selected stop (`gradient.selectStop`) is shared with the Gradient and Color panels: Delete or
 //! Backspace removes it (never below two stops) and the arrow keys nudge it.
 //!
+//! A radial gradient also shows its extent: a dashed ellipse around the centre (the start, a
+//! ring). Drag the dot on the ellipse across the bar to change the aspect ratio and the ellipse
+//! elsewhere to rotate it; the end handle sets the radius. The dot inside the centre ring is the
+//! focal point (where the first stop sits): drag it to make the gradient off-centre, back onto
+//! the centre to centre it.
+//!
 //! On a freeform gradient the tool edits its points instead (see `freeform`).
 
 use serde_json::{Value, json};
@@ -21,7 +27,7 @@ use vectorcraft_color::gradient::{duplicate_stop, insert_stop, midpoint_from_pos
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientStop};
 use vectorcraft_doc::NodeId;
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_geom::{Affine, Point, Vec2, constrain_angle_from};
+use vectorcraft_geom::{Affine, Point, Shape, Vec2, constrain_angle_from};
 
 use super::freeform::{self, Annotator as FreeformAnnotator};
 use super::paint_owner;
@@ -44,6 +50,10 @@ const MID_GAP: f64 = 7.0;
 const MID_HIT: f64 = 5.0;
 /// The bar (where a click adds a stop) reaches this far above it, and down through the stop row.
 const BAR_HIT: f64 = 4.0;
+/// A radial's focal dot, and the centre ring around it (the start handle).
+const FOCAL_HIT: f64 = 3.0;
+const CENTRE: f64 = 4.5;
+const CENTRE_HIT: f64 = 8.0;
 /// A stop dragged farther than this from the bar is deleted on release.
 const OFF_BAR: f64 = 24.0;
 /// A press becomes a drag after this much movement.
@@ -68,8 +78,12 @@ pub enum Part {
     Mid(usize),
     Start,
     End,
-    /// Just past the end: rotates the vector about the start.
+    /// Just past the end (or a radial's extent ellipse): rotates the vector about the start.
     Rotate,
+    /// A radial's focal point.
+    Focal,
+    /// The handle on a radial's extent ellipse, across the bar: the aspect ratio.
+    Aspect,
     /// The bar at an offset (0..1): a click adds a stop there.
     Bar(f32),
 }
@@ -84,6 +98,20 @@ impl Annotator {
     /// An annotator showing `stops` on `geom` (the state a drag started from).
     fn with(geom: GradientGeom, stops: &[GradientStop]) -> Self {
         Self { geom, gradient: Gradient { kind: GradientKind::Linear, stops: stops.to_vec() } }
+    }
+    fn radial(&self) -> bool {
+        self.gradient.kind == GradientKind::Radial
+    }
+    /// A radial's aspect handle: on the extent ellipse, across the bar from the stops.
+    pub fn aspect_point(&self) -> Point {
+        self.geom.start - self.normal() * (self.vector().hypot() * self.geom.aspect)
+    }
+    /// How far `p` is from a radial's extent ellipse (approximately, along the ray from the
+    /// centre).
+    fn off_ellipse(&self, p: Point) -> Option<f64> {
+        let m = self.geom.unit_frame()?;
+        let rho = (m.inverse() * p).to_vec2().hypot();
+        (rho > 1e-12).then(|| p.distance(self.geom.start) * (1.0 - 1.0 / rho).abs())
     }
     fn vector(&self) -> Vec2 {
         self.geom.end - self.geom.start
@@ -131,8 +159,15 @@ impl Annotator {
         if near(Some(self.geom.end), HANDLE) {
             return Some(Part::End);
         }
-        if near(Some(self.geom.start), HANDLE) {
+        let radial = self.radial();
+        if radial && near(Some(self.geom.focal_point()), FOCAL_HIT) {
+            return Some(Part::Focal);
+        }
+        if near(Some(self.geom.start), if radial { CENTRE_HIT } else { HANDLE }) {
             return Some(Part::Start);
+        }
+        if radial && near(Some(self.aspect_point()), HANDLE) {
+            return Some(Part::Aspect);
         }
         let (t, d) = self.project(p);
         if t > 1.0 && near(Some(self.geom.end), ROTATE) {
@@ -141,6 +176,9 @@ impl Annotator {
         let across = -cx.tol(BAR_HIT)..=cx.tol(STOP_GAP + STOP_HIT);
         if self.vector().hypot() > 1e-12 && (0.0..=1.0).contains(&t) && across.contains(&d) {
             return Some(Part::Bar(t as f32));
+        }
+        if radial && self.off_ellipse(p).is_some_and(|d| d <= cx.tol(BAR_HIT)) {
+            return Some(Part::Rotate);
         }
         None
     }
@@ -157,7 +195,13 @@ enum Grab {
         bar: Option<f32>,
     },
     End(GradientGeom),
-    Rotate(GradientGeom),
+    /// Rotates the vector, by the pointer's turn about the start from `from` (radians).
+    Rotate {
+        geom: GradientGeom,
+        from: f64,
+    },
+    Focal(GradientGeom),
+    Aspect(GradientGeom),
     Stop {
         index: usize,
         from: Annotator,
@@ -188,20 +232,33 @@ pub struct GradientTool {
     gesture: Option<Gesture>,
     /// A press on a freeform gradient's annotator.
     free: Option<freeform::Gesture>,
+    /// The line Lines mode is drawing on a freeform gradient.
+    lines: freeform::Lines,
     /// Smart-guide feedback of the handle being dragged.
     guides: Vec<Overlay>,
 }
 
-/// Overlays of an annotator: the bar, the handles, the midpoint diamonds and a chip per stop.
+/// Overlays of an annotator: the bar, the handles, the midpoint diamonds and a chip per stop; a
+/// radial's extent ellipse with its aspect handle, centre ring and focal dot.
 fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
     let (s, e) = (a.geom.start, a.geom.end);
     let shade = Vec2::new(0.0, cx.tol(1.0));
-    let mut o = vec![
+    let mut o = vec![];
+    if let Some(m) = a.geom.unit_frame().filter(|_| a.radial()) {
+        // Dark dashes over a light line: readable on any art.
+        let path = vectorcraft_geom::kurbo::Ellipse::from_affine(m).to_path(cx.tol(0.25));
+        o.push(Overlay::Path { path: path.clone(), color: LIGHT, width: 1.0, dashed: false });
+        o.push(Overlay::Path { path, color: BAR, width: 1.0, dashed: true });
+        o.push(Overlay::Handle { p: a.aspect_point(), color: BAR });
+        let ring = vectorcraft_geom::kurbo::Circle::new(s, cx.tol(CENTRE)).to_path(cx.tol(0.25));
+        o.push(Overlay::Path { path: ring, color: BAR, width: 1.5, dashed: false });
+    }
+    o.extend([
         Overlay::Line { a: s, b: e, color: BAR, dashed: false },
         Overlay::Line { a: s + shade, b: e + shade, color: LIGHT, dashed: false },
-        Overlay::Handle { p: s, color: BAR },
+        Overlay::Handle { p: if a.radial() { a.geom.focal_point() } else { s }, color: BAR },
         Overlay::Anchor { p: e, color: BAR, filled: true, size: 7.0 },
-    ];
+    ]);
     let len = a.vector().hypot();
     if len < 1e-12 {
         return o;
@@ -260,7 +317,9 @@ impl GradientTool {
             Some((a, Part::Start)) => Grab::Move { geom: a.geom, bar: None },
             Some((a, Part::Bar(t))) => Grab::Move { geom: a.geom, bar: Some(t) },
             Some((a, Part::End)) => Grab::End(a.geom),
-            Some((a, Part::Rotate)) => Grab::Rotate(a.geom),
+            Some((a, Part::Rotate)) => Grab::Rotate { geom: a.geom, from: (p - a.geom.start).atan2() - a.vector().atan2() },
+            Some((a, Part::Focal)) => Grab::Focal(a.geom),
+            Some((a, Part::Aspect)) => Grab::Aspect(a.geom),
             None => {
                 if cx.selection.is_empty() {
                     let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else { return out };
@@ -310,11 +369,26 @@ impl GradientTool {
                 ("paint.setGradientGeom", Self::geom_params(cx, start, start + (geom.end - geom.start)))
             }
             Grab::End(geom) => ("paint.setGradientGeom", Self::geom_params(cx, geom.start, place(geom.start, p))),
-            Grab::Rotate(geom) => {
-                let dir = if mods.shift { constrain(p - geom.start) } else { p - geom.start };
+            Grab::Rotate { geom, from } => {
+                let dir = (Affine::rotate(-from) * (p - geom.start).to_point()).to_vec2();
+                let dir = if mods.shift { constrain(dir) } else { dir };
                 let len = dir.hypot();
                 let end = if len < 1e-12 { geom.end } else { geom.start + dir * (geom.length() / len) };
                 ("paint.setGradientGeom", Self::geom_params(cx, geom.start, end))
+            }
+            Grab::Focal(geom) => {
+                // Dropped back on the centre it centres.
+                let f = geom.focal_point() + (p - g.at);
+                let mut params = Self::geom_params(cx, geom.start, geom.end);
+                params["focal"] = if f.distance(geom.start) <= cx.tol(FOCAL_HIT) { Value::Null } else { json!([f.x, f.y]) };
+                ("paint.setGradientGeom", params)
+            }
+            Grab::Aspect(geom) => {
+                // The pointer's distance across the bar, as a fraction of the radius.
+                let across = Annotator::with(*geom, &[]).project(p).1.abs();
+                let mut params = Self::geom_params(cx, geom.start, geom.end);
+                params["aspect"] = json!(across / geom.length().max(1e-12) * 100.0);
+                ("paint.setGradientGeom", params)
             }
             Grab::Stop { index, from, copy } => {
                 let (t, d) = from.project(p);
@@ -402,9 +476,14 @@ impl Tool for GradientTool {
             (PointerKind::Drag, Some(g)) => return freeform::drag(cx, g, ev.pos),
             (PointerKind::Up, Some(_)) => {
                 let g = self.free.take().expect("checked");
-                return freeform::release(cx, FreeformAnnotator::of(cx).as_ref(), g);
+                return freeform::release(cx, FreeformAnnotator::of(cx).as_ref(), g, &mut self.lines);
             }
-            (PointerKind::DoubleClick, free) if free.is_some() || FreeformAnnotator::of(cx).is_some() => return vec![],
+            (PointerKind::Move, None) => freeform::hover(cx, &mut self.lines, ev.pos),
+            (PointerKind::DoubleClick, _) => {
+                if let Some(a) = FreeformAnnotator::of(cx) {
+                    return freeform::double_click(cx, &a, ev.pos);
+                }
+            }
             _ => {}
         }
         match ev.kind {
@@ -423,7 +502,7 @@ impl Tool for GradientTool {
 
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         if let Some(a) = FreeformAnnotator::of(cx) {
-            return freeform::claims_key(cx, &a, key);
+            return freeform::claims_key(cx, &a, &self.lines, key);
         }
         matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Left | ToolKey::Right)
             && cx.gradient_stop.is_some_and(|i| Annotator::of(cx).is_some_and(|a| i < a.gradient.stops.len()))
@@ -432,15 +511,14 @@ impl Tool for GradientTool {
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.busy() {
             self.gesture = None;
-            self.free = None;
             self.guides.clear();
-            return vec![Action::Cancel];
+            return self.free.take().map_or_else(|| vec![Action::Cancel], |g| freeform::cancel(&g));
         }
         if self.busy() || !self.claims_key(cx, key) {
             return vec![];
         }
         if let Some(a) = FreeformAnnotator::of(cx) {
-            return freeform::key(cx, &a, key);
+            return freeform::key(cx, &a, &mut self.lines, key);
         }
         let (Some(a), Some(i)) = (Annotator::of(cx), cx.gradient_stop) else { return vec![] };
         let stops = &a.gradient.stops;
@@ -463,13 +541,13 @@ impl Tool for GradientTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if let Some(a) = FreeformAnnotator::of(cx) {
-            return a.overlays(cx);
+            return a.overlays(cx, &self.lines);
         }
         let mut o = match (Annotator::of(cx), self.gesture.as_ref().and_then(|g| g.vector)) {
             (Some(a), _) => annotator_overlays(cx, &a),
             // A vector drawn on a paint that isn't a gradient yet.
             (None, Some((s, e))) => {
-                annotator_overlays(cx, &Annotator::with(GradientGeom { start: s, end: e, aspect: 1.0 }, &Gradient::default().stops))
+                annotator_overlays(cx, &Annotator::with(GradientGeom { start: s, end: e, aspect: 1.0, focal: None }, &Gradient::default().stops))
             }
             _ => vec![],
         };
@@ -484,7 +562,7 @@ impl Tool for GradientTool {
         if let Some(g) = &self.gesture {
             return match (&g.grab, g.stop) {
                 (Grab::Stop { .. }, Some(None)) => Cursor::RemoveStop,
-                (Grab::Rotate(_), _) => Cursor::Rotate,
+                (Grab::Rotate { .. }, _) => Cursor::Rotate,
                 (Grab::Art, _) => Cursor::Crosshair,
                 _ => Cursor::Move,
             };
@@ -524,7 +602,7 @@ mod tests {
     fn graded(stops: Vec<GradientStop>) -> (Document, Selection) {
         let (mut d, id) = doc_with_rect();
         let mut g = GradientPaint::new(Gradient { kind: GradientKind::Linear, stops });
-        g.geom = Some(GradientGeom { start: Point::new(100.0, 150.0), end: Point::new(200.0, 150.0), aspect: 1.0 });
+        g.geom = Some(GradientGeom { start: Point::new(100.0, 150.0), end: Point::new(200.0, 150.0), aspect: 1.0, focal: None });
         d.node_mut(id).unwrap().appearance.set_fill(Paint::Gradient(Box::new(g)));
         let mut s = Selection::default();
         s.add(id);
@@ -664,7 +742,7 @@ mod tests {
         t.pointer(&cx2, &ev(PointerKind::Up, Point::new(150.0, 130.0)));
         // Constrain Angle 30: Shift gives 30 and 75 degrees (and no snapping).
         cx.constrain_angle = 30.0;
-        let angle = |v: &Value| GradientGeom { start: point(&v["start"]), end: point(&v["end"]), aspect: 1.0 }.angle_deg();
+        let angle = |v: &Value| GradientGeom { start: point(&v["start"]), end: point(&v["end"]), aspect: 1.0, focal: None }.angle_deg();
         for (to, want) in [(Point::new(190.0, 100.0), 30.0), (Point::new(125.0, 60.0), 75.0)] {
             t.pointer(&cx, &ev(PointerKind::Down, Point::new(200.0, 150.0)));
             let v = preview(&t.pointer(&cx, &with(SHIFT, ev(PointerKind::Drag, to)))).clone();
@@ -799,7 +877,7 @@ mod tests {
     #[test]
     fn annotator_follows_the_active_appearance_item() {
         let (mut d, id) = doc_with_rect();
-        let geom = GradientGeom { start: Point::new(100.0, 120.0), end: Point::new(200.0, 120.0), aspect: 1.0 };
+        let geom = GradientGeom { start: Point::new(100.0, 120.0), end: Point::new(200.0, 120.0), aspect: 1.0, focal: None };
         let mut gp = GradientPaint::new(Default::default());
         gp.geom = Some(geom);
         d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().paint = Paint::Gradient(Box::new(gp));
@@ -819,5 +897,31 @@ mod tests {
         t.pointer(&cx, &ev(PointerKind::Down, Point::new(150.0, 180.0)));
         let a = t.pointer(&cx, &ev(PointerKind::Up, Point::new(150.0, 180.0)));
         assert_eq!(exec(&a[0]).1["item"], 1);
+    }
+
+    #[test]
+    fn a_radial_shows_its_extent_ellipse_aspect_handle_and_focal_dot() {
+        let (mut d, s) = graded(two());
+        let n = d.node_mut(s.objects[0]).unwrap();
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { unreachable!() };
+        g.gradient.kind = GradientKind::Radial;
+        let geom = g.geom.as_mut().unwrap();
+        geom.aspect = 0.5;
+        geom.set_focal(Some(Point::new(120.0, 145.0)));
+        n.appearance.set_fill(Paint::Gradient(g));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let o = GradientTool::default().overlays(&cx);
+        assert_eq!(o.iter().filter(|o| matches!(o, Overlay::Path { dashed: true, .. })).count(), 1, "the extent ellipse");
+        // The aspect handle 50 pt above the centre, the focal dot where the focal point is.
+        assert!(
+            o.contains(&Overlay::Handle { p: Point::new(100.0, 100.0), color: BAR })
+                && o.contains(&Overlay::Handle { p: Point::new(120.0, 145.0), color: BAR })
+        );
+        let a = Annotator::of(&cx).unwrap();
+        let hit = |x: f64, y: f64| a.hit(&cx, Point::new(x, y));
+        assert_eq!((hit(120.0, 145.0), hit(104.0, 150.0), hit(100.0, 100.0)), (Some(Part::Focal), Some(Part::Start), Some(Part::Aspect)));
+        assert_eq!((hit(100.0, 200.0), hit(0.0, 150.0), hit(100.0, 220.0)), (Some(Part::Rotate), Some(Part::Rotate), None));
+        assert_eq!(GradientTool::default().cursor(&cx, Point::new(100.0, 200.0), Mods::default()), Cursor::Rotate);
     }
 }

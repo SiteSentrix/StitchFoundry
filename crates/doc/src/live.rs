@@ -196,6 +196,7 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
         g.start = ga.start.lerp(gb.start, t as f64);
         g.end = ga.end.lerp(gb.end, t as f64);
         g.aspect = ga.aspect + (gb.aspect - ga.aspect) * t as f64;
+        g.focal = (ga.focal.is_some() || gb.focal.is_some()).then(|| ga.focal_point().lerp(gb.focal_point(), t as f64));
         out.geom = Some(g);
     } else {
         out.geom = None;

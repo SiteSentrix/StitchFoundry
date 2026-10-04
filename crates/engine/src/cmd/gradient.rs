@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient Vector",
             [],
             None,
-            "{start: [x,y], end: [x,y] (document coordinates), ids?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (alias: index; omitted: the Appearance panel's active item when it is of the edited kind)} set the gradient vector (solid paints become the default gradient; type objects set it on their runs, in text space; the aspect ratio is kept)",
+            "{start?: [x,y], end?: [x,y] (document coordinates; both or neither: omitted, the vector stays), aspect?: % (radial: the extent ellipse's height / width; default: kept), focal?: [x,y] (document coordinates) | null (radial: the focal point, where the first stop sits, pulled inside the extent ellipse; null centres it; default: it keeps its place in the ellipse), ids?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (alias: index; omitted: the Appearance panel's active item when it is of the edited kind)} set the gradient vector, aspect ratio and focal point (solid paints become the default gradient; type objects set it on their runs, in text space)",
             has_doc,
             set_gradient_geom
         ),
@@ -181,16 +181,12 @@ pub(crate) fn parse_gradient(g: &Value) -> Parsed<GradientPaint> {
     let mut gp = GradientPaint::new(Gradient { kind, stops });
     gp.angle = f64_or(g, "angle", 0.0);
     gp.swatch = str_param(g, "swatch").map(str::to_string);
-    let aspect = aspect_param(g)?;
-    let point = |k: &str| g.get(k).map(|_| point_param(g, k).ok_or_else(|| format!("`{k}` must be [x, y]"))).transpose();
-    match (point("start")?, point("end")?) {
-        (Some(start), Some(end)) => {
-            let geom = GradientGeom { start, end, aspect: aspect.unwrap_or(1.0) };
-            gp.angle = geom.angle_deg();
-            gp.geom = Some(geom);
-        }
-        (None, None) => {}
-        _ => return Err("give both `start` and `end` (or neither)".into()),
+    let geom = GeomEdit::parse(g)?;
+    if let Some((start, end)) = geom.vector {
+        let mut g = GradientGeom { start, end, aspect: geom.aspect.unwrap_or(1.0), focal: None };
+        g.set_focal(geom.focal.flatten());
+        gp.angle = g.angle_deg();
+        gp.geom = Some(g);
     }
     if let Some(f) = g.get("freeform") {
         gp.freeform = Some(super::freeform::parse_freeform(f)?);
@@ -282,6 +278,8 @@ pub(crate) fn apply_gradient_edit_in(
             gp.gradient.stops[i].midpoint = if i + 1 < n { 1.0 - mids[n - 2 - i] } else { 0.5 };
         }
     }
+    // Angle and aspect edits keep the focal point in its place in the extent ellipse.
+    let before = gp.geom;
     if let Some(a) = p.get("angle").and_then(Value::as_f64) {
         let a = ((a + 180.0).rem_euclid(360.0)) - 180.0;
         gp.angle = a;
@@ -307,6 +305,9 @@ pub(crate) fn apply_gradient_edit_in(
         if let Some(g) = &mut gp.geom {
             g.aspect = asp;
         }
+    }
+    if let (Some(b), Some(g)) = (before, &mut gp.geom) {
+        g.keep_focal_from(&b);
     }
     if gp.gradient.kind == GradientKind::Freeform {
         // Points already shown (automatic ones fitted to the box) stay put; a fresh freeform
@@ -357,7 +358,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let b = item_paint_bounds(n, index, !stroke);
         // Only a gradient turning freeform needs the shape (its first points go inside it).
-        let inside = (freeform && b.is_some()).then(|| super::freeform::inside_fn(n));
+        let inside = (freeform && b.is_some()).then(|| n.contains_fn());
         let inside: &dyn Fn(Point) -> bool = match &inside {
             Some(f) => f,
             None => &|_| true,
@@ -428,10 +429,35 @@ fn invert(a: Affine) -> Option<Affine> {
     (a.determinant().abs() > 1e-12).then(|| a.inverse())
 }
 
-/// `cur` as a gradient whose vector runs from `start` to `end` in the document. `to_doc` maps the
-/// paint's space (text space for type runs) to the document and `bounds` (in that space) fits an
-/// unplaced gradient, so the aspect ratio the document shows carries over.
-fn vector_paint(cur: &Paint, start: Point, end: Point, to_doc: Affine, bounds: Option<Rect>) -> Option<Paint> {
+/// What `paint.setGradientGeom` sets, in document coordinates (None: kept).
+struct GeomEdit {
+    vector: Option<(Point, Point)>,
+    aspect: Option<f64>,
+    /// Some(None) centres the focal point.
+    focal: Option<Option<Point>>,
+}
+
+impl GeomEdit {
+    fn parse(p: &Value) -> std::result::Result<Self, String> {
+        let point = |k: &str| p.get(k).map(|_| point_param(p, k).ok_or_else(|| format!("`{k}` must be [x, y]"))).transpose();
+        let vector = match (point("start")?, point("end")?) {
+            (Some(s), Some(e)) => Some((s, e)),
+            (None, None) => None,
+            _ => return Err("give both `start` and `end` [x, y] (or neither)".into()),
+        };
+        let focal = match p.get("focal") {
+            None => None,
+            Some(Value::Null) => Some(None),
+            Some(_) => Some(point("focal")?),
+        };
+        Ok(Self { vector, aspect: aspect_param(p)?, focal })
+    }
+}
+
+/// `cur` with the vector, aspect and focal point of `e` (given in the document). `to_doc` maps
+/// the paint's space (text space for type runs) to the document and `bounds` (in that space) fits
+/// an unplaced gradient, so what the document shows carries over where `e` keeps it.
+fn vector_paint(cur: &Paint, e: &GeomEdit, to_doc: Affine, bounds: Option<Rect>) -> Option<Paint> {
     let from_doc = invert(to_doc)?;
     let mut gp = match cur {
         Paint::Gradient(g) => (**g).clone(),
@@ -444,8 +470,17 @@ fn vector_paint(cur: &Paint, start: Point, end: Point, to_doc: Affine, bounds: O
         }
         g
     };
-    let aspect = gp.geom.or_else(|| bounds.map(|b| gp.resolve(b))).map_or(1.0, |g| map(g, to_doc).aspect);
-    let geom = map(GradientGeom { start, end, aspect }, from_doc);
+    let shown = gp.geom.or_else(|| bounds.map(|b| gp.resolve(b))).map(|g| map(g, to_doc));
+    let (start, end) = e.vector.or_else(|| shown.map(|g| (g.start, g.end)))?;
+    let aspect = e.aspect.or_else(|| shown.map(|g| g.aspect)).unwrap_or(1.0);
+    let mut geom = GradientGeom { start, end, aspect, focal: None };
+    match (e.focal, shown) {
+        _ if kind != GradientKind::Radial => {}
+        (Some(f), _) => geom.set_focal(f),
+        (None, Some(b)) => geom.keep_focal_from(&b),
+        (None, None) => {}
+    }
+    let geom = map(geom, from_doc);
     gp.angle = geom.angle_deg();
     gp.geom = Some(geom);
     Some(Paint::Gradient(Box::new(gp)))
@@ -453,8 +488,7 @@ fn vector_paint(cur: &Paint, start: Point, end: Point, to_doc: Affine, bounds: O
 
 fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.setGradientGeom";
-    let start = point_param(p, "start").ok_or_else(|| bad(C, "missing start [x,y]"))?;
-    let end = point_param(p, "end").ok_or_else(|| bad(C, "missing end [x,y]"))?;
+    let edit = GeomEdit::parse(p).map_err(|e| bad(C, e))?;
     // `index` is an alias of `item`.
     let mut p = p.clone();
     if let (None, Some(i)) = (p.get("item"), p.get("index").cloned()) {
@@ -481,14 +515,14 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
                     run_stroke_weight(&mut r.style);
                 }
                 let (paint, b) = run_paint_mut(r, stroke, lb);
-                if let Some(np) = vector_paint(paint, start, end, xf, Some(b)) {
+                if let Some(np) = vector_paint(paint, &edit, xf, Some(b)) {
                     *paint = np;
                 }
             }
             return Ok(());
         }
         let b = item_paint_bounds(n, index, !stroke);
-        if let Some(np) = vector_paint(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), start, end, Affine::IDENTITY, b) {
+        if let Some(np) = vector_paint(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), &edit, Affine::IDENTITY, b) {
             n.appearance.set_paint_at(index, !stroke, np);
         }
         Ok(())

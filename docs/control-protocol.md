@@ -52,6 +52,10 @@ swatch, a Fill/Stroke proxy or the panel's gradient thumbnail onto art runs `pai
 active proxy) with the paint's params and the object's `ids`; a colour dropped on the panel's ramp adds or recolours
 a stop.
 
+Freeform gradients: double-clicking a point with the Gradient tool opens the same `gradientStop` popover on the selected
+point (`paint.freeform.selectPoint`); its fields are `color` (hex), `opacity` and `spread` (percentages), applied by
+`ui.dialog.confirm` through `paint.freeform.setPoint`. `ui.key` Escape ends the line Lines mode is drawing.
+
 Tool options: double-clicking a tool button runs `tool.options {tool}`. For `gradient` it opens the Gradient panel;
 for `eyedropper` it opens Eyedropper Options, an `eyedropperOptions` dialog (fields `sampleSize` 1/3/5, `pickUp` and
 `apply`, the attribute trees of `eyedropper.setOptions`) whose `ui.dialog.confirm` runs `eyedropper.setOptions` (what

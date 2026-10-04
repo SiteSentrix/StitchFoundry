@@ -401,16 +401,17 @@ fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern) -> Option<Gra
     };
     let c = |x: f32, y: f32| m * Point::new(x as f64, y as f64);
     let (kind, geom, stops) = if *axial {
-        let geom = GradientGeom { start: c(coords[0], coords[1]), end: c(coords[2], coords[3]), aspect: 1.0 };
+        let geom = GradientGeom { start: c(coords[0], coords[1]), end: c(coords[2], coords[3]), aspect: 1.0, focal: None };
         (GradientKind::Linear, geom, keep.iter().map(|&i| stop_at(pts[i].0, pts[i].0)).collect::<Vec<_>>())
     } else {
         let (r0, r1) = (coords[2].max(0.0), coords[5].max(1e-6));
-        let centre = c(coords[3], coords[4]);
-        let k = m.as_coeffs();
-        let ex = Vec2::new(k[0], k[1]) * r1 as f64;
-        let ey = Vec2::new(k[2], k[3]) * r1 as f64;
-        let aspect = if ex.hypot() > 1e-9 { ey.hypot() / ex.hypot() } else { 1.0 };
-        let geom = GradientGeom { start: centre, end: centre + ex, aspect };
+        // The end circle, mapped (as an ellipse) into the page; a start circle off its centre
+        // gives the focal point.
+        let p = |x: f32, y: f32| Point::new(x as f64, y as f64);
+        let centre = p(coords[3], coords[4]);
+        let mut geom = GradientGeom { start: centre, end: centre + Vec2::new(r1 as f64, 0.0), aspect: 1.0, focal: None };
+        geom.set_focal(Some(p(coords[0], coords[1])));
+        geom.transform(m, GradientKind::Radial);
         // Offsets are relative to the outer radius; an inner radius shifts them outwards.
         let stops = keep.iter().map(|&i| stop_at(pts[i].0, (r0 + (r1 - r0) * pts[i].0) / r1)).collect();
         (GradientKind::Radial, geom, stops)

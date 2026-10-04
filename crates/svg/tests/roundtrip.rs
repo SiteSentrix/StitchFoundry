@@ -226,7 +226,7 @@ fn linear_gradient_roundtrip() {
     g.stops[1].opacity = 0.5;
     let gp = GradientPaint {
         gradient: g,
-        geom: Some(GradientGeom { start: Point::new(10.0, 20.0), end: Point::new(90.0, 60.0), aspect: 1.0 }),
+        geom: Some(GradientGeom { start: Point::new(10.0, 20.0), end: Point::new(90.0, 60.0), aspect: 1.0, focal: None }),
         angle: 0.0,
         swatch: None,
         freeform: None,
@@ -258,7 +258,7 @@ fn radial_gradient_and_fit_roundtrip() {
     // Elliptical radial via gradientTransform.
     let gp = GradientPaint {
         gradient: g,
-        geom: Some(GradientGeom { start: Point::new(150.0, 150.0), end: Point::new(150.0, 180.0), aspect: 0.5 }),
+        geom: Some(GradientGeom { start: Point::new(150.0, 150.0), end: Point::new(150.0, 180.0), aspect: 0.5, focal: None }),
         angle: 0.0,
         swatch: None,
         freeform: None,
