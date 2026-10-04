@@ -40,6 +40,7 @@ pub mod tile_edge_color;
 mod tools;
 mod transform;
 pub mod transform_each;
+pub mod width_point;
 
 use serde_json::{Value, json};
 
@@ -168,6 +169,7 @@ registry! {
     Expand: [expand::KIND] => expand::SPEC,
     SpotColors: [spot_colors::KIND] => spot_colors::SPEC,
     TransformEach: [transform_each::KIND] => transform_each::SPEC,
+    WidthPoint: [width_point::KIND] => width_point::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

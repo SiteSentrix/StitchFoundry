@@ -26,6 +26,7 @@ mod layer;
 mod live;
 pub(crate) mod maskedit;
 pub(crate) mod menucmds;
+pub(crate) mod newart;
 mod object;
 mod opacitymask;
 mod overprint;
@@ -206,6 +207,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(stylelib::specs());
         v.extend(expand::specs());
         v.extend(attributes::specs());
+        v.extend(newart::specs());
         v
     })
 }

@@ -448,9 +448,7 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
-    s.paint.fill = Paint::solid(Color::WHITE);
-    s.paint.stroke = Paint::solid(Color::BLACK);
-    s.paint.stroke_width = 1.0;
+    super::newart::reset(s);
     let ids = paint_targets(s, p)?;
     if !ids.is_empty() {
         s.edit("Default Fill and Stroke", |d, _| {

@@ -340,6 +340,9 @@ pub struct Prefs {
     pub width_profiles: Vec<vectorcraft_doc::SavedProfile>,
     /// General → Use Japanese Crop Marks: the style of Create Trim Marks and Effect → Crop Marks.
     pub japanese_crop_marks: bool,
+    /// Appearance panel → New Art Has Basic Appearance (on): new art takes one fill and stroke;
+    /// off, the whole appearance of the last selection (`appearance.setNewArtBasic`).
+    pub new_art_basic: bool,
 }
 
 impl Default for Prefs {
@@ -461,6 +464,7 @@ impl Default for Prefs {
             flattener_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
+            new_art_basic: true,
         }
     }
 }
@@ -529,7 +533,7 @@ impl Session {
             docs: vec![],
             active: None,
             prefs: Prefs::default(),
-            paint: PaintDefaults { fill: Paint::solid(Color::WHITE), stroke: Paint::solid(Color::BLACK), stroke_width: 1.0 },
+            paint: PaintDefaults::default(),
             fill_active: true,
             clipboard: vec![],
             journal: vec![],
@@ -649,6 +653,9 @@ impl Session {
         let r = (spec.run)(self, params);
         self.depth -= 1;
         let r = r?;
+        if self.depth == 0 {
+            self.inherit_new_art();
+        }
         if spec.journal && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
             let p = self.noted(params);
             self.journal.push((id.to_string(), p));
@@ -888,6 +895,8 @@ mod tests_maskview;
 #[cfg(test)]
 mod tests_menucmds;
 #[cfg(test)]
+mod tests_newart;
+#[cfg(test)]
 mod tests_objexpand;
 #[cfg(test)]
 mod tests_opacitymask;
@@ -943,6 +952,8 @@ mod tests_tileedge;
 mod tests_tints;
 #[cfg(test)]
 mod tests_transparencygrid;
+#[cfg(test)]
+mod tests_widthpoints;
 #[cfg(test)]
 mod tests_widthprofiles;
 #[cfg(test)]

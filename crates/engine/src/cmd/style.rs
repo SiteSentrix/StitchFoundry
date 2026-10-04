@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks",
+            "{name, add?: bool, ids? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
             has_doc,
             style_apply
         ),
@@ -216,7 +216,7 @@ fn unitized(mut ap: Appearance, from: Option<Rect>) -> Appearance {
 /// strokes of its own lends those of its topmost painted object, and type its characters' fill
 /// and stroke. Placed gradients come relative to the unit box (from the bounds of the object
 /// they're on).
-fn captured(n: &Node) -> Appearance {
+pub(crate) fn captured(n: &Node) -> Appearance {
     let mut ap = n.appearance.clone();
     if !ap.items.is_empty() {
         return unitized(ap, n.geometric_bounds());
@@ -325,7 +325,13 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     let chars = s.prefs.override_char_color;
     let ids = super::appearance::appearance_targets(s, p)?;
     if ids.is_empty() {
-        return Err(bad("graphicStyle.apply", "nothing selected (or pass `ids`)"));
+        if p.get("ids").is_some() || p.get("id").is_some() {
+            return Err(bad("graphicStyle.apply", "no such objects"));
+        }
+        // Nothing selected: the next object drawn takes the style.
+        let g = s.doc()?.doc.graphic_styles[i].clone();
+        s.new_art_style(&g, add);
+        return Ok(json!({ "newArt": true }));
     }
     s.edit("Apply Graphic Style", |d, _| {
         if add {

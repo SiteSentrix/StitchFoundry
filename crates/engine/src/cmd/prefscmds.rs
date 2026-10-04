@@ -296,6 +296,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("patternTileEdgeColor", "Guides & Grid", "Pattern Editing", "Tile Edge Color", color),
     // Object → Create Trim Marks, Effect → Crop Marks
     p!("japaneseCropMarks", "General", "Options", "Use Japanese Crop Marks", bool),
+    // Appearance panel menu
+    p!("newArtBasic", "General", "Appearance Panel", "New Art Has Basic Appearance", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

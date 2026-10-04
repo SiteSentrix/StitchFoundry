@@ -10,7 +10,7 @@ use vectorcraft_geom::{Anchor, AnchorKind, BezPath, FillRule, PathData, Point, R
 use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, Cap, Join, SimplifyOptions};
 
-use super::create::add_node;
+use super::create::{add_look, add_node};
 use super::*;
 use crate::EngineError;
 
@@ -505,8 +505,8 @@ fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let sp = fit_freehand(&pts, tol, closed);
     let fill = if bool_or(p, "fill", false) { s.paint.fill.clone() } else { Paint::None };
-    let ap = Appearance::basic(fill, stroke_paint(s), s.paint.stroke_width.max(0.1));
-    add_node(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), ap, None)
+    let look = s.new_art_look(fill, stroke_paint(s), s.paint.stroke_width.max(0.1));
+    add_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None)
 }
 
 // ---------- Curvature ----------
@@ -536,11 +536,12 @@ fn curvature(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
         return Ok(json!({ "id": id.0 }));
     }
-    let mut ap = Appearance::basic(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+    let mut look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+    let ap = &mut look.appearance;
     if ap.stroke_paint().is_none() && ap.fill_paint().is_none() {
         ap.set_stroke(Paint::solid(Color::BLACK));
     }
-    add_node(s, "Curvature", path_kind(PathData::single(sp)), ap, None)
+    add_look(s, "Curvature", path_kind(PathData::single(sp)), look, None)
 }
 
 // ---------- anchor tools ----------

@@ -49,6 +49,13 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         }
         // Double-clicking a stop on the gradient annotator: its popover, next to the stop's chip.
         "gradientStop" => Dialog::new(kind, json!({"index": p.get("index").cloned().unwrap_or(json!(0)), "x": x, "y": y, "tab": "color"})),
+        // Double-clicking a width point with the Width tool: Width Point Edit.
+        super::width_point::KIND => {
+            if let Err(e) = super::width_point::open(app, &p) {
+                app.status(e);
+            }
+            return;
+        }
         _ => return,
     };
     app.ui.dialog = Some(d);

@@ -203,7 +203,9 @@ pub enum ArrowAlign {
     Tip,
 }
 
-/// Variable-width profile: (position 0..1 along the path, left width factor, right width factor).
+/// Variable-width profile: (position 0..1 along the path, left width factor, right width factor),
+/// in order along the path. Two points at the same position make a discontinuous point: the
+/// first is the width just before it, the second the width just after it (a step).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct WidthProfile {
     pub points: Vec<(f64, f64, f64)>,
@@ -276,6 +278,19 @@ impl WidthProfile {
     }
     pub fn taper_start() -> Self {
         Self::preset("taperStart").expect("built-in")
+    }
+    /// The (left, right) factors just before and just after `t`: they differ only at a
+    /// discontinuous point (two points at `t`, within `1e-7`).
+    pub fn around(&self, t: f64) -> ((f64, f64), (f64, f64)) {
+        let p = &self.points;
+        if let Some(i) = p.iter().position(|q| (q.0 - t).abs() <= 1e-7) {
+            let j = i + p[i..].iter().take_while(|q| (q.0 - p[i].0).abs() <= 1e-9).count() - 1;
+            if j > i {
+                return ((p[i].1, p[i].2), (p[j].1, p[j].2));
+            }
+        }
+        let v = self.at(t);
+        (v, v)
     }
 }
 

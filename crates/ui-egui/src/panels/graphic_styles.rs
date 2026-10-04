@@ -424,9 +424,8 @@ fn act(app: &mut VectorcraftApp, ui: &Ui, s: &Shown, ev: Events, picker: bool) {
             ui.close();
         }
         Some(Click::Apply(name)) => {
-            if selection_len(app) > 0 {
-                app.run("graphicStyle.apply", json!({"name": name, "add": alt_held(ui)})).ok();
-            }
+            // With nothing selected the next object drawn takes the style.
+            app.run("graphicStyle.apply", json!({"name": name, "add": alt_held(ui)})).ok();
             set_pstate(ui.ctx(), "gs-sel", vec![name]);
         }
         Some(Click::Toggle(name)) => {
