@@ -263,7 +263,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let selected = selection(app, ui);
     // Without a selection the swatch of the active paint is highlighted.
-    let sel: Vec<String> = if selected.is_empty() { active_swatch.into_iter().collect() } else { selected.clone() };
+    let fallback: Vec<String> = if selected.is_empty() { active_swatch.into_iter().collect() } else { vec![] };
+    let sel = if selected.is_empty() { &fallback } else { &selected };
     let is_sel = |name: &str| sel.iter().any(|s| s == name);
     let (tile, pitch) = view.tile();
     let mut clicked: Option<(Entry, egui::Modifiers)> = None;

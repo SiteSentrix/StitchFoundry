@@ -221,10 +221,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     app.ui.dialog = Some(d);
     if cancel {
-        if spec.preview {
-            let _ = app.session.cancel_interaction();
-        }
-        app.ui.dialog = None;
+        self::cancel(app);
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
     }
