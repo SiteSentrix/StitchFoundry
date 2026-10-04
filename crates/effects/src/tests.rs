@@ -212,11 +212,17 @@ fn offset_path_grows_and_shrinks() {
 }
 
 #[test]
-fn outline_stroke_uses_context_width() {
-    let ctx = GeomContext { stroke_width: 10.0 };
+fn outline_stroke_uses_context_stroke() {
+    let st = vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 10.0);
+    let ctx = GeomContext { stroke: Some(&st), ..Default::default() };
     let out = apply_geometry_with(&[fx("path.outlineStroke", json!({}))], &square(), Rect::new(0.0, 0.0, 100.0, 100.0), &ctx);
     let b = out.bounds().unwrap();
     assert!(close(b.width(), 110.0, 0.1), "{b:?}");
+    // An explicit width overrides the weight; without a stroke a plain 1 pt one is outlined.
+    let out = apply_geometry_with(&[fx("path.outlineStroke", json!({"width": 4}))], &square(), Rect::new(0.0, 0.0, 100.0, 100.0), &ctx);
+    assert!(close(out.bounds().unwrap().width(), 104.0, 0.1));
+    let out = run("path.outlineStroke", json!({}), &square());
+    assert!(close(out.bounds().unwrap().width(), 101.0, 0.1));
 }
 
 #[test]

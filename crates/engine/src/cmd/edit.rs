@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New…",
             ["File"],
             Some("Cmd+N"),
-            "{width?: pt=612, height?: pt=792, units?: \"Points\"|\"Inches\"|\"Millimeters\"|\"Pixels\"…, title?, artboards?: n, colorMode?: \"rgb\"|\"cmyk\"}",
+            "{width?: pt=612, height?: pt=792, units?: \"Points\"|\"Inches\"|\"Millimeters\"|\"Pixels\"…, title?, artboards?: n, colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK)}",
             always,
             file_new
         ),
@@ -58,13 +58,14 @@ fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     if !(w > 0.0 && h > 0.0) || w > 16383.0 * 10.0 || h > 16383.0 * 10.0 {
         return Err(bad("file.new", "width/height must be positive and within the canvas"));
     }
-    let mut d = Document::new(w, h);
+    let mode = match str_param(p, "colorMode") {
+        Some(m) if m.eq_ignore_ascii_case("cmyk") => vectorcraft_doc::ColorMode::Cmyk,
+        _ => vectorcraft_doc::ColorMode::Rgb,
+    };
+    let mut d = Document::new_with_mode(w, h, mode);
     d.title = str_param(p, "title").map(str::to_string).unwrap_or_else(|| s.next_untitled());
     if let Some(u) = str_param(p, "units") {
         d.units = parse_unit(u).ok_or_else(|| bad("file.new", format!("unknown units `{u}`")))?;
-    }
-    if str_param(p, "colorMode").is_some_and(|m| m.eq_ignore_ascii_case("cmyk")) {
-        d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
     }
     let n = p.get("artboards").and_then(Value::as_u64).unwrap_or(1).clamp(1, 1000) as usize;
     for i in 1..n {

@@ -255,8 +255,14 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
     let s = size * 0.62;
     let fill_r = Rect::from_min_size(rect.min + vec2(0.0, 0.0), Vec2::splat(s));
     let stroke_r = Rect::from_min_size(rect.max - Vec2::splat(s), Vec2::splat(s));
-    let stroke_resp = ui.interact(stroke_r, ui.id().with("stroke-proxy"), Sense::click());
-    let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click());
+    let stroke_resp = ui.interact(stroke_r, ui.id().with("stroke-proxy"), Sense::click_and_drag());
+    let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click_and_drag());
+    // A proxy drags its paint (onto the Swatches panel or art), unless it shows "?".
+    for (resp, paint, mixed) in [(&fill_resp, fill, mixed.0), (&stroke_resp, stroke, mixed.1)] {
+        if !mixed {
+            drag_source(ui, resp, || PanelDrag::paint(paint.clone()));
+        }
+    }
     let question = |ui: &Ui, r: Rect, color: Color32| {
         ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(r.height() * 0.8), color);
     };
@@ -538,14 +544,27 @@ fn choice_row(ui: &mut Ui, label: &str, enabled: bool) -> (Rect, Response, Color
 
 /// Panel-style checkbox with a disabled state. Returns true when toggled.
 pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
+    check3(ui, label, Some(value), enabled)
+}
+
+/// Three-state [`check`]: `None` shows a dash (a neutral or mixed state). Returns true when clicked.
+pub fn check3(ui: &mut Ui, label: &str, value: Option<bool>, enabled: bool) -> bool {
     let t = Tokens::get(ui.ctx());
     let (bx, resp, border) = choice_row(ui, label, enabled);
-    ui.painter().rect_filled(bx, CornerRadius::same(2), if value && enabled { t.accent_strong } else { t.input });
+    let checked = value == Some(true);
+    ui.painter().rect_filled(bx, CornerRadius::same(2), if checked && enabled { t.accent_strong } else { t.input });
     ui.painter().rect_stroke(bx, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
-    if value {
-        let c = if enabled { Color32::WHITE } else { t.text_disabled };
-        ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.center_bottom() + vec2(-1.0, -3.5)], Stroke::new(1.6, c));
-        ui.painter().line_segment([bx.center_bottom() + vec2(-1.0, -3.5), bx.right_top() + vec2(-3.0, 3.0)], Stroke::new(1.6, c));
+    match value {
+        Some(true) => {
+            let c = if enabled { Color32::WHITE } else { t.text_disabled };
+            ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.center_bottom() + vec2(-1.0, -3.5)], Stroke::new(1.6, c));
+            ui.painter().line_segment([bx.center_bottom() + vec2(-1.0, -3.5), bx.right_top() + vec2(-3.0, 3.0)], Stroke::new(1.6, c));
+        }
+        None => {
+            let c = if enabled { t.text } else { t.text_disabled };
+            ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.right_center() - vec2(3.0, 0.0)], Stroke::new(1.6, c));
+        }
+        Some(false) => {}
     }
     enabled && resp.clicked()
 }
@@ -844,6 +863,29 @@ pub fn swatch_tile(ui: &Ui, rect: Rect, paint: &Paint, selected: bool, hovered: 
     }
 }
 
+/// A recessed search field with an italic `hint` (Layers' Search All, Swatches' Find), keeping its
+/// text in egui memory under `id`. Returns the text.
+pub fn search_field(ui: &mut Ui, id: egui::Id, hint: &str) -> String {
+    let t = Tokens::get(ui.ctx());
+    let mut query: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+    egui::Frame::NONE
+        .fill(t.input)
+        .stroke(Stroke::new(1.0, t.input_border))
+        .corner_radius(egui::CornerRadius::same(2))
+        .inner_margin(egui::Margin::symmetric(8, 5))
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut query)
+                    .id(id.with("edit"))
+                    .frame(egui::Frame::NONE)
+                    .hint_text(egui::RichText::new(hint).italics())
+                    .desired_width(ui.available_width()),
+            );
+        });
+    ui.data_mut(|d| d.insert_temp(id, query.clone()));
+    query
+}
+
 /// A bordered list box (Swatches tiles, Appearance rows, Artboards list).
 pub fn list_box<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Tokens::get(ui.ctx());
@@ -900,5 +942,58 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         if s.is_empty() { Some(None) } else { s.parse::<f64>().ok().map(Some) }
     } else {
         None
+    }
+}
+
+/// What panels drag onto art and onto each other. One payload type, so the canvas has one drop
+/// handler for all of them (`canvas::panel_drop`); a chip of a dragged paint follows the pointer.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PanelDrag {
+    /// A paint: Swatches panel tiles, a Fill/Stroke proxy or the Gradient panel's thumbnail. Art it
+    /// is dropped on takes `params` (`{swatch}`, `{color}`, `{gradient}`…; null for a colour group,
+    /// which paints nothing) through the active proxy's `paint.setFill`/`paint.setStroke`; the
+    /// Gradient panel's ramp takes its colour as a stop; the Swatches panel moves `rows`, or makes
+    /// a swatch of a paint dragged from elsewhere.
+    Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows> },
+    /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
+    /// (`appearance.copyFrom`).
+    Appearance(vectorcraft_doc::NodeId),
+}
+
+/// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour
+/// group under the pointer when the drag started (`grabbed`) and `names`, the panel selection when
+/// the grabbed one is part of it (only colour groups, or only swatches, like the grabbed one), in
+/// panel order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwatchRows {
+    pub grabbed: String,
+    pub names: Vec<String>,
+    /// The names are colour groups.
+    pub groups: bool,
+}
+
+impl PanelDrag {
+    /// `paint` dragged from a Fill/Stroke proxy or the Gradient panel's thumbnail. A gradient
+    /// carries no placement: it fits the art it lands on.
+    pub fn paint(mut paint: Paint) -> Self {
+        if let Paint::Gradient(g) = &mut paint {
+            g.geom = None;
+        }
+        Self::Paint { params: crate::panels::paint_params(&paint), paint, rows: None }
+    }
+    /// The dragged colour (a solid paint's), which the Gradient panel's ramp takes.
+    pub fn color(&self) -> Option<vectorcraft_color::Color> {
+        match self {
+            Self::Paint { paint, .. } => paint.color(),
+            Self::Appearance(_) => None,
+        }
+    }
+}
+
+/// Make `resp` (which senses drags) a source of the [`PanelDrag`] `drag` builds when a drag starts
+/// on it.
+pub fn drag_source(ui: &Ui, resp: &Response, drag: impl FnOnce() -> PanelDrag) {
+    if resp.drag_started() {
+        egui::DragAndDrop::set_payload(ui.ctx(), drag());
     }
 }

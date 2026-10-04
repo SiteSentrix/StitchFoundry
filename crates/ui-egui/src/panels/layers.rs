@@ -25,22 +25,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut expanded: HashSet<u64> = ui.data(|d| d.get_temp(expanded_id())).unwrap_or_else(|| doc.layers.iter().map(|l| l.id.0).collect());
     let mut actions: Vec<(String, serde_json::Value)> = vec![];
     // Search field ("Search All").
-    let search_id = egui::Id::new("layers-search");
-    let mut query: String = ui.data(|d| d.get_temp(search_id)).unwrap_or_default();
-    egui::Frame::NONE
-        .fill(t.input)
-        .stroke(Stroke::new(1.0, t.input_border))
-        .corner_radius(egui::CornerRadius::same(2))
-        .inner_margin(egui::Margin::symmetric(8, 5))
-        .show(ui, |ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut query)
-                    .frame(egui::Frame::NONE)
-                    .hint_text(egui::RichText::new("Search All").italics())
-                    .desired_width(ui.available_width()),
-            );
-        });
-    ui.data_mut(|d| d.insert_temp(search_id, query.clone()));
+    crate::widgets::search_field(ui, egui::Id::new("layers-search"), "Search All");
     ui.add_space(6.0);
     let h = ui.available_height() - 34.0;
     egui::ScrollArea::vertical().max_height(h).auto_shrink([false, false]).show(ui, |ui| {

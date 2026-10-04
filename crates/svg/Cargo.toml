@@ -13,6 +13,7 @@ vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-effects = { workspace = true }
+vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
 kurbo = { workspace = true }
 usvg = { workspace = true }
@@ -22,6 +23,7 @@ image = { workspace = true }
 svgtypes = "0.16"
 
 [dev-dependencies]
+resvg = { version = "0.45", default-features = false }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }
 image = { workspace = true }

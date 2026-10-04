@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, Point, Rect, Vec2};
 
 use super::edit::{duplicate_in, selected_roots};
@@ -131,7 +131,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Object Properties",
             [],
             None,
-            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?}",
+            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool}",
             has_doc,
             set_props
         ),
@@ -644,6 +644,13 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
         Some(b) => Some(BlendMode::parse(b).ok_or_else(|| bad("object.setProps", format!("unknown blend mode `{b}`")))?),
         None => None,
     };
+    let knockout = match p.get("knockout") {
+        Some(v) => Some(
+            Knockout::from_value(v)
+                .ok_or_else(|| bad("object.setProps", format!("knockout must be \"on\", \"off\", \"neutral\" or a bool, not {v}")))?,
+        ),
+        None => None,
+    };
     s.edit("Object Properties", |d, _| {
         for id in &ids {
             let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
@@ -665,8 +672,11 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(v) = p.get("isolate").and_then(Value::as_bool) {
                 n.isolate = v;
             }
-            if let Some(v) = p.get("knockout").and_then(Value::as_bool) {
-                n.knockout = v;
+            if let Some(k) = knockout {
+                n.knockout = k;
+            }
+            if let Some(v) = p.get("knockoutShape").and_then(Value::as_bool) {
+                n.knockout_shape = v;
             }
         }
         Ok(())

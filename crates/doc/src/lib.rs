@@ -38,6 +38,7 @@ pub use appearance::{
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
+pub use node::Knockout;
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use selection::{AnchorRef, Selection};
@@ -206,6 +207,16 @@ pub enum ColorMode {
     Cmyk,
 }
 
+impl ColorMode {
+    /// The colour model new colours take in a document of this mode.
+    pub fn model(self) -> vectorcraft_color::cms::Model {
+        match self {
+            ColorMode::Rgb => vectorcraft_color::cms::Model::Rgb,
+            ColorMode::Cmyk => vectorcraft_color::cms::Model::Cmyk,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Artboard {
     pub id: u32,
@@ -254,11 +265,80 @@ impl Default for GridPrefs {
     }
 }
 
-/// A named graphic style (Graphic Styles panel).
+/// A named graphic style (Graphic Styles panel): an appearance plus the object's transparency.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GraphicStyle {
     pub name: String,
     pub appearance: Appearance,
+    /// Stable id linked objects refer to ([`Node::graphic_style`]); 0 until first needed (styles
+    /// from older files get one when an object is first linked to them).
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub id: u32,
+    #[serde(default = "one", skip_serializing_if = "skip::is_one")]
+    pub opacity: f32,
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub blend: vectorcraft_color::BlendMode,
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub isolate: bool,
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub knockout: Knockout,
+    /// Placed gradients are stored relative to the unit box (0, 0)–(1, 1), so applying the style
+    /// places them on each object's own bounds. Styles saved before this kept document
+    /// coordinates (false).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unit_box: bool,
+}
+
+fn one() -> f32 {
+    1.0
+}
+
+/// The name of the style new documents list first (Sort by Name keeps it first).
+pub const DEFAULT_GRAPHIC_STYLE: &str = "Default Graphic Style";
+
+impl GraphicStyle {
+    /// The box a style's placed gradients are stored relative to.
+    pub const UNIT_BOX: Rect = Rect::new(0.0, 0.0, 1.0, 1.0);
+
+    /// A style with `appearance` (its placed gradients, if any, in unit-box space) and default
+    /// transparency (no id yet).
+    pub fn new(name: impl Into<String>, appearance: Appearance) -> Self {
+        Self {
+            name: name.into(),
+            appearance,
+            id: 0,
+            opacity: 1.0,
+            blend: Default::default(),
+            isolate: false,
+            knockout: Knockout::Neutral,
+            unit_box: true,
+        }
+    }
+    /// A style capturing `n`'s transparency and `appearance` (in unit-box space).
+    pub fn of(name: impl Into<String>, appearance: Appearance, n: &Node) -> Self {
+        Self { opacity: n.opacity, blend: n.blend, isolate: n.isolate, knockout: n.knockout, ..Self::new(name, appearance) }
+    }
+    /// The style's appearance as object `n` takes it: placed gradients stored in unit-box space
+    /// land at the same place relative to `n`'s geometric bounds.
+    pub fn appearance_on(&self, n: &Node) -> std::borrow::Cow<'_, Appearance> {
+        let placed = self.unit_box && self.appearance.has_placed_gradient();
+        match n.geometric_bounds().filter(|_| placed) {
+            Some(b) => {
+                let mut ap = self.appearance.clone();
+                ap.rebase_gradients(Self::UNIT_BOX, b);
+                std::borrow::Cow::Owned(ap)
+            }
+            None => std::borrow::Cow::Borrowed(&self.appearance),
+        }
+    }
+    /// Give `n` this style's transparency.
+    pub fn apply_transparency(&self, n: &mut Node) {
+        (n.opacity, n.blend, n.isolate, n.knockout) = (self.opacity, self.blend, self.isolate, self.knockout);
+    }
+    /// Does `n` have this style's transparency?
+    pub fn transparency_matches(&self, n: &Node) -> bool {
+        (n.opacity, n.blend, n.isolate, n.knockout) == (self.opacity, self.blend, self.isolate, self.knockout)
+    }
 }
 
 /// A symbol definition.
@@ -333,6 +413,14 @@ pub struct Document {
     /// Foreign data preserved on round-trip.
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub unknown: serde_json::Map<String, serde_json::Value>,
+    /// Transparency panel → Page Isolated Blending: the page is an isolated transparency group,
+    /// so top-level blend modes don't blend with what lies under the page.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub page_isolate: bool,
+    /// Transparency panel → Page Knockout Group: the page's elements (its layers; neutral layers
+    /// pass their contents through) knock each other out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub page_knockout: bool,
 }
 
 fn ppi72() -> f64 {
@@ -342,15 +430,20 @@ fn ppi72() -> f64 {
 pub const FORMAT_VERSION: u32 = 1;
 
 impl Document {
-    /// A new document with one artboard of `size` and one layer ("Layer 1").
+    /// A new RGB document with one artboard of `size` and one layer ("Layer 1").
     pub fn new(width: f64, height: f64) -> Self {
-        let (swatches, swatch_groups) = vectorcraft_color::default_swatches();
+        Self::new_with_mode(width, height, ColorMode::Rgb)
+    }
+
+    /// [`Document::new`] in colour `mode`, with that mode's default swatches.
+    pub fn new_with_mode(width: f64, height: f64, mode: ColorMode) -> Self {
+        let (swatches, swatch_groups) = vectorcraft_color::default_swatches(mode.model());
         let mut d = Self {
             version: FORMAT_VERSION,
             title: "Untitled-1".into(),
             template: false,
             units: Unit::Points,
-            color_mode: ColorMode::Rgb,
+            color_mode: mode,
             artboards: vec![Artboard {
                 id: 1,
                 name: "Artboard 1".into(),
@@ -376,6 +469,8 @@ impl Document {
             mask_edit: None,
             next_id: 1,
             unknown: Default::default(),
+            page_isolate: false,
+            page_knockout: false,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
@@ -633,20 +728,51 @@ impl Document {
     }
 }
 
+/// Graphic styles.
+impl Document {
+    /// Index of the graphic style named `name`.
+    pub fn graphic_style_index(&self, name: &str) -> Option<usize> {
+        self.graphic_styles.iter().position(|g| g.name == name)
+    }
+    /// The graphic style named `name`.
+    pub fn graphic_style(&self, name: &str) -> Option<&GraphicStyle> {
+        self.graphic_styles.iter().find(|g| g.name == name)
+    }
+    /// The graphic style with id `id` (0 never matches).
+    pub fn graphic_style_by_id(&self, id: u32) -> Option<&GraphicStyle> {
+        self.graphic_styles.iter().find(|g| g.id != 0 && g.id == id)
+    }
+    /// An id no graphic style has.
+    pub fn next_graphic_style_id(&self) -> u32 {
+        self.graphic_styles.iter().map(|g| g.id).max().unwrap_or(0) + 1
+    }
+    /// The id of graphic style `index`, assigning one if it has none yet.
+    pub fn graphic_style_id(&mut self, index: usize) -> u32 {
+        if self.graphic_styles[index].id == 0 {
+            self.graphic_styles[index].id = self.next_graphic_style_id();
+        }
+        self.graphic_styles[index].id
+    }
+    /// The default name of a new graphic style: the first free "Graphic Style N", N counting on
+    /// from the number of styles.
+    pub fn new_graphic_style_name(&self) -> String {
+        (self.graphic_styles.len() + 1..).map(|i| format!("Graphic Style {i}")).find(|n| self.graphic_style(n).is_none()).unwrap_or_default()
+    }
+}
+
 fn default_graphic_styles() -> Vec<GraphicStyle> {
     use vectorcraft_color::{Color, Paint};
-    vec![
-        GraphicStyle { name: "Default Graphic Style".into(), appearance: Appearance::default_art() },
-        GraphicStyle { name: "Black Outline".into(), appearance: Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0) },
-        GraphicStyle {
-            name: "Heavy Ink".into(),
-            appearance: Appearance::basic(Paint::solid(Color::from_hex("#1b1464").unwrap()), Paint::solid(Color::BLACK), 4.0),
-        },
-        GraphicStyle {
-            name: "Sunshine".into(),
-            appearance: Appearance::basic(Paint::solid(Color::from_hex("#fbb03b").unwrap()), Paint::solid(Color::from_hex("#f15a24").unwrap()), 2.0),
-        },
+    let solid = |hex| Paint::solid(Color::from_hex(hex).unwrap());
+    [
+        GraphicStyle::new(DEFAULT_GRAPHIC_STYLE, Appearance::default_art()),
+        GraphicStyle::new("Black Outline", Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0)),
+        GraphicStyle::new("Heavy Ink", Appearance::basic(solid("#1b1464"), Paint::solid(Color::BLACK), 4.0)),
+        GraphicStyle::new("Sunshine", Appearance::basic(solid("#fbb03b"), solid("#f15a24"), 2.0)),
     ]
+    .into_iter()
+    .zip(1..)
+    .map(|(g, id)| GraphicStyle { id, ..g })
+    .collect()
 }
 
 #[cfg(test)]

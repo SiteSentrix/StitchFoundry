@@ -117,10 +117,11 @@ impl Renderer {
     pub(crate) fn draw_live(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
         let stamp = self.stamp;
         self.live.tick(stamp);
-        let layered = !f.opts.outline && (a.opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate);
+        let opacity = self.opacity_of(a);
+        let layered = !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate);
         if layered {
             ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, Some(blend_mode(a.blend)), Some(a.opacity), None, None);
+            ctx.push_layer(None, Some(blend_mode(a.blend)), Some(opacity), None, None);
         }
         self.draw_live_body(ctx, f, a, true);
         if layered {

@@ -1,13 +1,14 @@
 //! Gradient tool (G) and the gradient annotator.
 //!
 //! Drag across selected objects to set the gradient vector of the paint behind the active proxy
-//! (fill or stroke; type objects' runs), a solid paint becoming the default gradient. Shift
-//! constrains the angle to 45°. With nothing selected, the press targets the object under the
+//! (fill or stroke; type objects' runs), a solid paint becoming the default gradient. With nothing
+//! selected, the press targets the object under the
 //! pointer; a click inside selected art applies the gradient from that point.
 //!
 //! The annotator is a bar from a round start handle to a square end handle. Drag the start handle
 //! (or the bar) to move the gradient, the end handle to change its length and angle, and just past
-//! the end to rotate it (Shift snaps to 45°). Colour stops sit under the bar: click the bar to add
+//! the end to rotate it. Dragged handles snap to anchors, edges and smart guides; Shift instead
+//! constrains the vector to 45° steps from the Constrain Angle preference. Colour stops sit under the bar: click the bar to add
 //! one, drag one to move it (Alt drags a copy), drag it off the bar to delete it, and drag a
 //! diamond above the bar to move a midpoint. Double-clicking a stop opens its popover. The
 //! selected stop (`gradient.selectStop`) is shared with the Gradient and Color panels: Delete or
@@ -18,9 +19,10 @@ use vectorcraft_color::gradient::{duplicate_stop, insert_stop, midpoint_from_pos
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientStop};
 use vectorcraft_doc::NodeId;
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_geom::{Affine, Point, Vec2};
+use vectorcraft_geom::{Affine, Point, Vec2, constrain_angle_from};
 
 use super::paint_owner;
+use crate::guides::snap_draw;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 const BAR: [u8; 3] = [0x20, 0x20, 0x20];
@@ -181,6 +183,8 @@ struct Gesture {
 #[derive(Default)]
 pub struct GradientTool {
     gesture: Option<Gesture>,
+    /// Smart-guide feedback of the handle being dragged.
+    guides: Vec<Overlay>,
 }
 
 /// Overlays of an annotator: the bar, the handles, the midpoint diamonds and a chip per stop.
@@ -260,7 +264,9 @@ impl GradientTool {
                 Grab::Art
             }
         };
-        self.gesture = Some(Gesture { grab, at: p, began: false, vector: None, stop: None });
+        // A vector drawn on the art starts on the snapped point.
+        let at = if grab == Grab::Art { snap_draw(cx, p, &[]).0 } else { p };
+        self.gesture = Some(Gesture { grab, at, began: false, vector: None, stop: None });
         out
     }
 
@@ -274,20 +280,33 @@ impl GradientTool {
             g.began = true;
             out.push(Action::Begin("Gradient".into()));
         }
-        let snap = |from: Point, to: Point| if mods.shift { from + vectorcraft_geom::constrain_angle(to - from, 45.0) } else { to };
+        let constrain = |v: Vec2| constrain_angle_from(v, 45.0, cx.constrain_angle);
+        // Where a handle dragged to `to` lands: Shift constrains the vector from `from`, else it
+        // snaps (keeping the guides to show).
+        let mut guides = vec![];
+        let mut place = |from: Point, to: Point| {
+            if mods.shift {
+                from + constrain(to - from)
+            } else {
+                let (q, o) = snap_draw(cx, to, &[]);
+                guides = o;
+                q
+            }
+        };
         let (cmd, params) = match &g.grab {
             Grab::Art => {
-                let end = snap(g.at, p);
+                let end = place(g.at, p);
                 g.vector = Some((g.at, end));
                 ("paint.setGradientGeom", Self::geom_params(cx, g.at, end))
             }
             Grab::Move { geom, .. } => {
-                let d = p - g.at;
-                ("paint.setGradientGeom", Self::geom_params(cx, geom.start + d, geom.end + d))
+                // The start handle snaps; Shift constrains the move.
+                let start = place(geom.start, geom.start + (p - g.at));
+                ("paint.setGradientGeom", Self::geom_params(cx, start, start + (geom.end - geom.start)))
             }
-            Grab::End(geom) => ("paint.setGradientGeom", Self::geom_params(cx, geom.start, snap(geom.start, p))),
+            Grab::End(geom) => ("paint.setGradientGeom", Self::geom_params(cx, geom.start, place(geom.start, p))),
             Grab::Rotate(geom) => {
-                let dir = snap(geom.start, p) - geom.start;
+                let dir = if mods.shift { constrain(p - geom.start) } else { p - geom.start };
                 let len = dir.hypot();
                 let end = if len < 1e-12 { geom.end } else { geom.start + dir * (geom.length() / len) };
                 ("paint.setGradientGeom", Self::geom_params(cx, geom.start, end))
@@ -313,11 +332,13 @@ impl GradientTool {
                 ("paint.editGradient", Self::stops_params(cx, &set_midpoint(stops, *index, m)))
             }
         };
+        self.guides = guides;
         out.push(Action::Preview(cmd.into(), params));
         out
     }
 
     fn release(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        self.guides.clear();
         let Some(g) = self.gesture.take() else { return vec![] };
         if g.began {
             let mut out = vec![Action::Commit];
@@ -386,6 +407,7 @@ impl Tool for GradientTool {
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.busy() {
             self.gesture = None;
+            self.guides.clear();
             return vec![Action::Cancel];
         }
         if self.busy() || !self.claims_key(cx, key) {
@@ -411,14 +433,16 @@ impl Tool for GradientTool {
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        match (Annotator::of(cx), self.gesture.as_ref().and_then(|g| g.vector)) {
+        let mut o = match (Annotator::of(cx), self.gesture.as_ref().and_then(|g| g.vector)) {
             (Some(a), _) => annotator_overlays(cx, &a),
             // A vector drawn on a paint that isn't a gradient yet.
             (None, Some((s, e))) => {
                 annotator_overlays(cx, &Annotator::with(GradientGeom { start: s, end: e, aspect: 1.0 }, &Gradient::default().stops))
             }
             _ => vec![],
-        }
+        };
+        o.extend(self.guides.iter().cloned());
+        o
     }
 
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
@@ -579,6 +603,39 @@ mod tests {
         let end = point(&preview(&t.pointer(&cx, &with(SHIFT, ev(PointerKind::Drag, Point::new(103.0, 60.0)))))["end"]);
         // Snapped to straight up, keeping the 100 pt length.
         assert!(end.distance(Point::new(100.0, 50.0)) < 1e-9, "{end:?}");
+    }
+
+    #[test]
+    fn handles_snap_to_anchors_and_shift_uses_the_constrain_angle() {
+        let (d, s) = graded(two());
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        let mut t = GradientTool::default();
+        // The end handle dragged near the rectangle's corner lands on it, with a guide label.
+        t.pointer(&cx, &ev(PointerKind::Down, Point::new(200.0, 150.0)));
+        let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(202.0, 197.0)))).clone();
+        assert_eq!(point(&v["end"]), Point::new(200.0, 200.0));
+        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "anchor")));
+        t.pointer(&cx, &ev(PointerKind::Up, Point::new(202.0, 197.0)));
+        assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { .. })), "the guides go with the drag");
+        // A vector drawn from near a corner starts on it.
+        let (d2, id) = doc_with_rect();
+        let mut s2 = Selection::default();
+        s2.add(id);
+        let cx2 = crate::testutil::cx(&d2, &s2, &p);
+        t.pointer(&cx2, &ev(PointerKind::Down, Point::new(101.0, 102.0)));
+        let v = preview(&t.pointer(&cx2, &ev(PointerKind::Drag, Point::new(150.0, 130.0)))).clone();
+        assert_eq!(point(&v["start"]), Point::new(100.0, 100.0));
+        t.pointer(&cx2, &ev(PointerKind::Up, Point::new(150.0, 130.0)));
+        // Constrain Angle 30: Shift gives 30 and 75 degrees (and no snapping).
+        cx.constrain_angle = 30.0;
+        let angle = |v: &Value| GradientGeom { start: point(&v["start"]), end: point(&v["end"]), aspect: 1.0 }.angle_deg();
+        for (to, want) in [(Point::new(190.0, 100.0), 30.0), (Point::new(125.0, 60.0), 75.0)] {
+            t.pointer(&cx, &ev(PointerKind::Down, Point::new(200.0, 150.0)));
+            let v = preview(&t.pointer(&cx, &with(SHIFT, ev(PointerKind::Drag, to)))).clone();
+            assert!((angle(&v) - want).abs() < 1e-9, "{want}: {v}");
+            t.pointer(&cx, &ev(PointerKind::Up, to));
+        }
     }
 
     #[test]

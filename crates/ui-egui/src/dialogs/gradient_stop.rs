@@ -1,9 +1,10 @@
-//! The gradient stop popover: double-clicking a stop on the Gradient tool's annotator edits it
-//! next to its chip — its colour (the Color panel's controls, or a document swatch), opacity and
-//! location. It edits the selected stop (`gradient.selectStop`) through `paint.editGradient`, and
-//! closes on Escape or a click elsewhere.
+//! The gradient stop popover: double-clicking a stop on the Gradient tool's annotator (or the
+//! Gradient panel's slider) edits it next to its chip — its colour (the Color panel's controls,
+//! or a document swatch), opacity and location. It edits the selected stop
+//! (`gradient.selectStop`) through `paint.editGradient`, and closes on Escape or a click elsewhere.
 //!
-//! Fields: `index`, `x`, `y` (the chip, document coordinates) and `tab` (`color` or `swatches`).
+//! Fields: `index`, `x`, `y` (the chip, document coordinates) or `screen` ([x, y], screen points,
+//! from the panel), and `tab` (`color` or `swatches`).
 //! Agents can set `color` (hex), `opacity` and `location` (percentages) and confirm.
 
 use egui::{Sense, vec2};
@@ -15,8 +16,8 @@ use vectorcraft_geom::Point;
 use super::{DialogResult, DialogSpec};
 use crate::VectorcraftApp;
 use crate::canvas::Xf;
-use crate::panels::gradient::stops_json;
-use crate::panels::{active_paint, live_run};
+use crate::panels::active_paint;
+use crate::panels::gradient::set_stops;
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets::{self, Live};
@@ -28,15 +29,6 @@ fn selected(app: &VectorcraftApp) -> Option<(Vec<GradientStop>, usize)> {
     let Paint::Gradient(g) = active_paint(app) else { return None };
     let i = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len())?;
     Some((g.gradient.stops, i))
-}
-
-/// Write `stops` to the gradient and select stop `i`.
-fn apply(app: &mut VectorcraftApp, stops: &[GradientStop], i: usize, phase: Live) {
-    let params = json!({ "stops": stops_json(stops), "stroke": !app.session.fill_active });
-    live_run(app, "Gradient", "paint.editGradient", params, phase);
-    if phase == Live::Released && app.session.selected_stop() != Some(i) {
-        app.run("gradient.selectStop", json!({ "index": i })).ok();
-    }
 }
 
 /// `stops` with stop `i` given `color`.
@@ -60,9 +52,13 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     };
     let t = Tokens::get(ctx);
+    // Opened from the Gradient panel: at `screen`; from the annotator: beside the chip.
+    let screen =
+        d.fields.get("screen").and_then(Value::as_array).and_then(|a| Some(egui::pos2(a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32)));
     let chip = Point::new(d.f64("x", 0.0), d.f64("y", 0.0));
-    let pos =
-        app.canvas_rect.zip(app.view().copied()).map_or(ctx.content_rect().center(), |(r, v)| Xf::new(r, &v).to_screen(chip) + vec2(14.0, 14.0));
+    let pos = screen.unwrap_or_else(|| {
+        app.canvas_rect.zip(app.view().copied()).map_or(ctx.content_rect().center(), |(r, v)| Xf::new(r, &v).to_screen(chip) + vec2(14.0, 14.0))
+    });
     let swatches = d.str("tab") == "swatches";
     let mut tab = None;
     let resp = egui::Area::new(egui::Id::new("gradient-stop-popover"))
@@ -93,12 +89,12 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     if let Some(v) = widgets::plain_field(ui, "stop-pop-op", s.opacity as f64 * 100.0, "%", 0, 54.0) {
                         let mut v2 = stops.clone();
                         v2[i].opacity = (v / 100.0).clamp(0.0, 1.0) as f32;
-                        apply(app, &v2, i, Live::Released);
+                        set_stops(app, &v2, Some(i), Live::Released);
                     }
                     widgets::dim_label(ui, "Location:");
                     if let Some(v) = widgets::plain_field(ui, "stop-pop-loc", s.offset as f64 * 100.0, "%", 1, 54.0) {
                         let (v2, ni) = move_stop(&stops, i, (v / 100.0) as f32);
-                        apply(app, &v2, ni, Live::Released);
+                        set_stops(app, &v2, Some(ni), Live::Released);
                     }
                 });
             });
@@ -133,7 +129,7 @@ fn swatch_grid(app: &mut VectorcraftApp, ui: &mut egui::Ui, stops: &[GradientSto
         }
     });
     if let Some(c) = pick {
-        apply(app, &recolor(stops.to_vec(), i, c), i, Live::Released);
+        set_stops(app, &recolor(stops.to_vec(), i, c), Some(i), Live::Released);
     }
 }
 
@@ -150,7 +146,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     if d.fields.contains_key("location") {
         (stops, i) = move_stop(&stops, i, (d.f64("location", 0.0) / 100.0) as f32);
     }
-    apply(app, &stops, i, Live::Released);
+    set_stops(app, &stops, Some(i), Live::Released);
     app.ui.dialog = None;
     Ok(json!({ "index": i }))
 }

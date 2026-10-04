@@ -94,6 +94,16 @@ swatches and colour groups in one undo step (art using a deleted global swatch k
 `swatch.new {color?, mode?, spot?, global?, group?}` saves a colour (into a colour group with `group`), gradient
 or pattern; `swatch.newGroup {fromArtwork: true, toGlobal?, includeTints?}` makes a colour group of the selected
 art's colours (by default as global swatches the art links to).
+`swatch.move {names, to?, group?}` reorders swatches or moves them into or out of a colour group (as dragging
+them in the Swatches panel does); give colour group names instead to reorder the groups. Dropping a swatch on art
+in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
+The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
+names Select All Unused selects), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
+`swatch.sortByKind`.
+Document colour mode: `file.new {colorMode: "cmyk"}` starts a CMYK document with CMYK default swatches, and RGB
+colours applied to it (`paint.setFill`/`setStroke` colours and gradient stops, `swatch.new`) are stored as CMYK;
+Gray stays Gray, and `keepModel: true` keeps a colour as given. RGB documents keep colours as given. Harmonies, Edit
+Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
 
 ## Resources
 
@@ -185,6 +195,14 @@ until `transparency.stopEditingOpacityMask`. Saves and exports never include the
 {"name":"run_command","arguments":{"command":"transparency.info","params":{"ids":[12,20]}}}
 ```
 
+Knockout Group has three states: `transparency.set {knockout: "on"|"off"|"neutral"}` (`true` = on, `false` =
+neutral, the default). In a knockout group each child hides what it covers of the children below it; neutral groups
+pass the enclosing group's setting to their children, off groups never knock out. `knockoutShape: true` makes the
+object's opacity and opacity mask scale how much it knocks out. `transparency.togglePageKnockoutGroup` and
+`transparency.togglePageIsolatedBlending` (`{value?}`) treat the whole page as a knockout or isolated group; they are
+saved with the document and undoable, and `transparency.info` reports them. Knockout groups render as isolated groups;
+PDF and SVG write them as soft-masked groups with the same look (the PDF export reports a warning).
+
 ## Clipping masks
 
 `object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a
@@ -196,3 +214,31 @@ plain group and keeps the clipping path, unpainted.
 {"name":"run_command","arguments":{"command":"select.set","params":{"ids":[12,15]}}}
 {"name":"run_command","arguments":{"command":"object.clippingMask.make","params":{}}}
 ```
+
+## Graphic styles
+
+A graphic style holds an appearance (fills, strokes, effects) plus opacity, blend mode, isolate and knockout.
+`graphicStyle.new {name?, id?}` captures an object (a group without its own fills or strokes lends its topmost
+object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the objects the style and links them;
+`add: true` adds the style on top of the existing appearance instead. Linked objects stay linked while they keep the
+style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
+updates only the objects still linked. `graphicStyle.list` returns each style with the ids linked to it and the
+style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
+Styles keep placed gradients relative to the bounds of the object they were made from, and each object a
+style is applied to gets them at the same place relative to its own bounds.
+
+```json
+{"name":"run_command","arguments":{"command":"graphicStyle.new","params":{"id":12,"name":"Glow"}}}
+{"name":"run_command","arguments":{"command":"graphicStyle.apply","params":{"name":"Glow","ids":[15,20]}}}
+{"name":"run_command","arguments":{"command":"graphicStyle.redefine","params":{"id":12}}}
+{"name":"run_command","arguments":{"command":"graphicStyle.list","params":{}}}
+```
+
+## Editing appearance stacks
+
+`effect.move {from, to, fromItem?, toItem?, copy?}` reorders an effect or moves it between the object's effects
+(`null`) and a fill's or stroke's (an item index), as dragging its row in the Appearance panel does; `copy: true` copies
+it (Alt-drag). `appearance.duplicateItem {index, to?}` / `{indices}` and `appearance.removeItem {index | indices}`
+act on several fills/strokes at once, and `appearance.showAllHidden` makes every hidden fill, stroke and effect
+visible again. In remote mode, `effect.dialog {effect, index, item}` opens an applied effect's dialog prefilled
+(`ui.dialog.confirm` runs `effect.setParams`); see the control protocol for the "already applied" question.

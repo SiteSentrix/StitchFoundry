@@ -12,6 +12,8 @@
 //!   renderer, the exporters and Outline Stroke.
 //! - [`effect_catalog`] lists every effect with its menu path, parameter documentation and the
 //!   defaults of Illustrator's dialogs. Missing parameters always fall back to those defaults.
+//! - [`reshape`] applies geometry effects to type, images, symbol instances and live objects
+//!   through their outlines.
 //! - [`clip_outline`] is the region a clip group clips to, shared by the renderer and the SVG and
 //!   PDF writers.
 //!
@@ -24,6 +26,7 @@ mod clip;
 mod distort;
 mod group;
 mod raster;
+mod reshape;
 pub mod stroke;
 mod stylize;
 mod util;
@@ -33,13 +36,14 @@ mod warp;
 mod tests;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::Effect;
-use vectorcraft_geom::{BezPath, PathData, Rect};
+use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
+use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 
 pub use bake::{bake_document, needs_bake};
 pub use clip::clip_outline;
 pub use group::{OutlineHook, PATHFINDER_EFFECTS, has_pathfinder, is_pathfinder, pathfinder_children};
 pub use raster::{RasterFx, outset, raster_effects};
+pub use reshape::{needs_outline, outline_art, outline_text, reshape};
 pub use warp::{WarpStyle, warp_point};
 
 /// Catalogue entry for one effect.
@@ -158,7 +162,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "{offset: pt (10; negative insets), joins: \"miter\"|\"round\"|\"bevel\", miterLimit: (4)}",
             json!({"offset": 10.0, "joins": "miter", "miterLimit": 4.0}),
         ),
-        g("path.outlineStroke", "Outline Stroke", PATH, "{width?: pt (defaults to the object's stroke weight)}", json!({})),
+        g(
+            "path.outlineStroke",
+            "Outline Stroke",
+            PATH,
+            "{width?: pt (defaults to the stroke's weight)} the outline of the stroke the effect is on (on a fill or the object: the top stroke), with its caps, joins, dashes, alignment, width profile and arrowheads",
+            json!({}),
+        ),
         g("stylize.roundCorners", "Round Corners…", STYLIZE, "{radius: pt (10)}", json!({"radius": 10.0})),
         g(
             "stylize.scribble",
@@ -269,15 +279,33 @@ pub fn has_geometry(effects: &[Effect]) -> bool {
 }
 
 /// Context the geometry effects may need from the object's appearance.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GeomContext {
-    /// Stroke weight used by `path.outlineStroke` when the effect has no `width`.
-    pub stroke_width: f64,
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GeomContext<'a> {
+    /// The stroke `path.outlineStroke` outlines (its weight, caps, joins, dashes, alignment,
+    /// profile and arrowheads): the stroke the effect sits on, else the object's top painted
+    /// stroke. `None` outlines a plain 1 pt stroke.
+    pub stroke: Option<&'a StrokeLayer>,
+    /// The object's fill rule (inside and outside alignment).
+    pub rule: FillRule,
 }
 
-impl Default for GeomContext {
-    fn default() -> Self {
-        Self { stroke_width: 1.0 }
+impl<'a> GeomContext<'a> {
+    /// The context of `n`'s object-level effects.
+    pub fn of(n: &'a Node) -> Self {
+        let rule = match &n.kind {
+            NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } => *rule,
+            _ => FillRule::NonZero,
+        };
+        Self { stroke: n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0), rule }
+    }
+
+    /// The context of the effects on `item`, one of the same object's appearance items: a
+    /// stroke's own effects outline that stroke.
+    pub fn item(self, item: &'a AppearanceItem) -> Self {
+        match item {
+            AppearanceItem::Stroke(s) => Self { stroke: Some(s), ..self },
+            AppearanceItem::Fill(_) => self,
+        }
     }
 }
 
@@ -312,7 +340,7 @@ pub fn apply_geometry_bez(effects: &[Effect], path: &BezPath, bounds: Rect, ctx:
     apply_geometry_with(effects, &PathData::from_bezpath(path), bounds, ctx).to_bezpath()
 }
 
-fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext) -> PathData {
+pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext) -> PathData {
     use util::*;
     match id {
         "distort.freeDistort" => distort::free_distort(path, b, p),
@@ -330,11 +358,22 @@ fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext) -
             vectorcraft_pathops::offset_path(path, off, join(p, "joins"), num(p, "miterLimit", 4.0).clamp(1.0, 500.0))
         }
         "path.outlineStroke" => {
-            let w = p.get("width").and_then(Value::as_f64).unwrap_or(ctx.stroke_width);
-            if w <= 0.0 {
+            let fallback;
+            let base = match ctx.stroke {
+                Some(s) => s,
+                None => {
+                    fallback = StrokeLayer::new(vectorcraft_doc::color::Paint::None, 1.0);
+                    &fallback
+                }
+            };
+            let st = match p.get("width").and_then(Value::as_f64) {
+                Some(w) => std::borrow::Cow::Owned(StrokeLayer { width: w, ..base.clone() }),
+                None => std::borrow::Cow::Borrowed(base),
+            };
+            if st.width.is_nan() || st.width <= 0.0 {
                 return path.clone();
             }
-            vectorcraft_pathops::outline_stroke(path, w, vectorcraft_pathops::Cap::Butt, join(p, "joins"), num(p, "miterLimit", 10.0).max(1.0))
+            stroke::outline_region(path, ctx.rule, &st)
         }
         "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" => stylize::convert_to_shape(id, b, p),
         "stylize.roundCorners" => stylize::round_corners(path, num(p, "radius", 10.0)),

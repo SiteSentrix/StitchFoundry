@@ -156,7 +156,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "effect.dialog",
         "Effect…",
         "",
-        "{effect: id, item?: appearance item index|null (default: the Appearance panel's active item)} open the effect's dialog with live preview",
+        "{effect: id, index?: int (edit that applied effect in place, prefilled; OK runs effect.setParams), item?: appearance item index|null (the fill/stroke whose effects, null the object's; default: the Appearance panel's active item)} open the effect's dialog with live preview; without `index`, an effect already in that list first opens `effectExists` (confirm edits it, discard adds another) → {pending: \"effectExists\"}",
     ),
     ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
     ("ui.recolorDialog", "Recolor Artwork…", "", "{} open Recolor Artwork (engine: recolor.colors / recolor.apply)"),
@@ -188,6 +188,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Color Picker…",
         "",
         "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
+    ),
+    (
+        "ui.graphicStyleOptions",
+        "Graphic Style Options…",
+        "",
+        "{name?} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`): for style `name` OK renames it (graphicStyle.rename); without, OK makes a new style of that name from the selection (graphicStyle.new)",
+    ),
+    (
+        "tool.options",
+        "Tool Options…",
+        "",
+        "{tool: id} what double-clicking a tool button opens: gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `command` running eyedropper.setOptions, fields appearance, transparency)",
     ),
 ];
 
@@ -460,23 +472,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.session.set_tool_option(&k, p.get("value").unwrap_or(&Value::Null));
             Ok(app.session.tool_options())
         }
-        "effect.dialog" => {
-            let id = s("effect").unwrap_or_default();
-            match vectorcraft_effects::effect_catalog().into_iter().find(|e| e.id == id) {
-                Some(e) => {
-                    let mut fields = e.defaults.as_object().cloned().unwrap_or_default();
-                    fields.insert("__effect".into(), json!(e.id));
-                    fields.insert("__label".into(), json!(e.label.trim_end_matches('…')));
-                    fields.insert("preview".into(), json!(true));
-                    if let Some(item) = p.get("item") {
-                        fields.insert("__item".into(), item.clone());
-                    }
-                    app.ui.dialog = Some(crate::state::Dialog { kind: "effect".into(), fields });
-                    Ok(Value::Null)
-                }
-                None => Err(format!("unknown effect `{id}`")),
-            }
-        }
+        "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => match app.run("recolor.colors", json!({})) {
             Ok(v) => {
                 let pairs: Vec<Value> = v["colors"].as_array().cloned().unwrap_or_default().iter().map(|c| json!([c["hex"], c["hex"]])).collect();
@@ -524,6 +520,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
         }
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
+        "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
+        "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
         _ => return None,
     };
     Some(r)
@@ -687,6 +685,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "file.export.pdf" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
+        "ui.graphicStyleOptions" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1077,14 +1076,14 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "Same",
                     vec![
                         c("Appearance", "select.same.appearance"),
-                        todo("Appearance Attribute"),
+                        c("Appearance Attribute", "select.same.appearanceAttribute"),
                         c("Blending Mode", "select.same.blendingMode"),
                         c("Fill & Stroke", "select.same.fillAndStroke"),
                         c("Fill Color", "select.same.fillColor"),
                         c("Opacity", "select.same.opacity"),
                         c("Stroke Color", "select.same.strokeColor"),
                         c("Stroke Weight", "select.same.strokeWeight"),
-                        todo("Graphic Style"),
+                        c("Graphic Style", "select.same.graphicStyle"),
                         c("Shape", "select.same.shapeType"),
                         c("Symbol Instance", "select.same.symbolInstance"),
                         Sep,

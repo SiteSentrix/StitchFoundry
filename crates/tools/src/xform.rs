@@ -33,7 +33,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         "scale" => Box::new(TransformTool::new(TransformKind::Scale)),
         "shear" => Box::new(TransformTool::new(TransformKind::Shear)),
         "freeTransform" => Box::new(FreeTransformTool::default()),
-        "eyedropper" => Box::new(EyedropperTool),
+        "eyedropper" => Box::new(EyedropperTool::default()),
         "gradient" => Box::new(GradientTool::default()),
         "artboard" => Box::new(ArtboardTool::default()),
         "magicWand" => Box::new(MagicWandTool),
@@ -79,7 +79,7 @@ pub(crate) fn rect_corners(r: Rect) -> [Point; 4] {
 }
 
 /// The node that owns the appearance for a hit leaf (a compound path's child → the compound).
-pub(crate) fn paint_owner(doc: &Document, leaf: NodeId) -> NodeId {
+pub fn paint_owner(doc: &Document, leaf: NodeId) -> NodeId {
     match doc.parent_of(leaf) {
         Some(p) if doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) => p,
         _ => leaf,

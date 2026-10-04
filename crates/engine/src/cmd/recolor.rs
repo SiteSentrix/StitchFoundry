@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{Color, Paint, keep_model};
 use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 
 use super::*;
@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: {\"#rrggbb\": \"#rrggbb\", …}} replace colours across the selection (gradients and text included)",
+            "{map: {\"#rrggbb\": \"#rrggbb\", …}} replace colours across the selection (gradients and text included); each new colour keeps the model of the one it replaces",
             has_selection,
             apply
         ),
@@ -81,7 +81,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(n) = d.node_mut(*id) {
                 visit_paints(n, &mut |c| {
                     if let Some(to) = map.get(&c.to_hex()) {
-                        *c = *to;
+                        *c = keep_model(*c, *to);
                         changed += 1;
                     }
                 });

@@ -1,7 +1,9 @@
 //! VectorCraft PDF export and import.
 //!
 //! - [`export`] writes one PDF page per artboard with `krilla`: vector paths (fills, strokes with
-//!   caps/joins/miter/dashes, non-zero/even-odd), opacity and blend modes (transparency groups),
+//!   caps/joins/miter/dashes, inside/outside alignment as clips, non-zero/even-odd; arrowheads,
+//!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
+//!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), embedded images and text as outlined glyph
 //!   paths. Hidden objects, guides and template layers are skipped.
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
@@ -106,4 +108,10 @@ pub enum PdfError {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_dashalign;
+#[cfg(test)]
+mod tests_fx;
+#[cfg(test)]
 mod tests_stroke;
+#[cfg(test)]
+mod tests_strokeout;

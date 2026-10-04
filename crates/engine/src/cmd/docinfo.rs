@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?} → {document, objects: {paths, compoundPaths, groups, …}, fonts, images, swatches, …}",
+            "{selectionOnly?} → {document, objects: {paths, compoundPaths, groups, …}, fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), …}",
             has_doc,
             info
         ),
@@ -43,16 +43,15 @@ fn paint_kind(p: &Paint) -> Option<&'static str> {
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let d = &st.doc;
-    let roots: Vec<&Node> = if bool_or(p, "selectionOnly", false) {
-        st.selection.objects.iter().filter_map(|id| d.node(*id)).collect()
-    } else {
-        d.layers.iter().map(|l| &**l).collect()
-    };
+    let selection_only = bool_or(p, "selectionOnly", false);
+    let roots: Vec<&Node> =
+        if selection_only { st.selection.objects.iter().filter_map(|id| d.node(*id)).collect() } else { d.layers.iter().map(|l| &**l).collect() };
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     let mut fonts = BTreeSet::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut symbols = BTreeSet::new();
     let mut spot = BTreeSet::new();
+    let mut styles: Vec<&str> = if selection_only { vec![] } else { d.graphic_styles.iter().map(|g| g.name.as_str()).collect() };
     for r in roots {
         r.walk(&mut |n| {
             let k = match &n.kind {
@@ -104,6 +103,12 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if !n.appearance.effects.is_empty() {
                 *counts.entry("liveEffects").or_default() += 1;
             }
+            if selection_only
+                && let Some(g) = super::style::linked_style(d, n)
+                && !styles.contains(&g.name.as_str())
+            {
+                styles.push(&g.name);
+            }
         });
     }
     Ok(json!({
@@ -115,6 +120,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "spotColors": spot,
         "swatches": d.swatches_iter().count(),
         "graphicStyles": d.graphic_styles.len(),
+        "graphicStyleNames": styles,
         "characterStyles": d.char_styles.len(),
         "paragraphStyles": d.para_styles.len(),
         "patterns": d.patterns.len(),

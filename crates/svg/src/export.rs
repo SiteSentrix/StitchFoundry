@@ -7,7 +7,8 @@ use vectorcraft_doc::{
     AppearanceItem, Document, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_doc::{CharStyle, Justify};
-use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
+use vectorcraft_effects::stroke::{self, Written, WrittenShape};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
 use crate::{ExportOptions, Styling, base64_encode, fmt_num, xml_escape};
 
@@ -44,10 +45,23 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> String {
         depth: 1,
         patterns: HashMap::new(),
         pattern_nest: 0,
+        brushes: None,
+        knockout: doc.page_knockout,
+        anonymous: false,
+        knockout_filter: None,
     };
     w.assign_name_ids();
-    for l in &doc.layers {
-        w.node(l);
+    // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
+    let page_group = doc.page_isolate || doc.page_knockout;
+    if page_group {
+        let a = w.attrs(&vec![("isolation", "isolate".into())]);
+        w.line(&format!("<g{a}>"));
+        w.depth += 1;
+    }
+    w.children(&doc.layers);
+    if page_group {
+        w.depth -= 1;
+        w.line("</g>");
     }
 
     let nl = if opts.minify { "" } else { "\n" };
@@ -101,7 +115,25 @@ struct Writer<'a> {
     /// `<pattern>` def ids by pattern name + placement.
     patterns: HashMap<String, String>,
     pattern_nest: u32,
+    /// Whether the group being written is a knockout group (what its neutral children inherit).
+    knockout: bool,
+    /// Writing a copy of an object (a knockout mask): no object ids, so they stay unique.
+    anonymous: bool,
+    /// The filter that paints art black keeping its alpha (knockout masks), once defined.
+    knockout_filter: Option<String>,
+    /// The brush library, parsed when the first brushed stroke is written.
+    brushes: Option<Vec<vectorcraft_brush::Brush>>,
 }
+
+/// How one stroke is written.
+enum StrokePlan {
+    /// Its brush art (document space).
+    Brush(Vec<Node>),
+    Written(Written),
+}
+
+/// A region covering any artwork (mask and filter extents).
+const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
 
 pub(crate) fn blend_css(b: BlendMode) -> &'static str {
     match b {
@@ -188,6 +220,9 @@ impl Writer<'_> {
         }
     }
     fn id_attr(&self, n: &Node) -> String {
+        if self.anonymous {
+            return String::new();
+        }
         self.names.get(&n.id).map(|id| format!(" id=\"{}\"", xml_escape(id))).unwrap_or_default()
     }
     fn matrix(&self, m: Affine) -> String {
@@ -430,8 +465,57 @@ impl Writer<'_> {
         }
     }
 
-    /// Paint a shape (`d`) with a node's appearance stack.
-    fn shape(&mut self, n: &Node, d: &str, rule: FillRule, bounds: Option<Rect>) {
+    /// How stroke `st` is written (`bp`: the shape in document space, built on first use from
+    /// `paths`): its brush art, or a plain stroke or filled outlines matching the canvas.
+    fn stroke_plan(&mut self, st: &StrokeLayer, bp: &mut Option<BezPath>, paths: &[&PathData]) -> StrokePlan {
+        if stroke::is_plain(st) {
+            return StrokePlan::Written(stroke::for_writer(&BezPath::new(), st));
+        }
+        let bp = bp.get_or_insert_with(|| {
+            let mut bp = BezPath::new();
+            for p in paths {
+                bp.extend(p.to_bezpath());
+            }
+            bp
+        });
+        let doc = self.doc;
+        let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
+        match st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) {
+            Some(b) => StrokePlan::Brush(vectorcraft_brush::stroke_pieces(b, bp, st)),
+            None => StrokePlan::Written(stroke::for_writer(bp, st)),
+        }
+    }
+
+    /// The `clip-path` (inside) or `mask` (outside) attribute that keeps an aligned stroke on its
+    /// side of the shape `d`; `reach` (document space) is what the stroke covers.
+    fn side_attr(&mut self, side: Option<StrokeAlign>, d: &str, rule: FillRule, reach: Rect) -> String {
+        match side {
+            None | Some(StrokeAlign::Center) => String::new(),
+            Some(StrokeAlign::Inside) => {
+                let cid = self.fresh_id("clip-path");
+                let r = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
+                self.def(1, &format!("<clipPath id=\"{cid}\">"));
+                self.def(2, &format!("<path d=\"{d}\"{r}/>"));
+                self.def(1, "</clipPath>");
+                format!(" clip-path=\"url(#{cid})\"")
+            }
+            Some(StrokeAlign::Outside) => {
+                let mid = self.fresh_id("mask");
+                let b = self.xf.transform_rect_bbox(reach).inflate(1.0, 1.0);
+                let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
+                let fr = if rule == FillRule::EvenOdd { " fill-rule=\"evenodd\"" } else { "" };
+                self.def(1, &format!("<mask id=\"{mid}\" maskUnits=\"userSpaceOnUse\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\">"));
+                self.def(2, &format!("<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"#fff\"/>"));
+                self.def(2, &format!("<path d=\"{d}\" fill=\"#000\"{fr}/>"));
+                self.def(1, "</mask>");
+                format!(" mask=\"url(#{mid})\"")
+            }
+        }
+    }
+
+    /// Paint a shape (`d`) with a node's appearance stack. `paths` is the same shape in document
+    /// space, for strokes that aren't plain (it may be empty when all are).
+    fn shape(&mut self, n: &Node, d: &str, paths: &[&PathData], rule: FillRule, bounds: Option<Rect>) {
         let id = self.id_attr(n);
         let items: Vec<&AppearanceItem> = n
             .appearance
@@ -442,14 +526,23 @@ impl Writer<'_> {
                 AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
             })
             .collect();
+        let mut bp = None;
+        let plans: Vec<Option<StrokePlan>> = items
+            .iter()
+            .map(|i| match i {
+                AppearanceItem::Stroke(s) => Some(self.stroke_plan(s, &mut bp, paths)),
+                AppearanceItem::Fill(_) => None,
+            })
+            .collect();
         let fills = items.iter().filter(|i| matches!(i, AppearanceItem::Fill(_))).count();
         let strokes = items.len() - fills;
+        // A stroke's paint box is the bounds grown by half its weight, as on the canvas.
+        let paint_bounds = |s: &StrokeLayer| bounds.map(|b| s.paint_bounds(b));
         let simple = fills <= 1
             && strokes <= 1
-            && items.iter().all(|i| match i {
-                AppearanceItem::Fill(f) => f.blend == BlendMode::Normal,
-                AppearanceItem::Stroke(s) => s.blend == BlendMode::Normal && s.align == StrokeAlign::Center,
-            });
+            && !items.iter().any(|i| has_raster(i.effects()))
+            && items.iter().all(|i| i.blend() == BlendMode::Normal)
+            && plans.iter().flatten().all(|p| matches!(p, StrokePlan::Written(Written { shape: WrittenShape::Stroke { .. }, side: None })));
         if simple {
             let mut p = Props::new();
             match items.iter().find_map(|i| if let AppearanceItem::Fill(f) = i { Some(f) } else { None }) {
@@ -462,7 +555,7 @@ impl Writer<'_> {
                 }
             }
             if let Some(s) = items.iter().find_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None }) {
-                self.stroke_props(s, s.width, bounds, &mut p);
+                self.stroke_props(s, s.width, paint_bounds(s), &mut p);
                 if matches!(items.first(), Some(AppearanceItem::Stroke(_))) && fills == 1 {
                     p.push(("paint-order", "stroke".into()));
                 }
@@ -475,10 +568,12 @@ impl Writer<'_> {
         let a = self.attrs(&Self::node_props(n));
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
-        for it in items {
+        for (it, plan) in items.into_iter().zip(plans) {
+            // The item's own raster effects filter that item alone.
+            let filters = self.open_filters(n, it.effects());
             let mut p = Props::new();
-            match it {
-                AppearanceItem::Fill(f) => {
+            match (it, plan) {
+                (AppearanceItem::Fill(f), _) => {
                     self.fill_props(f, rule, bounds, &mut p);
                     if f.blend != BlendMode::Normal {
                         p.push(("mix-blend-mode", blend_css(f.blend).into()));
@@ -486,45 +581,64 @@ impl Writer<'_> {
                     let a = self.attrs(&p);
                     self.line(&format!("<path d=\"{d}\"{a}/>"));
                 }
-                AppearanceItem::Stroke(s) => {
-                    p.push(("fill", "none".into()));
-                    let width = if s.align == StrokeAlign::Center { s.width } else { s.width * 2.0 };
-                    self.stroke_props(s, width, bounds, &mut p);
+                (AppearanceItem::Stroke(s), Some(StrokePlan::Brush(art))) => {
+                    // The brush art takes the stroke's opacity and blend mode as a group.
+                    if s.opacity < 1.0 {
+                        p.push(("opacity", fmt_num(s.opacity as f64, 3)));
+                    }
                     if s.blend != BlendMode::Normal {
                         p.push(("mix-blend-mode", blend_css(s.blend).into()));
                     }
-                    let rule_attr = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
-                    let extra = match s.align {
-                        StrokeAlign::Center => String::new(),
-                        StrokeAlign::Inside => {
-                            let cid = self.fresh_id("clip-path");
-                            self.def(1, &format!("<clipPath id=\"{cid}\">"));
-                            self.def(2, &format!("<path d=\"{d}\"{rule_attr}/>"));
-                            self.def(1, "</clipPath>");
-                            format!(" clip-path=\"url(#{cid})\"")
-                        }
-                        StrokeAlign::Outside => {
-                            let mid = self.fresh_id("mask");
-                            let b = self
-                                .xf
-                                .transform_rect_bbox(bounds.unwrap_or_default())
-                                .inflate(width * s.miter_limit.max(1.0) + 1.0, width * s.miter_limit.max(1.0) + 1.0);
-                            let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
-                            let fr = if rule == FillRule::EvenOdd { " fill-rule=\"evenodd\"" } else { "" };
-                            self.def(
-                                1,
-                                &format!("<mask id=\"{mid}\" maskUnits=\"userSpaceOnUse\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\">"),
-                            );
-                            self.def(2, &format!("<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"#fff\"/>"));
-                            self.def(2, &format!("<path d=\"{d}\" fill=\"#000\"{fr}/>"));
-                            self.def(1, "</mask>");
-                            format!(" mask=\"url(#{mid})\"")
-                        }
-                    };
                     let a = self.attrs(&p);
-                    self.line(&format!("<path d=\"{d}\"{a}{extra}/>"));
+                    self.line(&format!("<g{a}>"));
+                    self.depth += 1;
+                    for piece in &art {
+                        self.node(piece);
+                    }
+                    self.depth -= 1;
+                    self.line("</g>");
                 }
+                (AppearanceItem::Stroke(s), Some(StrokePlan::Written(w))) => {
+                    let side = self.side_attr(w.side, d, rule, w.reach(s, bounds.unwrap_or_default()));
+                    let blend = (s.blend != BlendMode::Normal).then(|| ("mix-blend-mode", blend_css(s.blend).to_string()));
+                    match &w.shape {
+                        WrittenShape::Stroke { width } => {
+                            p.push(("fill", "none".into()));
+                            self.stroke_props(s, *width, paint_bounds(s), &mut p);
+                            p.extend(blend);
+                            let a = self.attrs(&p);
+                            self.line(&format!("<path d=\"{d}\"{a}{side}/>"));
+                        }
+                        WrittenShape::Fill(outlines) => {
+                            let paint = self.paint(&s.paint, paint_bounds(s));
+                            let ds: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
+                            let opacity = (s.opacity < 1.0).then(|| fmt_num(s.opacity as f64, 3));
+                            if let [one] = &ds[..] {
+                                p.push(("fill", paint));
+                                p.extend(opacity.map(|o| ("fill-opacity", o)));
+                                p.extend(blend);
+                                let a = self.attrs(&p);
+                                self.line(&format!("<path d=\"{one}\"{a}{side}/>"));
+                            } else if !ds.is_empty() {
+                                // The line and its arrowheads overlap: one group takes the opacity.
+                                p.extend(opacity.map(|o| ("opacity", o)));
+                                p.extend(blend);
+                                let a = self.attrs(&p);
+                                self.line(&format!("<g{a}{side}>"));
+                                self.depth += 1;
+                                let fill = self.attrs(&vec![("fill", paint)]);
+                                for one in &ds {
+                                    self.line(&format!("<path d=\"{one}\"{fill}/>"));
+                                }
+                                self.depth -= 1;
+                                self.line("</g>");
+                            }
+                        }
+                    }
+                }
+                (AppearanceItem::Stroke(_), None) => {}
             }
+            self.close_filters(filters);
         }
         self.depth -= 1;
         self.line("</g>");
@@ -533,13 +647,11 @@ impl Writer<'_> {
     /// An object with an opacity mask: `<g mask="url(#…)">` around the unmasked object. The mask
     /// art goes in `<defs>`; no-clip adds a white backdrop and invert a colour-inverting filter.
     fn masked(&mut self, n: &Node, m: &vectorcraft_doc::OpacityMask) {
-        const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
         let mid = self.fresh_id("mask");
-        let (body, depth) = (std::mem::take(&mut self.body), self.depth);
-        self.depth = 2;
-        self.node(&m.art);
-        let art = std::mem::replace(&mut self.body, body);
-        self.depth = depth;
+        // Mask art is a picture of its own: it takes no part in a knockout group around the object.
+        let knockout = std::mem::take(&mut self.knockout);
+        let art = self.detached(2, |w| w.node(&m.art));
+        self.knockout = knockout;
         let inv = m.invert.then(|| {
             let fid = self.fresh_id("invert");
             self.def(1, &format!("<filter id=\"{fid}\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\" {BIG}>"));
@@ -569,11 +681,90 @@ impl Writer<'_> {
         self.line("</g>");
     }
 
+    /// What `write` writes to the body, taken out of it (written at `depth`, for `<defs>`).
+    fn detached(&mut self, depth: usize, write: impl FnOnce(&mut Self)) -> String {
+        let (body, saved) = (std::mem::take(&mut self.body), self.depth);
+        self.depth = depth;
+        write(self);
+        self.depth = saved;
+        std::mem::replace(&mut self.body, body)
+    }
+
+    /// Props of a group: a knockout group is isolated.
+    fn group_props(&self, n: &Node) -> Props {
+        let mut p = Self::node_props(n);
+        if !n.isolate && n.knocks_out(self.knockout) {
+            p.push(("isolation", "isolate".into()));
+        }
+        p
+    }
+
+    /// The children of group `n`, as the elements of a knockout group when it is one.
+    fn group_children(&mut self, n: &Node, children: &[std::sync::Arc<Node>]) {
+        let knockout = n.knocks_out(self.knockout);
+        let enclosing = std::mem::replace(&mut self.knockout, knockout);
+        self.children(children);
+        self.knockout = enclosing;
+    }
+
+    /// Children of the group being written. SVG has no knockout groups: in one, each element is
+    /// drawn through a mask of where the elements above it don't paint (the same look for Normal
+    /// blending). The masks nest, so element i sits inside the masks of elements i+1…n.
+    fn children(&mut self, children: &[std::sync::Arc<Node>]) {
+        if !self.knockout {
+            for c in children {
+                self.node(c);
+            }
+            return;
+        }
+        let elements = Node::knockout_elements(children);
+        let Some((first, rest)) = elements.split_first() else { return };
+        for c in rest.iter().rev() {
+            let mid = self.knockout_mask(c);
+            self.line(&format!("<g mask=\"url(#{mid})\">"));
+            self.depth += 1;
+        }
+        self.node(first);
+        for c in rest {
+            self.depth -= 1;
+            self.line("</g>");
+            self.node(c);
+        }
+    }
+
+    /// A mask that is 1 − the knockout shape of `c`: white, then `c` painted black (at full object
+    /// opacity without its own mask, unless those define its shape). Returns the mask id.
+    fn knockout_mask(&mut self, c: &Node) -> String {
+        let filter = match &self.knockout_filter {
+            Some(f) => f.clone(),
+            None => {
+                let f = self.fresh_id("knockout-shape");
+                self.def(1, &format!("<filter id=\"{f}\" filterUnits=\"userSpaceOnUse\" {BIG}>"));
+                self.def(2, "<feColorMatrix type=\"matrix\" values=\"0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0\"/>");
+                self.def(1, "</filter>");
+                self.knockout_filter = Some(f.clone());
+                f
+            }
+        };
+        let shape = if c.knockout_shape { c.clone() } else { Node { opacity: 1.0, mask: None, ..c.clone() } };
+        let anonymous = std::mem::replace(&mut self.anonymous, true);
+        let art = self.detached(3, |w| w.node(&shape));
+        self.anonymous = anonymous;
+        let mid = self.fresh_id("knockout");
+        self.def(1, &format!("<mask id=\"{mid}\" maskUnits=\"userSpaceOnUse\" {BIG}>"));
+        self.def(2, &format!("<rect {BIG} fill=\"white\"/>"));
+        self.def(2, &format!("<g filter=\"url(#{filter})\">"));
+        self.defs.push_str(&art);
+        self.def(2, "</g>");
+        self.def(1, "</mask>");
+        mid
+    }
+
     fn node(&mut self, n: &Node) {
         if !n.visible {
             return;
         }
-        if n.appearance.effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
+        if has_raster(&n.appearance.effects) {
             return self.filtered(n);
         }
         if let Some(m) = n.mask.as_deref()
@@ -585,12 +776,10 @@ impl Writer<'_> {
             NodeKind::Layer { template: true, .. } => {}
             NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
                 let id = self.id_attr(n);
-                let a = self.attrs(&Self::node_props(n));
+                let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id}{a}>"));
                 self.depth += 1;
-                for c in children {
-                    self.node(c);
-                }
+                self.group_children(n, children);
                 self.depth -= 1;
                 self.line("</g>");
             }
@@ -607,12 +796,10 @@ impl Writer<'_> {
                 }
                 self.def(1, "</clipPath>");
                 let id = self.id_attr(n);
-                let a = self.attrs(&Self::node_props(n));
+                let a = self.attrs(&self.group_props(n));
                 self.line(&format!("<g{id} clip-path=\"url(#{cid})\"{a}>"));
                 self.depth += 1;
-                for c in rest {
-                    self.node(c);
-                }
+                self.group_children(n, rest);
                 self.depth -= 1;
                 self.line("</g>");
             }
@@ -622,20 +809,15 @@ impl Writer<'_> {
                     return;
                 }
                 let d = self.path_d(path, self.xf);
-                self.shape(n, &d, *rule, n.geometric_bounds());
+                self.shape(n, &d, &[path], *rule, n.geometric_bounds());
             }
             NodeKind::Compound { children, rule } => {
-                let d: Vec<String> = children
-                    .iter()
-                    .filter(|c| c.visible)
-                    .filter_map(|c| c.path_data())
-                    .filter(|p| !p.is_empty())
-                    .map(|p| self.path_d(p, self.xf))
-                    .collect();
-                if d.is_empty() {
+                let paths: Vec<&PathData> = children.iter().filter(|c| c.visible).filter_map(|c| c.path_data()).filter(|p| !p.is_empty()).collect();
+                if paths.is_empty() {
                     return;
                 }
-                self.shape(n, &d.join(" "), *rule, n.geometric_bounds());
+                let d: Vec<String> = paths.iter().map(|p| self.path_d(p, self.xf)).collect();
+                self.shape(n, &d.join(" "), &paths, *rule, n.geometric_bounds());
             }
             NodeKind::Text(t) if self.opts.outline_text => self.text_outlines(n, t),
             NodeKind::Text(t) => self.text(n, t),
@@ -665,7 +847,10 @@ impl Writer<'_> {
                 let a = self.attrs(&Self::node_props(n));
                 self.line(&format!("<g{id}{a}>"));
                 self.depth += 1;
+                // The symbol's art is the instance's own picture, outside any knockout around it.
+                let knockout = std::mem::take(&mut self.knockout);
                 self.node(&sym.art.clone());
+                self.knockout = knockout;
                 self.depth -= 1;
                 self.line("</g>");
                 self.xf = saved;
@@ -679,15 +864,22 @@ impl Writer<'_> {
     }
 
     /// Raster effects (drop shadow, glows, Gaussian blur, feather) as SVG filters: one `<g filter>`
-    /// per effect, the first effect innermost (Illustrator's stacking order).
+    /// per effect, the first effect innermost (the reference app's stacking order).
     fn filtered(&mut self, n: &Node) {
-        use vectorcraft_effects::RasterFx;
-        let fx = vectorcraft_effects::raster_effects(&n.appearance.effects);
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
+        let opened = self.open_filters(n, &n.appearance.effects);
+        self.node(&inner);
+        self.close_filters(opened);
+    }
+
+    /// Open one `<g filter>` per visible raster effect of `effects` (an object's, or one fill or
+    /// stroke's) on `n`, outermost last effect; returns how many to close.
+    fn open_filters(&mut self, n: &Node, effects: &[vectorcraft_doc::Effect]) -> usize {
+        use vectorcraft_effects::RasterFx;
+        let fx = vectorcraft_effects::raster_effects(effects);
         let reach: f64 = fx.iter().map(RasterFx::outset).sum::<f64>() + 2.0;
         let region = n.visual_bounds().map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
-        let mut opened = 0;
         for f in fx.iter().rev() {
             let fid = self.fresh_id("filter");
             let region_attr = match region {
@@ -741,9 +933,11 @@ impl Writer<'_> {
             self.def(1, &format!("<filter id=\"{fid}\"{region_attr} color-interpolation-filters=\"sRGB\">{body}</filter>"));
             self.line(&format!("<g filter=\"url(#{fid})\">"));
             self.depth += 1;
-            opened += 1;
         }
-        self.node(&inner);
+        fx.len()
+    }
+
+    fn close_filters(&mut self, opened: usize) {
         for _ in 0..opened {
             self.depth -= 1;
             self.line("</g>");
@@ -824,7 +1018,8 @@ impl Writer<'_> {
                 Node::path(NodeId(u64::MAX), pd.clone(), vectorcraft_doc::Appearance::basic(st.fill.clone(), st.stroke.clone(), st.stroke_width));
             let d = self.path_d(&pd, Affine::IDENTITY);
             let bounds = pd.bounds();
-            self.shape(&glyphs, &d, FillRule::NonZero, bounds);
+            // Run strokes are plain: they need no document-space geometry.
+            self.shape(&glyphs, &d, &[], FillRule::NonZero, bounds);
         }
         self.depth -= 1;
         self.line("</g>");
@@ -947,4 +1142,9 @@ impl Writer<'_> {
         }
         out
     }
+}
+
+/// Any visible raster effect (shadow, glow, blur, feather) in `effects`?
+fn has_raster(effects: &[vectorcraft_doc::Effect]) -> bool {
+    effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id))
 }

@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a gradient swatch fits each object, keeping its aspect), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy)} sets the selection's fill and the default (new art fits a gradient to itself)",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a gradient swatch fits each object, keeping its aspect), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray)} sets the selection's fill and the default (new art fits a gradient to itself)",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?, item?: appearance item index|null} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
             has_doc,
             transparency
         ),
@@ -261,8 +261,21 @@ fn stroke_param(s: &Session, p: &Value) -> bool {
     p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active)
 }
 
-/// Parse a paint from params (color / none / swatch / gradient). None = no paint keys given.
+/// The model RGB colours given in `p` are stored in: the document's in a CMYK document (`None` in
+/// an RGB one, or with `keepModel`).
+fn new_color_model(s: &Session, p: &Value) -> Option<vectorcraft_color::cms::Model> {
+    let mode = s.active()?.doc.color_mode;
+    (mode != vectorcraft_doc::ColorMode::Rgb && !bool_or(p, "keepModel", false)).then(|| mode.model())
+}
+
+/// Parse a paint from params (color / none / swatch / gradient). None = no paint keys given. A
+/// colour or gradient given in RGB takes the document's colour model ([`new_color_model`]).
 pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
+    let model = new_color_model(s, p);
+    let new_color = |c: Color| match (c, model) {
+        (Color::Rgb { .. }, Some(m)) => c.in_model(m),
+        _ => c,
+    };
     if bool_or(p, "none", false) {
         return Ok(Some(Paint::None));
     }
@@ -282,12 +295,13 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
         return Ok(Some(paint));
     }
     if let Some(g) = p.get("gradient") {
-        let gp = super::gradient::parse_gradient(g).map_err(|e| bad("paint", e))?;
+        let mut gp = super::gradient::parse_gradient(g).map_err(|e| bad("paint", e))?;
+        gp.gradient.stops.iter_mut().for_each(|st| st.color = new_color(st.color));
         return Ok(Some(Paint::Gradient(Box::new(gp))));
     }
     if let Some(c) = p.get("color") {
         let c = color_value(c).ok_or_else(|| bad("paint", format!("bad color {c}")))?;
-        return Ok(Some(Paint::solid(c)));
+        return Ok(Some(Paint::solid(new_color(c))));
     }
     Ok(None)
 }
@@ -447,7 +461,7 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     let ItemTarget::Item { index, explicit } = item else {
         return s.execute("object.setProps", &Value::Object(q));
     };
-    // Opacity and blend belong to the targeted fill/stroke; isolate/knockout stay object-level.
+    // Opacity and blend belong to the targeted fill/stroke; isolate/knockout/knockoutShape stay object-level.
     let item_ids = if editing_mask { ids } else { appearance_targets(s, p)? };
     if explicit {
         let d = &s.doc()?.doc;
@@ -460,6 +474,11 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
         && b.as_str().and_then(BlendMode::parse).is_none()
     {
         return Err(bad(C, format!("unknown blend mode {b}")));
+    }
+    if let Some(k) = q.get("knockout")
+        && vectorcraft_doc::Knockout::from_value(k).is_none()
+    {
+        return Err(bad(C, format!("unknown knockout state {k}")));
     }
     if opacity.is_some() || blend.is_some() {
         let ids: Vec<u64> = item_ids.iter().map(|id| id.0).collect();

@@ -2,7 +2,8 @@
 //!
 //! SVG, PDF and the clipboard have no notion of Illustrator's live effects, so exporters receive a
 //! copy of the document in which every geometry effect — object level, per fill/stroke and
-//! Effect → Pathfinder — is evaluated exactly like the renderer does. Raster effects (shadows,
+//! Effect → Pathfinder, and those on type, images, symbol instances and live objects (through their
+//! outlines, [`reshape`]) — is evaluated exactly like the renderer does. Raster effects (shadows,
 //! glows, blur) stay on the objects for the exporter to translate (e.g. SVG filters).
 
 use std::sync::Arc;
@@ -10,7 +11,9 @@ use std::sync::Arc;
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeKind};
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::{GeomContext, apply_geometry_with, has_geometry, has_pathfinder, is_geometry, is_pathfinder, pathfinder_children};
+use crate::{
+    GeomContext, apply_geometry_with, has_geometry, has_pathfinder, is_geometry, is_pathfinder, needs_outline, pathfinder_children, reshape,
+};
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
     match item {
@@ -67,6 +70,15 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if !needs_bake(n) {
         return None;
     }
+    // Type, images, symbol instances and live objects: reshaped through their outlines.
+    if needs_outline(n) && has_geometry(&n.appearance.effects) {
+        let symbol = match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
+            _ => None,
+        };
+        let m = reshape(n, symbol.as_deref())?;
+        return Some(bake_node(d, &m).unwrap_or(m));
+    }
     if let Some(result) = pathfinder_children(n, None) {
         let mut m = n.clone();
         m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
@@ -101,8 +113,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
 
 fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
     let (base, rule) = geometry(n)?;
-    let w = n.appearance.stroke_width();
-    let ctx = GeomContext { stroke_width: if w > 0.0 { w } else { 1.0 } };
+    let ctx = GeomContext::of(n);
     let g = apply(&n.appearance.effects, &base, &ctx);
     let mut m = n.clone();
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
@@ -117,7 +128,7 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
         .items
         .iter()
         .map(|item| {
-            let ig = apply(item_effects(item), &g, &ctx);
+            let ig = apply(item_effects(item), &g, &ctx.item(item));
             let mut it = item.clone();
             clear_item_effects(&mut it);
             let id = d.alloc_id();
@@ -129,7 +140,8 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
                 opacity: 1.0,
                 blend: Default::default(),
                 isolate: false,
-                knockout: false,
+                knockout: Default::default(),
+                knockout_shape: false,
                 mask: None,
                 trace: None,
                 wrap: None,

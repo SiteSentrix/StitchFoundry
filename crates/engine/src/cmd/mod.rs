@@ -346,3 +346,6 @@ pub(crate) fn parse_range(s: &str, count: usize) -> std::result::Result<Vec<usiz
 
 /// The Transparency panel's state ([`Session::transparency_info`]).
 pub use opacitymask::TransparencyInfo;
+
+/// What the Eyedropper copies (`Session::eyedropper`).
+pub use xform::EyedropperOptions;

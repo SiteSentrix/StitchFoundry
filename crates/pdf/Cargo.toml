@@ -12,6 +12,7 @@ workspace = true
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
 vectorcraft-effects = { workspace = true }
+vectorcraft-brush = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-text = { workspace = true }
 kurbo = { workspace = true }
@@ -22,3 +23,6 @@ hayro-syntax = "0.7.2"
 hayro-interpret = { version = "0.7.0", default-features = false, features = ["embed-fonts"] }
 log = { workspace = true }
 smallvec = "1"
+
+[dev-dependencies]
+vectorcraft-testkit = { workspace = true }

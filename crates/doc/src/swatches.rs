@@ -105,6 +105,23 @@ impl Document {
     }
 }
 
+impl Document {
+    /// Visit every paint held by the art, symbol definitions, pattern tiles and graphic styles
+    /// (fills, strokes and text runs), and the colour of every gradient-mesh point as a solid paint.
+    pub fn visit_paints(&self, f: &mut dyn FnMut(&Paint)) {
+        let mut tree = |n: &Node| {
+            n.walk(&mut |m| {
+                node_paints(m).for_each(&mut *f);
+                if let NodeKind::Mesh(mesh) = &m.kind {
+                    mesh.points.iter().for_each(|p| f(&Paint::solid(p.color)));
+                }
+            })
+        };
+        self.layers.iter().chain(self.symbols.iter().map(|s| &s.art)).chain(self.patterns.iter().flat_map(|p| &p.art)).for_each(|n| tree(n));
+        self.graphic_styles.iter().flat_map(|gs| &gs.appearance.items).for_each(|it| f(item_paint(it)));
+    }
+}
+
 /// The default name of a solid swatch: its values in its own colour model ("C=10 M=20 Y=30 K=0",
 /// "R=255 G=128 B=0", "Gray K=40").
 pub fn color_name(c: Color) -> String {

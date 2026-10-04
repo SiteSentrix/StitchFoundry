@@ -10,7 +10,7 @@ use vectorcraft_doc::{Effect, Node, NodeKind};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
-use super::appearance::{ItemTarget, appearance_targets, index_param, item_target};
+use super::appearance::{ItemTarget, appearance_targets, index_param, item_target, item_target_at};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -68,6 +68,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{index: int, item?: appearance item index|null (as effect.remove), ids?: [..]} insert a copy of the effect right after it → {ids}",
             has_selection,
             duplicate
+        ),
+        cmd!(
+            "effect.move",
+            "Move Effect",
+            [],
+            None,
+            "{from: int (position in the source list), to: int (its position in the destination list afterwards), fromItem?: appearance item index|null (the source list: that fill/stroke's effects, null the object's; omitted: the active item, else the object's), toItem?: item index|null (the destination list; default: the source list), copy?: bool (copy instead of move, as Alt-dragging the row), ids?: [..]} reorder an effect or move it between the object and its fills/strokes, as one undo step → {ids, index, item}",
+            has_selection,
+            move_effect
         ),
     ]
 }
@@ -175,6 +184,38 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
+fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "effect.move";
+    let from = index_param(p, "from", C)?;
+    let to = index_param(p, "to", C)?;
+    let src = item_target_at(s, p, "fromItem", C)?;
+    let dst = if p.get("toItem").is_some() { item_target_at(s, p, "toItem", C)? } else { src };
+    let copy = p.get("copy").and_then(Value::as_bool).unwrap_or(false);
+    let roots = appearance_targets(s, p)?;
+    // Where the effect landed in the first object.
+    let mut landed = None;
+    let ids = s.edit(if copy { "Duplicate Effect" } else { "Move Effect" }, |d, _| {
+        let mut done = vec![];
+        for id in &roots {
+            let Some(n) = d.node_mut(*id) else { continue };
+            let (si, di) = (src.effects_item(&n.appearance, C)?, dst.effects_item(&n.appearance, C)?);
+            let Some(fx) = n.appearance.effects_mut(si).filter(|fx| from < fx.len()) else { continue };
+            let e = if copy { fx[from].clone() } else { fx.remove(from) };
+            let Some(fx) = n.appearance.effects_mut(di) else { continue };
+            let at = to.min(fx.len());
+            fx.insert(at, e);
+            landed.get_or_insert((at, di));
+            done.push(*id);
+        }
+        if done.is_empty() {
+            return Err(EngineError::Other(format!("{C}: no effect at index {from}")));
+        }
+        Ok(done)
+    })?;
+    let (index, item) = landed.unzip();
+    Ok(json!({ "ids": ids_json(&ids), "index": index, "item": item.flatten() }))
+}
+
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
@@ -249,9 +290,7 @@ fn expand_node(d: &mut vectorcraft_doc::Document, id: NodeId, out: &mut Vec<Node
     }
     let Some((path, rule)) = node_geometry(&n) else { return };
     let Some(bounds) = path.bounds() else { return };
-    let w = n.appearance.stroke_width();
-    let ctx = effects::GeomContext { stroke_width: if w > 0.0 { w } else { 1.0 } };
-    let baked = effects::apply_geometry_with(&n.appearance.effects, &path, bounds, &ctx);
+    let baked = effects::apply_geometry_with(&n.appearance.effects, &path, bounds, &effects::GeomContext::of(&n));
     let kind = if matches!(n.kind, NodeKind::Compound { .. }) || baked.subpaths.len() > 1 {
         let children = baked
             .subpaths

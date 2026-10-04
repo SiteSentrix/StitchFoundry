@@ -17,6 +17,7 @@ mod effect;
 mod export_for_screens;
 mod form;
 mod gradient_stop;
+pub mod graphic_style_options;
 pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
@@ -31,6 +32,7 @@ mod transform;
 use serde_json::{Value, json};
 
 pub use color_picker::open as open_color_picker;
+pub use effect::open as open_effect_dialog;
 pub use tools::open_tool_dialog;
 
 use crate::state::Dialog;
@@ -140,6 +142,8 @@ registry! {
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
+    GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
+    EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

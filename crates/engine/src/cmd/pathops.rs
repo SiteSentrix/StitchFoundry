@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::appearance::{AppearanceItem, LineCap, LineJoin, StrokeAlign, StrokeLayer};
+use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_pathops as po;
@@ -450,41 +450,107 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Outline Stroke ----------
 
-fn cap_of(c: LineCap) -> po::Cap {
-    match c {
-        LineCap::Butt => po::Cap::Butt,
-        LineCap::Round => po::Cap::Round,
-        LineCap::Square => po::Cap::Square,
-    }
-}
-fn join_of(j: LineJoin) -> po::Join {
-    match j {
-        LineJoin::Miter => po::Join::Miter,
-        LineJoin::Round => po::Join::Round,
-        LineJoin::Bevel => po::Join::Bevel,
-    }
+/// Can Outline Stroke turn `st` into filled art?
+fn outlinable(st: &StrokeLayer) -> bool {
+    st.visible && !st.paint.is_none() && st.width > 0.0
 }
 
-/// The filled outline of `st` stroking `path` (honours inside/outside alignment on closed paths).
-pub(crate) fn stroke_outline(path: &PathData, rule: FillRule, st: &StrokeLayer) -> PathData {
-    let (cap, join) = (cap_of(st.cap), join_of(st.join));
-    let w = st.width;
-    if !w.is_finite() || w <= 0.0 {
-        return PathData::default();
+/// `n` with `opacity` and `blend` applied: set on it when it has none of its own, else on a
+/// group around it.
+fn with_transparency(d: &mut Document, mut n: Node, opacity: f32, blend: BlendMode) -> Node {
+    if opacity >= 1.0 && blend == BlendMode::Normal {
+        return n;
     }
-    match st.align {
-        StrokeAlign::Inside | StrokeAlign::Outside if path.is_closed() => {
-            let ring = po::outline_stroke(path, 2.0 * w, cap, join, st.miter_limit);
-            let op = if st.align == StrokeAlign::Inside { BoolOp::Intersect } else { BoolOp::Difference };
-            po::boolean(&ring, FillRule::NonZero, path, rule, op)
+    if n.opacity < 1.0 || n.blend != BlendMode::Normal {
+        n = Node::group(d.alloc_id(), vec![Arc::new(n)]);
+    }
+    n.opacity = opacity;
+    n.blend = blend;
+    n
+}
+
+/// The art stroke `st` of a path (`path`, `rule`) paints, as fills: its brush art, or the
+/// outline of the stroke (as on the canvas) filled with the stroke's paint, opacity, blend mode
+/// and effects. `None` when it paints nothing.
+fn outlined_stroke(d: &mut Document, brushes: &[vectorcraft_brush::Brush], path: &PathData, rule: FillRule, st: &StrokeLayer) -> Option<Node> {
+    if let Some(b) = st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) {
+        let mut pieces = vectorcraft_brush::stroke_pieces(b, &path.to_bezpath(), st);
+        let art = match pieces.len() {
+            0 => return None,
+            1 => pieces.remove(0),
+            _ => Node::group(NodeId(0), pieces.into_iter().map(Arc::new).collect()),
+        };
+        let art = d.reid(&art);
+        return Some(with_transparency(d, art, st.opacity, st.blend));
+    }
+    let outline = vectorcraft_render::effects::stroke::outline_region(path, rule, st);
+    if outline.is_empty() {
+        return None;
+    }
+    let mut n = shape_node(d, outline, None);
+    let fill = vectorcraft_doc::appearance::FillLayer {
+        opacity: st.opacity,
+        blend: st.blend,
+        effects: st.effects.clone(),
+        ..vectorcraft_doc::appearance::FillLayer::new(st.paint.clone())
+    };
+    n.appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], effects: vec![] };
+    Some(n)
+}
+
+/// Path `l` with every stroke outlined, in appearance order: runs of fills stay on copies of
+/// the path, each stroke becomes its outline (or brush art), grouped when there are several.
+/// `None` when `l` has no stroke to outline.
+fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
+    if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
+        return None;
+    }
+    let (path, rule) = node_path(l)?;
+    let mut parts: Vec<Node> = vec![];
+    let mut fills: Vec<AppearanceItem> = vec![];
+    let fill_node = |d: &mut Document, items: Vec<AppearanceItem>| {
+        let mut f = d.reid(l);
+        f.appearance = Appearance { items, effects: vec![] };
+        f.opacity = 1.0;
+        f.blend = BlendMode::Normal;
+        f.name = None;
+        f.mask = None;
+        if let NodeKind::Path { live, .. } = &mut f.kind {
+            *live = None;
         }
-        _ => po::outline_stroke(path, w, cap, join, st.miter_limit),
+        f
+    };
+    for item in &l.appearance.items {
+        match item {
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => fills.push(item.clone()),
+            AppearanceItem::Stroke(st) if outlinable(st) => {
+                if !fills.is_empty() {
+                    parts.push(fill_node(d, std::mem::take(&mut fills)));
+                }
+                parts.extend(outlined_stroke(d, brushes, &path, rule, st));
+            }
+            _ => {}
+        }
     }
+    if !fills.is_empty() {
+        parts.push(fill_node(d, fills));
+    }
+    let root = match parts.len() {
+        0 => return None,
+        1 => parts.remove(0),
+        _ => Node::group(d.alloc_id(), parts.into_iter().map(Arc::new).collect()),
+    };
+    let mut root = with_transparency(d, root, l.opacity, l.blend);
+    root.name = l.name.clone();
+    root.mask = l.mask.clone();
+    root.appearance.effects = l.appearance.effects.clone();
+    Some(root)
 }
 
 fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
+        let brushes = vectorcraft_brush::library(d);
         let mut new_sel = vec![];
         let mut changed = 0;
         for root in &roots {
@@ -496,43 +562,7 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
                 if matches!(l.kind, NodeKind::Text(_)) {
                     continue;
                 }
-                let Some(st) = l.appearance.stroke().filter(|s| s.visible && !s.paint.is_none() && s.width > 0.0).cloned() else { continue };
-                let Some((path, rule)) = node_path(&l) else { continue };
-                let outline = stroke_outline(&path, rule, &st);
-                if outline.is_empty() {
-                    continue;
-                }
-                let mut stroke_node = shape_node(d, outline, Some(&l));
-                stroke_node.appearance =
-                    Appearance { items: vec![AppearanceItem::Fill(vectorcraft_doc::appearance::FillLayer::new(st.paint.clone()))], effects: vec![] };
-                let fill = l.appearance.fill().filter(|f| f.visible && !f.paint.is_none()).cloned();
-                let new = if let Some(f) = fill {
-                    let mut fill_node = l.clone();
-                    fill_node.id = d.alloc_id();
-                    if let Some(ch) = fill_node.children_mut() {
-                        for c in ch.iter_mut() {
-                            Arc::make_mut(c).id = d.alloc_id();
-                        }
-                    }
-                    fill_node.appearance = Appearance { items: vec![AppearanceItem::Fill(f)], effects: vec![] };
-                    if let NodeKind::Path { live, .. } = &mut fill_node.kind {
-                        *live = None;
-                    }
-                    let gid = d.alloc_id();
-                    let mut g = Node::group(gid, vec![Arc::new(fill_node), Arc::new(stroke_node)]);
-                    g.opacity = l.opacity;
-                    g.blend = l.blend;
-                    if let Some(ch) = g.children_mut() {
-                        for c in ch.iter_mut() {
-                            let c = Arc::make_mut(c);
-                            c.opacity = 1.0;
-                            c.blend = BlendMode::Normal;
-                        }
-                    }
-                    g
-                } else {
-                    stroke_node
-                };
+                let Some(new) = outline_strokes(d, &brushes, &l) else { continue };
                 let (par, idx, _) = d.position(l.id).ok_or(EngineError::NoNode(l.id))?;
                 let nid = d.insert(par, idx, new)?;
                 d.remove(l.id)?;

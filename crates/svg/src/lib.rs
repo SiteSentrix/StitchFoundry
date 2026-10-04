@@ -8,14 +8,19 @@
 //!
 //! ## Export approximations
 //!
-//! * **Stroke alignment** is not expressible in SVG 1.1. An *inside* stroke is written as a stroke of
-//!   double width clipped to the path's own shape (`<clipPath>`); an *outside* stroke as a stroke of
-//!   double width masked by a `<mask>` that hides the path's interior. Both are visually exact for
-//!   closed paths but re-import as a group (clip group / masked stroke) rather than an aligned stroke.
+//! * **Stroke alignment** is not expressible in SVG 1.1. An *inside* stroke of a closed path is
+//!   written as a stroke of double width clipped to the path's own shape (`<clipPath>`); an
+//!   *outside* stroke as a stroke of double width masked by a `<mask>` that hides the path's
+//!   interior. Both are visually exact but re-import as a group (clip group / masked stroke)
+//!   rather than an aligned stroke. Open paths have no inside: their strokes are written centred,
+//!   as the canvas draws them.
+//! * **Arrowheads, width profiles, dashes fitted to corners and dotted dashes** are written as the
+//!   filled outlines the canvas paints (the line and each arrowhead, grouped under the stroke's
+//!   opacity); **brushed strokes** as their brush art. Both re-import as filled paths.
 //! * **Multiple fills/strokes** (or per-fill/stroke blend modes) are written as a `<g>` holding one
 //!   `<path>` per appearance item, in paint order.
-//! * Effects, arrowheads, width profiles, brushes, patterns and freeform gradients are not
-//!   expanded (patterns export as `none`, freeform gradients as linear).
+//! * Live geometry effects are written as their result and raster effects (shadows, glows, blurs)
+//!   as SVG filters. Freeform gradients export as linear gradients.
 //!
 //! ## Import approximations
 //!
@@ -34,7 +39,7 @@ mod import;
 pub use vectorcraft_doc::Document;
 pub use vectorcraft_doc::TextObject;
 
-/// How style properties are written (Illustrator's "Styling" option).
+/// How style properties are written (the "Styling" export option).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Styling {
     /// `fill="#ff0000"` attributes.

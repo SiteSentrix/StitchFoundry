@@ -3,7 +3,7 @@
 
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, Unit, WidthProfile};
 
 use super::{current_stroke, pstate, set_pstate};
 use crate::theme::Tokens;
@@ -36,6 +36,15 @@ pub fn dash_fields(pattern: &[f64]) -> [Option<f64>; 6] {
         out[i] = Some(*v);
     }
     out
+}
+
+/// The dash/gap fields and alignment the Dashed Line section shows: the stroke's dashes, or with
+/// dashes off the last ones turned off (`last`), at first 12 pt dashes fitted to corners.
+fn dash_state(dash: Option<&Dash>, last: Option<([Option<f64>; 6], bool)>) -> ([Option<f64>; 6], bool) {
+    match dash {
+        Some(d) => (dash_fields(&d.pattern), d.align_corners),
+        None => last.unwrap_or(([Some(12.0), None, None, None, None, None], true)),
+    }
 }
 
 /// Six dash/gap fields → a dash pattern: stops at the first empty dash; a dash without a gap
@@ -136,16 +145,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::divider(ui);
     // Dashed line.
-    let dash = st.as_ref().and_then(|s| s.dash.clone());
-    let fields: [Option<f64>; 6] = match &dash {
-        Some(d) => dash_fields(&d.pattern),
-        None => pstate::<Option<[Option<f64>; 6]>>(ui.ctx(), "stroke-dash-last").unwrap_or([Some(12.0), None, None, None, None, None]),
-    };
-    let align_corners = dash.as_ref().is_some_and(|d| d.align_corners);
+    let dash = st.as_ref().and_then(|s| s.dash.as_ref());
+    let (fields, align_corners) = dash_state(dash, pstate(ui.ctx(), "stroke-dash-last"));
     ui.horizontal(|ui| {
         if widgets::check(ui, "Dashed Line", dash.is_some(), st.is_some()) {
             if dash.is_some() {
-                set_pstate(ui.ctx(), "stroke-dash-last", Some(fields));
+                set_pstate(ui.ctx(), "stroke-dash-last", Some((fields, align_corners)));
                 set(app, json!({"dash": null}));
             } else {
                 set(app, json!({"dash": dash_pattern(&fields), "alignDashes": align_corners}));
@@ -154,10 +159,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_space((ui.available_width() - 56.0).max(0.0));
         let on = dash.is_some();
         if widgets::icon_button_enabled(ui, "dc-dash-exact", "Exact dash lengths", on && !align_corners, on, 24.0).clicked() {
-            set(app, json!({"dash": dash_pattern(&fields), "alignDashes": false}));
+            set(app, json!({"alignDashes": false}));
         }
         if widgets::icon_button_enabled(ui, "dc-dash-align", "Fit dashes to corners and ends", on && align_corners, on, 24.0).clicked() {
-            set(app, json!({"dash": dash_pattern(&fields), "alignDashes": true}));
+            set(app, json!({"alignDashes": true}));
         }
     });
     ui.horizontal(|ui| {
@@ -173,7 +178,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         if changed && dash.is_some() {
-            set(app, json!({"dash": dash_pattern(&nf), "alignDashes": align_corners}));
+            // The command keeps the dash offset and alignment.
+            set(app, json!({"dash": dash_pattern(&nf)}));
         }
     });
     ui.horizontal(|ui| {

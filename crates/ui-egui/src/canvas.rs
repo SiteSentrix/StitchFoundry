@@ -136,6 +136,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     handle_input(app, ui, &resp, rect);
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
+    panel_drop(app, ui, &resp, &xf);
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
@@ -667,14 +668,58 @@ fn node_outline(n: &Node) -> BezPath {
     bp
 }
 
+/// The topmost editable object under document point `p` at `zoom` (3 px tolerance).
+fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::hit::Hit> {
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / zoom, outline: app.ui.view.outline, path_only: false };
+    vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, p, opt)
+}
+
+/// A panel drag ([`widgets::PanelDrag`]) dropped on art acts on the object under the pointer,
+/// selected or not: a paint (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail) goes
+/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it), the
+/// Appearance panel's thumbnail gives the object (the topmost one hit) the appearance it carries
+/// (`appearance.copyFrom`). A chip follows the pointer meanwhile.
+fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
+    crate::panels::swatches::drag_preview(app, ui.ctx());
+    let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
+    // Not through a floating panel over the canvas.
+    if ui.ctx().layer_id_at(pos).is_some_and(|l| l != resp.layer_id) {
+        return;
+    }
+    let Some(d) = resp.dnd_release_payload::<widgets::PanelDrag>() else { return };
+    let Some(hit) = hit_at(app, xf.to_doc(pos), xf.zoom) else { return };
+    let Some(st) = app.session.active() else { return };
+    let (cmd, params) = match &*d {
+        widgets::PanelDrag::Paint { params, .. } => {
+            // Colour groups paint nothing.
+            if params.is_null() {
+                return;
+            }
+            let mut params = params.clone();
+            params["ids"] = json!([vectorcraft_tools::xform::paint_owner(&st.doc, hit.leaf).0]);
+            params["focus"] = json!(false);
+            (crate::panels::proxy_cmd(app, false), params)
+        }
+        widgets::PanelDrag::Appearance(source) => {
+            let target = hit.top_object(st.isolation);
+            if target == *source {
+                return;
+            }
+            ("appearance.copyFrom", json!({"source": source.0, "ids": [target.0]}))
+        }
+    };
+    if let Err(e) = app.run(cmd, params) {
+        app.status(e);
+    }
+}
+
 fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
     if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
         return;
     }
     let Some(st) = app.session.active() else { return };
-    let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / xf.zoom, outline: app.ui.view.outline, path_only: false };
-    let Some(hit) = vectorcraft_doc::hit::hit_test(&st.doc, h, opt) else { return };
+    let Some(hit) = hit_at(app, h, xf.zoom) else { return };
     let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
     if st.selection.contains(id) {
         return;
@@ -1080,5 +1125,76 @@ mod tests {
         frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(300.0, 200.0))]);
         assert_eq!(app.view().unwrap().center, after.center);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
+    }
+
+    #[test]
+    fn swatches_and_proxy_paints_dropped_on_art_fill_the_object_hit() {
+        use vectorcraft_color::{Color, GradientGeom, GradientPaint, Paint};
+        use widgets::{PanelDrag, SwatchRows};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let drop = |app: &mut VectorcraftApp, d: PanelDrag, at: Point| {
+            let at = xf.to_screen(at);
+            egui::DragAndDrop::set_payload(&ctx, d);
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+        };
+        let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+        let red = Paint::solid(Color::from_hex("#ed1c24").unwrap());
+        let rows = SwatchRows { grabbed: "Red".into(), names: vec!["Red".into()], groups: false };
+        let swatch = PanelDrag::Paint { paint: red.clone(), params: json!({"swatch": "Red"}), rows: Some(rows) };
+        // Off the art nothing happens.
+        drop(&mut app, swatch.clone(), Point::new(300.0, 250.0));
+        assert_eq!(fill(&app), Paint::solid(Color::WHITE));
+        drop(&mut app, swatch, Point::new(100.0, 100.0));
+        assert_eq!(fill(&app), red, "paint.setFill with the hit id");
+        assert!(app.session.active().unwrap().selection.is_empty(), "the selection stays as it was");
+        // A proxy's paint works the same.
+        drop(&mut app, PanelDrag::paint(Paint::solid(Color::rgb(0.0, 0.0, 1.0))), Point::new(60.0, 60.0));
+        assert_eq!(fill(&app), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+        // A dragged gradient (the Gradient panel's thumbnail, a proxy) fits the object it lands on.
+        let mut g = GradientPaint::new(Default::default());
+        g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0 });
+        drop(&mut app, PanelDrag::paint(Paint::Gradient(Box::new(g))), Point::new(100.0, 100.0));
+        assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()));
+    }
+
+    #[test]
+    fn dropping_the_appearance_thumbnail_on_art_copies_the_appearance() {
+        use vectorcraft_doc::NodeId;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 400, "height": 300}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
+        run(&mut app, "effect.apply", json!({"effect": "distort.twist"}));
+        run(&mut app, "transparency.set", json!({"opacity": 40}));
+        let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
+        run(&mut app, "select.set", json!({ "ids": [a] }));
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        // The Appearance panel's thumbnail (its drag payload) released over the second rectangle.
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let drop = |app: &mut VectorcraftApp, at: Point| {
+            let at = xf.to_screen(at);
+            egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Appearance(NodeId(a)));
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            frame(app, &ctx, vec![up]);
+        };
+        drop(&mut app, Point::new(250.0, 70.0));
+        let doc = &app.session.active().unwrap().doc;
+        let (na, nb) = (doc.node(NodeId(a)).unwrap(), doc.node(NodeId(b)).unwrap());
+        assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity));
+        assert_eq!(nb.appearance.effects[0].id, "distort.twist");
+        // Dropped on empty canvas or on the source itself: nothing changes.
+        let undo_len = app.session.active().unwrap().history.undo.len();
+        drop(&mut app, Point::new(350.0, 250.0));
+        drop(&mut app, Point::new(70.0, 70.0));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo_len);
     }
 }

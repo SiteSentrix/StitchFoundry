@@ -253,8 +253,13 @@ pub struct Node {
     pub blend: BlendMode,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub isolate: bool,
+    /// Knockout Group: whether a container's children knock each other out (see [`Knockout`]).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
-    pub knockout: bool,
+    pub knockout: Knockout,
+    /// Opacity & Mask Define Knockout Shape: inside a knockout group, this object's opacity and
+    /// opacity mask scale how much of the objects below it in the group it knocks out.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub knockout_shape: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub appearance: Appearance,
     /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
@@ -270,6 +275,10 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<Box<crate::graph::GraphSpec>>,
     pub kind: NodeKind,
+    /// The [`crate::GraphicStyle::id`] last applied to this object. It stays linked while it keeps
+    /// that style's look: editing its appearance or transparency breaks the link.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graphic_style: Option<u32>,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -307,13 +316,15 @@ impl Node {
             opacity: 1.0,
             blend: BlendMode::Normal,
             isolate: false,
-            knockout: false,
+            knockout: Knockout::Neutral,
+            knockout_shape: false,
             appearance: Appearance::default(),
             mask: None,
             trace: None,
             wrap: None,
             graph: None,
             kind,
+            graphic_style: None,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
@@ -360,7 +371,12 @@ impl Node {
     /// Full opacity, Normal blending, no isolation, knockout or opacity mask (the Layers panel
     /// fills an object's target circle otherwise).
     pub fn has_default_transparency(&self) -> bool {
-        self.opacity >= 1.0 && self.blend == BlendMode::Normal && !self.isolate && !self.knockout && self.mask.is_none()
+        self.opacity >= 1.0
+            && self.blend == BlendMode::Normal
+            && !self.isolate
+            && self.knockout == Knockout::Neutral
+            && !self.knockout_shape
+            && self.mask.is_none()
     }
     /// Kind name as the Layers panel / Properties panel shows it.
     pub fn kind_label(&self) -> &'static str {
@@ -635,6 +651,109 @@ impl Node {
     }
 }
 
+/// Knockout Group state of a container (the Transparency panel's three-state checkbox). In a
+/// knockout group each child composites against the group's backdrop, so it hides the children
+/// below it instead of showing them through its transparency. Neutral passes the enclosing
+/// group's setting through to the children. Files from before the three states stored a bool:
+/// `true` loads as On, `false` as Neutral.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Knockout {
+    #[default]
+    Neutral,
+    Off,
+    On,
+}
+
+impl Knockout {
+    pub const ALL: [Knockout; 3] = [Knockout::Neutral, Knockout::Off, Knockout::On];
+
+    /// Name in files and command parameters.
+    pub fn label(self) -> &'static str {
+        match self {
+            Knockout::Neutral => "neutral",
+            Knockout::Off => "off",
+            Knockout::On => "on",
+        }
+    }
+    /// A name ([`Self::label`], any case) or a bool as older files and commands wrote it.
+    pub fn from_value(v: &serde_json::Value) -> Option<Self> {
+        match v {
+            serde_json::Value::Bool(b) => Some(Self::from(*b)),
+            serde_json::Value::String(s) => Self::ALL.into_iter().find(|k| k.label().eq_ignore_ascii_case(s.trim())),
+            _ => None,
+        }
+    }
+    /// The state a click on the checkbox moves to: on → neutral → off → on.
+    pub fn cycle(self) -> Self {
+        match self {
+            Knockout::On => Knockout::Neutral,
+            Knockout::Neutral => Knockout::Off,
+            Knockout::Off => Knockout::On,
+        }
+    }
+    /// Whether children of a group with this state knock each other out, inside a group (or page)
+    /// where that is `enclosing`.
+    pub fn resolve(self, enclosing: bool) -> bool {
+        match self {
+            Knockout::Neutral => enclosing,
+            Knockout::Off => false,
+            Knockout::On => true,
+        }
+    }
+}
+
+impl From<bool> for Knockout {
+    fn from(b: bool) -> Self {
+        if b { Knockout::On } else { Knockout::Neutral }
+    }
+}
+
+impl Serialize for Knockout {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.label())
+    }
+}
+
+impl<'de> Deserialize<'de> for Knockout {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_json::Value::deserialize(d)?;
+        Self::from_value(&v).ok_or_else(|| serde::de::Error::custom(format!("invalid knockout {v}")))
+    }
+}
+
+impl Node {
+    /// Whether the children of this group or layer knock each other out, inside a group (or page)
+    /// where that is `enclosing`.
+    pub fn knocks_out(&self, enclosing: bool) -> bool {
+        matches!(self.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && self.knockout.resolve(enclosing)
+    }
+
+    /// A plain group or layer that is neutral to knockout and has no transparency or appearance
+    /// of its own: inside a knockout group its children composite as the group's own children.
+    pub fn passes_knockout_through(&self) -> bool {
+        matches!(self.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { template: false, .. })
+            && self.has_default_transparency()
+            && self.appearance.items.is_empty()
+            && self.appearance.effects.is_empty()
+    }
+
+    /// The visible elements of a knockout group made of `children` (bottom first): neutral plain
+    /// groups ([`Self::passes_knockout_through`]) contribute their children instead of themselves.
+    pub fn knockout_elements(children: &[Arc<Node>]) -> Vec<&Arc<Node>> {
+        fn push<'a>(children: &'a [Arc<Node>], out: &mut Vec<&'a Arc<Node>>) {
+            for c in children.iter().filter(|c| c.visible) {
+                match c.children() {
+                    Some(ch) if c.passes_knockout_through() => push(ch, out),
+                    _ => out.push(c),
+                }
+            }
+        }
+        let mut out = Vec::with_capacity(children.len());
+        push(children, &mut out);
+        out
+    }
+}
+
 /// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?
 fn keeps_gradient_fit(a: Affine) -> bool {
     let [m0, m1, m2, m3, _, _] = a.as_coeffs();
@@ -657,11 +776,13 @@ mod tests {
     fn default_transparency() {
         let p = || Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         assert!(p().has_default_transparency());
-        let tweaks: [fn(&mut Node); 5] = [
+        let tweaks: [fn(&mut Node); 7] = [
             |n| n.opacity = 0.5,
             |n| n.blend = BlendMode::Multiply,
             |n| n.isolate = true,
-            |n| n.knockout = true,
+            |n| n.knockout = Knockout::On,
+            |n| n.knockout = Knockout::Off,
+            |n| n.knockout_shape = true,
             |n| n.mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
         ];
         for tweak in tweaks {

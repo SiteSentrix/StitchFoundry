@@ -384,7 +384,7 @@ fn item_transparency_is_one_step_and_checks_the_blend_mode() {
     let before = steps(&s);
     run(&mut s, "transparency.set", json!({"knockout": true}));
     assert_eq!(steps(&s), before + 1, "isolate/knockout alone do not touch the item");
-    assert!(node(&s, id).knockout);
+    assert_eq!(node(&s, id).knockout, vectorcraft_doc::Knockout::On);
     assert!(s.execute("transparency.set", &json!({"blend": "nope"})).is_err());
     assert_eq!(stroke(&node(&s, id), 1).blend, BlendMode::Normal);
 }

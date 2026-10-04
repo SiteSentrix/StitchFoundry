@@ -12,10 +12,16 @@
 //! - Feather: like Gaussian Blur but clipped to the shape, so the edge fades inward;
 //! - Inner Glow: a blurred inverse silhouette (Edge) or the blurred silhouette (Center), clipped
 //!   to the shape and painted above it.
+//!
+//! The same applies to one fill or stroke's own raster effects (around that item alone) and to
+//! type, images, symbol instances and live objects ([`Renderer::draw_object_fx`]): their art is
+//! drawn offscreen in the filter layers, reshaped first by their geometry effects.
+
+use std::sync::Arc;
 
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind};
 use vectorcraft_effects::{self as effects, GeomContext, RasterFx};
-use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
+use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape, Vec2};
 use vello_common::filter_effects::{EdgeMode, Filter, FilterPrimitive};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
@@ -38,6 +44,30 @@ pub(crate) fn has_fx(n: &Node) -> bool {
         })
 }
 
+/// Does `n` carry visible object-level effects that only apply through its art (type, images,
+/// symbol instances, live objects; see [`Renderer::draw_object_fx`])?
+pub(crate) fn has_object_fx(n: &Node) -> bool {
+    effects::needs_outline(n) && visible(&n.appearance.effects)
+}
+
+/// What [`Renderer::raster_fx`] paints effects around.
+struct Content<'a> {
+    /// The object the effects belong to (cached shadows are checked against it).
+    node: &'a Node,
+    /// First shadow-cache slot of these effects (`None`: don't cache).
+    cache: Option<usize>,
+    /// Document-space bounds of the painted content.
+    reach: Rect,
+    /// Its silhouette: Feather and Inner Glow clip to it (without one, Feather only blurs and
+    /// Inner Glow is skipped).
+    outline: Option<(&'a BezPath, FillRule)>,
+}
+
+/// `f` with the content moved by (`dx`, `dy`) document units (a shadow's offset).
+fn shifted<'a>(f: &Frame<'a>, dx: f64, dy: f64) -> Frame<'a> {
+    Frame { view: f.view * Affine::translate((dx, dy)), visible: f.visible - Vec2::new(dx, dy), ..*f }
+}
+
 fn node_bezpath(n: &Node) -> Option<BezPath> {
     match &n.kind {
         NodeKind::Path { path, .. } => Some(path.to_bezpath()),
@@ -54,11 +84,6 @@ fn node_bezpath(n: &Node) -> Option<BezPath> {
     }
 }
 
-fn geom_ctx(n: &Node) -> GeomContext {
-    let w = n.appearance.stroke_width();
-    GeomContext { stroke_width: if w > 0.0 { w } else { 1.0 } }
-}
-
 fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return bp.clone();
@@ -68,7 +93,7 @@ fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
 
 /// The object-level effected geometry of `n` (base path `bp`).
 pub(crate) fn effected_path(n: &Node, bp: &BezPath) -> BezPath {
-    apply(&n.appearance.effects, bp, &geom_ctx(n))
+    apply(&n.appearance.effects, bp, &GeomContext::of(n))
 }
 
 fn item_effects(item: &AppearanceItem) -> &[Effect] {
@@ -81,13 +106,13 @@ fn item_effects(item: &AppearanceItem) -> &[Effect] {
 /// Visual bounds including geometry effects, stroke outsets and shadows/glows.
 pub(crate) fn visual_bounds(n: &Node) -> Option<Rect> {
     let bp = node_bezpath(n)?;
-    let ctx = geom_ctx(n);
+    let ctx = GeomContext::of(n);
     let g = effected_path(n, &bp);
     let mut r: Option<Rect> = (!g.elements().is_empty()).then(|| g.bounding_box());
     for item in &n.appearance.items {
         let fx = item_effects(item);
         if effects::has_geometry(fx) {
-            let ig = apply(fx, &g, &ctx);
+            let ig = apply(fx, &g, &ctx.item(item));
             if !ig.elements().is_empty() {
                 let b = ig.bounding_box();
                 r = Some(r.map_or(b, |r| r.union(b)));
@@ -106,6 +131,12 @@ pub(crate) fn cull_bounds(n: &Node) -> Option<Rect> {
             children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(c)))
         }
         _ if has_fx(n) => visual_bounds(n),
+        // The reshaped art (a symbol's art needs the document: its instance box stands in).
+        _ if has_object_fx(n) => {
+            let b = effects::reshape(n, None).and_then(|r| r.visual_bounds()).or_else(|| n.visual_bounds())?;
+            let o = effects::outset(&n.appearance.effects);
+            Some(b.inflate(o, o))
+        }
         _ => n.visual_bounds(),
     }
 }
@@ -209,7 +240,7 @@ fn blur_alpha(a: &mut Vec<f32>, w: usize, h: usize, sigma: f64) {
 }
 
 impl Renderer {
-    /// Drop shadow / outer glow `fx` (index `i` in the object's raster effects) from a cached raster:
+    /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) from a cached raster:
     /// the silhouette is rendered once into a small crop, blurred and tinted on the CPU, and reused
     /// while the object and the zoom/rotation are unchanged (pans only move it). Returns false when
     /// the effect isn't a shadow/glow or the raster would be too large (caller falls back).
@@ -221,10 +252,8 @@ impl Renderer {
         n: &Node,
         i: usize,
         fx: &RasterFx,
-        g: &BezPath,
-        rule: FillRule,
-        gctx: &GeomContext,
         reach: Rect,
+        paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
     ) -> bool {
         let (mode, opacity, dx, dy, blur, color) = match fx {
             RasterFx::DropShadow { mode, opacity, dx, dy, blur, color } => (*mode, *opacity, *dx, *dy, *blur, *color),
@@ -244,7 +273,7 @@ impl Renderer {
             }
             None => {
                 let spread = blur.max(0.0) * 1.5 / f.px + 2.0;
-                let reach = reach + vectorcraft_geom::Vec2::new(dx, dy);
+                let reach = reach + Vec2::new(dx, dy);
                 let r = f.view.transform_rect_bbox(reach).inflate(spread, spread);
                 let (x0, y0) = (r.x0.floor(), r.y0.floor());
                 let (w, h) = (r.x1.ceil() - x0, r.y1.ceil() - y0);
@@ -254,8 +283,8 @@ impl Renderer {
                 let (w, h) = (w as u16, h as u16);
                 // Silhouette (the object's painted alpha), offset by the shadow distance.
                 let mut off = crate::single_threaded_context(w, h);
-                let shifted = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view * Affine::translate((dx, dy)), ..*f };
-                self.paint_items(&mut off, &shifted, n, g, rule, gctx);
+                let crop = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
+                paint(self, &mut off, &shifted(&crop, dx, dy));
                 off.flush();
                 let mut pm = vello_cpu::Pixmap::new(w, h);
                 off.render(&mut pm, &mut self.resources);
@@ -298,38 +327,125 @@ impl Renderer {
             self.hairline(ctx, f, &g, [0, 0, 0, 255]);
             return;
         }
-        let gctx = geom_ctx(n);
+        let gctx = GeomContext::of(n);
         let rfx = effects::raster_effects(&n.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
         let reach = g.bounding_box().inflate(outset, outset);
-        // Below the object: shadows and outer glows.
+        let content = Content { node: n, cache: Some(0), reach, outline: Some((&g, rule)) };
+        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, n, &g, rule, &gctx));
+        ctx.set_transform(Affine::IDENTITY);
+    }
+
+    /// Draw type, an image, a symbol instance or a live object with object-level effects
+    /// ([`has_object_fx`]) inside its transparency group: its art (reshaped by the geometry
+    /// effects, see [`effects::reshape`]) with the raster effects painted around it as for paths,
+    /// the art standing for the object's silhouette.
+    pub(crate) fn draw_object_fx(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, cache: bool) {
+        let opacity = self.opacity_of(a);
+        let layered = !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_doc::color::BlendMode::Normal || a.isolate);
+        if layered {
+            ctx.set_transform(Affine::IDENTITY);
+            ctx.push_layer(None, Some(blend_mode(a.blend)), Some(opacity), None, None);
+        }
+        let art = self.fx_art(f.doc, a, cache);
+        let rfx = effects::raster_effects(&a.appearance.effects);
+        match cull_bounds(&art) {
+            Some(reach) if !f.opts.outline && !rfx.is_empty() => {
+                // Feather and Inner Glow clip to the art's outline.
+                let clipped = rfx.iter().any(|x| matches!(x, RasterFx::Feather { .. } | RasterFx::InnerGlow { .. }));
+                let region = if clipped { self.clip_of(&art) } else { None };
+                // A symbol's art can change while the instance doesn't: no cached shadows.
+                let cache = (cache && !matches!(a.kind, NodeKind::SymbolInstance { .. })).then_some(0);
+                let content = Content { node: a, cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)) };
+                self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_node(c, fr, &art, true));
+                ctx.set_transform(Affine::IDENTITY);
+            }
+            _ => self.draw_node(ctx, f, &art, true),
+        }
+        if layered {
+            ctx.pop_layer();
+        }
+        self.stats.drawn += 1;
+    }
+
+    /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):
+    /// reshaped by its geometry effects, else type and images as themselves and the others as
+    /// their evaluated art; without the object's transparency and effects.
+    fn fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>, cache: bool) -> Arc<Node> {
+        let key = Arc::as_ptr(a) as usize;
+        if cache
+            && let Some((node, art)) = self.fx_arts.get(&key)
+            && Arc::ptr_eq(node, a)
+        {
+            return art.clone();
+        }
+        let symbol = match &a.kind {
+            NodeKind::SymbolInstance { symbol, .. } => {
+                doc.symbols.iter().find(|s| s.name == *symbol).map(|s| crate::brush_fx::instance_art(&s.art, a))
+            }
+            _ => None,
+        };
+        let art = match effects::reshape(a, symbol.as_ref()) {
+            Some(r) => r,
+            None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_)) => (**a).clone(),
+            None => effects::outline_art(a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
+        };
+        let art = Arc::new(Node {
+            opacity: 1.0,
+            blend: Default::default(),
+            isolate: false,
+            // One element: its pieces never knock each other out.
+            knockout: vectorcraft_doc::Knockout::Off,
+            mask: None,
+            appearance: vectorcraft_doc::Appearance { effects: vec![], ..art.appearance },
+            ..art
+        });
+        if cache {
+            if self.fx_arts.len() > 1024 {
+                self.fx_arts.clear();
+            }
+            self.fx_arts.insert(key, (a.clone(), art.clone()));
+        }
+        art
+    }
+
+    /// Paint `content` with raster effects `rfx` (see the module docs): shadows and outer glows
+    /// below it, the content blurred or feathered, inner glows above it (clipped to its outline).
+    /// `paint` draws the content in the frame it is given.
+    fn raster_fx(
+        &mut self,
+        ctx: &mut RenderContext,
+        f: &Frame,
+        content: &Content,
+        rfx: &[RasterFx],
+        paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
+    ) {
+        let reach = content.reach;
+        // Below the content: shadows and outer glows.
         for (i, fx) in rfx.iter().enumerate().filter(|(_, x)| x.is_below()) {
-            if self.draw_shadow_cached(ctx, f, n, i, fx, &g, rule, &gctx, reach) {
+            if let Some(slot) = content.cache
+                && self.draw_shadow_cached(ctx, f, content.node, slot + i, fx, reach, paint)
+            {
                 continue;
             }
-            // The offset is applied to the geometry rather than in the filter: vello_cpu drops
-            // layer content that lies entirely outside the viewport before filtering.
-            let (mode, opacity, dx, dy, blur, filter) = match fx {
-                RasterFx::DropShadow { mode, opacity, dx, dy, blur, color } => {
-                    (*mode, *opacity, *dx, *dy, *blur, shadow_filter(0.0, 0.0, *blur, pcolor(color)))
-                }
-                RasterFx::OuterGlow { mode, opacity, blur, color } => {
-                    (*mode, *opacity, 0.0, 0.0, *blur, shadow_filter(0.0, 0.0, *blur, pcolor(color)))
-                }
+            let (mode, opacity, dx, dy, blur, color) = match fx {
+                RasterFx::DropShadow { mode, opacity, dx, dy, blur, color } => (*mode, *opacity, *dx, *dy, *blur, *color),
+                RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color),
                 _ => continue,
             };
-            let mut gs = g.clone();
-            gs.apply_affine(Affine::translate((dx, dy)));
-            let reach = reach + vectorcraft_geom::Vec2::new(dx, dy);
+            let filter = shadow_filter(0.0, 0.0, blur, pcolor(&color));
+            // The offset moves the content rather than the filter: vello_cpu drops layer content
+            // that lies entirely outside the viewport before filtering.
+            let reach = reach + Vec2::new(dx, dy);
             self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
                 c.set_transform(fr.view);
                 c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
-                r.paint_items(c, fr, n, &gs, rule, &gctx);
+                paint(r, c, &shifted(fr, dx, dy));
                 c.pop_layer();
             });
         }
-        // The object itself (blurred / feathered).
+        // The content itself (blurred / feathered).
         let blur: f64 = rfx
             .iter()
             .map(|fx| match fx {
@@ -340,14 +456,17 @@ impl Renderer {
         if blur > 0.0 {
             self.with_filters(ctx, f, reach, blur, None, |r, c, fr, _| {
                 let mut layers = 0;
-                for fx in &rfx {
+                for fx in rfx {
                     match fx {
                         RasterFx::Feather { radius } if *radius > 0.0 => {
                             c.set_transform(fr.view);
-                            c.set_fill_rule(fill_rule(rule));
-                            c.push_clip_layer(&g);
+                            if let Some((g, rule)) = content.outline {
+                                c.set_fill_rule(fill_rule(rule));
+                                c.push_clip_layer(g);
+                                layers += 1;
+                            }
                             c.push_layer(None, None, None, None, Some(blur_filter(radius / 2.0)));
-                            layers += 2;
+                            layers += 1;
                         }
                         RasterFx::GaussianBlur { radius } if *radius > 0.0 => {
                             c.set_transform(fr.view);
@@ -357,33 +476,34 @@ impl Renderer {
                         _ => {}
                     }
                 }
-                r.paint_items(c, fr, n, &g, rule, &gctx);
+                paint(r, c, fr);
                 for _ in 0..layers {
                     c.pop_layer();
                 }
             });
         } else {
-            self.paint_items(ctx, f, n, &g, rule, &gctx);
+            paint(self, ctx, f);
         }
-        // Above the object: inner glows, clipped to the shape.
-        for fx in &rfx {
+        // Above the content: inner glows, clipped to its outline.
+        let Some((g, rule)) = content.outline else { return };
+        for fx in rfx {
             let RasterFx::InnerGlow { mode, opacity, blur, color, center } = fx else { continue };
             let filter = shadow_filter(0.0, 0.0, *blur, pcolor(color));
             self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
                 // The blend layer goes outside the clip: a clip layer is isolated, so a blend
-                // inside it would mix with nothing instead of the object below.
+                // inside it would mix with nothing instead of the content below.
                 if let Some((m, o)) = comp {
                     c.set_transform(Affine::IDENTITY);
                     c.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
                 }
                 c.set_transform(fr.view);
                 c.set_fill_rule(fill_rule(rule));
-                c.push_clip_layer(&g);
+                c.push_clip_layer(g);
                 c.push_layer(None, None, None, None, Some(filter));
                 c.set_paint(peniko::Color::BLACK);
                 if *center {
                     c.set_fill_rule(fill_rule(rule));
-                    c.fill_path(&g);
+                    c.fill_path(g);
                 } else {
                     // Everything outside the shape, so the glow bleeds in from the edges.
                     let pad = blur * 2.0 + 4.0 * fr.px;
@@ -399,7 +519,6 @@ impl Renderer {
                 }
             });
         }
-        ctx.set_transform(Affine::IDENTITY);
     }
 
     /// Run `draw`, which pushes filter layers. Single-threaded contexts draw directly and `draw`
@@ -448,41 +567,66 @@ impl Renderer {
         ctx.set_transform(Affine::IDENTITY);
     }
 
-    /// Paint the fills and strokes of `n` on geometry `g`, applying per-item geometry effects.
+    /// Paint the fills and strokes of `n` on geometry `g`, applying per-item geometry effects and
+    /// painting per-item raster effects around that item alone.
     fn paint_items(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, g: &BezPath, rule: FillRule, gctx: &GeomContext) {
         let bounds = g.bounding_box();
-        for item in &n.appearance.items {
-            let ig = apply(item_effects(item), g, gctx);
+        for (j, item) in n.appearance.items.iter().enumerate() {
+            if !item.visible() || item.paint().is_none() {
+                continue;
+            }
+            let ig = apply(item_effects(item), g, &gctx.item(item));
             let ib = if effects::has_geometry(item_effects(item)) && !ig.elements().is_empty() { ig.bounding_box() } else { bounds };
-            match item {
-                AppearanceItem::Fill(fl) => {
-                    if !fl.visible || fl.paint.is_none() {
-                        continue;
-                    }
-                    let layered = fl.opacity < 1.0 || fl.blend != vectorcraft_doc::color::BlendMode::Normal;
-                    if layered {
-                        ctx.set_transform(Affine::IDENTITY);
-                        ctx.push_layer(None, Some(blend_mode(fl.blend)), Some(fl.opacity), None, None);
-                    }
-                    ctx.set_transform(f.view);
-                    if paint::set_paint(ctx, &fl.paint, ib, f.doc) {
-                        ctx.set_fill_rule(fill_rule(rule));
-                        ctx.fill_path(&ig);
-                    }
-                    if layered {
-                        ctx.pop_layer();
-                    }
-                }
+            let rfx = effects::raster_effects(item_effects(item));
+            if rfx.is_empty() {
+                self.paint_item(ctx, f, n, item, &ig, rule, ib);
+                continue;
+            }
+            // The item's silhouette: its fill area, or the outline of its stroke.
+            let outline = match item {
+                AppearanceItem::Fill(_) => ig.clone(),
                 AppearanceItem::Stroke(st) => {
-                    if !st.visible || st.paint.is_none() || st.width <= 0.0 {
-                        continue;
-                    }
-                    // Brushed strokes keep their brush art under effects (e.g. a glowing scatter brush).
-                    if st.brush.is_some() && self.draw_brush(ctx, f, n, &ig, st) {
-                        continue;
-                    }
-                    self.draw_stroke(ctx, f, &ig, rule, st, ib);
+                    let w = effects::stroke::aligned_width(st, effects::stroke::is_closed(&ig));
+                    effects::stroke::line_outline(&effects::stroke::stroke_pieces(&ig, st).line, st, w, f.px * 0.25)
                 }
+            };
+            let outset = n.appearance.outset();
+            let orule = if item.is_fill() { rule } else { FillRule::NonZero };
+            // Each item's shadows get their own cache slots.
+            let content = Content { node: n, cache: Some((j + 1) << 8), reach: ib.inflate(outset, outset), outline: Some((&outline, orule)) };
+            self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_item(c, fr, n, item, &ig, rule, ib));
+            ctx.set_transform(Affine::IDENTITY);
+        }
+    }
+
+    /// Paint one fill or stroke of `n` on its geometry `ig` (bounds `ib`).
+    #[allow(clippy::too_many_arguments)]
+    fn paint_item(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, item: &AppearanceItem, ig: &BezPath, rule: FillRule, ib: Rect) {
+        match item {
+            AppearanceItem::Fill(fl) => {
+                let layered = fl.opacity < 1.0 || fl.blend != vectorcraft_doc::color::BlendMode::Normal;
+                if layered {
+                    ctx.set_transform(Affine::IDENTITY);
+                    ctx.push_layer(None, Some(blend_mode(fl.blend)), Some(fl.opacity), None, None);
+                }
+                ctx.set_transform(f.view);
+                if paint::set_paint(ctx, &fl.paint, ib, f.doc) {
+                    ctx.set_fill_rule(fill_rule(rule));
+                    ctx.fill_path(ig);
+                }
+                if layered {
+                    ctx.pop_layer();
+                }
+            }
+            AppearanceItem::Stroke(st) => {
+                if st.width <= 0.0 {
+                    return;
+                }
+                // Brushed strokes keep their brush art under effects (e.g. a glowing scatter brush).
+                if st.brush.is_some() && self.draw_brush(ctx, f, n, ig, st) {
+                    return;
+                }
+                self.draw_stroke(ctx, f, ig, rule, st, ib);
             }
         }
     }
