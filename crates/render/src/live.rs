@@ -171,8 +171,7 @@ impl Renderer {
                 }
             }
             bp.close_path();
-            let [r, g, bl, al] = q.color.to_rgba8(q.opacity * alpha);
-            ctx.set_paint(peniko::Color::from_rgba8(r, g, bl, al));
+            ctx.set_paint(f.ink.color(&q.color, q.opacity * alpha));
             ctx.fill_path(&bp);
         }
     }

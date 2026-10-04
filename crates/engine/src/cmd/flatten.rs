@@ -5,7 +5,8 @@
 //! cut into atomic regions: the faces of the planar arrangement of every fill, outlined stroke and
 //! clipping path in them ([`po::regions`]). The same paints cover each whole region, so its colour
 //! is exact: those paints composited as the renderer composites them ([`Composer`], blend modes by
-//! [`composite`]), over white (or over nothing with Preserve Alpha). Each region becomes a path
+//! [`composite`]), over white (or over nothing with Preserve Alpha); in CMYK documents their inks
+//! composite, plane by plane ([`cmyk_planes`]), and the colour is CMYK. Each region becomes a path
 //! filled with that flat colour. Where gradients, patterns, images, opacity masks or raster
 //! effects reach there is no single colour: those regions are rendered into one image per group,
 //! clipped to them with Clip Complex Regions (else the image is a rectangle that takes in the
@@ -23,10 +24,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_color::blend::composite;
+use vectorcraft_color::blend::{cmyk_planes, composite, planes_cmyk};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer};
-use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, ImageObject, Knockout, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, ColorMode, Document, Effect, ImageBlob, ImageObject, Knockout, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
 use vectorcraft_pathops as po;
 use vectorcraft_render::effects;
@@ -43,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flatten Transparency…",
             ["Object"],
             None,
-            "{preset?: \"high\"|\"medium\"|\"low\" or a saved preset's name (see flattener.presets.list; default medium), balance?: 0..100 (raster/vector balance; 0 rasterizes everything), lineArtPpi?: 1..2400, gradientPpi?: 1..2400 (areas only gradients and meshes reach), textToOutlines?, strokesToOutlines?, clipComplexRegions? (clip images to the region outlines, else rectangles), antiAlias?, preserveAlpha? (composite over nothing instead of white), preserveOverprints? (areas showing one paint keep its colour and overprint; false clears overprints), options?: {the same keys}, ids?} overlapping transparent objects become one group of flat-colour regions, plus an image where gradients, patterns, images, masks or raster effects reach; objects without transparency stay → {ids, rasterized: images made, vector: regions made, options}",
+            "{preset?: \"high\"|\"medium\"|\"low\" or a saved preset's name (see flattener.presets.list; default medium), balance?: 0..100 (raster/vector balance; 0 rasterizes everything), lineArtPpi?: 1..2400, gradientPpi?: 1..2400 (areas only gradients and meshes reach), textToOutlines?, strokesToOutlines?, clipComplexRegions? (clip images to the region outlines, else rectangles), antiAlias?, preserveAlpha? (composite over nothing instead of white), preserveOverprints? (areas showing one paint keep its colour and overprint; false clears overprints), options?: {the same keys}, ids?} overlapping transparent objects become one group of flat-colour regions (CMYK colours composited ink by ink in CMYK documents), plus an image where gradients, patterns, images, masks or raster effects reach; objects without transparency stay → {ids, rasterized: images made, vector: regions made, options}",
             has_doc,
             flatten
         ),
@@ -786,14 +787,15 @@ fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render: bool) -> P
     let mut sc = Scratch { brushes: vectorcraft_brush::library(&baked), doc: baked.clone() };
     let plain: Vec<Node> = art.iter().map(|n| sc.plain(n)).collect();
     let reaches: Vec<Option<Rect>> = plain.iter().map(reach).collect();
-    let see_through: Vec<bool> = plain.iter().map(transparent).collect();
+    let see_through: Vec<bool> = plain.iter().map(Node::shows_transparency).collect();
+    let cmyk = src.color_mode == ColorMode::Cmyk;
     let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
     for g in overlapping(&reaches) {
         let ids: Vec<NodeId> = g.iter().map(|&i| roots[i]).collect();
         let flat = g.iter().any(|&i| see_through[i]).then(|| {
             let art: Vec<Node> = g.iter().map(|&i| art[i].clone()).collect();
             let plain: Vec<&Node> = g.iter().map(|&i| &plain[i]).collect();
-            let (regions, area) = flatten_group(&plain, o)?;
+            let (regions, area) = flatten_group(&plain, o, cmyk)?;
             let raster = area.as_ref().filter(|_| render).map(|a| render_raster(&baked, &art, a.rect, a.ppi, a.clip.clone(), o));
             Some(Flat { roots: ids.clone(), regions, area, raster })
         });
@@ -806,9 +808,9 @@ fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render: bool) -> P
 }
 
 /// The regions and the image area replacing one group of overlapping objects (`plain`: the art as
-/// composited); `None` when it paints nothing.
-fn flatten_group(plain: &[&Node], o: &FlattenOptions) -> Option<(Regions, Option<Area>)> {
-    let mut b = Builder::default();
+/// composited; `cmyk`: in a CMYK document); `None` when it paints nothing.
+fn flatten_group(plain: &[&Node], o: &FlattenOptions, cmyk: bool) -> Option<(Regions, Option<Area>)> {
+    let mut b = Builder { cmyk, ..Default::default() };
     let elems: Vec<Elem> = plain.iter().filter_map(|n| b.elem(n)).collect();
     if b.shapes.is_empty() {
         return None;
@@ -825,7 +827,7 @@ fn flatten_group(plain: &[&Node], o: &FlattenOptions) -> Option<(Regions, Option
         if all || r.sources.iter().any(|&i| b.kinds[i] != Kind::Vector) {
             gradients_only &= r.sources.iter().all(|&i| b.kinds[i] == Kind::Gradient);
             complex.push(k);
-        } else if let Some(fill) = region_fill(&elems, &r.sources, o) {
+        } else if let Some(fill) = region_fill(&elems, &r.sources, o, cmyk) {
             vector.push((k, fill));
         }
     }
@@ -860,25 +862,40 @@ fn flatten_group(plain: &[&Node], o: &FlattenOptions) -> Option<(Regions, Option
     Some((vector, area))
 }
 
-/// The flat colour of a region covered by `sources`; `None` where nothing paints it.
-fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions) -> Option<RegionFill> {
-    let mut c = Composer { sources, top: None };
+/// The flat colour of a region covered by `sources` (CMYK in a `cmyk` document); `None` where
+/// nothing paints it.
+fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions, cmyk: bool) -> Option<RegionFill> {
+    let mut c = Composer { sources, top: None, plane: 0 };
     let alone = c.eval(elems, CLEAR);
     if alone[3] < 0.5 / 255.0 {
         return None;
     }
+    let start = if o.preserve_alpha { CLEAR } else { WHITE };
     let px = if o.preserve_alpha {
         alone
     } else {
         c.top = None;
-        c.eval(elems, WHITE)
+        c.eval(elems, start)
     };
     let rgb = [px[0], px[1], px[2]];
+    // The K plane composites the same way.
+    let k = cmyk.then(|| {
+        c.plane = 1;
+        c.eval(elems, start)[0]
+    });
     // A paint showing as it is keeps its colour (spot, process, swatch) and overprint.
-    let same = |f: &Fill| px[3] >= 1.0 - 1e-4 && f.rgb.iter().zip(rgb).all(|(a, b)| (a - b).abs() < 1e-3);
+    let near = |a: &[f32], b: &[f32]| a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-3);
+    let same = |f: &Fill| px[3] >= 1.0 - 1e-4 && near(&f.planes[0], &rgb) && k.is_none_or(|k| near(&f.planes[1][..1], &[k]));
+    let color = match k {
+        Some(k) => {
+            let [c, m, y, k] = planes_cmyk(rgb, k);
+            Color::cmyk(c, m, y, k)
+        }
+        None => Color::rgb(rgb[0], rgb[1], rgb[2]),
+    };
     let (paint, overprint) = match c.top {
         Some(f) if o.preserve_overprints && same(f) => (f.paint.clone(), f.overprint),
-        _ => (Paint::solid(Color::rgb(rgb[0], rgb[1], rgb[2])), false),
+        _ => (Paint::solid(color), false),
     };
     Some(RegionFill { paint, alpha: px[3], overprint })
 }
@@ -1161,19 +1178,6 @@ fn masked(n: &Node) -> bool {
     n.mask.as_ref().is_some_and(|m| !m.disabled)
 }
 
-/// Whether plain art `n` shows any transparency: opacity, blend modes, masks, raster effects or
-/// transparent gradient stops.
-fn transparent(n: &Node) -> bool {
-    let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
-    n.visible
-        && (n.opacity < 1.0
-            || n.blend != BlendMode::Normal
-            || masked(n)
-            || has_effects(n)
-            || n.appearance.items.iter().any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint())))
-            || n.children().is_some_and(|ch| ch.iter().any(|c| transparent(c))))
-}
-
 /// Where `n` can paint: its visual bounds grown by its effects (and a margin for antialiasing).
 fn reach(n: &Node) -> Option<Rect> {
     if !n.visible {
@@ -1241,7 +1245,9 @@ enum Kind {
 
 /// A solid fill as the compositor uses it.
 struct Fill {
-    rgb: [f32; 3],
+    /// What it composites: its screen colour (twice), or in a CMYK document its two ink planes
+    /// ([`cmyk_planes`]).
+    planes: [[f32; 3]; 2],
     opacity: f32,
     blend: BlendMode,
     paint: Paint,
@@ -1276,9 +1282,21 @@ enum Body {
 struct Builder {
     shapes: Vec<po::Shape>,
     kinds: Vec<Kind>,
+    /// Building a CMYK document's art.
+    cmyk: bool,
 }
 
 impl Builder {
+    /// What colour `c` composites as ([`Fill::planes`]).
+    fn planes(&self, c: &Color) -> [[f32; 3]; 2] {
+        if self.cmyk {
+            let cms = vectorcraft_color::cms::active();
+            cmyk_planes(cms.to_cmyk(c, cms.settings().intent))
+        } else {
+            [c.to_rgb(); 2]
+        }
+    }
+
     fn shape(&mut self, path: PathData, rule: FillRule, kind: Kind) -> Option<usize> {
         path.bounds()?;
         self.shapes.push(po::Shape::new(path, rule, self.shapes.len() as u64));
@@ -1313,7 +1331,7 @@ impl Builder {
                     for item in n.appearance.items.iter().filter(|i| i.is_fill() && i.visible() && !i.paint().is_none()) {
                         match item.paint() {
                             Paint::Solid { color, .. } => fills.push(Fill {
-                                rgb: color.to_rgb(),
+                                planes: self.planes(color),
                                 opacity: item.opacity(),
                                 blend: item.blend(),
                                 paint: item.paint().clone(),
@@ -1376,6 +1394,8 @@ struct Composer<'a> {
     sources: &'a [usize],
     /// The last solid fill composited.
     top: Option<&'a Fill>,
+    /// Which of the fills' [`Fill::planes`] composites.
+    plane: usize,
 }
 
 impl<'a> Composer<'a> {
@@ -1422,7 +1442,8 @@ impl<'a> Composer<'a> {
         match &e.body {
             Body::Fills { shape, fills } if self.inside(*shape) => fills.iter().fold(b, |acc, f| {
                 self.top = Some(f);
-                composite(f.blend, acc, [f.rgb[0], f.rgb[1], f.rgb[2], f.opacity])
+                let [r, g, b] = f.planes[self.plane];
+                composite(f.blend, acc, [r, g, b, f.opacity])
             }),
             Body::Group { clip, children } if clip.is_none_or(|c| self.inside(c)) => {
                 if ko {

@@ -838,6 +838,8 @@ mod tests_clippaint;
 #[cfg(test)]
 mod tests_cmdsplit;
 #[cfg(test)]
+mod tests_cmykflatten;
+#[cfg(test)]
 mod tests_colorguide;
 #[cfg(test)]
 mod tests_colormgmt;

@@ -4,8 +4,9 @@
 //! ([`PatternDef::period`]) is rasterized once at the current device scale (rounded to a power of
 //! two, so it is re-rasterized only when the zoom changes by more than 2×) and used as an image
 //! paint with `Extend::Repeat`, with the paint transform mapping pixels → pattern space →
-//! document. Tiles are cached per pattern name and invalidated when the definition changes (art
-//! `Arc` identity, tile, tile type, overlap) — the pattern's "revision".
+//! document. Tiles are cached per pattern name (and ink plane, see [`crate::ink`]) and invalidated
+//! when the definition changes (art `Arc` identity, tile, tile type, overlap) — the pattern's
+//! "revision".
 //!
 //! Pattern editing mode (`Document::pattern_edit`) draws only the temporary tile layer, with
 //! dimmed copies of it at the neighbouring tile positions and the tile edge.
@@ -17,9 +18,10 @@ use std::sync::Arc;
 use vectorcraft_doc::pattern::{Overlap, PatternDef, TileType};
 use vectorcraft_doc::{Document, Node};
 use vectorcraft_geom::{Affine, Rect, Shape};
-use vello_cpu::peniko::{self, Extend, ImageQuality, ImageSampler};
+use vello_cpu::peniko::{Extend, ImageQuality, ImageSampler};
 use vello_cpu::{Pixmap, RenderContext};
 
+use crate::ink::Ink;
 use crate::{Frame, RenderOptions, Rendered, Renderer};
 
 /// Largest super-tile raster side (pixels).
@@ -36,7 +38,8 @@ struct TileEntry {
 
 #[derive(Default)]
 struct PatternCache {
-    tiles: HashMap<String, TileEntry>,
+    /// Per ink ([`Ink`] as index).
+    tiles: [HashMap<String, TileEntry>; 3],
     renderer: Option<Box<Renderer>>,
     depth: u32,
 }
@@ -58,8 +61,9 @@ pub(crate) fn raster_scale(s: f64, period: (f64, f64)) -> f64 {
     p2.min(cap).max(1e-3)
 }
 
-/// Rasterize `region` (pattern space) of the infinite tiling into a `w`×`h` pixmap.
-fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w: u16, h: u16) -> Pixmap {
+/// Rasterize `region` (pattern space) of the infinite tiling into a `w`×`h` pixmap, colours as
+/// `ink` paints them.
+fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w: u16, h: u16, ink: Ink) -> Pixmap {
     let (w, h) = (w.max(1), h.max(1));
     let mut ctx = crate::single_threaded_context(w, h);
     let view = Affine::scale_non_uniform(w as f64 / region.width().max(1e-9), h as f64 / region.height().max(1e-9))
@@ -76,6 +80,7 @@ fn rasterize(r: &mut Renderer, doc: &Document, def: &PatternDef, region: Rect, w
             visible: v.inverse().transform_rect_bbox(px_rect),
             px: 1.0 / v.determinant().abs().sqrt().max(1e-12),
             opts: &opts,
+            ink,
         };
         for a in &def.art {
             r.draw_arc(&mut ctx, &frame, a);
@@ -114,10 +119,13 @@ fn with_tile_renderer<T>(f: impl FnOnce(&mut Renderer) -> T) -> Option<T> {
     Some(out)
 }
 
-/// Set a pattern paint on `ctx` (its current transform maps the paint's user space to pixels).
-pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine, doc: &Document) -> bool {
+/// Set a pattern paint on `ctx` (its current transform maps the paint's user space to pixels), as
+/// frame `f` paints it.
+pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine, f: &Frame) -> bool {
+    let (doc, ink) = (f.doc, f.ink);
+    let missing = || ink.fixed([128, 128, 128, 255]);
     let Some(def) = doc.pattern(name) else {
-        ctx.set_paint(peniko::Color::from_rgba8(128, 128, 128, 255));
+        ctx.set_paint(missing());
         return true;
     };
     if def.art.is_empty() {
@@ -129,8 +137,7 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
     let scale = raster_scale(s, (pw, ph));
     let params = (def.tile, def.tile_type, def.overlap);
     let hit = CACHE.with(|c| {
-        c.borrow()
-            .tiles
+        c.borrow().tiles[ink as usize]
             .get(name)
             .filter(|e| e.scale == scale && e.params == params && same_art(&e.art, &def.art))
             .map(|e| (e.pixmap.clone(), e.sx, e.sy))
@@ -140,18 +147,19 @@ pub(crate) fn set_pattern_paint(ctx: &mut RenderContext, name: &str, xf: Affine,
         None => {
             let w = (pw * scale).ceil().clamp(1.0, 4096.0) as u16;
             let h = (ph * scale).ceil().clamp(1.0, 4096.0) as u16;
-            let Some(pm) = with_tile_renderer(|r| rasterize(r, doc, def, Rect::new(0.0, 0.0, pw, ph), w, h)) else {
-                ctx.set_paint(peniko::Color::from_rgba8(128, 128, 128, 255));
+            let Some(pm) = with_tile_renderer(|r| rasterize(r, doc, def, Rect::new(0.0, 0.0, pw, ph), w, h, ink)) else {
+                ctx.set_paint(missing());
                 return true;
             };
             let pm = Arc::new(pm);
             let (sx, sy) = (w as f64 / pw, h as f64 / ph);
             CACHE.with(|c| {
                 let mut c = c.borrow_mut();
-                if c.tiles.len() > 64 {
-                    c.tiles.clear();
+                let tiles = &mut c.tiles[ink as usize];
+                if tiles.len() > 64 {
+                    tiles.clear();
                 }
-                c.tiles.insert(name.to_string(), TileEntry { art: def.art.clone(), params, scale, sx, sy, pixmap: pm.clone() });
+                tiles.insert(name.to_string(), TileEntry { art: def.art.clone(), params, scale, sx, sy, pixmap: pm.clone() });
             });
             (pm, sx, sy)
         }
@@ -169,7 +177,7 @@ pub fn render_pattern_swatch(doc: &Document, name: &str, size: u32) -> Option<Re
     let side = w.max(h);
     let region = Rect::from_center_size((w / 2.0, h / 2.0), (side, side));
     let px = size.clamp(1, 1024) as u16;
-    let pm = with_tile_renderer(|r| rasterize(r, doc, def, region, px, px))?;
+    let pm = with_tile_renderer(|r| rasterize(r, doc, def, region, px, px, Ink::Display))?;
     Some(Rendered { width: px as u32, height: px as u32, pixels: pm.data_as_u8_slice().to_vec() })
 }
 
@@ -203,7 +211,7 @@ impl Renderer {
             bounds.apply_affine(f.view);
             ctx.set_transform(Affine::IDENTITY);
             ctx.set_stroke(vello_cpu::kurbo::Stroke::new(1.0).with_dashes(0.0, [4.0, 3.0]));
-            ctx.set_paint(peniko::Color::from_rgba8(r, g, b, 255));
+            ctx.set_paint(f.ink.fixed([r, g, b, 255]));
             ctx.stroke_path(&bounds);
         }
         true

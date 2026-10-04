@@ -29,6 +29,7 @@ use vello_common::filter_effects::{EdgeMode, Filter, FilterPrimitive};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
 
+use crate::ink::Ink;
 use crate::{Frame, Renderer, blend_mode, fill_rule, paint};
 
 fn visible(effects: &[Effect]) -> bool {
@@ -178,8 +179,8 @@ fn blur_filter(sigma: f64) -> Filter {
     Filter::from_primitive(FilterPrimitive::GaussianBlur { std_deviation: sigma.max(0.0) as f32, edge_mode: EdgeMode::None })
 }
 
-fn pcolor(c: &vectorcraft_doc::color::Color) -> peniko::Color {
-    let [r, g, b] = c.to_rgb();
+fn pcolor(ink: Ink, c: &vectorcraft_doc::color::Color) -> peniko::Color {
+    let [r, g, b] = ink.rgb(c);
     peniko::Color::new([r, g, b, 1.0])
 }
 
@@ -285,7 +286,7 @@ impl Renderer {
         };
         let c = f.view.as_coeffs();
         let linear = [c[0].to_bits(), c[1].to_bits(), c[2].to_bits(), c[3].to_bits()];
-        let key = (n as *const Node as usize, i);
+        let key = (n as *const Node as usize, i, f.ink);
         let stamp = self.stamp;
         let hit = self.shadows.get_mut(&key).filter(|e| e.linear == linear && e.node == *n);
         let (image, x, y) = match hit {
@@ -314,7 +315,7 @@ impl Renderer {
                 let (wu, hu) = (w as usize, h as usize);
                 let mut a: Vec<f32> = pm.data().iter().map(|p| p.a as f32).collect();
                 blur_alpha(&mut a, wu, hu, blur / 2.0 / f.px);
-                let [cr, cg, cb] = color.to_rgb();
+                let [cr, cg, cb] = f.ink.rgb(&color);
                 let tint = |v: f32, ch: f32| (v * ch).round().clamp(0.0, 255.0) as u8;
                 for (px, av) in pm.data_mut().iter_mut().zip(&a) {
                     let al = (av * opacity).clamp(0.0, 255.0);
@@ -466,7 +467,7 @@ impl Renderer {
                 RasterFx::OuterGlow { mode, opacity, blur, color } => (*mode, *opacity, 0.0, 0.0, *blur, *color),
                 _ => continue,
             };
-            let filter = shadow_filter(0.0, 0.0, blur, pcolor(&color));
+            let filter = shadow_filter(0.0, 0.0, blur, pcolor(f.ink, &color));
             // The offset moves the content rather than the filter: vello_cpu drops layer content
             // that lies entirely outside the viewport before filtering.
             let reach = reach + Vec2::new(dx, dy);
@@ -520,7 +521,7 @@ impl Renderer {
         let Some((g, rule)) = content.outline else { return };
         for fx in rfx {
             let RasterFx::InnerGlow { mode, opacity, blur, color, center } = fx else { continue };
-            let filter = shadow_filter(0.0, 0.0, *blur, pcolor(color));
+            let filter = shadow_filter(0.0, 0.0, *blur, pcolor(f.ink, color));
             self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
                 // The blend layer goes outside the clip: a clip layer is isolated, so a blend
                 // inside it would mix with nothing instead of the content below.
@@ -639,7 +640,7 @@ impl Renderer {
                     ctx.push_layer(None, Some(blend_mode(fl.blend)), Some(fl.opacity), None, None);
                 }
                 ctx.set_transform(f.view);
-                if paint::set_paint(ctx, &fl.paint, ib, f.doc) {
+                if paint::set_paint(ctx, &fl.paint, ib, f) {
                     ctx.set_fill_rule(fill_rule(rule));
                     ctx.fill_path(ig);
                 }

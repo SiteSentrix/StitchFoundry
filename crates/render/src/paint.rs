@@ -1,28 +1,25 @@
 //! Paint conversion (solid, gradients, patterns) and image decoding.
 
 use vectorcraft_color::{GradientKind, Paint};
-use vectorcraft_doc::Document;
 use vectorcraft_geom::{Affine, Rect, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko::{self, ColorStop};
 
-fn color(c: &vectorcraft_color::Color, alpha: f32) -> peniko::Color {
-    let [r, g, b, a] = c.to_rgba8(alpha);
-    peniko::Color::from_rgba8(r, g, b, a)
-}
+use crate::Frame;
 
-/// Set the context paint. Returns false if nothing should be drawn.
-pub fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, doc: &Document) -> bool {
+/// Set the context paint (colours as frame `f` paints them). Returns false if nothing should be
+/// drawn.
+pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Frame) -> bool {
     match p {
         Paint::None => false,
         Paint::Solid { color: c, .. } => {
-            ctx.set_paint(color(c, 1.0));
+            ctx.set_paint(f.ink.color(c, 1.0));
             true
         }
-        Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => crate::freeform::set_freeform_paint(ctx, g, bounds),
+        Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => crate::freeform::set_freeform_paint(ctx, g, bounds, f.ink),
         Paint::Gradient(g) => {
             let geom = g.resolve(bounds);
-            let stops: Vec<ColorStop> = g.gradient.expanded_stops().iter().map(|(o, c, a)| ColorStop::from((*o, color(c, *a)))).collect();
+            let stops: Vec<ColorStop> = g.gradient.expanded_stops().iter().map(|(o, c, a)| ColorStop::from((*o, f.ink.color(c, *a)))).collect();
             if stops.is_empty() {
                 return false;
             }
@@ -50,7 +47,7 @@ pub fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, doc: &Documen
             ctx.set_paint(grad);
             true
         }
-        Paint::Pattern { pattern, xf } => crate::pattern::set_pattern_paint(ctx, pattern, *xf, doc),
+        Paint::Pattern { pattern, xf } => crate::pattern::set_pattern_paint(ctx, pattern, *xf, f),
     }
 }
 
