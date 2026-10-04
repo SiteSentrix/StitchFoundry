@@ -14,6 +14,7 @@ use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Affine, PathData, Point};
 
 use super::edit::selected_roots;
+use super::expand::gradient_sampler;
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -161,7 +162,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Gradient Mesh…",
             ["Object"],
             None,
-            "{ids?, rows?: n (4), cols?: n (4), appearance?: flat|center|edge, highlight?: % (100), at?: [x,y]} convert filled paths into gradient meshes (with `at`: 1×1 mesh plus lines through that point) → {ids, index?}",
+            "{ids?, rows?: n (4), cols?: n (4), appearance?: flat|center|edge, highlight?: % (100), at?: [x,y]} convert filled paths into gradient meshes in their fill colour (a gradient fill: the colour it paints at each point), lightened per `appearance` (with `at`: 1×1 mesh plus lines through that point) → {ids, index?}",
             has_selection,
             mesh_create
         ),
@@ -723,12 +724,17 @@ fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &roots {
             let Some(n) = d.node(*id).cloned() else { continue };
             let Some(path) = outline_of(&n) else { continue };
-            let base = match n.appearance.fill_paint() {
-                Paint::Solid { color, .. } => color,
-                Paint::Gradient(g) => g.gradient.sample(0.5).0,
-                _ => Color::WHITE,
+            let m = match n.appearance.fill_paint() {
+                // The points take the colours the gradient paints there.
+                Paint::Gradient(g) => {
+                    path.bounds().and_then(|b| GradientMesh::for_path_with(&path, rows, cols, &*gradient_sampler(&g, b))).map(|mut m| {
+                        m.highlight(app, highlight);
+                        m
+                    })
+                }
+                p => GradientMesh::for_path(&path, rows, cols, p.color().unwrap_or(Color::WHITE), app, highlight),
             };
-            let Some(mut m) = GradientMesh::for_path(&path, rows, cols, base, app, highlight) else { continue };
+            let Some(mut m) = m else { continue };
             if let Some(q) = at {
                 index = m.add_lines_at(q);
             }

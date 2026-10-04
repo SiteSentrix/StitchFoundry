@@ -87,6 +87,11 @@ impl Default for Gradient {
 impl Gradient {
     /// Colour and opacity at `t` (honours midpoints).
     pub fn sample(&self, t: f32) -> (Color, f32) {
+        self.sample_with(t, Color::lerp)
+    }
+    /// [`Gradient::sample`] with neighbouring stop colours mixed by `mix` (e.g. in their own colour
+    /// model rather than display RGB).
+    pub fn sample_with(&self, t: f32, mix: impl Fn(&Color, &Color, f32) -> Color) -> (Color, f32) {
         let stops = &self.stops;
         if stops.is_empty() {
             return (Color::BLACK, 1.0);
@@ -102,7 +107,7 @@ impl Gradient {
                 // Map through the midpoint: u=mid → 0.5.
                 let m = a.midpoint.clamp(0.01, 0.99);
                 let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
-                return (a.color.lerp(&b.color, v), a.opacity + (b.opacity - a.opacity) * v);
+                return (mix(&a.color, &b.color, v), a.opacity + (b.opacity - a.opacity) * v);
             }
         }
         let l = stops.last().unwrap();

@@ -309,6 +309,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.userGraphicStyleLibrary8", "User Graphic Style Library 8", "", "{} open the 8. User Defined graphic style library"),
     ("window.userGraphicStyleLibrary9", "User Graphic Style Library 9", "", "{} open the 9. User Defined graphic style library"),
     ("window.userGraphicStyleLibrary10", "User Graphic Style Library 10", "", "{} open the 10. User Defined graphic style library"),
+    (
+        "ui.expandDialog",
+        "Expand…",
+        "",
+        "{} open Expand for the selection (dialog `expand`, fields object, fill, stroke (all on; one the selection has nothing for is disabled, see object.expand.info), gradient: objects|mesh, steps 1..1000 (255)): OK runs object.expand with them as one undo step",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -675,6 +681,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(l) => crate::panels::graphic_styles::open_library(app, &json!({ "library": l.id })),
             None => Err("no such user library".into()),
         },
+        "ui.expandDialog" => crate::dialogs::expand::open(app),
         _ => return None,
     };
     Some(r)
@@ -859,6 +866,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.flattenTransparencyDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveGraphicStyleLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => crate::panels::graphic_styles::user_library(app, id).is_some(),
+        "ui.expandDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         _ => true,
     }
 }
@@ -1042,7 +1050,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 c("Show All", "object.showAll"),
                 Sep,
-                cp("Expand…", "object.expand", json!({"object": true, "fill": true, "stroke": true})),
+                c("Expand…", "ui.expandDialog"),
                 c("Expand Appearance", "effect.expandAppearance"),
                 c("Crop Image", "object.cropImage"),
                 cp("Rasterize…", "object.rasterize", json!({"ppi": 72, "background": "transparent"})),
@@ -1653,6 +1661,13 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
                 let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Text Wrap Options", "params": fields}));
             }
             Err(e) => app.status(e.to_string()),
+        }
+        return;
+    }
+    // Expand…: its dialog.
+    if id == "object.expand" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::expand::open(app) {
+            app.status(e);
         }
         return;
     }

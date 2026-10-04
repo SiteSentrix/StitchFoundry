@@ -536,7 +536,11 @@ fn compound_release(s: &mut Session, _: &Value) -> Result<Value> {
 /// Make `top` (a path, compound path or text object) the clipping path: it loses its paint (it
 /// stays unpainted after Release).
 pub(super) fn make_clipping_path(d: &mut Document, top: NodeId) -> Result<()> {
-    let c = d.node_mut(top).ok_or(EngineError::NoNode(top))?;
+    as_clipping_path(d.node_mut(top).ok_or(EngineError::NoNode(top))?)
+}
+
+/// Turn path, compound path or text `c` into a clipping path (its paint goes).
+pub(super) fn as_clipping_path(c: &mut Node) -> Result<()> {
     if !matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
         return Err(EngineError::Other("the top object must be a path, compound path or text object to use as a clipping mask".into()));
     }

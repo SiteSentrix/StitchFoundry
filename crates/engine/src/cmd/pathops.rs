@@ -445,7 +445,7 @@ fn outlinable(st: &StrokeLayer) -> bool {
 
 /// `n` with `opacity` and `blend` applied: set on it when it has none of its own, else on a
 /// group around it.
-fn with_transparency(d: &mut Document, mut n: Node, opacity: f32, blend: BlendMode) -> Node {
+pub(crate) fn with_transparency(d: &mut Document, mut n: Node, opacity: f32, blend: BlendMode) -> Node {
     if opacity >= 1.0 && blend == BlendMode::Normal {
         return n;
     }
@@ -503,24 +503,12 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
     let (path, rule) = node_path(l)?;
     let mut parts: Vec<Node> = vec![];
     let mut fills: Vec<AppearanceItem> = vec![];
-    let fill_node = |d: &mut Document, items: Vec<AppearanceItem>| {
-        let mut f = d.reid(l);
-        f.appearance = Appearance { items, ..Default::default() };
-        f.opacity = 1.0;
-        f.blend = BlendMode::Normal;
-        f.name = None;
-        f.mask = None;
-        if let NodeKind::Path { live, .. } = &mut f.kind {
-            *live = None;
-        }
-        f
-    };
     for item in &l.appearance.items {
         match item {
             AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => fills.push(item.clone()),
             AppearanceItem::Stroke(st) if outlinable(st) => {
                 if !fills.is_empty() {
-                    parts.push(fill_node(d, std::mem::take(&mut fills)));
+                    parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
                 parts.extend(outlined_stroke(d, brushes, &path, rule, st));
             }
@@ -528,8 +516,28 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
         }
     }
     if !fills.is_empty() {
-        parts.push(fill_node(d, fills));
+        parts.push(styled_copy(d, l, fills));
     }
+    assemble(d, l, parts)
+}
+
+/// A plain copy of path `l` (new ids, no transparency, name or mask) painted with `items`.
+pub(crate) fn styled_copy(d: &mut Document, l: &Node, items: Vec<AppearanceItem>) -> Node {
+    let mut f = d.reid(l);
+    f.appearance = Appearance { items, ..Default::default() };
+    f.opacity = 1.0;
+    f.blend = BlendMode::Normal;
+    f.name = None;
+    f.mask = None;
+    if let NodeKind::Path { live, .. } = &mut f.kind {
+        *live = None;
+    }
+    f
+}
+
+/// What stands for object `l` once its appearance became `parts` (paint order): the one part or a
+/// group of them, with `l`'s transparency, name, opacity mask and effects. `None` without parts.
+pub(crate) fn assemble(d: &mut Document, l: &Node, mut parts: Vec<Node>) -> Option<Node> {
     let root = match parts.len() {
         0 => return None,
         1 => parts.remove(0),
@@ -545,15 +553,18 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
 /// Outline the strokes of every path under `root` in place: → (the id now standing for `root`,
 /// how many paths changed).
 pub(crate) fn outline_strokes_under(d: &mut Document, brushes: &[vectorcraft_brush::Brush], root: NodeId) -> Result<(NodeId, usize)> {
+    replace_leaves(d, root, |d, l| if matches!(l.kind, NodeKind::Text(_)) { None } else { outline_strokes(d, brushes, l) })
+}
+
+/// Replace each leaf shape under `root` ([`leaves`]) by what `f` makes of it (`None` keeps it):
+/// → (the id now standing for `root`, how many leaves changed).
+pub(crate) fn replace_leaves(d: &mut Document, root: NodeId, mut f: impl FnMut(&mut Document, &Node) -> Option<Node>) -> Result<(NodeId, usize)> {
     let Some(n) = d.node(root).cloned() else { return Ok((root, 0)) };
     let mut lv = vec![];
     leaves(&n, &mut lv);
     let (mut replacement, mut changed) = (root, 0);
     for l in lv {
-        if matches!(l.kind, NodeKind::Text(_)) {
-            continue;
-        }
-        let Some(new) = outline_strokes(d, brushes, &l) else { continue };
+        let Some(new) = f(d, &l) else { continue };
         let (par, idx, _) = d.position(l.id).ok_or(EngineError::NoNode(l.id))?;
         let nid = d.insert(par, idx, new)?;
         d.remove(l.id)?;

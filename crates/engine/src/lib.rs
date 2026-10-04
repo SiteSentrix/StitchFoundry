@@ -845,6 +845,8 @@ mod tests_maskview;
 #[cfg(test)]
 mod tests_menucmds;
 #[cfg(test)]
+mod tests_objexpand;
+#[cfg(test)]
 mod tests_opacitymask;
 #[cfg(test)]
 mod tests_outlinestroke;

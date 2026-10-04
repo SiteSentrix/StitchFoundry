@@ -138,3 +138,9 @@ overprints?, preset?, options?, showOptions?}` sets it (a preset loads its optio
 and refreshes its snapshot of the document, answering as `flattener.preview` does. `ui.inspect` reports the settings
 as `ui.flattener_preview`. The panel keeps its snapshot until Refresh (it notes when the document or the settings
 changed since); its preview greys the art and paints the highlighted objects or areas red.
+
+Expand: Object → Expand… (`ui.expandDialog`, or `object.expand` without params from the menus, palette and shortcuts)
+opens the `expand` dialog for the selection. Fields: `object`, `fill`, `stroke` (all on; `__object`, `__fill`,
+`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled),
+`gradient` (`objects` or `mesh`) and `steps` (1–1000, default 255). `ui.dialog.confirm` runs `object.expand` with them as
+one undo step.
