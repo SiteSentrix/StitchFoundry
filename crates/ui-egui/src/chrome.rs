@@ -195,6 +195,18 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
 }
 
+/// A document tab's title: "Name* @ 66.67 % (RGB/Preview)", or while an opacity mask is edited
+/// "Name* @ 66.67 % (<Opacity Mask>/Opacity Mask)".
+fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool) -> String {
+    let mode = if d.doc.mask_edit.is_some() {
+        "<Opacity Mask>/Opacity Mask".to_string()
+    } else {
+        let color = if d.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { "CMYK" } else { "RGB" };
+        format!("{color}/{}", if outline { "Outline" } else { "Preview" })
+    };
+    format!("{}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom).replace('%', " %"))
+}
+
 /// Document tab strip: "Name* @ 66.67% (RGB/Preview)".
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -207,9 +219,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let active = app.session.active_index();
     for (i, d) in app.session.documents().iter().enumerate() {
         let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
-        let mode = if d.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { "CMYK" } else { "RGB" };
-        let vm = if app.ui.view.outline { "Outline" } else { "Preview" };
-        let title = format!("{}{} @ {} ({mode}/{vm})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom).replace('%', " %"));
+        let title = tab_title(d, zoom, app.ui.view.outline);
         let is_active = Some(i) == active;
         let galley = ui.painter().layout_no_wrap(title, theme::semibold(12.5), if is_active { t.text_strong } else { t.text_dim });
         let w = galley.size().x + 50.0;
@@ -466,4 +476,23 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.label(job);
             });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+
+    #[test]
+    fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false);
+        assert!(title(&s).ends_with("(RGB/Preview)"), "{}", title(&s));
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));
+        s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+        assert!(title(&s).ends_with("(RGB/Preview)"));
+    }
 }

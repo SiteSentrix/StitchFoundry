@@ -787,6 +787,8 @@ mod tests_editcolors;
 #[cfg(test)]
 mod tests_effectedit;
 #[cfg(test)]
+mod tests_expand;
+#[cfg(test)]
 mod tests_eyedropper;
 #[cfg(test)]
 mod tests_file;
@@ -838,6 +840,8 @@ mod tests_swatchcmds;
 mod tests_swatches;
 #[cfg(test)]
 mod tests_swatchlib;
+#[cfg(test)]
+mod tests_targeting;
 #[cfg(test)]
 mod tests_textedit;
 #[cfg(test)]

@@ -173,7 +173,7 @@ impl Session {
     /// when it stands for it (see [`Session::proxy_paints`]); None: the defaults for new art.
     pub(crate) fn proxy_source(&self, stroke: bool) -> Option<(&Node, Option<usize>)> {
         let st = self.active()?;
-        let first = st.doc.node(*st.selection.objects.first()?)?;
+        let first = st.doc.node(*st.selection.subjects().first()?)?;
         let item = self.appearance_item();
         if first.appearance.item_of_kind(item, !stroke).is_some() {
             return Some((first, item));

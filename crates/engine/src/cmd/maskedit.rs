@@ -75,7 +75,7 @@ fn enter(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "already editing an opacity mask"));
     }
     let id = id_param(p, "id")
-        .or_else(|| st.selection.objects.iter().copied().find(|i| st.doc.node(*i).is_some_and(|n| n.mask.is_some())))
+        .or_else(|| st.selection.subjects().iter().copied().find(|i| st.doc.node(*i).is_some_and(|n| n.mask.is_some())))
         .ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
     let layer = s.edit("Edit Opacity Mask", |d, sel| begin(d, sel, id))?;
     show_editing(s, Some(layer))?;
@@ -117,7 +117,7 @@ pub(crate) fn finish(d: &mut Document, sel: &mut Selection) {
     sync(d);
     d.drop_edit_modes();
     if d.node(me.object).is_some() {
-        sel.set([me.object]);
+        sel.set_target(d, me.object);
     } else {
         sel.clear();
     }

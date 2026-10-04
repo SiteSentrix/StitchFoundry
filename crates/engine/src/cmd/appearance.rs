@@ -148,6 +148,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             target_contents
         ),
+        cmd!(
+            "appearance.transfer",
+            "Move Appearance",
+            [],
+            None,
+            "{source: id, target: id, copy?: bool} give `target` (a layer, group or object) the appearance (fills, strokes, effects) and transparency (opacity, blend mode, isolation, knockout) of `source`, as dragging a target circle onto another in the Layers panel does; the source is left with a cleared appearance (as appearance.clear) unless `copy` (Alt-drag). Opacity masks stay; placed gradients keep their place relative to each object's bounds → {source, target}",
+            has_doc,
+            transfer
+        ),
     ]
 }
 
@@ -165,7 +174,7 @@ impl Session {
     pub fn appearance_item(&self) -> Option<usize> {
         let a = self.active_appearance_item.as_ref()?;
         let st = self.active()?;
-        if st.uid != a.doc || st.selection.objects != a.objects {
+        if st.uid != a.doc || st.selection.subjects() != a.objects.as_slice() {
             return None;
         }
         let n = st.doc.node(*a.objects.first()?)?;
@@ -230,7 +239,8 @@ impl ItemTarget {
     /// leaves (as without an active item) and vice versa. Explicit items are kept (and checked).
     pub(crate) fn of_kind(self, s: &Session, fill: bool) -> Self {
         let ItemTarget::Item { index, explicit: false } = self else { return self };
-        let fits = s.active().and_then(|st| st.doc.node(*st.selection.objects.first()?)?.appearance.items.get(index).map(|it| it.is_fill() == fill));
+        let fits =
+            s.active().and_then(|st| st.doc.node(*st.selection.subjects().first()?)?.appearance.items.get(index).map(|it| it.is_fill() == fill));
         if fits == Some(true) { self } else { ItemTarget::Top }
     }
 
@@ -274,12 +284,22 @@ fn targets_contents(p: &Value) -> Result<bool> {
     }
 }
 
-/// Objects whose own appearance stack a command edits: `ids`/`id` (layers too), else the selected
-/// objects (a selected compound-path member stands for its compound); with `target: "contents"`
-/// the painted objects inside the groups and layers among them ([`leaf_targets`]).
+/// The objects appearance edits act on without `ids`: the targeted object, group or layer
+/// (`layer.target`), else the selected objects (a selected compound-path member stands for its
+/// compound).
+pub(crate) fn subject_roots(s: &Session) -> Result<Vec<NodeId>> {
+    match s.doc()?.selection.target {
+        Some(t) => Ok(vec![t]),
+        None => selected_roots(s),
+    }
+}
+
+/// Objects whose own appearance stack a command edits: `ids`/`id` (layers too), else the
+/// [`subject_roots`]; with `target: "contents"` the painted objects inside the groups and layers
+/// among them ([`leaf_targets`]).
 pub(crate) fn appearance_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let roots = if p.get("ids").is_none() && p.get("id").is_none() {
-        selected_roots(s)?
+        subject_roots(s)?
     } else {
         let d = &s.doc()?.doc;
         targets(s, p)?.into_iter().filter(|id| d.node(*id).is_some()).collect()
@@ -347,7 +367,7 @@ fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
         None => return Err(bad(C, "missing `index` (an item index or null)")),
     };
     let st = s.doc()?;
-    let objects = st.selection.objects.clone();
+    let objects = st.selection.subjects().to_vec();
     let first = objects.first().and_then(|id| st.doc.node(*id)).ok_or_else(|| EngineError::Other("nothing selected".into()))?;
     let fill = first.appearance.items.get(index).ok_or_else(|| bad(C, format!("no appearance item {index}")))?.is_fill();
     let doc = st.uid;
@@ -393,17 +413,52 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear Appearance", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
-                // No fill, no stroke, and the object's Opacity row back to Default. A group keeps no
-                // fill or stroke rows of its own.
-                n.appearance = if is_group(n) { Appearance::default() } else { Appearance::basic(Paint::None, Paint::None, 1.0) };
-                n.opacity = 1.0;
-                n.blend = BlendMode::Normal;
+                clear(n);
             }
         }
         Ok(())
     })?;
     s.active_appearance_item = None;
     ok()
+}
+
+/// Clear Appearance on `n`: no fill, no stroke, and the object's Opacity row back to Default. A
+/// group keeps no fill or stroke rows of its own.
+fn clear(n: &mut Node) {
+    n.appearance = if is_group(n) { Appearance::default() } else { Appearance::basic(Paint::None, Paint::None, 1.0) };
+    n.opacity = 1.0;
+    n.blend = BlendMode::Normal;
+}
+
+fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "appearance.transfer";
+    let source = id_param(p, "source").ok_or_else(|| bad(C, "missing `source` id"))?;
+    let target = id_param(p, "target").ok_or_else(|| bad(C, "missing `target` id"))?;
+    if source == target {
+        return Err(bad(C, "`source` and `target` are the same object"));
+    }
+    let copy = bool_or(p, "copy", false);
+    s.edit(if copy { "Copy Appearance" } else { "Move Appearance" }, |d, _| {
+        let src = d.node(source).cloned().ok_or(EngineError::NoNode(source))?;
+        let to = d.node_mut(target).ok_or(EngineError::NoNode(target))?;
+        let mut ap = src.appearance.clone();
+        if let (Some(f), Some(t)) = (src.geometric_bounds(), to.geometric_bounds()) {
+            ap.rebase_gradients(f, t);
+        }
+        // Only groups, layers and type have a Contents (Characters) row to keep a slot for.
+        if to.contents_label().is_none() {
+            ap.contents_index = None;
+        }
+        to.appearance = ap;
+        (to.opacity, to.blend, to.isolate, to.knockout, to.knockout_shape) = (src.opacity, src.blend, src.isolate, src.knockout, src.knockout_shape);
+        if !copy && let Some(n) = d.node_mut(source) {
+            clear(n);
+            (n.isolate, n.knockout, n.knockout_shape) = (false, Default::default(), false);
+        }
+        Ok(())
+    })?;
+    s.active_appearance_item = None;
+    Ok(json!({ "source": source.0, "target": target.0 }))
 }
 
 /// A group or layer (no fill or stroke rows of its own unless added).

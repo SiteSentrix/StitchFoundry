@@ -1,5 +1,10 @@
 //! The Layers panel: tree with visibility/lock columns, layer colour bars, thumbnails, target
 //! circles and selection squares; bottom bar with new/delete.
+//!
+//! A target circle targets its layer, group or object (`layer.target`); dragging it onto another
+//! row's circle moves the appearance there (Alt copies it, `appearance.transfer`) and dropping it
+//! on the trash clears it. While an opacity mask is edited the panel lists only its art, under
+//! an `<Opacity Mask>` entry.
 
 use std::collections::HashSet;
 
@@ -8,6 +13,7 @@ use serde_json::json;
 use vectorcraft_doc::{Node, NodeId, NodeKind};
 
 use crate::theme::Tokens;
+use crate::widgets::PanelDrag;
 use crate::{VectorcraftApp, icons, widgets};
 
 const ROW: f32 = 26.0;
@@ -21,7 +27,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
     let sel: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+    let target = st.selection.target;
     let current = st.active_layer;
+    // While an opacity mask is edited only its art is listed.
+    let mask_layer = doc.mask_edit.map(|m| m.layer);
     let mut expanded: HashSet<u64> = ui.data(|d| d.get_temp(expanded_id())).unwrap_or_else(|| doc.layers.iter().map(|l| l.id.0).collect());
     let mut actions: Vec<(String, serde_json::Value)> = vec![];
     // Search field ("Search All").
@@ -30,8 +39,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let h = ui.available_height() - 34.0;
     egui::ScrollArea::vertical().max_height(h).auto_shrink([false, false]).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        for l in doc.layers.iter().rev() {
-            row(ui, &doc, l, 0, false, &sel, current, &mut expanded, &mut actions, &t);
+        for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
+            row(ui, &doc, l, 0, false, &sel, target, current, &mut expanded, &mut actions, &t);
         }
     });
     ui.data_mut(|d| d.insert_temp(expanded_id(), expanded));
@@ -50,7 +59,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         t.text_dim,
     );
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
-    if widgets::icon_button(&mut child, "trash-2", "Delete Selection", false, 24.0).clicked() {
+    let trash = widgets::icon_button(&mut child, "trash-2", "Delete Selection", false, 24.0);
+    // A target circle dropped on the trash clears that appearance.
+    if let Some(d) = trash.dnd_release_payload::<PanelDrag>()
+        && let PanelDrag::Appearance(id) = *d
+    {
+        actions.push(("appearance.clear".into(), json!({"ids": [id.0]})));
+    } else if trash.clicked() {
         if app.session.active().is_some_and(|d| !d.selection.is_empty()) {
             actions.push(("edit.clear".into(), json!({})));
         } else {
@@ -91,6 +106,7 @@ fn row(
     depth: usize,
     clip_path: bool,
     sel: &HashSet<NodeId>,
+    target: Option<NodeId>,
     current: Option<NodeId>,
     expanded: &mut HashSet<u64>,
     actions: &mut Vec<(String, serde_json::Value)>,
@@ -177,7 +193,7 @@ fn row(
     }
     x += 26.0;
     // Name.
-    let name = n.display_name();
+    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.display_name() };
     let font = egui::FontId::proportional(13.0);
     let rename_id = egui::Id::new("layers-rename");
     let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id));
@@ -202,9 +218,11 @@ fn row(
         _ => {
             let painter = ui.painter().with_clip_rect(name_rect);
             let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name.clone(), font, t.text);
-            // A clipping path's name is underlined.
+            // A clipping path's name is underlined, a masked object's with a dashed line.
             if clip_path {
                 painter.line_segment([text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text));
+            } else if n.mask.is_some() {
+                painter.extend(egui::Shape::dashed_line(&[text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text), 3.0, 2.0));
             }
         }
     }
@@ -212,14 +230,7 @@ fn row(
     let col_x = r.right() - 43.5;
     ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
     let tc = egui::pos2(r.right() - 28.0, r.center().y);
-    let styled = has_styled_target(n);
-    ui.painter().circle_stroke(tc, 5.0, Stroke::new(1.0, t.icon));
-    if is_sel {
-        ui.painter().circle_stroke(tc, 2.8, Stroke::new(1.0, t.icon));
-    }
-    if styled {
-        ui.painter().circle_filled(tc, 3.2, t.icon);
-    }
+    let tresp = target_circle(ui, n, tc, target.map_or(is_sel, |id| id == n.id), actions, t);
     let sq = egui::pos2(r.right() - 11.0, r.center().y);
     if is_sel {
         let q = egui::Rect::from_center_size(sq, vec2(7.0, 7.0));
@@ -229,7 +240,9 @@ fn row(
         ui.painter().rect_filled(egui::Rect::from_center_size(sq, vec2(4.0, 4.0)), 0.0, color);
     }
     let sq_resp = ui.interact(egui::Rect::from_center_size(sq, vec2(18.0, ROW)), ui.id().with(("selsq", n.id.0)), Sense::click());
-    if sq_resp.clicked() {
+    if tresp.clicked() {
+        actions.push(("layer.target".into(), json!({"id": n.id.0})));
+    } else if sq_resp.clicked() {
         if n.is_layer() {
             actions.push(("layer.selectAll".into(), json!({"id": n.id.0})));
         } else if ui.input(|i| i.modifiers.shift) {
@@ -276,15 +289,47 @@ fn row(
 
     if has_children && expanded.contains(&n.id.0) {
         for (i, c) in n.children().unwrap().iter().enumerate().rev() {
-            row(ui, doc, c, depth + 1, i == 0 && n.clips(), sel, current, expanded, actions, t);
+            row(ui, doc, c, depth + 1, i == 0 && n.clips(), sel, target, current, expanded, actions, t);
         }
     }
 }
 
-/// Whether an object's target circle is filled: its appearance is not basic or its transparency
-/// (opacity, blend mode, isolation, knockout or an opacity mask) is not the default.
+/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, filled when `n`
+/// has an appearance or transparency of its own. Its response is clicked to target `n`; dragging
+/// it carries `n`'s appearance ([`PanelDrag::Appearance`]) onto another row's circle (Alt
+/// copies it) or the trash.
+fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, targeted: bool, actions: &mut Vec<(String, serde_json::Value)>, t: &Tokens) -> egui::Response {
+    let resp = ui.interact(egui::Rect::from_center_size(c, vec2(16.0, ROW)), ui.id().with(("target", n.id.0)), Sense::click_and_drag());
+    widgets::drag_source(ui, &resp, || PanelDrag::Appearance(n.id));
+    let held = resp.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(id) if id != n.id));
+    if let Some(d) = resp.dnd_release_payload::<PanelDrag>()
+        && let PanelDrag::Appearance(source) = *d
+        && source != n.id
+    {
+        let copy = ui.input(|i| i.modifiers.alt);
+        actions.push(("appearance.transfer".into(), json!({"source": source.0, "target": n.id.0, "copy": copy})));
+    }
+    let ring = if held { t.accent } else { t.icon };
+    ui.painter().circle_stroke(c, 5.0, Stroke::new(if held { 1.5 } else { 1.0 }, ring));
+    if targeted {
+        ui.painter().circle_stroke(c, 2.8, Stroke::new(1.0, t.icon));
+    }
+    if has_styled_target(n) {
+        ui.painter().circle_filled(c, 3.2, t.icon);
+    }
+    if resp.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    }
+    resp
+}
+
+/// Whether an object's target circle is filled: its appearance is not basic (a group or layer:
+/// it has fills, strokes or effects of its own) or its transparency (opacity, blend mode,
+/// isolation, knockout or an opacity mask) is not the default.
 fn has_styled_target(n: &Node) -> bool {
-    !n.appearance.is_basic() || !n.has_default_transparency()
+    !n.appearance.is_basic()
+        || (matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.appearance.items.is_empty())
+        || !n.has_default_transparency()
 }
 
 /// A real rendered thumbnail, cached by node identity (unchanged nodes keep their `Arc`
@@ -402,5 +447,133 @@ mod tests {
         assert_eq!(underlines(&mut app), 1);
         run(&mut app, "layer.clippingMask.toggle", json!({}));
         assert_eq!(underlines(&mut app), 0);
+    }
+
+    /// One headless frame of the panel with `events` (Alt held when `alt`): the centres of the
+    /// target circles, top row first, and the text-coloured line segments (underlines) drawn.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, alt: bool) -> (Vec<egui::Pos2>, usize) {
+        let mut events = events;
+        events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let text = Tokens::get(ctx).text;
+        let mut circles = vec![];
+        let mut lines = 0;
+        for c in &out.shapes {
+            match &c.shape {
+                egui::Shape::Circle(cs) if cs.radius == 5.0 => circles.push(cs.center),
+                egui::Shape::LineSegment { stroke, .. } if stroke.color == text => lines += 1,
+                _ => {}
+            }
+        }
+        circles.sort_by(|a, b| a.y.total_cmp(&b.y));
+        (circles, lines)
+    }
+
+    fn button(pos: egui::Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    }
+
+    /// Drag from `a` to `b` over a few frames (Alt held when `alt`).
+    fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, a: egui::Pos2, b: egui::Pos2, alt: bool) {
+        let steps = [
+            vec![egui::Event::PointerMoved(a)],
+            vec![button(a, true)],
+            vec![egui::Event::PointerMoved(a + vec2(0.0, 6.0))],
+            vec![egui::Event::PointerMoved(b)],
+            vec![button(b, false)],
+            vec![],
+        ];
+        for e in steps {
+            frame(app, ctx, e, alt);
+        }
+    }
+
+    /// A document with two rectangles on one layer → (app, layer, [bottom, top]).
+    fn two_rects() -> (VectorcraftApp, NodeId, [NodeId; 2]) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        let b = run(&mut app, "shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        run(&mut app, "select.none", json!({}));
+        let layer = app.session.active().unwrap().doc.layers[0].id;
+        (app, layer, [NodeId(a), NodeId(b)])
+    }
+
+    #[test]
+    fn clicking_a_target_circle_targets_the_layer() {
+        let (mut app, layer, [a, b]) = two_rects();
+        let ctx = egui::Context::default();
+        // Rows top down: the layer, the top rectangle, the bottom one.
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(c.len(), 3);
+        for e in [egui::Event::PointerMoved(c[0]), button(c[0], true), button(c[0], false)] {
+            frame(&mut app, &ctx, vec![e], false);
+        }
+        let st = app.session.active().unwrap();
+        assert_eq!(st.selection.target, Some(layer));
+        assert_eq!(st.selection.objects, vec![a, b]);
+        assert_eq!(super::super::appearance::object_label(&app), "Layer", "the Appearance panel lists the layer");
+        app.session.execute("transparency.set", &json!({"opacity": 25})).unwrap();
+        assert!((app.session.active().unwrap().doc.node(layer).unwrap().opacity - 0.25).abs() < 1e-6);
+        // The layer's circle is filled now; clicking an object's circle targets that object.
+        assert_eq!(filled_targets(&mut app, &ctx), 1);
+        for e in [egui::Event::PointerMoved(c[2]), button(c[2], true), button(c[2], false)] {
+            frame(&mut app, &ctx, vec![e], false);
+        }
+        let st = app.session.active().unwrap();
+        assert_eq!((st.selection.target, st.selection.objects.clone()), (Some(a), vec![a]));
+    }
+
+    #[test]
+    fn dragging_a_target_circle_moves_or_copies_the_appearance_and_the_trash_clears_it() {
+        let (mut app, layer, [a, b]) = two_rects();
+        app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+        let ctx = egui::Context::default();
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        let opacity = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().opacity;
+        // Alt-drag the bottom rectangle's circle onto the top one's: both have it.
+        drag(&mut app, &ctx, c[2], c[1], true);
+        assert!((opacity(&app, b) - 0.3).abs() < 1e-6 && (opacity(&app, a) - 0.3).abs() < 1e-6);
+        // A plain drag onto the layer's circle moves it there.
+        drag(&mut app, &ctx, c[1], c[0], false);
+        assert!((opacity(&app, layer) - 0.3).abs() < 1e-6 && opacity(&app, b) == 1.0);
+        // Dropped on the trash, the layer's appearance is cleared (and nothing is deleted).
+        let st = app.session.active().unwrap();
+        let count = st.doc.node_count();
+        let trash = {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+            out.textures_delta.clear();
+            // The bottom bar's rightmost button, under the right end of its top divider.
+            let divider = Tokens::get(&ctx).divider;
+            let corner = out.shapes.iter().rev().find_map(|c| match &c.shape {
+                egui::Shape::LineSegment { points, stroke } if stroke.color == divider => Some(points[1]),
+                _ => None,
+            });
+            corner.unwrap() + vec2(-12.0, 15.0)
+        };
+        drag(&mut app, &ctx, c[0], trash, false);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.node(layer).unwrap().opacity, 1.0);
+        assert_eq!(st.doc.node_count(), count);
+    }
+
+    #[test]
+    fn masks_underline_dashed_and_mask_editing_lists_only_the_mask() {
+        let (mut app, _, [a, _]) = two_rects();
+        let ctx = egui::Context::default();
+        let (_, before) = frame(&mut app, &ctx, vec![], false);
+        app.session.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        app.session.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        // Editing the new (empty) mask: one row, `<Opacity Mask>`.
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(c.len(), 1);
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], show);
+        assert!(texts.iter().any(|(t, _)| t == "<Opacity Mask>"), "{texts:?}");
+        app.session.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+        let (c, after) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(c.len(), 3);
+        assert!(after > before + 1, "a dashed underline: {before} → {after}");
     }
 }

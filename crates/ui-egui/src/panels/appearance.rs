@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeId};
 
-use super::{first_selected, live_run, pstate, set_pstate};
+use super::{live_run, pstate, set_pstate};
 use crate::panels::stroke::paint_profile;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, TransparencyEdit, menu_item};
@@ -86,7 +86,7 @@ pub(crate) fn select_row(app: &mut VectorcraftApp, ctx: &egui::Context, sel: Sel
     if app.session.appearance_item() != sel.item() {
         app.run("appearance.setActiveItem", json!({ "index": sel.item() })).ok();
     }
-    let owner = app.session.active().and_then(|d| d.selection.objects.first().copied());
+    let owner = app.session.active().and_then(|d| d.selection.subjects().first().copied());
     set_pstate(ctx, "ap-sel", (owner, sel));
     set_pstate(ctx, "ap-multi", (owner, sel.item().into_iter().collect::<Vec<usize>>()));
 }
@@ -223,7 +223,7 @@ fn link(ui: &mut Ui, pos: egui::Pos2, id: impl std::hash::Hash + std::fmt::Debug
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let node = first_selected(app);
+    let node = first_subject(app);
     let sel = current_sel(app, ui.ctx(), node.as_ref());
     let hide_thumb: bool = pstate(ui.ctx(), "ap-hide-thumb");
     widgets::list_box(ui, |ui| {
@@ -272,11 +272,18 @@ fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
     }
 }
 
+/// The object the panel lists: the targeted layer, group or object (`layer.target`), else the
+/// first selected one.
+fn first_subject(app: &VectorcraftApp) -> Option<Node> {
+    let st = app.session.active()?;
+    st.selection.subjects().first().and_then(|id| st.doc.node(*id)).cloned()
+}
+
 /// The selection as the Control bar and the object row name it: "No Selection", "Mixed Objects"
-/// or the object's kind ("Path", "Type", …).
+/// or the kind ("Path", "Type", "Layer"…) of the object, or targeted layer, the panel lists.
 pub(crate) fn object_label(app: &VectorcraftApp) -> &'static str {
     let Some(st) = app.session.active() else { return "No Selection" };
-    match st.selection.objects.as_slice() {
+    match st.selection.subjects() {
         [] => "No Selection",
         [id] => st.doc.node(*id).map_or("No Selection", Node::kind_label),
         _ => "Mixed Objects",
@@ -286,7 +293,7 @@ pub(crate) fn object_label(app: &VectorcraftApp) -> &'static str {
 /// Do the selected objects differ in appearance (fills, strokes, effects, opacity or blend mode)?
 fn mixed_appearances(app: &VectorcraftApp) -> bool {
     let Some(st) = app.session.active() else { return false };
-    let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
+    let mut nodes = st.selection.subjects().iter().filter_map(|id| st.doc.node(*id));
     let Some(first) = nodes.next() else { return false };
     nodes.any(|n| n.appearance != first.appearance || n.opacity != first.opacity || n.blend != first.blend)
 }
@@ -839,7 +846,7 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let node = first_selected(app);
+    let node = first_subject(app);
     let has = node.is_some();
     let sel = current_sel(app, ui.ctx(), node.as_ref());
     if menu_item(ui, "Add New Fill", has, false) {
