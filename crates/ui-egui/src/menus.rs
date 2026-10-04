@@ -259,6 +259,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Tile Edge Color (dialog `tileEdgeColor`, field `color`: #rrggbb or a preset name such as \"Light Blue\"); OK sets the preference patternTileEdgeColor (prefs.set), the colour of the tile edge and swatch bounds in pattern editing mode",
     ),
+    (
+        "ui.flattenTransparencyDialog",
+        "Flatten Transparency…",
+        "",
+        "{} open Flatten Transparency for the selection (dialog `flattenTransparency`, fields `preset` (a preset name: setting it loads its options), balance 0..100, lineArtPpi, gradientPpi 1..2400, textToOutlines, strokesToOutlines, clipComplexRegions, antiAlias, preserveAlpha, preserveOverprints, `preview` (off at first)): OK runs object.flattenTransparency with those options as one undo step",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -607,6 +613,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::graphic_style_options::open_merge(app, names.unwrap_or_default())
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
+        "ui.flattenTransparencyDialog" => {
+            crate::dialogs::flatten::open(app);
+            Ok(Value::Null)
+        }
         _ => return None,
     };
     Some(r)
@@ -783,6 +793,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
+        "ui.flattenTransparencyDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         _ => true,
     }
 }
@@ -977,7 +988,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     json!({"columns": 10, "rows": 10, "spacingX": 0, "spacingY": 0, "gray": false, "deleteRaster": false}),
                 ),
                 c("Create Trim Marks", "object.createTrimMarks"),
-                todo("Flatten Transparency…"),
+                c("Flatten Transparency…", "ui.flattenTransparencyDialog"),
                 Sep,
                 c("Make Pixel Perfect", "object.makePixelPerfect"),
                 Sep,

@@ -107,3 +107,10 @@ forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel
 a swatch clicked there runs `paint.setFill` / `paint.setStroke`. Panel keys (Color F6, Color Guide Shift+F3,
 Appearance Shift+F6, Graphic Styles Shift+F5, Stroke Cmd+F10, Gradient Cmd+F9, Transparency Cmd+Shift+F10) run
 `window.panel {panel}` and can be pressed with `ui.key`; `ui.menu.list` shows them on the Window menu's items.
+
+Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
+(fields `preset`: a preset name, setting it loads that preset's options; the option keys of
+`object.flattenTransparency`: `balance` 0–100, `lineArtPpi` and `gradientPpi` 1–2400, `textToOutlines`,
+`strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`; `preview`, off at first).
+With `preview` on it flattens on the canvas while open; `ui.dialog.confirm` keeps the result as one undo step and
+`ui.dialog.cancel` rolls it back. Out-of-range values answer with an error and the dialog stays open.
