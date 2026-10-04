@@ -1,6 +1,8 @@
 //! Path-operation properties on concave polygons, ellipses and random smooth curves (complements
 //! `props.rs`, which uses rectangles and circles).
 
+mod common;
+
 use proptest::prelude::*;
 use vectorcraft_geom::{FillRule, PathData, Point, Rect};
 use vectorcraft_pathops::*;
@@ -19,7 +21,7 @@ fn near_edge(p: &PathData, q: Point, eps: f64) -> bool {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 128, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(common::config(128))]
 
     /// Area of a simple polygon equals its shoelace area; normalize keeps it.
     #[test]

@@ -90,7 +90,7 @@ pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) ->
     } else {
         BezPath::new()
     };
-    let Ok(arr) = Arrangement::new(&[(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)]) else {
+    let Ok(arr) = Arrangement::new(vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)]) else {
         return PathData::default();
     };
     let c = if delta >= 0.0 { arr.contours(|m| m[0] || m[1] || m[2]) } else { arr.contours(|m| m[0] && !m[1]) };
