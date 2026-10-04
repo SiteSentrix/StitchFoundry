@@ -192,3 +192,49 @@ fn fewer_tspans_reaches_the_writer() {
     assert_eq!(placed(&svg(&mut s, json!({}))), 3, "a tspan per style run");
     assert_eq!(placed(&svg(&mut s, json!({"fewerTspans": true}))), 1, "a tspan per line");
 }
+
+/// Gunzip SVGZ bytes.
+fn gunzip(bytes: &[u8]) -> String {
+    assert!(vectorcraft_svg::is_svgz(bytes), "gzip magic");
+    vectorcraft_svg::text_of(bytes).unwrap().into_owned()
+}
+
+#[test]
+fn svgz_is_the_svg_export_gzipped() {
+    let mut s = session(2);
+    let opts = json!({"styling": "css", "range": "2"});
+    let mut p = opts.clone();
+    p["format"] = json!("svgz");
+    let svgz = vectorcraft_format::base64_decode(s.execute("document.serialize", &p).unwrap()["dataBase64"].as_str().unwrap()).unwrap();
+    assert_eq!(gunzip(&svgz), svg(&mut s, opts));
+    // The format comes from the extension too, and Save writes it.
+    let dir = tmp_dir("svgz");
+    let path = dir.join("art.svgz").to_string_lossy().to_string();
+    s.execute("document.export", &json!({"path": path, "range": "all"})).unwrap();
+    assert!(gunzip(&std::fs::read(dir.join("art-Artboard-1.svgz")).unwrap()).contains("<svg"));
+    let saved = dir.join("saved.svgz").to_string_lossy().to_string();
+    s.execute("document.save", &json!({"path": saved, "svg": {}})).unwrap();
+    assert!(gunzip(&std::fs::read(&saved).unwrap()).contains("<svg"));
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(saved.as_str()));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn svgz_opens_and_pastes_like_svg() {
+    let mut s = session(1);
+    s.execute("shape.ellipse", &json!({"x": 100, "y": 20, "width": 40, "height": 30})).unwrap();
+    let text = svg(&mut s, json!({}));
+    let open = |s: &mut Session, name: &str, bytes: &[u8]| {
+        s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap();
+        let mut doc = (*s.doc().unwrap().doc).clone();
+        doc.title.clear();
+        vectorcraft_format::save(&doc, false)
+    };
+    let plain = open(&mut s, "a.svg", text.as_bytes());
+    // Detected by the magic bytes whatever the name says.
+    assert_eq!(open(&mut s, "a.svg", &vectorcraft_svg::compress(&text)), plain);
+    assert_eq!(open(&mut s, "a.svgz", &vectorcraft_svg::compress(&text)), plain);
+    let r = s.execute("clipboard.importSvg", &json!({"dataBase64": vectorcraft_format::base64_encode(&vectorcraft_svg::compress(&text))})).unwrap();
+    assert_eq!(r["count"], 2);
+    assert!(s.execute("document.open", &json!({"name": "bad.svgz", "dataBase64": vectorcraft_format::base64_encode(&[0x1f, 0x8b, 1, 2])})).is_err());
+}

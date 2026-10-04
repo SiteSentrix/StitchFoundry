@@ -111,9 +111,9 @@ fn plan(doc: &Document, p: &Value) -> Result<(ExportOptions, Vec<Option<usize>>)
     Ok((opts, picked.into_iter().map(Some).collect()))
 }
 
-/// Encode `doc` as SVG: one file per chosen artboard, with the images they link to and the
-/// writer's warnings.
-pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded, String> {
+/// Encode `doc` as SVG (or gzipped, SVGZ): one file per chosen artboard, with the images they
+/// link to and the writer's warnings.
+pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Encoded, String> {
     let (opts, boards) = plan(doc, p)?;
     // Preserve editing embeds the native document (once, shared by every file).
     let native = opts.preserve_editing.then(|| vectorcraft_format::save(doc, false));
@@ -130,7 +130,7 @@ pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded, String> {
                 enc.warnings.push(w);
             }
         }
-        enc.files.push((artboard, out.svg.into_bytes()));
+        enc.files.push((artboard, if compressed { vectorcraft_svg::compress(&out.svg) } else { out.svg.into_bytes() }));
     }
     Ok(enc)
 }

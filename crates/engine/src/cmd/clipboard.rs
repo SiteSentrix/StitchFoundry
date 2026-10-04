@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load SVG into Clipboard",
             [],
             None,
-            "{svg, center?: [x, y]} replace the clipboard with the SVG's objects, centred on `center` (default: the first artboard) → {count}; then run edit.pasteInPlace",
+            "{svg | dataBase64 (SVG or SVGZ bytes), center?: [x, y]} replace the clipboard with the SVG's objects, centred on `center` (default: the first artboard) → {count}; then run edit.pasteInPlace",
             has_doc,
             import_svg
         ),
@@ -58,8 +58,16 @@ fn export_svg(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
-    let svg = str_param(p, "svg").ok_or_else(|| bad("clipboard.importSvg", "missing svg"))?;
-    let src = vectorcraft_svg::import(svg).map_err(|e| bad("clipboard.importSvg", e.to_string()))?;
+    const C: &str = "clipboard.importSvg";
+    let svg = match (str_param(p, "svg"), str_param(p, "dataBase64")) {
+        (Some(svg), _) => std::borrow::Cow::Borrowed(svg),
+        (None, Some(b64)) => {
+            let bytes = vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(C, "bad base64"))?;
+            vectorcraft_svg::text_of(&bytes).map_err(|e| bad(C, e.to_string()))?.into_owned().into()
+        }
+        (None, None) => return Err(bad(C, "give svg, or dataBase64 of an SVG or SVGZ file")),
+    };
+    let src = vectorcraft_svg::import(&svg).map_err(|e| bad(C, e.to_string()))?;
     let mut nodes: Vec<Node> = src.layers.iter().flat_map(|l| l.children().cloned().unwrap_or_default()).map(|n| (*n).clone()).collect();
     if nodes.is_empty() {
         return Err(bad("clipboard.importSvg", "the SVG has no drawable objects"));

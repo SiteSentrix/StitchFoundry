@@ -151,6 +151,11 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     let f = fileio::writable_format(format, path.as_deref())?;
     let doc = app.session.active().ok_or("no document")?.doc.clone();
     let path = target_path(app, path, f.extensions[0])?;
+    // An SVG given a .svgz name is written compressed.
+    let f = match fileio::format_for_name(&path) {
+        Some(z) if f.id == "svg" && z.id == "svgz" => z,
+        _ => f,
+    };
     let enc = fileio::encode_all(&doc, f.id, params).map_err(|e| e.to_string())?;
     write_encoded(app, &doc, &path, &enc)?;
     app.status(format!("Exported {path}"));

@@ -1,7 +1,6 @@
 //! `document.open`: every readable format into a new document.
 
-use std::borrow::Cow;
-use std::io::{Cursor, Read as _};
+use std::io::Cursor;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -45,7 +44,7 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_format::sniff(bytes) {
         return format("vectorcraft");
     }
-    if bytes.starts_with(&[0x1f, 0x8b]) {
+    if vectorcraft_svg::is_svgz(bytes) {
         return format("svgz");
     }
     if bytes.starts_with(b"%PDF") {
@@ -74,13 +73,12 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
     let mut doc = match format.id {
         "vectorcraft" => vectorcraft_format::load(bytes).map_err(err)?,
         "svg" | "svgz" => {
-            let text: Cow<[u8]> = if format.id == "svgz" { Cow::Owned(gunzip(bytes)?) } else { Cow::Borrowed(bytes) };
-            let text = std::str::from_utf8(&text).map_err(|_| err("SVG is not UTF-8"))?;
+            let text = vectorcraft_svg::text_of(bytes).map_err(err)?;
             // An SVG saved with Preserve Editing carries the native document: open that.
-            match vectorcraft_svg::editing_data(text).and_then(|b64| vectorcraft_format::base64_decode(&b64)) {
+            match vectorcraft_svg::editing_data(&text).and_then(|b64| vectorcraft_format::base64_decode(&b64)) {
                 Some(native) => vectorcraft_format::load(&native).map_err(err)?,
                 None => {
-                    let (d, w) = vectorcraft_svg::import_with_report(text).map_err(err)?;
+                    let (d, w) = vectorcraft_svg::import_with_report(&text).map_err(err)?;
                     warnings = w;
                     d
                 }
@@ -164,10 +162,4 @@ fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
     Ok(d)
-}
-
-fn gunzip(bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut out = Vec::new();
-    flate2::read::GzDecoder::new(bytes).read_to_end(&mut out).map_err(|e| err(format!("not a valid SVGZ file: {e}")))?;
-    Ok(out)
 }

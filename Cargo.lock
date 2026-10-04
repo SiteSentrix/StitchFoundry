@@ -4130,7 +4130,6 @@ dependencies = [
 name = "vectorcraft-engine"
 version = "0.1.1"
 dependencies = [
- "flate2",
  "image",
  "kurbo 0.13.1",
  "log",
@@ -4253,6 +4252,7 @@ dependencies = [
 name = "vectorcraft-svg"
 version = "0.1.1"
 dependencies = [
+ "flate2",
  "image",
  "kurbo 0.13.1",
  "proptest",

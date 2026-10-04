@@ -127,7 +127,8 @@ SVG Options: `export` to SVG takes them in `options`, flat or as `{"svg": {…}}
 SVG, or returned as `linked`), `objectIds` (`layerNames`, `minimal`, `unique`), `decimals` (1–7), `minify`,
 `responsive`, `useArtboards`, `range: "all"` (one SVG per artboard, listed in `files`), `preserveEditing` (the SVG
 reopens as the full document), `metadata` and `fewerTspans` (one `<tspan>` per line of type). Unknown keys inside `svg` are rejected; `run_command document.formats`
-lists every option with its default. `run_command document.save {path: "x.svg", svg: {…}}` saves as SVG.
+lists every option with its default. `svgz` takes the same options and writes the SVG gzipped (`.svgz` files also open,
+place and paste). `run_command document.save {path: "x.svg", svg: {…}}` saves as SVG (or `.svgz`).
 
 ## Resources
 

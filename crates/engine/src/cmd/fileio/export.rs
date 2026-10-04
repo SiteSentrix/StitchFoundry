@@ -98,7 +98,7 @@ fn screen_format(row: &Value) -> Result<ScreenFormat> {
     }
     let format = writable(C, Some(str_param(row, "format").unwrap_or("png")), None)?;
     if format.id == "vectorcraft" {
-        return Err(bad(C, "Export for Screens writes png, jpg, webp, svg or pdf"));
+        return Err(bad(C, "Export for Screens writes png, jpg, webp, svg, svgz or pdf"));
     }
     // Vector formats have no pixel size: scale doesn't apply and adds no @Nx suffix (not even one
     // left over from a raster row switched to SVG or PDF).

@@ -7,7 +7,7 @@ use super::{Encoded, Format, default_name, encode_all, format_for_name, writable
 use crate::DocState;
 
 /// The format Save writes: `format` (an id or extension), else the format the path's extension
-/// names, else native. Save writes .vectorcraft and SVG; other formats are exports.
+/// names, else native. Save writes .vectorcraft, SVG and SVGZ; other formats are exports.
 pub fn save_format(format: Option<&str>, path: Option<&str>) -> std::result::Result<&'static Format, String> {
     let f = match (format, path.and_then(format_for_name)) {
         (Some(_), _) => writable_format(format, None)?,
@@ -15,8 +15,8 @@ pub fn save_format(format: Option<&str>, path: Option<&str>) -> std::result::Res
         (None, None) => super::format("vectorcraft").ok_or("no native format")?,
     };
     match f.id {
-        "vectorcraft" | "svg" => Ok(f),
-        _ => Err(format!("Save writes .{} or .svg files: write {} with document.export", vectorcraft_format::EXTENSION, f.label)),
+        "vectorcraft" | "svg" | "svgz" => Ok(f),
+        _ => Err(format!("Save writes .{}, .svg or .svgz files: write {} with document.export", vectorcraft_format::EXTENSION, f.label)),
     }
 }
 

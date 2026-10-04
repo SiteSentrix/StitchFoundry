@@ -228,6 +228,41 @@ pub fn editing_data(svg: &str) -> Option<String> {
     Some(data).filter(|d| !d.is_empty())
 }
 
+/// Does `bytes` start like gzip data (an SVGZ file)?
+pub fn is_svgz(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0x1f, 0x8b])
+}
+
+/// Compress SVG text as SVGZ (gzip).
+pub fn compress(svg: &str) -> Vec<u8> {
+    use std::io::Write as _;
+    let mut gz = flate2::write::GzEncoder::new(Vec::with_capacity(svg.len() / 4), flate2::Compression::default());
+    // Writing to a Vec cannot fail.
+    let _ = gz.write_all(svg.as_bytes());
+    gz.finish().unwrap_or_default()
+}
+
+/// Most bytes an SVGZ file may unpack to (a guard against decompression bombs).
+const MAX_SVGZ: u64 = 512 << 20;
+
+/// SVG text from SVG or SVGZ bytes.
+pub fn text_of(bytes: &[u8]) -> Result<std::borrow::Cow<'_, str>, SvgError> {
+    use std::io::Read as _;
+    let not_utf8 = |_| SvgError::Parse("SVG is not UTF-8".into());
+    if !is_svgz(bytes) {
+        return std::str::from_utf8(bytes).map(Into::into).map_err(not_utf8);
+    }
+    let mut raw = Vec::new();
+    flate2::read::GzDecoder::new(bytes)
+        .take(MAX_SVGZ + 1)
+        .read_to_end(&mut raw)
+        .map_err(|e| SvgError::Parse(format!("not a valid SVGZ file: {e}")))?;
+    if raw.len() as u64 > MAX_SVGZ {
+        return Err(SvgError::Parse(format!("the SVGZ file unpacks to more than {} MB", MAX_SVGZ >> 20)));
+    }
+    String::from_utf8(raw).map(Into::into).map_err(|e| not_utf8(e.utf8_error()))
+}
+
 /// Import an SVG document.
 pub fn import(svg: &str) -> Result<Document, SvgError> {
     import_with_report(svg).map(|(d, _)| d)

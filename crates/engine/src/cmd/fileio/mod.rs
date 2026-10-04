@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|svg (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}} (default path: the document's) → {path, linked?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with. A never-saved document without path → {dataBase64} (stays modified)",
+            "{path?, format?: vectorcraft|svg|svgz (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}} (default path: the document's) → {path, linked?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with. A never-saved document without path → {dataBase64} (stays modified)",
             has_doc,
             save::save
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Serialize Document",
             [],
             None,
-            "{format?: vectorcraft (default)|svg|pdf|png|jpg|webp, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
+            "{format?: vectorcraft (default)|svg|svgz|pdf|png|jpg|webp, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
             has_doc,
             export::serialize
         ),
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Selection…",
             ["File"],
             None,
-            "{path?, format?: png|jpg|webp|svg|pdf (default: from the extension, else png), scale?: 1, …the format's options} the selected objects cropped to their bounds (template layers left out) → {path, bytes, bounds} (no path → {dataBase64, bounds})",
+            "{path?, format?: png|jpg|webp|svg|svgz|pdf (default: from the extension, else png), scale?: 1, …the format's options} the selected objects cropped to their bounds (template layers left out) → {path, bytes, bounds} (no path → {dataBase64, bounds})",
             has_selection,
             export::export_selection
         ),
@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export for Screens",
             ["File", "Export"],
             None,
-            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|pdf, scale?: 1 (raster only), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; svg/pdf drop @Nx suffixes)}], prefix?} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
+            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|svgz|pdf, scale?: 1 (raster only), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes)}], prefix?} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
             has_doc,
             export::export_for_screens
         ),
@@ -194,7 +194,16 @@ pub const FORMATS: &[Format] = &[
         options: &[],
     },
     Format { id: "svg", label: "SVG", extensions: &["svg"], mime: "image/svg+xml", read: true, write: true, raster: false, options: svg::OPTIONS },
-    reader("svgz", "SVG Compressed", &["svgz"], "image/svg+xml", false),
+    Format {
+        id: "svgz",
+        label: "SVG Compressed",
+        extensions: &["svgz"],
+        mime: "image/svg+xml",
+        read: true,
+        write: true,
+        raster: false,
+        options: svg::OPTIONS,
+    },
     Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: pdf::OPTIONS },
     reader("ai", "PDF-compatible .ai", &["ai"], "application/pdf", false),
     reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),

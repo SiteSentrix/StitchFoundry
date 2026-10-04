@@ -165,7 +165,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     let n = doc.artboards.len();
     let bytes = match f.id {
         "vectorcraft" => vectorcraft_format::save_file(doc),
-        "svg" => return super::svg::encode(doc, p).map_err(|e| bad(C, e)),
+        "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
         "pdf" => {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });
