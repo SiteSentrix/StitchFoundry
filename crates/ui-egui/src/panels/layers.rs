@@ -290,14 +290,14 @@ fn row(
     }
 }
 
-/// A real rendered thumbnail, cached by node identity (unchanged nodes keep their `Arc`
-/// allocation, so the address is a free change detector). Only rendered for visible rows.
 /// Whether an object's target circle is filled: its appearance is not basic or its transparency
 /// (opacity, blend mode, isolation, knockout or an opacity mask) is not the default.
 fn has_styled_target(n: &Node) -> bool {
     !n.appearance.is_basic() || !n.has_default_transparency()
 }
 
+/// A real rendered thumbnail, cached by node identity (unchanged nodes keep their `Arc`
+/// allocation, so the address is a free change detector). Only rendered for visible rows.
 fn real_thumb(ui: &Ui, doc: &vectorcraft_doc::Document, n: &Node, r: egui::Rect) -> bool {
     use std::cell::RefCell;
     use std::collections::HashMap;

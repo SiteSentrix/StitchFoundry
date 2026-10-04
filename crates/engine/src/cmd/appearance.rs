@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?} leave each object one empty fill and stroke (None) and reset its opacity and blend mode",
+            "{ids?} leave each object one empty fill and stroke (None; a group none of its own) and reset its opacity and blend mode",
             has_selection,
             clear_appearance
         ),
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reduce to Basic Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?} keep only the topmost visible fill and stroke, without their own opacity, blend mode or effects, and drop the object's effects",
+            "{ids?} keep only the topmost visible fill and stroke, without their own opacity, blend mode or effects (a group keeps no rows it lacked), and drop the object's effects",
             has_selection,
             reduce_basic
         ),
@@ -290,8 +290,9 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear Appearance", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
-                // No fill, no stroke, and the object's Opacity row back to Default.
-                n.appearance = Appearance::basic(Paint::None, Paint::None, 1.0);
+                // No fill, no stroke, and the object's Opacity row back to Default. A group keeps no
+                // fill or stroke rows of its own.
+                n.appearance = if is_group(n) { Appearance::default() } else { Appearance::basic(Paint::None, Paint::None, 1.0) };
                 n.opacity = 1.0;
                 n.blend = BlendMode::Normal;
             }
@@ -302,6 +303,10 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+fn is_group(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { .. })
+}
+
 fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = appearance_targets(s, p)?;
     s.edit("Reduce to Basic Appearance", |d, _| {
@@ -309,9 +314,12 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(n) = d.node_mut(*id) {
                 // The topmost visible fill and stroke stay, without their own transparency or effects.
                 let top = |fill: bool| n.appearance.items.iter().rev().find(|i| i.visible() && i.is_fill() == fill).cloned();
-                let fill = top(true).map_or(Paint::None, |f| f.paint().clone());
-                let stroke = top(false);
-                n.appearance = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(fill))], effects: vec![] };
+                let (fill, stroke) = (top(true), top(false));
+                // Other objects always keep a fill row (None when there was none); a group only
+                // keeps the rows it had.
+                let fill =
+                    (fill.is_some() || !is_group(n)).then(|| AppearanceItem::Fill(FillLayer::new(fill.map_or(Paint::None, |f| f.paint().clone()))));
+                n.appearance = Appearance { items: fill.into_iter().collect(), effects: vec![] };
                 if let Some(AppearanceItem::Stroke(mut st)) = stroke {
                     st.effects.clear();
                     st.opacity = 1.0;

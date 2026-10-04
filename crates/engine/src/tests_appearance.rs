@@ -385,3 +385,24 @@ fn item_transparency_is_one_step_and_checks_the_blend_mode() {
     assert!(s.execute("transparency.set", &json!({"blend": "nope"})).is_err());
     assert_eq!(stroke(&node(&s, id), 1).blend, BlendMode::Normal);
 }
+
+#[test]
+fn clear_and_reduce_keep_a_groups_stack_empty() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0);
+    let b = rect(&mut s, 250.0);
+    let members = node(&s, a).appearance;
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    assert!(node(&s, g).appearance.items.is_empty());
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    assert_eq!(node(&s, g).appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["stroke"]);
+    run(&mut s, "transparency.set", json!({"opacity": 50}));
+    run(&mut s, "appearance.clear", json!({}));
+    let n = node(&s, g);
+    assert!(n.appearance.items.is_empty() && n.opacity == 1.0);
+    // The members keep their own appearance.
+    assert_eq!(node(&s, a).appearance, members);
+}
