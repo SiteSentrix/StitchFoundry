@@ -140,6 +140,11 @@ pub fn spectrum_at(mode: Mode, x: f32, y: f32) -> Color {
     }
 }
 
+/// The hex field text of a colour (`E67828`).
+pub fn hex_digits(c: &Color) -> String {
+    c.to_hex().trim_start_matches('#').to_uppercase()
+}
+
 /// Parse a hex field (`E67828`, `#e67828`, `fff`).
 pub fn parse_hex(s: &str) -> Option<Color> {
     let s = s.trim().trim_start_matches('#');
@@ -147,6 +152,37 @@ pub fn parse_hex(s: &str) -> Option<Color> {
         return None;
     }
     Color::from_hex(s)
+}
+
+/// The out-of-web-colour warning: its icon and tooltip.
+pub(crate) const WEB_WARNING: (&str, &str) = ("dc-cube", "Out of Web Color Warning");
+/// The out-of-gamut warning: its icon and tooltip.
+pub(crate) const GAMUT_WARNING: (&str, &str) = ("dc-gamut", "Out of Gamut Warning");
+
+/// A warning icon with the corrected colour beside it. Returns true when the colour is clicked.
+pub(crate) fn warning_chip(ui: &mut Ui, (icon, warning): (&str, &str), fix: &Color) -> bool {
+    let t = Tokens::get(ui.ctx());
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        icons::icon(ui, icon, 16.0, t.icon).on_hover_text(warning);
+        let (r, resp) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
+        widgets::swatch_tile(ui, r, &Paint::solid(*fix), false, resp.hovered());
+        resp.on_hover_text(format!("{warning}: click to correct to the closest color ({})", fix.to_hex())).clicked()
+    })
+    .inner
+}
+
+/// The printable colour closest to `c` (its working-CMYK reproduction, back in RGB) when `c` is out
+/// of the CMYK gamut, through `color.convert`.
+pub(crate) fn in_gamut(app: &mut VectorcraftApp, c: &Color) -> Option<Color> {
+    let r = app.run("color.convert", json!({"color": color_json(c), "to": "cmyk"})).ok()?;
+    if !r["outOfGamut"].as_bool()? {
+        return None;
+    }
+    let v = |r: &serde_json::Value, i: usize| r["values"][i].as_f64();
+    let ink = json!({"c": v(&r, 0)?, "m": v(&r, 1)?, "y": v(&r, 2)?, "k": v(&r, 3)?});
+    let rgb = app.run("color.convert", json!({"color": ink, "to": "rgb"})).ok()?;
+    Some(Color::rgb(v(&rgb, 0)? as f32, v(&rgb, 1)? as f32, v(&rgb, 2)? as f32))
 }
 
 fn to32(c: &Color) -> Color32 {
@@ -224,16 +260,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 && !is_web_safe(&c)
             {
                 ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 3.0;
-                    icons::icon(ui, "dc-cube", 16.0, t.icon).on_hover_text("Out of Web Color Warning");
-                    let ws = web_safe(&c);
-                    let (r, resp) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
-                    widgets::swatch_tile(ui, r, &Paint::solid(ws), false, resp.hovered());
-                    if resp.on_hover_text(format!("Click to correct to the closest web color ({})", ws.to_hex())).clicked() {
-                        new = Some((ws, Live::Released, components(mode, &ws)));
-                    }
-                });
+                let ws = web_safe(&c);
+                if warning_chip(ui, WEB_WARNING, &ws) {
+                    new = Some((ws, Live::Released, components(mode, &ws)));
+                }
             }
         });
         // Sliders.
@@ -292,33 +322,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.spacing_mut().item_spacing.x = 6.0;
         if matches!(mode, Mode::Rgb | Mode::WebSafe | Mode::Hsb) {
             ui.add_space((ui.available_width() - 96.0).max(4.0));
-            ui.label(egui::RichText::new("#").size(15.0).color(t.text));
-            let hex = color.map(|c| c.to_hex().trim_start_matches('#').to_uppercase()).unwrap_or_default();
-            let id = ui.id().with("hex");
-            let editing = ui.memory(|m| m.has_focus(id));
-            let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.clone()) } else { hex.clone() };
-            let resp = egui::Frame::NONE
-                .fill(t.input)
-                .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-                .corner_radius(2)
-                .inner_margin(egui::Margin::symmetric(6, 4))
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut buf)
-                            .id(id)
-                            .frame(egui::Frame::NONE)
-                            .desired_width(62.0)
-                            .char_limit(7)
-                            .font(egui::FontId::proportional(12.5))
-                            .text_color(t.text_strong),
-                    )
-                })
-                .inner;
-            ui.data_mut(|d| d.insert_temp(id, buf.clone()));
-            if resp.lost_focus()
-                && buf != hex
-                && let Some(c) = parse_hex(&buf)
-            {
+            let hex = color.map(|c| hex_digits(&c)).unwrap_or_default();
+            if let Some(c) = widgets::hex_field(ui, "hex", &hex).as_deref().and_then(parse_hex) {
                 new = Some((c, Live::Released, components(mode, &c)));
             }
         }

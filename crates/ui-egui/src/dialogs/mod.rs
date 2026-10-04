@@ -9,6 +9,7 @@
 mod about;
 mod all_tools;
 mod artboard_options;
+mod color_picker;
 mod command;
 mod document_setup;
 mod effect;
@@ -24,6 +25,7 @@ mod transform;
 
 use serde_json::{Value, json};
 
+pub use color_picker::open as open_color_picker;
 pub use tools::open_tool_dialog;
 
 use crate::state::Dialog;
@@ -127,6 +129,7 @@ registry! {
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
+    ColorPicker: [color_picker::KIND] => color_picker::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

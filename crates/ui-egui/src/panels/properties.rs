@@ -279,7 +279,9 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.painter().rect_filled(r.shrink(7.0), 0.0, t.panel);
             }
             ui.painter().rect_stroke(r.shrink(2.0), 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Outside);
-            if resp.clicked() {
+            if resp.double_clicked() {
+                app.run("ui.colorPicker", json!({ "stroke": !is_fill })).ok();
+            } else if resp.clicked() {
                 app.session.fill_active = is_fill;
                 app.ui.open_panel = Some("swatches".into());
             }

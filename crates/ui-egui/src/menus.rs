@@ -160,6 +160,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
+    (
+        "ui.colorPicker",
+        "Color Picker…",
+        "",
+        "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -482,6 +488,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         "file.closeAll" => crate::unsaved::close_all(app, "closeAll"),
         "app.quit" => crate::unsaved::close_all(app, "quit"),
+        "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         _ => return None,
     };
     Some(r)
