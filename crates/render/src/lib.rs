@@ -29,6 +29,31 @@ pub use vectorcraft_effects as effects;
 pub use vello_cpu;
 pub use width::width_outline;
 
+/// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
+/// addresses at most `u16::MAX` pixels per side (and panics at that edge).
+pub const MAX_RASTER_SIDE: u32 = 32_768;
+/// Largest raster an export may ask for in total (16384², 1 GiB of RGBA pixels).
+pub const MAX_RASTER_PIXELS: u64 = 1 << 28;
+
+/// Pixel size of `region` rendered at `scale` (as [`Renderer::render_region`] rounds it), or an error
+/// when it exceeds [`MAX_RASTER_SIDE`] / [`MAX_RASTER_PIXELS`]. Raster exports check this first,
+/// because the renderer can only clamp (wrong picture) or fail (abort) at those sizes.
+pub fn raster_size(region: Rect, scale: f64) -> Result<(u32, u32), String> {
+    if !(scale.is_finite() && scale > 0.0) {
+        return Err(format!("invalid scale {scale}"));
+    }
+    let w = (region.width() * scale).round().max(1.0);
+    let h = (region.height() * scale).round().max(1.0);
+    let max = f64::from(MAX_RASTER_SIDE);
+    if !(w <= max && h <= max && w * h <= MAX_RASTER_PIXELS as f64) {
+        return Err(format!(
+            "the image would be {w:.0} × {h:.0} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {} megapixels: lower the scale or resolution",
+            MAX_RASTER_PIXELS / 1_000_000
+        ));
+    }
+    Ok((w as u32, h as u32))
+}
+
 /// Rendering options.
 #[derive(Clone, Debug)]
 pub struct RenderOptions {

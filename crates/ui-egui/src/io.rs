@@ -202,6 +202,7 @@ pub fn export(app: &mut VectorcraftApp, format: &str, path: Option<String>, scal
         "pdf" => vectorcraft_engine::export_pdf(&doc, &vectorcraft_pdf::PdfOptions::default()).map_err(|e| e.to_string())?,
         "png" | "jpg" | "jpeg" | "webp" => {
             let r = doc.artboards.first().map(|a| a.rect).ok_or("no artboard")?;
+            vectorcraft_render::raster_size(r, scale)?;
             let img = app.canvas.renderer.render_region(&doc, r, scale, format == "jpg" || format == "jpeg");
             match format {
                 "png" => img.to_png(),

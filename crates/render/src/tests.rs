@@ -27,6 +27,19 @@ fn fills_red_rect() {
 }
 
 #[test]
+fn raster_size_limits() {
+    let r = Rect::new(0.0, 0.0, 100.0, 50.0);
+    assert_eq!(raster_size(r, 2.0), Ok((200, 100)));
+    assert_eq!(raster_size(r, 0.001), Ok((1, 1)));
+    assert_eq!(raster_size(Rect::new(0.0, 0.0, MAX_RASTER_SIDE as f64, 1.0), 1.0), Ok((MAX_RASTER_SIDE, 1)));
+    assert!(raster_size(Rect::new(0.0, 0.0, MAX_RASTER_SIDE as f64 + 1.0, 1.0), 1.0).is_err());
+    assert!(raster_size(Rect::new(0.0, 0.0, 20_000.0, 20_000.0), 1.0).is_err(), "400 megapixels");
+    assert!(raster_size(r, f64::NAN).is_err());
+    assert!(raster_size(r, f64::INFINITY).is_err());
+    assert!(raster_size(r, 0.0).is_err());
+}
+
+#[test]
 fn stroke_draws_outline_only() {
     let mut d = Document::new(100.0, 100.0);
     let n = rect_node(&mut d, Rect::new(10.0, 10.0, 90.0, 90.0), Paint::None, Paint::solid(Color::BLACK), 4.0);

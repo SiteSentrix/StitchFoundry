@@ -448,3 +448,21 @@ fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
     call(&mut s, 15, "text_wrap", json!({"ids": [c], "release": true}));
     assert!(!doc_json(&mut s).to_string().contains("\"offset\":8.0"));
 }
+
+#[test]
+fn oversized_screenshot_and_png_export_are_errors() {
+    // 16383 pt at the maximum scale (16) is 262 128 px a side: an error result, not a crashed server.
+    let mut s = server();
+    let r = call(&mut s, 1, "run_command", json!({"command": "file.new", "params": {"width": 16383, "height": 16383}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = call(&mut s, 2, "screenshot", json!({"scale": 16}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains("pixels"), "{r}");
+    let path = tmp("huge.png");
+    let r = call(&mut s, 3, "export", json!({"path": path.to_str().unwrap(), "scale": 16}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(!path.exists());
+    // The session is still alive and a small screenshot works.
+    let r = call(&mut s, 4, "screenshot", json!({"scale": 0.01}));
+    assert_eq!(r["isError"], false, "{r}");
+}
