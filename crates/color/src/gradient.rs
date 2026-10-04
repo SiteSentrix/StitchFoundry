@@ -15,6 +15,10 @@ pub enum GradientKind {
 }
 
 impl GradientKind {
+    /// Parse a kind name (`linear`, `radial`, `freeform`; any case).
+    pub fn parse(s: &str) -> Option<Self> {
+        [GradientKind::Linear, GradientKind::Radial, GradientKind::Freeform].into_iter().find(|k| k.label().eq_ignore_ascii_case(s))
+    }
     pub fn label(self) -> &'static str {
         match self {
             GradientKind::Linear => "Linear",
@@ -112,6 +116,80 @@ impl Gradient {
     }
 }
 
+// ---------- stop editing (the Gradient panel, the annotator and agents share these) ----------
+
+/// Fewest stops a gradient keeps: deleting a stop never goes below this.
+pub const MIN_STOPS: usize = 2;
+
+/// Put `s` among `stops` (sorted by offset, after stops at the same offset). Returns its index.
+fn place_stop(stops: &mut Vec<GradientStop>, s: GradientStop) -> usize {
+    let i = stops.iter().position(|o| o.offset > s.offset).unwrap_or(stops.len());
+    stops.insert(i, s);
+    i
+}
+
+/// Insert a stop at `offset`, coloured by sampling the gradient there. Returns the new stops and
+/// the new stop's index.
+pub fn insert_stop(g: &Gradient, offset: f32) -> (Vec<GradientStop>, usize) {
+    let offset = offset.clamp(0.0, 1.0);
+    let (color, opacity) = g.sample(offset);
+    let mut stops = g.stops.clone();
+    let i = place_stop(&mut stops, GradientStop { offset, color, opacity, midpoint: 0.5 });
+    (stops, i)
+}
+
+/// Remove stop `i`; `None` when that would leave fewer than [`MIN_STOPS`].
+pub fn remove_stop(stops: &[GradientStop], i: usize) -> Option<Vec<GradientStop>> {
+    if stops.len() <= MIN_STOPS || i >= stops.len() {
+        return None;
+    }
+    let mut v = stops.to_vec();
+    v.remove(i);
+    Some(v)
+}
+
+/// Move stop `i` to `offset`, keeping the list sorted. Returns the stops and the stop's new index.
+pub fn move_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<GradientStop>, usize) {
+    let mut v = stops.to_vec();
+    if i >= v.len() {
+        return (v, i);
+    }
+    let mut s = v.remove(i);
+    s.offset = offset.clamp(0.0, 1.0);
+    let ni = place_stop(&mut v, s);
+    (v, ni)
+}
+
+/// Add a copy of stop `i` at `offset` (Alt-drag). Returns the stops and the copy's index.
+pub fn duplicate_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<GradientStop>, usize) {
+    let mut v = stops.to_vec();
+    let Some(&s) = v.get(i) else { return (v, i) };
+    let ni = place_stop(&mut v, GradientStop { offset: offset.clamp(0.0, 1.0), ..s });
+    (v, ni)
+}
+
+/// Set the midpoint between stop `i` and `i + 1` (clamped to the diamond's 13–87 %).
+pub fn set_midpoint(stops: &[GradientStop], i: usize, m: f32) -> Vec<GradientStop> {
+    let mut v = stops.to_vec();
+    if let Some(s) = v.get_mut(i) {
+        s.midpoint = m.clamp(0.13, 0.87);
+    }
+    v
+}
+
+/// Absolute position (0..1) of the midpoint diamond after stop `i`.
+pub fn midpoint_pos(stops: &[GradientStop], i: usize) -> Option<f32> {
+    let (a, b) = (stops.get(i)?, stops.get(i + 1)?);
+    Some(a.offset + (b.offset - a.offset) * a.midpoint)
+}
+
+/// Inverse of [`midpoint_pos`]: the relative midpoint for an absolute position.
+pub fn midpoint_from_pos(stops: &[GradientStop], i: usize, pos: f32) -> Option<f32> {
+    let (a, b) = (stops.get(i)?, stops.get(i + 1)?);
+    let span = (b.offset - a.offset).max(1e-6);
+    Some(((pos - a.offset) / span).clamp(0.13, 0.87))
+}
+
 /// Where the gradient sits on an object, in document coordinates.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GradientGeom {
@@ -127,27 +205,83 @@ fn one64() -> f64 {
 }
 
 impl GradientGeom {
-    /// Default placement for a bounding box: linear spans left→right through the centre at `angle_deg`,
-    /// radial is centred with radius = half the larger dimension.
+    /// Default placement for a bounding box: linear spans the box through the centre at `angle_deg`,
+    /// radial is centred with radius = half the larger dimension and its vector at `angle_deg`.
     pub fn fit(kind: GradientKind, b: Rect, angle_deg: f64) -> Self {
         let c = b.center();
+        let a = angle_deg.to_radians();
+        let d = Vec2::new(a.cos(), -a.sin());
         match kind {
-            GradientKind::Radial => {
-                let r = b.width().max(b.height()) / 2.0;
-                Self { start: c, end: c + Vec2::new(r, 0.0), aspect: 1.0 }
-            }
+            GradientKind::Radial => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0 },
             _ => {
-                let a = angle_deg.to_radians();
-                let d = Vec2::new(a.cos(), -a.sin());
                 // Project the box corners onto the direction to cover the whole box.
                 let half = (b.width() * d.x.abs() + b.height() * d.y.abs()) / 2.0;
                 Self { start: c - d * half, end: c + d * half, aspect: 1.0 }
             }
         }
     }
-    pub fn transform(&mut self, a: Affine) {
-        self.start = a * self.start;
-        self.end = a * self.end;
+
+    /// Map the placement through `a` so the gradient follows its object exactly.
+    ///
+    /// Linear (and freeform) gradients keep their isolines: the new vector is the normal to the
+    /// mapped isolines, reaching the line the old end maps onto. Radial gradients map their ellipse
+    /// (the radius along the vector, `aspect` × the radius across it); its principal axes give the
+    /// new end (on the axis nearest the mapped vector) and aspect.
+    pub fn transform(&mut self, a: Affine, kind: GradientKind) {
+        let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+        let lin = |v: Vec2| Vec2::new(m0 * v.x + m2 * v.y, m1 * v.x + m3 * v.y);
+        let perp = |v: Vec2| Vec2::new(-v.y, v.x);
+        let start = a * self.start;
+        let u = self.end - self.start;
+        if u.hypot2() < 1e-18 {
+            self.start = start;
+            self.end = start;
+            return;
+        }
+        if kind != GradientKind::Radial {
+            let far = a * self.end;
+            let nrm = perp(lin(perp(u)));
+            self.start = start;
+            self.end = if nrm.hypot2() > 1e-18 { start + nrm * ((far - start).dot(nrm) / nrm.hypot2()) } else { far };
+            return;
+        }
+        let (lu, lw) = (lin(u), lin(perp(u) * self.aspect));
+        // Eigen-decomposition of M·Mᵀ with M = [lu lw]: the mapped ellipse's axes and squared radii.
+        let p = lu.x * lu.x + lw.x * lw.x;
+        let q = lu.y * lu.y + lw.y * lw.y;
+        let r = lu.x * lu.y + lw.x * lw.y;
+        let disc = ((p - q).powi(2) + 4.0 * r * r).sqrt();
+        let s1 = ((p + q + disc) / 2.0).max(0.0).sqrt();
+        let s2 = ((p + q - disc) / 2.0).max(0.0).sqrt();
+        let (axis, len, other) = if disc <= 1e-12 * (p + q) {
+            // A circle: every direction is an axis, so keep the mapped vector's.
+            (lu / lu.hypot().max(1e-300), s1, s2)
+        } else {
+            let th = 0.5 * (2.0 * r).atan2(p - q);
+            let e1 = Vec2::new(th.cos(), th.sin());
+            let e2 = perp(e1);
+            if e1.dot(lu).abs() >= e2.dot(lu).abs() { (e1, s1, s2) } else { (e2, s2, s1) }
+        };
+        let axis = if axis.dot(lu) < 0.0 { -axis } else { axis };
+        self.start = start;
+        self.end = start + axis * len;
+        self.aspect = if len > 1e-12 { other / len } else { 1.0 };
+    }
+
+    /// The gradient parameter (0 at the start, 1 at the end) at document point `p`: the projection
+    /// onto the vector for linear gradients, the elliptical radius (honouring `aspect`) for radial.
+    pub fn param_at(&self, kind: GradientKind, p: Point) -> f64 {
+        let u = self.end - self.start;
+        let l2 = u.hypot2();
+        if l2 < 1e-18 {
+            return 0.0;
+        }
+        let d = p - self.start;
+        let along = d.dot(u) / l2;
+        match kind {
+            GradientKind::Radial => along.hypot(d.cross(u) / (l2 * self.aspect.max(1e-9))),
+            _ => along,
+        }
     }
     pub fn angle_deg(&self) -> f64 {
         let v = self.end - self.start;
@@ -178,6 +312,19 @@ impl GradientPaint {
     }
     pub fn resolve(&self, bounds: Rect) -> GradientGeom {
         self.geom.unwrap_or_else(|| GradientGeom::fit(self.gradient.kind, bounds, self.angle))
+    }
+    /// Fix an unplaced gradient (geom None) to its fit on `bounds`, so it can follow transforms
+    /// that refitting wouldn't reproduce (rotation, shear, non-uniform scale, warps).
+    pub fn pin(&mut self, bounds: Rect) {
+        if self.geom.is_none() {
+            self.geom = Some(self.resolve(bounds));
+        }
+    }
+    /// Map a placed gradient through `a` (see [`GradientGeom::transform`]).
+    pub fn transform(&mut self, a: Affine) {
+        if let Some(g) = &mut self.geom {
+            g.transform(a, self.gradient.kind);
+        }
     }
 }
 
@@ -220,5 +367,139 @@ mod tests {
         g.reverse();
         assert_eq!(g.stops[0].color.to_hex(), "#000000");
         assert_eq!(g.stops[0].offset, 0.0);
+    }
+
+    fn close(a: Point, b: Point) -> bool {
+        a.distance(b) < 1e-9
+    }
+
+    fn linear(start: (f64, f64), end: (f64, f64)) -> GradientGeom {
+        GradientGeom { start: start.into(), end: end.into(), aspect: 1.0 }
+    }
+
+    #[test]
+    fn rotate_90_gives_vertical_vector() {
+        let mut g = linear((0.0, 0.0), (100.0, 0.0));
+        g.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), GradientKind::Linear);
+        assert!(close(g.start, Point::ZERO) && close(g.end, Point::new(0.0, 100.0)), "{g:?}");
+        assert!((g.angle_deg() + 90.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn reflect_swaps_start_and_end() {
+        let mut g = linear((0.0, 25.0), (100.0, 25.0));
+        // Reflect across the vertical axis through x = 50.
+        let flip = Affine::translate((50.0, 0.0)) * Affine::scale_non_uniform(-1.0, 1.0) * Affine::translate((-50.0, 0.0));
+        g.transform(flip, GradientKind::Linear);
+        assert!(close(g.start, Point::new(100.0, 25.0)) && close(g.end, Point::new(0.0, 25.0)), "{g:?}");
+    }
+
+    #[test]
+    fn non_uniform_scale_turns_a_circle_into_an_ellipse() {
+        let mut g = GradientGeom { start: Point::new(10.0, 10.0), end: Point::new(20.0, 10.0), aspect: 1.0 };
+        g.transform(Affine::scale_non_uniform(2.0, 1.0), GradientKind::Radial);
+        assert!(close(g.start, Point::new(20.0, 10.0)) && close(g.end, Point::new(40.0, 10.0)), "{g:?}");
+        assert!((g.aspect - 0.5).abs() < 1e-9);
+        // A vertical vector keeps its axis: the ellipse is twice as wide as the vector is long.
+        let mut v = GradientGeom { start: Point::ZERO, end: Point::new(0.0, -10.0), aspect: 1.0 };
+        v.transform(Affine::scale_non_uniform(2.0, 1.0), GradientKind::Radial);
+        assert!(close(v.end, Point::new(0.0, -10.0)) && (v.aspect - 2.0).abs() < 1e-9, "{v:?}");
+    }
+
+    #[test]
+    fn samples_follow_shear_and_rotation() {
+        let shear = Affine::new([1.0, 0.3, 0.7, 1.2, 15.0, -4.0]) * Affine::rotate(0.4);
+        for kind in [GradientKind::Linear, GradientKind::Radial] {
+            let g = GradientGeom { start: Point::new(30.0, 40.0), end: Point::new(80.0, 55.0), aspect: 0.6 };
+            let mut m = g;
+            m.transform(shear, kind);
+            for p in [Point::new(30.0, 40.0), Point::new(55.0, 70.0), Point::new(90.0, 10.0), Point::new(-20.0, 48.0)] {
+                let (a, b) = (g.param_at(kind, p), m.param_at(kind, shear * p));
+                assert!((a - b).abs() < 1e-9, "{kind:?} at {p:?}: {a} vs {b}");
+            }
+        }
+    }
+
+    #[test]
+    fn radial_fit_uses_the_angle_and_param_honours_aspect() {
+        let b = Rect::new(0.0, 0.0, 100.0, 60.0);
+        let g = GradientGeom::fit(GradientKind::Radial, b, 90.0);
+        assert!(close(g.start, Point::new(50.0, 30.0)) && close(g.end, Point::new(50.0, -20.0)), "end above the centre: {g:?}");
+        let e = GradientGeom { start: Point::ZERO, end: Point::new(10.0, 0.0), aspect: 0.5 };
+        assert!((e.param_at(GradientKind::Radial, Point::new(0.0, 5.0)) - 1.0).abs() < 1e-12);
+        assert!((e.param_at(GradientKind::Radial, Point::new(5.0, 0.0)) - 0.5).abs() < 1e-12);
+        assert!((e.param_at(GradientKind::Linear, Point::new(5.0, 7.0)) - 0.5).abs() < 1e-12);
+    }
+
+    fn g3() -> Gradient {
+        let mut g = Gradient::default();
+        g.stops.insert(1, GradientStop { offset: 0.5, color: Color::rgb(1.0, 0.0, 0.0), opacity: 1.0, midpoint: 0.5 });
+        g
+    }
+
+    #[test]
+    fn insert_samples_color_and_sorts() {
+        let g = Gradient::default();
+        let (stops, i) = insert_stop(&g, 0.25);
+        assert_eq!(stops.len(), 3);
+        assert_eq!(i, 1);
+        let r = stops[1].color.to_rgb()[0];
+        assert!((r - 0.75).abs() < 1e-4, "sampled {r}");
+        let (stops, i) = insert_stop(&g, 2.0);
+        assert_eq!(i, 2);
+        assert_eq!(stops[2].offset, 1.0);
+    }
+
+    #[test]
+    fn remove_keeps_two() {
+        let g = g3();
+        let v = remove_stop(&g.stops, 1).unwrap();
+        assert_eq!(v.len(), 2);
+        assert!(remove_stop(&v, 0).is_none());
+        assert!(remove_stop(&g.stops, 9).is_none());
+    }
+
+    #[test]
+    fn move_reorders_and_tracks_index() {
+        let g = g3();
+        let (v, i) = move_stop(&g.stops, 0, 0.8);
+        assert_eq!(i, 1);
+        assert_eq!(v[1].color.to_hex(), "#ffffff");
+        assert!(v.windows(2).all(|w| w[0].offset <= w[1].offset));
+        let (v, i) = move_stop(&g.stops, 1, -3.0);
+        // Clamped to 0 and placed after the existing stop at 0.
+        assert_eq!((i, v[i].offset, v[i].color.to_hex()), (1, 0.0, "#ff0000".to_string()));
+    }
+
+    #[test]
+    fn duplicate_copies_the_stop_to_a_new_offset() {
+        let g = g3();
+        let (v, i) = duplicate_stop(&g.stops, 1, 0.9);
+        assert_eq!((v.len(), i, v[i].offset, v[i].color.to_hex()), (4, 2, 0.9, "#ff0000".to_string()));
+        assert_eq!(v[1], g.stops[1], "the original stays");
+        assert_eq!(duplicate_stop(&g.stops, 7, 0.5).0, g.stops);
+    }
+
+    #[test]
+    fn midpoint_math() {
+        let g = g3();
+        assert_eq!(midpoint_pos(&g.stops, 0), Some(0.25));
+        assert_eq!(midpoint_pos(&g.stops, 2), None);
+        let m = midpoint_from_pos(&g.stops, 1, 0.6).unwrap();
+        assert!((m - 0.2).abs() < 1e-5);
+        assert_eq!(midpoint_from_pos(&g.stops, 1, 0.51).unwrap(), 0.13);
+        let v = set_midpoint(&g.stops, 0, 0.99);
+        assert_eq!(v[0].midpoint, 0.87);
+    }
+
+    #[test]
+    fn pin_fixes_the_fit_once() {
+        let mut p = GradientPaint::new(Gradient::default());
+        p.angle = 90.0;
+        let b = Rect::new(0.0, 0.0, 100.0, 50.0);
+        p.pin(b);
+        assert_eq!(p.geom, Some(GradientGeom::fit(GradientKind::Linear, b, 90.0)));
+        p.pin(Rect::new(0.0, 0.0, 1.0, 1.0));
+        assert_eq!(p.geom, Some(GradientGeom::fit(GradientKind::Linear, b, 90.0)));
     }
 }

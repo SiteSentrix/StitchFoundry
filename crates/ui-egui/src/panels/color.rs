@@ -159,11 +159,11 @@ enum Target {
     Stop { paint: Paint, index: usize, color: Color },
 }
 
-fn target(app: &VectorcraftApp, ui: &Ui) -> Target {
+fn target(app: &VectorcraftApp) -> Target {
     let p = active_paint(app);
     match &p {
         Paint::Gradient(g) => {
-            let i = super::gradient::selected_stop(ui.ctx()).unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
+            let i = app.session.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
             let color = g.gradient.stops.get(i).map(|s| s.color).unwrap_or(Color::BLACK);
             Target::Stop { paint: p.clone(), index: i, color }
         }
@@ -196,7 +196,7 @@ fn apply(app: &mut VectorcraftApp, ui: &Ui, tgt: &Target, c: Color, phase: Live)
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let tgt = target(app, ui);
+    let tgt = target(app);
     let color = match &tgt {
         Target::Paint(c) => *c,
         Target::Stop { color, .. } => Some(*color),
@@ -376,7 +376,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_pstate(ui.ctx(), "color-hide-options", !hidden);
     }
     ui.separator();
-    let tgt = target(app, ui);
+    let tgt = target(app);
     let color = match &tgt {
         Target::Paint(c) => *c,
         Target::Stop { color, .. } => Some(*color),

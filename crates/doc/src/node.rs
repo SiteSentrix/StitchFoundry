@@ -448,13 +448,17 @@ impl Node {
     /// Apply an affine transform to the geometry (and gradients) of this node and its descendants.
     /// `scale_strokes` also scales stroke weights by the transform's mean scale.
     pub fn transform(&mut self, a: Affine, scale_strokes: bool) {
+        // Refitting an unplaced gradient only reproduces moves and uniform scales.
+        if !keeps_gradient_fit(a) {
+            self.pin_gradients();
+        }
         if scale_strokes {
             let det = a.determinant().abs().sqrt();
             if (det - 1.0).abs() > 1e-9 {
                 self.appearance.scale_strokes(det);
             }
         }
-        transform_paints(&mut self.appearance, a);
+        self.appearance.transform_gradients(a);
         match &mut self.kind {
             NodeKind::Path { path, live, .. } => {
                 path.transform(a);
@@ -516,22 +520,51 @@ impl Node {
         self.walk(&mut |_| n += 1);
         n
     }
-}
-
-fn transform_paints(ap: &mut Appearance, a: Affine) {
-    use crate::appearance::AppearanceItem;
-    use vectorcraft_color::Paint;
-    for it in &mut ap.items {
-        let p = match it {
-            AppearanceItem::Fill(f) => &mut f.paint,
-            AppearanceItem::Stroke(s) => &mut s.paint,
-        };
-        if let Paint::Gradient(g) = p
-            && let Some(geom) = &mut g.geom
+    /// Fix this node's unplaced gradients to their fit on its current bounds (before a transform
+    /// or warp that refitting wouldn't reproduce). Descendants pin their own when transformed.
+    pub fn pin_gradients(&mut self) {
+        if self.appearance.has_unplaced_gradient()
+            && let Some(b) = self.geometric_bounds()
         {
-            geom.transform(a);
+            self.appearance.pin_gradients(b);
         }
     }
+    /// The paint behind the Fill (or Stroke) proxy, the map from its space to the document and
+    /// the box (in that space) an unplaced gradient fits. Type objects paint their runs (the first
+    /// run speaks for all) in text space, fitted to the layout bounds; everything else paints its
+    /// top fill or stroke in the document, fitted to the geometric bounds. Strokes fit the box
+    /// grown by half their weight.
+    pub fn proxy_paint(&self, stroke: bool) -> Option<(&vectorcraft_color::Paint, Affine, Rect)> {
+        if let NodeKind::Text(t) = &self.kind {
+            let st = &t.runs.first()?.style;
+            let b = t.local_bounds();
+            return Some(if stroke { (&st.stroke, t.xf, crate::appearance::stroke_paint_bounds(b, st.stroke_width)) } else { (&st.fill, t.xf, b) });
+        }
+        let b = self.geometric_bounds()?;
+        if stroke {
+            self.appearance.stroke().map(|s| (&s.paint, Affine::IDENTITY, s.paint_bounds(b)))
+        } else {
+            self.appearance.fill().map(|f| (&f.paint, Affine::IDENTITY, b))
+        }
+    }
+    /// The gradient behind the Fill (or Stroke) proxy and its placement in document coordinates
+    /// (see [`Node::proxy_paint`]): what the gradient annotator shows and edits.
+    pub fn proxy_gradient(&self, stroke: bool) -> Option<(&vectorcraft_color::GradientPaint, vectorcraft_color::GradientGeom)> {
+        let (paint, to_doc, b) = self.proxy_paint(stroke)?;
+        let vectorcraft_color::Paint::Gradient(g) = paint else { return None };
+        let mut geom = g.resolve(b);
+        if to_doc != Affine::IDENTITY {
+            geom.transform(to_doc, g.gradient.kind);
+        }
+        Some((g, geom))
+    }
+}
+
+/// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?
+fn keeps_gradient_fit(a: Affine) -> bool {
+    let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+    let eps = 1e-12 * m0.abs().max(1.0);
+    m0 > 0.0 && m1.abs() <= eps && m2.abs() <= eps && (m0 - m3).abs() <= eps
 }
 
 #[cfg(test)]
@@ -553,6 +586,29 @@ mod tests {
         assert_eq!(g.geometric_bounds(), Some(Rect::new(0.0, 0.0, 20.0, 20.0)));
         let child = &g.children().unwrap()[0];
         assert_eq!(child.appearance.stroke_width(), 2.0);
+    }
+
+    #[test]
+    fn unplaced_gradients_pin_only_when_a_refit_would_differ() {
+        use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
+        let grad = || Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let fresh = || Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), Appearance::basic(grad(), grad(), 2.0));
+        let geoms = |n: &Node| match (n.appearance.fill_paint(), n.appearance.stroke_paint()) {
+            (Paint::Gradient(f), Paint::Gradient(s)) => (f.geom, s.geom),
+            _ => unreachable!(),
+        };
+        let mut n = fresh();
+        n.transform(Affine::translate((10.0, 5.0)) * Affine::scale(2.0), true);
+        assert_eq!(geoms(&n), (None, None), "moves and uniform scales keep refitting");
+        let mut n = fresh();
+        n.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), false);
+        let (f, s) = geoms(&n);
+        // Fitted on the old bounds (strokes on the stroke-inflated box), then rotated: vertical.
+        let mut want = GradientGeom::fit(GradientKind::Linear, Rect::new(0.0, 0.0, 100.0, 50.0), 0.0);
+        want.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), GradientKind::Linear);
+        let f = f.unwrap();
+        assert!(f.start.distance(want.start) < 1e-9 && f.end.distance(want.end) < 1e-9, "{f:?}");
+        assert!((s.unwrap().length() - 102.0).abs() < 1e-9);
     }
 
     #[test]

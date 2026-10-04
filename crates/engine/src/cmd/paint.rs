@@ -1,9 +1,10 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, NodeKind};
 
+use super::gradient::{place_paint, place_run_paint, run_paint_mut, unplaced};
 use super::*;
 use crate::EngineError;
 
@@ -14,7 +15,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind, stops:[{offset,color}], angle?}, ids?} sets selection fill and the default",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a gradient swatch fits each object, keeping its aspect), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, ids?} sets selection fill and the default (new art fits a gradient to itself)",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -62,27 +63,7 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
         return Ok(Some(paint));
     }
     if let Some(g) = p.get("gradient") {
-        let kind = match str_param(g, "kind") {
-            Some("radial") => GradientKind::Radial,
-            _ => GradientKind::Linear,
-        };
-        let mut grad = Gradient { kind, ..Default::default() };
-        if let Some(stops) = g.get("stops").and_then(Value::as_array) {
-            grad.stops = stops
-                .iter()
-                .filter_map(|st| {
-                    Some(vectorcraft_color::GradientStop {
-                        offset: st.get("offset")?.as_f64()? as f32,
-                        color: color_value(st.get("color")?)?,
-                        opacity: st.get("opacity").and_then(Value::as_f64).unwrap_or(1.0) as f32,
-                        midpoint: 0.5,
-                    })
-                })
-                .collect();
-            grad.sort();
-        }
-        let mut gp = GradientPaint::new(grad);
-        gp.angle = f64_or(g, "angle", 0.0);
+        let gp = super::gradient::parse_gradient(g).map_err(|e| bad("paint", e))?;
         return Ok(Some(Paint::Gradient(Box::new(gp))));
     }
     if let Some(c) = p.get("color") {
@@ -94,10 +75,11 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
 
 fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     let paint = paint_from(s, p)?.ok_or_else(|| bad("paint.setFill", "give color, none, swatch or gradient"))?;
+    // New art gets the paint fitted to itself, not placed where this one is.
     if fill {
-        s.paint.fill = paint.clone();
+        s.paint.fill = unplaced(&paint);
     } else {
-        s.paint.stroke = paint.clone();
+        s.paint.stroke = unplaced(&paint);
     }
     s.fill_active = fill;
     let ids = paint_targets(s, p)?;
@@ -108,22 +90,24 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
             if let NodeKind::Text(t) = &mut n.kind {
+                let (xf, lb) = (t.xf, t.local_bounds());
                 for r in &mut t.runs {
-                    if fill {
-                        r.style.fill = paint.clone();
-                    } else {
-                        r.style.stroke = paint.clone();
-                        if r.style.stroke_width == 0.0 {
-                            r.style.stroke_width = 1.0;
-                        }
+                    if !fill && r.style.stroke_width == 0.0 {
+                        r.style.stroke_width = 1.0;
                     }
+                    let (cur, b) = run_paint_mut(r, !fill, lb);
+                    *cur = place_run_paint(&paint, p, xf, b);
                 }
                 continue;
             }
+            let b = n.geometric_bounds();
             if fill {
-                n.appearance.set_fill(paint.clone());
+                n.appearance.set_fill(place_paint(&paint, p, b));
             } else {
                 n.appearance.set_stroke(paint.clone());
+                if let Some(st) = n.appearance.stroke_mut() {
+                    st.paint = place_paint(&paint, p, b.map(|b| st.paint_bounds(b)));
+                }
             }
         }
         Ok(())

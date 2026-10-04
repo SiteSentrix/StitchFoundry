@@ -335,6 +335,8 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::ZoomOut => C::ZoomOut,
         Cursor::Eyedropper => C::Crosshair,
         Cursor::NotAllowed => C::NotAllowed,
+        Cursor::AddStop => C::Copy,
+        Cursor::RemoveStop => C::NotAllowed,
     }
 }
 
@@ -878,6 +880,17 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
                 let r = egui::Rect::from_min_size(sp, galley.size() + vec2(12.0, 8.0));
                 p.rect_filled(r, CornerRadius::same(3), t.measure_bg);
                 p.galley(sp + vec2(6.0, 4.0), galley, Color32::WHITE);
+            }
+            Overlay::Swatch { p: pt, color, selected } => {
+                // A white disc under the colour shows its opacity; a dark rim keeps it readable on
+                // any art, and the accent ring marks the selected stop.
+                let c = xf.to_screen(*pt);
+                p.circle_filled(c, 6.0, Color32::WHITE);
+                p.circle_filled(c, 5.0, Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]));
+                p.circle_stroke(c, 6.0, Stroke::new(1.0, Color32::from_gray(32)));
+                if *selected {
+                    p.circle_stroke(c, 8.0, Stroke::new(2.0, t.accent));
+                }
             }
         }
     }

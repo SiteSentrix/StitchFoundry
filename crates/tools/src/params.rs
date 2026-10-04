@@ -1,0 +1,62 @@
+//! Command params written by tools and panels: the inverse of the engine's paint parsers, so a
+//! paint read from the document and sent back through a command arrives unchanged.
+
+use serde_json::{Value, json};
+use vectorcraft_color::{Color, GradientPaint, GradientStop};
+
+/// A colour as a `color` param in its own model: `[r,g,b]`, `{c,m,y,k}` or `{gray}`.
+pub fn color_json(c: &Color) -> Value {
+    match *c {
+        Color::Rgb { r, g, b } => json!([r, g, b]),
+        Color::Cmyk { c, m, y, k } => json!({"c": c, "m": m, "y": y, "k": k}),
+        Color::Gray { k } => json!({"gray": k}),
+    }
+}
+
+/// Gradient stops as the `stops` param of `paint.editGradient` / a `gradient` paint.
+pub fn stops_json(stops: &[GradientStop]) -> Value {
+    Value::Array(
+        stops.iter().map(|s| json!({"offset": s.offset, "color": color_json(&s.color), "opacity": s.opacity, "midpoint": s.midpoint})).collect(),
+    )
+}
+
+/// A gradient paint as the `gradient` param of `paint.setFill` / `swatch.new`: kind, stops (with
+/// opacity and midpoint), angle, the linked swatch and, once placed, the vector and aspect (%).
+pub fn gradient_params(g: &GradientPaint) -> Value {
+    let mut v = json!({
+        "kind": g.gradient.kind.label().to_lowercase(),
+        "angle": g.angle,
+        "stops": stops_json(&g.gradient.stops),
+    });
+    if let Some(geom) = g.geom {
+        v["start"] = json!([geom.start.x, geom.start.y]);
+        v["end"] = json!([geom.end.x, geom.end.y]);
+        v["aspect"] = json!(geom.aspect * 100.0);
+    }
+    if let Some(s) = &g.swatch {
+        v["swatch"] = json!(s);
+    }
+    v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind};
+    use vectorcraft_geom::Point;
+
+    #[test]
+    fn gradient_params_carry_placement_only_when_placed() {
+        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Radial, ..Default::default() });
+        let v = gradient_params(&g);
+        assert_eq!(v["kind"], "radial");
+        assert!(v.get("start").is_none() && v.get("aspect").is_none());
+        assert_eq!(v["stops"][0]["midpoint"], json!(0.5));
+        g.geom = Some(GradientGeom { start: Point::new(1.0, 2.0), end: Point::new(3.0, 4.0), aspect: 0.5 });
+        g.swatch = Some("Sky".into());
+        let v = gradient_params(&g);
+        assert_eq!((v["start"].clone(), v["end"].clone(), v["aspect"].clone()), (json!([1.0, 2.0]), json!([3.0, 4.0]), json!(50.0)));
+        assert_eq!(v["swatch"], "Sky");
+        assert_eq!(color_json(&Color::gray(0.25)), json!({"gray": 0.25}));
+    }
+}

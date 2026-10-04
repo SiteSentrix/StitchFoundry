@@ -330,7 +330,7 @@ impl Writer<'_> {
 
     fn gradient_def(&mut self, g: &GradientPaint, bounds: Rect) -> String {
         let mut geom = g.resolve(bounds);
-        geom.transform(self.xf);
+        geom.transform(self.xf, g.gradient.kind);
         let (s, e) = (geom.start, geom.end);
         let head = match g.gradient.kind {
             GradientKind::Radial => {

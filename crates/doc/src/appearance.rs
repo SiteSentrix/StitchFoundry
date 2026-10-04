@@ -222,6 +222,16 @@ impl StrokeLayer {
             effects: vec![],
         }
     }
+    /// The box an unplaced gradient on this stroke fits to (see [`stroke_paint_bounds`]).
+    pub fn paint_bounds(&self, geometric: vectorcraft_geom::Rect) -> vectorcraft_geom::Rect {
+        stroke_paint_bounds(geometric, self.width)
+    }
+}
+
+/// The box an unplaced gradient on a stroke of `width` fits to: the geometric bounds grown by half
+/// the weight (object strokes and type strokes alike, on screen and in exports).
+pub fn stroke_paint_bounds(geometric: vectorcraft_geom::Rect, width: f64) -> vectorcraft_geom::Rect {
+    geometric.inflate(width / 2.0, width / 2.0)
 }
 
 /// One entry of the appearance stack.
@@ -322,6 +332,54 @@ impl Appearance {
                         *v *= s;
                     }
                 }
+            }
+        }
+    }
+    /// Gradient paints of the fills and strokes.
+    fn gradients_mut(&mut self) -> impl Iterator<Item = &mut vectorcraft_color::GradientPaint> {
+        self.items.iter_mut().filter_map(|i| match i {
+            AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. })
+            | AppearanceItem::Stroke(StrokeLayer { paint: Paint::Gradient(g), .. }) => Some(&mut **g),
+            _ => None,
+        })
+    }
+    /// Does a fill or stroke carry a gradient that is fitted to the bounds on each render?
+    pub fn has_unplaced_gradient(&self) -> bool {
+        self.items.iter().any(|i| match i {
+            AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. })
+            | AppearanceItem::Stroke(StrokeLayer { paint: Paint::Gradient(g), .. }) => g.geom.is_none(),
+            _ => false,
+        })
+    }
+    /// Fix unplaced gradients to their fit on `bounds` (the object's geometric bounds; strokes fit
+    /// the stroke-inflated box), so they can follow transforms that refitting wouldn't reproduce.
+    pub fn pin_gradients(&mut self, bounds: vectorcraft_geom::Rect) {
+        for i in &mut self.items {
+            match i {
+                AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. }) => g.pin(bounds),
+                AppearanceItem::Stroke(s) => {
+                    let b = s.paint_bounds(bounds);
+                    if let Paint::Gradient(g) = &mut s.paint {
+                        g.pin(b);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    /// Map placed gradients through `a`.
+    pub fn transform_gradients(&mut self, a: vectorcraft_geom::Affine) {
+        for g in self.gradients_mut() {
+            g.transform(a);
+        }
+    }
+    /// Map placed gradients through a warp, given its local affine approximation at a point (taken
+    /// at each gradient's centre: the start of a radial, the middle of a linear vector).
+    pub fn warp_gradients(&mut self, near: &dyn Fn(vectorcraft_geom::Point) -> vectorcraft_geom::Affine) {
+        for g in self.gradients_mut() {
+            if let Some(geom) = g.geom {
+                let c = if g.gradient.kind == vectorcraft_color::GradientKind::Radial { geom.start } else { geom.start.midpoint(geom.end) };
+                g.transform(near(c));
             }
         }
     }

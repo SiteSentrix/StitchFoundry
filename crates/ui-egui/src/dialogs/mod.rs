@@ -16,6 +16,7 @@ mod effect;
 mod export_for_screens;
 mod form;
 pub mod new_color_group;
+mod gradient_stop;
 mod new_document;
 pub mod new_swatch;
 mod path_ops;
@@ -135,6 +136,7 @@ registry! {
     Confirm: [confirm::KIND] => confirm::SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
+    GradientStop: ["gradientStop"] => gradient_stop::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

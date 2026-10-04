@@ -1,5 +1,5 @@
-//! Dialogs a tool click opens: shape sizes, transform values, graph size and data, flare options
-//! and artboard options.
+//! Dialogs a tool click opens: shape sizes, transform values, graph size and data, flare options,
+//! artboard options and the gradient stop popover.
 
 use serde_json::{Value, json};
 
@@ -47,6 +47,8 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             }
             Dialog::new(kind, base)
         }
+        // Double-clicking a stop on the gradient annotator: its popover, next to the stop's chip.
+        "gradientStop" => Dialog::new(kind, json!({"index": p.get("index").cloned().unwrap_or(json!(0)), "x": x, "y": y, "tab": "color"})),
         _ => return,
     };
     app.ui.dialog = Some(d);

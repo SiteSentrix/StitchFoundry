@@ -166,9 +166,10 @@ impl Headless {
         let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
         let mods = Mods { shift: b("shift"), alt: b("alt"), cmd: b("cmd"), ctrl: b("ctrl"), ..Mods::default() };
         let tk = tool_key(key);
-        // A busy tool (pen path in progress, shape being dragged) gets its keys first.
+        // A busy tool (pen path in progress, shape being dragged) gets its keys first, as do keys
+        // the tool claims (the Gradient tool's selected stop takes Delete and the arrows).
         if let Some(k) = tk
-            && self.session.tool_busy()
+            && (self.session.tool_busy() || self.session.tool_claims_key(k, self.view))
         {
             let mut out = vec![];
             let reqs = self.session.tool_key(k, mods, self.view).map_err(|e| e.to_string())?;

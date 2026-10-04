@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::Paint;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::edit::selected_roots;
@@ -91,23 +90,10 @@ impl Projective {
     }
 }
 
-fn warp_paints(ap: &mut Appearance, pr: &Projective) {
-    for it in &mut ap.items {
-        let p = match it {
-            vectorcraft_doc::AppearanceItem::Fill(f) => &mut f.paint,
-            vectorcraft_doc::AppearanceItem::Stroke(s) => &mut s.paint,
-        };
-        if let Paint::Gradient(g) = p
-            && let Some(geom) = &mut g.geom
-        {
-            geom.start = pr.apply(geom.start);
-            geom.end = pr.apply(geom.end);
-        }
-    }
-}
-
+/// Warp `n`'s anchors and handles; gradients (pinned first if unplaced) follow the warp's affine
+/// approximation at their centre.
 fn warp_node(n: &mut Node, pr: &Projective) {
-    warp_paints(&mut n.appearance, pr);
+    n.pin_gradients();
     match &mut n.kind {
         NodeKind::Path { path, live, .. } => {
             *live = None;
@@ -125,11 +111,14 @@ fn warp_node(n: &mut Node, pr: &Projective) {
             }
         }
         _ => {
+            // No editable points: the affine approximation (which maps the gradients too).
             if let Some(b) = n.geometric_bounds() {
                 n.transform(pr.affine_near(b.center()), false);
             }
+            return;
         }
     }
+    n.appearance.warp_gradients(&|p| pr.affine_near(p));
 }
 
 fn distort(s: &mut Session, p: &Value) -> Result<Value> {

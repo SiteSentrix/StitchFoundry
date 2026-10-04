@@ -107,6 +107,17 @@ fn corner_radius(p: &Painter, o: Pos2) {
     p.add(Shape::line(pts, Stroke::new(1.2, INK)));
 }
 
+/// The gradient annotator's stop cursors: the arrow with a plus (add a stop) or minus (delete it)
+/// badge.
+fn stop_badge(p: &Painter, o: Pos2, add: bool) {
+    arrow(p, o, false);
+    let b = o + vec2(13.0, 13.0);
+    line(p, b, b + vec2(6.0, 0.0));
+    if add {
+        line(p, b + vec2(3.0, -3.0), b + vec2(3.0, 3.0));
+    }
+}
+
 fn ibeam(p: &Painter, o: Pos2) {
     line(p, o + vec2(0.0, -8.0), o + vec2(0.0, 8.0));
     line(p, o + vec2(-3.0, -8.0), o + vec2(3.0, -8.0));
@@ -137,6 +148,8 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
         Cursor::PenClose => pen(painter, p, "o"),
         Cursor::PenContinue => pen(painter, p, "/"),
         Cursor::Text => ibeam(painter, p),
+        Cursor::AddStop => stop_badge(painter, p, true),
+        Cursor::RemoveStop => stop_badge(painter, p, false),
         _ => return false,
     }
     let _ = pos2;
