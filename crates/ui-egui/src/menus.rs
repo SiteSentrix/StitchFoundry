@@ -1338,15 +1338,18 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             } else {
                 egui::RichText::new(*title).size(13.0).color(t.text)
             };
-            ui.menu_button(text, |ui| {
-                ui.set_min_width(230.0);
-                render_items(app, ui, items, &mut clicked);
-            });
+            ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked));
         }
     });
     if let Some((id, p)) = clicked {
         invoke(app, &id, p);
     }
+}
+
+/// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt.
+fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
+    ui.set_min_width(230.0);
+    render_items(app, ui, items, clicked);
 }
 
 fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
@@ -1367,7 +1370,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             }
             Item::Todo(label, sc) => {
                 ui.add_enabled_ui(false, |ui| {
-                    ui.add(egui::Button::new(*label).shortcut_text(pretty_shortcut(sc)).min_size(egui::vec2(ui.available_width(), 0.0)));
+                    ui.add(egui::Button::new(*label).shortcut_text(pretty_shortcut(sc)));
                 })
                 .response
                 .on_disabled_hover_text("Coming soon — tracked in the parity plan");
@@ -1386,7 +1389,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
                     Some(false) => format!("     {label}"),
                     None => label,
                 };
-                let r = ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc).min_size(egui::vec2(ui.available_width(), 0.0)));
+                let r = ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc));
                 if r.clicked() {
                     *clicked = Some(click_target(label_of(it), id, p));
                     ui.close();
@@ -1846,5 +1849,29 @@ mod tests {
         let paths: Vec<Vec<String>> =
             menu_entries(&app).into_iter().filter(|e| e.command.as_deref() == Some("effect.expandAppearance")).map(|e| e.path).collect();
         assert_eq!(paths, [vec!["Object".to_string()]]);
+    }
+
+    #[test]
+    fn menus_are_as_wide_as_their_items() {
+        // Items size the popup to the widest label and shortcut instead of the widest a menu may be.
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
+        let tree = menu_tree();
+        let (_, file) = tree.iter().find(|(t, _)| *t == "File").unwrap();
+        let id = egui::Id::new("test-menu");
+        for _ in 0..3 {
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::Area::new(id).show(ui.ctx(), |ui| {
+                    egui::containers::menu::menu_style(ui.style_mut());
+                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| menu_body(&app, ui, file, &mut None));
+                });
+            });
+            out.textures_delta.clear();
+        }
+        let w = ctx.memory(|m| m.area_rect(id)).unwrap().width();
+        assert!((230.0..340.0).contains(&w), "File menu is {w} pt wide");
     }
 }

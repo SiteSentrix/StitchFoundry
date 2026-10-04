@@ -195,7 +195,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     let heading = (spec.heading)(&d);
     egui::Window::new(heading.as_str())
-        .id(egui::Id::new("dialog"))
+        // One window per kind, so a dialog never inherits another dialog's size.
+        .id(egui::Id::new(("dialog", d.kind.as_str())))
         .order(egui::Order::Foreground)
         .collapsible(false)
         .resizable(false)
@@ -211,7 +212,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.add_space(12.0);
             cancel = (spec.body)(app, ui, &mut d);
             ui.add_space(16.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // The button row is as tall as the buttons: a right-to-left layout would otherwise take
+            // all the height left in the window, so the window could never shrink to its content.
+            let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+            ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if let Some(label) = spec.ok
                     && widgets::primary_button(ui, label).clicked()
                 {

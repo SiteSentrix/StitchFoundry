@@ -15,6 +15,7 @@ fn app() -> VectorcraftApp {
 fn frame(app: &mut VectorcraftApp, input: egui::RawInput) {
     let ctx = egui::Context::default();
     theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
     let mut out = ctx.run_ui(input, |ui| show(app, ui.ctx()));
     out.textures_delta.clear();
 }
@@ -175,4 +176,26 @@ fn effect_dialog_applies_to_its_appearance_item() {
     let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
     assert_eq!(n.appearance.items[1].effects().len(), 1, "the effect goes to the stroke");
     assert!(n.appearance.effects.is_empty() && n.appearance.items[0].effects().is_empty());
+}
+
+#[test]
+fn dialogs_are_as_tall_as_their_content() {
+    // The save prompt, shown after a taller dialog, is as tall as its text and buttons: no empty
+    // band around the buttons, nothing inherited from the other dialog.
+    let mut app = app();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
+    let height = |app: &mut VectorcraftApp, kind: &str, fields: serde_json::Value| {
+        open(app, kind, fields);
+        for _ in 0..30 {
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            ctx.run_ui(input, |ui| show(app, ui.ctx())).textures_delta.clear();
+        }
+        ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", kind)))).unwrap().height()
+    };
+    let tall = height(&mut app, "command", json!({"__command": "object.move", "a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6, "g": 7, "h": 8}));
+    let prompt = height(&mut app, crate::unsaved::KIND, json!({"index": 0, "name": "Untitled-1", "then": "close"}));
+    assert!(prompt < 180.0 && prompt < tall, "save prompt {prompt} pt tall (the dialog before it: {tall} pt)");
 }
