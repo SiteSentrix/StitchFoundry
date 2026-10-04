@@ -5,7 +5,7 @@
 //!   filled outlines (hollow kinds are rings), placed by [`ArrowAlign`](vectorcraft_doc::ArrowAlign);
 //! - [`dash`]: the dash pattern, exact or fitted to corners and path ends; zero-length dashes
 //!   become [`Dot`]s that a round or projecting cap turns into discs or squares ([`dot_outline`]);
-//! - [`width_outline`]: variable-width (profile) strokes;
+//! - [`width_outline`]: variable-width (profile) strokes, with the stroke's joins at corners;
 //! - [`line_outline`]: the line part of a stroke as one filled outline (profile, dashes, dots,
 //!   caps and joins);
 //! - [`for_writer`] and [`outline_region`]: strokes for the SVG/PDF writers and Outline Stroke.
@@ -27,7 +27,8 @@ pub use width::width_outline;
 
 /// Arc-length accuracy for dashing and trimming (document points).
 const ARCLEN_ACCURACY: f64 = 1e-6;
-/// Tangents meeting at more than about 1° (this cosine) make a corner that fitted dashes centre on.
+/// Tangents meeting at more than about 1° (this cosine) make a corner: fitted dashes centre on it
+/// and variable-width strokes give it the stroke's join.
 const CORNER_COS: f64 = 0.9998;
 
 /// The geometry one stroke paints, in the coordinate space of its path.
@@ -86,31 +87,35 @@ pub fn style(st: &StrokeLayer, width: f64) -> kurbo::Stroke {
         .with_miter_limit(st.miter_limit)
 }
 
-/// Does the dash pattern of `st` draw anything other than a solid line?
-pub fn is_dashed(st: &StrokeLayer) -> bool {
-    st.dash.as_ref().is_some_and(|d| d.pattern.iter().any(|v| *v > 0.0))
-}
-
 /// The filled outline of the line part of `st` along `line` (usually [`StrokePieces::line`]) at
-/// `width` (see [`aligned_width`]), flattened/fitted to `tol`: the width profile, or the dash
-/// pattern with its dots, with the stroke's caps and joins. Fill it with the non-zero rule.
-/// Arrowheads are not included.
+/// `width` (see [`aligned_width`]), flattened/fitted to `tol`: the dash pattern with its dots and
+/// the width profile (each dash and dot as wide as the profile where it sits along the path), with
+/// the stroke's caps and joins. Fill it with the non-zero rule. Arrowheads are not included.
 pub fn line_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64) -> BezPath {
     if line.elements().is_empty() || width <= 0.0 || !width.is_finite() {
         return BezPath::new();
     }
     let tol = tol.max(1e-4);
-    if let Some(profile) = st.profile.as_ref().filter(|_| !is_dashed(st)) {
-        return width_outline(line, width, profile, st.cap, tol);
-    }
-    let style = style(st, width);
-    match st.dash.as_ref().and_then(|d| dash(line, d)) {
-        Some(d) => {
-            let mut out = kurbo::stroke(d.path.iter(), &style, &kurbo::StrokeOpts::default(), tol);
+    let dashed = st.dash.as_ref().and_then(|d| dash(line, d));
+    match (st.profile.as_ref(), dashed) {
+        (Some(profile), None) => width_outline(line, width, profile, st, tol),
+        (Some(profile), Some(d)) => {
+            let mut out = width::outline_spans(&d.path, &d.spans, width, profile, st, tol);
+            for dot in &d.dots {
+                // The dot spans the profile's left and right widths there.
+                let (l, r) = profile.at(dot.t);
+                let (l, r) = (l.max(0.0), r.max(0.0));
+                let at = dot.at + width::left(dot.dir) * (width * (l - r) / 4.0);
+                out.extend(dot_outline(&[Dot { at, ..*dot }], width * (l + r) / 2.0, st.cap, tol).iter());
+            }
+            out
+        }
+        (None, Some(d)) => {
+            let mut out = kurbo::stroke(d.path.iter(), &style(st, width), &kurbo::StrokeOpts::default(), tol);
             out.extend(dot_outline(&d.dots, width, st.cap, tol).iter());
             out
         }
-        None => kurbo::stroke(line.iter(), &style, &kurbo::StrokeOpts::default(), tol),
+        (None, None) => kurbo::stroke(line.iter(), &style(st, width), &kurbo::StrokeOpts::default(), tol),
     }
 }
 

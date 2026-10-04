@@ -1,8 +1,8 @@
-//! Dashes fitted to corners and path ends.
+//! Dashes fitted to corners and path ends, and variable-width strokes with dashes and joins.
 
 use kurbo::{BezPath, ParamCurveArclen, PathEl, Point, Rect, Shape};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Dash, LineCap, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{Dash, LineCap, LineJoin, StrokeLayer, WidthProfile};
 
 use super::*;
 
@@ -143,5 +143,82 @@ fn fitted_dashes_on_curves_and_degenerate_paths_stay_finite() {
             let o = line_outline(&mixed, &st, 4.0, 0.01);
             assert!(o.elements().iter().filter_map(|e| e.end_point()).all(|p| p.x.is_finite() && p.y.is_finite()), "{pat:?}");
         }
+    }
+}
+
+// ---------------------------------------------------------------- width profiles with dashes and joins
+
+#[test]
+fn each_dash_takes_its_width_from_the_profile_along_the_whole_path() {
+    let st = stroke(10.0, |s| {
+        s.profile = Some(WidthProfile::lens());
+        s.dash = Some(Dash { pattern: vec![10.0, 10.0], offset: 0.0, align_corners: false });
+    });
+    let o = line_outline(&line(100.0), &st, 10.0, 1e-3);
+    // The dash over 40..50 is near the lens's widest point; the one over 0..10 near its tip.
+    assert!(o.contains(Point::new(45.0, 4.0)) && o.contains(Point::new(45.0, -4.0)), "middle dash is wide");
+    assert!(!o.contains(Point::new(5.0, 2.0)) && o.contains(Point::new(5.0, 0.3)), "first dash is thin");
+    assert!(!o.contains(Point::new(15.0, 0.0)), "gaps stay empty");
+    // Dots too: a round dot near the middle is bigger than one near an end.
+    let st = stroke(10.0, |s| {
+        s.profile = Some(WidthProfile::lens());
+        s.cap = LineCap::Round;
+        s.dash = Some(Dash { pattern: vec![0.0, 10.0], offset: 0.0, align_corners: false });
+    });
+    let o = line_outline(&line(100.0), &st, 10.0, 1e-3);
+    assert!(o.contains(Point::new(50.0, 4.5)) && !o.contains(Point::new(10.0, 1.5)) && o.contains(Point::new(10.0, 0.5)));
+}
+
+/// An L whose corner turns 90° at (100, 0), or a sharp V turning back at (100, 0).
+fn bend(sharp: bool) -> BezPath {
+    let mut b = line(100.0);
+    b.line_to(if sharp { (0.0, 20.0) } else { (100.0, 100.0) });
+    b
+}
+
+fn uniform(join: LineJoin, miter_limit: f64) -> StrokeLayer {
+    stroke(20.0, |s| {
+        s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] });
+        s.join = join;
+        s.miter_limit = miter_limit;
+    })
+}
+
+#[test]
+fn profile_corners_take_the_stroke_join() {
+    let out = |join, limit, sharp| line_outline(&bend(sharp), &uniform(join, limit), 20.0, 1e-3);
+    // The L: a miter fills the outer corner, a round join leaves it, a bevel cuts it.
+    let corner = Point::new(109.0, -9.0);
+    assert!(out(LineJoin::Miter, 10.0, false).contains(corner));
+    assert!(!out(LineJoin::Round, 10.0, false).contains(corner));
+    assert!(out(LineJoin::Round, 10.0, false).contains(Point::new(106.5, -6.5)), "round join reaches 10 out");
+    assert!(!out(LineJoin::Bevel, 10.0, false).contains(Point::new(106.5, -6.5)));
+    assert!(out(LineJoin::Bevel, 10.0, false).contains(Point::new(104.5, -4.5)));
+    // The inside of the L is filled up to the inner miter and no further.
+    let l = out(LineJoin::Round, 10.0, false);
+    assert!(l.contains(Point::new(91.0, 9.0)) && !l.contains(Point::new(89.0, 11.0)));
+    // The sharp V: its miter (about 10 × the half width) is past the limit of 10, so it bevels;
+    // no join spikes out past the round join's reach.
+    for join in [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel] {
+        let x1 = out(join, 10.0, true).bounding_box().x1;
+        assert!(x1 <= 110.0 + 1e-6, "{join:?}: {x1}");
+    }
+    // A limit above it keeps the full miter.
+    let x1 = out(LineJoin::Miter, 20.0, true).bounding_box().x1;
+    assert!(x1 > 195.0, "{x1}");
+}
+
+#[test]
+fn smooth_points_of_curves_stay_smooth_with_any_join() {
+    // A circle stroked with a uniform profile is the same ring whatever the join.
+    let c = kurbo::Circle::new((0.0, 0.0), 50.0).to_path(1e-4);
+    let want = 2.0 * std::f64::consts::PI * 50.0 * 10.0;
+    for join in [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel] {
+        let st = stroke(10.0, |s| {
+            s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] });
+            s.join = join;
+        });
+        let a = line_outline(&c, &st, 10.0, 1e-3).area().abs();
+        assert!((a - want).abs() / want < 0.005, "{join:?}: {a} vs {want}");
     }
 }

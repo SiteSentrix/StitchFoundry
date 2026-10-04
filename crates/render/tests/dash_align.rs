@@ -1,9 +1,9 @@
-//! Pixel tests for dashes fitted to corners, drawn on the canvas from the shared stroke geometry
-//! (`vectorcraft_effects::stroke`).
+//! Pixel tests for dashes fitted to corners and for width profiles with dashes and joins, drawn
+//! on the canvas from the shared stroke geometry (`vectorcraft_effects::stroke`).
 
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, StrokeLayer};
-use vectorcraft_geom::{PathData, Rect, shapes};
+use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, LineJoin, StrokeLayer, WidthProfile};
+use vectorcraft_geom::{PathData, Point, Rect, SubPath, shapes};
 use vectorcraft_testkit::fixtures::DocBuilder;
 use vectorcraft_testkit::raster::{Image, render_region};
 
@@ -52,4 +52,27 @@ fn fitted_dashes_wrap_every_corner_of_a_rectangle() {
     }
     // Exact dashes keep their lengths instead (the exact golden covers how they look).
     assert_ne!(render(&rect_doc(false)).rgba, img.rgba);
+}
+
+#[test]
+fn dashes_of_a_lens_stroke_widen_towards_the_middle() {
+    let img = render(&doc(shapes::line(Point::new(30.0, 60.0), Point::new(130.0, 60.0)), 10.0, |s| {
+        s.profile = Some(WidthProfile::lens());
+        s.dash = Some(Dash { pattern: vec![10.0, 10.0], offset: 0.0, align_corners: false });
+    }));
+    // The dash over 40..50 of the 100 pt line is nearly full width, the one over 0..10 thin.
+    assert!(dark(&img, 75.0, 60.0 - 3.8) && dark(&img, 75.0, 60.0 + 3.8));
+    assert!(dark(&img, 35.0, 60.0) && !dark(&img, 35.0, 60.0 - 1.5));
+    assert!(!dark(&img, 45.0, 60.0), "gap");
+}
+
+#[test]
+fn a_round_join_on_a_profile_stroke_has_no_spike() {
+    let l = SubPath::polyline(&[Point::new(20.0, 40.0), Point::new(100.0, 40.0), Point::new(100.0, 110.0)], false);
+    let img = render(&doc(PathData::single(l), 20.0, |s| {
+        s.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] });
+        s.join = LineJoin::Round;
+    }));
+    assert!(dark(&img, 106.0, 34.0), "the round join covers the corner");
+    assert!(!dark(&img, 109.0, 31.0), "but not the miter's point");
 }
