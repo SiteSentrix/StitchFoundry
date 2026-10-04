@@ -9,9 +9,9 @@ use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeId};
 
-use super::{first_selected, pstate, set_pstate};
+use super::{first_selected, live_run, pstate, set_pstate};
 use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
+use crate::widgets::{self, TransparencyEdit, menu_item};
 use crate::{VectorcraftApp, icons};
 
 const ROW: f32 = 30.0;
@@ -221,11 +221,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
         let open: bool = pstate(ui.ctx(), &format!("ap-open-{i}"));
         let (r, resp) = row(ui, sel == Sel::Item(i));
         row_rects.push((i, r));
-        let visible = it.visible();
-        let (paint, width) = match it {
-            AppearanceItem::Fill(f) => (&f.paint, 0.0),
-            AppearanceItem::Stroke(s) => (&s.paint, s.width),
-        };
+        let (visible, paint) = (it.visible(), it.paint());
         let is_stroke = !it.is_fill();
         if eye(ui, r, ("ap-eye", i), visible, true) {
             app.run("appearance.setItem", json!({"index": i, "visible": !visible})).ok();
@@ -249,10 +245,10 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
         egui::Popup::menu(&cresp).show(|ui| {
             swatch_picker(app, ui, i);
         });
-        if is_stroke {
+        if let AppearanceItem::Stroke(st) = it {
             let fr = Rect::from_min_size(pos2(r.left() + EYE_W + 104.0, r.center().y - 12.0), vec2(56.0, 24.0));
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(fr).layout(egui::Layout::left_to_right(egui::Align::Center)));
-            if let Some(w) = widgets::num_field(&mut child, ("ap-w", i), Some(width), vectorcraft_doc::Unit::Points, 56.0) {
+            if let Some(w) = widgets::num_field(&mut child, ("ap-w", i), Some(st.width), vectorcraft_doc::Unit::Points, 56.0) {
                 app.run("appearance.setItem", json!({"index": i, "weight": w})).ok();
             }
         }
@@ -269,7 +265,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
             stopped = true;
         }
         if open {
-            sub_row(app, ui, ("ap-sub-op", i), &format!("Opacity: {}", opacity_text(it.opacity(), it.blend())), true, 1);
+            opacity_row(app, ui, Some(i), it.opacity(), it.blend());
             for (k, e) in it.effects().iter().enumerate() {
                 effect_row(app, ui, Some(i), k, e, sel == Sel::ItemEffect(i, k));
             }
@@ -297,14 +293,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel) {
     for (k, e) in n.appearance.effects.iter().enumerate() {
         effect_row(app, ui, None, k, e, sel == Sel::Effect(k));
     }
-    // Object opacity row.
-    let (r, resp) = row(ui, false);
-    eye(ui, r, "ap-op-eye", true, false);
-    let lx = r.left() + EYE_W + 24.0;
-    if link(ui, pos2(lx, r.center().y), "ap-op-link", "Opacity:") || resp.double_clicked() {
-        app.ui.open_panel = Some("transparency".into());
-    }
-    text(ui, pos2(lx + 56.0, r.center().y), &opacity_text(n.opacity, n.blend), false);
+    opacity_row(app, ui, None, n.opacity, n.blend);
     if let Some((from, to_row)) = drop
         && from != to_row
     {
@@ -320,10 +309,24 @@ fn target_index(rows: &[(usize, Rect)], y: f32) -> usize {
     })
 }
 
-fn sub_row(_app: &mut VectorcraftApp, ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug + Copy, label: &str, visible: bool, depth: usize) {
-    let (r, _) = row(ui, false);
-    eye(ui, r, (id, "eye"), visible, false);
-    text(ui, r.left_center() + vec2(EYE_W + 24.0 + depth as f32 * 12.0, 0.0), label, false);
+/// The Opacity row of the object (`item: None`) or, indented, of fill/stroke `item`. Clicking it
+/// opens a popup with the shared opacity and blend controls (`transparency.set` on that item).
+fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opacity: f32, blend: BlendMode) {
+    let (r, resp) = row(ui, false);
+    eye(ui, r, ("ap-op-eye", item), true, false);
+    let lx = r.left() + EYE_W + 24.0 + if item.is_some() { 12.0 } else { 0.0 };
+    let clicked = link(ui, pos2(lx, r.center().y), ("ap-op-link", item), "Opacity:") || resp.clicked();
+    text(ui, pos2(lx + 56.0, r.center().y), &opacity_text(opacity, blend), false);
+    egui::Popup::menu(&resp)
+        .open_memory(clicked.then_some(egui::SetOpenCommand::Toggle))
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| match widgets::opacity_blend(ui, ("ap-op", item), opacity, blend, true) {
+            Some(TransparencyEdit::Blend(b)) => {
+                app.run("transparency.set", json!({"item": item, "blend": b.label()})).ok();
+            }
+            Some(TransparencyEdit::Opacity(o, phase)) => live_run(app, "Opacity", "transparency.set", json!({"item": item, "opacity": o}), phase),
+            None => {}
+        });
 }
 
 /// An effect row: of the object (`item: None`) or, indented under it, of fill/stroke `item`.
@@ -379,6 +382,12 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
             ui.horizontal(|ui| {
                 let label = humanize(key);
                 ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(label).size(11.5).color(t.text)).truncate());
+                if let Some(cur) = widgets::blend_param(key, v) {
+                    if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
+                        change = Some((key.clone(), m));
+                    }
+                    return;
+                }
                 match v {
                     Value::Bool(b) => {
                         if widgets::check(ui, "", *b, true) {

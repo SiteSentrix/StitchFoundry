@@ -245,3 +245,25 @@ fn per_fill_offset_path_renders() {
     let px = render(&s).pixel(90, 150);
     assert!(px[0] > 200 && px[3] > 200, "{px:?}");
 }
+
+#[test]
+fn text_fill_items_composite_with_their_opacity() {
+    let mut s = session();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 20, "y": 200, "text": "HIM", "size": 150}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "color": "#ff0000"}));
+    let render = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+    };
+    let opaque = render(&s);
+    // A pixel the red fill covers fully (over the black character fill).
+    let (x, y) = (0..400u32).flat_map(|y| (0..400u32).map(move |x| (x, y))).find(|&(x, y)| opaque.pixel(x, y) == [255, 0, 0, 255]).expect("red text");
+    run(&mut s, "appearance.setItem", json!({"index": 0, "opacity": 0.5, "blend": "multiply"}));
+    let px = render(&s).pixel(x, y);
+    // Half of red multiplied over black: black.
+    assert!(px[0] < 20 && px[3] == 255, "{px:?}");
+    run(&mut s, "appearance.setItem", json!({"index": 0, "blend": "normal"}));
+    let px = render(&s).pixel(x, y);
+    assert!((110..=145).contains(&px[0]) && px[1] < 10, "{px:?}");
+}

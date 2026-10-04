@@ -126,3 +126,34 @@ fn item_effect_rows_toggle_their_eye() {
 fn current_stroke_effects(app: &VectorcraftApp) -> Vec<vectorcraft_doc::Effect> {
     first_selected(app).unwrap().appearance.items[1].effects().clone()
 }
+
+#[test]
+fn blend_separators_follow_the_groups() {
+    use vectorcraft_color::BlendMode;
+    let starts: Vec<BlendMode> =
+        (0..BlendMode::ALL.len()).filter(|i| crate::widgets::blend_separator_before(*i)).map(|i| BlendMode::ALL[i]).collect();
+    assert_eq!(starts, [BlendMode::Darken, BlendMode::Lighten, BlendMode::Overlay, BlendMode::Difference, BlendMode::Hue]);
+    assert!(starts.iter().all(|m| m.group() > 0) && !crate::widgets::blend_separator_before(BlendMode::ALL.len()));
+}
+
+#[test]
+fn item_opacity_popup_sets_the_items_opacity() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    super::set_pstate(&ctx, "ap-open-1", true);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    // The stroke's Opacity sub-row (listed first; the object's own Opacity row is last).
+    let link = texts.iter().find(|(t, _)| t == "Opacity:").expect("item opacity row").1;
+    click(&ctx, &mut app, link.center(), appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "Normal"), "the popup shows the blend mode: {texts:?}");
+    // Type 50 into the popup's opacity field.
+    let field = text_rect(&texts, "100%");
+    click(&ctx, &mut app, field.center(), appearance::show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("50".into())], appearance::show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, Default::default())], appearance::show);
+    let n = first_selected(&app).unwrap();
+    assert_eq!(n.appearance.items[1].opacity(), 0.5);
+    assert_eq!((n.appearance.items[0].opacity(), n.opacity), (1.0, 1.0));
+}

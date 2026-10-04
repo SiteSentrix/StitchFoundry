@@ -59,6 +59,14 @@ pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect();
         for (k, v) in keys {
             ui.label(egui::RichText::new(humanize(&k)).color(t.text));
+            if let Some(cur) = crate::widgets::blend_param(&k, &v) {
+                if let Some(m) = crate::widgets::blend_param_dropdown(ui, ("fx-blend", &k), cur) {
+                    d.fields.insert(k, m);
+                    changed = true;
+                }
+                ui.end_row();
+                continue;
+            }
             match v {
                 Value::Number(n) => {
                     let mut x = n.as_f64().unwrap_or(0.0);

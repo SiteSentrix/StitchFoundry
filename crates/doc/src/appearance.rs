@@ -231,6 +231,12 @@ impl AppearanceItem {
     pub fn kind_name(&self) -> &'static str {
         if self.is_fill() { "fill" } else { "stroke" }
     }
+    pub fn paint(&self) -> &Paint {
+        match self {
+            AppearanceItem::Fill(f) => &f.paint,
+            AppearanceItem::Stroke(s) => &s.paint,
+        }
+    }
     pub fn visible(&self) -> bool {
         match self {
             AppearanceItem::Fill(f) => f.visible,
