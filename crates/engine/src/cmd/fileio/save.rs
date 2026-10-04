@@ -1,5 +1,5 @@
-//! Saving: `document.save`, `file.saveAs`, `file.saveCopy`, `file.saveAsTemplate` and
-//! `file.formatOptions`.
+//! Saving: `document.save`, `file.saveAs`, `file.saveCopy`, `file.saveAsTemplate`, `file.revert`
+//! and `file.formatOptions`.
 //!
 //! Every frontend saves the same way: [`save_plan`] resolves where and how (path, format, options,
 //! a suggested name and folder when there is no path), then [`save_with`] encodes, writes through
@@ -10,7 +10,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 
 use super::super::*;
-use super::{Encoded, Format, encode_all, file_stem, format, format_for_name, write_encoded, write_file};
+use super::{Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, write_encoded, write_file};
 use crate::DocState;
 
 /// The formats Save As offers, in menu order (append-only). The other writable formats are exports:
@@ -266,6 +266,26 @@ fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> {
     save_with(s, plan, write_file)
 }
 
+fn can_revert(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    match (&st.path, st.is_dirty()) {
+        (None, _) => Err("the document has never been saved".into()),
+        (_, false) => Err("no changes since the last save".into()),
+        _ => Ok(()),
+    }
+}
+
+/// File → Revert: read and decode the saved file first (on any failure the document is left as it
+/// is), then replace the document in its tab.
+fn revert(s: &mut Session, _: &Value) -> Result<Value> {
+    let index = s.active_index().ok_or(crate::EngineError::NoDocument)?;
+    let path = s.doc()?.path.clone().ok_or_else(|| bad("file.revert", "the document has never been saved"))?;
+    let Loaded { mut doc, .. } = load(&path, &read_file(&path)?)?;
+    doc.template = false;
+    s.replace_document(index, doc);
+    Ok(json!({ "path": path }))
+}
+
 /// `file.formatOptions`: a writable format's options with the values Save would use.
 fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "file.formatOptions";
@@ -321,6 +341,15 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "{path?} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name>.vctemplate\", folder?, warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
+        ),
+        cmd!(
+            "file.revert",
+            "Revert",
+            ["File"],
+            Some("F12"),
+            "{} discard the changes: reload the saved file into the same tab (history cleared; the tab keeps its place and view). Saved, modified documents only; if the file can't be read the document is left as it is → {path}. The app asks first (a confirm dialog) unless confirmed: true",
+            can_revert,
+            revert
         ),
         cmd!(
             query "file.formatOptions",

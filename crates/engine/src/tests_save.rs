@@ -1,4 +1,5 @@
-//! The save pipeline: Save writes a document's own format, Save As, a Copy and as Template.
+//! The save pipeline: Save writes a document's own format, Save As / a Copy / as Template and
+//! Revert.
 
 use std::path::PathBuf;
 
@@ -31,6 +32,10 @@ fn path(d: &std::path::Path, name: &str) -> String {
 
 fn b64(v: &Value) -> Vec<u8> {
     vectorcraft_format::base64_decode(v["dataBase64"].as_str().expect("dataBase64")).unwrap()
+}
+
+fn objects(s: &Session) -> usize {
+    s.doc().unwrap().doc.node_count()
 }
 
 #[test]
@@ -120,6 +125,39 @@ fn save_a_copy_keeps_the_path_title_and_modified_state() {
     let st = s.doc().unwrap();
     assert_eq!((st.path.as_deref(), st.format, st.title()), (Some(native.as_str()), "vectorcraft", "poster.vectorcraft".to_string()));
     assert!(st.is_dirty(), "a copy leaves the document modified");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn revert_reloads_the_saved_file_in_the_same_tab() {
+    let d = dir("revert");
+    let mut s = session();
+    rect(&mut s);
+    let native = path(&d, "a.vectorcraft");
+    s.execute("document.save", &json!({"path": native})).unwrap();
+    assert!(s.execute("file.revert", &json!({})).is_err(), "nothing to revert");
+    s.execute("file.new", &json!({})).unwrap();
+    s.set_active(0);
+    let uid = s.doc().unwrap().uid;
+    rect(&mut s);
+    rect(&mut s);
+    assert_eq!(objects(&s), 4);
+    s.execute("file.revert", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!((s.active_index(), s.documents().len(), objects(&s)), (Some(0), 2, 2));
+    assert!(!st.is_dirty() && st.history.undo.is_empty() && st.selection.is_empty());
+    assert_eq!((st.uid, st.path.as_deref()), (uid, Some(native.as_str())));
+    // With the file gone the document is left as it is, still modified.
+    rect(&mut s);
+    std::fs::remove_file(&native).unwrap();
+    assert!(s.execute("file.revert", &json!({})).is_err());
+    let st = s.doc().unwrap();
+    assert!(st.is_dirty());
+    assert_eq!((objects(&s), st.history.undo.len()), (3, 1));
+    // Never saved: nothing to revert to.
+    s.set_active(1);
+    rect(&mut s);
+    assert!(s.execute("file.revert", &json!({})).is_err());
     let _ = std::fs::remove_dir_all(d);
 }
 

@@ -643,10 +643,9 @@ impl Session {
         self.untitled_counter += 1;
         format!("Untitled-{}", self.untitled_counter)
     }
-    /// Add a document and make it active.
-    pub fn add_document(&mut self, mut doc: Document, path: Option<String>) -> usize {
-        // Text layout bounds are a cache (not saved): compute them now, or selection boxes and
-        // hit testing would use the rough estimate until each text object is edited.
+    /// Text layout bounds are a cache (not saved): compute them for a document just read, or
+    /// selection boxes and hit testing would use the rough estimate until each text is edited.
+    fn refresh_text_bounds(doc: &mut Document) {
         let mut texts = vec![];
         doc.walk(|n| {
             if matches!(n.kind, NodeKind::Text(_)) {
@@ -660,6 +659,10 @@ impl Session {
                 cmd::typecmd::refresh_bounds(t);
             }
         }
+    }
+    /// Add a document and make it active.
+    pub fn add_document(&mut self, mut doc: Document, path: Option<String>) -> usize {
+        Self::refresh_text_bounds(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -667,6 +670,28 @@ impl Session {
         let i = self.docs.len() - 1;
         self.active = Some(i);
         i
+    }
+    /// Replace the document in tab `index` (File → Revert): new content, cleared history and
+    /// selection, saved state. The tab keeps its place, path and format.
+    pub fn replace_document(&mut self, index: usize, mut doc: Document) -> bool {
+        if index >= self.docs.len() {
+            return false;
+        }
+        Self::refresh_text_bounds(&mut doc);
+        if self.active == Some(index) {
+            // Pending tool work (typing, a drag) belongs to the content being thrown away.
+            self.reset_tool_for_doc_switch();
+        }
+        let old = &self.docs[index];
+        let mut st = DocState::new(doc, old.path.clone());
+        st.history.limit = old.history.limit;
+        // Same open document (caches keyed by uid stay valid); a new revision redraws it.
+        st.uid = old.uid;
+        st.revision = old.revision + 1;
+        st.format = old.format;
+        st.save_options = old.save_options.clone();
+        self.docs[index] = st;
+        true
     }
     pub fn close_document(&mut self, index: usize) -> bool {
         if index >= self.docs.len() {

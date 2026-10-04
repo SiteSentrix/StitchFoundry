@@ -5,7 +5,7 @@
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
-//! - `save`: `document.save`, Save As / a Copy / as Template and the per-format options
+//! - `save`: `document.save`, Save As / a Copy / as Template, Revert and the per-format options
 //!   (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
 //! - `pdfimport`: the PDF pages, box and password `document.open` and Place read, `document.pdfInfo`.

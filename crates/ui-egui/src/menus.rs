@@ -57,7 +57,6 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path?, format?, options?, svg?: {…SVG options}} = document.save, written through the app (a document saved as SVG, PDF or .ai, or opened from one Save can write back, saves as that again, with the same options); with no path known (never saved) the Save As panel asks first",
     ),
     ("file.newFromTemplate", "New from Template…", "Cmd+Shift+N", "{path?} open a template as a new untitled document"),
-    ("file.revert", "Revert", "F12", "{}"),
     (
         "file.place",
         "Place…",
@@ -443,17 +442,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(path) => io::open_path(app, &path).map(|_| Value::Null),
             None => io::open_dialog(app).map(|_| Value::Null),
         },
-        "file.revert" => {
-            let path = app.session.active().and_then(|d| d.path.clone());
-            match path {
-                Some(path) => {
-                    let i = app.session.active_index().unwrap_or(0);
-                    app.session.close_document(i);
-                    io::open_path(app, &path).map(|_| Value::Null)
-                }
-                None => Err("document has never been saved".into()),
-            }
-        }
+        "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
         id if id.starts_with("file.openRecent") => {
             let n: usize = id["file.openRecent".len()..].parse().unwrap_or(0);
             match n.checked_sub(1).and_then(|i| app.ui.recent_files.get(i)).cloned() {
@@ -948,7 +937,6 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "view.fitArtboard"
         | "view.fitAll"
         | "view.actualSize" => app.session.active().is_some(),
-        "file.revert" => app.session.active().is_some_and(|d| d.path.is_some() && d.is_dirty()),
         id if id.starts_with("file.openRecent") => {
             id["file.openRecent".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.ui.recent_files.len())
         }

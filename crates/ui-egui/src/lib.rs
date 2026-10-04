@@ -51,6 +51,8 @@ mod tests_place;
 #[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
+mod tests_save;
+#[cfg(test)]
 mod tests_svg;
 #[cfg(test)]
 mod tests_svgsave;

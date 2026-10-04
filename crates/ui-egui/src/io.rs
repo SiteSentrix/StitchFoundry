@@ -375,6 +375,16 @@ fn file_url(path: &str) -> String {
     url
 }
 
+/// File → Revert: ask first; OK runs `file.revert` with `confirmed`, which goes to the engine.
+pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let c = vectorcraft_engine::find_command("file.revert").ok_or("no revert command")?;
+    (c.enabled)(&app.session)?;
+    let name = app.session.active().map(|d| d.title()).unwrap_or_default();
+    let message = format!("Revert to the saved version of “{name}”?");
+    dialogs::confirm::ask(app, &message, "Changes made since it was last saved will be lost.", "file.revert", json!({ "confirmed": true }));
+    Ok(json!({ "pending": dialogs::confirm::KIND }))
+}
+
 /// Place a file's bytes (no path, so embedded) centred in the view: `file.place`.
 pub fn place_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result<(), String> {
     crate::place::run(app, &serde_json::json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).map(|_| ())
