@@ -75,6 +75,9 @@ Swatches go through `run_command`: `swatch.list` lists every swatch with its col
 `swatch.edit {name, newName?, color?, mode?, global?, spot?}` edits one (fills, strokes and text linked to a
 global or spot swatch follow its colour and name, as one undo step); `swatch.delete {names, unlink?}` deletes
 swatches and colour groups in one undo step (art using a deleted global swatch keeps its colour, unlinked).
+`swatch.new {color?, mode?, spot?, global?, group?}` saves a colour (into a colour group with `group`), gradient
+or pattern; `swatch.newGroup {fromArtwork: true, toGlobal?, includeTints?}` makes a colour group of the selected
+art's colours (by default as global swatches the art links to).
 
 ## Resources
 

@@ -15,7 +15,9 @@ mod document_setup;
 mod effect;
 mod export_for_screens;
 mod form;
+pub mod new_color_group;
 mod new_document;
+pub mod new_swatch;
 mod path_ops;
 mod recolor;
 mod save_changes;
@@ -131,6 +133,8 @@ registry! {
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
+    NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
+    NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

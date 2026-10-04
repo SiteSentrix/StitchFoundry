@@ -33,6 +33,24 @@ impl Document {
     pub fn swatch_name_taken(&self, name: &str) -> bool {
         self.swatch(name).is_some() || self.swatch_groups.iter().any(|g| g.name == name)
     }
+    /// `base`, or the first of "base 2", "base 3"… no swatch or colour group uses.
+    pub fn free_swatch_name(&self, base: &str) -> String {
+        if !self.swatch_name_taken(base) {
+            return base.to_string();
+        }
+        (2..).map(|i| format!("{base} {i}")).find(|n| !self.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
+    }
+    /// The name a new swatch of `paint` gets by default, unused in the document: a colour's values
+    /// ([`color_name`], made free like [`Document::free_swatch_name`]), or "New Gradient Swatch 1",
+    /// "New Pattern Swatch 1"…
+    pub fn new_swatch_name(&self, paint: &Paint) -> String {
+        let base = match paint {
+            Paint::Solid { color, .. } => return self.free_swatch_name(&color_name(*color)),
+            Paint::Gradient(_) => "New Gradient Swatch",
+            _ => "New Pattern Swatch",
+        };
+        (1..).map(|i| format!("{base} {i}")).find(|n| !self.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
+    }
     /// Remove swatch `name` from wherever it lives.
     pub fn remove_swatch(&mut self, name: &str) -> Option<Swatch> {
         if let Some(i) = self.swatches.iter().position(|s| s.name == name) {
@@ -80,6 +98,18 @@ impl Document {
             }
         }
         n
+    }
+}
+
+/// The default name of a solid swatch: its values in its own colour model ("C=10 M=20 Y=30 K=0",
+/// "R=255 G=128 B=0", "Gray K=40").
+pub fn color_name(c: Color) -> String {
+    let pct = |v: f32| (v * 100.0).round();
+    let byte = |v: f32| (v * 255.0).round();
+    match c {
+        Color::Cmyk { c, m, y, k } => format!("C={} M={} Y={} K={}", pct(c), pct(m), pct(y), pct(k)),
+        Color::Rgb { r, g, b } => format!("R={} G={} B={}", byte(r), byte(g), byte(b)),
+        Color::Gray { k } => format!("Gray K={}", pct(k)),
     }
 }
 

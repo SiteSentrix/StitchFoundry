@@ -1,5 +1,6 @@
 //! Swatches: colour groups as first-class swatch homes (colour mode, spot plates, PDF, Document
-//! Info), naming and kinds, Swatch Options edits reaching linked art, deleting and new groups.
+//! Info), naming and kinds, Swatch Options edits reaching linked art, deleting, new swatches in
+//! groups and colour groups made from artwork.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -24,12 +25,9 @@ fn doc(s: &Session) -> &vectorcraft_doc::Document {
     &s.doc().unwrap().doc
 }
 
-/// Put a solid swatch into colour group `group` directly in the model (no command creates one in a
-/// group before M3.13).
+/// Add a global solid swatch to colour group `group`.
 fn grouped_swatch(s: &mut Session, group: &str, name: &str, color: Color) {
-    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
-    let g = d.swatch_groups.iter_mut().find(|g| g.name == group).unwrap();
-    g.swatches.push(vectorcraft_color::Swatch { name: name.into(), paint: Paint::solid(color), global: true, spot: false });
+    assert_eq!(run(s, "swatch.new", json!({"name": name, "color": color, "global": true, "group": group}))["name"], name);
 }
 
 #[test]
@@ -253,4 +251,76 @@ fn deleting_several_swatches_and_groups() {
     assert!(s.execute("swatch.delete", &json!({})).is_err());
     run(&mut s, "edit.undo", json!({}));
     assert!(doc(&s).swatch("Bright Red").is_some() && doc(&s).swatch("Red").is_some());
+}
+
+#[test]
+fn new_swatches_go_into_groups_convert_modes_and_can_be_spot() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#ff0000", "spot": true, "mode": "cmyk", "group": "Brights"}));
+    let d = doc(&s);
+    let ink = d.swatch("Ink").unwrap();
+    assert!(ink.spot && ink.global, "spot colours are global");
+    assert!(matches!(ink.paint.color(), Some(Color::Cmyk { .. })), "mode converts the colour");
+    assert_eq!(d.swatch_group_of("Ink").map(|g| d.swatch_groups[g].name.as_str()), Some("Brights"));
+    assert!(s.execute("swatch.new", &json!({"color": "#00ff00", "group": "Nope"})).is_err());
+    assert!(s.execute("swatch.new", &json!({"swatch": "Sunset", "group": "Brights"})).is_err(), "groups hold solid colours only");
+    assert!(s.execute("swatch.new", &json!({"color": "#00ff00", "mode": "lab"})).is_err());
+}
+
+/// Two rectangles: `a` filled red and stroked green, `b` filled red and stroked with global swatch
+/// "Brand"; both selected.
+fn art(s: &mut Session) -> (NodeId, NodeId) {
+    run(s, "swatch.new", json!({"name": "Brand", "color": "#2a6fb0", "global": true}));
+    let (a, b) = (rect(s), rect(s));
+    run(s, "paint.setFill", json!({"ids": [a.0, b.0], "color": "#ff0000"}));
+    run(s, "paint.setStroke", json!({"ids": [a.0], "color": "#00ff00"}));
+    run(s, "paint.setStroke", json!({"ids": [b.0], "swatch": "Brand"}));
+    run(s, "select.set", json!({"ids": [a.0, b.0]}));
+    (a, b)
+}
+
+#[test]
+fn a_group_from_artwork_holds_its_unique_colours_and_links_the_art() {
+    let mut s = session();
+    let (a, b) = art(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "Art", "fromArtwork": true}));
+    assert_eq!(r["swatches"], json!(["Brand", "R=255 G=0 B=0", "R=0 G=255 B=0"]), "the linked swatch moves in, the rest are new");
+    assert_eq!(r["linked"], 3, "both red fills and the green stroke");
+    let d = doc(&s);
+    assert!(d.swatch("R=255 G=0 B=0").unwrap().global);
+    assert_eq!(d.swatch_group_of("Brand").map(|g| d.swatch_groups[g].name.as_str()), Some("Art"));
+    assert_eq!(fill_of(&s, a), linked("#ff0000", "R=255 G=0 B=0"));
+    assert_eq!(fill_of(&s, b), linked("#ff0000", "R=255 G=0 B=0"));
+    assert_eq!(doc(&s).node(b).unwrap().appearance.stroke_paint(), linked("#2a6fb0", "Brand"));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    // Without Convert to Global the swatches are process colours and the art stays unlinked.
+    run(&mut s, "edit.undo", json!({}));
+    let r = run(&mut s, "swatch.newGroup", json!({"fromArtwork": true, "toGlobal": false}));
+    assert_eq!((r["name"].as_str(), r["linked"].as_u64()), (Some("Color Group"), Some(0)));
+    assert!(!doc(&s).swatch("R=0 G=255 B=0").unwrap().global);
+    assert_eq!(fill_of(&s, a), Paint::solid(Color::from_hex("#ff0000").unwrap()));
+    run(&mut s, "select.set", json!({"ids": []}));
+    assert!(s.execute("swatch.newGroup", &json!({"fromArtwork": true})).is_err(), "needs selected art");
+}
+
+#[test]
+fn tints_of_global_swatches_get_swatches_only_when_asked() {
+    let mut s = session();
+    let (_, b) = art(&mut s);
+    // A 50% tint of Brand on b's stroke.
+    let tint = Color::from_hex("#95b7d8").unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).map_solid_paints_in(&[b], &mut |c, l| {
+        let hit = l.as_deref() == Some("Brand");
+        if hit {
+            *c = tint;
+        }
+        hit
+    });
+    let without = run(&mut s, "swatch.newGroup", json!({"fromArtwork": true}));
+    assert_eq!(without["swatches"], json!(["Brand", "R=255 G=0 B=0", "R=0 G=255 B=0"]), "a tint brings its swatch");
+    run(&mut s, "edit.undo", json!({}));
+    let with = run(&mut s, "swatch.newGroup", json!({"fromArtwork": true, "includeTints": true}));
+    assert_eq!(with["swatches"], json!(["Brand", "R=255 G=0 B=0", "R=0 G=255 B=0", "R=149 G=183 B=216"]));
+    assert_eq!(doc(&s).node(b).unwrap().appearance.stroke_paint(), Paint::Solid { color: tint, swatch: Some("Brand".into()) }, "tints stay linked");
 }

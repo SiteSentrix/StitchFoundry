@@ -451,11 +451,12 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
         }
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
         if widgets::icon_button(ui, "dc-folder", "New Color Group", false, 24.0).clicked() {
-            app.run("swatch.newGroup", json!({"swatches": deletable(sel)})).ok();
+            app.run("ui.newColorGroup", json!({"swatches": deletable(sel)})).ok();
         }
-        // Ctrl/Cmd-click makes a spot colour (Alt-click skips the dialog).
+        // Alt-click skips the dialog; Ctrl/Cmd-click makes a spot colour.
         if widgets::icon_button(ui, "dc-new-item", "New Swatch", false, 24.0).clicked() {
-            new_swatch(app, ui.input(|i| i.modifiers.command));
+            let m = ui.input(|i| i.modifiers);
+            new_swatch(app, sel, m.command, m.alt);
         }
         // Alt-click deletes without asking.
         let del = deletable(sel);
@@ -465,10 +466,31 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
     });
 }
 
-/// Save the active paint as a new swatch (a spot colour with `spot`).
-fn new_swatch(app: &mut VectorcraftApp, spot: bool) {
-    let mut params = super::paint_params(&active_paint(app));
+/// The colour group the selection points at: the last selected group, or the group of the last
+/// selected swatch.
+fn target_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
+    let d = &app.session.active()?.doc;
+    let last = sel.last()?;
+    if d.swatch_groups.iter().any(|g| g.name == *last) {
+        return Some(last.clone());
+    }
+    d.swatch_group_of(last).map(|g| d.swatch_groups[g].name.clone())
+}
+
+/// New Swatch from the active paint (a colour goes into the selected colour group): opens the
+/// dialog, or saves at once with `now` (Alt-click). `spot` (Cmd/Ctrl-click) makes a spot colour.
+fn new_swatch(app: &mut VectorcraftApp, sel: &[String], spot: bool, now: bool) {
+    let paint = active_paint(app);
+    let group = paint.color().and_then(|_| target_group(app, sel));
+    if !now {
+        app.run("ui.newSwatch", json!({"spot": spot, "group": group})).ok();
+        return;
+    }
+    let mut params = super::paint_params(&paint);
     params["spot"] = json!(spot);
+    if let Some(g) = group {
+        params["group"] = json!(g);
+    }
     app.run("swatch.new", params).ok();
 }
 
@@ -478,10 +500,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let del = deletable(&selected);
     let opts = editable(app, &selected);
     if menu_item(ui, "New Swatch…", true, false) {
-        new_swatch(app, false);
+        new_swatch(app, &selected, false, false);
     }
     if menu_item(ui, "New Color Group…", true, false) {
-        app.run("swatch.newGroup", json!({"swatches": del})).ok();
+        app.run("ui.newColorGroup", json!({"swatches": del})).ok();
     }
     if menu_item(ui, "Duplicate Swatch", opts.is_some(), false)
         && let Some(n) = &opts
@@ -676,6 +698,64 @@ mod tests {
         delete(&mut app, vec!["Orange".into()], true);
         assert!(app.ui.dialog.is_none() && app.session.doc().unwrap().doc.swatch("Orange").is_none());
         assert_eq!(deletable(&["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+    }
+
+    #[test]
+    fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_group() {
+        let mut app = app();
+        let ctx = context();
+        app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
+        new_swatch(&mut app, &["Bright Red".into()], true, false);
+        let d = app.ui.dialog.as_ref().expect("New Swatch opens its dialog");
+        assert_eq!(
+            (d.kind.as_str(), d.str("name").as_str(), d.str("group").as_str()),
+            (crate::dialogs::new_swatch::KIND, "R=255 G=128 B=0", "Brights")
+        );
+        assert!(d.bool("spot") && d.bool("global"), "Cmd/Ctrl-click makes a spot colour");
+        dialog_frame(&mut app, &ctx);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let w = doc.swatch("R=255 G=128 B=0").expect("created");
+        assert!(w.spot && doc.swatch_group_of(&w.name).is_some_and(|g| doc.swatch_groups[g].name == "Brights"));
+        // Alt-click saves at once; a gradient takes only a name and stays out of colour groups.
+        app.run("paint.setFill", json!({"swatch": "Sunset"})).unwrap();
+        new_swatch(&mut app, &["Brights".into()], false, true);
+        assert!(app.ui.dialog.is_none() && app.session.doc().unwrap().doc.swatch("New Gradient Swatch 1").is_some());
+        new_swatch(&mut app, &[], false, false);
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("name").as_str(), d.fields.contains_key("__paint")), ("New Gradient Swatch 2", true));
+        dialog_frame(&mut app, &ctx);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.session.doc().unwrap().doc.swatch("New Gradient Swatch 2").is_some_and(|w| matches!(w.paint, Paint::Gradient(_))));
+    }
+
+    #[test]
+    fn new_color_group_dialog_makes_a_group_from_swatches_or_artwork() {
+        let mut app = app();
+        let ctx = context();
+        app.run("ui.newColorGroup", json!({"swatches": ["Red", "Sunset"]})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.kind.as_str(), d.str("name").as_str(), d.bool("fromArtwork")), (crate::dialogs::new_color_group::KIND, "Color Group", false));
+        dialog_frame(&mut app, &ctx);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let g = doc.swatch_groups.iter().find(|g| g.name == "Color Group").expect("group made");
+        assert_eq!(g.swatches.iter().map(|w| w.name.as_str()).collect::<Vec<_>>(), ["Red"], "gradients stay out");
+        // With art selected (and no swatches) it starts from the artwork: its colours become global.
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": "#123456"})).unwrap();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("ui.newColorGroup", json!({})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("name").as_str(), d.bool("fromArtwork"), d.bool("toGlobal")), ("Color Group 2", true, true));
+        dialog_frame(&mut app, &ctx);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let g = doc.swatch_groups.iter().find(|g| g.name == "Color Group 2").expect("group made");
+        assert_eq!(g.swatches.iter().map(|w| (w.name.as_str(), w.global)).collect::<Vec<_>>(), [("R=18 G=52 B=86", true)]);
+        let fill = doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
+        assert_eq!(fill, Paint::Solid { color: Color::from_hex("#123456").unwrap(), swatch: Some("R=18 G=52 B=86".into()) });
     }
 
     #[test]

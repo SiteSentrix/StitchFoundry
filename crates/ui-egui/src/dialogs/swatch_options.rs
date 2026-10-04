@@ -28,7 +28,7 @@ const MODES: [(Mode, &str); 5] = [(Mode::Grayscale, "gray"), (Mode::Rgb, "rgb"),
 
 const TYPES: [&str; 2] = ["Process Color", "Spot Color"];
 
-fn mode_id(m: Mode) -> &'static str {
+pub(super) fn mode_id(m: Mode) -> &'static str {
     MODES.iter().find(|x| x.0 == m).map_or("rgb", |x| x.1)
 }
 
@@ -38,7 +38,7 @@ fn mode_of(d: &Dialog) -> Mode {
 }
 
 /// The dialog's colour: a hex string or a serialized colour.
-fn color_of(d: &Dialog) -> Color {
+pub(super) fn color_of(d: &Dialog) -> Color {
     match d.fields.get("color") {
         Some(Value::String(s)) => Color::from_hex(s),
         Some(v) => serde_json::from_value(v.clone()).ok(),
@@ -116,16 +116,30 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     run_and_close(app, "swatch.edit", edit_params(d))
 }
 
+/// The fields' grid of the swatch dialogs.
+pub(super) fn grid<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    egui::Grid::new("swatch-options").num_columns(2).spacing([10.0, 8.0]).show(ui, add).inner
+}
+
+/// A dimmed field label in the swatch dialogs' grid.
+pub(super) fn label(ui: &mut egui::Ui, s: &str) {
+    ui.label(egui::RichText::new(s).color(Tokens::get(ui.ctx()).text_dim));
+}
+
+/// The Swatch Name row of the grid. Returns true when it changed.
+pub(super) fn name_row(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    label(ui, "Swatch Name:");
+    let changed = form::text(ui, d, "name", 190.0);
+    ui.end_row();
+    changed
+}
+
 /// The shared fields of Swatch Options and New Swatch: name, colour type, Global, mode, sliders and
 /// hex. Returns true when anything changed.
 pub(super) fn editor(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let label = |ui: &mut egui::Ui, s: &str| ui.label(egui::RichText::new(s).color(t.text_dim));
     let mut changed = false;
-    egui::Grid::new("swatch-options").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        label(ui, "Swatch Name:");
-        changed |= form::text(ui, d, "name", 190.0);
-        ui.end_row();
+    grid(ui, |ui| {
+        changed |= name_row(ui, d);
         label(ui, "Color Type:");
         let spot = d.bool("spot");
         if let Some(i) = widgets::dropdown(ui, "swatch-type", TYPES[usize::from(spot)], &TYPES, 200.0) {
