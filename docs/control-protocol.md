@@ -161,3 +161,7 @@ have the fields `corners` (Scale Corners) and `strokes` (Scale Strokes & Effects
 `scaleCorners` and `scaleStrokes`, and `ui.dialog.confirm` keeps them as the preferences (`prefs.set`) before running
 `object.scale` / `object.transformEach` with them. The Transform panel's checkboxes and flyout item and the Properties
 panel's checkbox set the same preferences through `prefs.set`.
+
+Use Preview Bounds: the Align panel flyout's Use Preview Bounds item shows and toggles the `usePreviewBounds`
+preference (`prefs.set`); while it is on, the bounding box and the Transform panel, Properties and Control bar
+fields measure visual bounds.

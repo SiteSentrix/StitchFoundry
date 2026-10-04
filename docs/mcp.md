@@ -626,3 +626,16 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 {"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"strokes":true}}}
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
 ```
+
+## Use Preview Bounds
+
+With the preference `usePreviewBounds` on (`prefs.set {key: "usePreviewBounds", value: true}`; also the Align panel
+flyout's Use Preview Bounds), the Transform panel's and Control bar's X, Y, W and H, the bounding box, and
+`object.align`, `object.distribute` and `object.distributeSpacing` measure visual bounds, which take in the whole
+stroke (see Stroke bounds and clicks); off, they measure the paths. The three Align commands also take
+`bounds: "preview"|"geometric"` for one call. `object.setBounds` then sets the visual box: with Scale Strokes &
+Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets a 210 pt path.
+
+```json
+{"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","bounds":"preview"}}}
+```

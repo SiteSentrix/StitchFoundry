@@ -208,7 +208,7 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let units = st.doc.units;
-    let Some(b) = st.doc.bounds_of(&st.selection.objects, false) else {
+    let Some(b) = app.session.transform_bounds(&st.selection.objects) else {
         dim_label(ui, "No Selection");
         return;
     };

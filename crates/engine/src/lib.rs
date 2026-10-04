@@ -904,6 +904,8 @@ mod tests_pattern;
 #[cfg(test)]
 mod tests_prefs;
 #[cfg(test)]
+mod tests_previewbounds;
+#[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]
 mod tests_registration;

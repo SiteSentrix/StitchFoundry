@@ -28,7 +28,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let units = st.doc.units;
-    let bounds = st.doc.bounds_of(&st.selection.objects, false);
+    let bounds = app.session.transform_bounds(&st.selection.objects);
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
     let link: bool = pstate(ui.ctx(), "xf-link");
     let has = bounds.is_some();
@@ -171,6 +171,38 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One headless frame of the panel (or the Align panel's menu): the texts drawn.
+    fn texts(app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<String> {
+        fn walk(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| draw(app, ui));
+        out.textures_delta.clear();
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+        v
+    }
+
+    #[test]
+    fn use_preview_bounds_shows_the_visual_size_and_checks_the_align_flyout() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+        app.run("stroke.set", json!({"weight": 10})).unwrap();
+        assert!(texts(&mut app, show).iter().any(|t| t == "100 pt"));
+        assert!(texts(&mut app, crate::panels::align::menu).iter().any(|t| t == "   Use Preview Bounds"));
+        set_pref(&mut app, "usePreviewBounds", true);
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "110 pt") && shown.iter().any(|t| t == "60 pt"), "{shown:?}");
+        assert!(texts(&mut app, crate::panels::align::menu).iter().any(|t| t == "✓ Use Preview Bounds"));
+    }
 
     #[test]
     fn constrain_proportions() {
