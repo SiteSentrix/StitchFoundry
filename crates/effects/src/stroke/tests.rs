@@ -1,6 +1,6 @@
 use kurbo::{BezPath, PathEl, Point, Rect, Shape, Vec2};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Arrowhead, Dash, LineCap, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, StrokeLayer, WidthProfile};
 
 use super::*;
 
@@ -137,33 +137,119 @@ fn aligned_width_doubles_only_closed_inside_and_outside_strokes() {
 
 // ---------------------------------------------------------------- arrowheads
 
-#[test]
-fn no_heads_borrows_the_path() {
-    let l = line(0.0, 50.0);
-    let p = stroke_pieces(&l, &stroke(2.0, |_| {}));
-    assert!(matches!(p.line, Cow::Borrowed(_)) && p.heads.is_empty());
+fn arrows(kind: Arrowhead, align: ArrowAlign, cap: LineCap) -> StrokeLayer {
+    stroke(2.0, |s| {
+        s.end_arrow = Some(kind);
+        s.arrow_align = align;
+        s.cap = cap;
+    })
 }
 
 #[test]
-fn heads_sit_on_the_end_points_and_point_out_of_the_path() {
+fn no_heads_borrows_the_path_and_closed_paths_get_none() {
+    let l = line(0.0, 50.0);
+    assert!(matches!(stroke_pieces(&l, &stroke(2.0, |_| {})).line, Cow::Borrowed(_)));
+    let st = stroke(2.0, |s| {
+        s.start_arrow = Some(Arrowhead::Triangle);
+        s.end_arrow = Some(Arrowhead::Triangle);
+        s.arrow_align = ArrowAlign::Tip;
+    });
+    let sq = square(50.0);
+    let p = stroke_pieces(&sq, &st);
+    assert!(p.heads.is_empty());
+    assert_eq!(p.line.as_ref(), &sq);
+}
+
+#[test]
+fn tip_mode_shortens_the_stroke_by_the_head_and_puts_the_tip_on_the_end_point() {
     for kind in Arrowhead::ALL {
-        let st = stroke(2.0, |s| {
-            s.start_arrow = Some(kind);
-            s.end_arrow = Some(kind);
-        });
+        let st = arrows(kind, ArrowAlign::Tip, LineCap::Butt);
         let l = line(0.0, 100.0);
         let p = stroke_pieces(&l, &st);
-        let [a, b] = &p.heads[..] else { panic!("two heads") };
-        assert_eq!((a.tip, b.tip), (Point::new(0.0, 0.0), Point::new(100.0, 0.0)), "{kind:?}");
-        assert!(near(a.dir.x, -1.0, 1e-9) && near(b.dir.x, 1.0, 1e-9), "{kind:?}");
-        let (ba, bb) = (a.outline.bounding_box(), b.outline.bounding_box());
-        assert!(ba.x0 >= -0.01 && bb.x1 <= 100.01, "{kind:?}: nothing past the tips");
-        assert!(a.outline.area().abs() > 0.5, "{kind:?}");
+        let [h] = &p.heads[..] else { panic!("one head") };
+        assert_eq!(h.tip, Point::new(100.0, 0.0), "{kind:?}");
+        assert!(near(h.dir.x, 1.0, 1e-9), "{kind:?}");
+        assert!(h.inset > 0.0 && h.inset <= 8.0, "{kind:?} inset {}", h.inset);
+        assert!(near(length(&p.line), 100.0 - h.inset, 1e-6), "{kind:?}");
+        // Nothing reaches past the tip.
+        assert!(h.outline.bounding_box().x1 <= 100.0 + 0.01, "{kind:?}");
+        assert!(h.outline.area().abs() > 0.5, "{kind:?}");
     }
-    // The start head of a curve points back along its first tangent.
+    // Both ends, on a curve: the start head points back along the path.
     let mut c = BezPath::new();
     c.move_to((0.0, 0.0));
     c.curve_to((30.0, -40.0), (70.0, -40.0), (100.0, 0.0));
-    let p = stroke_pieces(&c, &stroke(2.0, |s| s.start_arrow = Some(Arrowhead::Triangle)));
+    let st = stroke(2.0, |s| {
+        s.start_arrow = Some(Arrowhead::Triangle);
+        s.end_arrow = Some(Arrowhead::Arrow);
+        s.arrow_align = ArrowAlign::Tip;
+    });
+    let p = stroke_pieces(&c, &st);
+    assert_eq!(p.heads.len(), 2);
+    assert_eq!(p.heads[0].tip, Point::new(0.0, 0.0));
     assert!(p.heads[0].dir.x < 0.0 && p.heads[0].dir.y > 0.0, "{:?}", p.heads[0].dir);
+    let total = length(&c);
+    assert!(near(length(&p.line), total - p.heads[0].inset - p.heads[1].inset, 1e-5));
+    // A path shorter than its heads leaves no line.
+    let short = line(0.0, 3.0);
+    let p = stroke_pieces(&short, &arrows(Arrowhead::Triangle, ArrowAlign::Tip, LineCap::Butt));
+    assert!(p.line.elements().is_empty());
+    assert_eq!(p.heads.len(), 1);
+}
+
+#[test]
+fn extend_mode_keeps_the_path_and_overhangs_by_the_inset() {
+    let l = line(0.0, 100.0);
+    let st = arrows(Arrowhead::Triangle, ArrowAlign::Extend, LineCap::Butt);
+    let p = stroke_pieces(&l, &st);
+    assert!(matches!(p.line, Cow::Borrowed(_)));
+    let h = &p.heads[0];
+    assert!(near(h.tip.x, 100.0 + h.inset, 1e-9));
+    // The same head as in tip mode, moved by the overhang.
+    let tip = stroke_pieces(&l, &arrows(Arrowhead::Triangle, ArrowAlign::Tip, LineCap::Butt));
+    let mut moved = tip.heads[0].outline.clone();
+    moved.apply_affine(kurbo::Affine::translate((h.inset, 0.0)));
+    let pts = |b: &BezPath| b.elements().iter().filter_map(|e| e.end_point()).collect::<Vec<_>>();
+    let (a, b) = (pts(&moved), pts(&h.outline));
+    assert_eq!(a.len(), b.len());
+    assert!(a.iter().zip(&b).all(|(p, q)| p.distance(*q) < 1e-9));
+}
+
+#[test]
+fn hollow_heads_are_rings_and_the_stroke_stays_out_of_the_hole() {
+    for (kind, cap) in [(Arrowhead::CircleOpen, LineCap::Round), (Arrowhead::SquareOpen, LineCap::Square), (Arrowhead::TriangleOpen, LineCap::Butt)] {
+        let st = arrows(kind, ArrowAlign::Tip, cap);
+        let l = line(0.0, 100.0);
+        let p = stroke_pieces(&l, &st);
+        let h = &p.heads[0];
+        let line_o = line_outline(&p.line, &st, st.width, 1e-3);
+        // A point inside the hole is neither head nor line.
+        let hole = Point::new(100.0 - 8.0 * 0.45, 0.0);
+        assert_eq!(h.outline.winding(hole), 0, "{kind:?} hole");
+        assert_eq!(line_o.winding(hole), 0, "{kind:?} line in the hole");
+        // The line reaches the back wall, so they overlap (no seam).
+        let back_wall = Point::new(100.0 - 8.0 + 0.25, 0.0);
+        assert_ne!(h.outline.winding(back_wall), 0, "{kind:?} wall");
+        assert_ne!(line_o.winding(back_wall - Vec2::new(0.2, 0.0)), 0, "{kind:?} line reaches the wall");
+    }
+    // The open arrow is a chevron: open between its arms.
+    let l = line(0.0, 100.0);
+    let p = stroke_pieces(&l, &arrows(Arrowhead::ArrowOpen, ArrowAlign::Tip, LineCap::Butt));
+    let h = &p.heads[0];
+    assert_eq!(h.outline.winding(Point::new(93.0, 0.0)), 0);
+    assert_ne!(h.outline.winding(Point::new(99.0, 0.0)), 0);
+}
+
+#[test]
+fn round_caps_never_poke_past_the_tip() {
+    for kind in Arrowhead::ALL {
+        for scale in [10.0, 100.0, 300.0] {
+            let mut st = arrows(kind, ArrowAlign::Tip, LineCap::Round);
+            st.arrow_scale = (scale, scale);
+            let l = line(0.0, 100.0);
+            let p = stroke_pieces(&l, &st);
+            let o = line_outline(&p.line, &st, st.width, 1e-3);
+            assert!(o.bounding_box().x1 <= 100.0 + 1e-3, "{kind:?} at {scale}%: {}", o.bounding_box().x1);
+        }
+    }
 }

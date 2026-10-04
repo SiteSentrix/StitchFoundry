@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Arrowhead, Dash, LineCap, LineJoin, StrokeAlign, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign, StrokeLayer, WidthProfile};
 
 use super::*;
 
@@ -13,7 +13,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares), dashOffset?, alignDashes?, startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", ids?}",
+            "{weight?, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares), dashOffset?, alignDashes?, startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", ids?}",
             has_doc,
             stroke_set
         ),
@@ -48,6 +48,12 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     let (sa, ea) = (arrow("startArrow")?, arrow("endArrow")?);
+    let arrow_align = match str_param(p, "arrowAlign") {
+        None => None,
+        Some("extend") => Some(ArrowAlign::Extend),
+        Some("tip") => Some(ArrowAlign::Tip),
+        Some(o) => return Err(bad("stroke.set", format!("arrowAlign must be extend|tip, got {o}"))),
+    };
     let profile = match str_param(p, "profile") {
         None => None,
         Some("uniform") => Some(None),
@@ -101,6 +107,9 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(a) = ea {
                 st.end_arrow = a;
+            }
+            if let Some(a) = arrow_align {
+                st.arrow_align = a;
             }
             if let Some(pr) = &profile {
                 st.profile = pr.clone();

@@ -523,6 +523,18 @@ impl Exporter<'_> {
             s.push_blend_mode(blend(st.blend));
             pushes += 1;
         }
+        // The line ends under its arrowheads; they overlap, so both take the opacity once, as a group.
+        let pieces = vectorcraft_effects::stroke::stroke_pieces(bp, st);
+        let grouped = !pieces.heads.is_empty() && st.opacity < 1.0;
+        if grouped {
+            s.push_opacity(norm(st.opacity));
+            pushes += 1;
+        }
+        let opacity = if grouped { NormalizedF32::ONE } else { norm(st.opacity) };
+        let trimmed = match &pieces.line {
+            std::borrow::Cow::Owned(line) => Some(to_path(line)),
+            std::borrow::Cow::Borrowed(_) => None,
+        };
         let width = match st.align {
             StrokeAlign::Center => st.width,
             _ if closed => st.width * 2.0,
@@ -567,20 +579,22 @@ impl Exporter<'_> {
                 LineJoin::Round => krilla::paint::LineJoin::Round,
                 LineJoin::Bevel => krilla::paint::LineJoin::Bevel,
             },
-            opacity: norm(st.opacity),
+            opacity,
             dash,
         }));
-        s.draw_path(path);
+        // A line fully covered by its heads (Tip alignment) has nothing left to stroke.
+        if let Some(line) = trimmed.as_ref().map_or(Some(path), Option::as_ref) {
+            s.draw_path(line);
+        }
         s.set_stroke(None);
         // Pop the alignment clip before drawing arrowheads.
         if matches!(st.align, StrokeAlign::Inside | StrokeAlign::Outside) && closed && pushes > 0 {
             s.pop();
             pushes -= 1;
         }
-        let heads = vectorcraft_effects::stroke::stroke_pieces(bp, st).heads;
-        if !heads.is_empty() {
-            s.set_fill(Some(Fill { paint, opacity: norm(st.opacity), rule: krilla::paint::FillRule::NonZero }));
-            for head in &heads {
+        if !pieces.heads.is_empty() {
+            s.set_fill(Some(Fill { paint, opacity, rule: krilla::paint::FillRule::NonZero }));
+            for head in &pieces.heads {
                 if let Some(p) = to_path(&head.outline) {
                     s.draw_path(&p);
                 }

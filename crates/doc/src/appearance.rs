@@ -68,6 +68,17 @@ impl Arrowhead {
     ];
 }
 
+/// Where an arrowhead sits relative to the end of its path. In both modes the stroke stops under
+/// the head, so the line never shows through a hollow head or past its tip.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ArrowAlign {
+    /// The tip extends past the end point (the path keeps its length).
+    #[default]
+    Extend,
+    /// The tip sits on the end point (the stroke is shortened by the head).
+    Tip,
+}
+
 /// Variable-width profile: (position 0..1 along the path, left width factor, right width factor).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct WidthProfile {
@@ -207,6 +218,9 @@ pub struct StrokeLayer {
     pub visible: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    /// Arrowhead placement at both ends.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub arrow_align: ArrowAlign,
 }
 
 fn ten() -> f64 {
@@ -241,6 +255,7 @@ impl StrokeLayer {
             blend: BlendMode::Normal,
             visible: true,
             effects: vec![],
+            arrow_align: ArrowAlign::Extend,
         }
     }
 }
@@ -388,6 +403,19 @@ mod tests {
         assert_eq!(WidthProfile::id_of(Some(&WidthProfile { points: vec![(0.0, 0.3, 0.3)] })), "custom");
         assert!(WidthProfile::preset("nope").is_none());
         assert_eq!(WidthProfile::lens().points, vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]);
+    }
+
+    #[test]
+    fn arrow_align_defaults_to_extend_and_round_trips() {
+        let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+        assert_eq!(st.arrow_align, ArrowAlign::Extend);
+        // The default is not written, so older readers see the same JSON as before.
+        assert!(!serde_json::to_string(&st).unwrap().contains("arrow_align"));
+        let old: StrokeLayer = serde_json::from_str(r#"{"paint":{"type":"none"},"width":2.0}"#).unwrap();
+        assert_eq!(old.arrow_align, ArrowAlign::Extend);
+        st.arrow_align = ArrowAlign::Tip;
+        let back: StrokeLayer = serde_json::from_str(&serde_json::to_string(&st).unwrap()).unwrap();
+        assert_eq!(back, st);
     }
 
     #[test]

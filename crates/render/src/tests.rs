@@ -189,8 +189,9 @@ fn arrowheads_render() {
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
     let r = render(&d);
-    // Arrowhead is wider than the 2 pt line.
-    assert!(r.pixel(73, 47)[0] < 128);
+    // The arrowhead (past the end point by default: tip at 84) is wider than the 2 pt line.
+    assert!(r.pixel(78, 48)[0] < 128);
+    assert!(r.pixel(85, 50)[0] > 200, "nothing past the tip");
 }
 
 use vectorcraft_doc::Arrowhead;

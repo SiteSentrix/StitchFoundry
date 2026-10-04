@@ -1,9 +1,10 @@
 //! Pixel tests for the shared stroke geometry (`vectorcraft_effects::stroke`) on the canvas:
-//! dotted lines (zero-length dashes).
+//! dotted lines (zero-length dashes) and arrowheads (hollow kinds, alignment, compositing).
 
-use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, LineCap, StrokeLayer};
-use vectorcraft_geom::{Point, Rect, shapes};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_doc::{Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Document, LineCap, StrokeLayer};
+use vectorcraft_geom::{Point, Rect, Shape, shapes};
+use vectorcraft_render::{Renderer, effects};
 use vectorcraft_testkit::fixtures::DocBuilder;
 use vectorcraft_testkit::raster::{Image, assert_similar, render_region};
 use vectorcraft_testkit::svg;
@@ -74,4 +75,98 @@ fn dotted_lines_survive_svg_export_and_render_the_same() {
         let back = svg::import(&text).unwrap();
         assert_similar(&render(&d), &render(&back), 0.05, 0.001);
     }
+}
+
+fn arrow_doc(kind: Arrowhead, align: ArrowAlign, opacity: f32, f: impl FnOnce(&mut StrokeLayer)) -> Document {
+    line_doc(
+        20.0,
+        80.0,
+        stroked(4.0, |s| {
+            s.end_arrow = Some(kind);
+            s.arrow_align = align;
+            f(s);
+        }),
+        opacity,
+    )
+}
+
+/// The arrowhead the shared geometry computes for the line of `d`.
+fn head_of(d: &Document) -> effects::stroke::Arrow {
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let bp = n.path_data().unwrap().to_bezpath();
+    effects::stroke::stroke_pieces(&bp, n.appearance.stroke().unwrap()).heads.remove(0)
+}
+
+#[test]
+fn a_hollow_circle_head_is_empty_inside() {
+    let d = arrow_doc(Arrowhead::CircleOpen, ArrowAlign::Extend, 1.0, |_| {});
+    let h = head_of(&d);
+    let centre = h.tip - h.dir * 8.0;
+    let img = render(&d);
+    assert!(!dark(&img, centre.x, centre.y), "the centre of an open circle is empty");
+    assert!(dark(&img, h.tip.x - 1.0, 50.0), "its wall is painted");
+    // The filled circle is solid.
+    let solid = render(&arrow_doc(Arrowhead::Circle, ArrowAlign::Extend, 1.0, |_| {}));
+    assert!(dark(&solid, centre.x, centre.y));
+}
+
+#[test]
+fn heads_are_drawn_where_the_shared_geometry_puts_them_and_never_past_the_tip() {
+    for align in [ArrowAlign::Extend, ArrowAlign::Tip] {
+        for kind in Arrowhead::ALL {
+            let d = arrow_doc(kind, align, 1.0, |s| s.cap = LineCap::Round);
+            let h = head_of(&d);
+            if align == ArrowAlign::Tip {
+                assert_eq!(h.tip, Point::new(80.0, 50.0));
+            } else {
+                assert!((h.tip.x - (80.0 + h.inset)).abs() < 1e-9);
+            }
+            let img = render(&d);
+            // The rightmost ink is the tip (allowing for antialiasing).
+            let right = (0..img.width).rev().find(|&x| (0..img.height).any(|y| img.over_white(x, y)[0] < 250)).unwrap();
+            let bb = h.outline.bounding_box();
+            assert!((right as f64 / S - bb.x1).abs() <= 0.5, "{kind:?} {align:?}: ink ends at {} vs head {}", right as f64 / S, bb.x1);
+            assert!(!dark(&img, h.tip.x + 0.5, 50.0), "{kind:?} {align:?}: nothing past the tip");
+        }
+    }
+}
+
+/// Straight-alpha pixel at document point (x, y), rendered on transparent.
+fn alpha_at(d: &Document, x: f64, y: f64) -> u8 {
+    let r = Renderer::new().render_region(d, Rect::new(0.0, 0.0, 100.0, 100.0), S, false);
+    r.pixel((x * S) as u32, (y * S) as u32)[3]
+}
+
+#[test]
+fn line_and_head_take_the_opacity_once() {
+    for (node, stroke) in [(0.5, 1.0), (1.0, 0.5)] {
+        let d = arrow_doc(Arrowhead::Triangle, ArrowAlign::Extend, node, |s| s.opacity = stroke);
+        let h = head_of(&d);
+        let line = alpha_at(&d, 40.0, 50.0);
+        assert!((120..=135).contains(&line), "half-opaque line: {line}");
+        // Where the line runs under the head, and in the head beside it.
+        let overlap = alpha_at(&d, h.tip.x - h.inset - 1.0, 50.0);
+        let beside = alpha_at(&d, h.tip.x - 12.0, 50.0 + 4.5);
+        assert_eq!(overlap, line, "no double darkening where line and head overlap");
+        assert_eq!(beside, line, "the head has the line's opacity");
+    }
+}
+
+#[test]
+fn a_gradient_runs_on_into_the_head() {
+    let stops = vec![
+        GradientStop { offset: 0.0, color: Color::rgb(1.0, 0.0, 0.0), opacity: 1.0, midpoint: 0.5 },
+        GradientStop { offset: 1.0, color: Color::rgb(0.0, 0.0, 1.0), opacity: 1.0, midpoint: 0.5 },
+    ];
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient { kind: GradientKind::Linear, stops })));
+    let d = arrow_doc(Arrowhead::Square, ArrowAlign::Tip, 1.0, |s| s.paint = paint);
+    let h = head_of(&d);
+    let img = render(&d);
+    // Just behind the head's back edge (line) and just inside it (head): nearly the same colour.
+    let back = h.tip.x - 16.0;
+    let (a, b) = (img.over_white(((back - 0.5) * S) as u32, (50.0 * S) as u32), img.over_white(((back + 0.5) * S) as u32, (50.0 * S) as u32));
+    assert!(a[0].abs_diff(b[0]) < 12 && a[2].abs_diff(b[2]) < 12, "{a:?} vs {b:?}");
+    // The head is part of the same gradient: bluer than the line's start.
+    let start = img.over_white((22.0 * S) as u32, (50.0 * S) as u32);
+    assert!(b[2] > start[2] + 100, "{b:?} vs {start:?}");
 }

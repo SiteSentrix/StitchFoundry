@@ -1,7 +1,8 @@
 //! Stroke geometry shared by the canvas, the PDF/SVG exporters and Outline Stroke, so every
 //! consumer paints the same shapes:
 //!
-//! - [`stroke_pieces`]: the centre line and the arrowheads as filled outlines;
+//! - [`stroke_pieces`]: the centre line (trimmed under the arrowheads) and the arrowheads as
+//!   filled outlines (hollow kinds are rings), placed by [`ArrowAlign`](vectorcraft_doc::ArrowAlign);
 //! - [`dash`]: the dash pattern; zero-length dashes become [`Dot`]s that a round or projecting cap
 //!   turns into discs or squares ([`dot_outline`]);
 //! - [`width_outline`]: variable-width (profile) strokes;
@@ -27,9 +28,10 @@ const ARCLEN_ACCURACY: f64 = 1e-6;
 /// The geometry one stroke paints, in the coordinate space of its path.
 #[derive(Clone, Debug)]
 pub struct StrokePieces<'a> {
-    /// The centre line to stroke.
+    /// The centre line to stroke: the path with its ends trimmed under the arrowheads (borrowed
+    /// when nothing is trimmed). Empty when the heads cover the whole path.
     pub line: Cow<'a, BezPath>,
-    /// The arrowheads, start first.
+    /// The arrowheads, start first. Closed ends get none.
     pub heads: Vec<Arrow>,
 }
 
@@ -52,6 +54,14 @@ pub fn aligned_width(st: &StrokeLayer, closed: bool) -> f64 {
     match st.align {
         StrokeAlign::Inside | StrokeAlign::Outside if closed => st.width * 2.0,
         _ => st.width,
+    }
+}
+
+/// How far a cap reaches past the end of a stroke of `width`.
+pub fn cap_extent(cap: LineCap, width: f64) -> f64 {
+    match cap {
+        LineCap::Butt => 0.0,
+        LineCap::Round | LineCap::Square => width / 2.0,
     }
 }
 

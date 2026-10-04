@@ -646,13 +646,17 @@ impl Renderer {
     }
 
     fn draw_stroke(&mut self, ctx: &mut RenderContext, f: &Frame, bp: &BezPath, rule: FillRule, st: &StrokeLayer, bounds: Rect) {
-        let layered = st.opacity < 1.0 || st.blend != vectorcraft_color::BlendMode::Normal || st.align == StrokeAlign::Outside;
+        let pieces = effects::stroke::stroke_pieces(bp, st);
+        // The line and its heads overlap: they take the opacity once, in one layer, instead of
+        // each folding it into its paint.
+        let folded = if pieces.heads.is_empty() { 1.0 } else { std::mem::replace(&mut self.alpha, 1.0) };
+        let opacity = st.opacity * folded;
+        let layered = opacity < 1.0 || st.blend != vectorcraft_color::BlendMode::Normal || st.align == StrokeAlign::Outside;
         if layered {
             ctx.set_transform(Affine::IDENTITY);
-            ctx.push_layer(None, Some(blend_mode(st.blend)), Some(st.opacity), None, None);
+            ctx.push_layer(None, Some(blend_mode(st.blend)), Some(opacity), None, None);
         }
         ctx.set_transform(f.view);
-        let pieces = effects::stroke::stroke_pieces(bp, st);
         let closed = effects::stroke::is_closed(bp);
         // Keep hairlines visible when zoomed far out (at least ~1 device pixel).
         let width = effects::stroke::aligned_width(st, closed).max(f.px * 0.5);
@@ -661,12 +665,17 @@ impl Renderer {
             ctx.set_fill_rule(fill_rule(rule));
             ctx.push_clip_layer(bp);
         }
-        if paint::set_paint(ctx, &st.paint, bounds.inflate(st.width / 2.0, st.width / 2.0), f.doc) {
+        // One paint box for the line and the heads, so a gradient runs on into the heads.
+        let paint_bounds = bounds.inflate(st.width / 2.0, st.width / 2.0);
+        if paint::set_paint(ctx, &st.paint, paint_bounds, f.doc) {
             self.fold_alpha(ctx, &st.paint);
             ctx.set_fill_rule(peniko::Fill::NonZero);
             match self.cached_stroke(f, &pieces.line, st, width) {
                 Some(o) => ctx.fill_path(&o),
                 None => ctx.fill_path(&effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
+            }
+            for head in &pieces.heads {
+                ctx.fill_path(&head.outline);
             }
         }
         if inside {
@@ -680,14 +689,11 @@ impl Renderer {
             ctx.fill_path(bp);
             ctx.set_blend_mode(BlendMode::default());
         }
-        if !pieces.heads.is_empty() && paint::set_paint(ctx, &st.paint, bounds, f.doc) {
-            ctx.set_fill_rule(peniko::Fill::NonZero);
-            for head in &pieces.heads {
-                ctx.fill_path(&head.outline);
-            }
-        }
         if layered {
             ctx.pop_layer();
+        }
+        if !pieces.heads.is_empty() {
+            self.alpha = folded;
         }
     }
 

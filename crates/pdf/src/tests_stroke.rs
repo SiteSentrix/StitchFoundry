@@ -1,8 +1,8 @@
-//! Stroke geometry in PDF export: arrowheads come from the shared `vectorcraft_effects::stroke`
-//! geometry, the same the canvas draws.
+//! Stroke geometry in PDF export: arrowheads and the trimmed line come from the shared
+//! `vectorcraft_effects::stroke` geometry, and they take the stroke opacity once.
 
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Arrowhead, Document, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, ArrowAlign, Arrowhead, Document, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_effects::stroke::stroke_pieces;
 use vectorcraft_geom::{Point, Rect, Shape, shapes};
 
@@ -21,9 +21,11 @@ fn line_doc(st: StrokeLayer) -> (Document, Node) {
     (d, n)
 }
 
-fn arrow_stroke(kind: Arrowhead) -> StrokeLayer {
+fn arrow_stroke(kind: Arrowhead, align: ArrowAlign, opacity: f32) -> StrokeLayer {
     let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
     st.end_arrow = Some(kind);
+    st.arrow_align = align;
+    st.opacity = opacity;
     st
 }
 
@@ -47,16 +49,44 @@ fn painted_boxes(d: &Document) -> (Vec<Rect>, Vec<Rect>) {
 }
 
 #[test]
-fn arrowheads_match_the_shared_geometry() {
-    for kind in Arrowhead::ALL {
-        let (d, n) = line_doc(arrow_stroke(kind));
-        let bp = n.path_data().unwrap().to_bezpath();
-        let pieces = stroke_pieces(&bp, n.appearance.stroke().unwrap());
-        let (fills, strokes) = painted_boxes(&d);
-        let head = pieces.heads[0].outline.bounding_box();
-        assert_eq!(fills.len(), 1, "{kind:?}: one head");
-        assert!(close(fills[0], head), "{kind:?}: {:?} vs {head:?}", fills[0]);
-        assert_eq!(strokes.len(), 1, "{kind:?}: one line");
-        assert!(close(strokes[0], bp.bounding_box()), "{kind:?}: {:?}", strokes[0]);
+fn arrowheads_and_the_trimmed_line_match_the_shared_geometry() {
+    for align in [ArrowAlign::Extend, ArrowAlign::Tip] {
+        for kind in Arrowhead::ALL {
+            let (d, n) = line_doc(arrow_stroke(kind, align, 1.0));
+            let bp = n.path_data().unwrap().to_bezpath();
+            let pieces = stroke_pieces(&bp, n.appearance.stroke().unwrap());
+            let (fills, strokes) = painted_boxes(&d);
+            let head = pieces.heads[0].outline.bounding_box();
+            assert_eq!(fills.len(), 1, "{kind:?} {align:?}: one head");
+            assert!(close(fills[0], head), "{kind:?} {align:?}: {:?} vs {head:?}", fills[0]);
+            assert_eq!(strokes.len(), 1, "{kind:?} {align:?}: one line");
+            assert!(close(strokes[0], pieces.line.bounding_box()), "{kind:?} {align:?}: {:?}", strokes[0]);
+            if align == ArrowAlign::Tip {
+                assert!((strokes[0].x1 - (80.0 - pieces.heads[0].inset)).abs() < 0.01, "{kind:?}: the stroke stops under the head");
+            }
+        }
     }
+}
+
+#[test]
+fn line_and_head_share_one_opacity_group() {
+    let (d, _) = line_doc(arrow_stroke(Arrowhead::Triangle, ArrowAlign::Tip, 0.5));
+    let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap();
+    let mut group_opacity = None;
+    let mut leaf_opacities = vec![];
+    back.walk(|m| match &m.kind {
+        NodeKind::Group { .. } if m.opacity < 1.0 => group_opacity = Some(m.opacity),
+        NodeKind::Path { .. } => {
+            leaf_opacities.push(m.opacity);
+            for i in &m.appearance.items {
+                leaf_opacities.push(match i {
+                    AppearanceItem::Fill(f) => f.opacity,
+                    AppearanceItem::Stroke(s) => s.opacity,
+                });
+            }
+        }
+        _ => {}
+    });
+    assert!(group_opacity.is_some_and(|o| (o - 0.5).abs() < 0.01), "{group_opacity:?}");
+    assert!(leaf_opacities.iter().all(|o| (o - 1.0).abs() < 1e-3), "{leaf_opacities:?}");
 }
