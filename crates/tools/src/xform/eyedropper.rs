@@ -3,8 +3,12 @@
 //! Click an object: copy its appearance (fill, stroke, weight, opacity) to the selection and the
 //! paint defaults (`appearance.copyFrom`). Shift-click: sample only the colour under the cursor into
 //! the active fill/stroke (`paint.sampleColor`).
+//!
+//! The Gradient panel's eyedropper sets the `stop` option (the tool to return to): the next click
+//! samples the colour under the cursor into the selected gradient stop (`paint.sampleColor
+//! {stop}`) and switches back to that tool.
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::hit::{HitKind, hit_test};
 use vectorcraft_geom::Point;
@@ -12,7 +16,11 @@ use vectorcraft_geom::Point;
 use super::paint_owner;
 use crate::{Action, Cursor, Mods, PointerEvent, PointerKind, Tool, ToolContext};
 
-pub struct EyedropperTool;
+#[derive(Default)]
+pub struct EyedropperTool {
+    /// Sampling for the selected gradient stop: the tool to switch back to afterwards.
+    stop: Option<String>,
+}
 
 /// The colour of `paint` at `p` (gradients are sampled along their vector, radial ones honouring
 /// their aspect ratio).
@@ -41,17 +49,29 @@ impl Tool for EyedropperTool {
         let Some(h) = hit_test(cx.doc, ev.pos, opts) else { return vec![] };
         let src = paint_owner(cx.doc, h.leaf);
         let Some(n) = cx.doc.node(src) else { return vec![] };
-        if ev.mods.shift {
+        let stop = self.stop.as_ref().zip(cx.gradient_stop);
+        if ev.mods.shift || stop.is_some() {
             let fill_none = n.proxy_paint(false, None).is_none_or(|(p, ..)| p.is_none());
             let Some((paint, to_doc, bounds)) = n.proxy_paint(h.kind == HitKind::Stroke || fill_none, None) else { return vec![] };
             // Sample in the paint's own space (text space for type runs) and box.
             let p = if to_doc.determinant().abs() > 1e-12 { to_doc.inverse() * ev.pos } else { ev.pos };
-            return match paint_color_at(paint, Some(bounds), p) {
-                Some(c) => vec![Action::Exec("paint.sampleColor".into(), json!({ "color": c.to_hex() }))],
-                None => vec![],
-            };
+            let Some(c) = paint_color_at(paint, Some(bounds), p) else { return vec![] };
+            let Some((back, i)) = stop else { return vec![Action::Exec("paint.sampleColor".into(), json!({ "color": c.to_hex() }))] };
+            let out = vec![Action::Exec("paint.sampleColor".into(), json!({ "color": c.to_hex(), "stop": i })), Action::SwitchTool(back.clone())];
+            self.stop = None;
+            return out;
         }
         vec![Action::Exec("appearance.copyFrom".into(), json!({ "source": src.0 }))]
+    }
+
+    fn options(&self) -> Value {
+        json!({ "stop": self.stop })
+    }
+
+    fn set_option(&mut self, key: &str, value: &Value) {
+        if key == "stop" {
+            self.stop = value.as_str().map(str::to_string);
+        }
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
@@ -71,7 +91,7 @@ mod tests {
         let s = Selection::default();
         let p = paint();
         let cx = cx(&d, &s, &p);
-        let mut t = EyedropperTool;
+        let mut t = EyedropperTool::default();
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
         assert_eq!(a, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": id.0}))]);
         let shift = Mods { shift: true, ..Default::default() };
@@ -81,6 +101,26 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": "#000000"}))]);
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)).is_empty());
+    }
+
+    #[test]
+    fn the_stop_option_samples_into_the_selected_stop_then_switches_back() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        let mut t = EyedropperTool::default();
+        t.set_option("stop", &json!("gradient"));
+        assert_eq!(t.options(), json!({"stop": "gradient"}));
+        // Without a selected stop the click copies the appearance as usual.
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        assert!(matches!(&a[0], Action::Exec(c, _) if c == "appearance.copyFrom"));
+        cx.gradient_stop = Some(1);
+        // Empty canvas: still waiting.
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)).is_empty());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+        assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": "#000000", "stop": 1})), Action::SwitchTool("gradient".into())]);
+        assert_eq!(t.options(), json!({"stop": null}), "one sample only");
     }
 
     #[test]
@@ -109,7 +149,7 @@ mod tests {
         let (s, p) = (Selection::default(), paint());
         let shift = Mods { shift: true, ..Default::default() };
         // 80 % along the baseline (text space (80, -5)).
-        let a = EyedropperTool.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 105.0, 180.0).with_mods(shift));
+        let a = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 105.0, 180.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": "#333333"}))]);
     }
 

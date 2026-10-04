@@ -187,7 +187,11 @@ pub fn mixed_field(
 
 /// Draw a paint preview (swatch chip) into `rect`.
 pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
-    let p = ui.painter();
+    draw_paint(ui.painter(), rect, paint);
+}
+
+/// [`paint_chip`] on any painter (a layer above the panels).
+fn draw_paint(p: &egui::Painter, rect: Rect, paint: &Paint) {
     match paint {
         Paint::None => {
             p.rect_filled(rect, 0.0, Color32::WHITE);
@@ -197,7 +201,7 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
             let [r, g, b, _] = color.to_rgba8(1.0);
             p.rect_filled(rect, 0.0, Color32::from_rgb(r, g, b));
         }
-        Paint::Gradient(gp) => gradient_chip(ui, rect, &gp.gradient),
+        Paint::Gradient(gp) => draw_gradient(p, rect, &gp.gradient),
         Paint::Pattern { .. } => {
             p.rect_filled(rect, 0.0, Color32::from_gray(200));
             for i in 0..4 {
@@ -210,7 +214,10 @@ pub fn paint_chip(ui: &Ui, rect: Rect, paint: &Paint) {
 
 /// Draw a gradient preview into `rect` (linear left to right; radial from the centre).
 pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient) {
-    let p = ui.painter();
+    draw_gradient(ui.painter(), rect, gradient);
+}
+
+fn draw_gradient(p: &egui::Painter, rect: Rect, gradient: &vectorcraft_color::Gradient) {
     let radial = gradient.kind == vectorcraft_color::GradientKind::Radial;
     if radial {
         // Outer colour fills the corners beyond the largest circle.
@@ -900,5 +907,33 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         if s.is_empty() { Some(None) } else { s.parse::<f64>().ok().map(Some) }
     } else {
         None
+    }
+}
+
+/// A paint dragged out of a panel (a swatch, the Gradient panel's thumbnail). Dropped on art it
+/// paints the active proxy through `paint.setFill`/`paint.setStroke` with `params` (`{swatch}`,
+/// `{color}`, `{gradient}`…); dropped on the Gradient panel's ramp its colour adds or recolours a
+/// stop.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PaintDrag {
+    pub paint: Paint,
+    pub params: serde_json::Value,
+}
+
+/// Make `resp` (which senses drags) a source of the [`PaintDrag`] `drag` builds when the drag
+/// starts, and draw that paint under the pointer while it travels.
+pub fn paint_drag_source(ui: &Ui, resp: &Response, drag: impl FnOnce() -> PaintDrag) {
+    if resp.drag_started() {
+        egui::DragAndDrop::set_payload(ui.ctx(), drag());
+    }
+    if resp.dragged()
+        && let Some(at) = ui.ctx().pointer_interact_pos()
+        && let Some(d) = egui::DragAndDrop::payload::<PaintDrag>(ui.ctx())
+    {
+        let t = Tokens::get(ui.ctx());
+        let p = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("paint-drag")));
+        let r = Rect::from_min_size(at + vec2(10.0, 10.0), Vec2::splat(18.0));
+        draw_paint(&p, r, &d.paint);
+        p.rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     }
 }

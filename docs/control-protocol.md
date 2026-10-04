@@ -36,3 +36,10 @@ fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern
 `swatches`); `ui.dialog.confirm` runs `swatch.new` / `swatch.newGroup`.
 
 The Color Picker is a dialog too: `engine.execute {command: "ui.colorPicker", params: {stroke?, color?}}` opens it for the fill (or stroke) proxy; `ui.dialog.set {field: "hex", value: "00FF00"}` (or `color`, `channel`, `webOnly`, `swatches`) then `ui.dialog.confirm` applies the colour through `paint.setFill` / `paint.setStroke`.
+
+Gradient panel: double-clicking a stop on the panel's slider opens the same `gradientStop` popover, with a `screen`
+field (`[x, y]`, screen points) in place of `x`/`y`. The panel's stop eyedropper selects the Eyedropper tool with the
+tool option `stop` (the tool to return to; `tool.setOption {key: "stop", value: "gradient"}`): its next click on art
+samples the colour there into the selected stop (`paint.sampleColor {color, stop}`) and switches back. Dragging a
+swatch or the panel's gradient thumbnail onto art runs `paint.setFill` / `paint.setStroke` (the active proxy) with
+the swatch's params and the object's `ids`.

@@ -136,6 +136,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     handle_input(app, ui, &resp, rect);
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
+    paint_drop(app, &resp, &xf);
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
@@ -667,14 +668,30 @@ fn node_outline(n: &Node) -> BezPath {
     bp
 }
 
+/// The art under the pointer (3 screen pixels of tolerance).
+fn hit_under_pointer(app: &VectorcraftApp, xf: &Xf) -> Option<vectorcraft_doc::hit::Hit> {
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / xf.zoom, outline: app.ui.view.outline, path_only: false };
+    vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, app.hover_doc?, opt)
+}
+
+/// A paint dragged out of a panel (a swatch, the Gradient panel's thumbnail) and dropped on art
+/// paints the active proxy of the object under the pointer (`paint.setFill`/`paint.setStroke`
+/// with its `ids`), selected or not.
+fn paint_drop(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
+    let Some(d) = resp.dnd_release_payload::<widgets::PaintDrag>() else { return };
+    let Some(hit) = hit_under_pointer(app, xf) else { return };
+    let Some(st) = app.session.active() else { return };
+    let mut params = d.params.clone();
+    params["ids"] = json!([vectorcraft_tools::xform::paint_owner(&st.doc, hit.leaf).0]);
+    app.run(crate::panels::proxy_cmd(app, false), params).ok();
+}
+
 fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    let Some(h) = app.hover_doc else { return };
     if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
         return;
     }
     let Some(st) = app.session.active() else { return };
-    let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / xf.zoom, outline: app.ui.view.outline, path_only: false };
-    let Some(hit) = vectorcraft_doc::hit::hit_test(&st.doc, h, opt) else { return };
+    let Some(hit) = hit_under_pointer(app, xf) else { return };
     let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
     if st.selection.contains(id) {
         return;
@@ -1080,5 +1097,32 @@ mod tests {
         frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos2(300.0, 200.0))]);
         assert_eq!(app.view().unwrap().center, after.center);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
+    }
+
+    #[test]
+    fn a_paint_dropped_on_art_paints_that_object_selected_or_not() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let at = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(150.0, 150.0));
+        let drop = |app: &mut VectorcraftApp, at: Pos2, params: serde_json::Value| {
+            egui::DragAndDrop::set_payload(&ctx, widgets::PaintDrag { paint: vectorcraft_color::Paint::None, params });
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            frame(app, &ctx, vec![up]);
+        };
+        drop(&mut app, at, json!({"color": "#ff0000"}));
+        let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+        assert_eq!(fill(&app).color().map(|c| c.to_hex()), Some("#ff0000".into()));
+        assert!(app.session.active().unwrap().selection.is_empty(), "the drop does not select");
+        // Off the art nothing changes.
+        drop(&mut app, at - vec2(0.0, 120.0), json!({"color": "#00ff00"}));
+        assert_eq!(fill(&app).color().map(|c| c.to_hex()), Some("#ff0000".into()));
+        // A gradient fits the object it lands on.
+        drop(&mut app, at, json!({"gradient": {}}));
+        assert!(matches!(fill(&app), vectorcraft_color::Paint::Gradient(g) if g.geom.is_none()));
     }
 }

@@ -121,15 +121,28 @@ fn entries(app: &VectorcraftApp, kind: Kind) -> Vec<Entry> {
     out
 }
 
-/// Apply a clicked swatch to the active proxy (Alt: the inactive one).
-fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
-    let params = match e {
+/// The paint params (`paint.setFill`) of an entry; none for a group.
+fn params(e: &Entry) -> Option<serde_json::Value> {
+    Some(match e {
         Entry::Registration => json!({"color": {"c": 1.0, "m": 1.0, "y": 1.0, "k": 1.0}}),
         Entry::Swatch { paint, .. } if paint.is_none() => json!({"none": true}),
         Entry::Swatch { name, .. } => json!({"swatch": name}),
-        Entry::Folder(_) => return,
-    };
-    super::apply_click(app, ui, params);
+        Entry::Folder(_) => return None,
+    })
+}
+
+/// Apply a clicked swatch to the active proxy (Alt: the inactive one).
+fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
+    if let Some(p) = params(e) {
+        super::apply_click(app, ui, p);
+    }
+}
+
+/// Let a swatch tile be dragged onto art or the Gradient panel's ramp.
+fn drag_source(ui: &Ui, resp: &egui::Response, e: &Entry) {
+    if let Entry::Swatch { paint, .. } = e {
+        widgets::paint_drag_source(ui, resp, || widgets::PaintDrag { paint: paint.clone(), params: params(e).unwrap_or_default() });
+    }
 }
 
 /// A pattern swatch drawn as a rendered tile (cached by the definition's identity and size).
@@ -268,7 +281,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.set_width(ui.available_width());
             if view.is_list() {
                 for e in &items {
-                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), pitch), Sense::click());
+                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), pitch), Sense::click_and_drag());
+                    drag_source(ui, &resp, e);
                     let name = e.name();
                     if is_sel(name) {
                         ui.painter().rect_filled(r, 0.0, t.row_selected);
@@ -335,7 +349,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let (r, _) = ui.allocate_exact_size(vec2(w, pitch), Sense::hover());
                     for (c, e) in row.into_iter().enumerate() {
                         let cell = Rect::from_min_size(r.min + vec2(1.0 + c as f32 * pitch, (pitch - tile) / 2.0), vec2(tile, tile));
-                        let resp = ui.interact(cell, tile_id(e), Sense::click());
+                        let resp = ui.interact(cell, tile_id(e), Sense::click_and_drag());
+                        drag_source(ui, &resp, e);
                         let name = e.name();
                         match e {
                             Entry::Registration => draw_registration(ui, cell),

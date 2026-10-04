@@ -754,6 +754,8 @@ mod tests_file;
 #[cfg(test)]
 mod tests_gradient;
 #[cfg(test)]
+mod tests_gradpanel;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_menucmds;

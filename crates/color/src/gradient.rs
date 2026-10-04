@@ -168,6 +168,18 @@ pub fn duplicate_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<Gra
     (v, ni)
 }
 
+/// Swap the colours of stops `a` and `b` (Alt-dropping one stop on another); offsets, opacities
+/// and midpoints stay. Out-of-range indices leave the stops unchanged.
+pub fn swap_stop_colors(stops: &[GradientStop], a: usize, b: usize) -> Vec<GradientStop> {
+    let mut v = stops.to_vec();
+    if a < v.len() && b < v.len() {
+        let c = v[a].color;
+        v[a].color = v[b].color;
+        v[b].color = c;
+    }
+    v
+}
+
 /// Set the midpoint between stop `i` and `i + 1` (clamped to the diamond's 13–87 %).
 pub fn set_midpoint(stops: &[GradientStop], i: usize, m: f32) -> Vec<GradientStop> {
     let mut v = stops.to_vec();
@@ -478,6 +490,16 @@ mod tests {
         assert_eq!((v.len(), i, v[i].offset, v[i].color.to_hex()), (4, 2, 0.9, "#ff0000".to_string()));
         assert_eq!(v[1], g.stops[1], "the original stays");
         assert_eq!(duplicate_stop(&g.stops, 7, 0.5).0, g.stops);
+    }
+
+    #[test]
+    fn swap_exchanges_only_the_colours() {
+        let mut g = g3();
+        g.stops[0].opacity = 0.25;
+        let v = swap_stop_colors(&g.stops, 0, 1);
+        assert_eq!((v[0].color.to_hex(), v[1].color.to_hex()), ("#ff0000".to_string(), "#ffffff".to_string()));
+        assert_eq!((v[0].offset, v[0].opacity, v[1].offset, v[1].opacity), (0.0, 0.25, 0.5, 1.0));
+        assert_eq!(swap_stop_colors(&g.stops, 0, 9), g.stops);
     }
 
     #[test]
