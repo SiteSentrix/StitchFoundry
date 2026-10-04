@@ -34,9 +34,9 @@ pub(super) fn pieces<'a>(bp: &'a BezPath, st: &StrokeLayer) -> StrokePieces<'a> 
     let first = subs.first().filter(|s| !s.1).map(|s| s.0.clone());
     let last = subs.last().filter(|s| !s.1).map(|s| s.0.clone());
     let cap = cap_extent(st.cap, st.width);
-    let weight = |pct: f64| (st.width * pct / 100.0).max(0.25);
-    let start = st.start_arrow.zip(first).map(|(k, r)| (k, r, inset(k, weight(st.arrow_scale.0), cap)));
-    let end = st.end_arrow.zip(last).map(|(k, r)| (k, r, inset(k, weight(st.arrow_scale.1), cap)));
+    let (hw0, hw1) = (st.arrow_weight(false), st.arrow_weight(true));
+    let start = st.start_arrow.zip(first).map(|(k, r)| (k, r, inset(k, hw0, cap)));
+    let end = st.end_arrow.zip(last).map(|(k, r)| (k, r, inset(k, hw1, cap)));
     if start.is_none() && end.is_none() {
         return StrokePieces { line: Cow::Borrowed(bp), heads: vec![] };
     }
@@ -44,7 +44,7 @@ pub(super) fn pieces<'a>(bp: &'a BezPath, st: &StrokeLayer) -> StrokePieces<'a> 
     let mut heads = vec![];
     // Trims per subpath index (start, end), applied in tip mode only.
     let mut trims: Vec<(f64, f64)> = vec![(0.0, 0.0); subs.len()];
-    let mut place = |kind: Arrowhead, range: std::ops::Range<usize>, at_start: bool, inset: f64, pct: f64| {
+    let mut place = |kind: Arrowhead, range: std::ops::Range<usize>, at_start: bool, inset: f64, hw: f64| {
         let segs = segments(&els[range]);
         let (end_pt, outward) = end_of(&segs, at_start);
         let (tip, dir) = if tip_mode {
@@ -54,16 +54,16 @@ pub(super) fn pieces<'a>(bp: &'a BezPath, st: &StrokeLayer) -> StrokePieces<'a> 
         } else {
             (end_pt + outward * inset, outward)
         };
-        heads.push(Arrow { kind, outline: shape(kind, tip, dir, weight(pct)), tip, dir, inset });
+        heads.push(Arrow { kind, outline: shape(kind, tip, dir, hw), tip, dir, inset });
     };
     if let Some((k, r, i)) = start {
-        place(k, r, true, i, st.arrow_scale.0);
+        place(k, r, true, i, hw0);
         if tip_mode {
             trims[0].0 = i;
         }
     }
     if let Some((k, r, i)) = end {
-        place(k, r, false, i, st.arrow_scale.1);
+        place(k, r, false, i, hw1);
         if tip_mode {
             trims[subs.len() - 1].1 = i;
         }

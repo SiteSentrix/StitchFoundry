@@ -170,3 +170,15 @@ fn a_gradient_runs_on_into_the_head() {
     let start = img.over_white((22.0 * S) as u32, (50.0 * S) as u32);
     assert!(b[2] > start[2] + 100, "{b:?} vs {start:?}");
 }
+
+#[test]
+fn a_head_past_the_end_counts_in_the_visual_bounds_and_is_never_culled() {
+    let d = arrow_doc(Arrowhead::Triangle, ArrowAlign::Extend, 1.0, |s| s.join = vectorcraft_doc::LineJoin::Round);
+    let h = head_of(&d);
+    let vb = d.layers[0].children().unwrap()[0].visual_bounds().unwrap();
+    let head = h.outline.bounding_box();
+    assert_eq!(vb.union(head), vb, "{vb:?} covers the head {head:?}");
+    // A view that shows only the overhanging part of the head (the line ends at 80).
+    let img = render_region(&d, Rect::new(83.0, 40.0, 100.0, 60.0), S);
+    assert!(img.ink() > 0, "the head is drawn");
+}

@@ -204,11 +204,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let scale = st.as_ref().map(|s| s.arrow_scale).unwrap_or((100.0, 100.0));
     let linked: bool = pstate(ui.ctx(), "arrow-scale-link");
+    // Scale and Align only mean something for a stroke with a head.
+    let (arrow_align, has_head) = arrow_align_state(st.as_ref());
     ui.horizontal(|ui| {
         row_label(ui, "Scale:");
-        let on = st.is_some() && (sa.is_some() || ea.is_some());
         let mut ns = None;
-        ui.add_enabled_ui(on, |ui| {
+        ui.add_enabled_ui(has_head, |ui| {
             if let Some(v) = widgets::plain_field(ui, "arrow-scale-s", scale.0, "%", 0, 56.0) {
                 ns = Some((v, if linked { v } else { scale.1 }));
             }
@@ -223,11 +224,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("stroke.setAdvanced", json!({"arrowScale": [a, b]})).ok();
         }
     });
-    let (arrow_align, can_align) = arrow_align_state(st.as_ref());
     ui.horizontal(|ui| {
         row_label(ui, "Align:");
         for (v, name, icon, tip) in ARROW_ALIGN {
-            if widgets::icon_button_enabled(ui, icon, tip, arrow_align == v, can_align, 22.0).clicked() {
+            if widgets::icon_button_enabled(ui, icon, tip, arrow_align == v, has_head, 22.0).clicked() {
                 set(app, json!({"arrowAlign": name}));
             }
         }

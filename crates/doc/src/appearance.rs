@@ -258,6 +258,18 @@ impl StrokeLayer {
             arrow_align: ArrowAlign::Extend,
         }
     }
+    /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
+    /// a quarter point. A head of weight `hw` is `4·hw` long and wide.
+    pub fn arrow_weight(&self, end: bool) -> f64 {
+        let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
+        (self.width * pct / 100.0).max(0.25)
+    }
+    /// How far the arrowheads can reach from the path's end points (0 without heads): the
+    /// head's diagonal, or with [`ArrowAlign::Extend`] its length plus the cap past the end.
+    pub fn arrow_reach(&self) -> f64 {
+        let reach = |head: Option<Arrowhead>, end: bool| head.map_or(0.0, |_| 4.5 * self.arrow_weight(end) + self.width / 2.0);
+        reach(self.start_arrow, false).max(reach(self.end_arrow, true))
+    }
 }
 
 /// One entry of the appearance stack.
@@ -339,11 +351,14 @@ impl Appearance {
         self.items
             .iter()
             .filter_map(|i| match i {
-                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(match s.align {
-                    StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
-                    StrokeAlign::Outside => s.width,
-                    StrokeAlign::Inside => 0.0,
-                }),
+                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(
+                    match s.align {
+                        StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
+                        StrokeAlign::Outside => s.width,
+                        StrokeAlign::Inside => 0.0,
+                    }
+                    .max(s.arrow_reach()),
+                ),
                 _ => None,
             })
             .fold(0.0, f64::max)
@@ -416,6 +431,22 @@ mod tests {
         st.arrow_align = ArrowAlign::Tip;
         let back: StrokeLayer = serde_json::from_str(&serde_json::to_string(&st).unwrap()).unwrap();
         assert_eq!(back, st);
+    }
+
+    #[test]
+    fn outset_covers_arrowheads() {
+        let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+        a.stroke_mut().unwrap().join = LineJoin::Round;
+        assert_eq!(a.outset(), 2.0);
+        let st = a.stroke_mut().unwrap();
+        st.end_arrow = Some(Arrowhead::Triangle);
+        st.arrow_scale = (100.0, 200.0);
+        assert_eq!(st.arrow_weight(false), 4.0);
+        assert_eq!(st.arrow_weight(true), 8.0);
+        // A 32 pt head whose tip sits up to its length (plus the cap) past the end point.
+        assert_eq!(a.outset(), 4.5 * 8.0 + 2.0);
+        a.stroke_mut().unwrap().width = 0.01;
+        assert_eq!(a.stroke().unwrap().arrow_weight(true), 0.25, "heads keep a minimum size");
     }
 
     #[test]
