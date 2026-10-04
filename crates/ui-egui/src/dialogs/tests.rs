@@ -218,6 +218,7 @@ fn dialogs_do_not_stretch_to_the_screen() {
         ("ui.spotColors", json!({})),
         ("ui.paramDialog", json!({"command": "object.path.simplify", "label": "Simplify", "params": {"tolerance": 2}})),
         ("effect.dialog", json!({"effect": "distort.roughen"})),
+        ("ui.recolorDialog", json!({})),
     ];
     let height = |id: &str, p: &serde_json::Value, screen_h: f32| -> Option<(String, f32)> {
         let mut app = app();

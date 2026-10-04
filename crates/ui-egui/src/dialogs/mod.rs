@@ -28,7 +28,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 mod path_ops;
-mod recolor;
+pub mod recolor;
 pub mod saturate;
 mod save_changes;
 pub mod save_style_library;
@@ -140,7 +140,7 @@ registry! {
     ArtboardOptions: ["artboardOptions"] => artboard_options::SPEC,
     AllTools: ["allTools"] => all_tools::SPEC,
     ExportForScreens: ["exportForScreens"] => export_for_screens::SPEC,
-    Recolor: ["recolor"] => recolor::SPEC,
+    Recolor: [recolor::KIND] => recolor::SPEC,
     Command: ["command"] => command::SPEC,
     Effect: ["effect"] => effect::SPEC,
     SaveChanges: [crate::unsaved::KIND] => save_changes::SPEC,

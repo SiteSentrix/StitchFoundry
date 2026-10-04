@@ -122,6 +122,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             swatch_spot_options
         ),
+        cmd!(
+            "swatch.editGroup",
+            "Edit Color Group",
+            ["Window", "Swatches"],
+            None,
+            "{group: colour group, colors: [colour] (hex, key, {c,m,y,k} or {l,a,b}; the group's swatches take them in order, extra colours become new swatches, swatches past the end are removed; built-in swatches can't change), rename?: new group name} rewrite a colour group as one undo step; art linked to its global swatches takes their new colours (and keeps its colour, unlinked, when its swatch goes) → {name, swatches: [names], relinked}",
+            has_doc,
+            swatch_edit_group
+        ),
     ]
 }
 
@@ -769,4 +778,79 @@ fn follow_bases(bases: &[(String, Color)]) -> impl FnMut(&mut Color, &mut Option
         let new = base.tinted(*tint);
         std::mem::replace(c, new) != new
     }
+}
+
+/// A colour group rewrite: its name afterwards and the swatch links it changed.
+pub(super) struct GroupEdit {
+    name: String,
+    swatches: Vec<String>,
+    relinks: Vec<Relink>,
+    relinked: usize,
+}
+
+impl GroupEdit {
+    /// Apply the link changes to the default fill and stroke for new art.
+    pub(super) fn defaults(&self, s: &mut Session) {
+        self.relinks.iter().for_each(|r| r.defaults(s));
+    }
+}
+
+/// Rewrite colour group `group` with `colors`: its swatches take them in order (keeping their
+/// names, kinds and global or spot flags), extra colours are added as new swatches and swatches
+/// past the end are removed. Paints linked to its global swatches follow (a removed swatch's are
+/// unlinked); `rename` renames the group. A built-in swatch (None, Registration) it would change or
+/// remove is refused.
+pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], rename: Option<&str>, cmd: &str) -> Result<GroupEdit> {
+    let gi = d.swatch_groups.iter().position(|g| g.name == group).ok_or_else(|| bad(cmd, format!("no colour group `{group}`")))?;
+    let name = match rename.map(str::trim).filter(|n| !n.is_empty() && *n != group) {
+        Some(n) => d.free_swatch_name(n),
+        None => group.to_string(),
+    };
+    let old = &d.swatch_groups[gi].swatches;
+    if let Some(w) = old.iter().enumerate().find(|(i, w)| w.is_reserved() && colors.get(*i).is_none_or(|c| w.paint.color() != Some(*c))).map(|x| x.1)
+    {
+        return Err(bad(cmd, format!("`{}` can't be edited or removed", w.name)));
+    }
+    let mut relinks = vec![];
+    let mut swatches = std::mem::take(&mut d.swatch_groups[gi].swatches);
+    for gone in swatches.split_off(colors.len().min(swatches.len())) {
+        if gone.global {
+            relinks.push(Relink { from: gone.name.clone(), to: gone.name, color: None, keep: false });
+        }
+    }
+    for (w, c) in swatches.iter_mut().zip(colors) {
+        if w.paint.color() != Some(*c) {
+            // A tint swatch becomes a colour of its own.
+            w.paint = Paint::solid(*c);
+            if w.global {
+                // Art linked to a Lab spot shows it as the Spot Colors options say.
+                relinks.push(Relink { from: w.name.clone(), to: w.name.clone(), color: Some(d.linked_color(*c, w.spot)), keep: true });
+            }
+        }
+    }
+    for c in colors.iter().skip(swatches.len()) {
+        let nm = unique_name(&color_name(*c), |n| n == name || d.swatch_name_taken(n) || swatches.iter().any(|w| w.name == n));
+        swatches.push(Swatch { name: nm, paint: Paint::solid(*c), global: false, spot: false });
+    }
+    let g = &mut d.swatch_groups[gi];
+    (g.name, g.swatches) = (name.clone(), swatches);
+    let names = g.swatches.iter().map(|w| w.name.clone()).collect();
+    let relinked = if relinks.is_empty() { 0 } else { d.map_solid_paints(&mut |c, l, t| relinks.iter().any(|r| r.apply(c, l, t))) };
+    Ok(GroupEdit { name, swatches: names, relinks, relinked })
+}
+
+fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.editGroup";
+    let group = str_param(p, "group").ok_or_else(|| bad(C, "missing `group`"))?;
+    let colors: Vec<Color> = p
+        .get("colors")
+        .and_then(Value::as_array)
+        .ok_or_else(|| bad(C, "missing `colors`"))?
+        .iter()
+        .map(|v| color_value(v).ok_or_else(|| bad(C, format!("bad colour {v}"))))
+        .collect::<Result<_>>()?;
+    let rename = str_param(p, "rename");
+    let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, rename, C))?;
+    e.defaults(s);
+    Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))
 }
