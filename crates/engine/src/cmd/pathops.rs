@@ -459,7 +459,8 @@ pub(crate) fn with_transparency(d: &mut Document, mut n: Node, opacity: f32, ble
 
 /// The art stroke `st` of a path (`path`, `rule`) paints, as fills: its brush art, or the
 /// outline of the stroke (as on the canvas) filled with the stroke's paint, opacity, blend mode
-/// and effects. `None` when it paints nothing.
+/// and effects (a gradient along or across the stroke: gradient meshes in a clip group shaped
+/// like the outline). `None` when it paints nothing.
 pub(crate) fn outlined_stroke(
     d: &mut Document,
     brushes: &[vectorcraft_brush::Brush],
@@ -480,6 +481,18 @@ pub(crate) fn outlined_stroke(
     let outline = vectorcraft_render::effects::stroke::outline_region(path, rule, st);
     if outline.is_empty() {
         return None;
+    }
+    if let Some(g) = st.path_gradient() {
+        // A gradient along or across the stroke: gradient meshes clipped to its outline.
+        let meshes = vectorcraft_render::effects::stroke::gradient_meshes(&path.to_bezpath(), rule, st, &g.gradient);
+        let mut clip = shape_node(d, outline, None);
+        super::object::as_clipping_path(&mut clip).ok()?;
+        let meshes: Vec<Node> = meshes.into_iter().map(|m| Node::new(d.alloc_id(), NodeKind::Mesh(m))).collect();
+        let children = std::iter::once(clip).chain(meshes).map(Arc::new).collect();
+        let group = Node::new(d.alloc_id(), NodeKind::Group { children, clip: true });
+        let mut art = with_transparency(d, group, st.opacity, st.blend);
+        art.appearance.effects = st.effects.clone();
+        return Some(art);
     }
     let mut n = shape_node(d, outline, None);
     let fill = vectorcraft_doc::appearance::FillLayer {

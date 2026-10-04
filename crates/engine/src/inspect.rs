@@ -96,7 +96,8 @@ pub fn node_stroke(n: &Node) -> Option<StrokeLayer> {
 
 /// A stroke's options in `stroke.set` terms: cap, join, miterLimit, align, dash (null when
 /// solid), dashOffset, alignDashes, startArrow/endArrow (null for none), arrowAlign and profile,
-/// plus widthPoints: the profile's `[t, left, right]` points (width factors; null when uniform).
+/// plus widthPoints: the profile's `[t, left, right]` points (width factors; null when uniform)
+/// and gradientMode: how a gradient lies on it (`paint.editGradient` strokeMode).
 pub fn stroke_options(st: &StrokeLayer) -> Value {
     json!({
         "cap": name_of(&CAPS, st.cap),
@@ -111,6 +112,7 @@ pub fn stroke_options(st: &StrokeLayer) -> Value {
         "arrowAlign": if st.arrow_align == ArrowAlign::Tip { "tip" } else { "extend" },
         "profile": WidthProfile::id_of(st.profile.as_ref()),
         "widthPoints": st.profile.as_ref().map(|p| &p.points),
+        "gradientMode": st.gradient_mode.name(),
     })
 }
 

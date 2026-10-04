@@ -783,6 +783,30 @@ impl Exporter<'_> {
                 s.draw_path(path);
                 s.set_stroke(None);
             }
+            WrittenShape::Fill(outlines) if st.path_gradient().is_some() => {
+                // A gradient along or across the stroke: slices clipped to its outlines, under
+                // the stroke's opacity as a group.
+                if let Some(ws) = stroke::written_slices(bp, r, st, outlines)
+                    && let Some(clip) = to_path(&ws.clip)
+                {
+                    self.warn("gradients along or across strokes are exported as slices of linear gradients");
+                    if st.opacity < 1.0 {
+                        s.push_opacity(norm(st.opacity));
+                        pushes += 1;
+                    }
+                    s.push_clip_path(&clip, &krilla::paint::FillRule::NonZero);
+                    s.set_stroke(None);
+                    for (shape, paint) in &ws.slices {
+                        let b = shape.bounding_box();
+                        if let (Some(paint), Some(p)) = (self.paint(paint, b), to_path(shape)) {
+                            s.set_fill(Some(Fill { paint, opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+                            s.draw_path(&p);
+                        }
+                    }
+                    s.set_fill(None);
+                    s.pop();
+                }
+            }
             WrittenShape::Fill(outlines) => {
                 // The line and its arrowheads overlap: they take the opacity once, as a group.
                 let grouped = outlines.len() > 1 && st.opacity < 1.0;

@@ -202,6 +202,16 @@ struct StrokeEntry {
     stamp: u64,
 }
 
+/// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.
+type Slices = Arc<Vec<(BezPath, vectorcraft_color::Paint, Rect)>>;
+
+/// [`Slices`] cached for a stroke: (owning node, slices, last frame used).
+struct SliceEntry {
+    node: Arc<Node>,
+    slices: Slices,
+    stamp: u64,
+}
+
 /// Cached per-node geometry, keyed by `Arc` identity. Structural sharing means an unchanged node
 /// keeps its allocation across edits, so a pointer match (with the Arc kept alive here so the
 /// address can't be reused) is an exact cache hit — no invalidation logic needed.
@@ -268,6 +278,8 @@ pub struct Renderer {
     clip_paints: PtrMap<usize, ClipPaintEntry>,
     /// Placed images as painted in ink planes (see [`ink`]).
     ink_images: ink::InkImages,
+    /// Gradients along or across strokes, keyed like `strokes` (see [`Self::fill_path_gradient`]).
+    stroke_slices: PtrMap<(usize, i32), SliceEntry>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -326,6 +338,7 @@ impl Renderer {
             clip_paths: vec![],
             clip_paints: PtrMap::default(),
             ink_images: Default::default(),
+            stroke_slices: PtrMap::default(),
         }
     }
 
@@ -368,6 +381,9 @@ impl Renderer {
         }
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
+        }
+        if self.stroke_slices.len() > 256 {
+            self.stroke_slices.retain(|_, e| g - e.stamp <= 3);
         }
         if self.shadows.len() > 256 {
             self.shadows.retain(|_, e| g - e.stamp <= 3);
@@ -908,7 +924,9 @@ impl Renderer {
         }
         // One paint box for the line and the heads, so a gradient runs on into the heads.
         let paint_bounds = bounds.inflate(st.width / 2.0, st.width / 2.0);
-        if paint::set_paint(ctx, &st.paint, paint_bounds, f) {
+        if let Some(g) = st.path_gradient() {
+            self.fill_path_gradient(ctx, f, bp, rule, st, &pieces, width, &g.gradient);
+        } else if paint::set_paint(ctx, &st.paint, paint_bounds, f) {
             self.fold_alpha(ctx, f.ink, &st.paint);
             ctx.set_fill_rule(peniko::Fill::NonZero);
             match self.cached_stroke(f, &pieces.line, st, width) {
@@ -935,6 +953,76 @@ impl Renderer {
         }
         if !pieces.heads.is_empty() {
             self.alpha = folded;
+        }
+    }
+
+    /// Paint the line and arrowheads (`pieces`) of stroke `st` of `bp` (filled with `rule`) with
+    /// its gradient `g` laid along or across the path ([`effects::stroke::gradient_slices`]). Each
+    /// piece clips the slices, grown a pixel into each other and each replacing what it covers, so
+    /// neighbours meet without seams and translucent colours paint once.
+    #[allow(clippy::too_many_arguments)]
+    fn fill_path_gradient(
+        &mut self,
+        ctx: &mut RenderContext,
+        f: &Frame,
+        bp: &BezPath,
+        rule: FillRule,
+        st: &StrokeLayer,
+        pieces: &effects::stroke::StrokePieces,
+        width: f64,
+        g: &vectorcraft_color::Gradient,
+    ) {
+        let level = (f.px * 0.25).log2().floor() as i32;
+        let make = || -> Slices {
+            let tol = 2f64.powi(level);
+            // Reach a pixel past the stroke, so its antialiased edge has colour under it.
+            let slices = effects::stroke::gradient_slices(bp, rule, st, tol, f.px + tol, f.px);
+            Arc::new(
+                slices
+                    .into_iter()
+                    .map(|s| {
+                        let (b, paint) = (s.shape.bounding_box(), s.paint(g));
+                        (s.shape, paint, b)
+                    })
+                    .collect(),
+            )
+        };
+        let slices = match self.cur.clone() {
+            Some(node) => {
+                let key = (st as *const StrokeLayer as usize, level);
+                match self.stroke_slices.get_mut(&key) {
+                    Some(e) if Arc::ptr_eq(&e.node, &node) => {
+                        e.stamp = self.stamp;
+                        e.slices.clone()
+                    }
+                    _ => {
+                        let slices = make();
+                        self.stroke_slices.insert(key, SliceEntry { node, slices: slices.clone(), stamp: self.stamp });
+                        slices
+                    }
+                }
+            }
+            None => make(),
+        };
+        let line = match self.cached_stroke(f, &pieces.line, st, width) {
+            Some(o) => o,
+            None => Arc::new(effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
+        };
+        ctx.set_fill_rule(peniko::Fill::NonZero);
+        for clip in std::iter::once(&*line).chain(pieces.heads.iter().map(|h| &h.outline)) {
+            let cb = clip.bounding_box();
+            if clip.elements().is_empty() || !cb.is_finite() {
+                continue;
+            }
+            ctx.push_clip_layer(clip);
+            ctx.set_blend_mode(BlendMode::new(Mix::Normal, Compose::Copy));
+            for (shape, paint, b) in slices.iter() {
+                if rects_overlap(*b, cb) && paint::set_paint(ctx, paint, *b, f) {
+                    ctx.fill_path(shape);
+                }
+            }
+            ctx.set_blend_mode(BlendMode::default());
+            ctx.pop_layer();
         }
     }
 
@@ -1247,5 +1335,7 @@ mod tests_isolation;
 mod tests_knockout;
 #[cfg(test)]
 mod tests_objectfx;
+#[cfg(test)]
+mod tests_strokegradient;
 #[cfg(test)]
 mod tests_tileedge;

@@ -729,3 +729,18 @@ resets it.
 {"name":"run_command","arguments":{"command":"stroke.set","params":{"cap":"round","dash":[6,3]}}}
 {"name":"run_command","arguments":{"command":"appearance.newArt","params":{}}}
 ```
+
+## Gradients on strokes
+
+A linear or radial gradient on a stroke lies within it (placed on the page like a fill's gradient: the default), along
+it (from the start of each subpath to its end) or across it (from the stroke's left edge to its right edge, left of the
+path's direction; an inside or outside stroke spans the side it shows on). `paint.editGradient {stroke: true,
+strokeMode: "within"|"along"|"across"}` sets it (the Gradient panel's Stroke buttons), and `document.inspect` reports it
+as `strokeOptions.gradientMode`. Width profiles, dashes and arrowheads keep working: the gradient runs on through gaps
+and into the heads. Outline Stroke and Expand turn such a stroke into gradient meshes clipped to its outline; SVG and PDF
+write it as slices of linear gradients clipped to the outline (`vectorcraft_svg::export_with_report` and the PDF
+report warn about it).
+
+```json
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stroke":true,"strokeMode":"along"}}}
+```

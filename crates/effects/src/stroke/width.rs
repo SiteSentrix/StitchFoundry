@@ -43,7 +43,7 @@ pub(super) fn left(t: Vec2) -> Vec2 {
 
 /// The flattened points of one subpath (consecutive duplicates removed; a closed one doesn't
 /// repeat its start), each marked when it is a corner of the path.
-fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> (Vec<Point>, Vec<bool>) {
+pub(super) fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> (Vec<Point>, Vec<bool>) {
     let Some(s0) = segs.first() else { return (vec![], vec![]) };
     let (mut pts, mut corner) = (vec![s0.start()], vec![false]);
     // The first and the last segment that drew something.
@@ -88,15 +88,28 @@ fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> (Vec<Point>, Vec<bool>) 
 /// along straight runs; the two points of a discontinuous point share one sample). `span` maps the
 /// subpath onto the profile (see [`outline_spans`]).
 fn densify(pts: &[Point], corner: &[bool], closed: bool, profile: &WidthProfile, span: (f64, f64)) -> (Vec<Point>, Vec<bool>) {
-    let n = pts.len();
-    let seg_count = if closed { n } else { n - 1 };
-    let total: f64 = (0..seg_count).map(|i| pts[i].distance(pts[(i + 1) % n])).sum();
+    let total = length(pts, closed);
     let range = span.1 - span.0;
     if total <= 1e-12 || range <= 1e-12 {
         return (pts.to_vec(), corner.to_vec());
     }
     // Where the profile's points fall along this piece (a span past 1 wraps round a closed path).
     let marks: Vec<f64> = profile.points.iter().flat_map(|p| [p.0, p.0 + 1.0]).map(|t| (t - span.0) / range * total).collect();
+    split_at(pts, corner, closed, &marks)
+}
+
+/// Length of a flattened subpath (see [`flatten`]).
+pub(super) fn length(pts: &[Point], closed: bool) -> f64 {
+    let n = pts.len();
+    let seg_count = if closed { n } else { n.saturating_sub(1) };
+    (0..seg_count).map(|i| pts[i].distance(pts[(i + 1) % n])).sum()
+}
+
+/// A flattened subpath (see [`flatten`]) with points added `marks` along it (distances from its
+/// start; those on a point or off the subpath are ignored).
+pub(super) fn split_at(pts: &[Point], corner: &[bool], closed: bool, marks: &[f64]) -> (Vec<Point>, Vec<bool>) {
+    let n = pts.len();
+    let seg_count = if closed { n } else { n.saturating_sub(1) };
     let mut out = (Vec::with_capacity(n + marks.len()), Vec::with_capacity(n + marks.len()));
     let mut acc = 0.0;
     for i in 0..seg_count {
@@ -113,7 +126,7 @@ fn densify(pts: &[Point], corner: &[bool], closed: bool, profile: &WidthProfile,
         }
         acc += len;
     }
-    if !closed {
+    if !closed && n > 0 {
         out.0.push(pts[n - 1]);
         out.1.push(corner[n - 1]);
     }

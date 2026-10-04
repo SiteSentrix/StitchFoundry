@@ -33,12 +33,15 @@ pub enum WrittenShape {
     /// and dash pattern.
     Stroke { width: f64 },
     /// Filled outlines (non-zero rule): the line, then each arrowhead. They overlap, so they take
-    /// the stroke's opacity once, as a group.
+    /// the stroke's opacity once, as a group. A gradient along or across the stroke
+    /// ([`StrokeLayer::path_gradient`]) paints its [`gradient_slices`](super::gradient_slices)
+    /// clipped to them instead.
     Fill(Vec<BezPath>),
 }
 
 /// Does `st` draw as a plain centred stroke on every path (no alignment, arrowheads, width
-/// profile, brush, fitted dashes or dots)? Writers then need no geometry for it.
+/// profile, brush, fitted dashes, dots or gradient along or across it)? Writers then need no
+/// geometry for it.
 pub fn is_plain(st: &StrokeLayer) -> bool {
     st.align == StrokeAlign::Center
         && st.start_arrow.is_none()
@@ -46,6 +49,7 @@ pub fn is_plain(st: &StrokeLayer) -> bool {
         && st.profile.is_none()
         && st.brush.is_none()
         && !needs_outline_dashes(st)
+        && st.path_gradient().is_none()
 }
 
 /// Dashes a plain stroke can't draw like the canvas: fitted to corners, or zero-length dashes
@@ -54,9 +58,10 @@ fn needs_outline_dashes(st: &StrokeLayer) -> bool {
     st.dash.as_ref().is_some_and(|d| d.is_dashed() && (d.align_corners || (st.cap != LineCap::Butt && d.pattern.contains(&0.0))))
 }
 
-/// Do these pieces of `st` need filled outlines (see [`is_plain`])? Alignment alone doesn't.
+/// Do these pieces of `st` need filled outlines (see [`is_plain`])? Alignment alone doesn't; a
+/// gradient along or across the stroke paints slices clipped to them.
 fn needs_outline(pieces: &StrokePieces, st: &StrokeLayer) -> bool {
-    !pieces.heads.is_empty() || st.profile.is_some() || needs_outline_dashes(st)
+    !pieces.heads.is_empty() || st.profile.is_some() || needs_outline_dashes(st) || st.path_gradient().is_some()
 }
 
 /// How a writer draws stroke `st` along `bp` (brushes aside) to match the canvas.

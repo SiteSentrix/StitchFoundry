@@ -8,10 +8,12 @@
 //! - [`width_outline`]: variable-width (profile) strokes, with the stroke's joins at corners;
 //! - [`line_outline`]: the line part of a stroke as one filled outline (profile, dashes, dots,
 //!   caps and joins);
-//! - [`for_writer`] and [`outline_region`]: strokes for the SVG/PDF writers and Outline Stroke.
+//! - [`for_writer`] and [`outline_region`]: strokes for the SVG/PDF writers and Outline Stroke;
+//! - [`gradient_slices`] and [`gradient_meshes`]: gradients laid along or across a stroke.
 
 mod arrow;
 mod dash;
+mod gradient;
 mod outline;
 mod width;
 
@@ -23,6 +25,7 @@ pub(crate) use vectorcraft_geom::bez::{kink, segments, subpaths, tangent, unit};
 
 pub use arrow::Arrow;
 pub use dash::{Dashed, Dot, dash, dot_outline};
+pub use gradient::{Slice, WrittenSlices, gradient_meshes, gradient_slices, written_slices};
 pub use outline::{OUTLINE_TOL, Written, WrittenShape, for_writer, is_plain, outline_region};
 pub use width::width_outline;
 
@@ -132,5 +135,7 @@ mod tests;
 mod tests_arrows;
 #[cfg(test)]
 mod tests_fit;
+#[cfg(test)]
+mod tests_gradient;
 #[cfg(test)]
 mod tests_reach;

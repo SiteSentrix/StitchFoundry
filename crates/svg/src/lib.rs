@@ -94,6 +94,11 @@ pub enum SvgError {
 
 /// Export a document as an SVG string.
 pub fn export(doc: &Document, opts: &ExportOptions) -> String {
+    export::export(doc, opts).0
+}
+
+/// Export a document as an SVG string, also returning warnings about approximated features.
+pub fn export_with_report(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
     export::export(doc, opts)
 }
 
