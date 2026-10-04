@@ -10,17 +10,25 @@ use crate::theme::Tokens;
 pub(super) fn field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(label).color(t.text_dim));
+    text(ui, d, key, 120.0);
+    ui.end_row();
+}
+
+/// A text field `width` wide bound to `d.fields[key]`. Returns true when it changed.
+pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> bool {
+    let t = Tokens::get(ui.ctx());
     let mut s = d.str(key);
     let r = egui::Frame::NONE
         .fill(t.input)
         .stroke(egui::Stroke::new(1.0, t.input_border))
         .corner_radius(egui::CornerRadius::same(3))
         .inner_margin(egui::Margin::symmetric(6, 3))
-        .show(ui, |ui| ui.add(egui::TextEdit::singleline(&mut s).frame(egui::Frame::NONE).desired_width(120.0)));
-    if r.inner.changed() {
+        .show(ui, |ui| ui.add(egui::TextEdit::singleline(&mut s).frame(egui::Frame::NONE).desired_width(width)));
+    let changed = r.inner.changed();
+    if changed {
         d.fields.insert(key.into(), Value::String(s));
     }
-    ui.end_row();
+    changed
 }
 
 /// A checkbox bound to `d.fields[key]`.

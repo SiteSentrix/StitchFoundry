@@ -124,3 +124,97 @@ fn colour_groups_hold_solid_colours_only() {
     assert!(d.swatches.iter().any(|w| w.name == "Sunset") && d.swatches.iter().any(|w| w.name == "[None]"), "gradients and None stay put");
     assert!(d.swatch_groups.iter().find(|x| x.name == "Brights").unwrap().swatches.iter().all(|w| w.name != "Bright Blue"), "moved, not copied");
 }
+
+fn fill_of(s: &Session, id: NodeId) -> Paint {
+    doc(s).node(id).unwrap().appearance.fill_paint()
+}
+
+fn linked(hex: &str, name: &str) -> Paint {
+    Paint::Solid { color: Color::from_hex(hex).unwrap(), swatch: Some(name.into()) }
+}
+
+#[test]
+fn editing_a_global_swatch_recolours_linked_art_in_one_step() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": "#2a6fb0", "global": true}));
+    let (a, b) = (rect(&mut s), rect(&mut s));
+    run(&mut s, "paint.setFill", json!({"ids": [a.0], "swatch": "Brand"}));
+    run(&mut s, "paint.setFill", json!({"ids": [b.0], "color": "#2a6fb0"}));
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Hi"}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setFill", json!({"ids": [t.0], "swatch": "Brand"}));
+    run(&mut s, "select.set", json!({"ids": []}));
+    run(&mut s, "paint.setStroke", json!({"swatch": "Brand"}));
+    let undo_depth = s.doc().unwrap().history.undo.len();
+    let r = run(&mut s, "swatch.edit", json!({"name": "Brand", "color": "#ff0000"}));
+    assert_eq!(r, json!({"name": "Brand", "relinked": 2}));
+    assert_eq!(fill_of(&s, a), linked("#ff0000", "Brand"));
+    assert_eq!(fill_of(&s, b), Paint::solid(Color::from_hex("#2a6fb0").unwrap()), "unlinked art keeps its colour");
+    let text_fill = |s: &Session| match &doc(s).node(t).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(tx) => tx.runs[0].style.fill.clone(),
+        _ => unreachable!(),
+    };
+    assert_eq!(text_fill(&s), linked("#ff0000", "Brand"), "text runs follow the swatch");
+    assert_eq!(s.paint.stroke, linked("#ff0000", "Brand"), "so does the default stroke");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo_depth + 1, "one undo step");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(fill_of(&s, a), linked("#2a6fb0", "Brand"));
+    assert_eq!(doc(&s).swatch("Brand").unwrap().paint.color(), Color::from_hex("#2a6fb0"));
+}
+
+#[test]
+fn renaming_relinks_and_spot_forces_global() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": "#2a6fb0", "global": true}));
+    let a = rect(&mut s);
+    run(&mut s, "paint.setFill", json!({"ids": [a.0], "swatch": "Brand"}));
+    // A name in use gets the next free number.
+    let r = run(&mut s, "swatch.edit", json!({"name": "Brand", "newName": "Red"}));
+    assert_eq!(r, json!({"name": "Red 2", "relinked": 1}));
+    assert_eq!(fill_of(&s, a), linked("#2a6fb0", "Red 2"));
+    assert!(doc(&s).swatch("Brand").is_none());
+    run(&mut s, "swatch.edit", json!({"name": "Red 2", "spot": true, "global": false}));
+    assert!(doc(&s).swatch("Red 2").is_some_and(|w| w.spot && w.global), "spot colours stay global");
+    // Turning Global off (no longer spot) unlinks the art, which keeps its colour.
+    let r = run(&mut s, "swatch.edit", json!({"name": "Red 2", "spot": false, "global": false, "color": "#000000"}));
+    assert_eq!(r["relinked"], 1);
+    assert_eq!(fill_of(&s, a), Paint::solid(Color::from_hex("#2a6fb0").unwrap()));
+    assert!(doc(&s).swatch("Red 2").is_some_and(|w| !w.global && w.paint.color() == Some(Color::BLACK)));
+}
+
+#[test]
+fn grouped_swatches_edit_and_convert_modes() {
+    let mut s = session();
+    let r = run(&mut s, "swatch.edit", json!({"name": "Bright Red", "mode": "cmyk", "global": true}));
+    assert_eq!(r["name"], "Bright Red");
+    let w = doc(&s).swatch("Bright Red").unwrap();
+    assert!(w.global && matches!(w.paint.color(), Some(Color::Cmyk { .. })));
+    assert_eq!(doc(&s).swatch_group_of("Bright Red").map(|g| doc(&s).swatch_groups[g].name.clone()), Some("Brights".into()));
+    run(&mut s, "swatch.edit", json!({"name": "Bright Red", "color": "#123456", "mode": "web"}));
+    assert_eq!(doc(&s).swatch("Bright Red").unwrap().paint.color().unwrap().to_hex(), "#003366");
+    run(&mut s, "swatch.edit", json!({"name": "Bright Red", "mode": "gray"}));
+    assert!(matches!(doc(&s).swatch("Bright Red").unwrap().paint.color(), Some(Color::Gray { .. })));
+    // Gradients can be renamed but have no colour, mode or spot; None can't be edited.
+    assert!(s.execute("swatch.edit", &json!({"name": "Sunset", "color": "#000000"})).is_err());
+    assert!(s.execute("swatch.edit", &json!({"name": "Sunset", "spot": true})).is_err());
+    assert!(s.execute("swatch.edit", &json!({"name": "[None]", "newName": "x"})).is_err());
+    assert!(s.execute("swatch.edit", &json!({"name": "Bright Red", "mode": "lab"})).is_err());
+    assert_eq!(run(&mut s, "swatch.edit", json!({"name": "Sunset", "newName": "Dusk"}))["name"], "Dusk");
+}
+
+#[test]
+fn swatch_list_reports_kinds_and_groups() {
+    let mut s = session();
+    let all = run(&mut s, "swatch.list", json!({}));
+    let list = all["swatches"].as_array().unwrap();
+    assert_eq!(list.len(), doc(&s).swatches_iter().count());
+    let find = |n: &str| list.iter().find(|w| w["name"] == n).unwrap().clone();
+    assert_eq!(find("[None]")["kind"], "none");
+    assert_eq!(find("Red")["kind"], "color");
+    assert_eq!(find("Red")["hex"], "#ed1c24");
+    assert_eq!(find("Sunset")["kind"], "gradient");
+    assert_eq!(find("K=50")["group"], "Grays");
+    let grays = run(&mut s, "swatch.list", json!({"group": "Grays"}));
+    assert_eq!(grays["swatches"].as_array().unwrap().len(), 9);
+    assert_eq!(grays["groups"][0]["name"], "Grays");
+    assert!(s.execute("swatch.list", &json!({"group": "Nope"})).is_err());
+}

@@ -260,7 +260,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         },
         "ui.dialog.confirm" => wrap(crate::dialogs::confirm(app)),
         "ui.dialog.cancel" => {
-            app.ui.dialog = None;
+            crate::dialogs::cancel(app);
             ok(Value::Null)
         }
         "ui.resize" => {

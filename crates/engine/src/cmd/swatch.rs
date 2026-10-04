@@ -32,6 +32,24 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("swatch.duplicate", "Duplicate Swatch", ["Window", "Swatches"], None, "{name}", has_doc, swatch_duplicate),
         cmd!("swatch.sortByName", "Sort by Name", ["Window", "Swatches"], None, "{}", has_doc, swatch_sort),
+        cmd!(
+            "swatch.edit",
+            "Swatch Options",
+            ["Window", "Swatches"],
+            None,
+            "{name, newName?, color?, mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global)} edit a swatch in any colour group, as one undo step. Fills, strokes and text linked to a global swatch take its new colour and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only → {name, relinked: paints changed}",
+            has_doc,
+            swatch_edit
+        ),
+        cmd!(
+            query "swatch.list",
+            "Swatches",
+            [],
+            None,
+            "{group?: name (only that colour group's swatches)} → {swatches: [{name, kind: \"none\"|\"color\"|\"gradient\"|\"pattern\", group, global, spot, color?, hex?, gradient?, pattern?}], groups: [{name, swatches: [names]}]}",
+            has_doc,
+            swatch_list
+        ),
     ]
 }
 
@@ -51,7 +69,7 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
         _ if spot => return Err(bad(C, "only solid colours can be spot colours")),
         other => other,
     };
-    let requested = str_param(p, "name").map(str::to_string);
+    let requested = name_param(p, "name");
     let name = s.edit("New Swatch", |d, _| {
         let name = match requested {
             Some(n) => free_name(d, &n),
@@ -142,6 +160,150 @@ fn swatch_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(nm)
     })?;
     Ok(json!({"name": new}))
+}
+
+/// A trimmed, non-empty name parameter.
+fn name_param(p: &Value, key: &str) -> Option<String> {
+    str_param(p, key).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string)
+}
+
+/// `c` converted to a Swatch Options colour mode through the colour settings (HSB is an RGB view;
+/// Web snaps each channel to a multiple of 0x33).
+fn convert_to_mode(c: Color, mode: &str, cmd: &str) -> Result<Color> {
+    use vectorcraft_color::cms::Model;
+    let cms = vectorcraft_color::cms::active();
+    let to = |m: Model| cms.convert(&c, m, cms.settings().intent);
+    Ok(match mode.to_ascii_lowercase().as_str() {
+        "gray" | "grayscale" => to(Model::Gray),
+        "rgb" | "hsb" => to(Model::Rgb),
+        "cmyk" => to(Model::Cmyk),
+        "web" => {
+            let snap = |v: f32| (v.clamp(0.0, 1.0) * 5.0).round() / 5.0;
+            let [r, g, b] = to(Model::Rgb).to_rgb_uncalibrated();
+            Color::rgb(snap(r), snap(g), snap(b))
+        }
+        other => return Err(bad(cmd, format!("unknown mode `{other}` (gray, rgb, hsb, cmyk or web)"))),
+    })
+}
+
+/// How a swatch edit reaches the solid paints linked to swatch `from`.
+struct Relink {
+    from: String,
+    /// The swatch's name after the edit.
+    to: String,
+    /// The new colour of a global swatch (linked paints take it).
+    color: Option<Color>,
+    /// false: drop the links (the swatch stopped being global or is deleted); paints keep their colour.
+    keep: bool,
+}
+
+impl Relink {
+    /// Apply to one paint; true when it changed.
+    fn apply(&self, c: &mut Color, link: &mut Option<String>) -> bool {
+        if link.as_deref() != Some(self.from.as_str()) {
+            return false;
+        }
+        if !self.keep {
+            *link = None;
+            return true;
+        }
+        let renamed = self.to != self.from;
+        if renamed {
+            *link = Some(self.to.clone());
+        }
+        let recolored = self.color.is_some_and(|n| n != *c);
+        if let Some(n) = self.color {
+            *c = n;
+        }
+        renamed || recolored
+    }
+
+    /// Apply to the default fill and stroke for new art, except during a live preview (Cancel rolls
+    /// the document back, not the session).
+    fn defaults(&self, s: &mut Session) {
+        if s.in_interaction() {
+            return;
+        }
+        for p in [&mut s.paint.fill, &mut s.paint.stroke] {
+            if let Paint::Solid { color, swatch } = p {
+                self.apply(color, swatch);
+            }
+        }
+    }
+}
+
+fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "swatch.edit";
+    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?.to_string();
+    let d = &s.doc()?.doc;
+    let sw = d.swatch(&name).cloned().ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
+    if sw.paint.is_none() {
+        return Err(bad(C, format!("`{name}` can't be edited")));
+    }
+    let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
+    let solid = sw.paint.color();
+    if solid.is_none() && (given("color") || given("mode") || bool_or(p, "spot", false)) {
+        return Err(bad(C, "colour, mode and spot apply to solid-colour swatches only"));
+    }
+    let mut color = match p.get("color").filter(|v| !v.is_null()) {
+        Some(v) => Some(color_value(v).ok_or_else(|| bad(C, format!("bad color {v}")))?),
+        None => solid,
+    };
+    if let (Some(c), Some(m)) = (color, str_param(p, "mode")) {
+        color = Some(convert_to_mode(c, m, C)?);
+    }
+    let spot = bool_or(p, "spot", sw.spot);
+    let global = spot || bool_or(p, "global", sw.global);
+    let to = name_param(p, "newName").filter(|n| *n != name).map_or_else(|| name.clone(), |n| free_name(d, &n));
+    let relink = Relink { from: name.clone(), to: to.clone(), color: color.filter(|_| global), keep: global };
+    let relinked = s.edit("Swatch Options", |d, _| {
+        let w = d.swatch_mut(&name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
+        w.name = to.clone();
+        w.spot = spot;
+        w.global = global;
+        if let (Some(c), Paint::Solid { color: wc, .. }) = (color, &mut w.paint) {
+            *wc = c;
+        }
+        Ok(d.map_solid_paints(&mut |c, l| relink.apply(c, l)))
+    })?;
+    relink.defaults(s);
+    Ok(json!({"name": to, "relinked": relinked}))
+}
+
+fn swatch_json(sw: &Swatch, group: Option<&str>) -> Value {
+    let mut v = json!({"name": sw.name, "group": group, "global": sw.global, "spot": sw.spot});
+    match &sw.paint {
+        Paint::None => v["kind"] = json!("none"),
+        Paint::Solid { color, .. } => {
+            v["kind"] = json!("color");
+            v["color"] = json!(color);
+            v["hex"] = json!(color.to_hex());
+        }
+        Paint::Gradient(g) => {
+            v["kind"] = json!("gradient");
+            v["gradient"] = json!(g.gradient.kind.label().to_lowercase());
+        }
+        Paint::Pattern { pattern, .. } => {
+            v["kind"] = json!("pattern");
+            v["pattern"] = json!(pattern);
+        }
+    }
+    v
+}
+
+fn swatch_list(s: &mut Session, p: &Value) -> Result<Value> {
+    let d = &s.doc()?.doc;
+    let only = str_param(p, "group");
+    let groups: Vec<&SwatchGroup> = match only {
+        Some(g) => vec![d.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| bad("swatch.list", format!("no colour group `{g}`")))?],
+        None => d.swatch_groups.iter().collect(),
+    };
+    let ungrouped = d.swatches.iter().filter(|_| only.is_none()).map(|w| swatch_json(w, None));
+    let grouped = groups.iter().flat_map(|g| g.swatches.iter().map(|w| swatch_json(w, Some(&g.name))));
+    let swatches: Vec<Value> = ungrouped.chain(grouped).collect();
+    let groups: Vec<Value> =
+        groups.iter().map(|g| json!({"name": g.name, "swatches": g.swatches.iter().map(|w| &w.name).collect::<Vec<_>>()})).collect();
+    Ok(json!({"swatches": swatches, "groups": groups}))
 }
 
 fn swatch_sort(s: &mut Session, _: &Value) -> Result<Value> {

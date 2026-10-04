@@ -222,7 +222,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel = selected_name(ui).or(active_swatch);
     let (tile, pitch) = view.tile();
     let mut clicked: Option<Entry> = None;
-    let mut edit_pattern: Option<String> = None;
+    // Double-click opens the swatch's editor (Swatch Options, Gradient panel or pattern editing).
+    let mut edit: Option<String> = None;
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt("swatch-scroll").max_height(if view == View::LargeThumb { 200.0 } else { 150.0 }).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -271,6 +272,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                             ));
                         }
                     }
+                    if let Entry::Swatch { name, .. } = e
+                        && resp.double_clicked()
+                    {
+                        edit = Some(name.clone());
+                    }
                     if resp.on_hover_text(&name).clicked() && !matches!(e, Entry::Folder(_)) {
                         clicked = Some(e.clone());
                     }
@@ -279,8 +285,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let w = ui.available_width();
                 let per_row = ((w - 2.0) / pitch).floor().max(1.0) as usize;
                 let mut col = 0usize;
-                let mut rows: Vec<Vec<(usize, &Entry)>> = vec![vec![]];
-                for (i, e) in items.iter().enumerate() {
+                let mut rows: Vec<Vec<&Entry>> = vec![vec![]];
+                for e in &items {
                     // A group folder starts a new row.
                     if matches!(e, Entry::Folder(_)) && col > 0 {
                         rows.push(vec![]);
@@ -290,14 +296,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         rows.push(vec![]);
                         col = 0;
                     }
-                    rows.last_mut().unwrap().push((i, e));
+                    rows.last_mut().unwrap().push(e);
                     col += 1;
                 }
                 for row in rows {
                     let (r, _) = ui.allocate_exact_size(vec2(w, pitch), Sense::hover());
-                    for (c, (i, e)) in row.into_iter().enumerate() {
+                    for (c, e) in row.into_iter().enumerate() {
                         let cell = Rect::from_min_size(r.min + vec2(1.0 + c as f32 * pitch, (pitch - tile) / 2.0), vec2(tile, tile));
-                        let resp = ui.interact(cell, ui.id().with(("sw", i)), Sense::click());
+                        let resp = ui.interact(cell, tile_id(e), Sense::click());
                         let (name, tip) = match e {
                             Entry::Registration => (REGISTRATION.to_string(), "[Registration]".to_string()),
                             Entry::Swatch { name, .. } => (name.clone(), name.clone()),
@@ -308,10 +314,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                             Entry::Swatch { paint, global, .. } => {
                                 swatch_tile(ui, cell, paint, sel.as_deref() == Some(name.as_str()), resp.hovered());
                                 pattern_thumb(app, ui, cell.shrink(1.0), paint);
-                                if resp.double_clicked()
-                                    && let Paint::Pattern { pattern, .. } = paint
-                                {
-                                    edit_pattern = Some(pattern.clone());
+                                if resp.double_clicked() {
+                                    edit = Some(name.clone());
                                 }
                                 if *global {
                                     let k = cell.shrink(1.0);
@@ -332,9 +336,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
-    if let Some(name) = edit_pattern {
-        app.run("object.pattern.edit", json!({"name": name})).ok();
-        app.ui.open_panel = Some("patternOptions".into());
+    if let Some(name) = edit {
+        app.run("ui.swatchOptions", json!({"name": name})).ok();
     }
     if let Some(e) = clicked {
         let name = match &e {
@@ -348,8 +351,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     bottom(app, ui);
 }
 
+/// The interaction id of a tile in the thumbnail views (stable per swatch or group name).
+fn tile_id(e: &Entry) -> egui::Id {
+    let name = match e {
+        Entry::Registration => REGISTRATION,
+        Entry::Swatch { name, .. } | Entry::Folder(name) => name,
+    };
+    egui::Id::new(("swatch-tile", name))
+}
+
 fn deletable(ui: &Ui) -> Option<String> {
     selected_name(ui).filter(|n| !n.starts_with('['))
+}
+
+/// The selected swatch when it has an editor (any swatch but None and Registration).
+fn editable(app: &VectorcraftApp, ui: &Ui) -> Option<String> {
+    deletable(ui).filter(|n| app.session.active().is_some_and(|st| st.doc.swatch(n).is_some()))
 }
 
 fn bottom(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -364,7 +381,12 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
         });
-        widgets::icon_button_enabled(ui, "dc-options", "Swatch Options (on the roadmap)", false, false, 24.0);
+        let opts = editable(app, ui);
+        if widgets::icon_button_enabled(ui, "dc-options", "Swatch Options", false, opts.is_some(), 24.0).clicked()
+            && let Some(n) = opts
+        {
+            app.run("ui.swatchOptions", json!({"name": n})).ok();
+        }
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
         if widgets::icon_button(ui, "dc-folder", "New Color Group", false, 24.0).clicked() {
             let names: Vec<String> = deletable(ui).into_iter().collect();
@@ -426,7 +448,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.separator();
-    menu_item(ui, "Swatch Options…", false, false);
+    let opts = editable(app, ui);
+    if menu_item(ui, "Swatch Options…", opts.is_some(), false)
+        && let Some(n) = opts
+    {
+        app.run("ui.swatchOptions", json!({"name": n})).ok();
+    }
     menu_item(ui, "Spot Colors…", false, false);
     ui.separator();
     menu_item(ui, "Open Swatch Library", false, false);
@@ -436,7 +463,92 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dialogs::swatch_options::KIND;
+    use egui::{Event, PointerButton, Pos2};
     use vectorcraft_color::Color;
+    use vectorcraft_engine::Session;
+
+    fn app() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app
+    }
+
+    /// One frame of `draw` on a persistent context (clicks need the previous frame's layout).
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, time: f64, draw: fn(&mut VectorcraftApp, &mut Ui)) {
+        let input =
+            egui::RawInput { events, time: Some(time), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0))), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| draw(app, ui));
+        out.textures_delta.clear();
+    }
+
+    fn context() -> egui::Context {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx
+    }
+
+    fn double_click(at: Pos2) -> Vec<Event> {
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        vec![Event::PointerMoved(at), button(true), button(false), button(true), button(false)]
+    }
+
+    /// Double-click the thumbnail of swatch `name` in the panel.
+    fn double_click_tile(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
+        frame(app, ctx, vec![], 0.0, show);
+        let tile = ctx.read_response(egui::Id::new(("swatch-tile", name))).unwrap_or_else(|| panic!("no tile for {name}")).rect;
+        frame(app, ctx, double_click(tile.center()), 1.0, show);
+    }
+
+    fn dialog_frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
+        frame(app, ctx, vec![], 2.0, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    }
+
+    #[test]
+    fn double_click_opens_swatch_options_and_ok_edits_linked_art() {
+        let mut app = app();
+        app.run("swatch.edit", json!({"name": "Red", "global": true})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "swatch": "Red"})).unwrap();
+        let ctx = context();
+        double_click_tile(&mut app, &ctx, "Red");
+        let d = app.ui.dialog.as_ref().expect("double-click opens Swatch Options");
+        assert_eq!((d.kind.as_str(), d.str("__swatch").as_str(), d.str("mode").as_str()), (KIND, "Red", "rgb"));
+        // The dialog previews live on the canvas; OK keeps the edit as one undo step.
+        let undo = app.session.doc().unwrap().history.undo.len();
+        dialog_frame(&mut app, &ctx);
+        assert!(app.session.in_interaction(), "Preview runs as an interaction");
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("color".into(), json!("#00ff00"));
+        d.fields.insert("name".into(), json!("Signal"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(doc.swatch("Signal").and_then(|w| w.paint.color()).map(|c| c.to_hex()), Some("#00ff00".into()));
+        let fill = doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
+        assert_eq!(fill, Paint::Solid { color: Color::from_hex("#00ff00").unwrap(), swatch: Some("Signal".into()) });
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    }
+
+    #[test]
+    fn cancel_rolls_the_preview_back_and_other_kinds_open_their_editors() {
+        let mut app = app();
+        let ctx = context();
+        let before = app.session.doc().unwrap().doc.clone();
+        app.run("ui.swatchOptions", json!({"name": "Bright Blue"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#000000"));
+        dialog_frame(&mut app, &ctx);
+        assert_ne!(app.session.doc().unwrap().doc, before, "previewed");
+        crate::dialogs::cancel(&mut app);
+        assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        // Gradients open the Gradient panel, patterns pattern editing, None nothing.
+        double_click_tile(&mut app, &ctx, "Sunset");
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.ui.open_panel.as_deref(), Some("gradient"));
+        assert!(app.run("ui.swatchOptions", json!({"name": "[None]"})).is_err());
+        assert!(app.run("ui.swatchOptions", json!({})).is_err());
+    }
 
     #[test]
     fn kind_filter() {

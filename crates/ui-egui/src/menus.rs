@@ -160,6 +160,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
+    (
+        "ui.swatchOptions",
+        "Swatch Options…",
+        "",
+        "{name} edit a swatch: Swatch Options for a colour (dialog `swatchOptions`, engine: swatch.edit), the Gradient panel for a gradient, pattern editing for a pattern",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -482,6 +488,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         "file.closeAll" => crate::unsaved::close_all(app, "closeAll"),
         "app.quit" => crate::unsaved::close_all(app, "quit"),
+        "ui.swatchOptions" => match s("name") {
+            Some(name) => crate::dialogs::swatch_options::open(app, &name),
+            None => Err("missing `name`".into()),
+        },
         _ => return None,
     };
     Some(r)
@@ -644,6 +654,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "effect.dialog" | "ui.recolorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "file.export.pdf" => app.session.active().is_some(),
+        "ui.swatchOptions" => app.session.active().is_some(),
         _ => true,
     }
 }

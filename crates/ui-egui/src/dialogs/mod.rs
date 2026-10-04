@@ -19,6 +19,7 @@ mod path_ops;
 mod recolor;
 mod save_changes;
 mod shapes;
+pub mod swatch_options;
 mod tools;
 mod transform;
 
@@ -127,6 +128,7 @@ registry! {
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
+    SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -140,6 +142,13 @@ fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogRes
     let r = app.run(id, params);
     app.ui.dialog = None;
     r
+}
+
+/// Close the open dialog as Cancel does, rolling back a live preview (`ui.dialog.cancel`).
+pub fn cancel(app: &mut VectorcraftApp) {
+    if app.ui.dialog.take().is_some_and(|d| spec(&d.kind).preview) {
+        let _ = app.session.cancel_interaction();
+    }
 }
 
 /// Apply the open dialog (OK).
