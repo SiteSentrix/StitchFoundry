@@ -189,7 +189,10 @@ pub(crate) fn overprint_black(s: &mut Session, p: &Value) -> Result<Value> {
     let op = OverprintBlack {
         remove: bool_or(p, "remove", false),
         min_k: (f64_or(p, "percentage", 100.0) / 100.0).clamp(0.0, 1.0) as f32,
-        ..Default::default()
+        fill: bool_or(p, "fill", true),
+        stroke: bool_or(p, "stroke", true),
+        rich: bool_or(p, "includeCmyBlacks", false),
+        spot: bool_or(p, "includeSpotBlacks", false),
     };
     let ids = match ids_param(p, "ids") {
         Some(v) => v,

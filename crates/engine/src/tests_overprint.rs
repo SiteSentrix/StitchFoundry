@@ -192,3 +192,63 @@ fn old_documents_with_an_overprint_black_list_still_preview() {
     let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
     assert_eq!(back.node(k).unwrap().appearance, n.appearance);
 }
+
+fn overprints(s: &Session, id: NodeId) -> (bool, bool) {
+    let a = &node(s, id).appearance;
+    (a.fill().unwrap().overprint, a.stroke().unwrap().overprint)
+}
+
+#[test]
+fn overprint_black_options() {
+    let mut s = session();
+    let k = rect(&mut s, [0.0, 0.0, 10.0, 10.0], black_ink(), Some(black_ink()), 1.0);
+    let rich = rect(&mut s, [20.0, 0.0, 10.0, 10.0], ink(60, 40, 40, 100), Some(ink(0, 0, 0, 80)), 1.0);
+    let rgb = rect(&mut s, [40.0, 0.0, 10.0, 10.0], json!("#000000"), Some(cyan_ink()), 1.0);
+    let ids = json!([k.0, rich.0, rgb.0]);
+
+    let r = s.execute("edit.colors.overprintBlack", &json!({"ids": ids, "fill": false})).unwrap();
+    assert_eq!(r["changed"], 1);
+    assert_eq!(overprints(&s, k), (false, true), "fill: false marks strokes only");
+    s.execute("edit.colors.overprintBlack", &json!({"ids": ids})).unwrap();
+    assert_eq!(overprints(&s, k), (true, true));
+    assert_eq!(overprints(&s, rich), (false, false), "rich black and 80% K stay out at 100%");
+    assert_eq!(overprints(&s, rgb), (false, false), "RGB black is not black ink");
+
+    let before = undo_len(&s);
+    s.execute("edit.colors.overprintBlack", &json!({"ids": ids, "includeCmyBlacks": true})).unwrap();
+    assert_eq!(overprints(&s, rich), (true, false), "rich black included with CMY");
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    s.execute("edit.colors.overprintBlack", &json!({"ids": ids, "percentage": 75})).unwrap();
+    assert_eq!(overprints(&s, rich), (true, true), "80% K at 75%");
+
+    s.execute("edit.colors.overprintBlack", &json!({"ids": ids, "remove": true, "stroke": false, "includeCmyBlacks": true})).unwrap();
+    assert_eq!((overprints(&s, k), overprints(&s, rich)), ((false, true), (false, true)), "remove from fills only");
+    let before = undo_len(&s);
+    let r = s.execute("edit.colors.overprintBlack", &json!({"ids": ids, "remove": true, "stroke": false})).unwrap();
+    assert_eq!((r["changed"].clone(), undo_len(&s)), (json!(0), before), "nothing to change, no undo step");
+}
+
+#[test]
+fn overprint_black_covers_type_gradients_spots_and_groups() {
+    let mut s = session();
+    let t = NodeId(s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [t.0], "color": black_ink()})).unwrap();
+    let g = rect(&mut s, [0.0, 0.0, 10.0, 10.0], black_ink(), None, 0.0);
+    let stops = json!([{"offset": 0, "color": black_ink()}, {"offset": 1, "color": ink(50, 0, 0, 100)}]);
+    s.execute("paint.setFill", &json!({"ids": [g.0], "gradient": {"stops": stops}})).unwrap();
+    let spot = rect(&mut s, [20.0, 0.0, 10.0, 10.0], black_ink(), None, 0.0);
+    let name =
+        s.execute("swatch.new", &json!({"name": "Press Black", "color": black_ink(), "spot": true})).unwrap()["name"].as_str().unwrap().to_string();
+    s.execute("paint.setFill", &json!({"ids": [spot.0], "swatch": name})).unwrap();
+    s.execute("select.set", &json!({"ids": [t.0, g.0, spot.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+
+    s.execute("edit.colors.overprintBlack", &json!({})).unwrap();
+    let NodeKind::Text(tx) = &node(&s, t).kind else { panic!() };
+    assert!(tx.runs.iter().all(|r| r.style.overprint_fill), "type characters, inside the selected group");
+    let fill = |s: &Session, id| node(s, id).appearance.fill().unwrap().overprint;
+    assert!(!fill(&s, g), "a gradient with a rich-black stop");
+    assert!(!fill(&s, spot), "spot blacks need includeSpotBlacks");
+    s.execute("edit.colors.overprintBlack", &json!({"includeCmyBlacks": true, "includeSpotBlacks": true})).unwrap();
+    assert!(fill(&s, g) && fill(&s, spot));
+}

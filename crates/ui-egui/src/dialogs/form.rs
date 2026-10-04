@@ -133,6 +133,7 @@ pub(super) fn humanize(k: &str) -> String {
         "Sy" => "Vertical %".into(),
         "Radius1" => "Radius 1".into(),
         "Radius2" => "Radius 2".into(),
+        "Include Cmy Blacks" => "Include Blacks with CMY:".into(),
         _ => format!("{s}:"),
     }
 }

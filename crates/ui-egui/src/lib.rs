@@ -33,6 +33,8 @@ pub mod workspaces;
 
 #[cfg(test)]
 mod tests_labels;
+#[cfg(test)]
+mod tests_overprint;
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
