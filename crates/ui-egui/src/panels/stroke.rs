@@ -3,7 +3,7 @@
 
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Arrowhead, LineCap, LineJoin, StrokeAlign, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{Arrowhead, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, Unit, WidthProfile};
 
 use super::{first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
@@ -13,27 +13,9 @@ use crate::{VectorcraftApp, icons};
 pub const WEIGHT_PRESETS: [f64; 22] =
     [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
 
-/// Width profile presets: (id for `stroke.set`, label).
-pub const PROFILES: [(&str, &str); 4] = [("uniform", "Uniform"), ("lens", "Lens"), ("taperStart", "Taper Start"), ("taperEnd", "Taper End")];
-
-/// Which preset a stroke's profile is (None profile = uniform).
-pub fn profile_id(p: Option<&WidthProfile>) -> &'static str {
-    let Some(p) = p else { return "uniform" };
-    for (id, prof) in [("lens", WidthProfile::lens()), ("taperStart", WidthProfile::taper_start()), ("taperEnd", WidthProfile::taper_end())] {
-        if prof.points == p.points {
-            return id;
-        }
-    }
-    "custom"
-}
-
+/// The silhouette drawn for profile `id` (None draws the plain uniform bar).
 fn profile_of(id: &str) -> Option<WidthProfile> {
-    match id {
-        "lens" => Some(WidthProfile::lens()),
-        "taperStart" => Some(WidthProfile::taper_start()),
-        "taperEnd" => Some(WidthProfile::taper_end()),
-        _ => None,
-    }
+    WidthProfile::preset(id).filter(|_| id != "uniform")
 }
 
 /// Dash pattern → the panel's six dash/gap fields (None = empty field).
@@ -237,7 +219,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::divider(ui);
     // Profile.
-    let pid = profile_id(st.as_ref().and_then(|s| s.profile.as_ref()));
+    let pid = WidthProfile::id_of(st.as_ref().and_then(|s| s.profile.as_ref()));
     ui.horizontal(|ui| {
         row_label(ui, "Profile:");
         if let Some(id) = profile_dropdown(ui, pid) {
@@ -355,7 +337,7 @@ fn profile_dropdown(ui: &mut Ui, cur: &str) -> Option<&'static str> {
     let resp = resp.on_hover_text("Variable Width Profile");
     let mut out = None;
     egui::Popup::menu(&resp).show(|ui| {
-        for (id, label) in PROFILES {
+        for ProfilePreset { id, label, .. } in WidthProfile::PRESETS {
             let (row, rr) = ui.allocate_exact_size(vec2(170.0, 26.0), Sense::click());
             if id == cur {
                 ui.painter().rect_filled(row, 0.0, t.row_selected);
@@ -404,11 +386,38 @@ mod tests {
     }
 
     #[test]
-    fn profile_ids() {
-        assert_eq!(profile_id(None), "uniform");
-        assert_eq!(profile_id(Some(&WidthProfile::lens())), "lens");
-        assert_eq!(profile_id(Some(&WidthProfile::taper_end())), "taperEnd");
-        assert_eq!(profile_id(Some(&WidthProfile { points: vec![(0.0, 0.3, 0.3)] })), "custom");
+    fn profile_silhouettes_and_arrow_labels() {
+        assert!(profile_of("uniform").is_none());
+        assert_eq!(profile_of("lens"), Some(WidthProfile::lens()));
+        assert!(profile_of("custom").is_none());
         assert_eq!(arrow_label(Some(Arrowhead::CircleOpen)), "Circle (open)");
+    }
+
+    /// Run the panel and its ≡ menu for one headless frame.
+    fn frame(app: &mut VectorcraftApp) {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            show(app, ui);
+            menu(app, ui);
+        });
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn panel_draws_for_lines_with_and_without_heads() {
+        use vectorcraft_engine::Session;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let r = |app: &mut VectorcraftApp, id: &str, p: Value| app.session.execute(id, &p).unwrap();
+        r(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        frame(&mut app);
+        r(&mut app, "shape.line", json!({"x1": 10, "y1": 50, "x2": 90, "y2": 50}));
+        frame(&mut app);
+        for p in [json!({"endArrow": "ArrowOpen"}), json!({"profile": "lens"}), json!({"dash": [0, 6], "cap": "round"})] {
+            r(&mut app, "stroke.set", p);
+            frame(&mut app);
+        }
+        let st = stroke_now(&app).unwrap();
+        assert_eq!(st.end_arrow, Some(Arrowhead::ArrowOpen));
+        assert_eq!(WidthProfile::id_of(st.profile.as_ref()), "lens");
     }
 }

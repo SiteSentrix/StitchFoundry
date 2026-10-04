@@ -11,9 +11,9 @@ use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
 use krilla::surface::Surface;
-use kurbo::{ParamCurve, ParamCurveDeriv, PathEl, Shape, Vec2};
+use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, Arrowhead, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
+use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 
 use crate::{Compatibility, ExportReport, PdfError, PdfOptions};
@@ -577,10 +577,11 @@ impl Exporter<'_> {
             s.pop();
             pushes -= 1;
         }
-        if st.start_arrow.is_some() || st.end_arrow.is_some() {
-            for head in arrowheads(bp, st) {
-                if let Some(p) = to_path(&head) {
-                    s.set_fill(Some(Fill { paint: paint.clone(), opacity: norm(st.opacity), rule: krilla::paint::FillRule::NonZero }));
+        let heads = vectorcraft_effects::stroke::stroke_pieces(bp, st).heads;
+        if !heads.is_empty() {
+            s.set_fill(Some(Fill { paint, opacity: norm(st.opacity), rule: krilla::paint::FillRule::NonZero }));
+            for head in &heads {
+                if let Some(p) = to_path(&head.outline) {
                     s.draw_path(&p);
                 }
             }
@@ -678,79 +679,4 @@ impl Exporter<'_> {
         s.draw_image(img, size);
         s.pop();
     }
-}
-
-/// Arrowhead outlines for a stroke (same geometry as the renderer).
-fn arrowheads(bp: &BezPath, st: &StrokeLayer) -> Vec<BezPath> {
-    let segs: Vec<kurbo::PathSeg> = bp.segments().collect();
-    let mut out = Vec::new();
-    let (Some(first), Some(last)) = (segs.first(), segs.last()) else { return out };
-    if let Some(a) = st.start_arrow {
-        out.push(head(a, first.eval(0.0), tangent(first, 0.0) * -1.0, st.width * st.arrow_scale.0 / 100.0));
-    }
-    if let Some(a) = st.end_arrow {
-        out.push(head(a, last.eval(1.0), tangent(last, 1.0), st.width * st.arrow_scale.1 / 100.0));
-    }
-    out
-}
-
-fn tangent(s: &kurbo::PathSeg, t: f64) -> Vec2 {
-    let d = match s {
-        kurbo::PathSeg::Line(l) => l.p1 - l.p0,
-        kurbo::PathSeg::Quad(q) => q.deriv().eval(t).to_vec2(),
-        kurbo::PathSeg::Cubic(c) => {
-            let v = c.deriv().eval(t).to_vec2();
-            if v.hypot() < 1e-9 { c.p3 - c.p0 } else { v }
-        }
-    };
-    let l = d.hypot();
-    if l < 1e-12 { Vec2::new(1.0, 0.0) } else { d / l }
-}
-
-fn head(kind: Arrowhead, tip: kurbo::Point, dir: Vec2, w: f64) -> BezPath {
-    let w = w.max(0.25);
-    let n = Vec2::new(-dir.y, dir.x);
-    let len = 4.0 * w;
-    let half = 2.0 * w;
-    let base = tip - dir * len;
-    let mut p = BezPath::new();
-    match kind {
-        Arrowhead::Triangle | Arrowhead::TriangleOpen | Arrowhead::Arrow | Arrowhead::ArrowOpen => {
-            p.move_to(tip);
-            p.line_to(base + n * half);
-            if matches!(kind, Arrowhead::Arrow | Arrowhead::ArrowOpen) {
-                p.line_to(tip - dir * (len * 0.7));
-            }
-            p.line_to(base - n * half);
-            p.close_path();
-        }
-        Arrowhead::Circle | Arrowhead::CircleOpen => {
-            p = kurbo::Circle::new(tip - dir * half, half).to_path(0.01);
-        }
-        Arrowhead::Square | Arrowhead::SquareOpen => {
-            let c = tip - dir * half;
-            p.move_to(c + dir * half + n * half);
-            p.line_to(c - dir * half + n * half);
-            p.line_to(c - dir * half - n * half);
-            p.line_to(c + dir * half - n * half);
-            p.close_path();
-        }
-        Arrowhead::Diamond => {
-            let c = tip - dir * half;
-            p.move_to(tip);
-            p.line_to(c + n * half);
-            p.line_to(c - dir * half);
-            p.line_to(c - n * half);
-            p.close_path();
-        }
-        Arrowhead::Bar => {
-            let t = w * 0.75;
-            p.move_to(tip + n * half);
-            p.line_to(tip + n * half - dir * t);
-            p.line_to(tip - n * half - dir * t);
-            p.line_to(tip - n * half);
-            p.close_path();
-        }
-    }
-    p
 }

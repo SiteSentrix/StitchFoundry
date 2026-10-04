@@ -12,22 +12,21 @@ mod live;
 mod paint;
 mod pattern;
 pub mod proof;
-mod width;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
 use vello_cpu::peniko::{self, BlendMode, Compose, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
+pub use effects::stroke::width_outline;
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
 pub use vello_cpu;
-pub use width::width_outline;
 
 /// Rendering options.
 #[derive(Clone, Debug)]
@@ -653,36 +652,10 @@ impl Renderer {
             ctx.push_layer(None, Some(blend_mode(st.blend)), Some(st.opacity), None, None);
         }
         ctx.set_transform(f.view);
-        let closed = bp.elements().last().is_some_and(|e| matches!(e, kurbo::PathEl::ClosePath));
-        let width = match st.align {
-            StrokeAlign::Center => st.width,
-            _ if closed => st.width * 2.0,
-            _ => st.width,
-        };
-        // Keep hairlines visible when zoomed far out (Illustrator shows at least ~1 device pixel).
-        let width = width.max(f.px * 0.5);
-        let mut stroke = kurbo::Stroke::new(width)
-            .with_join(match st.join {
-                LineJoin::Miter => kurbo::Join::Miter,
-                LineJoin::Round => kurbo::Join::Round,
-                LineJoin::Bevel => kurbo::Join::Bevel,
-            })
-            .with_caps(match st.cap {
-                LineCap::Butt => kurbo::Cap::Butt,
-                LineCap::Round => kurbo::Cap::Round,
-                LineCap::Square => kurbo::Cap::Square,
-            })
-            .with_miter_limit(st.miter_limit);
-        if let Some(d) = &st.dash
-            && d.pattern.iter().any(|v| *v > 0.0)
-        {
-            let mut pat = d.pattern.clone();
-            if pat.len() % 2 == 1 {
-                pat.extend(pat.clone());
-            }
-            stroke = stroke.with_dashes(d.offset, pat);
-        }
-        ctx.set_stroke(stroke.clone());
+        let pieces = effects::stroke::stroke_pieces(bp, st);
+        let closed = effects::stroke::is_closed(bp);
+        // Keep hairlines visible when zoomed far out (at least ~1 device pixel).
+        let width = effects::stroke::aligned_width(st, closed).max(f.px * 0.5);
         let inside = st.align == StrokeAlign::Inside && closed;
         if inside {
             ctx.set_fill_rule(fill_rule(rule));
@@ -690,14 +663,10 @@ impl Renderer {
         }
         if paint::set_paint(ctx, &st.paint, bounds.inflate(st.width / 2.0, st.width / 2.0), f.doc) {
             self.fold_alpha(ctx, &st.paint);
-            if let Some(o) = width::outline_for(bp, st, f.px * 0.25) {
-                ctx.set_fill_rule(peniko::Fill::NonZero);
-                ctx.fill_path(&o);
-            } else if let Some(o) = self.cached_stroke(f, bp, st, &stroke) {
-                ctx.set_fill_rule(peniko::Fill::NonZero);
-                ctx.fill_path(&o);
-            } else {
-                ctx.stroke_path(bp);
+            ctx.set_fill_rule(peniko::Fill::NonZero);
+            match self.cached_stroke(f, &pieces.line, st, width) {
+                Some(o) => ctx.fill_path(&o),
+                None => ctx.fill_path(&effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
             }
         }
         if inside {
@@ -711,14 +680,10 @@ impl Renderer {
             ctx.fill_path(bp);
             ctx.set_blend_mode(BlendMode::default());
         }
-        // Arrowheads.
-        if st.start_arrow.is_some() || st.end_arrow.is_some() {
-            for (arrow, head) in paint::arrowheads(bp, st) {
-                let _ = arrow;
-                if paint::set_paint(ctx, &st.paint, bounds, f.doc) {
-                    ctx.set_fill_rule(peniko::Fill::NonZero);
-                    ctx.fill_path(&head);
-                }
+        if !pieces.heads.is_empty() && paint::set_paint(ctx, &st.paint, bounds, f.doc) {
+            ctx.set_fill_rule(peniko::Fill::NonZero);
+            for head in &pieces.heads {
+                ctx.fill_path(&head.outline);
             }
         }
         if layered {
@@ -726,21 +691,21 @@ impl Renderer {
         }
     }
 
-    /// The stroke of the fast-path node `self.cur` expanded to a fill outline in document space,
-    /// cached across frames. The tolerance (vello's 0.25 device px) is bucketed to powers of two,
-    /// never coarser than needed, so zooming reuses outlines until the level changes.
-    fn cached_stroke(&mut self, f: &Frame, bp: &BezPath, st: &StrokeLayer, stroke: &kurbo::Stroke) -> Option<Arc<BezPath>> {
+    /// The line part of a stroke of the fast-path node `self.cur` (see
+    /// [`effects::stroke::line_outline`]), cached across frames. The tolerance (vello's 0.25
+    /// device px) is bucketed to powers of two, never coarser than needed, so zooming reuses
+    /// outlines until the level changes.
+    fn cached_stroke(&mut self, f: &Frame, line: &BezPath, st: &StrokeLayer, width: f64) -> Option<Arc<BezPath>> {
         let node = self.cur.clone()?;
         let level = (f.px * 0.25).log2().floor() as i32;
-        let key = (st as *const StrokeLayer as usize, stroke.width.to_bits(), level);
+        let key = (st as *const StrokeLayer as usize, width.to_bits(), level);
         if let Some(e) = self.strokes.get_mut(&key)
             && Arc::ptr_eq(&e.node, &node)
         {
             e.stamp = self.stamp;
             return Some(e.outline.clone());
         }
-        let tolerance = 2f64.powi(level);
-        let outline = Arc::new(kurbo::stroke(bp.iter(), stroke, &kurbo::StrokeOpts::default(), tolerance));
+        let outline = Arc::new(effects::stroke::line_outline(line, st, width, 2f64.powi(level)));
         self.strokes.insert(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp });
         Some(outline)
     }

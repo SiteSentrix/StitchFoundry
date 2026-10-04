@@ -74,6 +74,17 @@ pub struct WidthProfile {
     pub points: Vec<(f64, f64, f64)>,
 }
 
+/// A built-in width profile (the Stroke panel's Profile list).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProfilePreset {
+    /// Stable id used by `stroke.set {profile}`.
+    pub id: &'static str,
+    /// Menu label.
+    pub label: &'static str,
+    /// (t, left, right) width points.
+    pub points: &'static [(f64, f64, f64)],
+}
+
 impl WidthProfile {
     /// Width factor at `t` (average of both sides), linear between points.
     pub fn at(&self, t: f64) -> (f64, f64) {
@@ -93,15 +104,34 @@ impl WidthProfile {
         let l = p.last().unwrap();
         (l.1, l.2)
     }
-    /// Illustrator's "Width Profile 1" (lens shape) analogue.
+    /// The built-in profiles, in menu order. "uniform" is the plain stroke (no profile).
+    pub const PRESETS: [ProfilePreset; 4] = [
+        ProfilePreset { id: "uniform", label: "Uniform", points: &[(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] },
+        ProfilePreset { id: "lens", label: "Lens", points: &[(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+        ProfilePreset { id: "taperStart", label: "Taper Start", points: &[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] },
+        ProfilePreset { id: "taperEnd", label: "Taper End", points: &[(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+    ];
+    /// The built-in profile with this id.
+    pub fn preset(id: &str) -> Option<Self> {
+        Self::PRESETS.iter().find(|p| p.id == id).map(|p| Self { points: p.points.to_vec() })
+    }
+    /// The id of the built-in profile these points match, if any.
+    pub fn preset_id(&self) -> Option<&'static str> {
+        Self::PRESETS.iter().find(|p| p.points == self.points.as_slice()).map(|p| p.id)
+    }
+    /// The id of a stroke's profile: "uniform" without one, "custom" when it matches no preset.
+    pub fn id_of(p: Option<&Self>) -> &'static str {
+        p.map_or(Some("uniform"), Self::preset_id).unwrap_or("custom")
+    }
+    /// The lens profile (thin ends, full width in the middle).
     pub fn lens() -> Self {
-        Self { points: vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] }
+        Self::preset("lens").expect("built-in")
     }
     pub fn taper_end() -> Self {
-        Self { points: vec![(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] }
+        Self::preset("taperEnd").expect("built-in")
     }
     pub fn taper_start() -> Self {
-        Self { points: vec![(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] }
+        Self::preset("taperStart").expect("built-in")
     }
 }
 
@@ -345,6 +375,19 @@ mod tests {
         assert_eq!(p.at(0.5), (1.0, 1.0));
         assert_eq!(p.at(0.25), (0.5, 0.5));
         assert_eq!(p.at(2.0), (0.0, 0.0));
+    }
+
+    #[test]
+    fn profile_presets_round_trip_their_ids() {
+        for p in WidthProfile::PRESETS {
+            let prof = WidthProfile::preset(p.id).unwrap();
+            assert_eq!(prof.preset_id(), Some(p.id));
+            assert_eq!(WidthProfile::id_of(Some(&prof)), p.id);
+        }
+        assert_eq!(WidthProfile::id_of(None), "uniform");
+        assert_eq!(WidthProfile::id_of(Some(&WidthProfile { points: vec![(0.0, 0.3, 0.3)] })), "custom");
+        assert!(WidthProfile::preset("nope").is_none());
+        assert_eq!(WidthProfile::lens().points, vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]);
     }
 
     #[test]

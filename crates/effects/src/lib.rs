@@ -8,6 +8,8 @@
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
+//! - **Stroke geometry** ([`stroke`]): arrowheads, dash patterns and width profiles, shared by the
+//!   renderer, the exporters and Outline Stroke.
 //! - [`effect_catalog`] lists every effect with its menu path, parameter documentation and the
 //!   defaults of Illustrator's dialogs. Missing parameters always fall back to those defaults.
 //!
@@ -19,6 +21,7 @@ mod bake;
 mod distort;
 mod group;
 mod raster;
+pub mod stroke;
 mod stylize;
 mod util;
 mod warp;
