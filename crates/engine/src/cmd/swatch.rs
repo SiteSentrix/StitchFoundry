@@ -383,7 +383,7 @@ fn swatch_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// A list-of-strings parameter (missing or non-string entries are skipped).
-fn str_list(p: &Value, key: &str) -> Vec<String> {
+pub(super) fn str_list(p: &Value, key: &str) -> Vec<String> {
     p.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
 }
 
@@ -450,7 +450,7 @@ impl Relink {
 
 /// Apply a swatch-link rewrite to the default fill and stroke for new art, except during a live
 /// preview (Cancel rolls the document back, not the session).
-fn map_default_paints(s: &mut Session, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) {
+pub(super) fn map_default_paints(s: &mut Session, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) {
     if s.in_interaction() {
         return;
     }
@@ -499,7 +499,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"name": to, "relinked": relinked}))
 }
 
-fn swatch_json(sw: &Swatch, group: Option<&str>) -> Value {
+pub(super) fn swatch_json(sw: &Swatch, group: Option<&str>) -> Value {
     let mut v = json!({"name": sw.name, "group": group, "global": sw.global, "spot": sw.spot});
     match &sw.paint {
         Paint::None => v["kind"] = json!("none"),

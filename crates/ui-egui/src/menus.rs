@@ -219,6 +219,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
     ),
+    (
+        "window.swatchLibrary",
+        "Swatch Library",
+        "",
+        "{library: id or name (see swatch.library.list) | null (close)} open the read-only library panel on a swatch library (UI state `library_panel`); clicking a swatch there runs swatch.library.add with apply → {open, name, count}",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -552,6 +558,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::saturate::open(app);
             Ok(Value::Null)
         }
+        "window.swatchLibrary" => crate::panels::swatches::open_library(app, p),
         _ => return None,
     };
     Some(r)
@@ -1305,7 +1312,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 sub("Brush Libraries", library_placeholders()),
                 sub("Graphic Style Libraries", library_placeholders()),
-                sub("Swatch Libraries", library_placeholders()),
+                sub("Swatch Libraries", crate::panels::swatches::window_menu()),
                 sub("Symbol Libraries", library_placeholders()),
             ],
         ),

@@ -77,3 +77,9 @@ Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`
 canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.colors.adjustBalance` /
 `edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global
 and spot colours exist; the dialog then stays open.
+
+Library panel: `engine.execute {command: "window.swatchLibrary", params: {library}}` opens the read-only library
+panel on a swatch library (`ui.inspect` shows it as `library_panel: {kind, id}`; `library: null` closes it).
+Clicking a swatch there runs `swatch.library.add {library, names: [name], apply}` (the active proxy, or the other
+one with Alt), so one undo step adds and applies it; Shift/Cmd-clicks select swatches and colour groups for
+Add to Swatches.

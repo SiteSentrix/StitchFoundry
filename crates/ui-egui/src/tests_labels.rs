@@ -49,7 +49,7 @@ fn effect_menu_has_a_vector_effects_section() {
 fn library_submenus_are_disabled_placeholders() {
     let app = app();
     let entries = menus::menu_entries(&app);
-    for lib in ["Brush Libraries", "Graphic Style Libraries", "Swatch Libraries", "Symbol Libraries"] {
+    for lib in ["Brush Libraries", "Graphic Style Libraries", "Symbol Libraries"] {
         let items: Vec<_> = entries.iter().filter(|e| e.path == ["Window", lib]).collect();
         let labels: Vec<&str> = items.iter().map(|e| e.label.as_str()).collect();
         assert_eq!(labels, ["Built-in Libraries", "User Defined", "Other Library…"], "{lib}");

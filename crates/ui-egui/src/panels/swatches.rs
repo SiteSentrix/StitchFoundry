@@ -5,17 +5,23 @@
 //! proxy's paint command with the object's id) and onto the Gradient panel's ramp; a Fill/Stroke
 //! proxy or the Gradient panel's thumbnail dropped on the panel becomes a swatch (`swatch.new`).
 
+use std::sync::Arc;
+
 use egui::{Color32, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, GradientKind, Paint};
+use vectorcraft_color::libraries::SWATCH_LIBRARIES;
+use vectorcraft_color::{Color, GradientKind, Paint, Swatch, SwatchLibrary};
 use vectorcraft_doc::Document;
+use vectorcraft_engine::cmd::swatchlib;
 
+use super::library_panel::{self, LibraryKind, LibraryRef, OpenLibrary, Row};
 use super::{active_paint, pstate, set_pstate};
+use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, SwatchRows, menu_item, swatch_tile};
 use crate::{VectorcraftApp, icons};
 
-/// View modes of the swatch list.
+/// View modes of the swatch list (and of the library panel).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum View {
     SmallThumb,
@@ -27,18 +33,18 @@ pub enum View {
 }
 
 impl View {
-    const ALL: [(View, &'static str); 5] = [
+    pub(crate) const ALL: [(View, &'static str); 5] = [
         (View::SmallThumb, "Small Thumbnail View"),
         (View::MediumThumb, "Medium Thumbnail View"),
         (View::LargeThumb, "Large Thumbnail View"),
         (View::SmallList, "Small List View"),
         (View::LargeList, "Large List View"),
     ];
-    fn is_list(self) -> bool {
+    pub(crate) fn is_list(self) -> bool {
         matches!(self, View::SmallList | View::LargeList)
     }
     /// (tile, pitch) in points. Medium is the measured 15.5 / 17 pt.
-    fn tile(self) -> (f32, f32) {
+    pub(crate) fn tile(self) -> (f32, f32) {
         match self {
             View::SmallThumb => (11.0, 12.5),
             View::MediumThumb => (15.5, 17.0),
@@ -202,7 +208,7 @@ fn draw_registration(ui: &Ui, r: Rect) {
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
 }
 
-fn draw_folder(ui: &Ui, r: Rect) {
+pub(crate) fn draw_folder(ui: &Ui, r: Rect) {
     let t = Tokens::get(ui.ctx());
     icons::paint(ui, "dc-folder", r.expand(1.0), t.icon);
 }
@@ -212,7 +218,7 @@ const CMYK_INKS: [Color32; 4] = [Color32::from_rgb(0, 174, 239), Color32::from_r
 const RGB_BARS: [Color32; 3] = [Color32::from_rgb(255, 0, 0), Color32::from_rgb(0, 200, 0), Color32::from_rgb(0, 0, 255)];
 
 /// A swatch's kind in words, for list tooltips ("Global Process Color, CMYK").
-fn describe(paint: &Paint, global: bool, spot: bool) -> String {
+pub(crate) fn describe(paint: &Paint, global: bool, spot: bool) -> String {
     match paint {
         Paint::Solid { color, .. } => {
             let kind = if spot {
@@ -233,7 +239,7 @@ fn describe(paint: &Paint, global: bool, spot: bool) -> String {
 /// The kind and colour-mode icons at the right of list row `r`: spot (a dot in a ring), global (a
 /// square with a filled corner) or process colours (a square), gradients and patterns; then a
 /// colour's model (CMYK as four ink quarters, RGB as three bars, Gray as a grey square).
-fn list_icons(ui: &Ui, r: Rect, paint: &Paint, global: bool, spot: bool) {
+pub(crate) fn list_icons(ui: &Ui, r: Rect, paint: &Paint, global: bool, spot: bool) {
     let t = Tokens::get(ui.ctx());
     let p = ui.painter();
     let mode = Rect::from_center_size(r.right_center() - vec2(12.0, 0.0), vec2(10.0, 10.0));
@@ -303,9 +309,10 @@ fn highlighted<'a>(d: &'a Document, sel: &'a [String]) -> Vec<&'a str> {
 }
 
 /// The selection after a click on `name`: Cmd/Ctrl toggles it, Shift extends from the last clicked
-/// name over `order` (the names as displayed), a plain click selects it alone.
-fn click_selection(ui: &Ui, mut sel: Vec<String>, order: &[&str], name: &str, m: egui::Modifiers) -> Vec<String> {
-    let anchor: String = pstate(ui.ctx(), "swatch-anchor");
+/// name (kept in panel state `anchor_key`) over `order` (the names as displayed), a plain click
+/// selects it alone.
+pub(crate) fn click_selection(ui: &Ui, anchor_key: &str, mut sel: Vec<String>, order: &[&str], name: &str, m: egui::Modifiers) -> Vec<String> {
+    let anchor: String = pstate(ui.ctx(), anchor_key);
     let pos = |n: &str| order.iter().position(|o| *o == n);
     if m.shift
         && let (Some(a), Some(b)) = (pos(&anchor), pos(name))
@@ -317,7 +324,7 @@ fn click_selection(ui: &Ui, mut sel: Vec<String>, order: &[&str], name: &str, m:
         }
         return sel;
     }
-    set_pstate(ui.ctx(), "swatch-anchor", name.to_string());
+    set_pstate(ui.ctx(), anchor_key, name.to_string());
     if !m.command {
         return vec![name.to_string()];
     }
@@ -547,7 +554,6 @@ fn find_id() -> egui::Id {
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     if app.session.active().is_none() {
         super::empty_state(ui, "swatch-book", "No document", "Open a document to see its swatches.");
         return;
@@ -583,7 +589,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel = if selected.is_empty() { &fallback } else { &selected };
     let lit = app.session.active().map(|st| highlighted(&st.doc, sel)).unwrap_or_default();
     let is_sel = |name: &str| lit.contains(&name);
-    let (tile, pitch) = view.tile();
     let mut ev = TileEvents::default();
     widgets::list_box(ui, |ui| {
         let max_height = if view == View::LargeThumb { 200.0 } else { 150.0 };
@@ -591,15 +596,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.set_width(ui.available_width());
             if view.is_list() {
                 for e in &items {
-                    let (_, r) = ui.allocate_space(vec2(ui.available_width(), pitch));
-                    let resp = ui.interact(r, tile_id(e), Sense::click_and_drag());
                     let name = e.name();
-                    if is_sel(name) {
-                        ui.painter().rect_filled(r, 0.0, t.row_selected);
-                    } else if resp.hovered() {
-                        ui.painter().rect_filled(r, 0.0, t.hover);
-                    }
-                    let chip = Rect::from_min_size(r.left_center() + vec2(4.0, -tile / 2.0), vec2(tile, tile));
+                    let (r, resp, chip) = list_row(ui, tile_id(e), view, is_sel(name));
                     match e {
                         Entry::Registration => draw_registration(ui, chip),
                         Entry::Swatch { paint, global, spot, .. } => {
@@ -609,63 +607,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         }
                         Entry::Folder(_) => draw_folder(ui, chip),
                     }
-                    ui.painter().text(
-                        pos2(chip.right() + 8.0, r.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        name,
-                        egui::FontId::proportional(12.0),
-                        t.text,
-                    );
+                    list_row_name(ui, r, chip, name);
                     tile_input(ui, resp, e, &items, sel, true, &mut ev);
                 }
             } else {
-                let w = ui.available_width();
-                let per_row = ((w - 2.0) / pitch).floor().max(1.0) as usize;
-                let mut col = 0usize;
-                let mut rows: Vec<Vec<&Entry>> = vec![vec![]];
-                for e in &items {
-                    // A group folder starts a new row.
-                    if e.is_folder() && col > 0 {
-                        rows.push(vec![]);
-                        col = 0;
-                    }
-                    if col == per_row {
-                        rows.push(vec![]);
-                        col = 0;
-                    }
-                    rows.last_mut().unwrap().push(e);
-                    col += 1;
-                }
-                for row in rows {
-                    let (r, _) = ui.allocate_exact_size(vec2(w, pitch), Sense::hover());
-                    for (c, e) in row.into_iter().enumerate() {
-                        let cell = Rect::from_min_size(r.min + vec2(1.0 + c as f32 * pitch, (pitch - tile) / 2.0), vec2(tile, tile));
-                        let resp = ui.interact(cell, tile_id(e), Sense::click_and_drag());
-                        let name = e.name();
-                        match e {
-                            Entry::Registration => draw_registration(ui, cell),
-                            Entry::Swatch { paint, global, spot, .. } => {
-                                swatch_tile(ui, cell, paint, is_sel(name), resp.hovered());
-                                pattern_thumb(app, ui, cell.shrink(1.0), paint);
-                                // Global colours get a white corner; spot colours a dot in it.
-                                if *global {
-                                    let k = cell.shrink(1.0).right_bottom();
-                                    let corner = vec![k, k - vec2(5.0, 0.0), k - vec2(0.0, 5.0)];
-                                    ui.painter().add(Shape::convex_polygon(corner, Color32::WHITE, Stroke::NONE));
-                                    if *spot {
-                                        ui.painter().circle_filled(k - vec2(1.6, 1.6), 1.0, Color32::BLACK);
-                                    }
-                                }
-                            }
-                            Entry::Folder(_) => {
-                                draw_folder(ui, cell);
-                                if is_sel(name) {
-                                    ui.painter().rect_stroke(cell.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
-                                }
+                for (e, cell) in tile_grid(ui, &items, view, Entry::is_folder) {
+                    let resp = ui.interact(cell, tile_id(e), Sense::click_and_drag());
+                    let name = e.name();
+                    match e {
+                        Entry::Registration => draw_registration(ui, cell),
+                        Entry::Swatch { paint, global, spot, .. } => {
+                            swatch_tile(ui, cell, paint, is_sel(name), resp.hovered());
+                            pattern_thumb(app, ui, cell.shrink(1.0), paint);
+                            if *global {
+                                global_mark(ui, cell, *spot);
                             }
                         }
-                        tile_input(ui, resp, e, &items, sel, false, &mut ev);
+                        Entry::Folder(_) => folder_tile(ui, cell, is_sel(name)),
                     }
+                    tile_input(ui, resp, e, &items, sel, false, &mut ev);
                 }
             }
         });
@@ -681,7 +641,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let selected = match ev.clicked {
         Some((e, m)) => {
             let order: Vec<&str> = items.iter().map(Entry::name).collect();
-            let sel = click_selection(ui, selected, &order, e.name(), m);
+            let sel = click_selection(ui, "swatch-anchor", selected, &order, e.name(), m);
             set_pstate(ui.ctx(), "swatch-selected", sel.clone());
             // A plain click also applies the swatch; modifier clicks only select.
             if !(m.shift || m.command) {
@@ -692,6 +652,68 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         None => selected,
     };
     bottom(app, ui, &selected);
+}
+
+/// The thumbnail cells of `items` for `view` in the full available width, row by row; a folder
+/// (`is_folder`) starts a new row.
+pub(crate) fn tile_grid<'a, T>(ui: &mut Ui, items: &'a [T], view: View, is_folder: impl Fn(&T) -> bool) -> Vec<(&'a T, Rect)> {
+    let (tile, pitch) = view.tile();
+    let w = ui.available_width();
+    let per_row = ((w - 2.0) / pitch).floor().max(1.0) as usize;
+    let mut rows: Vec<Vec<&T>> = vec![vec![]];
+    for e in items {
+        let len = rows.last().map_or(0, Vec::len);
+        if len == per_row || (len > 0 && is_folder(e)) {
+            rows.push(vec![]);
+        }
+        rows.last_mut().expect("a row").push(e);
+    }
+    let mut out = Vec::with_capacity(items.len());
+    for row in rows {
+        let (r, _) = ui.allocate_exact_size(vec2(w, pitch), Sense::hover());
+        let cell = |c: usize| Rect::from_min_size(r.min + vec2(1.0 + c as f32 * pitch, (pitch - tile) / 2.0), vec2(tile, tile));
+        out.extend(row.into_iter().enumerate().map(|(c, e)| (e, cell(c))));
+    }
+    out
+}
+
+/// A list-view row for `view` taking clicks and drags as `id`, shaded when `selected` or hovered
+/// → (the row, its response, the chip at its left).
+pub(crate) fn list_row(ui: &mut Ui, id: egui::Id, view: View, selected: bool) -> (Rect, Response, Rect) {
+    let t = Tokens::get(ui.ctx());
+    let (tile, pitch) = view.tile();
+    let (_, r) = ui.allocate_space(vec2(ui.available_width(), pitch));
+    let resp = ui.interact(r, id, Sense::click_and_drag());
+    if selected {
+        ui.painter().rect_filled(r, 0.0, t.row_selected);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(r, 0.0, t.hover);
+    }
+    (r, resp, Rect::from_min_size(r.left_center() + vec2(4.0, -tile / 2.0), vec2(tile, tile)))
+}
+
+/// A list row's name, right of its `chip`.
+pub(crate) fn list_row_name(ui: &Ui, r: Rect, chip: Rect, name: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.painter().text(pos2(chip.right() + 8.0, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
+}
+
+/// The white corner of a global colour's tile; a spot colour has a dot in it.
+pub(crate) fn global_mark(ui: &Ui, cell: Rect, spot: bool) {
+    let k = cell.shrink(1.0).right_bottom();
+    let corner = vec![k, k - vec2(5.0, 0.0), k - vec2(0.0, 5.0)];
+    ui.painter().add(Shape::convex_polygon(corner, Color32::WHITE, Stroke::NONE));
+    if spot {
+        ui.painter().circle_filled(k - vec2(1.6, 1.6), 1.0, Color32::BLACK);
+    }
+}
+
+/// A colour group's folder in the thumbnail view, outlined when `selected`.
+pub(crate) fn folder_tile(ui: &Ui, cell: Rect, selected: bool) {
+    draw_folder(ui, cell);
+    if selected {
+        ui.painter().rect_stroke(cell.expand(1.0), 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Outside);
+    }
 }
 
 /// The interaction id of a tile or list row (stable per swatch or group name).
@@ -742,7 +764,12 @@ fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
 fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
     let kind: Kind = pstate(ui.ctx(), "swatch-kind");
     widgets::bottom_bar(ui, |ui| {
-        widgets::icon_button_enabled(ui, "library", "Swatch Libraries (on the roadmap)", false, false, 24.0);
+        let open = app.ui.library_panel.as_ref().is_some_and(|o| o.kind == SwatchLibraries::KIND);
+        let lr = widgets::icon_button(ui, "library", SwatchLibraries::MENU, open, 24.0);
+        egui::Popup::menu(&lr).show(|ui| {
+            ui.set_min_width(200.0);
+            library_panel::library_menu::<SwatchLibraries>(app, ui);
+        });
         let kr = widgets::icon_button(ui, "dc-swatch-kinds", "Show Swatch Kinds", kind != Kind::All, 24.0);
         egui::Popup::menu(&kr).show(|ui| {
             for (k, label) in Kind::ALL {
@@ -862,8 +889,97 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     menu_item(ui, "Spot Colors…", false, false);
     ui.separator();
-    menu_item(ui, "Open Swatch Library", false, false);
+    ui.menu_button("Open Swatch Library", |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
     menu_item(ui, "Save Swatch Library…", false, false);
+}
+
+/// Swatch libraries in the library panel (engine: `swatch.library.*`).
+pub(crate) struct SwatchLibraries;
+
+impl LibraryKind for SwatchLibraries {
+    const KIND: &'static str = "swatches";
+    const OPEN: &'static str = "window.swatchLibrary";
+    const MENU: &'static str = "Swatch Libraries Menu";
+    const ADD: &'static str = "Add to Swatches";
+    type Lib = Arc<SwatchLibrary>;
+    type Item = Swatch;
+
+    fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
+        swatchlib::libraries(&app.session).into_iter().map(|l| LibraryRef { id: l.id, name: l.name, submenu: None }).collect()
+    }
+    fn get(app: &VectorcraftApp, id: &str) -> Option<(String, Self::Lib)> {
+        swatchlib::library(&app.session, id).map(|(info, lib)| (info.name, lib))
+    }
+    /// Ungrouped swatches, then each colour group's folder and swatches (a group whose name
+    /// matches shows all of them), as in the Swatches panel.
+    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, Swatch>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+        let row = |w: &'a Swatch| Row { name: &w.name, item: Some(w) };
+        let mut out: Vec<Row<Swatch>> = lib.swatches.iter().filter(|w| found(&w.name)).map(row).collect();
+        for g in &lib.groups {
+            let all = found(&g.name);
+            let mut items = g.swatches.iter().filter(|w| all || found(&w.name)).map(row).peekable();
+            if items.peek().is_some() {
+                out.push(Row { name: &g.name, item: None });
+                out.extend(items);
+            }
+        }
+        out
+    }
+    fn draw(_: &VectorcraftApp, ui: &Ui, r: Rect, w: &Swatch, selected: bool, hovered: bool) {
+        swatch_tile(ui, r, &w.paint, selected, hovered);
+        if w.global {
+            global_mark(ui, r, w.spot);
+        }
+    }
+    fn row_icons(ui: &Ui, r: Rect, w: &Swatch) {
+        list_icons(ui, r, &w.paint, w.global, w.spot);
+    }
+    fn describe(w: &Swatch) -> String {
+        describe(&w.paint, w.global, w.spot)
+    }
+    /// Adds the swatch and applies it to the active proxy (Alt: the inactive one), as one step.
+    fn click(app: &mut VectorcraftApp, ui: &Ui, id: &str, name: &str) {
+        let alt = super::alt_held(ui);
+        let apply = if super::proxy_cmd(app, alt) == "paint.setFill" { "fill" } else { "stroke" };
+        add_from_library(app, json!({"library": id, "names": [name], "apply": apply, "focus": !alt}));
+    }
+    fn add(app: &mut VectorcraftApp, id: &str, names: Vec<String>) {
+        add_from_library(app, json!({"library": id, "names": names}));
+    }
+    fn menu_head(app: &mut VectorcraftApp, ui: &mut Ui) {
+        if menu_item(ui, "Default Swatches", app.session.active().is_some(), false) {
+            app.run("swatch.resetDefaults", json!({})).ok();
+        }
+        ui.separator();
+    }
+}
+
+fn add_from_library(app: &mut VectorcraftApp, params: Value) {
+    if let Err(e) = app.run("swatch.library.add", params) {
+        app.status(e);
+    }
+}
+
+/// `window.swatchLibrary {library}`: open a swatch library in the library panel (`library` null
+/// closes it).
+pub(crate) fn open_library(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let Some(key) = p.get("library").filter(|v| !v.is_null()) else {
+        app.ui.library_panel = None;
+        return Ok(json!({ "open": null }));
+    };
+    let key = key.as_str().ok_or("`library` is a library id or name (see swatch.library.list)")?;
+    let (info, lib) = swatchlib::library(&app.session, key).ok_or_else(|| format!("no swatch library `{key}` (see swatch.library.list)"))?;
+    app.ui.library_panel = Some(OpenLibrary { kind: SwatchLibraries::KIND.into(), id: info.id.clone() });
+    Ok(json!({"open": info.id, "name": info.name, "count": lib.len()}))
+}
+
+/// Window → Swatch Libraries.
+pub(crate) fn window_menu() -> Vec<Item> {
+    let mut items = vec![Item::Cmd("Default Swatches", "swatch.resetDefaults", Value::Null), Item::Sep];
+    items.extend(SWATCH_LIBRARIES.iter().map(|b| Item::Cmd(b.name, "window.swatchLibrary", json!({ "library": b.id }))));
+    items.extend([Item::Sep, Item::Todo("User Defined", ""), Item::Sep, Item::Todo("Other Library…", "")]);
+    items
 }
 
 #[cfg(test)]

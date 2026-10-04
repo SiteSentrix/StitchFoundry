@@ -249,6 +249,9 @@ pub struct UiState {
     /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
     #[serde(default)]
     pub color_guide: vectorcraft_color::harmony::GuideOptions,
+    /// The library open in the library panel (Window → Swatch Libraries).
+    #[serde(default)]
+    pub library_panel: Option<crate::panels::library_panel::OpenLibrary>,
 }
 
 impl UiState {
@@ -301,6 +304,7 @@ impl Default for UiState {
             recent_fonts: vec![],
             engine_prefs: Value::Null,
             color_guide: Default::default(),
+            library_panel: None,
         }
     }
 }

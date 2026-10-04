@@ -802,6 +802,8 @@ mod tests_swatchcmds;
 #[cfg(test)]
 mod tests_swatches;
 #[cfg(test)]
+mod tests_swatchlib;
+#[cfg(test)]
 mod tests_textedit;
 #[cfg(test)]
 mod tests_xform;
