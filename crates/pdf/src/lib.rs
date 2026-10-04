@@ -112,6 +112,8 @@ mod tests_dashalign;
 #[cfg(test)]
 mod tests_fx;
 #[cfg(test)]
+mod tests_blend;
+#[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]
 mod tests_strokeout;

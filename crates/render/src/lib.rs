@@ -968,7 +968,8 @@ impl Renderer {
 /// Opacity-mask coverage of one premultiplied pixel: luminance, with the area outside the mask
 /// art black (clip) or white (no clip), optionally inverted.
 fn mask_value(r: u8, g: u8, b: u8, a: u8, clip: bool, invert: bool) -> u8 {
-    let mut l = (0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32) / 255.0;
+    let [kr, kg, kb] = vectorcraft_color::blend::MASK_LUM;
+    let mut l = (kr * r as f32 + kg * g as f32 + kb * b as f32) / 255.0;
     if !clip {
         l += 1.0 - a as f32 / 255.0;
     }
@@ -1100,6 +1101,8 @@ fn now() -> u64 {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_blend;
 #[cfg(test)]
 mod tests_clip;
 #[cfg(test)]

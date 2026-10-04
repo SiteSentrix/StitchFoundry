@@ -134,6 +134,9 @@ enum StrokePlan {
 
 /// A region covering any artwork (mask and filter extents).
 const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
+/// Attributes of every `<mask>`: user-space units, and luminance taken from the sRGB values (as the
+/// canvas and PDF take it) rather than from linearised ones.
+const MASK: &str = "maskUnits=\"userSpaceOnUse\" color-interpolation=\"sRGB\"";
 
 pub(crate) fn blend_css(b: BlendMode) -> &'static str {
     match b {
@@ -504,7 +507,7 @@ impl Writer<'_> {
                 let b = self.xf.transform_rect_bbox(reach).inflate(1.0, 1.0);
                 let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
                 let fr = if rule == FillRule::EvenOdd { " fill-rule=\"evenodd\"" } else { "" };
-                self.def(1, &format!("<mask id=\"{mid}\" maskUnits=\"userSpaceOnUse\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\">"));
+                self.def(1, &format!("<mask id=\"{mid}\" {MASK} x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\">"));
                 self.def(2, &format!("<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"#fff\"/>"));
                 self.def(2, &format!("<path d=\"{d}\" fill=\"#000\"{fr}/>"));
                 self.def(1, "</mask>");
@@ -659,7 +662,7 @@ impl Writer<'_> {
             self.def(1, "</filter>");
             fid
         });
-        self.def(1, &format!("<mask id=\"{mid}\" maskUnits=\"userSpaceOnUse\" {BIG}>"));
+        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {BIG}>"));
         if let Some(fid) = &inv {
             self.def(1, &format!("<g filter=\"url(#{fid})\">"));
         }
@@ -751,7 +754,7 @@ impl Writer<'_> {
         let art = self.detached(3, |w| w.node(&shape));
         self.anonymous = anonymous;
         let mid = self.fresh_id("knockout");
-        self.def(1, &format!("<mask id=\"{mid}\" maskUnits=\"userSpaceOnUse\" {BIG}>"));
+        self.def(1, &format!("<mask id=\"{mid}\" {MASK} {BIG}>"));
         self.def(2, &format!("<rect {BIG} fill=\"white\"/>"));
         self.def(2, &format!("<g filter=\"url(#{filter})\">"));
         self.defs.push_str(&art);
