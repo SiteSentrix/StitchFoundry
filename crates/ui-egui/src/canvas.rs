@@ -676,8 +676,9 @@ fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::
 
 /// A panel drag ([`widgets::PanelDrag`]) dropped on art acts on the object under the pointer,
 /// selected or not: a paint (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail) goes
-/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it). A
-/// chip of a dragged paint follows the pointer meanwhile.
+/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it), the
+/// Appearance panel's thumbnail gives the object (the topmost one hit) the appearance it carries
+/// (`appearance.copyFrom`). A chip follows the pointer meanwhile.
 fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
     crate::panels::swatches::drag_preview(app, ui.ctx());
     let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
@@ -698,6 +699,13 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
             params["ids"] = json!([vectorcraft_tools::xform::paint_owner(&st.doc, hit.leaf).0]);
             params["focus"] = json!(false);
             (crate::panels::proxy_cmd(app, false), params)
+        }
+        widgets::PanelDrag::Appearance(source) => {
+            let target = hit.top_object(st.isolation);
+            if target == *source {
+                return;
+            }
+            ("appearance.copyFrom", json!({"source": source.0, "ids": [target.0]}))
         }
     };
     if let Err(e) = app.run(cmd, params) {
@@ -1154,5 +1162,39 @@ mod tests {
         g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0 });
         drop(&mut app, PanelDrag::paint(Paint::Gradient(Box::new(g))), Point::new(100.0, 100.0));
         assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()));
+    }
+
+    #[test]
+    fn dropping_the_appearance_thumbnail_on_art_copies_the_appearance() {
+        use vectorcraft_doc::NodeId;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 400, "height": 300}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
+        run(&mut app, "effect.apply", json!({"effect": "distort.twist"}));
+        run(&mut app, "transparency.set", json!({"opacity": 40}));
+        let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 20, "width": 100, "height": 100}))["id"].as_u64().unwrap();
+        run(&mut app, "select.set", json!({ "ids": [a] }));
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        // The Appearance panel's thumbnail (its drag payload) released over the second rectangle.
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let drop = |app: &mut VectorcraftApp, at: Point| {
+            let at = xf.to_screen(at);
+            egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Appearance(NodeId(a)));
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            frame(app, &ctx, vec![up]);
+        };
+        drop(&mut app, Point::new(250.0, 70.0));
+        let doc = &app.session.active().unwrap().doc;
+        let (na, nb) = (doc.node(NodeId(a)).unwrap(), doc.node(NodeId(b)).unwrap());
+        assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity));
+        assert_eq!(nb.appearance.effects[0].id, "distort.twist");
+        // Dropped on empty canvas or on the source itself: nothing changes.
+        let undo_len = app.session.active().unwrap().history.undo.len();
+        drop(&mut app, Point::new(350.0, 250.0));
+        drop(&mut app, Point::new(70.0, 70.0));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo_len);
     }
 }

@@ -955,6 +955,9 @@ pub enum PanelDrag {
     /// Gradient panel's ramp takes its colour as a stop; the Swatches panel moves `rows`, or makes
     /// a swatch of a paint dragged from elsewhere.
     Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows> },
+    /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
+    /// (`appearance.copyFrom`).
+    Appearance(vectorcraft_doc::NodeId),
 }
 
 /// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour
@@ -982,6 +985,7 @@ impl PanelDrag {
     pub fn color(&self) -> Option<vectorcraft_color::Color> {
         match self {
             Self::Paint { paint, .. } => paint.color(),
+            Self::Appearance(_) => None,
         }
     }
 }

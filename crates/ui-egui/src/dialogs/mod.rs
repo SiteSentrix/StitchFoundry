@@ -32,6 +32,7 @@ mod transform;
 use serde_json::{Value, json};
 
 pub use color_picker::open as open_color_picker;
+pub use effect::open as open_effect_dialog;
 pub use tools::open_tool_dialog;
 
 use crate::state::Dialog;
@@ -142,6 +143,7 @@ registry! {
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
+    EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

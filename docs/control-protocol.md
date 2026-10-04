@@ -53,3 +53,10 @@ Tool options: double-clicking a tool button runs `tool.options {tool}`. For `gra
 for `eyedropper` it opens Eyedropper Options, a `command` dialog (fields `appearance`, `transparency`) whose
 `ui.dialog.confirm` runs `eyedropper.setOptions` (what `appearance.copyFrom` copies). Gradient tool handles snap to
 anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.
+
+Effect dialogs: `engine.execute {command: "effect.dialog", params: {effect, index?, item?}}` opens the `effect` dialog
+(fields: the effect's parameters, `preview`). With `index` it edits that applied effect of `item` (null: the object's
+effects) prefilled with its values, and `ui.dialog.confirm` runs `effect.setParams`; otherwise confirm runs
+`effect.apply`. Choosing an effect that the list already has returns `{"pending": "effectExists"}` and opens the
+`effectExists` question: `ui.dialog.confirm` opens the applied effect's dialog, `ui.dialog.set {field: "discard",
+value: true}` then confirm opens a fresh one that adds another, `ui.dialog.cancel` drops it.

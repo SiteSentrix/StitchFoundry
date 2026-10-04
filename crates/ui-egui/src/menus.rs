@@ -156,7 +156,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "effect.dialog",
         "Effect…",
         "",
-        "{effect: id, item?: appearance item index|null (default: the Appearance panel's active item)} open the effect's dialog with live preview",
+        "{effect: id, index?: int (edit that applied effect in place, prefilled; OK runs effect.setParams), item?: appearance item index|null (the fill/stroke whose effects, null the object's; default: the Appearance panel's active item)} open the effect's dialog with live preview; without `index`, an effect already in that list first opens `effectExists` (confirm edits it, discard adds another) → {pending: \"effectExists\"}",
     ),
     ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
     ("ui.recolorDialog", "Recolor Artwork…", "", "{} open Recolor Artwork (engine: recolor.colors / recolor.apply)"),
@@ -472,23 +472,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.session.set_tool_option(&k, p.get("value").unwrap_or(&Value::Null));
             Ok(app.session.tool_options())
         }
-        "effect.dialog" => {
-            let id = s("effect").unwrap_or_default();
-            match vectorcraft_effects::effect_catalog().into_iter().find(|e| e.id == id) {
-                Some(e) => {
-                    let mut fields = e.defaults.as_object().cloned().unwrap_or_default();
-                    fields.insert("__effect".into(), json!(e.id));
-                    fields.insert("__label".into(), json!(e.label.trim_end_matches('…')));
-                    fields.insert("preview".into(), json!(true));
-                    if let Some(item) = p.get("item") {
-                        fields.insert("__item".into(), item.clone());
-                    }
-                    app.ui.dialog = Some(crate::state::Dialog { kind: "effect".into(), fields });
-                    Ok(Value::Null)
-                }
-                None => Err(format!("unknown effect `{id}`")),
-            }
-        }
+        "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => match app.run("recolor.colors", json!({})) {
             Ok(v) => {
                 let pairs: Vec<Value> = v["colors"].as_array().cloned().unwrap_or_default().iter().map(|c| json!([c["hex"], c["hex"]])).collect();

@@ -224,6 +224,8 @@ object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the obj
 style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
 updates only the objects still linked. `graphicStyle.list` returns each style with the ids linked to it and the
 style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
+Styles keep placed gradients relative to the bounds of the object they were made from, and each object a
+style is applied to gets them at the same place relative to its own bounds.
 
 ```json
 {"name":"run_command","arguments":{"command":"graphicStyle.new","params":{"id":12,"name":"Glow"}}}
@@ -231,3 +233,12 @@ style of the first selected object; `select.same.graphicStyle` selects an object
 {"name":"run_command","arguments":{"command":"graphicStyle.redefine","params":{"id":12}}}
 {"name":"run_command","arguments":{"command":"graphicStyle.list","params":{}}}
 ```
+
+## Editing appearance stacks
+
+`effect.move {from, to, fromItem?, toItem?, copy?}` reorders an effect or moves it between the object's effects
+(`null`) and a fill's or stroke's (an item index), as dragging its row in the Appearance panel does; `copy: true` copies
+it (Alt-drag). `appearance.duplicateItem {index, to?}` / `{indices}` and `appearance.removeItem {index | indices}`
+act on several fills/strokes at once, and `appearance.showAllHidden` makes every hidden fill, stroke and effect
+visible again. In remote mode, `effect.dialog {effect, index, item}` opens an applied effect's dialog prefilled
+(`ui.dialog.confirm` runs `effect.setParams`); see the control protocol for the "already applied" question.

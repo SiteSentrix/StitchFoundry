@@ -108,6 +108,8 @@ pub enum PdfError {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_fx;
+#[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]
 mod tests_strokeout;

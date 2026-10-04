@@ -634,9 +634,44 @@ impl Appearance {
     }
 }
 
+impl Appearance {
+    /// Is any fill, stroke or effect (the object's or an item's) hidden?
+    pub fn has_hidden(&self) -> bool {
+        let hidden = |fx: &[Effect]| fx.iter().any(|e| !e.visible);
+        hidden(&self.effects) || self.items.iter().any(|i| !i.visible() || hidden(i.effects()))
+    }
+
+    /// Make every hidden fill, stroke and effect visible (Show All Hidden Attributes). Returns
+    /// whether anything was hidden.
+    pub fn show_all(&mut self) -> bool {
+        let had = self.has_hidden();
+        let show = |fx: &mut Vec<Effect>| fx.iter_mut().for_each(|e| e.visible = true);
+        show(&mut self.effects);
+        for i in &mut self.items {
+            match i {
+                AppearanceItem::Fill(f) => f.visible = true,
+                AppearanceItem::Stroke(s) => s.visible = true,
+            }
+            show(i.effects_mut());
+        }
+        had
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidden_attributes_show_again() {
+        let mut a = Appearance::default_art();
+        assert!(!a.has_hidden() && !a.show_all());
+        a.stroke_mut().unwrap().visible = false;
+        a.items[0].effects_mut().push(Effect { id: "distort.roughen".into(), params: serde_json::Value::Null, visible: false });
+        assert!(a.has_hidden());
+        assert!(a.show_all());
+        assert!(!a.has_hidden() && a.items.iter().all(AppearanceItem::visible) && a.items[0].effects()[0].visible);
+    }
 
     #[test]
     fn basic_appearance() {

@@ -235,6 +235,8 @@ pub struct Renderer {
     /// Address of the knockout-group element being drawn as its knockout shape: at full object
     /// opacity and without its opacity mask (see [`Self::draw_knockout`]); 0 = none.
     shape_of: usize,
+    /// The art drawn for objects with effects that apply through it (see `fx::has_object_fx`).
+    fx_arts: PtrMap<usize, (Arc<Node>, Arc<Node>)>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -284,6 +286,7 @@ impl Renderer {
             live: live::LiveCache::default(),
             knockout: false,
             shape_of: 0,
+            fx_arts: PtrMap::default(),
         }
     }
 
@@ -557,6 +560,9 @@ impl Renderer {
             self.stats.drawn += 1;
             return;
         }
+        if fx::has_object_fx(a) {
+            return self.draw_object_fx(ctx, f, a, true);
+        }
         if let NodeKind::Text(t) = &a.kind
             && self.opacity_of(a) >= 1.0
             && a.blend == vectorcraft_color::BlendMode::Normal
@@ -587,6 +593,9 @@ impl Renderer {
             }
         } else if !n.is_container() {
             return;
+        }
+        if fx::has_object_fx(n) {
+            return self.draw_object_fx(ctx, f, &Arc::new(n.clone()), false);
         }
         let outline = f.opts.outline;
         let mut layers = 0;
@@ -1084,3 +1093,5 @@ mod tests;
 mod tests_clip;
 #[cfg(test)]
 mod tests_knockout;
+#[cfg(test)]
+mod tests_objectfx;

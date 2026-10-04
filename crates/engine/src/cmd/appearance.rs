@@ -66,7 +66,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             set_item
         ),
-        cmd!("appearance.removeItem", "Remove Item", [], None, "{index, ids?}", has_selection, remove_item),
+        cmd!(
+            "appearance.removeItem",
+            "Remove Item",
+            [],
+            None,
+            "{index | indices: [..] (paint-order item indices), ids?} remove those fills/strokes from each target object's own stack",
+            has_selection,
+            remove_item
+        ),
         cmd!(
             "appearance.addEffect",
             "Add Effect",
@@ -76,7 +84,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             super::effectcmd::apply
         ),
-        cmd!("appearance.duplicateItem", "Duplicate Item", ["Window", "Appearance"], None, "{index, ids?}", has_selection, duplicate_item),
+        cmd!(
+            "appearance.duplicateItem",
+            "Duplicate Item",
+            ["Window", "Appearance"],
+            None,
+            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (one `index` only; default: right above it, as Alt-dragging a row places it), ids?} copy fills/strokes with their effects",
+            has_selection,
+            duplicate_item
+        ),
         cmd!("appearance.moveItem", "Reorder Appearance Item", [], None, "{from, to, ids?} (paint-order indices)", has_selection, move_item),
         cmd!(
             "appearance.copyFrom",
@@ -95,6 +111,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{index: paint-order item index in the first selected object's stack | null} make that fill/stroke row the target of the paint.setFill/setStroke, stroke.set/setAdvanced, paint.editGradient/setGradientGeom, transparency.set and effect.* calls that omit `item` (a fill row brings the Fill proxy forward, a stroke row the Stroke proxy); null or any selection change clears it → {index}",
             has_selection,
             set_active_item
+        ),
+        cmd!(
+            "appearance.showAllHidden",
+            "Show All Hidden Attributes",
+            ["Window", "Appearance"],
+            None,
+            "{ids?} make every hidden fill, stroke and effect (the object's and each item's) of each selected object visible again; errors when nothing is hidden → {ids}",
+            has_selection,
+            show_all_hidden
         ),
     ]
 }
@@ -146,12 +171,17 @@ pub(crate) enum ItemTarget {
 
 /// Parse the `item` param of `cmd` (see the module docs).
 pub(crate) fn item_target(s: &Session, p: &Value, cmd: &str) -> Result<ItemTarget> {
-    match p.get("item") {
+    item_target_at(s, p, "item", cmd)
+}
+
+/// [`item_target`] read from param `key` (e.g. `fromItem`).
+pub(crate) fn item_target_at(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<ItemTarget> {
+    match p.get(key) {
         Some(Value::Null) => Ok(ItemTarget::Top),
         Some(v) => v
             .as_u64()
             .map(|i| ItemTarget::Item { index: i as usize, explicit: true })
-            .ok_or_else(|| bad(cmd, "`item` must be an appearance item index (paint order) or null")),
+            .ok_or_else(|| bad(cmd, format!("`{key}` must be an appearance item index (paint order) or null"))),
         None if p.get("ids").is_some() || p.get("id").is_some() => Ok(ItemTarget::Top),
         None => Ok(s.appearance_item().map_or(ItemTarget::Top, |index| ItemTarget::Item { index, explicit: false })),
     }
@@ -385,43 +415,90 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// The paint-order item indices a command acts on (`indices`, else `index`), ascending and
+/// without repeats.
+fn item_indices(p: &Value, cmd: &str) -> Result<Vec<usize>> {
+    let mut v = match p.get("indices") {
+        Some(a) => a
+            .as_array()
+            .and_then(|a| a.iter().map(|x| x.as_u64().map(|i| i as usize)).collect::<Option<Vec<_>>>())
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| bad(cmd, "`indices` must be a non-empty array of item indices"))?,
+        None => vec![index_param(p, "index", cmd)?],
+    };
+    v.sort_unstable();
+    v.dedup();
+    Ok(v)
+}
+
 fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
-    let idx = index_param(p, "index", "appearance.removeItem")?;
+    let idx = item_indices(p, "appearance.removeItem")?;
     let ids = appearance_targets(s, p)?;
     s.edit("Remove Item", |d, _| {
         for id in &ids {
-            if let Some(n) = d.node_mut(*id)
-                && idx < n.appearance.items.len()
-            {
-                n.appearance.items.remove(idx);
+            if let Some(n) = d.node_mut(*id) {
+                let items = &mut n.appearance.items;
+                // From the top down, so the lower indices stay valid.
+                for &i in idx.iter().rev() {
+                    if i < items.len() {
+                        items.remove(i);
+                    }
+                }
             }
         }
         Ok(())
     })?;
-    s.remap_appearance_item(&ids, |a| match a.cmp(&idx) {
-        std::cmp::Ordering::Less => Some(a),
-        std::cmp::Ordering::Equal => None,
-        std::cmp::Ordering::Greater => Some(a - 1),
-    });
+    s.remap_appearance_item(&ids, |a| (!idx.contains(&a)).then(|| a - idx.iter().filter(|i| **i < a).count()));
     ok()
 }
 
 fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
-    let idx = index_param(p, "index", "appearance.duplicateItem")?;
+    const C: &str = "appearance.duplicateItem";
+    let idx = item_indices(p, C)?;
+    let to = p.get("to").map(|_| index_param(p, "to", C)).transpose()?;
+    if to.is_some() && idx.len() > 1 {
+        return Err(bad(C, "`to` takes a single `index`"));
+    }
     let ids = appearance_targets(s, p)?;
+    // Where the first object's copy landed (the active item lives in the first object's stack).
+    let mut first_at = None;
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
-            if let Some(item) = n.appearance.items.get(idx).cloned() {
-                n.appearance.items.insert(idx + 1, item);
-                any = true;
+            let items = &mut n.appearance.items;
+            // From the top down, so the lower indices stay valid.
+            for &i in idx.iter().rev() {
+                if let Some(item) = items.get(i).cloned() {
+                    let at = to.map_or(i + 1, |t| t.min(items.len()));
+                    first_at.get_or_insert(at);
+                    items.insert(at, item);
+                    any = true;
+                }
             }
         }
-        if any { Ok(()) } else { Err(bad("appearance.duplicateItem", format!("no item at index {idx}"))) }
+        if any { Ok(()) } else { Err(bad(C, format!("no item at index {}", idx[0]))) }
     })?;
-    s.remap_appearance_item(&ids, |a| Some(if a > idx { a + 1 } else { a }));
+    // Rows at or above each copy move up by one.
+    s.remap_appearance_item(&ids, |a| {
+        Some(match to {
+            Some(_) => a + usize::from(first_at.is_some_and(|at| at <= a)),
+            None => a + idx.iter().filter(|i| **i < a).count(),
+        })
+    });
     ok()
+}
+
+fn show_all_hidden(s: &mut Session, p: &Value) -> Result<Value> {
+    let roots = appearance_targets(s, p)?;
+    let ids = s.edit("Show All Hidden Attributes", |d, _| {
+        let shown: Vec<NodeId> = roots.iter().copied().filter(|id| d.node_mut(*id).is_some_and(|n| n.appearance.show_all())).collect();
+        if shown.is_empty() {
+            return Err(EngineError::Other("Show All Hidden Attributes: nothing is hidden".into()));
+        }
+        Ok(shown)
+    })?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
 fn move_item(s: &mut Session, p: &Value) -> Result<Value> {

@@ -342,14 +342,19 @@ enum Drop {
 
 impl Drop {
     /// What releasing `d` before or `after` row `target` (`None`: at the end) does: move the rows
-    /// it carries, or make a swatch of a paint dragged from elsewhere.
-    fn of(d: &PanelDrag, target: Option<String>, after: bool) -> Self {
-        let PanelDrag::Paint { paint, rows, .. } = d;
-        match rows {
-            Some(r) => Drop::Move { names: r.names.clone(), target, after },
-            None => Drop::New { paint: paint.clone(), target },
+    /// it carries, or make a swatch of a paint dragged from elsewhere (appearances: nothing).
+    fn of(d: &PanelDrag, target: Option<String>, after: bool) -> Option<Self> {
+        match d {
+            PanelDrag::Paint { rows: Some(r), .. } => Some(Drop::Move { names: r.names.clone(), target, after }),
+            PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target }),
+            PanelDrag::Appearance(_) => None,
         }
     }
+}
+
+/// The drag held over `resp`, if the panel takes it (paints, not the Appearance panel's thumbnail).
+fn held(resp: &Response) -> Option<std::sync::Arc<PanelDrag>> {
+    resp.dnd_hover_payload::<PanelDrag>().filter(|d| matches!(**d, PanelDrag::Paint { .. }))
 }
 
 /// The drag a tile or row of `e` starts, moving rows `names`. Registration and colour groups have
@@ -404,8 +409,8 @@ fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String
 /// A drag held over the tile or row `resp` of entry `e` shows where it would land (before or after
 /// it by the pointer's half, or into a folder); a release there sets the drop.
 fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvents) {
-    let Some(d) = resp.dnd_hover_payload::<PanelDrag>() else { return };
-    let PanelDrag::Paint { rows, .. } = &*d;
+    let Some(d) = held(resp) else { return };
+    let PanelDrag::Paint { rows, .. } = &*d else { return };
     let name = e.name();
     ev.over = true;
     // Swatches dropped on one of themselves stay where they are.
@@ -428,19 +433,19 @@ fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvent
         ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
     }
     if resp.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Some(Drop::of(&d, Some(name.to_string()), after));
+        ev.drop = Drop::of(&d, Some(name.to_string()), after);
     }
 }
 
 /// Drops between and after the tiles (`zone`: the list's viewport) go to the end of the ungrouped
 /// swatches (colour groups to the end of the groups); the list is outlined while one is held there.
 fn zone_input(ui: &Ui, zone: &Response, ev: &mut TileEvents) {
-    let Some(d) = zone.dnd_hover_payload::<PanelDrag>() else { return };
+    let Some(d) = held(zone) else { return };
     if !ev.over {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
     }
     if zone.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Some(Drop::of(&d, None, false));
+        ev.drop = Drop::of(&d, None, false);
     }
 }
 
@@ -509,16 +514,20 @@ fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
     }
 }
 
-/// While a paint is dragged (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail), a chip
-/// of it follows the pointer.
+/// While a panel drags something onto art, a chip follows the pointer: the dragged paint (swatches,
+/// a Fill/Stroke proxy, the Gradient panel's thumbnail), or the fill of the object whose
+/// appearance the Appearance panel's thumbnail carries.
 pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
     let Some(d) = egui::DragAndDrop::payload::<PanelDrag>(ctx) else { return };
-    let PanelDrag::Paint { paint, params, rows } = &*d;
-    // Colour groups paint nothing.
-    if params.is_null() {
-        return;
-    }
-    let registration = rows.as_ref().is_some_and(|r| r.grabbed == REGISTRATION);
+    let (paint, registration) = match &*d {
+        // Colour groups paint nothing.
+        PanelDrag::Paint { params, .. } if params.is_null() => return,
+        PanelDrag::Paint { paint, rows, .. } => (std::borrow::Cow::Borrowed(paint), rows.as_ref().is_some_and(|r| r.grabbed == REGISTRATION)),
+        PanelDrag::Appearance(id) => match app.session.active().and_then(|st| st.doc.node(*id)) {
+            Some(n) => (std::borrow::Cow::Owned(n.appearance.fill_paint()), false),
+            None => return,
+        },
+    };
     let Some(at) = ctx.pointer_hover_pos() else { return };
     let area = egui::Area::new(egui::Id::new("swatch-drag-preview")).order(egui::Order::Tooltip).fixed_pos(at + vec2(12.0, 12.0));
     area.interactable(false).show(ctx, |ui| {
@@ -526,8 +535,8 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
         if registration {
             draw_registration(ui, r);
         } else {
-            swatch_tile(ui, r, paint, false, false);
-            pattern_thumb(app, ui, r.shrink(1.0), paint);
+            swatch_tile(ui, r, &paint, false, false);
+            pattern_thumb(app, ui, r.shrink(1.0), &paint);
         }
     });
 }
