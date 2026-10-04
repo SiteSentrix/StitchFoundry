@@ -747,6 +747,8 @@ mod tests_brushsym;
 #[cfg(test)]
 mod tests_build;
 #[cfg(test)]
+mod tests_charstroke;
+#[cfg(test)]
 mod tests_clip;
 #[cfg(test)]
 mod tests_cmdsplit;

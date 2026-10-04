@@ -5,7 +5,7 @@ use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, Unit, WidthProfile};
 
-use super::{current_stroke, pstate, set_pstate};
+use super::{character, current_stroke, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -73,8 +73,14 @@ fn arrow_label(a: Option<Arrowhead>) -> String {
     }
 }
 
+/// Apply Stroke panel options (`stroke.set` params): while the Type tool edits text, to the
+/// selected characters' stroke.
 fn set(app: &mut VectorcraftApp, p: Value) {
-    app.run("stroke.set", p).ok();
+    if character::text_editing(app).is_some() {
+        character::range_style(app, json!({ "strokeOptions": p }));
+    } else {
+        app.run("stroke.set", p).ok();
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -449,5 +455,29 @@ mod tests {
         let st = current_stroke(&app).unwrap();
         assert_eq!((st.end_arrow, st.arrow_align), (Some(Arrowhead::ArrowOpen), ArrowAlign::Tip));
         assert_eq!(WidthProfile::id_of(st.profile.as_ref()), "lens");
+    }
+
+    #[test]
+    fn while_typing_the_panel_strokes_the_selected_characters() {
+        use vectorcraft_doc::NodeKind;
+        use vectorcraft_engine::{Session, ViewInfo};
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let v = ViewInfo::default();
+        app.session.select_tool("type", v).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(k, 50.0, 200.0), v).unwrap();
+        }
+        app.session.tool_text("Make this bold", v).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 5, "end": 9}));
+        set(&mut app, json!({"weight": 4, "join": "round"}));
+        let id = app.session.active().unwrap().selection.objects[0];
+        let NodeKind::Text(t) = &app.session.active().unwrap().doc.node(id).unwrap().kind else { panic!("type") };
+        let joins: Vec<(&str, LineJoin, f64)> = t.runs.iter().map(|r| (r.text.as_str(), r.style.stroke_join, r.style.stroke_width)).collect();
+        assert_eq!(joins, [("Make ", LineJoin::Miter, 0.0), ("this", LineJoin::Round, 4.0), (" bold", LineJoin::Miter, 0.0)]);
+        // The panel shows the selected characters' stroke.
+        assert_eq!(current_stroke(&app).map(|s| (s.join, s.width)), Some((LineJoin::Round, 4.0)));
+        frame(&mut app);
     }
 }

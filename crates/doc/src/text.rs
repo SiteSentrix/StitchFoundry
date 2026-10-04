@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
+use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeLayer};
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Justify {
     #[default]
@@ -64,8 +66,24 @@ pub struct CharStyle {
     pub overprint_fill: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub overprint_stroke: bool,
+    /// Cap, join, miter limit and dashes of the character stroke (Stroke panel, with type
+    /// selected); defaults as for object strokes.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub stroke_cap: LineCap,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub stroke_join: LineJoin,
+    #[serde(default = "ten", skip_serializing_if = "is_ten")]
+    pub stroke_miter_limit: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stroke_dash: Option<Dash>,
 }
 
+fn ten() -> f64 {
+    10.0
+}
+fn is_ten(v: &f64) -> bool {
+    *v == 10.0
+}
 fn regular() -> String {
     "Regular".into()
 }
@@ -96,6 +114,10 @@ impl Default for CharStyle {
             style_name: None,
             overprint_fill: false,
             overprint_stroke: false,
+            stroke_cap: LineCap::Butt,
+            stroke_join: LineJoin::Miter,
+            stroke_miter_limit: 10.0,
+            stroke_dash: None,
         }
     }
 }
@@ -104,18 +126,49 @@ impl CharStyle {
     pub fn effective_leading(&self) -> f64 {
         self.leading.unwrap_or(self.size * 1.2)
     }
-    /// These characters' paint as an object appearance (their outlines'): the fill, plus the
-    /// stroke when it is painted, overprinting as the characters do.
-    pub fn appearance(&self) -> crate::Appearance {
-        let mut fill = crate::FillLayer::new(self.fill.clone());
-        fill.overprint = self.overprint_fill;
-        let mut a = crate::Appearance { items: vec![crate::AppearanceItem::Fill(fill)], ..Default::default() };
-        if !self.stroke.is_none() && self.stroke_width > 0.0 {
-            let mut st = crate::StrokeLayer::new(self.stroke.clone(), self.stroke_width);
-            st.overprint = self.overprint_stroke;
-            a.items.push(crate::AppearanceItem::Stroke(st));
+    /// Do the characters draw a stroke (a paint and a positive weight)?
+    pub fn has_stroke(&self) -> bool {
+        !self.stroke.is_none() && self.stroke_width > 0.0
+    }
+    /// The character stroke as a stroke layer (paint, weight, cap, join, miter limit, dashes and
+    /// overprint), so type strokes share the object strokes' geometry, rendering and export.
+    pub fn stroke_layer(&self) -> StrokeLayer {
+        StrokeLayer {
+            overprint: self.overprint_stroke,
+            cap: self.stroke_cap,
+            join: self.stroke_join,
+            miter_limit: self.stroke_miter_limit,
+            dash: self.stroke_dash.clone(),
+            ..StrokeLayer::new(self.stroke.clone(), self.stroke_width)
+        }
+    }
+    /// Take the paint, weight, cap, join, miter limit and dashes of `st` as the character stroke
+    /// (the options characters have no use for, such as alignment and arrowheads, are dropped).
+    pub fn set_stroke_layer(&mut self, st: &StrokeLayer) {
+        self.stroke = st.paint.clone();
+        self.stroke_width = st.width;
+        self.stroke_cap = st.cap;
+        self.stroke_join = st.join;
+        self.stroke_miter_limit = st.miter_limit;
+        self.stroke_dash = st.dash.clone();
+    }
+    /// The character fill as a fill layer, overprinting as the characters do.
+    fn fill_layer(&self) -> FillLayer {
+        FillLayer { overprint: self.overprint_fill, ..FillLayer::new(self.fill.clone()) }
+    }
+    /// The characters' paint as an object appearance (their outlines'): the fill, plus the
+    /// stroke when it draws one, overprinting as the characters do.
+    pub fn appearance(&self) -> Appearance {
+        let mut a = Appearance { items: vec![AppearanceItem::Fill(self.fill_layer())], ..Default::default() };
+        if self.has_stroke() {
+            a.items.push(AppearanceItem::Stroke(self.stroke_layer()));
         }
         a
+    }
+    /// The characters' paint as the basic fill and stroke rows (the stroke row even when it has
+    /// no paint): the appearance the Eyedropper and graphic styles take from type.
+    pub fn basic_appearance(&self) -> Appearance {
+        Appearance { items: vec![AppearanceItem::Fill(self.fill_layer()), AppearanceItem::Stroke(self.stroke_layer())], ..Default::default() }
     }
 }
 

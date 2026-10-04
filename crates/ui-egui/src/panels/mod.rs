@@ -205,10 +205,13 @@ pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, 
     }
 }
 
-/// The stroke the Stroke panel, Control bar and Properties show: the Appearance panel's active
-/// item when it is a stroke, else the first selected object's top stroke.
+/// The stroke the Stroke panel, Control bar and Properties show: while the Type tool edits text,
+/// the selected characters' stroke, else [`vectorcraft_engine::Session::shown_stroke`].
 pub(crate) fn current_stroke(app: &VectorcraftApp) -> Option<StrokeLayer> {
-    first_node(app)?.appearance.stroke_for(app.session.appearance_item()).cloned()
+    if character::text_editing(app).is_some() {
+        return character::text_style(app).map(|(c, _)| c.stroke_layer());
+    }
+    app.session.shown_stroke()
 }
 
 /// Opacity and blend mode as the Transparency panel and Control bar show them: the Appearance

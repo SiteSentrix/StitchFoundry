@@ -17,7 +17,6 @@ pub mod proof;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::appearance::stroke_paint_bounds;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect, Shape};
 use vello_cpu::kurbo;
@@ -792,7 +791,7 @@ impl Renderer {
                     if st.brush.is_some() && self.draw_brush(ctx, f, n, bp, st) {
                         continue;
                     }
-                    self.draw_stroke(ctx, f, bp, rule, st, bounds);
+                    self.draw_stroke(ctx, f, Affine::IDENTITY, bp, rule, st, bounds);
                 }
             }
         }
@@ -808,7 +807,10 @@ impl Renderer {
         }
     }
 
-    fn draw_stroke(&mut self, ctx: &mut RenderContext, f: &Frame, bp: &BezPath, rule: FillRule, st: &StrokeLayer, bounds: Rect) {
+    /// Paint stroke `st` of the shape `bp` (in the space `xf` maps to the document; `bounds`: its
+    /// geometric bounds there) with its alignment, dashes, profile, arrowheads, opacity and blend.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_stroke(&mut self, ctx: &mut RenderContext, f: &Frame, xf: Affine, bp: &BezPath, rule: FillRule, st: &StrokeLayer, bounds: Rect) {
         let pieces = effects::stroke::stroke_pieces(bp, st);
         // The line and its heads overlap: they take the opacity once, in one layer, instead of
         // each folding it into its paint.
@@ -819,10 +821,10 @@ impl Renderer {
             ctx.set_transform(Affine::IDENTITY);
             ctx.push_layer(None, Some(blend_mode(st.blend)), Some(opacity), None, None);
         }
-        ctx.set_transform(f.view);
+        ctx.set_transform(f.view * xf);
         let closed = effects::stroke::is_closed(bp);
         // Keep hairlines visible when zoomed far out (at least ~1 device pixel).
-        let width = effects::stroke::aligned_width(st, closed).max(f.px * 0.5);
+        let width = effects::stroke::aligned_width(st, closed).max(f.px * 0.5 / xf.determinant().abs().sqrt().max(1e-9));
         let inside = st.align == StrokeAlign::Inside && closed;
         if inside {
             ctx.set_fill_rule(fill_rule(rule));
@@ -929,7 +931,7 @@ impl Renderer {
             all
         });
         if let Some(all) = &all {
-            self.draw_text_items(ctx, f, below, all, tb);
+            self.draw_text_items(ctx, f, n, below, all, tb);
         }
         for (i, run) in t.runs.iter().enumerate() {
             let Some(path) = g.runs.get(i) else { continue };
@@ -943,44 +945,45 @@ impl Renderer {
                 overprint(ctx, run.style.overprint_fill);
                 ctx.fill_path(path);
             }
-            if !run.style.stroke.is_none()
-                && run.style.stroke_width > 0.0
-                && paint::set_paint(ctx, &run.style.stroke, stroke_paint_bounds(g.bounds, run.style.stroke_width), f.doc)
-            {
+            if run.style.has_stroke() {
+                // Character strokes are drawn in text space, with their cap, join and dashes.
                 overprint(ctx, run.style.overprint_stroke);
-                ctx.set_stroke(kurbo::Stroke::new(run.style.stroke_width));
-                ctx.stroke_path(path);
+                self.draw_stroke(ctx, f, t.xf, path, FillRule::NonZero, &run.style.stroke_layer(), g.bounds);
             }
         }
         overprint(ctx, false);
         if let Some(all) = &all {
-            self.draw_text_items(ctx, f, above, all, tb);
+            self.draw_text_items(ctx, f, n, above, all, tb);
         }
     }
 
-    /// Paint a type object's own fills and strokes `items` on its glyph outlines `all` (document
-    /// space; `tb` their bounds), each with its own opacity and blend mode.
-    fn draw_text_items(&mut self, ctx: &mut RenderContext, f: &Frame, items: &[AppearanceItem], all: &BezPath, tb: Rect) {
+    /// Paint some of type `n`'s own fills and strokes (`items`) on its glyph outlines `all`
+    /// (document space; `tb` their bounds). Fills composite with their own opacity and blend mode;
+    /// strokes take every stroke option, as on paths.
+    fn draw_text_items(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, items: &[AppearanceItem], all: &BezPath, tb: Rect) {
         for item in items.iter().filter(|i| i.visible() && !i.paint().is_none()) {
-            let layered = item.opacity() < 1.0 || item.blend() != vectorcraft_color::BlendMode::Normal;
-            if layered {
-                ctx.set_transform(Affine::IDENTITY);
-                ctx.push_layer(None, Some(blend_mode(item.blend())), Some(item.opacity()), None, None);
-            }
-            ctx.set_transform(f.view);
             match item {
-                AppearanceItem::Fill(fl) if paint::set_paint(ctx, &fl.paint, tb, f.doc) => {
-                    ctx.set_fill_rule(peniko::Fill::NonZero);
-                    ctx.fill_path(all);
+                AppearanceItem::Fill(fl) => {
+                    let layered = fl.opacity < 1.0 || fl.blend != vectorcraft_color::BlendMode::Normal;
+                    if layered {
+                        ctx.set_transform(Affine::IDENTITY);
+                        ctx.push_layer(None, Some(blend_mode(fl.blend)), Some(fl.opacity), None, None);
+                    }
+                    ctx.set_transform(f.view);
+                    if paint::set_paint(ctx, &fl.paint, tb, f.doc) {
+                        ctx.set_fill_rule(peniko::Fill::NonZero);
+                        ctx.fill_path(all);
+                    }
+                    if layered {
+                        ctx.pop_layer();
+                    }
                 }
-                AppearanceItem::Stroke(st) if st.width > 0.0 && paint::set_paint(ctx, &st.paint, st.paint_bounds(tb), f.doc) => {
-                    ctx.set_stroke(kurbo::Stroke::new(st.width));
-                    ctx.stroke_path(all);
+                AppearanceItem::Stroke(st) if st.width > 0.0 => {
+                    if st.brush.is_none() || !self.draw_brush(ctx, f, n, all, st) {
+                        self.draw_stroke(ctx, f, Affine::IDENTITY, all, FillRule::NonZero, st, tb);
+                    }
                 }
-                _ => {}
-            }
-            if layered {
-                ctx.pop_layer();
+                AppearanceItem::Stroke(_) => {}
             }
         }
     }
@@ -1151,6 +1154,8 @@ fn now() -> u64 {
 mod tests;
 #[cfg(test)]
 mod tests_blend;
+#[cfg(test)]
+mod tests_charstroke;
 #[cfg(test)]
 mod tests_clip;
 #[cfg(test)]

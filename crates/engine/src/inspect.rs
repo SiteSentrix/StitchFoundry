@@ -1,7 +1,7 @@
 //! Agent-friendly document summaries and view-models for panels.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer};
 
 use crate::Session;
 
@@ -30,6 +30,7 @@ pub fn node_summary(n: &Node) -> Value {
         v["stroke"] = json!(n.appearance.stroke_paint().label());
         v["strokeWidth"] = json!(n.appearance.stroke_width());
     }
+
     match &n.kind {
         NodeKind::Path { path, .. } => {
             v["anchors"] = json!(path.anchor_count());
@@ -67,4 +68,21 @@ pub fn document(s: &Session) -> Value {
         "tool": s.tool_id(),
         "paint": {"fill": s.paint.fill.label(), "stroke": s.paint.stroke.label(), "strokeWidth": s.paint.stroke_width, "fillActive": s.fill_active, "appearanceItem": s.appearance_item()},
     })
+}
+
+/// Cap names as `stroke.set` takes them.
+pub const CAPS: [(LineCap, &str); 3] = [(LineCap::Butt, "butt"), (LineCap::Round, "round"), (LineCap::Square, "square")];
+/// Join names as `stroke.set` takes them.
+pub const JOINS: [(LineJoin, &str); 3] = [(LineJoin::Miter, "miter"), (LineJoin::Round, "round"), (LineJoin::Bevel, "bevel")];
+/// Stroke alignment names as `stroke.set` takes them.
+pub const ALIGNS: [(StrokeAlign, &str); 3] = [(StrokeAlign::Center, "center"), (StrokeAlign::Inside, "inside"), (StrokeAlign::Outside, "outside")];
+
+/// The stroke an object's Stroke panel options describe: type's first run's character stroke,
+/// else the topmost stroke. None for containers and objects without a stroke.
+pub fn node_stroke(n: &Node) -> Option<StrokeLayer> {
+    match &n.kind {
+        NodeKind::Text(t) => Some(t.runs.first().map_or_else(|| vectorcraft_doc::CharStyle::default().stroke_layer(), |r| r.style.stroke_layer())),
+        _ if n.is_container() => None,
+        _ => n.appearance.stroke().cloned(),
+    }
 }

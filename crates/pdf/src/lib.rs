@@ -110,6 +110,8 @@ mod tests;
 #[cfg(test)]
 mod tests_blend;
 #[cfg(test)]
+mod tests_charstroke;
+#[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
 mod tests_fx;

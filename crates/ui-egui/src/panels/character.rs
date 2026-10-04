@@ -42,10 +42,17 @@ fn format(app: &mut VectorcraftApp, p: Value) {
 /// Apply character attributes: to the selected range while the Type tool edits text (the whole
 /// object when nothing is selected), else to the selected text objects.
 fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
-    let Some((id, a, b)) = text_editing(app) else {
+    if text_editing(app).is_none() {
         app.run(cmd, p).ok();
         return;
-    };
+    }
+    range_style(app, p);
+}
+
+/// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
+/// nothing is selected). Does nothing unless the Type tool edits text.
+pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
+    let Some((id, a, b)) = text_editing(app) else { return };
     end_typing(app);
     let mut q = p;
     q["id"] = json!(id.0);

@@ -637,7 +637,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     let (appearance, src_box) = match &src.kind {
         NodeKind::Text(t) if !t.runs.is_empty() => {
             let r = &t.runs[0];
-            (Appearance::basic(r.style.fill.clone(), r.style.stroke.clone(), r.style.stroke_width), Some(t.local_bounds()))
+            (r.style.basic_appearance(), Some(t.local_bounds()))
         }
         _ => (src.appearance.clone(), src.geometric_bounds()),
     };
@@ -680,10 +680,12 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let NodeKind::Text(t) = &mut n.kind {
                 let ap = placed(Some(t.local_bounds()));
+                // Characters without a painted stroke get no weight.
+                let stroke =
+                    ap.stroke().map_or_else(|| StrokeLayer::new(Paint::None, 0.0), |s| StrokeLayer { width: ap.stroke_width(), ..s.clone() });
                 for r in &mut t.runs {
                     r.style.fill = ap.fill_paint();
-                    r.style.stroke = ap.stroke_paint();
-                    r.style.stroke_width = ap.stroke_width();
+                    r.style.set_stroke_layer(&stroke);
                 }
                 continue;
             }
