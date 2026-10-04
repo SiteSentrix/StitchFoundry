@@ -7,11 +7,19 @@ use vectorcraft_doc::{
     AppearanceItem, Document, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_doc::{CharStyle, Justify};
-use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
+use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
 
 use crate::{ExportOptions, Styling, base64_encode, fmt_num, xml_escape};
 
 type Props = Vec<(&'static str, String)>;
+
+/// One laid-out line of area type: baseline anchor (text space) and its pieces of each run.
+struct AreaLine<'t> {
+    x: f64,
+    y: f64,
+    pieces: Vec<(usize, &'t str)>,
+    hyphenated: bool,
+}
 
 pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> String {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
@@ -853,11 +861,8 @@ impl Writer<'_> {
         let lead = first.effective_leading();
         let id = self.id_attr(n);
         let (m, on_path) = match &t.kind {
-            TextKind::Point => (self.xf * t.xf, None),
-            TextKind::Area { frame } => {
-                let b = frame.bounds().unwrap_or_default();
-                (self.xf * t.xf * Affine::translate(Vec2::new(b.x0 + t.para.left_indent, b.y0 + first.size)), None)
-            }
+            // Area type lines are positioned in text space (see `area_lines`).
+            TextKind::Point | TextKind::Area { .. } => (self.xf * t.xf, None),
             TextKind::OnPath { path, start } => {
                 let pid = self.fresh_id("text-path");
                 let d = self.path_d(path, self.xf * t.xf);
@@ -874,28 +879,48 @@ impl Writer<'_> {
         props.extend(Self::node_props(n));
         let a = self.attrs(&props);
         let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
-        let mut s = format!("<text{id}{tr} xml:space=\"preserve\"{a}>");
+        // Area type: laid-out lines (the `<text>` carries the first line's position too, so readers
+        // that place text by its own x/y start where the first line does).
+        let lines = matches!(t.kind, TextKind::Area { .. }).then(|| self.area_lines(t));
+        let at = match lines.as_ref().and_then(|l| l.first()) {
+            Some(l) => format!(" x=\"{}\" y=\"{}\"", self.num(l.x), self.num(l.y)),
+            None => String::new(),
+        };
+        let mut s = format!("<text{id}{tr}{at} xml:space=\"preserve\"{a}>");
         if let Some((pid, start)) = &on_path {
             s.push_str(&format!("<textPath xlink:href=\"#{pid}\" startOffset=\"{}%\">", fmt_num(start * 100.0, 3)));
         }
         let base = self.char_props(&first);
-        let mut line = 0usize;
-        let mut pending = false;
-        for run in &t.runs {
-            let rp = self.char_props(&run.style);
-            let diff: Props = rp.into_iter().filter(|kv| !base.contains(kv)).collect();
-            for (i, piece) in run.text.split('\n').enumerate() {
-                if i > 0 {
-                    line += 1;
-                    pending = true;
+        if let Some(lines) = lines {
+            for l in lines {
+                let last = l.pieces.len() - 1;
+                for (k, (ri, text)) in l.pieces.into_iter().enumerate() {
+                    let pos = if k == 0 { format!(" x=\"{}\" y=\"{}\"", self.num(l.x), self.num(l.y)) } else { String::new() };
+                    let diff: Props = self.char_props(&t.runs[ri].style).into_iter().filter(|kv| !base.contains(kv)).collect();
+                    let a = self.attrs(&diff);
+                    let hy = if k == last && l.hyphenated { "-" } else { "" };
+                    s.push_str(&format!("<tspan{pos}{a}>{}{hy}</tspan>", xml_escape(text)));
                 }
-                if piece.is_empty() {
-                    continue;
+            }
+        } else {
+            let mut line = 0usize;
+            let mut pending = false;
+            for run in &t.runs {
+                let rp = self.char_props(&run.style);
+                let diff: Props = rp.into_iter().filter(|kv| !base.contains(kv)).collect();
+                for (i, piece) in run.text.split('\n').enumerate() {
+                    if i > 0 {
+                        line += 1;
+                        pending = true;
+                    }
+                    if piece.is_empty() {
+                        continue;
+                    }
+                    let pos = if pending && on_path.is_none() { format!(" x=\"0\" y=\"{}\"", self.num(line as f64 * lead)) } else { String::new() };
+                    pending = false;
+                    let a = self.attrs(&diff);
+                    s.push_str(&format!("<tspan{pos}{a}>{}</tspan>", xml_escape(piece)));
                 }
-                let pos = if pending && on_path.is_none() { format!(" x=\"0\" y=\"{}\"", self.num(line as f64 * lead)) } else { String::new() };
-                pending = false;
-                let a = self.attrs(&diff);
-                s.push_str(&format!("<tspan{pos}{a}>{}</tspan>", xml_escape(piece)));
             }
         }
         if on_path.is_some() {
@@ -903,5 +928,49 @@ impl Writer<'_> {
         }
         s.push_str("</text>");
         self.line(&s);
+    }
+
+    /// Area type as laid out. Soft line breaks are only known to the layout, so each laid-out line
+    /// is placed at its baseline (text space), at its left edge, centre or right edge to match the
+    /// `text-anchor` of the paragraph alignment.
+    fn area_lines<'t>(&self, t: &'t TextObject) -> Vec<AreaLine<'t>> {
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let mut offsets = Vec::with_capacity(t.runs.len());
+        let mut off = 0;
+        for r in &t.runs {
+            offsets.push(off);
+            off += r.text.len();
+        }
+        let mut out = vec![];
+        for l in &lay.lines {
+            // Run pieces of this line (the paragraph's `\n` is outside `start..end`).
+            let mut pieces: Vec<(usize, &str)> = vec![];
+            for (ri, (r, &o)) in t.runs.iter().zip(&offsets).enumerate() {
+                let (a, b) = (l.start.max(o), l.end.min(o + r.text.len()));
+                if a < b {
+                    pieces.push((ri, &r.text[a - o..b - o]));
+                }
+            }
+            // Spaces where the line wrapped don't belong to the line.
+            while let Some((_, p)) = pieces.last_mut() {
+                *p = p.trim_end();
+                if !p.is_empty() {
+                    break;
+                }
+                pieces.pop();
+            }
+            if pieces.is_empty() {
+                continue;
+            }
+            let x = match t.para.justify {
+                Justify::Center | Justify::JustifyCenter => (l.x0 + l.x1) / 2.0,
+                Justify::Right | Justify::JustifyRight => l.x1,
+                _ => l.x0,
+            };
+            // A hyphenated break: the layout adds the hyphen as a glyph with no source text.
+            let hyphenated = l.glyph_end > l.glyph_start && lay.glyphs.get(l.glyph_end - 1).is_some_and(|g| g.len == 0);
+            out.push(AreaLine { x, y: l.baseline, pieces, hyphenated });
+        }
+        out
     }
 }

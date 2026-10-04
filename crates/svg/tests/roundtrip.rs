@@ -600,6 +600,36 @@ fn import_opacity_wrapper_folds_into_object() {
 }
 
 #[test]
+fn area_type_exports_its_wrapped_lines() {
+    // Area type wraps at the frame edge; the SVG has to carry those soft line breaks (SVG text never
+    // wraps), with centred lines anchored on the frame's centre, not its left edge.
+    let mut d = Document::new(400.0, 300.0);
+    let text = "Centred area text that wraps onto more than one line here";
+    let mut t = TextObject::point(Point::new(0.0, 0.0), text, CharStyle { size: 18.0, ..CharStyle::default() });
+    t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 150.0)) };
+    t.xf = Affine::translate((100.0, 50.0));
+    t.para.justify = vectorcraft_doc::Justify::Center;
+    let id = d.alloc_id();
+    let d = doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]);
+    let svg = export(&d, &ExportOptions::default());
+    let line = svg.lines().find(|l| l.contains("<text")).unwrap();
+    let ys: Vec<&str> = line.split("<tspan").skip(1).filter_map(|t| t.split(" y=\"").nth(1)?.split('"').next()).collect();
+    assert!(ys.len() >= 3, "one positioned tspan per line: {line}");
+    assert!(ys.windows(2).all(|w| w[0] != w[1]), "{line}");
+    assert!(line.contains("text-anchor=\"middle\""), "{line}");
+    // Lines are anchored at x = 100 in text space = 200 in the document, the frame's centre.
+    assert!(line.contains("transform=\"matrix(1 0 0 1 100 50)\"") && line.contains("<tspan x=\"100\""), "{line}");
+    // Re-import: the same words, now with hard line breaks where the lines wrapped.
+    let r = import(&svg).unwrap();
+    let a = art(&r);
+    let NodeKind::Text(t) = &a[0].kind else { panic!() };
+    let lines: Vec<String> = t.plain_text().lines().map(str::to_string).collect();
+    assert_eq!(lines.len(), ys.len(), "{lines:?}");
+    assert_eq!(lines.join(" "), text);
+    assert!((t.xf.translation().x - 200.0).abs() < 0.01, "{:?}", t.xf);
+}
+
+#[test]
 fn import_text_tspans_and_css() {
     let d = import_art(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
