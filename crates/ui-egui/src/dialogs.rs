@@ -468,7 +468,7 @@ fn new_document(ui: &mut egui::Ui, d: &mut Dialog) {
         ("A4", "595.28 pt", "841.89 pt", "Points"),
         ("A3", "841.89 pt", "1190.55 pt", "Points"),
         ("Web 1920", "1920 px", "1080 px", "Pixels"),
-        ("iPhone", "390 px", "844 px", "Pixels"),
+        ("Phone 390×844", "390 px", "844 px", "Pixels"),
         ("Square Post", "1080 px", "1080 px", "Pixels"),
     ];
     ui.horizontal(|ui| {
