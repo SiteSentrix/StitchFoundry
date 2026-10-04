@@ -58,7 +58,7 @@ pub fn plates(doc: &Document) -> Vec<Plate> {
             Plate { name: (*n).into(), spot: false, rgb: c.cmyk_to_srgb(ink, false) }
         })
         .collect();
-    for sw in &doc.swatches {
+    for sw in doc.swatches_iter() {
         if let (true, Paint::Solid { color, .. }) = (sw.spot, &sw.paint)
             && !v.iter().any(|p| p.name == sw.name)
         {
@@ -69,7 +69,7 @@ pub fn plates(doc: &Document) -> Vec<Plate> {
 }
 
 fn spot_swatch<'a>(doc: &'a Document, name: &str) -> Option<&'a Color> {
-    doc.swatches.iter().find(|s| s.spot && s.name == name).and_then(|s| match &s.paint {
+    doc.swatch(name).filter(|s| s.spot).and_then(|s| match &s.paint {
         Paint::Solid { color, .. } => Some(color),
         _ => None,
     })

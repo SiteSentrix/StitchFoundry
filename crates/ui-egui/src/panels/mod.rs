@@ -274,7 +274,7 @@ pub(crate) fn color_json(c: &Color) -> Value {
     }
 }
 
-/// Paint as command params (`{color}`, `{none}` or `{gradient}`).
+/// Paint as command params (`{color}`, `{swatch}`, `{none}`, `{gradient}` or `{pattern}`).
 pub(crate) fn paint_params(p: &Paint) -> Value {
     match p {
         Paint::None => json!({"none": true}),
@@ -285,7 +285,7 @@ pub(crate) fn paint_params(p: &Paint) -> Value {
             "angle": g.angle,
             "stops": g.gradient.stops.iter().map(|s| json!({"offset": s.offset, "color": color_json(&s.color), "opacity": s.opacity})).collect::<Vec<_>>()
         }}),
-        Paint::Pattern { .. } => json!({"none": true}),
+        Paint::Pattern { pattern, .. } => json!({"pattern": pattern}),
     }
 }
 
@@ -321,5 +321,6 @@ mod tests {
         let p = paint_params(&g);
         assert_eq!(p["gradient"]["kind"], "linear");
         assert_eq!(p["gradient"]["stops"].as_array().unwrap().len(), 2);
+        assert_eq!(paint_params(&vectorcraft_doc::pattern::pattern_paint("Dots")), json!({"pattern": "Dots"}));
     }
 }

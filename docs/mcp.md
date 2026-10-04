@@ -71,6 +71,14 @@ or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"
 Errors (unknown tool, bad arguments, a disabled or failing command) come back as a normal result with
 `isError: true` and a message. The model can read the message and retry.
 
+Swatches go through `run_command`: `swatch.list` lists every swatch with its colour group, kind and colour;
+`swatch.edit {name, newName?, color?, mode?, global?, spot?}` edits one (fills, strokes and text linked to a
+global or spot swatch follow its colour and name, as one undo step); `swatch.delete {names, unlink?}` deletes
+swatches and colour groups in one undo step (art using a deleted global swatch keeps its colour, unlinked).
+`swatch.new {color?, mode?, spot?, global?, group?}` saves a colour (into a colour group with `group`), gradient
+or pattern; `swatch.newGroup {fromArtwork: true, toGlobal?, includeTints?}` makes a colour group of the selected
+art's colours (by default as global swatches the art links to).
+
 ## Resources
 
 | URI | Content |

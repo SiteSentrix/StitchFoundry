@@ -257,7 +257,7 @@ fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
             }
             n
         });
-        for sw in &mut d.swatches {
+        for sw in d.swatches_iter_mut() {
             match &mut sw.paint {
                 Paint::Solid { color, .. } => *color = conv(color),
                 Paint::Gradient(g) => {
@@ -486,14 +486,14 @@ fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.setSpot";
     let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?.to_string();
     let spot = bool_or(p, "spot", true);
-    let sw = s.doc()?.doc.swatches.iter().find(|w| w.name == name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
+    let sw = s.doc()?.doc.swatch(&name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
     if !matches!(sw.paint, Paint::Solid { .. }) {
         return Err(bad(C, "only solid-colour swatches can be spot colours"));
     }
     if sw.spot != spot {
         let n = name.clone();
         s.edit("Swatch Options", |d, _| {
-            if let Some(w) = d.swatches.iter_mut().find(|w| w.name == n) {
+            if let Some(w) = d.swatch_mut(&n) {
                 w.spot = spot;
                 if spot {
                     w.global = true;

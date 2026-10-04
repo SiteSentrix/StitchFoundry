@@ -356,35 +356,48 @@ pub fn link_label(ui: &mut Ui, text: &str) -> Response {
     resp
 }
 
-/// Illustrator-style checkbox with a disabled state. Returns true when toggled.
-pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
+/// The row of a checkbox or radio button: allocates a 13 pt box plus `label`, draws the label and
+/// returns the box, the response and the box's border colour.
+fn choice_row(ui: &mut Ui, label: &str, enabled: bool) -> (Rect, Response, Color32) {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(12.5), if enabled { t.text } else { t.text_disabled });
     let (rect, resp) =
         ui.allocate_exact_size(vec2(18.0 + galley.size().x, 20.0f32.max(galley.size().y)), if enabled { Sense::click() } else { Sense::hover() });
     let bx = Rect::from_min_size(pos2(rect.left(), rect.center().y - 6.5), Vec2::splat(13.0));
+    ui.painter().galley(pos2(bx.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley, t.text);
+    let border = if !enabled {
+        t.divider
+    } else if resp.hovered() {
+        t.text
+    } else {
+        t.button_border
+    };
+    (bx, resp, border)
+}
+
+/// Panel-style checkbox with a disabled state. Returns true when toggled.
+pub fn check(ui: &mut Ui, label: &str, value: bool, enabled: bool) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (bx, resp, border) = choice_row(ui, label, enabled);
     ui.painter().rect_filled(bx, CornerRadius::same(2), if value && enabled { t.accent_strong } else { t.input });
-    ui.painter().rect_stroke(
-        bx,
-        CornerRadius::same(2),
-        Stroke::new(
-            1.0,
-            if !enabled {
-                t.divider
-            } else if resp.hovered() {
-                t.text
-            } else {
-                t.button_border
-            },
-        ),
-        StrokeKind::Inside,
-    );
+    ui.painter().rect_stroke(bx, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
     if value {
         let c = if enabled { Color32::WHITE } else { t.text_disabled };
         ui.painter().line_segment([bx.left_center() + vec2(3.0, 0.0), bx.center_bottom() + vec2(-1.0, -3.5)], Stroke::new(1.6, c));
         ui.painter().line_segment([bx.center_bottom() + vec2(-1.0, -3.5), bx.right_top() + vec2(-3.0, 3.0)], Stroke::new(1.6, c));
     }
-    ui.painter().galley(pos2(bx.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley, t.text);
+    enabled && resp.clicked()
+}
+
+/// Radio button in the style of [`check`], with a disabled state. Returns true when clicked.
+pub fn radio(ui: &mut Ui, label: &str, selected: bool, enabled: bool) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (bx, resp, border) = choice_row(ui, label, enabled);
+    let c = bx.center();
+    ui.painter().circle(c, 6.0, if selected && enabled { t.accent_strong } else { t.input }, Stroke::new(1.0, border));
+    if selected {
+        ui.painter().circle_filled(c, 2.5, if enabled { Color32::WHITE } else { t.text_disabled });
+    }
     enabled && resp.clicked()
 }
 

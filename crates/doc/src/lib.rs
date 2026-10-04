@@ -12,6 +12,7 @@ pub mod live;
 pub mod node;
 pub mod pattern;
 pub mod selection;
+pub mod swatches;
 pub mod text;
 
 use std::collections::BTreeMap;
@@ -593,9 +594,6 @@ impl Document {
     }
     pub fn pattern_mut(&mut self, name: &str) -> Option<&mut PatternDef> {
         self.patterns.iter_mut().find(|p| p.name == name)
-    }
-    pub fn swatch(&self, name: &str) -> Option<&Swatch> {
-        self.swatches.iter().chain(self.swatch_groups.iter().flat_map(|g| g.swatches.iter())).find(|s| s.name == name)
     }
     /// Deep-clone `node` with fresh ids for it and all descendants.
     pub fn reid(&mut self, node: &Node) -> Node {

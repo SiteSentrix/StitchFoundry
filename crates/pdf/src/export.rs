@@ -215,9 +215,7 @@ impl Exporter<'_> {
     /// swatch's CMYK equivalent is the alternate space).
     fn solid(&mut self, c: &Color, swatch: Option<&str>) -> krilla::color::Color {
         use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
-        let spot = swatch
-            .and_then(|n| self.doc.swatches.iter().find(|s| s.spot && s.name == n))
-            .and_then(|s| s.paint.color().map(|sc| (s.name.clone(), sc)));
+        let spot = swatch.and_then(|n| self.doc.swatch(n).filter(|s| s.spot)).and_then(|s| s.paint.color().map(|sc| (s.name.clone(), sc)));
         let Some((name, sc)) = spot else { return self.col(c) };
         let cms = vectorcraft_color::cms::active();
         let intent = cms.settings().intent;

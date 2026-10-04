@@ -113,7 +113,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "images": images,
         "symbols": symbols,
         "spotColors": spot,
-        "swatches": d.swatches.len(),
+        "swatches": d.swatches_iter().count(),
         "graphicStyles": d.graphic_styles.len(),
         "characterStyles": d.char_styles.len(),
         "paragraphStyles": d.para_styles.len(),

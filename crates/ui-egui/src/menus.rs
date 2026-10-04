@@ -160,6 +160,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
+    (
+        "ui.swatchOptions",
+        "Swatch Options…",
+        "",
+        "{name} edit a swatch: Swatch Options for a colour (dialog `swatchOptions`, engine: swatch.edit), the Gradient panel for a gradient, pattern editing for a pattern",
+    ),
+    (
+        "ui.newSwatch",
+        "New Swatch…",
+        "",
+        "{spot?, group?: colour group name} open New Swatch for the active fill or stroke (dialog `newSwatch`, engine: swatch.new)",
+    ),
+    (
+        "ui.newColorGroup",
+        "New Color Group…",
+        "",
+        "{swatches?: [names]} open New Color Group, from those swatches or the selected artwork (dialog `newColorGroup`, engine: swatch.newGroup)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -482,6 +500,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         "file.closeAll" => crate::unsaved::close_all(app, "closeAll"),
         "app.quit" => crate::unsaved::close_all(app, "quit"),
+        "ui.swatchOptions" => match s("name") {
+            Some(name) => crate::dialogs::swatch_options::open(app, &name),
+            None => Err("missing `name`".into()),
+        },
+        "ui.newSwatch" => crate::dialogs::new_swatch::open(app, p.get("spot").and_then(Value::as_bool).unwrap_or(false), s("group").as_deref()),
+        "ui.newColorGroup" => {
+            let names = p.get("swatches").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
+        }
         _ => return None,
     };
     Some(r)
@@ -644,6 +671,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "effect.dialog" | "ui.recolorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "file.export.pdf" => app.session.active().is_some(),
+        "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         _ => true,
     }
 }
