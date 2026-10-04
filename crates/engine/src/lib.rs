@@ -772,6 +772,8 @@ mod tests_prefs;
 #[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]
+mod tests_styles;
+#[cfg(test)]
 mod tests_swatches;
 #[cfg(test)]
 mod tests_textedit;
