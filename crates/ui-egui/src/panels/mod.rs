@@ -192,14 +192,14 @@ pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
 }
 
 /// Whether the selected objects' fills and strokes differ (the proxies show "?"), cached per
-/// document revision.
+/// document revision and Appearance panel item.
 pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool) {
     let Some(st) = app.session.active() else { return (false, false) };
-    let key = (st.uid, st.revision);
-    match pstate::<Option<((u64, u64), (bool, bool))>>(ctx, "proxy-mixed") {
+    let key = (st.uid, st.revision, app.session.appearance_item());
+    match pstate::<Option<((u64, u64, Option<usize>), (bool, bool))>>(ctx, "proxy-mixed") {
         Some((k, mixed)) if k == key => mixed,
         _ => {
-            let mixed = st.proxy_mixed();
+            let mixed = app.session.proxy_mixed();
             set_pstate(ctx, "proxy-mixed", Some((key, mixed)));
             mixed
         }
@@ -269,6 +269,56 @@ pub(crate) fn proxy(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     }
     if let Some(stroke) = c.pick {
         app.run("ui.colorPicker", json!({ "stroke": stroke })).ok();
+    }
+}
+
+/// The Fill (or `stroke`) chip of the Control bar and the Properties panel, `size` square (with a
+/// `chevron` after it): the proxy's paint, "?" when the selected objects' paints differ. A click
+/// brings that proxy forward and opens a popover with the Swatches panel; Shift-click (or the
+/// popover's toggle) shows the Color panel's mixer instead.
+pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool, size: f32, chevron: bool) {
+    let (fill, stroke_paint) = current_paints(app);
+    let mixed = mixed_paints(app, ui.ctx());
+    let (paint, mixed) = if stroke { (stroke_paint, mixed.1) } else { (fill, mixed.0) };
+    let resp = crate::widgets::chip_button(ui, size, chevron, |ui, chip| {
+        crate::widgets::proxy_chip(ui, chip, &paint, mixed, stroke.then_some(size * 0.25));
+    });
+    let resp = resp.on_hover_text(if stroke {
+        "Stroke: click for swatches, Shift-click for the color mixer"
+    } else {
+        "Fill: click for swatches, Shift-click for the color mixer"
+    });
+    if resp.clicked() {
+        app.run("paint.toggleActive", json!({ "fill": !stroke })).ok();
+        set_pstate(ui.ctx(), MIXER, ui.input(|i| i.modifiers.shift));
+    }
+    egui::Popup::from_toggle_button_response(&resp)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .width(POPOVER_WIDTH)
+        .show(|ui| paint_popover(app, ui));
+}
+
+/// The chip popovers' width (a narrow Swatches or Color panel).
+const POPOVER_WIDTH: f32 = 248.0;
+/// Panel state: the chip popovers show the Color panel's mixer instead of the swatches.
+const MIXER: &str = "paint-popover-mixer";
+
+/// The body of a Fill/Stroke chip popover: a Swatches / Color mixer toggle above that panel's body.
+fn paint_popover(app: &mut VectorcraftApp, ui: &mut Ui) {
+    ui.set_width(POPOVER_WIDTH);
+    let mixer: bool = pstate(ui.ctx(), MIXER);
+    ui.horizontal(|ui| {
+        for (icon, tip, m) in [("swatch-book", "Swatches", false), ("palette", "Color Mixer (Shift-click the chip)", true)] {
+            if crate::widgets::icon_button(ui, icon, tip, mixer == m, 22.0).clicked() {
+                set_pstate(ui.ctx(), MIXER, m);
+            }
+        }
+    });
+    crate::widgets::divider(ui);
+    if mixer {
+        color::show(app, ui);
+    } else {
+        swatches::popover(app, ui);
     }
 }
 

@@ -1,10 +1,10 @@
 //! The Properties panel: context-sensitive sections like Illustrator's.
 
-use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
+use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{NodeKind, Unit};
 
-use super::first_selected;
+use super::{first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, dim_label, divider, section_header};
 use crate::{VectorcraftApp, icons};
@@ -90,6 +90,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if is_live {
         actions.push(("Expand Shape", "object.expandShape"));
     }
+    if multi_color(app, ui.ctx()) {
+        actions.push(("Recolor", "ui.recolorDialog"));
+    }
     actions.push(("Offset Path", "object.path.offsetPath"));
     actions.push(("Simplify", "object.path.simplify"));
     actions.push(("Arrange: Bring to Front", "object.arrange.bringToFront"));
@@ -103,6 +106,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
         });
+    }
+}
+
+/// Whether the selection uses more than one colour (`recolor.colors`), which offers the Recolor
+/// quick action; cached per document revision.
+fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let key = (st.uid, st.revision);
+    match pstate::<Option<((u64, u64), bool)>>(ctx, "props-multi-color") {
+        Some((k, multi)) if k == key => multi,
+        _ => {
+            let r = app.session.execute("recolor.colors", &json!({})).unwrap_or_default();
+            let multi = r["colors"].as_array().is_some_and(|c| c.len() > 1);
+            set_pstate(ctx, "props-multi-color", Some((key, multi)));
+            multi
+        }
     }
 }
 
@@ -262,25 +281,12 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     let Some(n) = first_selected(app) else { return };
     section_header(ui, "Appearance");
-    let (fill, stroke) = super::current_paints(app);
     let weight = super::stroke::shown_weight(app, super::current_stroke(app).as_ref(), &super::stroke_mixed(app, ui.ctx()));
-    for (label, paint, is_fill) in [("Fill", fill, true), ("Stroke", stroke, false)] {
+    for (label, is_fill) in [("Fill", true), ("Stroke", false)] {
         ui.horizontal(|ui| {
-            let (r, resp) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::click());
-            widgets::paint_chip(ui, r.shrink(2.0), &paint);
-            if !is_fill {
-                ui.painter().rect_filled(r.shrink(7.0), 0.0, t.panel);
-            }
-            ui.painter().rect_stroke(r.shrink(2.0), 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Outside);
-            if resp.double_clicked() {
-                app.run("ui.colorPicker", json!({ "stroke": !is_fill })).ok();
-            } else if resp.clicked() {
-                app.session.fill_active = is_fill;
-                app.ui.open_panel = Some("swatches".into());
-            }
+            super::paint_chip(app, ui, !is_fill, 22.0, false);
             ui.label(egui::RichText::new(label).size(12.0));
             if !is_fill {
                 ui.add_space(8.0);

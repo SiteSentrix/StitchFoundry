@@ -820,6 +820,8 @@ mod tests_pattern;
 #[cfg(test)]
 mod tests_prefs;
 #[cfg(test)]
+mod tests_proxyitems;
+#[cfg(test)]
 mod tests_strokegeom;
 #[cfg(test)]
 mod tests_strokeux;

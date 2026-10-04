@@ -41,10 +41,18 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             default_paint
         ),
-        cmd!("paint.toggleActive", "Toggle Fill/Stroke Focus", [], Some("X"), "{}", always, |s, _| {
-            s.fill_active = !s.fill_active;
-            Ok(json!({ "fillActive": s.fill_active }))
-        }),
+        cmd!(
+            "paint.toggleActive",
+            "Toggle Fill/Stroke Focus",
+            [],
+            Some("X"),
+            "{fill?: bool (true: bring the Fill proxy forward, false: the Stroke proxy; omitted: swap which is in front)} → {fillActive}",
+            always,
+            |s, p| {
+                s.fill_active = p.get("fill").and_then(Value::as_bool).unwrap_or(!s.fill_active);
+                Ok(json!({ "fillActive": s.fill_active }))
+            }
+        ),
         cmd!("paint.none", "None", [], Some("/"), "{} set the active proxy (fill or stroke) to None", has_doc, |s, _| {
             let f = s.fill_active;
             set_paint(s, &json!({"none": true}), f)
@@ -69,18 +77,18 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Invert",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; with nothing selected, invert the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with nothing selected, invert the default → {changed}",
             has_doc,
-            |s, p| proxy_recolor(s, p, "Invert", &super::colorcmds::invert)
+            |s, p| proxy_recolor(s, p, "paint.invert", "Invert", &super::colorcmds::invert)
         ),
         cmd!(
             "paint.complement",
             "Complement",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; with nothing selected, the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item as paint.invert does; with nothing selected, the default → {changed}",
             has_doc,
-            |s, p| proxy_recolor(s, p, "Complement", &|c: Color| c.complement_keep_model())
+            |s, p| proxy_recolor(s, p, "paint.complement", "Complement", &|c: Color| c.complement_keep_model())
         ),
         cmd!(
             "paint.lastColor",
@@ -231,36 +239,44 @@ pub(crate) fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
 
 impl DocState {
     /// Whether the selected objects' fills and strokes differ as the proxies show them (a "?"
-    /// proxy; a group whose contents differ counts). One walk of the document, so callers that ask
+    /// proxy; a group whose contents differ counts). `item` (the Appearance panel's active item)
+    /// stands for the proxy of its kind, as in [`Session::proxy_paints`]: that fill or stroke of
+    /// each selected object's own stack is compared. One walk of the document, so callers that ask
     /// every frame cache it by revision.
-    pub fn proxy_mixed(&self) -> (bool, bool) {
+    pub fn proxy_mixed(&self, item: Option<usize>) -> (bool, bool) {
         if self.selection.is_empty() {
             return (false, false);
         }
         let ids: std::collections::HashSet<NodeId> = self.selection.objects.iter().copied().collect();
-        let mut nodes = vec![];
+        let (mut selected, mut nodes) = (vec![], vec![]);
         self.doc.walk(|n| {
             if ids.contains(&n.id) {
+                selected.push(n);
                 painted(n, true, &mut nodes);
             }
         });
-        let mut paints = nodes.iter().map(|n| (proxy_paint(n, false, None), proxy_paint(n, true, None)));
-        let Some((f0, s0)) = paints.next() else { return (false, false) };
-        let mut mixed = (false, false);
-        for (f, s) in paints {
-            mixed.0 |= !same_in_proxy(&f0, &f);
-            mixed.1 |= !same_in_proxy(&s0, &s);
-            if mixed.0 && mixed.1 {
-                break;
-            }
-        }
-        mixed
+        let first = self.selection.objects.first().and_then(|id| self.doc.node(*id));
+        let differ = |stroke: bool| {
+            let item = first.and_then(|f| f.appearance.item_of_kind(item, !stroke));
+            let set = if item.is_some() { &selected } else { &nodes };
+            let mut paints = set.iter().map(|n| proxy_paint(n, stroke, item));
+            let Some(p0) = paints.next() else { return false };
+            paints.any(|p| !same_in_proxy(&p0, &p))
+        };
+        (differ(false), differ(true))
+    }
+}
+
+impl Session {
+    /// [`DocState::proxy_mixed`] of the active document for the Appearance panel's active item.
+    pub fn proxy_mixed(&self) -> (bool, bool) {
+        self.active().map_or((false, false), |st| st.proxy_mixed(self.appearance_item()))
     }
 }
 
 fn proxies(s: &mut Session, _: &Value) -> Result<Value> {
     let (fill, stroke) = s.proxy_paints();
-    let (fill_mixed, stroke_mixed) = s.active().map_or((false, false), DocState::proxy_mixed);
+    let (fill_mixed, stroke_mixed) = s.proxy_mixed();
     Ok(json!({"fill": fill, "stroke": stroke, "fillActive": s.fill_active, "fillMixed": fill_mixed, "strokeMixed": stroke_mixed}))
 }
 
@@ -428,9 +444,10 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// Invert / Complement: recolour the active proxy of the targets (or the default when there are
-/// none) and remember the first target's new paint.
-fn proxy_recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
+/// Invert / Complement (`cmd`, undone as `label`): recolour the active proxy of the targets (or the
+/// default when there are none) and remember the first target's new paint. The Appearance panel's
+/// active item of the proxy's kind is recoloured in each selected object's own stack instead.
+fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
     let stroke = stroke_param(s, p);
     let ids = match ids_param(p, "ids") {
         Some(ids) => ids,
@@ -443,11 +460,27 @@ fn proxy_recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> C
         s.remember_paint(&shown);
         return Ok(json!({ "changed": changed as usize }));
     }
-    // The proxy's colours only: images and pattern tiles stay as they are.
-    let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
-    let r = super::colorcmds::recolor(s, &q, label, f)?;
-    let first = leaf_targets(s, &ids)?.first().and_then(|id| s.doc().ok()?.doc.node(*id).map(|n| proxy_paint(n, stroke, None)));
-    if let Some(shown) = first {
+    let item = item_target(s, p, cmd)?.of_kind(s, !stroke);
+    let (r, shown_item) = match item {
+        ItemTarget::Item { index, .. } => {
+            let ids = item.targets(s, p)?;
+            let mut changed = 0;
+            edit_items(s, &ids, item, cmd, label, !stroke, |n, i| {
+                let paint =
+                    if stroke { n.appearance.stroke_at_mut(i).map(|l| &mut l.paint) } else { n.appearance.fill_at_mut(i).map(|l| &mut l.paint) };
+                changed += paint.is_some_and(|paint| super::colorcmds::map_paint(paint, f)) as usize;
+                Ok(())
+            })?;
+            (json!({ "changed": changed }), Some(index))
+        }
+        // The proxy's colours only: images and pattern tiles stay as they are.
+        ItemTarget::Top => {
+            let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
+            (super::colorcmds::recolor(s, &q, label, f)?, None)
+        }
+    };
+    let shown_ids = if shown_item.is_some() { ids } else { leaf_targets(s, &ids)? };
+    if let Some(shown) = shown_ids.first().and_then(|id| s.doc().ok()?.doc.node(*id).map(|n| proxy_paint(n, stroke, shown_item))) {
         s.remember_paint(&shown);
     }
     Ok(r)

@@ -1456,7 +1456,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
                     continue;
                 }
                 let label = dynamic_label(app, id, label);
-                let sc = if p.is_null() { shortcut_of(id).map(pretty_shortcut).unwrap_or_default() } else { String::new() };
+                let sc = item_shortcut(id, p).map(pretty_shortcut).unwrap_or_default();
                 let chk = checked(app, id, p);
                 let text = match chk {
                     Some(true) => format!("✓  {label}"),
@@ -1638,7 +1638,7 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
                     command: Some(id.to_string()),
                     params: p.clone(),
                     enabled: enabled(app, id),
-                    shortcut: shortcut_of(id).unwrap_or("").to_string(),
+                    shortcut: item_shortcut(id, p).or_else(|| shortcut_of(id)).unwrap_or("").to_string(),
                 }),
                 Item::Todo(l, sc) => out.push(MenuEntry {
                     path: path.clone(),
@@ -1785,6 +1785,16 @@ fn effect_menu() -> Vec<Item> {
         out.push(Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })));
     }
     out
+}
+
+/// The shortcut a menu item shows: its command's (items without params), or a panel's for the
+/// Window menu's `window.panel {panel}` items.
+pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
+    match (id, p.get("panel").and_then(Value::as_str)) {
+        ("window.panel", Some(panel)) => crate::shortcut_editor::panel_shortcut(panel),
+        _ if p.is_null() => shortcut_of(id),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

@@ -100,3 +100,9 @@ caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 
 not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (the same `saveChanges` questions for
 modified documents), and empty bar space and the 5 pt window edges move and resize the window. macOS and the web
 build are unchanged.
+
+Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
+forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
+a swatch clicked there runs `paint.setFill` / `paint.setStroke`. Panel keys (Color F6, Color Guide Shift+F3,
+Appearance Shift+F6, Graphic Styles Shift+F5, Stroke Cmd+F10, Gradient Cmd+F9, Transparency Cmd+Shift+F10) run
+`window.panel {panel}` and can be pressed with `ui.key`; `ui.menu.list` shows them on the Window menu's items.

@@ -43,21 +43,27 @@ pub fn parse(s: &str) -> Option<KeyboardShortcut> {
     Some(KeyboardShortcut::new(m, key))
 }
 
-/// Every command shortcut in effect (user overrides from Edit → Keyboard Shortcuts win).
-fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str)> {
-    let mut v: Vec<(KeyboardShortcut, &'static str)> = vec![];
+/// Every command shortcut in effect (user overrides from Edit → Keyboard Shortcuts win), with the
+/// command's params: `{}`, or `{panel}` for the panel shortcuts (`window.panel`).
+pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json::Value)> {
+    let mut v = vec![];
     for c in vectorcraft_engine::command_specs() {
         if let Some(sc) = crate::menus::shortcut_of(c.id).and_then(parse) {
-            v.push((sc, c.id));
+            v.push((sc, c.id, json!({})));
         }
     }
     for c in crate::menus::UI_COMMANDS {
         if let Some(sc) = crate::menus::shortcut_of(c.0).and_then(parse) {
-            v.push((sc, c.0));
+            v.push((sc, c.0, json!({})));
+        }
+    }
+    for (panel, _, _) in crate::state::ICON_PANELS {
+        if let Some(sc) = crate::shortcut_editor::panel_shortcut(panel).and_then(parse) {
+            v.push((sc, "window.panel", json!({ "panel": panel })));
         }
     }
     // Most specific (most modifiers) first so Cmd+Shift+Z isn't eaten by Cmd+Z.
-    v.sort_by_key(|(sc, _)| {
+    v.sort_by_key(|(sc, ..)| {
         std::cmp::Reverse(sc.modifiers.shift as u8 + sc.modifiers.alt as u8 + sc.modifiers.command as u8 + sc.modifiers.ctrl as u8)
     });
     v
@@ -105,13 +111,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // Editing keys with modifiers, clipboard and Cmd+A.
         crate::panels::character::route_type_input(app, ctx);
         // Enter was already delivered above as ToolKey::Enter (newline).
-        let fire = all_shortcuts()
-            .into_iter()
-            .filter(|(sc, _)| sc.modifiers.command)
-            .find(|(sc, _)| ctx.input_mut(|i| i.consume_shortcut(sc)))
-            .map(|(_, id)| id);
-        if let Some(id) = fire {
-            crate::menus::invoke(app, id, json!({}));
+        let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| i.consume_shortcut(sc)));
+        if let Some((_, id, p)) = fire {
+            crate::menus::invoke(app, id, p);
         }
         return;
     }
@@ -156,8 +158,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
     }
     // Command shortcuts.
-    let mut fire: Option<&'static str> = None;
-    for (sc, id) in all_shortcuts() {
+    let mut fire = None;
+    for (sc, id, p) in all_shortcuts() {
         // Letter / punctuation keys without Cmd/Alt/Ctrl are handled below as text (tool shortcuts,
         // X, D, /, `,` and `.`).
         let plain = !(sc.modifiers.command || sc.modifiers.alt || sc.modifiers.ctrl);
@@ -168,12 +170,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             continue;
         }
         if ctx.input_mut(|i| i.consume_shortcut(&sc)) {
-            fire = Some(id);
+            fire = Some((id, p));
             break;
         }
     }
-    if let Some(id) = fire {
-        crate::menus::invoke(app, id, json!({}));
+    if let Some((id, p)) = fire {
+        crate::menus::invoke(app, id, p);
         return;
     }
     // Arrow nudges (Shift = ×10, Alt = copy).
