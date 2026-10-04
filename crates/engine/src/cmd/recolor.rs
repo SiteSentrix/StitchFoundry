@@ -30,8 +30,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library (new colours snap to its nearest colour), includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces) as one undo step → {changed}",
-            has_selection,
+            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null, exclude?: false (the row's colours are kept)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library (new colours snap to its nearest colour), group?: colour group rewritten with groupColors?: [colour] (default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces) and the group, as one undo step → {changed}",
+            has_doc,
             apply
         ),
         cmd!(
@@ -305,10 +305,32 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let ids = s.doc()?.selection.objects.clone();
+    let group = str_param(p, "group");
+    if ids.is_empty() && group.is_none() {
+        return Err(bad(C, "select artwork to recolour, or give a colour `group`"));
+    }
     let map = ColorMap::new(&rows, method);
     let f = |c: Color| map.map(c);
     let scope = Scope { fill: true, stroke: true, ..Scope::of(p) };
-    let changed = s.edit("Recolor Artwork", |d, _| Ok(Recolor::new(scope, &f).run(d, &ids)))?;
+    let label = if ids.is_empty() { "Edit Color Group" } else { "Recolor Artwork" };
+    let new: Vec<Color> = match p.get("groupColors").and_then(Value::as_array) {
+        Some(cs) => cs
+            .iter()
+            .map(|v| {
+                color_value(v).map(|c| palette.as_ref().map_or(c, |pl| pl.nearest(c))).ok_or_else(|| bad(C, format!("bad colour {v} in groupColors")))
+            })
+            .collect::<Result<_>>()?,
+        None => rows.iter().filter_map(Row::new_color).collect(),
+    };
+    let rename = str_param(p, "rename");
+    let (changed, edit) = s.edit(label, |d, _| {
+        let changed = Recolor::new(scope, &f).run(d, &ids);
+        let edit = group.map(|g| super::swatch::rewrite_group(d, g, &new, rename, C)).transpose()?;
+        Ok((changed, edit))
+    })?;
+    if let Some(e) = edit {
+        e.defaults(s);
+    }
     Ok(json!({ "changed": changed }))
 }
 

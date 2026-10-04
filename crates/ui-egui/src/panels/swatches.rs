@@ -396,8 +396,9 @@ fn drag_of(e: &Entry, names: Vec<String>) -> PanelDrag {
 #[derive(Default)]
 struct TileEvents {
     clicked: Option<(Entry, egui::Modifiers)>,
-    /// Double-click opens the swatch's editor (Swatch Options, Gradient panel or pattern editing).
-    edit: Option<String>,
+    /// Double-click opens the swatch's editor (Swatch Options, Gradient panel or pattern editing),
+    /// or Edit or Apply Color Group on a colour group.
+    edit: Option<Entry>,
     drop: Option<Drop>,
     /// A drag is held over a tile or row.
     over: bool,
@@ -408,8 +409,8 @@ struct TileEvents {
 /// starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held over it.
 fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String], list: bool, ev: &mut TileEvents) {
     let name = e.name();
-    if matches!(e, Entry::Swatch { .. }) && resp.double_clicked() {
-        ev.edit = Some(name.to_string());
+    if matches!(e, Entry::Swatch { .. } | Entry::Folder(_)) && resp.double_clicked() {
+        ev.edit = Some(e.clone());
     }
     if resp.drag_started() {
         let with_sel = sel.iter().any(|s| s == name);
@@ -685,8 +686,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
         let zone = ui.interact(out.inner_rect, ui.id().with("swatch-drop"), Sense::hover());
         zone_input(ui, &zone, &mut ev);
     });
-    if let Some(name) = ev.edit {
-        app.run("ui.swatchOptions", json!({"name": name})).ok();
+    match ev.edit {
+        Some(Entry::Folder(g)) => edit_group(app, &g),
+        Some(e) => {
+            app.run("ui.swatchOptions", json!({"name": e.name()})).ok();
+        }
+        None => {}
     }
     if let Some(drop) = ev.drop {
         apply_drop(app, drop);
@@ -815,6 +820,11 @@ fn selected_group(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
     sel.iter().find(|n| d.swatch_groups.iter().any(|g| g.name == **n)).cloned()
 }
 
+/// Edit or Apply Color Group: Recolor Artwork on colour group `group` (and the selected art).
+fn edit_group(app: &mut VectorcraftApp, group: &str) {
+    app.run("ui.recolorDialog", json!({ "group": group })).ok();
+}
+
 /// Delete `names` (swatches and colour groups) after asking, or at once with `now` (Alt-click).
 fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
     let params = json!({"names": names});
@@ -846,8 +856,13 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
                 }
             }
         });
+        // With a colour group selected the options button edits or applies the group.
         let opts = editable(app, sel);
-        if widgets::icon_button_enabled(ui, "dc-options", "Swatch Options", false, opts.is_some(), 24.0).clicked()
+        if let Some(g) = selected_group(app, sel).filter(|_| opts.is_none()) {
+            if widgets::icon_button(ui, "palette", "Edit or Apply Color Group", false, 24.0).clicked() {
+                edit_group(app, &g);
+            }
+        } else if widgets::icon_button_enabled(ui, "dc-options", "Swatch Options", false, opts.is_some(), 24.0).clicked()
             && let Some(n) = opts
         {
             app.run("ui.swatchOptions", json!({"name": n})).ok();
@@ -917,6 +932,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         delete(app, del, false);
     }
     let group = selected_group(app, &selected);
+    if menu_item(ui, "Edit or Apply Color Group…", group.is_some(), false)
+        && let Some(g) = &group
+    {
+        edit_group(app, g);
+    }
     if menu_item(ui, "Ungroup Color Group", group.is_some(), false)
         && let Some(g) = group
     {

@@ -1,5 +1,5 @@
 //! Recolor Artwork (M3.78): colour reduction, preserve rules, recolour methods, Limit to Library,
-//! randomize.
+//! randomize; Edit Color Group (M3.79).
 
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
@@ -200,6 +200,8 @@ fn methods_and_bad_params() {
     assert!(s.execute("recolor.apply", &json!({"map": {"#ff0000": "#00ff00"}, "method": "nope"})).is_err());
     assert!(s.execute("recolor.apply", &json!({"map": {"#ff0000": "nonsense"}})).is_err());
     assert!(s.execute("recolor.apply", &json!({})).is_err());
+    run(&mut s, "select.none", json!({}));
+    assert!(s.execute("recolor.apply", &json!({"map": {}})).is_err(), "needs art or a group");
 }
 
 #[test]
@@ -221,4 +223,83 @@ fn randomize_shuffles_new_colours_and_skips_excluded_rows() {
     let sb = run(&mut s, "recolor.randomize", json!({"map": map, "order": false, "saturationBrightness": true}));
     let hue = |v: &Value| color_value(v).unwrap().to_hsb()[0];
     assert!((hue(&sb["map"][0]["to"]) - 0.0).abs() < 1.0 && (hue(&sb["map"][1]["to"]) - 120.0).abs() < 1.0, "hue kept");
+}
+
+#[test]
+fn edit_group_rewrites_in_order_as_one_undo_step() {
+    let mut s = session();
+    let g = run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["#ff0000", "#00ff00", "#0000ff"]}));
+    let names = keys(&g["swatches"]);
+    let group = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let g = d.swatch_groups.iter().find(|g| g.name == "Theme" || g.name == "Brand Theme").unwrap();
+        (g.name.clone(), g.swatches.iter().map(|w| (w.name.clone(), w.paint.color().unwrap().to_hex())).collect::<Vec<_>>())
+    };
+    let before = group(&s);
+    let r = run(
+        &mut s,
+        "swatch.editGroup",
+        json!({"group": "Theme", "colors": ["#111111", "cmyk 0 0 0 50", "#333333", "#444444"], "rename": "Brand Theme"}),
+    );
+    assert_eq!(r["name"], "Brand Theme");
+    let (name, sw) = group(&s);
+    assert_eq!(name, "Brand Theme");
+    assert_eq!(sw.iter().map(|w| w.1.as_str()).collect::<Vec<_>>()[..1], ["#111111"]);
+    assert_eq!(sw.len(), 4, "an extra colour becomes a new swatch");
+    assert_eq!(sw[..3].iter().map(|w| w.0.clone()).collect::<Vec<_>>(), names, "the swatches keep their names, in order");
+    assert!(matches!(s.doc().unwrap().doc.swatch(&names[1]).unwrap().paint.color(), Some(Color::Cmyk { .. })));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(group(&s), before, "one undo step");
+    // Fewer colours drop the swatches past the end.
+    run(&mut s, "swatch.editGroup", json!({"group": "Theme", "colors": ["#ababab"]}));
+    assert_eq!(group(&s).1.len(), 1);
+    assert!(s.execute("swatch.editGroup", &json!({"group": "Nope", "colors": []})).is_err());
+}
+
+#[test]
+fn edit_group_relinks_art_and_apply_rewrites_the_group_with_the_art() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Theme", "colors": ["#ff0000"]}));
+    let name = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().swatches[0].name.clone();
+    run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    let linked = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [linked.0], "swatch": name}));
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "Theme", "colors": ["#00ff00"]}));
+    assert_eq!(r["relinked"], 1);
+    assert_eq!(fill(&s, linked).to_hex(), "#00ff00", "linked art follows its swatch");
+    // Recolor with a group: the art and the group change in one undo step.
+    let plain = rect(&mut s, json!("#0000ff"));
+    run(&mut s, "select.set", json!({"ids": [plain.0]}));
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "recolor.apply", json!({"map": [{"from": ["#0000ff"], "to": "#ffff00"}], "group": "Theme"}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(fill(&s, plain).to_hex(), "#ffff00");
+    assert_eq!(s.doc().unwrap().doc.swatch(&name).unwrap().paint.color().unwrap().to_hex(), "#ffff00");
+    // Without a selection, only the group.
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "recolor.apply", json!({"map": [{"from": ["#ffff00"], "to": "#ff00ff"}], "group": "Theme"}));
+    assert_eq!(s.doc().unwrap().doc.swatch(&name).unwrap().paint.color().unwrap().to_hex(), "#ff00ff");
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Edit Color Group");
+    // Explicit group colours.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Theme", "groupColors": ["#010203", "cmyk 0 0 0 20"]}));
+    let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Theme").unwrap().clone();
+    assert_eq!(g.swatches.iter().map(|w| w.paint.color().unwrap()).collect::<Vec<_>>(), [Color::rgb8(1, 2, 3), Color::cmyk(0.0, 0.0, 0.0, 0.2)]);
+}
+
+#[test]
+fn edit_group_refuses_to_change_built_in_swatches() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Marks", "colors": ["#ff0000"]}));
+    // A group holding the built-in Registration swatch (as an older file might).
+    s.edit("test", |d, _| {
+        d.swatch_groups.iter_mut().find(|g| g.name == "Marks").unwrap().swatches.insert(0, vectorcraft_color::swatch::registration().clone());
+        Ok(())
+    })
+    .unwrap();
+    let reg = vectorcraft_color::swatch::registration().paint.color().unwrap();
+    assert!(s.execute("swatch.editGroup", &json!({"group": "Marks", "colors": ["#00ff00", "#0000ff"]})).is_err(), "changed");
+    assert!(s.execute("swatch.editGroup", &json!({"group": "Marks", "colors": []})).is_err(), "removed");
+    let key = vectorcraft_color::recolor::ColorKey::of(&reg).to_string();
+    let ok = run(&mut s, "swatch.editGroup", json!({"group": "Marks", "colors": [key, "#0000ff"]}));
+    assert_eq!(ok["swatches"][0], vectorcraft_color::swatch::REGISTRATION, "kept as it is");
 }

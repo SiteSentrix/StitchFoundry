@@ -82,12 +82,15 @@ canvas while open; `ui.dialog.confirm` keeps the result as one undo step (`edit.
 `edit.colors.saturate`) and `ui.dialog.cancel` rolls it back. Global mode answers with an error until tints of global
 and spot colours exist; the dialog then stays open.
 
-Recolor Artwork: `ui.recolorDialog {colors?, library?}` opens the `recolor` dialog on the selected art (`colors`: a
-count for an n-colour job, or colours to assign as the new colours; `library`: Limit to Library, `""` for the first).
-Fields: `rows` (`[{from: [keys], to: key, exclude?}]` as `recolor.reduce` returns them), `colors` (null for Auto),
-`method`, `preserveWhite`, `preserveBlack`, `preserveGrays`, `limitTo`, `tab` (`assign` or `edit`), `rule` (harmony
-id), `linked`, `preview`. Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on
-`ui.dialog.confirm`). The dialog previews `recolor.apply` on the canvas; confirm keeps it as one undo step.
+Recolor Artwork: `ui.recolorDialog {colors?, library?, group?}` opens the `recolor` dialog on the selected art
+(`colors`: a count for an n-colour job, or colours to assign as the new colours; `library`: Limit to Library, `""` for
+the first; `group`: a colour group, Edit or Apply Color Group). Fields: `rows` (`[{from: [keys], to: key, exclude?}]`
+as `recolor.reduce` returns them), `colors` (null for Auto), `method`, `preserveWhite`, `preserveBlack`,
+`preserveGrays`, `limitTo`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`. Setting
+`colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
+`recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
+step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
+or the options button while a group is selected, opens it.
 
 Library panel: `engine.execute {command: "window.swatchLibrary", params: {library}}` opens the read-only library
 panel on a swatch library (`ui.inspect` shows it as `library_panel: {kind, id}`; `library: null` closes it).
