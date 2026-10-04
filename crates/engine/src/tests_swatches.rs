@@ -195,7 +195,7 @@ fn grouped_swatches_edit_and_convert_modes() {
     assert!(s.execute("swatch.edit", &json!({"name": "Sunset", "color": "#000000"})).is_err());
     assert!(s.execute("swatch.edit", &json!({"name": "Sunset", "spot": true})).is_err());
     assert!(s.execute("swatch.edit", &json!({"name": "[None]", "newName": "x"})).is_err());
-    assert!(s.execute("swatch.edit", &json!({"name": "Bright Red", "mode": "lab"})).is_err());
+    assert!(s.execute("swatch.edit", &json!({"name": "Bright Red", "mode": "xyz"})).is_err());
     assert_eq!(run(&mut s, "swatch.edit", json!({"name": "Sunset", "newName": "Dusk"}))["name"], "Dusk");
 }
 
@@ -264,7 +264,7 @@ fn new_swatches_go_into_groups_convert_modes_and_can_be_spot() {
     assert_eq!(d.swatch_group_of("Ink").map(|g| d.swatch_groups[g].name.as_str()), Some("Brights"));
     assert!(s.execute("swatch.new", &json!({"color": "#00ff00", "group": "Nope"})).is_err());
     assert!(s.execute("swatch.new", &json!({"swatch": "Sunset", "group": "Brights"})).is_err(), "groups hold solid colours only");
-    assert!(s.execute("swatch.new", &json!({"color": "#00ff00", "mode": "lab"})).is_err());
+    assert!(s.execute("swatch.new", &json!({"color": "#00ff00", "mode": "xyz"})).is_err());
 }
 
 /// Two rectangles: `a` filled red and stroked green, `b` filled red and stroked with global swatch

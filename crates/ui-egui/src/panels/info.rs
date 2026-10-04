@@ -22,6 +22,7 @@ pub fn color_values(c: &Color) -> Vec<(&'static str, String)> {
             ]
         }
         Color::Gray { k } => vec![("K", format!("{:.0}%", k * 100.0))],
+        Color::Lab { l, a, b } => vec![("L", format!("{l:.0}")), ("a", format!("{a:.0}")), ("b", format!("{b:.0}"))],
     }
 }
 

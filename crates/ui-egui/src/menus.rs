@@ -321,6 +321,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{url?} open url, else the selection's URL (attributes.info), in the web browser (the Attributes panel's Browser button) → {url}",
     ),
+    (
+        "ui.spotColors",
+        "Spot Colors…",
+        "",
+        "{} open Spot Colors (dialog `spotColors`, field `useLab`: true shows and separates Lab spot colours from their Lab values, false from their CMYK equivalents); OK runs swatch.spotOptions as one undo step",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -689,6 +695,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         "ui.expandDialog" => crate::dialogs::expand::open(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
+        "ui.spotColors" => crate::dialogs::spot_colors::open(app),
         _ => return None,
     };
     Some(r)
@@ -874,6 +881,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.saveGraphicStyleLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => crate::panels::graphic_styles::user_library(app, id).is_some(),
         "ui.expandDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.spotColors" => app.session.active().is_some(),
         _ => true,
     }
 }

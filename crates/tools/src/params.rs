@@ -4,12 +4,13 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Freeform, FreeformPoint, GradientPaint, GradientStop};
 
-/// A colour as a `color` param in its own model: `[r,g,b]`, `{c,m,y,k}` or `{gray}`.
+/// A colour as a `color` param in its own model: `[r,g,b]`, `{c,m,y,k}`, `{gray}` or `{l,a,b}`.
 pub fn color_json(c: &Color) -> Value {
     match *c {
         Color::Rgb { r, g, b } => json!([r, g, b]),
         Color::Cmyk { c, m, y, k } => json!({"c": c, "m": m, "y": y, "k": k}),
         Color::Gray { k } => json!({"gray": k}),
+        Color::Lab { l, a, b } => json!({"l": l, "a": a, "b": b}),
     }
 }
 

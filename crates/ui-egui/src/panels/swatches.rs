@@ -118,7 +118,13 @@ fn entries(app: &VectorcraftApp, kind: Kind, query: &str) -> Vec<Entry> {
     // A tint swatch shows its base's kind (global or spot).
     let sw = |s: &vectorcraft_color::Swatch| {
         let (global, spot) = s.tint_of().and_then(|(base, _)| d.swatch(base)).map_or((s.global, s.spot), |b| (b.global, b.spot));
-        Entry::Swatch { name: s.name.clone(), paint: s.paint.clone(), global, spot }
+        // A spot colour shows the colour its art shows (a Lab one's CMYK equivalent when the Spot
+        // Colors options use those).
+        let paint = match s.paint {
+            Paint::Solid { color, swatch: None, .. } if spot => Paint::solid(d.linked_color(color, true)),
+            _ => s.paint.clone(),
+        };
+        Entry::Swatch { name: s.name.clone(), paint, global, spot }
     };
     // None first, then Registration, then the rest (the reference app's order).
     let (specials, rest): (Vec<_>, Vec<_>) = d.swatches.iter().partition(|s| s.paint.is_none());
@@ -219,6 +225,9 @@ pub(crate) fn draw_folder(ui: &Ui, r: Rect) {
 /// The ink colours of the CMYK glyph (cyan, magenta, yellow, black) and the RGB glyph's bars.
 const CMYK_INKS: [Color32; 4] = [Color32::from_rgb(0, 174, 239), Color32::from_rgb(236, 0, 140), Color32::from_rgb(255, 242, 0), Color32::BLACK];
 const RGB_BARS: [Color32; 3] = [Color32::from_rgb(255, 0, 0), Color32::from_rgb(0, 200, 0), Color32::from_rgb(0, 0, 255)];
+/// Lab's opponent axes: green | red (a) over blue | yellow (b).
+const LAB_AXES: [Color32; 4] =
+    [Color32::from_rgb(0, 166, 81), Color32::from_rgb(230, 30, 60), Color32::from_rgb(0, 90, 220), Color32::from_rgb(250, 205, 0)];
 
 /// A swatch's kind in words, for list tooltips ("Global Process Color, CMYK").
 pub(crate) fn describe(paint: &Paint, global: bool, spot: bool) -> String {
@@ -241,7 +250,8 @@ pub(crate) fn describe(paint: &Paint, global: bool, spot: bool) -> String {
 
 /// The kind and colour-mode icons at the right of list row `r`: spot (a dot in a ring), global (a
 /// square with a filled corner) or process colours (a square), gradients and patterns; then a
-/// colour's model (CMYK as four ink quarters, RGB as three bars, Gray as a grey square).
+/// colour's model (CMYK as four ink quarters, RGB as three bars, Gray as a grey square, Lab as its
+/// two opponent axes).
 pub(crate) fn list_icons(ui: &Ui, r: Rect, paint: &Paint, global: bool, spot: bool) {
     let t = Tokens::get(ui.ctx());
     let p = ui.painter();
@@ -260,13 +270,15 @@ pub(crate) fn list_icons(ui: &Ui, r: Rect, paint: &Paint, global: bool, spot: bo
                     p.add(Shape::convex_polygon(vec![c, c - vec2(6.0, 0.0), c - vec2(0.0, 6.0)], t.icon, Stroke::NONE));
                 }
             }
-            match color {
-                Color::Cmyk { .. } => {
-                    let q = mode.size() / 2.0;
-                    for (i, ink) in CMYK_INKS.into_iter().enumerate() {
-                        p.rect_filled(Rect::from_min_size(mode.min + vec2((i % 2) as f32 * q.x, (i / 2) as f32 * q.y), q), 0.0, ink);
-                    }
+            let quarters = |colors: [Color32; 4]| {
+                let q = mode.size() / 2.0;
+                for (i, c) in colors.into_iter().enumerate() {
+                    p.rect_filled(Rect::from_min_size(mode.min + vec2((i % 2) as f32 * q.x, (i / 2) as f32 * q.y), q), 0.0, c);
                 }
+            };
+            match color {
+                Color::Cmyk { .. } => quarters(CMYK_INKS),
+                Color::Lab { .. } => quarters(LAB_AXES),
                 Color::Rgb { .. } => {
                     let w = mode.width() / 3.0;
                     for (i, bar) in RGB_BARS.into_iter().enumerate() {
@@ -943,7 +955,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.run("ui.swatchOptions", json!({"name": n})).ok();
     }
-    menu_item(ui, "Spot Colors…", false, false);
+    if menu_item(ui, "Spot Colors…", app.session.active().is_some(), false) {
+        app.run("ui.spotColors", json!({})).ok();
+    }
     ui.separator();
     ui.menu_button("Open Swatch Library", |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
     if menu_item(ui, "Save Swatch Library…", true, false) {
@@ -1491,5 +1505,21 @@ mod tests {
     fn medium_tiles_match_measured_metrics() {
         assert_eq!(View::MediumThumb.tile(), (15.5, 17.0));
         assert!(View::SmallList.is_list() && !View::LargeThumb.is_list());
+    }
+
+    #[test]
+    fn lab_spot_tiles_show_the_colour_the_spot_colors_options_pick() {
+        let mut app = app();
+        let lab = Color::lab(60.0, 50.0, 20.0);
+        app.run("swatch.new", json!({"name": "Ink", "color": lab, "spot": true})).unwrap();
+        let tile = |app: &VectorcraftApp| {
+            let ink = entries(app, Kind::All, "Ink").into_iter().find(|e| e.name() == "Ink");
+            let Some(Entry::Swatch { paint, .. }) = ink else { panic!("the Ink tile") };
+            paint.color().unwrap()
+        };
+        assert_eq!(tile(&app), lab);
+        app.run("swatch.spotOptions", json!({"useLab": false})).unwrap();
+        assert_eq!(tile(&app), app.session.active().unwrap().doc.global_color("Ink").unwrap());
+        assert!(matches!(tile(&app), Color::Cmyk { .. }));
     }
 }

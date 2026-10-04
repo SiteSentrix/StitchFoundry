@@ -215,3 +215,29 @@ fn loads_system_cmyk_icc() {
     assert!(de(rgb, back) < 5.0, "{back:?}");
     assert_eq!(c.cmyk_to_srgb([0.0; 4], false).map(|v| (v * 255.0).round() as u8), [255, 255, 255]);
 }
+
+#[test]
+fn lab_colours_round_trip_through_the_cms() {
+    let c = cms_no_bpc();
+    let ri = Intent::RelativeColorimetric;
+    // In-gamut Lab colours separate into working CMYK and come back within a small ΔE.
+    for (l, a, b) in [(60.0, 20.0, 30.0), (50.0, -20.0, -10.0), (75.0, 5.0, 40.0), (40.0, 30.0, -25.0)] {
+        let lab = Color::lab(l, a, b);
+        assert_eq!(c.lab(&lab), Lab::new(l, a, b), "Lab passes through");
+        assert_eq!(c.convert(&lab, Model::Lab, ri), lab, "already Lab: unchanged");
+        let ink = c.convert(&lab, Model::Cmyk, ri);
+        let Color::Cmyk { c: cc, m, y, k } = ink else { panic!("CMYK") };
+        assert_eq!([cc, m, y, k], c.to_cmyk(&lab, ri), "separation = conversion");
+        let back = c.lab(&ink);
+        assert!(delta_e2000(back, Lab::new(l, a, b)) < 1.5, "{l} {a} {b} → {ink:?} → {back:?}");
+        assert!(!c.out_of_gamut(&lab), "{l} {a} {b} is printable");
+        // Through RGB and back to Lab.
+        let rgb = c.convert(&lab, Model::Rgb, ri);
+        let Color::Lab { l: l2, a: a2, b: b2 } = c.convert(&rgb, Model::Lab, ri) else { panic!("Lab") };
+        assert!(delta_e76(Lab::new(l2, a2, b2), Lab::new(l, a, b)) < 0.05, "{l} {a} {b} → {rgb:?} → {l2} {a2} {b2}");
+    }
+    // A saturated Lab blue no press reaches is out of gamut; Lab grey converts to a neutral.
+    assert!(c.out_of_gamut(&Color::lab(30.0, 60.0, -100.0)));
+    let Color::Gray { k } = c.convert(&Color::lab(50.0, 0.0, 0.0), Model::Gray, ri) else { panic!("Gray") };
+    assert!((k - 0.53).abs() < 0.01, "{k}");
+}

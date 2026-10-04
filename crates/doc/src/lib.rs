@@ -428,10 +428,19 @@ pub struct Document {
     /// pass their contents through) knock each other out.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub page_knockout: bool,
+    /// Swatches panel → Spot Colors: spot colours defined in Lab show and separate from their Lab
+    /// values (on, the default) or from their working-CMYK equivalents (off)
+    /// ([`Document::linked_color`]).
+    #[serde(default = "yes", skip_serializing_if = "skip::is_true")]
+    pub spot_use_lab: bool,
 }
 
 fn ppi72() -> f64 {
     72.0
+}
+
+fn yes() -> bool {
+    true
 }
 
 pub const FORMAT_VERSION: u32 = 1;
@@ -478,6 +487,7 @@ impl Document {
             unknown: Default::default(),
             page_isolate: false,
             page_knockout: false,
+            spot_use_lab: true,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));

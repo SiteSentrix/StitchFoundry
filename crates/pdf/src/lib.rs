@@ -14,6 +14,7 @@
 
 mod export;
 mod import;
+mod lab_spot;
 
 pub use export::{export, export_with_report};
 pub use import::{import, import_with_report};

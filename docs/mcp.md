@@ -566,6 +566,20 @@ stroke}`), and `object.mesh.create` on a gradient-filled object colours the mesh
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
 {"name":"run_command","arguments":{"command":"object.expand","params":{"steps":16}}}
+
+## Lab spot colours
+
+Colours can be CIE Lab (D50): give `{"l": 55, "a": 60, "b": 40}` (L 0–100, a and b about −128–127) wherever a
+colour is taken; documents store them as `{"model": "lab", …}`. `swatch.new {color, spot: true}` or
+`swatch.edit {name, mode: "lab"}` defines a spot colour in Lab (Swatch Options' Lab mode). `swatch.spotOptions
+{useLab}` sets the document's Spot Colors options: with `true` (the default) Lab spot colours show and print from
+their Lab values and PDF export writes their Separation spaces with a Lab alternate; with `false` art linked to them
+takes their working-CMYK equivalents and PDF uses a DeviceCMYK alternate. Without `useLab` it answers the current
+setting.
+
+```json
+{"name":"run_command","arguments":{"command":"swatch.new","params":{"name":"Lab Ink","color":{"l":55,"a":60,"b":40},"spot":true}}}
+{"name":"run_command","arguments":{"command":"swatch.spotOptions","params":{"useLab":false}}}
 ```
 
 ## Attributes, URLs and image maps

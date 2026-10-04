@@ -34,6 +34,7 @@ mod save_changes;
 pub mod save_style_library;
 pub mod save_swatch_library;
 mod shapes;
+pub mod spot_colors;
 pub mod swatch_options;
 pub mod tile_edge_color;
 mod tools;
@@ -164,6 +165,7 @@ registry! {
     FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
     SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
     Expand: [expand::KIND] => expand::SPEC,
+    SpotColors: [spot_colors::KIND] => spot_colors::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

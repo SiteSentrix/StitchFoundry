@@ -22,7 +22,7 @@
 | `ui.dialog.*` on `gradientStop` | `{field: "color" \| "opacity" \| "location", value}` | double-clicking a stop on the Gradient tool's annotator opens its popover (fields `index`, `x`, `y`, `tab`); set `color` (hex), `opacity` or `location` (percentages) and `ui.dialog.confirm` to apply them to the selected stop. `gradient.selectStop {index}` picks the stop the annotator, the panels and Delete/←/→ (`ui.key`) act on |
 
 Swatch editors: `engine.execute` with `ui.swatchOptions {name}` opens the `swatchOptions` dialog for a colour swatch
-(fields `name`, `spot`, `global`, `mode`: `gray`/`rgb`/`hsb`/`cmyk`/`web`, `color`: `"#rrggbb"` or a colour object,
+(fields `name`, `spot`, `global`, `mode`: `gray`/`rgb`/`hsb`/`lab`/`cmyk`/`web`, `color`: `"#rrggbb"` or a colour object,
 `preview`), which previews on the canvas while open; `ui.dialog.confirm` applies it with `swatch.edit` as one undo
 step and `ui.dialog.cancel` rolls the preview back. For a gradient swatch the dialog has `name` only (it shows the
 gradient) and OK renames it; pattern swatches open pattern editing instead. Dropping a gradient (or colour) on a
@@ -148,3 +148,7 @@ one undo step.
 Attributes panel: `window.panel {panel: "attributes"}` (Cmd+F11) shows it; its controls run `attributes.set`,
 `path.reverse {reversed}` and `path.setFillRule {rule}`, and its Browser button runs the UI command
 `attributes.openUrl {url?}`, which opens the URL (default: the selection's) in the web browser and answers `{url}`.
+
+Spot Colors: the Swatches panel menu's Spot Colors… (`ui.spotColors`) opens the `spotColors` dialog (field `useLab`:
+true shows and separates spot colours defined in Lab from their Lab values, false from their working-CMYK
+equivalents); `ui.dialog.confirm` runs `swatch.spotOptions {useLab}` as one undo step.

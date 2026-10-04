@@ -452,6 +452,8 @@ mod tests {
             Color::Rgb { r, g, b } => vec![r, g, b],
             Color::Cmyk { c, m, y, k } => vec![c, m, y, k],
             Color::Gray { k } => vec![k],
+            // Normalized to 0..1 like the others.
+            Color::Lab { l, a, b } => vec![l / 100.0, (a + 128.0) / 255.0, (b + 128.0) / 255.0],
         };
         lib.iter()
             .flat_map(|s| match &s.paint {

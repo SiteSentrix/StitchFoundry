@@ -162,6 +162,7 @@ pub fn lerp_color(a: &Color, b: &Color, t: f32) -> Color {
     match (*a, *b) {
         (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) => Color::cmyk(l(c, c2), l(m, m2), l(y, y2), l(k, k2)),
         (Color::Gray { k }, Color::Gray { k: k2 }) => Color::gray(l(k, k2)),
+        (Color::Lab { l: l1, a, b }, Color::Lab { l: l2, a: a2, b: b2 }) => Color::lab(l(l1, l2), l(a, a2), l(b, b2)),
         _ => a.lerp(b, t),
     }
 }

@@ -75,17 +75,16 @@ pub fn plates(doc: &Document) -> Vec<Plate> {
         if let (true, Paint::Solid { color, .. }) = (sw.spot, &sw.paint)
             && !v.iter().any(|p| p.name == sw.name)
         {
-            v.push(Plate { name: sw.name.clone(), spot: true, rgb: c.display_rgb(color) });
+            v.push(Plate { name: sw.name.clone(), spot: true, rgb: c.display_rgb(&doc.linked_color(*color, true)) });
         }
     }
     v
 }
 
-fn spot_swatch<'a>(doc: &'a Document, name: &str) -> Option<&'a Color> {
-    doc.swatch(name).filter(|s| s.spot).and_then(|s| match &s.paint {
-        Paint::Solid { color, .. } => Some(color),
-        _ => None,
-    })
+/// The ink colour of spot swatch `name` as it shows ([`Document::linked_color`]).
+fn spot_color(doc: &Document, name: &str) -> Option<Color> {
+    let s = doc.swatch(name).filter(|s| s.spot)?;
+    s.paint.color().map(|c| doc.linked_color(c, true))
 }
 
 /// A colour's swatch link and tint (`(swatch name, tint 0..1)`), as the colour visitors pass it.
@@ -98,7 +97,7 @@ pub fn inks(doc: &Document, c: &Cms, color: &Color, link: Link, intent: Intent) 
         return Inks { cmyk: [tint.clamp(0.0, 1.0); 4], spot: None, registration: true };
     }
     if let Some((name, tint)) = link
-        && spot_swatch(doc, name).is_some()
+        && doc.swatch(name).is_some_and(|s| s.spot && s.paint.color().is_some())
     {
         return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint.clamp(0.0, 1.0))), registration: false };
     }
@@ -201,9 +200,9 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
         for name in visible.iter().filter(|v| !PROCESS_PLATES.contains(&v.as_str())) {
             let t = ink.spot_tint(name);
             if t > 0.0
-                && let Some(sc) = spot_swatch(doc, name)
+                && let Some(sc) = spot_color(doc, name)
             {
-                let s = c.display_rgb(sc);
+                let s = c.display_rgb(&sc);
                 for i in 0..3 {
                     rgb[i] *= 1.0 - t * (1.0 - s[i]);
                 }

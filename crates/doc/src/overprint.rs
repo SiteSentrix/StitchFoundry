@@ -11,13 +11,13 @@ use crate::{Document, Node, NodeId, NodeKind};
 pub const LEGACY_OVERPRINT_KEY: &str = "overprintBlack";
 
 /// Black ink of at least `min_k` (0..1): CMYK with that much K and, unless `rich`, no cyan,
-/// magenta or yellow; or a grey that dark. RGB colours are never black ink.
+/// magenta or yellow; or a grey that dark. RGB and Lab colours are never black ink.
 pub fn is_black_ink(c: &Color, min_k: f32, rich: bool) -> bool {
     const E: f32 = 0.005;
     match *c {
         Color::Cmyk { c, m, y, k } => k >= min_k - E && (rich || (c <= E && m <= E && y <= E)),
         Color::Gray { k } => k >= min_k - E,
-        Color::Rgb { .. } => false,
+        Color::Rgb { .. } | Color::Lab { .. } => false,
     }
 }
 

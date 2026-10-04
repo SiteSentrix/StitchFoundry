@@ -140,6 +140,8 @@ pub enum Model {
     Rgb,
     Cmyk,
     Gray,
+    /// CIE L*a*b* (D50).
+    Lab,
 }
 
 #[derive(Clone)]
@@ -354,6 +356,7 @@ impl Cms {
             Color::Rgb { r, g, b } => self.rgb_to_srgb([r, g, b]),
             Color::Cmyk { c, m, y, k } => self.cmyk_to_srgb([c, m, y, k], false),
             Color::Gray { k } => [1.0 - k.clamp(0.0, 1.0); 3],
+            Color::Lab { l, a, b } => lab::lab_to_srgb(Lab::new(l, a, b)),
         }
     }
 
@@ -361,23 +364,33 @@ impl Cms {
     pub fn lab(&self, c: &Color) -> Lab {
         match *c {
             Color::Cmyk { c, m, y, k } => self.cmyk_to_lab([c, m, y, k]),
+            Color::Lab { l, a, b } => Lab::new(l, a, b),
             _ => lab::srgb_to_lab(self.display_rgb(c)),
         }
     }
 
-    /// Ink values of any colour in the working CMYK space (CMYK passes through; grey is K only).
+    /// Ink values of any colour in the working CMYK space (CMYK passes through; grey is K only;
+    /// Lab separates from its own values).
     pub fn to_cmyk(&self, c: &Color, intent: Intent) -> [f32; 4] {
         match *c {
             Color::Cmyk { c, m, y, k } => [c, m, y, k],
             Color::Gray { k } => [0.0, 0.0, 0.0, k],
             Color::Rgb { .. } => self.srgb_to_cmyk(self.display_rgb(c), intent),
+            Color::Lab { l, a, b } => self.lab_to_cmyk(Lab::new(l, a, b), intent),
         }
     }
 
     /// Convert `c` into `model` (a colour already in `model` is returned unchanged).
     pub fn convert(&self, c: &Color, model: Model, intent: Intent) -> Color {
         match (c, model) {
-            (Color::Rgb { .. }, Model::Rgb) | (Color::Cmyk { .. }, Model::Cmyk) | (Color::Gray { .. }, Model::Gray) => *c,
+            (Color::Rgb { .. }, Model::Rgb)
+            | (Color::Cmyk { .. }, Model::Cmyk)
+            | (Color::Gray { .. }, Model::Gray)
+            | (Color::Lab { .. }, Model::Lab) => *c,
+            (_, Model::Lab) => {
+                let Lab { l, a, b } = self.lab(c);
+                Color::Lab { l, a, b }
+            }
             (_, Model::Cmyk) => {
                 let [c, m, y, k] = self.to_cmyk(c, intent);
                 Color::Cmyk { c, m, y, k }
@@ -404,19 +417,18 @@ impl Cms {
     /// How far (ΔE2000) the best CMYK reproduction of `c` is from `c` (0 for CMYK/grey colours).
     pub fn gamut_error(&self, c: &Color) -> f32 {
         match c {
-            Color::Rgb { .. } => {
-                let srgb = self.display_rgb(c);
-                let src = lab::srgb_to_lab(srgb);
+            Color::Rgb { .. } | Color::Lab { .. } => {
+                let src = self.lab(c);
                 match &self.cmyk {
                     CmykSpace::Generic(g) => g.gamut_error(src),
                     CmykSpace::Device => 0.0,
                     CmykSpace::Icc(_) => {
-                        let back = self.cmyk_to_srgb(self.srgb_to_cmyk(srgb, Intent::RelativeColorimetric), false);
+                        let back = self.cmyk_to_srgb(self.to_cmyk(c, Intent::RelativeColorimetric), false);
                         delta_e2000(src, lab::srgb_to_lab(back))
                     }
                 }
             }
-            _ => 0.0,
+            Color::Cmyk { .. } | Color::Gray { .. } => 0.0,
         }
     }
 

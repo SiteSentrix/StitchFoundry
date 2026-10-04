@@ -27,31 +27,61 @@ pub enum Mode {
     Hsb,
     Cmyk,
     WebSafe,
+    /// CIE Lab: Swatch Options offers it; the panel shows it for Lab colours.
+    Lab,
 }
 
 impl Mode {
-    pub const ALL: [(Mode, &'static str); 5] =
-        [(Mode::Grayscale, "Grayscale"), (Mode::Rgb, "RGB"), (Mode::Hsb, "HSB"), (Mode::Cmyk, "CMYK"), (Mode::WebSafe, "Web Safe RGB")];
+    /// The panel menu's modes, in order.
+    pub const ALL: [Mode; 5] = [Mode::Grayscale, Mode::Rgb, Mode::Hsb, Mode::Cmyk, Mode::WebSafe];
 
+    pub fn label(self) -> &'static str {
+        match self {
+            Mode::Grayscale => "Grayscale",
+            Mode::Rgb => "RGB",
+            Mode::Hsb => "HSB",
+            Mode::Cmyk => "CMYK",
+            Mode::WebSafe => "Web Safe RGB",
+            Mode::Lab => "Lab",
+        }
+    }
     pub fn labels(self) -> &'static [&'static str] {
         match self {
             Mode::Grayscale => &["K"],
             Mode::Rgb | Mode::WebSafe => &["R", "G", "B"],
             Mode::Hsb => &["H", "S", "B"],
             Mode::Cmyk => &["C", "M", "Y", "K"],
+            Mode::Lab => &["L", "a", "b"],
         }
     }
-    /// Maximum of each displayed component (minimum is 0).
+    /// Maximum of each displayed component.
     pub fn max(self, i: usize) -> f32 {
         match self {
             Mode::Rgb | Mode::WebSafe => 255.0,
             Mode::Hsb if i == 0 => 360.0,
+            Mode::Lab if i > 0 => 127.0,
             _ => 100.0,
+        }
+    }
+    /// Minimum of each displayed component (0 but for Lab's a and b).
+    pub fn min(self, i: usize) -> f32 {
+        if self == Mode::Lab && i > 0 { -128.0 } else { 0.0 }
+    }
+    /// Slider position (0..1) of component `i` at value `v`.
+    pub fn unit(self, i: usize, v: f32) -> f32 {
+        (v - self.min(i)) / (self.max(i) - self.min(i))
+    }
+    /// Component `i` at slider position `t` (0..1), in whole units (Web Safe RGB snaps to its six
+    /// levels).
+    pub fn value_at(self, i: usize, t: f32) -> f32 {
+        match self {
+            Mode::WebSafe => ((t * 5.0).round() / 5.0) * self.max(i),
+            _ => (self.min(i) + t * (self.max(i) - self.min(i))).round(),
         }
     }
     pub fn suffix(self, i: usize) -> &'static str {
         match self {
-            Mode::Rgb | Mode::WebSafe => "",
+            Mode::Rgb | Mode::WebSafe | Mode::Lab => "",
             Mode::Hsb if i == 0 => "°",
             _ => "%",
         }
@@ -62,11 +92,12 @@ impl Mode {
             Color::Rgb { .. } => Mode::Rgb,
             Color::Cmyk { .. } => Mode::Cmyk,
             Color::Gray { .. } => Mode::Grayscale,
+            Color::Lab { .. } => Mode::Lab,
         }
     }
 }
 
-/// Displayed component values of `c` in `mode` (RGB 0–255, HSB °/%/%, CMYK %, K %).
+/// Displayed component values of `c` in `mode` (RGB 0–255, HSB °/%/%, CMYK %, K %, Lab L*a*b*).
 pub fn components(mode: Mode, c: &Color) -> Vec<f32> {
     match mode {
         Mode::Grayscale => {
@@ -85,6 +116,10 @@ pub fn components(mode: Mode, c: &Color) -> Vec<f32> {
             vec![h, s * 100.0, b * 100.0]
         }
         Mode::Cmyk => c.to_cmyk().iter().map(|v| v * 100.0).collect(),
+        Mode::Lab => {
+            let l = c.to_lab();
+            vec![l.l, l.a, l.b]
+        }
     }
 }
 
@@ -102,6 +137,7 @@ pub fn from_components(mode: Mode, v: &[f32]) -> Color {
             (g(2) / 100.0).clamp(0.0, 1.0),
             (g(3) / 100.0).clamp(0.0, 1.0),
         ),
+        Mode::Lab => Color::lab(g(0).clamp(0.0, 100.0), g(1).clamp(-128.0, 127.0), g(2).clamp(-128.0, 127.0)),
     }
 }
 
@@ -121,7 +157,7 @@ pub fn is_web_safe(c: &Color) -> bool {
 pub fn track_color(mode: Mode, comps: &[f32], i: usize, t: f32) -> Color {
     let mut v = comps.to_vec();
     if i < v.len() {
-        v[i] = t * mode.max(i);
+        v[i] = mode.min(i) + t * (mode.max(i) - mode.min(i));
     }
     // HSB hue track at full saturation/brightness reads better when S or B are 0.
     let m = if mode == Mode::WebSafe { Mode::Rgb } else { mode };
@@ -144,6 +180,7 @@ pub fn spectrum_at(mode: Mode, x: f32, y: f32) -> Color {
             Color::cmyk(c0, m, yy, k)
         }
         Mode::WebSafe => web_safe(&c),
+        Mode::Lab => c.in_model(vectorcraft_color::cms::Model::Lab),
         _ => c,
     }
 }
@@ -228,8 +265,8 @@ impl Mode {
     }
     /// The next mode (Shift-click on the spectrum).
     pub fn next(self) -> Mode {
-        let i = Mode::ALL.iter().position(|(m, _)| *m == self).unwrap_or(0);
-        Mode::ALL[(i + 1) % Mode::ALL.len()].0
+        let i = Mode::ALL.iter().position(|m| *m == self).unwrap_or(0);
+        Mode::ALL[(i + 1) % Mode::ALL.len()]
     }
     /// Can Shift-drag move the sliders in tandem? (Not HSB, and Grayscale has one slider.)
     fn tandem(self) -> bool {
@@ -491,19 +528,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             for (i, lbl) in mode.labels().iter().enumerate() {
                 ui.horizontal(|ui| {
                     ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new(*lbl).size(12.5).color(t.text)));
-                    let max = mode.max(i);
                     let v = comps.get(i).copied().unwrap_or(0.0);
                     let track = |x: f32| to32(&track_color(mode, &comps, i, x));
                     let grey = |_x: f32| t.input;
                     let (nv, phase) = if enabled {
-                        widgets::color_slider(ui, ("color-slider", i), v / max, slider_w, &track)
+                        widgets::color_slider(ui, ("color-slider", i), mode.unit(i, v), slider_w, &track)
                     } else {
                         widgets::color_slider(ui, ("color-slider", i), 0.0, slider_w, &grey)
                     };
                     if let Some(nv) = nv
                         && enabled
                     {
-                        let nv = if mode == Mode::WebSafe { ((nv * 5.0).round() / 5.0) * max } else { (nv * max).round() };
+                        let nv = mode.value_at(i, nv);
                         let c2 = if shift && mode.tandem() {
                             tandem(mode, &comps, i, nv)
                         } else {
@@ -517,7 +553,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         && enabled
                     {
                         let mut c2 = comps.clone();
-                        c2[i] = (fv as f32).clamp(0.0, max);
+                        c2[i] = (fv as f32).clamp(mode.min(i), mode.max(i));
                         new = Some((from_components(mode, &c2), Live::Released, c2));
                     }
                 });
@@ -584,8 +620,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let color = tgt.color();
     // Tint mode checks no colour mode: picking one makes the tint a process colour.
     let cur = display_mode(pstate(ui.ctx(), "color-mode"), color.as_ref());
-    for (m, label) in Mode::ALL {
-        if menu_item(ui, label, true, m == cur && tgt.tint().is_none()) {
+    for m in Mode::ALL {
+        if menu_item(ui, m.label(), true, m == cur && tgt.tint().is_none()) {
             set_mode(app, ui.ctx(), &tgt, m);
         }
     }
@@ -702,6 +738,31 @@ mod tests {
         let _ = ctx.run_ui(Default::default(), |ui| {
             let mode = display_mode(pstate(ui.ctx(), "color-mode"), target(&app, ui).color().as_ref());
             assert_eq!(mode.labels(), ["C", "M", "Y", "K"]);
+        });
+    }
+
+    #[test]
+    fn lab_colours_show_lab_sliders_with_signed_ranges() {
+        let lab = Color::lab(50.0, -20.0, 30.0);
+        assert_eq!(Mode::of(&lab), Mode::Lab);
+        assert_eq!(display_mode(Some(Mode::Rgb), Some(&lab)), Mode::Lab);
+        assert!(!Mode::ALL.contains(&Mode::Lab), "not a panel menu mode");
+        assert_eq!(components(Mode::Lab, &lab), vec![50.0, -20.0, 30.0]);
+        assert_eq!(from_components(Mode::Lab, &[50.0, -20.0, 30.0]), lab);
+        assert_eq!(from_components(Mode::Lab, &[150.0, -300.0, 300.0]), Color::lab(100.0, -128.0, 127.0), "clamped");
+        assert_eq!((Mode::Lab.unit(1, -128.0), Mode::Lab.unit(2, 127.0), Mode::Lab.unit(0, 50.0)), (0.0, 1.0, 0.5));
+        assert_eq!((Mode::Lab.value_at(1, 0.0), Mode::Lab.value_at(0, 1.0)), (-128.0, 100.0));
+        assert_eq!((Mode::Rgb.value_at(0, 0.5), Mode::WebSafe.value_at(0, 0.45)), (128.0, 102.0), "other modes as before");
+        assert_eq!(track_color(Mode::Lab, &[50.0, -20.0, 30.0], 1, 0.0), Color::lab(50.0, -128.0, 30.0));
+        assert_eq!(convert_to(Mode::Lab, &Color::rgb(1.0, 0.0, 0.0)).model(), vectorcraft_color::cms::Model::Lab);
+        // In the panel: a Lab fill shows L, a, b.
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.run("paint.setFill", json!({"color": {"l": 50, "a": -20, "b": 30}})).unwrap();
+        frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+        let _ = ctx.run_ui(Default::default(), |ui| {
+            let mode = display_mode(pstate(ui.ctx(), "color-mode"), target(&app, ui).color().as_ref());
+            assert_eq!(mode.labels(), ["L", "a", "b"]);
         });
     }
 
