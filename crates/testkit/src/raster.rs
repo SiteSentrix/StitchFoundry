@@ -33,7 +33,7 @@ impl Image {
     }
     /// Number of pixels for which `pred(rgba)` holds.
     pub fn count(&self, pred: impl Fn([u8; 4]) -> bool) -> usize {
-        self.rgba.chunks_exact(4).filter(|p| pred([p[0], p[1], p[2], p[3]])).count()
+        self.rgba.as_chunks::<4>().0.iter().filter(|p| pred([p[0], p[1], p[2], p[3]])).count()
     }
     /// Pixels that differ from opaque white and are not fully transparent.
     pub fn ink(&self) -> usize {

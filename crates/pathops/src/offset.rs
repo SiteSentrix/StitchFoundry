@@ -160,7 +160,7 @@ fn deep_point(bp: &BezPath) -> Option<kurbo::Point> {
             _ => {}
         });
         xs.sort_by(f64::total_cmp);
-        for w in xs.chunks_exact(2) {
+        for w in xs.as_chunks::<2>().0 {
             let span = w[1] - w[0];
             if best.is_none_or(|(b, _)| span > b) {
                 best = Some((span, kurbo::Point::new((w[0] + w[1]) / 2.0, y)));
