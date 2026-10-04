@@ -1,5 +1,6 @@
 //! Gradient panel and gradient behaviour: sampling a colour into a gradient stop (M3.33) and
-//! copied appearances placing their gradients on the target's own bounds (M3.34).
+//! copied appearances placing their gradients on the target's own bounds (M3.34) and the
+//! Gradient tool's snapping and Eyedropper Options (M3.35).
 
 use serde_json::json;
 use vectorcraft_color::{GradientGeom, Paint};
@@ -112,4 +113,41 @@ fn graphic_styles_keep_gradients_relative_to_the_bounds() {
     .unwrap();
     s.execute("graphicStyle.apply", &json!({"name": "Old"})).unwrap();
     assert!(close(fill_geom(&s, dst).unwrap().start, Point::new(0.2, 0.5)), "legacy styles are applied as stored");
+}
+
+#[test]
+fn eyedropper_options_choose_what_copy_from_takes() {
+    let mut s = session();
+    let src = rect(&mut s, 10.0, 10.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 40})).unwrap();
+    let dst = rect(&mut s, 200.0, 10.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    assert_eq!(s.execute("eyedropper.setOptions", &json!({})).unwrap(), json!({"appearance": true, "transparency": true}));
+    assert_eq!(s.execute("eyedropper.setOptions", &json!({"appearance": false})).unwrap(), json!({"appearance": false, "transparency": true}));
+    let n = |s: &Session| s.doc().unwrap().doc.node(dst).unwrap().clone();
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0]})).unwrap();
+    assert_eq!((n(&s).opacity, n(&s).appearance.fill_paint().color().unwrap().to_hex()), (0.4, "#ffffff".into()));
+    // Params override the options for one call.
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0], "appearance": true})).unwrap();
+    assert_eq!(n(&s).appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
+    // Nothing to copy: no edit.
+    let undo = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0], "transparency": false})).unwrap(), json!({"ids": []}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn the_gradient_tool_reads_the_constrain_angle_preference() {
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("prefs.set", &json!({"key": "constrainAngle", "value": 30})).unwrap();
+    s.select_tool("gradient", ViewInfo::default()).unwrap();
+    let ev = |kind, x, y, shift| vectorcraft_tools::PointerEvent::new(kind, x, y).with_mods(vectorcraft_tools::Mods { shift, ..Default::default() });
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    s.pointer(&ev(Down, 120.0, 180.0, false), ViewInfo::default()).unwrap();
+    s.pointer(&ev(Drag, 190.0, 140.0, true), ViewInfo::default()).unwrap();
+    s.pointer(&ev(Up, 190.0, 140.0, true), ViewInfo::default()).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    assert!((fill_geom(&s, id).unwrap().angle_deg() - 30.0).abs() < 1e-9);
 }

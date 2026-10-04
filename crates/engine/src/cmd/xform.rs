@@ -32,6 +32,15 @@ pub fn specs() -> Vec<CommandSpec> {
             sample_color
         ),
         cmd!(
+            "eyedropper.setOptions",
+            "Eyedropper Options",
+            [],
+            None,
+            "{appearance?: bool (fill, stroke and effects), transparency?: bool (opacity and blend mode)} what the Eyedropper copies (appearance.copyFrom); {} reads them → {appearance, transparency}",
+            always,
+            eyedropper_options
+        ),
+        cmd!(
             "artboard.move",
             "Move Artboard",
             [],
@@ -161,6 +170,35 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 // ---------- eyedropper ----------
+
+/// What the Eyedropper copies from the object it clicks (`appearance.copyFrom`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EyedropperOptions {
+    /// The fill, stroke and effects (the appearance stack; type: its run paints).
+    pub appearance: bool,
+    /// The opacity and blend mode.
+    pub transparency: bool,
+}
+
+impl Default for EyedropperOptions {
+    fn default() -> Self {
+        Self { appearance: true, transparency: true }
+    }
+}
+
+impl EyedropperOptions {
+    /// These options with any `appearance` / `transparency` booleans in `p` applied.
+    pub(crate) fn with(mut self, p: &Value) -> Self {
+        self.appearance = bool_or(p, "appearance", self.appearance);
+        self.transparency = bool_or(p, "transparency", self.transparency);
+        self
+    }
+}
+
+fn eyedropper_options(s: &mut Session, p: &Value) -> Result<Value> {
+    s.eyedropper = s.eyedropper.with(p);
+    Ok(serde_json::to_value(s.eyedropper).unwrap_or_default())
+}
 
 fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.sampleColor";

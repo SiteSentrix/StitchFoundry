@@ -43,3 +43,8 @@ tool option `stop` (the tool to return to; `tool.setOption {key: "stop", value: 
 samples the colour there into the selected stop (`paint.sampleColor {color, stop}`) and switches back. Dragging a
 swatch or the panel's gradient thumbnail onto art runs `paint.setFill` / `paint.setStroke` (the active proxy) with
 the swatch's params and the object's `ids`.
+
+Tool options: double-clicking a tool button runs `tool.options {tool}`. For `gradient` it opens the Gradient panel;
+for `eyedropper` it opens Eyedropper Options, a `command` dialog (fields `appearance`, `transparency`) whose
+`ui.dialog.confirm` runs `eyedropper.setOptions` (what `appearance.copyFrom` copies). Gradient tool handles snap to
+anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.

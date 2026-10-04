@@ -83,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?} copy fill, stroke, weight, opacity and blend from `source` to ids (default: selection) and to the paint defaults; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art)",
+            "{source: id, ids?, appearance?: bool, transparency?: bool (default: eyedropper.setOptions)} copy fill, stroke, weight and effects (appearance) and opacity and blend (transparency) from `source` to ids (default: selection), the appearance also to the paint defaults; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art)",
             has_doc,
             copy_from
         ),
@@ -478,11 +478,14 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         }
         ap
     };
-    s.paint.fill = super::gradient::unplaced(&appearance.fill_paint());
-    s.paint.stroke = super::gradient::unplaced(&appearance.stroke_paint());
-    s.remember_paint(&s.paint.fill.clone());
-    if appearance.stroke().is_some() {
-        s.paint.stroke_width = appearance.stroke_width();
+    let opts = s.eyedropper.with(p);
+    if opts.appearance {
+        s.paint.fill = super::gradient::unplaced(&appearance.fill_paint());
+        s.paint.stroke = super::gradient::unplaced(&appearance.stroke_paint());
+        s.remember_paint(&s.paint.fill.clone());
+        if appearance.stroke().is_some() {
+            s.paint.stroke_width = appearance.stroke_width();
+        }
     }
     let ids = match ids_param(p, "ids") {
         Some(v) => v,
@@ -490,15 +493,20 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut targets = leaf_targets(s, &ids)?;
     targets.retain(|id| *id != src_id);
-    if targets.is_empty() {
+    if targets.is_empty() || !(opts.appearance || opts.transparency) {
         return Ok(json!({ "ids": [] }));
     }
     let (opacity, blend) = (src.opacity, src.blend);
     s.edit("Eyedropper", |d, _| {
         for id in &targets {
             let Some(n) = d.node_mut(*id) else { continue };
-            n.opacity = opacity;
-            n.blend = blend;
+            if opts.transparency {
+                n.opacity = opacity;
+                n.blend = blend;
+            }
+            if !opts.appearance {
+                continue;
+            }
             if let NodeKind::Text(t) = &mut n.kind {
                 let ap = placed(Some(t.local_bounds()));
                 for r in &mut t.runs {

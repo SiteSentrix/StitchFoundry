@@ -157,6 +157,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         } else if resp.clicked() && alt && slot.len() > 1 {
                             let idx = slot.iter().position(|x| *x == shown.id).unwrap_or(0);
                             app.select_tool(slot[(idx + 1) % slot.len()]);
+                        } else if resp.double_clicked() {
+                            app.select_tool(shown.id);
+                            app.run("tool.options", json!({ "tool": shown.id })).ok();
                         } else if resp.clicked() {
                             app.select_tool(shown.id);
                         }
@@ -176,6 +179,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             bottom_controls(app, ui, &t);
         });
     flyout(app, ui.ctx());
+}
+
+/// Open a tool's options (`tool.options`, a double-click on its button): the Gradient tool's are
+/// the Gradient panel, the Eyedropper's the Eyedropper Options dialog.
+pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
+    match tool {
+        "gradient" if app.ui.open_panel.as_deref() == Some("gradient") => Ok(json!({ "open": "gradient" })),
+        "gradient" => app.run("window.panel", json!({ "panel": "gradient" })),
+        "eyedropper" => {
+            let o = app.session.eyedropper;
+            let fields = json!({
+                "__command": "eyedropper.setOptions",
+                "__label": "Eyedropper Options",
+                "appearance": o.appearance,
+                "transparency": o.transparency,
+            });
+            app.ui.dialog = Some(crate::state::Dialog::new("command", fields));
+            Ok(json!({ "dialog": "command" }))
+        }
+        _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
+        _ => Err(format!("the {tool} tool has no options")),
+    }
 }
 
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
@@ -288,4 +313,60 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.flyout = None;
     }
     let _ = theme::semibold;
+}
+
+#[cfg(test)]
+mod tests {
+    use egui::{Event, PointerButton, Pos2};
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    /// One headless frame of the toolbar; returns the tool buttons' rects, top to bottom.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Rect> {
+        let input = egui::RawInput {
+            time: Some(time),
+            events,
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0))),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let mut r: Vec<egui::Rect> = ctx.viewport(|vp| {
+            let size = vec2(36.0, PITCH - 1.0);
+            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect()
+        });
+        r.sort_by(|a, b| a.top().total_cmp(&b.top()));
+        r
+    }
+
+    /// A double-click at `at`, `time` seconds in (a second apart from the last).
+    fn double_click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2) {
+        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, ctx, time, vec![Event::PointerMoved(at), b(true), b(false), b(true), b(false)]);
+        frame(app, ctx, time + 0.1, vec![]);
+    }
+
+    #[test]
+    fn double_clicking_a_tool_button_opens_its_options() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        let buttons = frame(&mut app, &ctx, 0.0, vec![]);
+        // The Color category's slots close the list: Gradient, then Eyedropper.
+        let (gradient, eyedropper) = (buttons[buttons.len() - 2], buttons[buttons.len() - 1]);
+        double_click(&mut app, &ctx, 1.0, gradient.center());
+        assert_eq!((app.session.tool_id(), app.ui.open_panel.as_deref()), ("gradient", Some("gradient")));
+        // Again: the panel stays open.
+        double_click(&mut app, &ctx, 2.0, gradient.center());
+        assert_eq!(app.ui.open_panel.as_deref(), Some("gradient"));
+        double_click(&mut app, &ctx, 3.0, eyedropper.center());
+        let d = app.ui.dialog.clone().expect("Eyedropper Options");
+        assert_eq!((app.session.tool_id(), d.kind.as_str(), d.str("__command")), ("eyedropper", "command", "eyedropper.setOptions".into()));
+        // OK applies the options.
+        app.ui.dialog.as_mut().unwrap().fields.insert("transparency".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.session.eyedropper.appearance && !app.session.eyedropper.transparency);
+        assert!(app.run("tool.options", json!({"tool": "zoom"})).is_err());
+    }
 }

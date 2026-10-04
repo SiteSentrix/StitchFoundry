@@ -189,6 +189,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{stroke?: bool (default: the active proxy), color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray} (default: the proxy's colour)} open the Color Picker (fields: hex or color, channel, webOnly, swatches); OK runs paint.setFill / paint.setStroke",
     ),
+    (
+        "tool.options",
+        "Tool Options…",
+        "",
+        "{tool: id} what double-clicking a tool button opens: gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `command` running eyedropper.setOptions, fields appearance, transparency)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -524,6 +530,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
         }
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
+        "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
         _ => return None,
     };
     Some(r)
