@@ -198,11 +198,11 @@ fn finite(p: Point) -> bool {
 }
 
 fn fill_only(paint: Paint) -> Appearance {
-    Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(paint))], effects: vec![] }
+    Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(paint))], ..Default::default() }
 }
 
 fn stroke_only(paint: Paint, width: f64) -> Appearance {
-    Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, width))], effects: vec![] }
+    Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, width))], ..Default::default() }
 }
 
 /// A point strictly inside a filled path (for re-finding faces after a rebuild).

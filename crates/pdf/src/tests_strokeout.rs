@@ -56,7 +56,7 @@ fn outside_strokes_keep_their_miter_spikes() {
         s.join = LineJoin::Miter;
         s.miter_limit = 10.0;
     });
-    let mut n = Node::path(NodeId(0), PathData::single(tri), Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] });
+    let mut n = Node::path(NodeId(0), PathData::single(tri), Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
     n.id = d.alloc_id();
     let layer = d.default_layer().unwrap();
     d.insert(Some(layer), 0, n).unwrap();

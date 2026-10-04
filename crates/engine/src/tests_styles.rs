@@ -99,12 +99,18 @@ fn a_style_from_a_group_or_type_is_not_empty() {
     run(&mut s, "graphicStyle.new", json!({"name": "Type Look"}));
     assert!(!style(&s, "Type Look").appearance.fill_paint().is_none());
 
-    // Applying to a group styles its contents and links the group.
+    // Applying to a group gives the group itself the style (its fills paint the members, which
+    // keep their own look) and links it; `target: "contents"` styles the members instead.
     let c = rect(&mut s, 200.0);
+    let before = node(&s, a).appearance;
     run(&mut s, "graphicStyle.apply", json!({"name": "Black Outline", "ids": [g.0]}));
-    assert_eq!(node(&s, a).appearance, style(&s, "Black Outline").appearance);
+    assert_eq!(node(&s, g).appearance, style(&s, "Black Outline").appearance);
+    assert_eq!(node(&s, a).appearance, before);
     assert_eq!(node(&s, g).graphic_style, Some(style(&s, "Black Outline").id));
+    assert_eq!(linked(&mut s, "Black Outline"), vec![g.0]);
     assert_ne!(node(&s, c).appearance, style(&s, "Black Outline").appearance);
+    run(&mut s, "graphicStyle.apply", json!({"name": "Black Outline", "ids": [g.0], "target": "contents"}));
+    assert_eq!(node(&s, a).appearance, style(&s, "Black Outline").appearance);
 }
 
 #[test]

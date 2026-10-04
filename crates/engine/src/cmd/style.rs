@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?} give the objects (default: the selection; a group's contents) the style's appearance, and themselves its opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks",
+            "{name, add?: bool, ids? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks",
             has_doc,
             style_apply
         ),
@@ -126,22 +126,19 @@ fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
     }
 }
 
-/// [`painted`], mutably (copying only the nodes on the way).
-fn paint_mut(n: &mut Node, top: bool, f: &mut impl FnMut(&mut Node)) {
-    if !descends(n, top) {
-        return f(n);
-    }
-    for c in n.children_mut().into_iter().flatten() {
-        paint_mut(std::sync::Arc::make_mut(c), false, f);
-    }
-}
-
-/// Does `n` still have style `g`'s look (its transparency, and its appearance on every painted
-/// object)? Linked objects that don't are no longer linked.
+/// Does `n` still have style `g`'s look (its transparency, and the style's appearance as its own;
+/// a group or layer with no appearance of its own: on every painted object inside it, the look a
+/// style made from it captures)? Linked objects that don't are no longer linked.
 pub(crate) fn in_sync(n: &Node, g: &GraphicStyle) -> bool {
+    if !g.transparency_matches(n) {
+        return false;
+    }
+    if g.appearance_on(n).approx_eq(&n.appearance) {
+        return true;
+    }
     let mut leaves = vec![];
     painted(n, true, &mut leaves);
-    g.transparency_matches(n) && leaves.iter().all(|l| g.appearance_on(l).approx_eq(&l.appearance))
+    n.appearance == Appearance::default() && leaves.iter().all(|l| l.id != n.id && g.appearance_on(l).approx_eq(&l.appearance))
 }
 
 /// The style `n` is linked to (and still looks like).
@@ -214,10 +211,10 @@ fn captured(n: &Node) -> Appearance {
     ap
 }
 
-/// Give `id` style `g` (its painted objects the appearance, itself the transparency) and link it.
+/// Give `id` style `g` (a group or layer too: its own appearance, above its contents) and link it.
 fn apply_style(d: &mut Document, id: NodeId, g: &GraphicStyle) {
     if let Some(n) = d.node_mut(id) {
-        paint_mut(n, true, &mut |l| l.appearance = g.appearance_on(l).into_owned());
+        n.appearance = g.appearance_on(n).into_owned();
         g.apply_transparency(n);
         n.graphic_style = Some(g.id);
     }
@@ -270,11 +267,9 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             let g = d.graphic_styles[i].clone();
             for id in &ids {
                 if let Some(n) = d.node_mut(*id) {
-                    paint_mut(n, true, &mut |l| {
-                        let ap = g.appearance_on(l).into_owned();
-                        l.appearance.items.extend(ap.items);
-                        l.appearance.effects.extend(ap.effects);
-                    });
+                    let ap = g.appearance_on(n).into_owned();
+                    n.appearance.items.extend(ap.items);
+                    n.appearance.effects.extend(ap.effects);
                     n.graphic_style = None;
                 }
             }

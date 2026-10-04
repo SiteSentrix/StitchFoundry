@@ -1,14 +1,20 @@
-//! Effect → Pathfinder: live Pathfinder operations on a group (or layer).
+//! The appearance of groups and layers.
 //!
-//! The group's direct children are the Pathfinder stack (back → front). In the shape modes (Add,
-//! Subtract, Intersect, Exclude, Minus Back) a child group acts as one shape — the union of its
-//! leaves, styled like its top leaf — as in the Pathfinder panel. The result replaces the children
-//! at render time; each result keeps the appearance of the object whose paint it takes.
+//! **Effect → Pathfinder**: live Pathfinder operations on a group (or layer). The group's direct
+//! children are the Pathfinder stack (back → front). In the shape modes (Add, Subtract, Intersect,
+//! Exclude, Minus Back) a child group acts as one shape — the union of its leaves, styled like its
+//! top leaf — as in the Pathfinder panel. The result replaces the children at render time; each
+//! result keeps the appearance of the object whose paint it takes.
+//!
+//! **Container appearance** ([`evaluate_container`]): a group's or layer's own fills and strokes
+//! paint every member's geometry, below or above the members as its contents slot says
+//! ([`Appearance::contents_at`]); its geometry effects reshape the members as one piece; its raster
+//! effects (one combined shadow) apply to the composite and stay for the renderer and exporters.
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeKind, StrokeLayer};
-use vectorcraft_geom::{FillRule, PathData};
+use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_geom::{FillRule, PathData, Rect};
 use vectorcraft_pathops::{self as po, PathfinderOp};
 
 /// Effect ids of the Pathfinder submenu with their operation, in Illustrator's menu order.
@@ -74,11 +80,11 @@ fn geometry(n: &Node) -> Option<(PathData, FillRule)> {
 
 /// A result path styled like `src` (its appearance, opacity and blend mode).
 fn styled(src: &Node, path: PathData, outline: bool) -> Node {
-    let mut appearance = Appearance { items: src.appearance.items.clone(), effects: vec![] };
+    let mut appearance = Appearance { items: src.appearance.items.clone(), ..Default::default() };
     if outline {
         let fill = src.appearance.fill_paint();
         let paint = if fill.is_none() { src.appearance.stroke_paint() } else { fill };
-        appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], effects: vec![] };
+        appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() };
     }
     let mut n = Node::path(src.id, path, appearance);
     n.opacity = src.opacity;
@@ -128,6 +134,145 @@ pub fn pathfinder_children(group: &Node, hook: Option<OutlineHook>) -> Option<Ve
             .collect();
     }
     Some(stack)
+}
+
+fn is_container(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
+}
+
+/// Does `item` paint anything?
+fn paints(item: &AppearanceItem) -> bool {
+    item.visible()
+        && !item.paint().is_none()
+        && match item {
+            AppearanceItem::Stroke(s) => s.width > 0.0,
+            AppearanceItem::Fill(_) => true,
+        }
+}
+
+/// Do the own fills or strokes of `n`, a group or layer, paint anything?
+pub(crate) fn has_own_paint(n: &Node) -> bool {
+    is_container(n) && n.appearance.items.iter().any(paints)
+}
+
+/// Does `n`, a group or layer, have an appearance of its own to evaluate: a fill or stroke that
+/// paints, or a visible effect other than Pathfinder (evaluated by [`pathfinder_children`])?
+pub fn has_container_appearance(n: &Node) -> bool {
+    is_container(n) && (has_own_paint(n) || n.appearance.effects.iter().any(|e| e.visible && !is_pathfinder(&e.id)))
+}
+
+/// The regions a group's or layer's own fills and strokes paint, in document space, each with its
+/// fill rule: every visible member path and compound path, type as its glyph outlines and live
+/// objects evaluated; the members of a clip group or clipping layer without its clipping path.
+/// Images, symbol instances and guides add nothing.
+pub fn member_shapes(n: &Node) -> Vec<(PathData, FillRule)> {
+    fn push(n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+        if !n.visible {
+            return;
+        }
+        match &n.kind {
+            NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => out.extend(crate::reshape::leaf_geometry(n)),
+            NodeKind::Text(t) => {
+                let (_, all) = crate::reshape::glyph_outlines(t);
+                if !all.elements().is_empty() {
+                    out.push((PathData::from_bezpath(&all).transformed(t.xf), FillRule::NonZero));
+                }
+            }
+            NodeKind::Group { .. } | NodeKind::Layer { .. } => members(n, out),
+            _ if vectorcraft_doc::live::is_live(n) => members(&crate::reshape::outlined_members(n), out),
+            _ => {}
+        }
+    }
+    fn members(n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+        let clip = usize::from(n.clips());
+        for c in n.children().into_iter().flatten().skip(clip) {
+            push(c, out);
+        }
+    }
+    let mut out = vec![];
+    members(n, &mut out);
+    out
+}
+
+/// A path node of `id` on `path` (filled under `rule`) painted by `ap`.
+fn shape_node(id: NodeId, path: PathData, rule: FillRule, ap: Appearance) -> Node {
+    let mut n = Node::path(id, path, ap);
+    if let NodeKind::Path { rule: r, .. } = &mut n.kind {
+        *r = rule;
+    }
+    n
+}
+
+/// One of a container's own fills or strokes as art: `item` painting every shape of `shapes`, an
+/// unplaced gradient placed across `bounds` (the whole group). Several shapes share the item's
+/// opacity and blend mode as one layer, as one fill would. `None` when it paints nothing.
+fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], bounds: Option<Rect>) -> Option<Node> {
+    if !paints(item) || shapes.is_empty() {
+        return None;
+    }
+    let mut ap = Appearance { items: vec![item.clone()], ..Default::default() };
+    if let Some(b) = bounds {
+        ap.pin_gradients(b);
+    }
+    if let [(path, rule)] = shapes {
+        return Some(shape_node(id, path.clone(), *rule, ap));
+    }
+    let (opacity, blend) = (item.opacity(), item.blend());
+    match &mut ap.items[0] {
+        AppearanceItem::Fill(f) => (f.opacity, f.blend) = (1.0, Default::default()),
+        AppearanceItem::Stroke(s) => (s.opacity, s.blend) = (1.0, Default::default()),
+    }
+    let children = shapes.iter().map(|(p, r)| Arc::new(shape_node(id, p.clone(), *r, ap.clone()))).collect();
+    let mut g = Node::group(id, children);
+    (g.opacity, g.blend) = (opacity, blend);
+    Some(g)
+}
+
+/// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
+/// reshaping all its members as one piece (the whole art's bounds as their reference box), and its
+/// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
+/// the members (after a clipping path) or above them, as its contents slot says. Its
+/// transparency, opacity mask and raster effects stay. `None` when it has none of these.
+pub fn evaluate_container(n: &Node) -> Option<Node> {
+    if !is_container(n) {
+        return None;
+    }
+    let pathfinder = has_pathfinder(n);
+    let fx = crate::reshape::geometry_effects(n);
+    let paint = has_own_paint(n);
+    if !pathfinder && fx.is_empty() && !paint {
+        return None;
+    }
+    let mut m = n.clone();
+    if pathfinder {
+        let hook: &dyn Fn(&Node) -> Option<Node> = &crate::outline_text;
+        let result = pathfinder_children(n, Some(hook)).unwrap_or_default();
+        if let Some(ch) = m.children_mut() {
+            *ch = result;
+        }
+    }
+    if !fx.is_empty() {
+        m = crate::reshape::outlined_members(&m);
+        crate::reshape::reshape_leaves(&mut m, &fx);
+    }
+    m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !crate::is_geometry(&e.id));
+    if paint {
+        let shapes = member_shapes(&m);
+        let bounds = m.geometric_bounds();
+        let art =
+            |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
+        let (below, above) = m.appearance.split_contents();
+        let (below, above) = (art(below), art(above));
+        let at = usize::from(m.clips());
+        if let Some(ch) = m.children_mut() {
+            let at = at.min(ch.len());
+            ch.splice(at..at, below);
+            ch.extend(above);
+        }
+    }
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    Some(m)
 }
 
 #[cfg(test)]

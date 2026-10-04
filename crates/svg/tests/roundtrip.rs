@@ -192,7 +192,7 @@ fn stroke_attributes_roundtrip() {
     s.cap = LineCap::Round;
     s.join = LineJoin::Bevel;
     s.dash = Some(Dash { pattern: vec![6.0, 3.0], offset: 1.5, align_corners: false });
-    let ap = Appearance { items: vec![AppearanceItem::Stroke(s)], effects: vec![] };
+    let ap = Appearance { items: vec![AppearanceItem::Stroke(s)], ..Default::default() };
     let id = d.alloc_id();
     let n = Node::path(id, shapes::line(Point::new(0.0, 0.0), Point::new(100.0, 50.0)), ap);
     let d = doc_with(vec![n]);
@@ -213,7 +213,7 @@ fn stroke_attributes_roundtrip() {
     let n = Node::path(
         NodeId(99),
         shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)),
-        Appearance { items: vec![AppearanceItem::Stroke(m)], effects: vec![] },
+        Appearance { items: vec![AppearanceItem::Stroke(m)], ..Default::default() },
     );
     let r = roundtrip(&doc_with(vec![n]));
     assert!((art(&r)[0].appearance.stroke().unwrap().miter_limit - 7.0).abs() < 1e-6);
@@ -284,7 +284,7 @@ fn multiple_fills_stack_in_paint_order() {
             AppearanceItem::Fill(FillLayer::new(solid("#00ff00"))),
             AppearanceItem::Stroke(StrokeLayer::new(solid("#0000ff"), 2.0)),
         ],
-        effects: vec![],
+        ..Default::default()
     };
     let n = rect_node(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0), ap);
     let s = export(&doc_with(vec![n]), &ExportOptions::default());

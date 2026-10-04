@@ -11,7 +11,7 @@ use vectorcraft_geom::{Anchor, FillRule, PathData, Point, Rect, SubPath, shapes}
 use crate::{ArtBrush, ArtScale, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, Direction, PatternBrush, PatternFit, Scatter};
 
 fn fill(c: Color) -> Appearance {
-    Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(Paint::solid(c)))], effects: vec![] }
+    Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(Paint::solid(c)))], ..Default::default() }
 }
 
 fn path(p: PathData, c: Color) -> Node {

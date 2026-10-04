@@ -109,7 +109,7 @@ impl CharStyle {
     pub fn appearance(&self) -> crate::Appearance {
         let mut fill = crate::FillLayer::new(self.fill.clone());
         fill.overprint = self.overprint_fill;
-        let mut a = crate::Appearance { items: vec![crate::AppearanceItem::Fill(fill)], effects: vec![] };
+        let mut a = crate::Appearance { items: vec![crate::AppearanceItem::Fill(fill)], ..Default::default() };
         if !self.stroke.is_none() && self.stroke_width > 0.0 {
             let mut st = crate::StrokeLayer::new(self.stroke.clone(), self.stroke_width);
             st.overprint = self.overprint_stroke;

@@ -456,7 +456,7 @@ impl Renderer {
             return e.bounds;
         }
         let b = match &a.kind {
-            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_fx(a) => {
+            NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(a) => {
                 let mut acc: Option<Rect> = None;
                 for c in children {
                     if c.visible {
@@ -920,7 +920,17 @@ impl Renderer {
                 ctx.set_blend_mode(if on { blend_mode(vectorcraft_color::BlendMode::Multiply) } else { BlendMode::default() });
             }
         };
-        // Object-level appearance fills/strokes apply on top of character fills (like Illustrator).
+        // The object's own fills and strokes paint the whole outline: those below the Characters
+        // row under the characters' own fill and stroke, the others over them.
+        let (below, above) = n.appearance.split_contents();
+        let all = (!n.appearance.items.is_empty()).then(|| {
+            let mut all = g.all.clone();
+            all.apply_affine(t.xf);
+            all
+        });
+        if let Some(all) = &all {
+            self.draw_text_items(ctx, f, below, all, tb);
+        }
         for (i, run) in t.runs.iter().enumerate() {
             let Some(path) = g.runs.get(i) else { continue };
             if path.elements().is_empty() {
@@ -943,31 +953,34 @@ impl Renderer {
             }
         }
         overprint(ctx, false);
-        if !n.appearance.items.is_empty() {
-            let mut all = g.all.clone();
-            all.apply_affine(t.xf);
-            for item in n.appearance.items.iter().filter(|i| i.visible() && !i.paint().is_none()) {
-                // Each item composites with its own opacity and blend mode.
-                let layered = item.opacity() < 1.0 || item.blend() != vectorcraft_color::BlendMode::Normal;
-                if layered {
-                    ctx.set_transform(Affine::IDENTITY);
-                    ctx.push_layer(None, Some(blend_mode(item.blend())), Some(item.opacity()), None, None);
+        if let Some(all) = &all {
+            self.draw_text_items(ctx, f, above, all, tb);
+        }
+    }
+
+    /// Paint a type object's own fills and strokes `items` on its glyph outlines `all` (document
+    /// space; `tb` their bounds), each with its own opacity and blend mode.
+    fn draw_text_items(&mut self, ctx: &mut RenderContext, f: &Frame, items: &[AppearanceItem], all: &BezPath, tb: Rect) {
+        for item in items.iter().filter(|i| i.visible() && !i.paint().is_none()) {
+            let layered = item.opacity() < 1.0 || item.blend() != vectorcraft_color::BlendMode::Normal;
+            if layered {
+                ctx.set_transform(Affine::IDENTITY);
+                ctx.push_layer(None, Some(blend_mode(item.blend())), Some(item.opacity()), None, None);
+            }
+            ctx.set_transform(f.view);
+            match item {
+                AppearanceItem::Fill(fl) if paint::set_paint(ctx, &fl.paint, tb, f.doc) => {
+                    ctx.set_fill_rule(peniko::Fill::NonZero);
+                    ctx.fill_path(all);
                 }
-                ctx.set_transform(f.view);
-                match item {
-                    AppearanceItem::Fill(fl) if paint::set_paint(ctx, &fl.paint, tb, f.doc) => {
-                        ctx.set_fill_rule(peniko::Fill::NonZero);
-                        ctx.fill_path(&all);
-                    }
-                    AppearanceItem::Stroke(st) if st.width > 0.0 && paint::set_paint(ctx, &st.paint, st.paint_bounds(tb), f.doc) => {
-                        ctx.set_stroke(kurbo::Stroke::new(st.width));
-                        ctx.stroke_path(&all);
-                    }
-                    _ => {}
+                AppearanceItem::Stroke(st) if st.width > 0.0 && paint::set_paint(ctx, &st.paint, st.paint_bounds(tb), f.doc) => {
+                    ctx.set_stroke(kurbo::Stroke::new(st.width));
+                    ctx.stroke_path(all);
                 }
-                if layered {
-                    ctx.pop_layer();
-                }
+                _ => {}
+            }
+            if layered {
+                ctx.pop_layer();
             }
         }
     }
@@ -1140,6 +1153,8 @@ mod tests;
 mod tests_blend;
 #[cfg(test)]
 mod tests_clip;
+#[cfg(test)]
+mod tests_container;
 #[cfg(test)]
 mod tests_isolation;
 #[cfg(test)]

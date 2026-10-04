@@ -752,6 +752,8 @@ mod tests_colorguide;
 #[cfg(test)]
 mod tests_colormgmt;
 #[cfg(test)]
+mod tests_containers;
+#[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
 mod tests_distort;

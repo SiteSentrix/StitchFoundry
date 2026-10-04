@@ -283,3 +283,24 @@ patterns out. The Blend commands also grade gradient meshes, which keep their sh
 {"name":"run_command","arguments":{"command":"recolor.apply","params":{"map":{"#ff0000":"#0055ff"},"includeImages":false}}}
 {"name":"run_command","arguments":{"command":"edit.colors.adjustBalance","params":{"mode":"cmyk","m":-20,"k":10}}}
 ```
+
+## Group, layer and type appearance
+
+Groups and layers carry fills, strokes and effects of their own, as in the reference app: their fills and strokes
+paint every member's geometry, and their effects apply to the members as one piece (one combined drop shadow; a
+Transform or Warp moves or bends the whole group). Their Contents row (type: Characters) is a slot in the stack:
+fills and strokes above it paint over the members (characters), those below under them; new items go above it.
+`appearance.moveItem {"from": "contents", "to": n}` puts the row above the bottom `n` items, and an item move takes
+`contents` to say where the row ends up in the same undo step; `document.node` shows the slot as
+`appearance.contents_index`. The `appearance.*`, `effect.*` and `graphicStyle.apply` commands edit the selected
+objects themselves (a group's own stack; layers through `ids`) or, with `target: "contents"`, the objects inside the
+groups and layers. `appearance.targetContents` selects a group's members (double-clicking the Contents row).
+SVG and PDF export bake a group's own fills, strokes and geometry effects into paths; its raster effects stay a
+filter on the whole group.
+
+```json
+{"name":"run_command","arguments":{"command":"appearance.addFill","params":{"ids":[7]}}}
+{"name":"run_command","arguments":{"command":"appearance.moveItem","params":{"ids":[7],"from":"contents","to":1}}}
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"ids":[2],"effect":"stylize.dropShadow"}}}
+{"name":"run_command","arguments":{"command":"appearance.addStroke","params":{"ids":[7],"target":"contents"}}}
+```

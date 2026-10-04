@@ -461,7 +461,7 @@ impl<'a> Device<'a> for Builder {
             PathDrawMode::Fill(rule) => {
                 let mut f = FillLayer::new(paint);
                 f.opacity = opacity;
-                let mut n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Fill(f)], effects: vec![] });
+                let mut n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Fill(f)], ..Default::default() });
                 if let NodeKind::Path { rule: r, .. } = &mut n.kind {
                     *r = fill_rule(*rule);
                 }
@@ -480,7 +480,7 @@ impl<'a> Device<'a> for Builder {
                     Arc::make_mut(last).appearance.items.push(AppearanceItem::Stroke(st));
                     return;
                 }
-                let n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] });
+                let n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
                 self.push_node(n);
             }
         }

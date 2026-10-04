@@ -456,7 +456,9 @@ impl Node {
                 children.first().and_then(|c| c.geometric_bounds())
             }
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
-                children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()))
+                // The container's own strokes paint around its members.
+                let o = self.appearance.outset();
+                children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds())).map(|b| b.inflate(o, o))
             }
             NodeKind::Blend { children, spec } => {
                 let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual_bounds()));
@@ -790,6 +792,19 @@ impl Node {
     /// [`Self::blends_through`] of a group made of `children` (`inner` answers it for each child).
     pub fn children_blend(children: &[Arc<Node>], inner: &mut dyn FnMut(&Arc<Node>) -> bool) -> bool {
         children.iter().any(|c| c.visible && (c.blend != BlendMode::Normal || (!c.isolate && inner(c))))
+    }
+}
+
+impl Node {
+    /// The Appearance panel's row for what this object's own fills and strokes paint around:
+    /// "Contents" for a group or layer (its members), "Characters" for type; `None` for objects
+    /// whose fills and strokes paint their own geometry.
+    pub fn contents_label(&self) -> Option<&'static str> {
+        match self.kind {
+            NodeKind::Group { .. } | NodeKind::Layer { .. } => Some("Contents"),
+            NodeKind::Text(_) => Some("Characters"),
+            _ => None,
+        }
     }
 }
 

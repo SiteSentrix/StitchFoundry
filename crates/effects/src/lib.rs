@@ -14,6 +14,8 @@
 //!   defaults of Illustrator's dialogs. Missing parameters always fall back to those defaults.
 //! - [`reshape`] applies geometry effects to type, images, symbol instances and live objects
 //!   through their outlines.
+//! - [`evaluate_container`] turns a group's or layer's own fills, strokes and geometry effects into
+//!   art painting its members (its raster effects then apply to the composite).
 //! - [`clip_outline`] is the region a clip group clips to, shared by the renderer and the SVG and
 //!   PDF writers.
 //!
@@ -39,9 +41,11 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 
-pub use bake::{bake_document, needs_bake};
+pub use bake::{bake_document, fresh_ids, needs_bake};
 pub use clip::clip_outline;
-pub use group::{OutlineHook, PATHFINDER_EFFECTS, has_pathfinder, is_pathfinder, pathfinder_children};
+pub use group::{
+    OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, pathfinder_children,
+};
 pub use raster::{RasterFx, outset, raster_effects};
 pub use reshape::{needs_outline, outline_art, outline_text, reshape};
 pub use warp::{WarpStyle, warp_point};

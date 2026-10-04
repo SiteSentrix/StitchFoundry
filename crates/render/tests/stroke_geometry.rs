@@ -15,7 +15,7 @@ const S: f64 = 4.0;
 fn stroked(width: f64, f: impl FnOnce(&mut StrokeLayer)) -> Appearance {
     let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), width);
     f(&mut st);
-    Appearance { items: vec![AppearanceItem::Stroke(st)], effects: vec![] }
+    Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() }
 }
 
 /// A horizontal line from x0 to x1 at y = 50 on a 100 × 100 artboard.

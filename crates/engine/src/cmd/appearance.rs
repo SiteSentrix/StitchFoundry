@@ -8,6 +8,14 @@
 //! current selection and no `ids` are given, else the topmost fill or stroke; `null` always means
 //! the topmost one. A targeted item lives in the selected objects' own stacks (a group's own fill,
 //! not its contents'), so item edits apply to the selected objects themselves.
+//!
+//! **Object or contents.** The `appearance.*` and `effect.*` commands edit the stacks of the
+//! selected objects themselves (`target: "object"`, the default; with `ids`, layers too) or, with
+//! `target: "contents"`, of the painted objects inside the selected groups and layers. A group's or
+//! layer's own fills and strokes paint its members' geometry and its effects apply to them as one
+//! piece; the Contents row (type: Characters) is the slot that says which of its fills and strokes
+//! paint below the members and which above ([`Appearance::contents_at`], moved by
+//! `appearance.moveItem {from: "contents"}`).
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
@@ -26,8 +34,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Fill",
             ["Window", "Appearance"],
             None,
-            "{ids?} add a fill on top of each selected object's own stack",
-            has_selection,
+            "{ids?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack (a copy of its top fill; type without one: its characters' fill; else the default fill)",
+            has_doc,
             |s, p| add_item(s, p, true)
         ),
         cmd!(
@@ -35,8 +43,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Stroke",
             ["Window", "Appearance"],
             None,
-            "{ids?} add a stroke on top of each selected object's own stack",
-            has_selection,
+            "{ids?, target?} add a stroke on top of each selected object's own stack (a copy of its top stroke, else the default stroke)",
+            has_doc,
             |s, p| add_item(s, p, false)
         ),
         cmd!(
@@ -44,8 +52,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?} leave each object one empty fill and stroke (None; a group none of its own) and reset its opacity and blend mode",
-            has_selection,
+            "{ids?, target?} leave each object one empty fill and stroke (None; a group none of its own) and reset its opacity and blend mode",
+            has_doc,
             clear_appearance
         ),
         cmd!(
@@ -53,8 +61,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reduce to Basic Appearance",
             ["Window", "Appearance"],
             None,
-            "{ids?} keep only the topmost visible fill and stroke, without their own opacity, blend mode or effects (a group keeps no rows it lacked), and drop the object's effects",
-            has_selection,
+            "{ids?, target?} keep only the topmost visible fill and stroke, without their own opacity, blend mode or effects (a group keeps no rows it lacked), and drop the object's effects",
+            has_doc,
             reduce_basic
         ),
         cmd!(
@@ -62,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index: paint-order item index, ids? (default: the selection), opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill)} edit one fill/stroke of each target object's own appearance stack",
+            "{index: paint-order item index, ids? (default: the selection), target?: \"object\"|\"contents\", opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill)} edit one fill/stroke of each target object's own appearance stack",
             has_doc,
             set_item
         ),
@@ -71,8 +79,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Item",
             [],
             None,
-            "{index | indices: [..] (paint-order item indices), ids?} remove those fills/strokes from each target object's own stack",
-            has_selection,
+            "{index | indices: [..] (paint-order item indices), ids?, target?} remove those fills/strokes from each target object's own stack",
+            has_doc,
             remove_item
         ),
         cmd!(
@@ -80,8 +88,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Effect",
             [],
             None,
-            "same as effect.apply (an alias): {effect: id, params?: {…}, item?: appearance item index|null, ids?} → {ids, index, item}",
-            has_selection,
+            "same as effect.apply (an alias): {effect: id, params?: {…}, item?: appearance item index|null, ids?, target?} → {ids, index, item}",
+            has_doc,
             super::effectcmd::apply
         ),
         cmd!(
@@ -89,11 +97,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Item",
             ["Window", "Appearance"],
             None,
-            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (one `index` only; default: right above it, as Alt-dragging a row places it), ids?} copy fills/strokes with their effects",
-            has_selection,
+            "{index | indices: [..] (paint-order item indices), to?: paint-order index of the copy (one `index` only; default: right above it, as Alt-dragging a row places it), ids?, target?} copy fills/strokes with their effects",
+            has_doc,
             duplicate_item
         ),
-        cmd!("appearance.moveItem", "Reorder Appearance Item", [], None, "{from, to, ids?} (paint-order indices)", has_selection, move_item),
+        cmd!(
+            "appearance.moveItem",
+            "Reorder Appearance Item",
+            [],
+            None,
+            "{from: paint-order item index | \"contents\", to, contents?: count, ids?, target?} move fill/stroke `from` to paint-order index `to`; on a group, layer or type the Contents (Characters) row stays between the same items (a moved item landing next to it keeps its side) unless `contents` says how many items paint below it afterwards. from \"contents\": move that row so `to` items paint below the members (characters) and the rest above → {index: where the item landed | contents: the row's slot}",
+            has_doc,
+            move_item
+        ),
         cmd!(
             "appearance.copyFrom",
             "Eyedropper",
@@ -117,9 +133,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Show All Hidden Attributes",
             ["Window", "Appearance"],
             None,
-            "{ids?} make every hidden fill, stroke and effect (the object's and each item's) of each selected object visible again; errors when nothing is hidden → {ids}",
-            has_selection,
+            "{ids?, target?} make every hidden fill, stroke and effect (the object's and each item's) of each selected object visible again; errors when nothing is hidden → {ids}",
+            has_doc,
             show_all_hidden
+        ),
+        cmd!(
+            "appearance.targetContents",
+            "Target Contents",
+            [],
+            None,
+            "{ids?} select the members of the selected groups and layers (or `ids`), as double-clicking the Appearance panel's Contents row does: the panel then lists, and appearance edits change, their own appearance; errors when none has members → {ids}",
+            has_doc,
+            target_contents
         ),
     ]
 }
@@ -182,7 +207,8 @@ pub(crate) fn item_target_at(s: &Session, p: &Value, key: &str, cmd: &str) -> Re
             .as_u64()
             .map(|i| ItemTarget::Item { index: i as usize, explicit: true })
             .ok_or_else(|| bad(cmd, format!("`{key}` must be an appearance item index (paint order) or null"))),
-        None if p.get("ids").is_some() || p.get("id").is_some() => Ok(ItemTarget::Top),
+        // The active item is a row of the first selected object's own stack.
+        None if p.get("ids").is_some() || p.get("id").is_some() || targets_contents(p)? => Ok(ItemTarget::Top),
         None => Ok(s.appearance_item().map_or(ItemTarget::Top, |index| ItemTarget::Item { index, explicit: false })),
     }
 }
@@ -234,14 +260,38 @@ impl ItemTarget {
     }
 }
 
-/// Objects whose own appearance stack a command edits: `ids`/`id`, else the selected objects
-/// (a selected compound-path member stands for its compound). Layers are skipped.
-pub(crate) fn appearance_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    if p.get("ids").is_none() && p.get("id").is_none() {
-        return selected_roots(s);
+/// Whether the `target` param asks for the contents of groups and layers (see the module docs).
+fn targets_contents(p: &Value) -> Result<bool> {
+    match p.get("target") {
+        None | Some(Value::Null) => Ok(false),
+        Some(v) => match v.as_str() {
+            Some("object") => Ok(false),
+            Some("contents") => Ok(true),
+            _ => Err(bad("appearance", format!("`target` must be \"object\" or \"contents\", not {v}"))),
+        },
     }
-    let d = &s.doc()?.doc;
-    Ok(targets(s, p)?.into_iter().filter(|id| d.node(*id).is_some_and(|n| !n.is_layer())).collect())
+}
+
+/// Objects whose own appearance stack a command edits: `ids`/`id` (layers too), else the selected
+/// objects (a selected compound-path member stands for its compound); with `target: "contents"`
+/// the painted objects inside the groups and layers among them ([`leaf_targets`]).
+pub(crate) fn appearance_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let roots = if p.get("ids").is_none() && p.get("id").is_none() {
+        selected_roots(s)?
+    } else {
+        let d = &s.doc()?.doc;
+        targets(s, p)?.into_iter().filter(|id| d.node(*id).is_some()).collect()
+    };
+    if targets_contents(p)? { leaf_targets(s, &roots) } else { Ok(roots) }
+}
+
+/// [`appearance_targets`] of `cmd`, which needs at least one.
+fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
+    let ids = appearance_targets(s, p)?;
+    if ids.is_empty() {
+        return Err(bad(cmd, "select objects or give ids"));
+    }
+    Ok(ids)
 }
 
 /// One undo step (`label`) running `f` on each of `ids` with the item a fill (`fill`) or stroke
@@ -305,14 +355,28 @@ fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
-    let ids = appearance_targets(s, p)?;
+    let ids = require_targets(s, p, if fill { "appearance.addFill" } else { "appearance.addStroke" })?;
+    let defaults = s.paint.clone();
     s.edit(if fill { "Add New Fill" } else { "Add New Stroke" }, |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
+                // A copy of the top fill (stroke); without one, type's characters' and otherwise the
+                // default paint, so a new fill on a group or type shows.
+                let paint = match (n.appearance.paint_at(None, fill), &n.kind) {
+                    (Some(p), _) => p.clone(),
+                    (None, NodeKind::Text(_)) => super::paint::proxy_paint(n, !fill, None),
+                    (None, _) => {
+                        if fill {
+                            defaults.fill.clone()
+                        } else {
+                            defaults.stroke.clone()
+                        }
+                    }
+                };
                 let item = if fill {
-                    AppearanceItem::Fill(FillLayer::new(n.appearance.fill_paint()))
+                    AppearanceItem::Fill(FillLayer::new(paint))
                 } else {
-                    AppearanceItem::Stroke(StrokeLayer::new(n.appearance.stroke_paint(), n.appearance.stroke_width().max(1.0)))
+                    AppearanceItem::Stroke(StrokeLayer::new(paint, n.appearance.stroke_width().max(1.0)))
                 };
                 n.appearance.items.push(item);
             }
@@ -323,7 +387,7 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
 }
 
 fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = appearance_targets(s, p)?;
+    let ids = require_targets(s, p, "appearance.clear")?;
     s.edit("Clear Appearance", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -340,12 +404,13 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// A group or layer (no fill or stroke rows of its own unless added).
 fn is_group(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Group { .. })
+    matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
 }
 
 fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = appearance_targets(s, p)?;
+    let ids = require_targets(s, p, "appearance.reduceToBasic")?;
     s.edit("Reduce to Basic Appearance", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -356,7 +421,7 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
                 // keeps the rows it had.
                 let fill =
                     (fill.is_some() || !is_group(n)).then(|| AppearanceItem::Fill(FillLayer::new(fill.map_or(Paint::None, |f| f.paint().clone()))));
-                n.appearance = Appearance { items: fill.into_iter().collect(), effects: vec![] };
+                n.appearance = Appearance { items: fill.into_iter().collect(), ..Default::default() };
                 if let Some(AppearanceItem::Stroke(mut st)) = stroke {
                     st.effects.clear();
                     st.opacity = 1.0;
@@ -433,16 +498,13 @@ fn item_indices(p: &Value, cmd: &str) -> Result<Vec<usize>> {
 
 fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = item_indices(p, "appearance.removeItem")?;
-    let ids = appearance_targets(s, p)?;
+    let ids = require_targets(s, p, "appearance.removeItem")?;
     s.edit("Remove Item", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
-                let items = &mut n.appearance.items;
                 // From the top down, so the lower indices stay valid.
                 for &i in idx.iter().rev() {
-                    if i < items.len() {
-                        items.remove(i);
-                    }
+                    n.appearance.remove_item(i);
                 }
             }
         }
@@ -459,20 +521,20 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     if to.is_some() && idx.len() > 1 {
         return Err(bad(C, "`to` takes a single `index`"));
     }
-    let ids = appearance_targets(s, p)?;
+    let ids = require_targets(s, p, C)?;
     // Where the first object's copy landed (the active item lives in the first object's stack).
     let mut first_at = None;
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
-            let items = &mut n.appearance.items;
+            let ap = &mut n.appearance;
             // From the top down, so the lower indices stay valid.
             for &i in idx.iter().rev() {
-                if let Some(item) = items.get(i).cloned() {
-                    let at = to.map_or(i + 1, |t| t.min(items.len()));
+                if let Some(item) = ap.items.get(i).cloned() {
+                    let at = to.map_or(i + 1, |t| t.min(ap.items.len()));
                     first_at.get_or_insert(at);
-                    items.insert(at, item);
+                    ap.insert_item(at, item);
                     any = true;
                 }
             }
@@ -490,7 +552,7 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn show_all_hidden(s: &mut Session, p: &Value) -> Result<Value> {
-    let roots = appearance_targets(s, p)?;
+    let roots = require_targets(s, p, "appearance.showAllHidden")?;
     let ids = s.edit("Show All Hidden Attributes", |d, _| {
         let shown: Vec<NodeId> = roots.iter().copied().filter(|id| d.node_mut(*id).is_some_and(|n| n.appearance.show_all())).collect();
         if shown.is_empty() {
@@ -503,20 +565,21 @@ fn show_all_hidden(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.moveItem";
-    let from = index_param(p, "from", C)?;
     let to = index_param(p, "to", C)?;
-    let ids = appearance_targets(s, p)?;
+    let ids = require_targets(s, p, C)?;
+    if p.get("from").and_then(Value::as_str) == Some("contents") {
+        return move_contents(s, &ids, to);
+    }
+    let from = index_param(p, "from", C)?;
+    let contents = p.get("contents").map(|_| index_param(p, "contents", C)).transpose()?;
     let mut landed = to;
     s.edit("Reorder Appearance", |d, _| {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
-            let items = &mut n.appearance.items;
-            if from >= items.len() {
-                return Err(bad(C, format!("no item at index {from}")));
+            landed = n.appearance.move_item(from, to).ok_or_else(|| bad(C, format!("no item at index {from}")))?;
+            if let Some(k) = contents.filter(|_| n.contents_label().is_some()) {
+                n.appearance.set_contents_at(k);
             }
-            let it = items.remove(from);
-            landed = to.min(items.len());
-            items.insert(landed, it);
         }
         Ok(())
     })?;
@@ -532,7 +595,38 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
             a
         })
     });
-    ok()
+    Ok(json!({ "index": landed }))
+}
+
+/// `appearance.moveItem {from: "contents"}`: put the Contents (Characters) row of each target that
+/// has one above its bottom `to` items.
+fn move_contents(s: &mut Session, ids: &[NodeId], to: usize) -> Result<Value> {
+    let slot = s.edit("Reorder Appearance", |d, _| {
+        let mut slot = None;
+        for id in ids {
+            let Some(n) = d.node_mut(*id).filter(|n| n.contents_label().is_some()) else { continue };
+            n.appearance.set_contents_at(to);
+            slot.get_or_insert(n.appearance.contents_at());
+        }
+        slot.ok_or_else(|| bad("appearance.moveItem", "only groups, layers and type have a Contents (Characters) row"))
+    })?;
+    Ok(json!({ "contents": slot }))
+}
+
+fn target_contents(s: &mut Session, p: &Value) -> Result<Value> {
+    let roots = appearance_targets(s, p)?;
+    let d = &s.doc()?.doc;
+    let ids: Vec<NodeId> = roots
+        .iter()
+        .filter_map(|id| d.node(*id))
+        .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
+        .flat_map(|n| n.children().into_iter().flatten().filter(|c| c.visible && !c.locked).map(|c| c.id))
+        .collect();
+    if ids.is_empty() {
+        return Err(bad("appearance.targetContents", "select a group or layer with visible, unlocked members"));
+    }
+    s.select(|_, sel| sel.set(ids.iter().copied()))?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
 fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {

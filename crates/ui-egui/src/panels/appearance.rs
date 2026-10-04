@@ -2,10 +2,14 @@
 //! the appearance onto art), each stroke/fill row (eye, disclosure, link label, swatch, weight,
 //! brush/dash/profile notes) with "Opacity: Default" sub-rows, fx rows (the name opens the
 //! effect's dialog; the disclosure an inline editor), the object's Opacity row and the bottom bar.
+//! Groups and layers show a Contents row and type a Characters row where their members
+//! (characters) paint among the object's own fills and strokes: double-clicking Contents targets
+//! the members, double-clicking Characters edits the characters' paint.
 //!
-//! Rows drag: a fill/stroke row reorders the stack, an effect row reorders its list or moves into
-//! another item (dropped on its row) or onto the object; Alt copies instead. Cmd-click and
-//! Shift-click select several fills/strokes for Duplicate and Delete.
+//! Rows drag: a fill/stroke row reorders the stack (across the Contents row too), the Contents row
+//! moves between the fills and strokes, an effect row reorders its list or moves into another item
+//! (dropped on its row) or onto the object; Alt copies instead. Cmd-click and Shift-click select
+//! several fills/strokes for Duplicate and Delete.
 
 use std::sync::OnceLock;
 
@@ -35,6 +39,8 @@ pub enum Sel {
     Effect(usize),
     /// Effect `k` of fill/stroke item `i`.
     ItemEffect(usize, usize),
+    /// The Contents (type: Characters) row: paint edits go to the members (characters).
+    Contents,
 }
 
 impl Sel {
@@ -42,7 +48,7 @@ impl Sel {
     fn item(self) -> Option<usize> {
         match self {
             Sel::Item(i) | Sel::ItemEffect(i, _) => Some(i),
-            Sel::None | Sel::Effect(_) => None,
+            Sel::None | Sel::Effect(_) | Sel::Contents => None,
         }
     }
     /// `{item, index}` of a selected effect row (`item: null` for the object's own effects).
@@ -50,8 +56,12 @@ impl Sel {
         match self {
             Sel::Effect(k) => Some(json!({"item": null, "index": k})),
             Sel::ItemEffect(i, k) => Some(json!({"item": i, "index": k})),
-            Sel::None | Sel::Item(_) => None,
+            Sel::None | Sel::Item(_) | Sel::Contents => None,
         }
+    }
+    /// Is a fill/stroke or effect row selected (what Duplicate and Delete act on)?
+    fn editable(self) -> bool {
+        self.item().is_some() || self.effect().is_some()
     }
 }
 
@@ -65,6 +75,7 @@ fn current_sel(app: &VectorcraftApp, ctx: &egui::Context, node: Option<&Node>) -
         (Some(i), Sel::ItemEffect(j, k)) if i == j && exists(Some(i), k) => sel,
         (Some(i), _) => Sel::Item(i),
         (None, Sel::Effect(k)) if exists(None, k) => sel,
+        (None, Sel::Contents) if owner == Some(n.id) && n.contents_label().is_some() => sel,
         (None, _) => Sel::None,
     }
 }
@@ -301,6 +312,8 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Dragged {
     Item(usize),
+    /// The Contents (Characters) row.
+    Contents,
     /// Effect `k` of fill/stroke `item` (`None`: of the object).
     Effect(Option<usize>, usize),
 }
@@ -314,6 +327,8 @@ enum Slot {
     Effect(Option<usize>, usize),
     /// The object row (`top`) or the object's Opacity row.
     Object { top: bool },
+    /// The Contents (Characters) row.
+    Contents,
 }
 
 fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: Rect) {
@@ -330,7 +345,15 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         }
         stopped |= resp.drag_stopped();
     };
+    let contents = n.contents_label();
+    let below = n.appearance.contents_at();
     for (i, it) in n.appearance.items.iter().enumerate().rev() {
+        // The Contents row sits right above the items painted below the members.
+        if let Some(label) = contents.filter(|_| i + 1 == below) {
+            let (r, resp) = contents_row(app, ui, n, label, sel);
+            rows.push((Slot::Contents, r));
+            track(&resp, Dragged::Contents);
+        }
         let open: bool = pstate(ui.ctx(), &format!("ap-open-{i}"));
         let (r, resp) = row(ui, items.contains(&i));
         rows.push((Slot::Item { index: i, sub: false }, r));
@@ -392,6 +415,11 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
             }
         }
     }
+    if let Some(label) = contents.filter(|_| below == 0) {
+        let (r, resp) = contents_row(app, ui, n, label, sel);
+        rows.push((Slot::Contents, r));
+        track(&resp, Dragged::Contents);
+    }
     // Object-level effects.
     for (k, e) in n.appearance.effects.iter().enumerate() {
         let (r, resp) = effect_row(app, ui, None, k, e, sel == Sel::Effect(k));
@@ -415,7 +443,10 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
             (Dragged::Effect(..), _) => {
                 ui.painter().rect_stroke(r.shrink(1.0), 0.0, stroke, StrokeKind::Inside);
             }
+            // Onto the Contents row: an item from above lands just below it, one from below just above.
+            (Dragged::Item(from), Slot::Contents) => line(if from >= below { r.bottom() } else { r.top() }),
             (Dragged::Item(from), _) => line(if item_at(n, slot) > from { r.top() } else { r.bottom() }),
+            (Dragged::Contents, _) => line(if contents_slot(n, slot).is_some_and(|k| k > below) { r.top() } else { r.bottom() }),
         }
     }
     if !ui.ctx().input(|i| i.pointer.any_down()) {
@@ -439,12 +470,27 @@ fn slot_at(rows: &[(Slot, Rect)], p: egui::Pos2) -> Option<(Slot, Rect)> {
 }
 
 /// Paint-order index a dragged fill/stroke lands on when dropped on row `slot`: that row's item;
-/// the object row stands above the topmost item, the rows below the items under item 0.
+/// the object row stands above the topmost item, the rows below the items under item 0, the
+/// Contents row for the first item above it.
 fn item_at(n: &Node, slot: Slot) -> usize {
     match slot {
         Slot::Item { index, .. } | Slot::Effect(Some(index), _) => index,
         Slot::Object { top: true } => n.appearance.items.len().saturating_sub(1),
         Slot::Object { top: false } | Slot::Effect(None, _) => 0,
+        Slot::Contents => n.appearance.contents_at(),
+    }
+}
+
+/// How many items paint below the Contents row after it is dropped on row `slot`: it goes above a
+/// fill or stroke above it and below one below it; the object row is above everything, the rows
+/// under the stack below everything. `None` on itself.
+fn contents_slot(n: &Node, slot: Slot) -> Option<usize> {
+    let k = n.appearance.contents_at();
+    match slot {
+        Slot::Item { index, .. } | Slot::Effect(Some(index), _) => Some(if index >= k { index + 1 } else { index }),
+        Slot::Object { top: true } => Some(n.appearance.items.len()),
+        Slot::Object { top: false } | Slot::Effect(None, _) => Some(0),
+        Slot::Contents => None,
     }
 }
 
@@ -459,16 +505,38 @@ fn drop_command(n: &Node, rows: &[(Slot, Rect)], what: Dragged, p: egui::Pos2, c
                 // The copy goes where the row was dropped: above that row when dragged up, below it
                 // when dragged down.
                 let at = if to >= from { to + 1 } else { to };
-                Some(("appearance.duplicateItem", json!({"index": from, "to": at})))
-            } else {
-                (to != from).then(|| ("appearance.moveItem", json!({"from": from, "to": to})))
+                return Some(("appearance.duplicateItem", json!({"index": from, "to": at})));
             }
+            // The Contents row ends up below an item dropped on the object row, above one dropped
+            // under the stack, and on the far side of one dropped on it (elsewhere it stays put).
+            let k = n.appearance.contents_at();
+            let others = k - usize::from(from < k);
+            let contents = match slot {
+                Slot::Contents if from < k => Some(others),
+                Slot::Contents | Slot::Object { top: false } | Slot::Effect(None, _) => Some(others + 1),
+                Slot::Object { top: true } => Some(others),
+                _ => None,
+            }
+            .filter(|_| n.contents_label().is_some());
+            let to = if slot == Slot::Contents { others } else { to };
+            if to == from && contents.is_none_or(|c| c == k) {
+                return None;
+            }
+            let mut params = json!({"from": from, "to": to});
+            if let Some(c) = contents {
+                params["contents"] = json!(c);
+            }
+            Some(("appearance.moveItem", params))
+        }
+        Dragged::Contents => {
+            let to = contents_slot(n, slot)?;
+            (to != n.appearance.contents_at()).then(|| ("appearance.moveItem", json!({"from": "contents", "to": to})))
         }
         Dragged::Effect(from_item, k) => {
             let (item, pos) = match slot {
                 Slot::Effect(item, k2) => (item, k2 + usize::from(p.y > r.center().y)),
                 Slot::Item { index, .. } => (Some(index), n.appearance.effects_at(Some(index))?.len()),
-                Slot::Object { .. } => (None, n.appearance.effects.len()),
+                Slot::Object { .. } | Slot::Contents => (None, n.appearance.effects.len()),
             };
             // Within its own list the effect leaves its old place first.
             let same = item == from_item && !copy;
@@ -479,6 +547,34 @@ fn drop_command(n: &Node, rows: &[(Slot, Rect)], what: Dragged, p: egui::Pos2, c
             Some(("effect.move", json!({"from": k, "fromItem": from_item, "to": pos, "toItem": item, "copy": copy})))
         }
     }
+}
+
+/// The Contents (type: Characters) row of `n`: clicking it sends paint edits to the members
+/// (characters); double-clicking Contents targets the members, Characters opens the Color panel
+/// on the characters' paint (whose chips it shows). Returns its rect and response (for dragging).
+fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, sel: Sel) -> (Rect, egui::Response) {
+    let (r, resp) = row(ui, sel == Sel::Contents);
+    eye(ui, r, "ap-contents-eye", true, false);
+    text(ui, pos2(r.left() + EYE_W + 24.0, r.center().y), label, false);
+    let characters = matches!(n.kind, vectorcraft_doc::NodeKind::Text(_));
+    if characters {
+        for (k, stroke) in [false, true].into_iter().enumerate() {
+            let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 100.0 + 24.0 * k as f32, r.center().y - 9.0), vec2(18.0, 18.0));
+            chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p));
+        }
+    }
+    let resp = resp.on_hover_text(if characters { "Double-click to edit the characters' paint" } else { "Double-click to target the contents" });
+    if resp.clicked() || resp.double_clicked() {
+        select_row(app, ui.ctx(), Sel::Contents);
+    }
+    if resp.double_clicked() {
+        if characters {
+            app.ui.open_panel = Some("color".into());
+        } else {
+            app.run("appearance.targetContents", json!({})).ok();
+        }
+    }
+    (r, resp)
 }
 
 /// A stroke row's notes after the weight: its brush, "Dashed" and its width profile (drawn).
@@ -686,7 +782,7 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) 
         if widgets::icon_button_enabled(ui, "dc-clear", "Clear Appearance", false, has, 24.0).clicked() {
             app.run("appearance.clear", json!({})).ok();
         }
-        let can = has && sel != Sel::None;
+        let can = has && sel.editable();
         if widgets::icon_button_enabled(ui, "dc-new-item", "Duplicate Selected Item", false, can, 24.0).clicked() {
             duplicate_selected(app, ui, node, sel);
         }
@@ -753,10 +849,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("appearance.addStroke", json!({})).ok();
     }
     ui.separator();
-    if menu_item(ui, "Duplicate Item", has && sel != Sel::None, false) {
+    if menu_item(ui, "Duplicate Item", has && sel.editable(), false) {
         duplicate_selected(app, ui, node.as_ref(), sel);
     }
-    if menu_item(ui, "Remove Item", has && sel != Sel::None, false) {
+    if menu_item(ui, "Remove Item", has && sel.editable(), false) {
         delete_selected(app, ui, node.as_ref(), sel);
     }
     if menu_item(ui, "Clear Appearance", has, false) {
@@ -839,5 +935,78 @@ mod tests {
         assert_eq!(drop(Dragged::Effect(Some(1), 1), at(7, false), false), mv(1, json!(1), 1, Value::Null, false));
         assert_eq!(drop(Dragged::Effect(None, 0), at(3, false), false), mv(0, Value::Null, 0, json!(1), false));
         assert_eq!(drop(Dragged::Effect(None, 0), pos2(500.0, 10.0), false), None, "outside the stack");
+    }
+
+    /// One headless frame of the panel: the texts drawn, top to bottom.
+    fn frame(app: &mut VectorcraftApp) -> Vec<String> {
+        fn texts(s: &egui::Shape, out: &mut Vec<(f32, String)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.pos.y, t.galley.text().to_string())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+        v.sort_by(|a, b| a.0.total_cmp(&b.0));
+        v.into_iter().map(|(_, t)| t).collect()
+    }
+
+    #[test]
+    fn groups_show_a_contents_row_and_type_a_characters_row_in_their_slot() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+        let b = run(&mut app, "shape.rectangle", json!({"x": 30, "y": 0, "width": 20, "height": 20}))["id"].clone();
+        run(&mut app, "select.set", json!({"ids": [a, b]}));
+        run(&mut app, "object.group", json!({}));
+        run(&mut app, "appearance.addFill", json!({}));
+        run(&mut app, "appearance.addStroke", json!({}));
+        let rows =
+            |t: Vec<String>| t.into_iter().filter(|t| ["Fill:", "Stroke:", "Contents", "Characters"].contains(&t.as_str())).collect::<Vec<_>>();
+        assert_eq!(rows(frame(&mut app)), ["Stroke:", "Fill:", "Contents"]);
+        run(&mut app, "appearance.moveItem", json!({"from": "contents", "to": 1}));
+        assert_eq!(rows(frame(&mut app)), ["Stroke:", "Contents", "Fill:"]);
+        let t = run(&mut app, "text.create", json!({"x": 0, "y": 60, "text": "Hi"}))["id"].clone();
+        run(&mut app, "select.set", json!({"ids": [t]}));
+        assert_eq!(rows(frame(&mut app)), ["Characters"]);
+        run(&mut app, "appearance.addFill", json!({}));
+        assert_eq!(rows(frame(&mut app)), ["Fill:", "Characters"]);
+    }
+
+    #[test]
+    fn drops_move_items_across_the_contents_row_and_the_row_itself() {
+        use vectorcraft_doc::FillLayer;
+        // A group [F0 | F1 F2]: the Contents row sits above item 0.
+        let mut n = Node::group(NodeId(1), vec![]);
+        n.appearance.items = (0..3).map(|_| AppearanceItem::Fill(FillLayer::new(Paint::None))).collect();
+        n.appearance.set_contents_at(1);
+        let slots = [
+            Slot::Object { top: true },
+            Slot::Item { index: 2, sub: false },
+            Slot::Item { index: 1, sub: false },
+            Slot::Contents,
+            Slot::Item { index: 0, sub: false },
+            Slot::Object { top: false },
+        ];
+        let rows: Vec<(Slot, Rect)> =
+            slots.iter().enumerate().map(|(i, s)| (*s, Rect::from_min_size(pos2(0.0, i as f32 * ROW), vec2(200.0, ROW)))).collect();
+        let at = |i: usize| pos2(50.0, i as f32 * ROW + ROW / 2.0);
+        let drop = |what, i| drop_command(&n, &rows, what, at(i), false);
+        // Onto the Contents row: from above it lands just below, from below just above.
+        assert_eq!(drop(Dragged::Item(2), 3), Some(("appearance.moveItem", json!({"from": 2, "to": 1, "contents": 2}))));
+        assert_eq!(drop(Dragged::Item(0), 3), Some(("appearance.moveItem", json!({"from": 0, "to": 0, "contents": 0}))));
+        // Onto the object row: above everything; under the stack: below everything.
+        assert_eq!(drop(Dragged::Item(0), 0), Some(("appearance.moveItem", json!({"from": 0, "to": 2, "contents": 0}))));
+        assert_eq!(drop(Dragged::Item(2), 5), Some(("appearance.moveItem", json!({"from": 2, "to": 0, "contents": 2}))));
+        // The row itself: above item 2, below item 0; nowhere new on itself.
+        assert_eq!(drop(Dragged::Contents, 1), Some(("appearance.moveItem", json!({"from": "contents", "to": 3}))));
+        assert_eq!(drop(Dragged::Contents, 4), Some(("appearance.moveItem", json!({"from": "contents", "to": 0}))));
+        assert_eq!(drop(Dragged::Contents, 3), None);
+        assert_eq!(drop(Dragged::Contents, 2), Some(("appearance.moveItem", json!({"from": "contents", "to": 2}))));
     }
 }
