@@ -1,3 +1,5 @@
+mod common;
+
 use std::f64::consts::PI;
 
 use kurbo::{ParamCurve, Point, Rect, Shape as _};
@@ -20,7 +22,7 @@ fn close(a: f64, b: f64, rel: f64) -> bool {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(common::config(48))]
 
     #[test]
     fn inclusion_exclusion(a in arb_shape(), b in arb_shape()) {

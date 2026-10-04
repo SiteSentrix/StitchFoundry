@@ -69,7 +69,7 @@ impl Region {
 
 fn arrangement(shapes: &[Shape]) -> Option<Arrangement> {
     let bps: Vec<(BezPath, FillRule)> = shapes.iter().map(|s| (fill_bezpath(&s.path), s.rule)).collect();
-    Arrangement::new(&bps).ok()
+    Arrangement::new(bps).ok()
 }
 
 fn topmost(m: &[bool]) -> Option<usize> {

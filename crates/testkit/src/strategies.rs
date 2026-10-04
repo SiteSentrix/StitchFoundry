@@ -19,9 +19,14 @@ pub fn arb_rect() -> impl Strategy<Value = Rect> {
 }
 
 /// A simple (non self-intersecting) star-shaped polygon: points at increasing angles around a
-/// centre with random radii.
+/// centre with random radii. Every angular step stays below half a turn: a wider one puts the
+/// centre outside and can make the polygon cross itself.
 pub fn arb_star_polygon() -> impl Strategy<Value = Vec<Point>> {
-    (arb_point(40.0, 160.0), prop::collection::vec((0.2f64..1.0, 5.0f64..40.0), 3..12)).prop_map(|(c, v)| {
+    let steps = prop::collection::vec((0.2f64..1.0, 5.0f64..40.0), 3..12).prop_filter("an angular step of half a turn or more", |v| {
+        let total: f64 = v.iter().map(|(a, _)| a).sum();
+        v.iter().all(|(a, _)| 2.0 * a < total)
+    });
+    (arb_point(40.0, 160.0), steps).prop_map(|(c, v)| {
         let total: f64 = v.iter().map(|(a, _)| a).sum();
         let mut ang = 0.0;
         v.iter()
