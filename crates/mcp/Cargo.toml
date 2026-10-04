@@ -12,6 +12,7 @@ workspace = true
 vectorcraft-engine = { workspace = true }
 vectorcraft-render = { workspace = true }
 vectorcraft-svg = { workspace = true }
+vectorcraft-pdf = { workspace = true }
 vectorcraft-format = { workspace = true }
 vectorcraft-tools = { workspace = true }
 vectorcraft-geom = { workspace = true }
