@@ -94,3 +94,9 @@ folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `swatch.library.s
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
+
+Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
+caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 46 pt each; they are window chrome,
+not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (the same `saveChanges` questions for
+modified documents), and empty bar space and the 5 pt window edges move and resize the window. macOS and the web
+build are unchanged.

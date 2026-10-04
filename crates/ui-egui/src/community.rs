@@ -10,12 +10,23 @@ use crate::{VectorcraftApp, icons};
 /// Discord's brand colour (a colour, not a logo).
 const DISCORD: Color32 = Color32::from_rgb(0x58, 0x65, 0xF2);
 
-/// A Discord pill button: compact for the header, large for About / Home.
-pub fn discord_button(app: &mut VectorcraftApp, ui: &mut Ui, large: bool) -> egui::Response {
+/// The Discord button's label, height and width.
+fn discord_layout(ui: &Ui, large: bool) -> (std::sync::Arc<egui::Galley>, f32, f32) {
     let (h, font, label) = if large { (36.0, theme::semibold(14.0), "Join our Discord") } else { (24.0, theme::semibold(12.0), "Discord") };
     let galley = ui.painter().layout_no_wrap(label.to_string(), font, Color32::WHITE);
+    let w = galley.size().x + h * 0.55 + h * 0.9;
+    (galley, h, w)
+}
+
+/// The Discord button's width (the app bar drops it when space runs out).
+pub fn discord_width(ui: &Ui, large: bool) -> f32 {
+    discord_layout(ui, large).2
+}
+
+/// A Discord pill button: compact for the header, large for About / Home.
+pub fn discord_button(app: &mut VectorcraftApp, ui: &mut Ui, large: bool) -> egui::Response {
+    let (galley, h, w) = discord_layout(ui, large);
     let icon = h * 0.55;
-    let w = galley.size().x + icon + h * 0.9;
     let (r, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
     let fill = if resp.hovered() { DISCORD.gamma_multiply(0.85) } else { DISCORD };
     ui.painter().rect_filled(r, CornerRadius::same((h / 2.0) as u8), fill);
