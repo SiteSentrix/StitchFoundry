@@ -43,6 +43,8 @@ or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"
 The Fill/Stroke proxy commands run through `run_command`: `paint.invert` and `paint.complement` recolour the active
 proxy keeping each colour's model, `paint.lastColor` / `paint.lastGradient` re-apply the last solid colour or gradient,
 and `paint.recent` returns the recent colours that every paint command (and the eyedropper) feeds.
+`paint.proxies` returns what the proxies show: the fill and stroke, which one is active, and whether the selected
+objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" proxy).
 
 | Tool | Arguments | Notes |
 |---|---|---|

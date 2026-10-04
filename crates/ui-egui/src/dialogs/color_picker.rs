@@ -14,7 +14,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
 
 use super::DialogSpec;
-use crate::panels::color::{GAMUT_WARNING, WEB_WARNING, hex_digits, in_gamut, is_web_safe, parse_hex, warning_chip, web_safe};
+use crate::panels::color::{GAMUT_WARNING, WEB_WARNING, gamut_fix, hex_digits, is_web_safe, parse_hex, warning_chip, web_safe};
 use crate::panels::{c32, color_from_json, color_json};
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -177,24 +177,13 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The cached out-of-gamut correction of `c` (`color.convert` runs once per colour).
-fn gamut_fix(app: &mut VectorcraftApp, d: &mut Dialog, c: &Color) -> Option<Color> {
-    let key = color_json(c);
-    if d.fields.get("__gamutOf") != Some(&key) {
-        let fix = in_gamut(app, c).map_or(Value::Null, |f| color_json(&f));
-        d.fields.insert("__gamut".into(), fix);
-        d.fields.insert("__gamutOf".into(), key);
-    }
-    d.fields.get("__gamut").and_then(color_from_json)
-}
-
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let channel = Channel::parse(&d.str("channel")).unwrap_or_default();
     let web = d.bool("webOnly");
     let swatches = d.bool("swatches");
     let p = picked(d);
     let original = d.fields.get("original").and_then(color_from_json).unwrap_or(p.color);
-    let gamut = gamut_fix(app, d, &p.color);
+    let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
     let mut pick: Option<Picked> = None;
     let mut new_channel = None;
     let mut toggle_swatches = false;
@@ -389,6 +378,7 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use super::*;
+    use crate::panels::color::in_gamut;
 
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -455,10 +445,11 @@ mod tests {
         assert!(!fix.out_of_gamut(), "{fix:?}");
         assert!(matches!(fix, Color::Rgb { .. }));
         assert_eq!(in_gamut(&mut app, &Color::rgb8(128, 128, 128)), None);
-        // The dialog offers it and clicking it would pick it.
-        app.run("ui.colorPicker", json!({"color": "#0000ff"})).unwrap();
-        let mut d = app.ui.dialog.clone().unwrap();
-        assert_eq!(gamut_fix(&mut app, &mut d, &blue), Some(fix));
+        // The dialog and the Color panel ask through a cache.
+        let ctx = egui::Context::default();
+        assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), Some(fix));
+        assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), Some(fix));
+        assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &Color::rgb8(128, 128, 128)), None);
     }
 
     #[test]

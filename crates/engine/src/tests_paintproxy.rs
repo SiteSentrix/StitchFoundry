@@ -170,3 +170,28 @@ fn focus_false_keeps_the_active_proxy() {
     assert!(s.fill_active);
     assert_eq!(node(&s, id).appearance.stroke_paint().color().unwrap().to_hex(), "#ff0000");
 }
+
+#[test]
+fn a_mixed_selection_shows_a_question_mark_proxy() {
+    let mut s = session();
+    let a = rect(&mut s);
+    let b = rect(&mut s);
+    let q = |s: &mut Session| s.execute("paint.proxies", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let r = q(&mut s);
+    assert_eq!((r["fillMixed"].as_bool(), r["strokeMixed"].as_bool()), (Some(false), Some(false)));
+    assert_eq!(r["fillActive"], true);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [b.0]})).unwrap();
+    let r = q(&mut s);
+    assert_eq!((r["fillMixed"].as_bool(), r["strokeMixed"].as_bool()), (Some(true), Some(false)));
+    assert_eq!(r["fill"]["color"], json!(Color::rgb(1.0, 0.0, 0.0)), "the first selected object's fill");
+    // One selected object, or the same gradient fitted to different objects, is never mixed.
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    assert_eq!(q(&mut s)["fillMixed"], false);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"gradient": {"stops": [{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]}})).unwrap();
+    assert_eq!(s.doc().unwrap().proxy_mixed(), (false, false));
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(q(&mut s)["fillMixed"], false);
+}

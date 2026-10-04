@@ -5,7 +5,7 @@ use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
 use vectorcraft_color::Paint;
 
-use super::{active_paint, paint_target, pstate, set_pstate};
+use super::{active_paint, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item, swatch_tile};
 use crate::{VectorcraftApp, icons};
@@ -112,18 +112,15 @@ fn entries(app: &VectorcraftApp, kind: Kind) -> Vec<Entry> {
     out
 }
 
-fn apply(app: &mut VectorcraftApp, e: &Entry) {
-    let target = paint_target(app);
-    match e {
-        Entry::Registration => {
-            app.run(target, json!({"color": {"c": 1.0, "m": 1.0, "y": 1.0, "k": 1.0}})).ok();
-        }
-        Entry::Swatch { name, paint, .. } => {
-            let params = if paint.is_none() { json!({"none": true}) } else { json!({"swatch": name}) };
-            app.run(target, params).ok();
-        }
-        Entry::Folder(_) => {}
-    }
+/// Apply a clicked swatch to the active proxy (Alt: the inactive one).
+fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
+    let params = match e {
+        Entry::Registration => json!({"color": {"c": 1.0, "m": 1.0, "y": 1.0, "k": 1.0}}),
+        Entry::Swatch { paint, .. } if paint.is_none() => json!({"none": true}),
+        Entry::Swatch { name, .. } => json!({"swatch": name}),
+        Entry::Folder(_) => return,
+    };
+    super::apply_click(app, ui, params);
 }
 
 /// A pattern swatch drawn as a rendered tile (cached by the definition's identity and size).
@@ -339,7 +336,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Entry::Folder(n) => n.clone(),
         };
         set_pstate(ui.ctx(), "swatch-selected", Some(name));
-        apply(app, &e);
+        apply(app, ui, &e);
     }
     bottom(app, ui);
 }

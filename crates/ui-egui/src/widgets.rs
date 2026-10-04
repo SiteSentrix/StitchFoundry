@@ -233,8 +233,9 @@ pub struct ProxyClicks {
     pub pick: Option<bool>,
 }
 
-/// The Fill/Stroke proxy pair (two overlapping squares).
-pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active: bool, size: f32) -> ProxyClicks {
+/// The Fill/Stroke proxy pair (two overlapping squares). `mixed` (fill, stroke) draws a "?" square
+/// for a selection whose objects differ.
+pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool, bool), fill_active: bool, size: f32) -> ProxyClicks {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
     let s = size * 0.62;
@@ -242,16 +243,31 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, fill_active:
     let stroke_r = Rect::from_min_size(rect.max - Vec2::splat(s), Vec2::splat(s));
     let stroke_resp = ui.interact(stroke_r, ui.id().with("stroke-proxy"), Sense::click());
     let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click());
+    let question = |ui: &Ui, r: Rect, color: Color32| {
+        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(r.height() * 0.8), color);
+    };
     let draw_fill = |ui: &Ui| {
-        paint_chip(ui, fill_r, fill);
+        if mixed.0 {
+            ui.painter().rect_filled(fill_r, 0.0, Color32::WHITE);
+            question(ui, fill_r, Color32::BLACK);
+        } else {
+            paint_chip(ui, fill_r, fill);
+        }
         ui.painter().rect_stroke(fill_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(fill_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
     };
     let draw_stroke = |ui: &Ui| {
         let w = s * 0.28;
-        paint_chip(ui, stroke_r, stroke);
+        if mixed.1 {
+            ui.painter().rect_filled(stroke_r, 0.0, Color32::WHITE);
+        } else {
+            paint_chip(ui, stroke_r, stroke);
+        }
         let inner = stroke_r.shrink(w);
         ui.painter().rect_filled(inner, 0.0, t.panel);
+        if mixed.1 {
+            question(ui, inner, t.text_strong);
+        }
         ui.painter().rect_stroke(stroke_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Outside);
         ui.painter().rect_stroke(stroke_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
@@ -553,7 +569,7 @@ pub fn color_slider(
 }
 
 /// The pointer of a click or drag on `resp` and its phase (dragging, or released on click/drop).
-fn pointer_phase(resp: &Response) -> Option<(Pos2, Live)> {
+pub(crate) fn pointer_phase(resp: &Response) -> Option<(Pos2, Live)> {
     if !(resp.dragged() || resp.clicked() || resp.drag_stopped()) {
         return None;
     }
@@ -585,29 +601,11 @@ pub fn color_field(
     pos: (f32, f32),
     color_at: &dyn Fn(f32, f32) -> Color32,
 ) -> (Option<(f32, f32)>, Live) {
-    const CELLS: u32 = 32;
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let resp = ui.interact(rect, ui.id().with(id), Sense::click_and_drag());
-    let mut mesh = egui::Mesh::default();
-    let row = CELLS + 1;
-    mesh.reserve_vertices((row * row) as usize);
-    mesh.reserve_triangles((CELLS * CELLS * 2) as usize);
-    for j in 0..row {
-        for i in 0..row {
-            let (x, y) = (i as f32 / CELLS as f32, j as f32 / CELLS as f32);
-            mesh.colored_vertex(pos2(rect.left() + x * rect.width(), rect.top() + y * rect.height()), color_at(x, y));
-        }
-    }
-    for j in 0..CELLS {
-        for i in 0..CELLS {
-            let a = j * row + i;
-            mesh.add_triangle(a, a + 1, a + row);
-            mesh.add_triangle(a + 1, a + row + 1, a + row);
-        }
-    }
     let painter = ui.painter_at(rect.expand(6.0));
-    painter.add(egui::Shape::mesh(mesh));
+    painter.add(color_mesh(rect, (32, 32), color_at));
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let c = pos2(rect.left() + pos.0.clamp(0.0, 1.0) * rect.width(), rect.top() + pos.1.clamp(0.0, 1.0) * rect.height());
     painter.circle_stroke(c, 5.0, Stroke::new(1.0, Color32::BLACK));
@@ -619,6 +617,29 @@ pub fn color_field(
         }
         None => (None, Live::Idle),
     }
+}
+
+/// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1
+/// each, y down) at its vertices.
+pub fn color_mesh(rect: Rect, (cols, rows): (u32, u32), color_at: &dyn Fn(f32, f32) -> Color32) -> egui::Shape {
+    let mut mesh = egui::Mesh::default();
+    let row = cols + 1;
+    mesh.reserve_vertices((row * (rows + 1)) as usize);
+    mesh.reserve_triangles((cols * rows * 2) as usize);
+    for j in 0..=rows {
+        for i in 0..=cols {
+            let (x, y) = (i as f32 / cols as f32, j as f32 / rows as f32);
+            mesh.colored_vertex(pos2(rect.left() + x * rect.width(), rect.top() + y * rect.height()), color_at(x, y));
+        }
+    }
+    for j in 0..rows {
+        for i in 0..cols {
+            let a = j * row + i;
+            mesh.add_triangle(a, a + 1, a + row);
+            mesh.add_triangle(a + 1, a + row + 1, a + row);
+        }
+    }
+    egui::Shape::mesh(mesh)
 }
 
 /// The Color Picker's vertical channel slider: `track(t)` gives the colour at 0..1 (bottom to top)

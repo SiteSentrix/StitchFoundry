@@ -159,9 +159,22 @@ pub fn libraries(_app: &mut VectorcraftApp, ui: &mut Ui) {
 
 // ---------- shared helpers ----------
 
-/// The paint command for the active proxy (Fill or Stroke).
-pub(crate) fn paint_target(app: &VectorcraftApp) -> &'static str {
-    if app.session.fill_active { "paint.setFill" } else { "paint.setStroke" }
+/// The paint command of the active proxy (Fill or Stroke), or of the inactive one.
+pub(crate) fn proxy_cmd(app: &VectorcraftApp, inactive: bool) -> &'static str {
+    if app.session.fill_active != inactive { "paint.setFill" } else { "paint.setStroke" }
+}
+
+/// Is Alt held? A click on a colour then paints the inactive proxy.
+pub(crate) fn alt_held(ui: &Ui) -> bool {
+    ui.input(|i| i.modifiers.alt)
+}
+
+/// Apply a clicked colour, swatch or None (`params`: `{color}`, `{swatch}` or `{none}`) to the
+/// active proxy, or with Alt held to the inactive one, which stays behind.
+pub(crate) fn apply_click(app: &mut VectorcraftApp, ui: &Ui, mut params: Value) {
+    let alt = alt_held(ui);
+    params["focus"] = json!(!alt);
+    app.run(proxy_cmd(app, alt), params).ok();
 }
 
 /// Fill and stroke as the proxies show them: the first selected object's (text uses its first
@@ -179,6 +192,27 @@ pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
     }
 }
 
+/// Whether the selected objects' fills and strokes differ (the proxies show "?"), cached per
+/// document revision.
+pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool) {
+    let Some(st) = app.session.active() else { return (false, false) };
+    let key = (st.uid, st.revision);
+    match pstate::<Option<((u64, u64), (bool, bool))>>(ctx, "proxy-mixed") {
+        Some((k, mixed)) if k == key => mixed,
+        _ => {
+            let mixed = st.proxy_mixed();
+            set_pstate(ctx, "proxy-mixed", Some((key, mixed)));
+            mixed
+        }
+    }
+}
+
+/// Is the active proxy "?" (the selected objects' paints differ)?
+pub(crate) fn active_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    let (f, s) = mixed_paints(app, ctx);
+    if app.session.fill_active { f } else { s }
+}
+
 /// The paint behind the active proxy.
 pub(crate) fn active_paint(app: &VectorcraftApp) -> Paint {
     let (f, s) = current_paints(app);
@@ -188,7 +222,8 @@ pub(crate) fn active_paint(app: &VectorcraftApp) -> Paint {
 /// Draw the Fill/Stroke proxy and handle its clicks through commands.
 pub(crate) fn proxy(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     let (f, s) = current_paints(app);
-    let c = crate::widgets::fill_stroke_proxy(ui, &f, &s, app.session.fill_active, size);
+    let mixed = mixed_paints(app, ui.ctx());
+    let c = crate::widgets::fill_stroke_proxy(ui, &f, &s, mixed, app.session.fill_active, size);
     if (c.fill && !app.session.fill_active) || (c.stroke && app.session.fill_active) {
         app.run("paint.toggleActive", json!({})).ok();
     }
@@ -233,7 +268,7 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
 }
 
 /// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
-/// command feeds); clicking one applies it to the active proxy.
+/// command feeds); clicking one applies it to the active proxy (Alt: the inactive one).
 pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, "Recent Colors");
@@ -252,7 +287,7 @@ pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     if let Some(c) = chosen {
-        app.run(paint_target(app), json!({"color": color_json(&c)})).ok();
+        apply_click(app, ui, json!({"color": color_json(&c)}));
     }
 }
 

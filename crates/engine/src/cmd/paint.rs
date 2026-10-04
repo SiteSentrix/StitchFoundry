@@ -5,7 +5,7 @@ use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Node, NodeId, NodeKind};
 
 use super::*;
-use crate::EngineError;
+use crate::{DocState, EngineError};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -118,6 +118,15 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
                 }))
             }
         ),
+        cmd!(
+            query "paint.proxies",
+            "Fill and Stroke",
+            [],
+            None,
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the first selected object's, type: its first run's; else the defaults for new art), fillActive, fillMixed, strokeMixed: the selected objects' fills (strokes) differ, shown as a \"?\" proxy}",
+            always,
+            proxies
+        ),
     ]
 }
 
@@ -159,6 +168,53 @@ pub(crate) fn proxy_paint(n: &Node, stroke: bool) -> Paint {
         _ if stroke => n.appearance.stroke_paint(),
         _ => n.appearance.fill_paint(),
     }
+}
+
+/// Do two paints look the same in a proxy? Solid colours compare without their swatch link and
+/// gradients without their per-object geometry.
+fn same_in_proxy(a: &Paint, b: &Paint) -> bool {
+    match (a, b) {
+        (Paint::Solid { color: x, .. }, Paint::Solid { color: y, .. }) => x == y,
+        (Paint::Gradient(x), Paint::Gradient(y)) => x.gradient == y.gradient,
+        _ => a == b,
+    }
+}
+
+impl DocState {
+    /// Whether the selected objects' fills and strokes differ as the proxies show them (a "?"
+    /// proxy). One walk of the document, so callers that ask every frame cache it by revision.
+    pub fn proxy_mixed(&self) -> (bool, bool) {
+        if self.selection.len() < 2 {
+            return (false, false);
+        }
+        let ids: std::collections::HashSet<NodeId> = self.selection.objects.iter().copied().collect();
+        let mut first: Option<(Paint, Paint)> = None;
+        let mut mixed = (false, false);
+        self.doc.walk(|n| {
+            if (mixed.0 && mixed.1) || !ids.contains(&n.id) {
+                return;
+            }
+            let (f, s) = (proxy_paint(n, false), proxy_paint(n, true));
+            match &first {
+                Some((f0, s0)) => {
+                    mixed.0 |= !same_in_proxy(f0, &f);
+                    mixed.1 |= !same_in_proxy(s0, &s);
+                }
+                None => first = Some((f, s)),
+            }
+        });
+        mixed
+    }
+}
+
+fn proxies(s: &mut Session, _: &Value) -> Result<Value> {
+    let st = s.doc().ok();
+    let (fill, stroke) = match st.and_then(|st| st.selection.objects.first().and_then(|id| st.doc.node(*id))) {
+        Some(n) => (proxy_paint(n, false), proxy_paint(n, true)),
+        None => (s.paint.fill.clone(), s.paint.stroke.clone()),
+    };
+    let (fill_mixed, stroke_mixed) = st.map_or((false, false), DocState::proxy_mixed);
+    Ok(json!({"fill": fill, "stroke": stroke, "fillActive": s.fill_active, "fillMixed": fill_mixed, "strokeMixed": stroke_mixed}))
 }
 
 /// `stroke` param, defaulting to the proxy that is in front.
