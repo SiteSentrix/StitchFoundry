@@ -42,15 +42,11 @@ impl Tool for EyedropperTool {
         let src = paint_owner(cx.doc, h.leaf);
         let Some(n) = cx.doc.node(src) else { return vec![] };
         if ev.mods.shift {
-            let (fill, stroke) = match &n.kind {
-                vectorcraft_doc::NodeKind::Text(t) => {
-                    let st = t.runs.first().map(|r| r.style.clone());
-                    (st.as_ref().map(|s| s.fill.clone()).unwrap_or_default(), st.map(|s| s.stroke).unwrap_or_default())
-                }
-                _ => (n.appearance.fill_paint(), n.appearance.stroke_paint()),
-            };
-            let paint = if h.kind == HitKind::Stroke || fill.is_none() { stroke } else { fill };
-            return match paint_color_at(&paint, n.geometric_bounds(), ev.pos) {
+            let fill_none = n.proxy_paint(false).is_none_or(|(p, ..)| p.is_none());
+            let Some((paint, to_doc, bounds)) = n.proxy_paint(h.kind == HitKind::Stroke || fill_none) else { return vec![] };
+            // Sample in the paint's own space (text space for type runs) and box.
+            let p = if to_doc.determinant().abs() > 1e-12 { to_doc.inverse() * ev.pos } else { ev.pos };
+            return match paint_color_at(paint, Some(bounds), p) {
                 Some(c) => vec![Action::Exec("paint.sampleColor".into(), json!({ "color": c.to_hex() }))],
                 None => vec![],
             };
@@ -94,6 +90,27 @@ mod tests {
         let r = vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 10.0);
         assert_eq!(paint_color_at(&paint, Some(r), Point::new(0.0, 5.0)).unwrap().to_hex(), "#ffffff");
         assert_eq!(paint_color_at(&paint, Some(r), Point::new(100.0, 5.0)).unwrap().to_hex(), "#000000");
+    }
+
+    #[test]
+    fn type_gradients_are_sampled_in_text_space() {
+        use vectorcraft_color::{Gradient, GradientGeom, GradientPaint};
+        use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, TextObject};
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        // Type turned 90°: its baseline runs down from (100, 100).
+        let mut t = TextObject::point(Point::ZERO, "Gradient", CharStyle { size: 20.0, ..Default::default() });
+        t.xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(std::f64::consts::FRAC_PI_2);
+        let mut g = GradientPaint::new(Gradient::default());
+        g.geom = Some(GradientGeom { start: Point::ZERO, end: Point::new(100.0, 0.0), aspect: 1.0 });
+        t.runs[0].style.fill = Paint::Gradient(Box::new(g));
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let shift = Mods { shift: true, ..Default::default() };
+        // 80 % along the baseline (text space (80, -5)).
+        let a = EyedropperTool.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 105.0, 180.0).with_mods(shift));
+        assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": "#333333"}))]);
     }
 
     #[test]
