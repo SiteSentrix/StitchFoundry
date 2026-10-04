@@ -37,8 +37,8 @@ pub mod transparency;
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::{Node, NodeKind, StrokeLayer};
 
 use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
@@ -164,19 +164,47 @@ pub(crate) fn paint_target(app: &VectorcraftApp) -> &'static str {
     if app.session.fill_active { "paint.setFill" } else { "paint.setStroke" }
 }
 
-/// Fill and stroke as the proxies show them: the first selected object's (text uses its first
-/// run's style), else the defaults for new art.
+/// The first selected node, borrowed (for per-frame reads that need no copy of it).
+fn first_node(app: &VectorcraftApp) -> Option<&Node> {
+    let st = app.session.active()?;
+    st.selection.objects.first().and_then(|id| st.doc.node(*id))
+}
+
+/// Fill and stroke as the proxies show them: the first selected object's, where the Appearance
+/// panel's active item stands in for the top fill or stroke of its kind (text without one shows
+/// its first run's style); else, and for a group without its own fill or stroke, the defaults
+/// for new art.
 pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
-    match first_selected(app) {
-        Some(n) => match &n.kind {
-            NodeKind::Text(t) => {
-                let s = t.first_style();
-                (s.fill, s.stroke)
-            }
-            _ => (n.appearance.fill_paint(), n.appearance.stroke_paint()),
-        },
-        None => (app.session.paint.fill.clone(), app.session.paint.stroke.clone()),
+    let defaults = || (app.session.paint.fill.clone(), app.session.paint.stroke.clone());
+    let Some(n) = first_node(app) else { return defaults() };
+    let item = app.session.appearance_item();
+    if item.is_none() {
+        if let NodeKind::Text(t) = &n.kind {
+            let s = t.first_style();
+            return (s.fill, s.stroke);
+        }
+        if n.is_container() && n.appearance.items.is_empty() {
+            return defaults();
+        }
     }
+    let ap = &n.appearance;
+    (ap.fill_for(item).map_or(Paint::None, |f| f.paint.clone()), ap.stroke_for(item).map_or(Paint::None, |s| s.paint.clone()))
+}
+
+/// The stroke the Stroke panel, Control bar and Properties show: the Appearance panel's active
+/// item when it is a stroke, else the first selected object's top stroke.
+pub(crate) fn current_stroke(app: &VectorcraftApp) -> Option<StrokeLayer> {
+    first_node(app)?.appearance.stroke_for(app.session.appearance_item()).cloned()
+}
+
+/// Opacity and blend mode as the Transparency panel and Control bar show them: the Appearance
+/// panel's active item's, else the first selected object's.
+pub(crate) fn current_transparency(app: &VectorcraftApp) -> Option<(f32, BlendMode)> {
+    let n = first_node(app)?;
+    Some(match app.session.appearance_item().and_then(|i| n.appearance.items.get(i)) {
+        Some(it) => (it.opacity(), it.blend()),
+        None => (n.opacity, n.blend),
+    })
 }
 
 /// The paint behind the active proxy.
@@ -323,3 +351,5 @@ mod tests {
         assert_eq!(p["gradient"]["stops"].as_array().unwrap().len(), 2);
     }
 }
+#[cfg(test)]
+mod tests_appearance;

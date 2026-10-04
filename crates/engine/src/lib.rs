@@ -443,6 +443,9 @@ pub struct Session {
     untitled_counter: u32,
     /// Session-level state of the menu commands (saved selections, guide lock).
     pub(crate) menu: cmd::menucmds::MenuState,
+    /// The Appearance panel's active fill/stroke row (`appearance.setActiveItem`); not saved. Read
+    /// it through [`Session::appearance_item`], which drops it once the selection changes.
+    pub(crate) active_appearance_item: Option<cmd::appearance::ActiveItem>,
 }
 
 impl Default for Session {
@@ -468,6 +471,7 @@ impl Session {
             draw_inside: None,
             untitled_counter: 0,
             menu: Default::default(),
+            active_appearance_item: None,
         }
     }
 
@@ -619,6 +623,7 @@ impl Session {
 
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
+        self.active_appearance_item = None;
         let st = self.doc_mut()?;
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
@@ -706,6 +711,8 @@ impl Session {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_appearance;
 #[cfg(test)]
 mod tests_brushsym;
 #[cfg(test)]

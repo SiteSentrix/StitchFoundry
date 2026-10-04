@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, NodeKind};
 
+use super::appearance::{ItemTarget, appearance_targets, edit_items, item_target};
 use super::*;
 use crate::EngineError;
 
@@ -14,11 +15,13 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind, stops:[{offset,color}], angle?}, ids?} sets selection fill and the default",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind, stops:[{offset,color}], angle?}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?} sets the selection's fill and the default",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
-        cmd!("paint.setStroke", "Stroke", [], None, "same as paint.setFill, for the stroke", has_doc, |s, p| set_paint(s, p, false)),
+        cmd!("paint.setStroke", "Stroke", [], None, "same as paint.setFill, for the stroke (item?: the stroke item to set)", has_doc, |s, p| {
+            set_paint(s, p, false)
+        }),
         cmd!("paint.swap", "Swap Fill and Stroke", [], Some("Shift+X"), "{}", has_doc, swap),
         cmd!("paint.default", "Default Fill and Stroke", [], Some("D"), "{}", has_doc, default_paint),
         cmd!("paint.toggleActive", "Toggle Fill/Stroke Focus", [], Some("X"), "{}", always, |s, _| {
@@ -34,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{opacity?: 0..100, blend?: name, isolate?, knockout?}",
+            "{opacity?: 0..100, blend?: name, isolate?, knockout?, item?: appearance item index|null, ids?} opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
             has_selection,
             transparency
         ),
@@ -93,38 +96,32 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
 }
 
 fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
-    let paint = paint_from(s, p)?.ok_or_else(|| bad("paint.setFill", "give color, none, swatch or gradient"))?;
+    let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
+    let paint = paint_from(s, p)?.ok_or_else(|| bad(cmd, "give color, none, swatch or gradient"))?;
     if fill {
         s.paint.fill = paint.clone();
     } else {
         s.paint.stroke = paint.clone();
     }
     s.fill_active = fill;
-    let ids = paint_targets(s, p)?;
-    if ids.is_empty() {
-        return ok();
-    }
-    s.edit(if fill { "Fill Color" } else { "Stroke Color" }, |d, _| {
-        for id in &ids {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if let NodeKind::Text(t) = &mut n.kind {
-                for r in &mut t.runs {
-                    if fill {
-                        r.style.fill = paint.clone();
-                    } else {
-                        r.style.stroke = paint.clone();
-                        if r.style.stroke_width == 0.0 {
-                            r.style.stroke_width = 1.0;
-                        }
+    let item = item_target(s, p, cmd)?;
+    let ids = item.targets(s, p)?;
+    edit_items(s, &ids, item, cmd, if fill { "Fill Color" } else { "Stroke Color" }, fill, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            for r in &mut t.runs {
+                if fill {
+                    r.style.fill = paint.clone();
+                } else {
+                    r.style.stroke = paint.clone();
+                    if r.style.stroke_width == 0.0 {
+                        r.style.stroke_width = 1.0;
                     }
                 }
-                continue;
             }
-            if fill {
-                n.appearance.set_fill(paint.clone());
-            } else {
-                n.appearance.set_stroke(paint.clone());
-            }
+        } else {
+            n.appearance.set_paint_at(index, fill, paint.clone());
         }
         Ok(())
     })?;
@@ -171,9 +168,35 @@ fn default_paint(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
-    let mut q = p.clone();
-    if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
-        q["opacity"] = json!(o / 100.0);
+    const C: &str = "transparency.set";
+    let item = item_target(s, p, C)?;
+    let mut q = p.as_object().cloned().unwrap_or_default();
+    q.remove("item");
+    let opacity = q.remove("opacity").and_then(|v| v.as_f64()).map(|o| (o / 100.0).clamp(0.0, 1.0));
+    if let ItemTarget::Item { index, explicit } = item {
+        // Opacity and blend belong to the targeted fill/stroke; isolate/knockout stay object-level.
+        if explicit {
+            let d = &s.doc()?.doc;
+            if !appearance_targets(s, p)?.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {
+                return Err(bad(C, format!("no appearance item {index}")));
+            }
+        }
+        let mut set = json!({ "index": index });
+        for key in ["blend", "ids", "id"] {
+            if let Some(v) = p.get(key) {
+                set[key] = v.clone();
+            }
+        }
+        if let Some(o) = opacity {
+            set["opacity"] = json!(o);
+        }
+        q.remove("blend");
+        s.execute("appearance.setItem", &set)?;
+        if q.keys().all(|k| k == "ids" || k == "id") {
+            return ok();
+        }
+    } else if let Some(o) = opacity {
+        q.insert("opacity".into(), json!(o));
     }
-    s.execute("object.setProps", &q)
+    s.execute("object.setProps", &Value::Object(q))
 }

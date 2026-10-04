@@ -1,6 +1,6 @@
 //! The command registry. Ids follow Illustrator's menu structure.
 
-mod appearance;
+pub(crate) mod appearance;
 mod brushsym;
 mod buildcmds;
 pub mod clipboard;

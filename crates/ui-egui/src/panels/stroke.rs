@@ -3,9 +3,9 @@
 
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Arrowhead, LineCap, LineJoin, StrokeAlign, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{Arrowhead, LineCap, LineJoin, StrokeAlign, Unit, WidthProfile};
 
-use super::{first_selected, pstate, set_pstate};
+use super::{current_stroke, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -71,17 +71,13 @@ fn arrow_label(a: Option<Arrowhead>) -> String {
     }
 }
 
-fn stroke_now(app: &VectorcraftApp) -> Option<StrokeLayer> {
-    first_selected(app).and_then(|n| n.appearance.stroke().cloned())
-}
-
 fn set(app: &mut VectorcraftApp, p: Value) {
     app.run("stroke.set", p).ok();
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let st = stroke_now(app);
+    let st = current_stroke(app);
     let weight = st.as_ref().map(|s| s.width).unwrap_or(app.session.paint.stroke_width);
     let hidden: bool = pstate(ui.ctx(), "stroke-hide-options");
     let label_w = 64.0;
@@ -380,7 +376,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     menu_item(ui, "Add to Profiles", false, false);
     menu_item(ui, "Delete Profile", false, false);
-    if menu_item(ui, "Reset Profile", stroke_now(app).is_some_and(|s| s.profile.is_some()), false) {
+    if menu_item(ui, "Reset Profile", current_stroke(app).is_some_and(|s| s.profile.is_some()), false) {
         set(app, json!({"profile": "uniform"}));
     }
 }

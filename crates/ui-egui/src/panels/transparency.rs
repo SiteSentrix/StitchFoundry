@@ -6,7 +6,7 @@ use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
 
-use super::{current_paints, first_selected, live_run, pstate, selection_len, set_pstate};
+use super::{current_paints, current_transparency, first_selected, live_run, pstate, selection_len, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, Live, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -20,8 +20,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         None => first_selected(app),
     };
     let has = n.is_some();
-    let (blend, op, isolate, knockout) =
-        n.as_ref().map(|n| (n.blend, n.opacity, n.isolate, n.knockout)).unwrap_or((BlendMode::Normal, 1.0, false, false));
+    let (isolate, knockout) = n.as_ref().map_or((false, false), |n| (n.isolate, n.knockout));
+    // Opacity and blend of the Appearance panel's active item, else of the object.
+    let (op, blend) = match editing {
+        None => current_transparency(app),
+        Some(_) => n.as_ref().map(|n| (n.opacity, n.blend)),
+    }
+    .unwrap_or((1.0, BlendMode::Normal));
     ui.horizontal(|ui| {
         let labels: Vec<&str> = BlendMode::ALL.iter().map(|b| b.label()).collect();
         ui.add_enabled_ui(has, |ui| {

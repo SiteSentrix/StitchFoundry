@@ -7,6 +7,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
+use vectorcraft_doc::AppearanceItem;
 use vectorcraft_doc::hit::hit_test;
 use vectorcraft_geom::{Point, Vec2};
 
@@ -21,11 +22,18 @@ pub struct GradientTool {
     drag: Option<(Point, Point, bool)>,
 }
 
-/// Start/end/stop offsets of the gradient annotator for the first selected object with a gradient fill.
+/// Start/end/stop offsets of the gradient annotator for the first selected object with a gradient
+/// in the Appearance panel's active item (when it is one), else in its fill.
 pub fn annotator(cx: &ToolContext) -> Option<(Point, Point, Vec<f32>)> {
     cx.selection.objects.iter().find_map(|id| {
         let n = cx.doc.node(*id)?;
-        let Paint::Gradient(g) = n.appearance.fill_paint() else { return None };
+        let item = cx.appearance_item.and_then(|i| n.appearance.items.get(i));
+        let paint = match item {
+            Some(AppearanceItem::Stroke(s)) => &s.paint,
+            Some(AppearanceItem::Fill(f)) => &f.paint,
+            None => &n.appearance.fill()?.paint,
+        };
+        let Paint::Gradient(g) = paint else { return None };
         let geom = g.resolve(n.geometric_bounds()?);
         Some((geom.start, geom.end, g.gradient.stops.iter().map(|s| s.offset).collect()))
     })
@@ -155,5 +163,23 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
         assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 450.0, 450.0)).is_empty());
+    }
+
+    #[test]
+    fn annotator_follows_the_active_appearance_item() {
+        let (mut d, id) = doc_with_rect();
+        let geom = vectorcraft_color::GradientGeom { start: Point::new(100.0, 120.0), end: Point::new(200.0, 120.0), aspect: 1.0 };
+        let mut gp = vectorcraft_color::GradientPaint::new(Default::default());
+        gp.geom = Some(geom);
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().paint = Paint::Gradient(Box::new(gp));
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        // The fill is solid: no annotator until the stroke row (item 1) is the active item.
+        assert!(annotator(&cx).is_none());
+        cx.appearance_item = Some(1);
+        let (a, b, _) = annotator(&cx).unwrap();
+        assert_eq!((a, b), (geom.start, geom.end));
     }
 }

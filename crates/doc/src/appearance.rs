@@ -223,6 +223,47 @@ pub enum AppearanceItem {
     Stroke(StrokeLayer),
 }
 
+impl AppearanceItem {
+    pub fn is_fill(&self) -> bool {
+        matches!(self, AppearanceItem::Fill(_))
+    }
+    /// `"fill"` or `"stroke"` (the serialized `kind`).
+    pub fn kind_name(&self) -> &'static str {
+        if self.is_fill() { "fill" } else { "stroke" }
+    }
+    pub fn visible(&self) -> bool {
+        match self {
+            AppearanceItem::Fill(f) => f.visible,
+            AppearanceItem::Stroke(s) => s.visible,
+        }
+    }
+    pub fn opacity(&self) -> f32 {
+        match self {
+            AppearanceItem::Fill(f) => f.opacity,
+            AppearanceItem::Stroke(s) => s.opacity,
+        }
+    }
+    pub fn blend(&self) -> BlendMode {
+        match self {
+            AppearanceItem::Fill(f) => f.blend,
+            AppearanceItem::Stroke(s) => s.blend,
+        }
+    }
+    /// The item's own live effects (applied to this fill or stroke only).
+    pub fn effects(&self) -> &Vec<Effect> {
+        match self {
+            AppearanceItem::Fill(f) => &f.effects,
+            AppearanceItem::Stroke(s) => &s.effects,
+        }
+    }
+    pub fn effects_mut(&mut self) -> &mut Vec<Effect> {
+        match self {
+            AppearanceItem::Fill(f) => &mut f.effects,
+            AppearanceItem::Stroke(s) => &mut s.effects,
+        }
+    }
+}
+
 /// Appearance attributes. `items` is in paint order: `items[0]` is painted first (the bottom of the
 /// Appearance panel list).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -289,6 +330,97 @@ impl Appearance {
                 AppearanceItem::Stroke(s) => s.effects.is_empty() && s.opacity == 1.0 && s.blend == BlendMode::Normal,
             })
     }
+    /// Fill item `index`, or the topmost fill for `None`. `None` when that item is not a fill.
+    pub fn fill_at(&self, index: Option<usize>) -> Option<&FillLayer> {
+        match index {
+            None => self.fill(),
+            Some(i) => match self.items.get(i)? {
+                AppearanceItem::Fill(f) => Some(f),
+                AppearanceItem::Stroke(_) => None,
+            },
+        }
+    }
+    pub fn fill_at_mut(&mut self, index: Option<usize>) -> Option<&mut FillLayer> {
+        match index {
+            None => self.fill_mut(),
+            Some(i) => match self.items.get_mut(i)? {
+                AppearanceItem::Fill(f) => Some(f),
+                AppearanceItem::Stroke(_) => None,
+            },
+        }
+    }
+    /// Stroke item `index`, or the topmost stroke for `None`. `None` when that item is not a stroke.
+    pub fn stroke_at(&self, index: Option<usize>) -> Option<&StrokeLayer> {
+        match index {
+            None => self.stroke(),
+            Some(i) => match self.items.get(i)? {
+                AppearanceItem::Stroke(s) => Some(s),
+                AppearanceItem::Fill(_) => None,
+            },
+        }
+    }
+    pub fn stroke_at_mut(&mut self, index: Option<usize>) -> Option<&mut StrokeLayer> {
+        match index {
+            None => self.stroke_mut(),
+            Some(i) => match self.items.get_mut(i)? {
+                AppearanceItem::Stroke(s) => Some(s),
+                AppearanceItem::Fill(_) => None,
+            },
+        }
+    }
+    /// `index` when it names a fill (`fill`) or stroke item, else `None` (the topmost one): the
+    /// item a fill or stroke edit changes while item `index` is the Appearance panel's target.
+    pub fn item_of_kind(&self, index: Option<usize>, fill: bool) -> Option<usize> {
+        index.filter(|i| self.items.get(*i).is_some_and(|it| it.is_fill() == fill))
+    }
+    /// The fill the Fill proxy shows while item `index` is targeted: that item when it is a fill,
+    /// else the topmost fill.
+    pub fn fill_for(&self, index: Option<usize>) -> Option<&FillLayer> {
+        self.fill_at(self.item_of_kind(index, true))
+    }
+    /// The stroke the Stroke proxy and panel show while item `index` is targeted.
+    pub fn stroke_for(&self, index: Option<usize>) -> Option<&StrokeLayer> {
+        self.stroke_at(self.item_of_kind(index, false))
+    }
+    /// Set the paint of fill item `index` (`None`: the top fill, created if missing). False when
+    /// `index` is not a fill.
+    pub fn set_fill_at(&mut self, index: Option<usize>, p: Paint) -> bool {
+        if index.is_none() {
+            self.set_fill(p);
+            return true;
+        }
+        self.fill_at_mut(index).map(|f| f.paint = p).is_some()
+    }
+    /// Set the paint of stroke item `index` (`None`: the top stroke, created if missing). False
+    /// when `index` is not a stroke.
+    pub fn set_stroke_at(&mut self, index: Option<usize>, p: Paint) -> bool {
+        if index.is_none() {
+            self.set_stroke(p);
+            return true;
+        }
+        self.stroke_at_mut(index).map(|s| s.paint = p).is_some()
+    }
+    /// The paint of fill (`fill`) or stroke item `index` (`None`: the topmost one).
+    pub fn paint_at(&self, index: Option<usize>, fill: bool) -> Option<&Paint> {
+        if fill { self.fill_at(index).map(|f| &f.paint) } else { self.stroke_at(index).map(|s| &s.paint) }
+    }
+    /// [`Self::set_fill_at`] or [`Self::set_stroke_at`].
+    pub fn set_paint_at(&mut self, index: Option<usize>, fill: bool, p: Paint) -> bool {
+        if fill { self.set_fill_at(index, p) } else { self.set_stroke_at(index, p) }
+    }
+    /// The effects of item `index`, or the object-level effects for `None`.
+    pub fn effects_at(&self, index: Option<usize>) -> Option<&Vec<Effect>> {
+        match index {
+            None => Some(&self.effects),
+            Some(i) => self.items.get(i).map(AppearanceItem::effects),
+        }
+    }
+    pub fn effects_mut(&mut self, index: Option<usize>) -> Option<&mut Vec<Effect>> {
+        match index {
+            None => Some(&mut self.effects),
+            Some(i) => self.items.get_mut(i).map(AppearanceItem::effects_mut),
+        }
+    }
     /// Largest distance the painted area extends beyond the geometry (for visual bounds).
     pub fn outset(&self) -> f64 {
         self.items
@@ -328,6 +460,26 @@ mod tests {
         assert!(a.is_basic());
         assert_eq!(a.fill_paint(), Paint::solid(Color::WHITE));
         assert_eq!(a.stroke_width(), 1.0);
+    }
+
+    #[test]
+    fn items_by_index() {
+        let mut a = Appearance::default_art();
+        a.items.push(AppearanceItem::Fill(FillLayer::new(Paint::None)));
+        // [Fill white, Stroke black, Fill none]
+        assert_eq!(a.fill_at(None).unwrap().paint, Paint::None);
+        assert_eq!(a.fill_at(Some(0)).unwrap().paint, Paint::solid(Color::WHITE));
+        assert!(a.fill_at(Some(1)).is_none() && a.stroke_at(Some(0)).is_none() && a.fill_at(Some(9)).is_none());
+        assert_eq!(a.item_of_kind(Some(1), false), Some(1));
+        assert_eq!(a.item_of_kind(Some(1), true), None);
+        assert_eq!(a.fill_for(Some(1)).unwrap().paint, Paint::None);
+        assert!(a.set_fill_at(Some(0), Paint::solid(Color::BLACK)));
+        assert!(!a.set_stroke_at(Some(0), Paint::None));
+        assert_eq!(a.fill_at(Some(0)).unwrap().paint, Paint::solid(Color::BLACK));
+        a.effects_mut(Some(1)).unwrap().push(Effect { id: "distort.roughen".into(), params: serde_json::Value::Null, visible: true });
+        assert_eq!(a.effects_at(Some(1)).unwrap().len(), 1);
+        assert!(a.effects_at(None).unwrap().is_empty() && a.effects_mut(Some(3)).is_none());
+        assert_eq!((a.items[1].kind_name(), a.items[2].kind_name()), ("stroke", "fill"));
     }
 
     #[test]

@@ -155,6 +155,9 @@ pub struct ToolContext<'a> {
     pub snap_to_point: bool,
     /// View → Show Corner Widget: live rectangles show draggable Live Corners widgets.
     pub corner_widgets: bool,
+    /// The Appearance panel's active fill/stroke (paint-order index into the first selected
+    /// object's stack); paint tools show and edit that item.
+    pub appearance_item: Option<usize>,
 }
 
 impl ToolContext<'_> {
@@ -324,6 +327,7 @@ pub(crate) mod testutil {
             snap_to_pixel: false,
             snap_to_point: true,
             corner_widgets: true,
+            appearance_item: None,
         }
     }
 }

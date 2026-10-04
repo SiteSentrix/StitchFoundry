@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::NodeKind;
 
+use super::appearance::{ItemTarget, edit_items, edits_stroke, item_target};
 use super::edit::selected_roots;
 use super::*;
 use crate::EngineError;
@@ -15,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the active proxy), kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1, midpoint? 0..1}], angle?: deg, aspect?: %, reverse?: bool, ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1, midpoint? 0..1}], angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -24,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient Vector",
             [],
             None,
-            "{start: [x,y], end: [x,y], ids?, stroke?: bool} set the gradient vector (solid paints become the default gradient)",
+            "{start: [x,y], end: [x,y], ids?, stroke?: bool (default: the targeted item's kind, else the fill), item?: fill/stroke item index|null} set the gradient vector (solid paints become the default gradient)",
             has_doc,
             set_gradient_geom
         ),
@@ -112,51 +113,26 @@ pub(crate) fn apply_gradient_edit(paint: &Paint, p: &Value, bounds: Option<vecto
 
 fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.editGradient";
-    let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
-    let ids = paint_targets(s, p)?;
+    let item = item_target(s, p, C)?;
+    let ids = item.targets(s, p)?;
+    let stroke = edits_stroke(s, p, item, &ids, !s.fill_active)?;
     // Validate against the defaults first so bad params fail without touching the document.
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
     let new_default = apply_gradient_edit(&default_paint, p, None).map_err(|e| bad(C, e))?;
-    if ids.is_empty() {
-        if stroke {
-            s.paint.stroke = new_default;
-        } else {
-            s.paint.fill = new_default;
-        }
-        return Ok(json!({"ids": []}));
-    }
-    let mut err = None;
-    s.edit("Gradient", |d, _| {
-        for id in &ids {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if let NodeKind::Text(t) = &mut n.kind {
-                for r in &mut t.runs {
-                    let cur = if stroke { &mut r.style.stroke } else { &mut r.style.fill };
-                    match apply_gradient_edit(cur, p, None) {
-                        Ok(np) => *cur = np,
-                        Err(e) => err = Some(e),
-                    }
-                }
-                continue;
+    edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            for r in &mut t.runs {
+                let cur = if stroke { &mut r.style.stroke } else { &mut r.style.fill };
+                *cur = apply_gradient_edit(cur, p, None).map_err(|e| bad(C, e))?;
             }
-            let b = n.geometric_bounds();
-            let ap = &mut n.appearance;
-            let cur = if stroke { ap.stroke_paint() } else { ap.fill_paint() };
-            match apply_gradient_edit(&cur, p, b) {
-                Ok(np) => {
-                    if stroke {
-                        ap.set_stroke(np)
-                    } else {
-                        ap.set_fill(np)
-                    }
-                }
-                Err(e) => err = Some(e),
-            }
+            return Ok(());
         }
-        match err.take() {
-            Some(e) => Err(bad(C, e)),
-            None => Ok(()),
-        }
+        let b = n.geometric_bounds();
+        let np = apply_gradient_edit(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), p, b).map_err(|e| bad(C, e))?;
+        n.appearance.set_paint_at(index, !stroke, np);
+        Ok(())
     })?;
     if stroke {
         s.paint.stroke = new_default;
@@ -167,38 +143,31 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
-    let start = point_param(p, "start").ok_or_else(|| bad("paint.setGradientGeom", "missing start [x,y]"))?;
-    let end = point_param(p, "end").ok_or_else(|| bad("paint.setGradientGeom", "missing end [x,y]"))?;
-    let stroke = bool_or(p, "stroke", false);
-    let ids = match ids_param(p, "ids") {
-        Some(v) => v,
-        None => selected_roots(s)?,
+    const C: &str = "paint.setGradientGeom";
+    let start = point_param(p, "start").ok_or_else(|| bad(C, "missing start [x,y]"))?;
+    let end = point_param(p, "end").ok_or_else(|| bad(C, "missing end [x,y]"))?;
+    let item = item_target(s, p, C)?;
+    let targets = match item {
+        ItemTarget::Top => leaf_targets(s, &ids_param(p, "ids").map_or_else(|| selected_roots(s), Ok)?)?,
+        _ => item.targets(s, p)?,
     };
-    let targets = leaf_targets(s, &ids)?;
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
-    s.edit("Gradient", |d, _| {
-        for id in &targets {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if matches!(n.kind, NodeKind::Text(_)) {
-                continue;
-            }
-            let cur = if stroke { n.appearance.stroke_paint() } else { n.appearance.fill_paint() };
-            let mut gp = match cur {
-                Paint::Gradient(g) => *g,
-                _ => GradientPaint::new(Gradient::default()),
-            };
-            let aspect = gp.geom.map(|g| g.aspect).unwrap_or(1.0);
-            gp.geom = Some(GradientGeom { start, end, aspect });
-            gp.angle = GradientGeom { start, end, aspect }.angle_deg();
-            let paint = Paint::Gradient(Box::new(gp));
-            if stroke {
-                n.appearance.set_stroke(paint);
-            } else {
-                n.appearance.set_fill(paint);
-            }
+    let stroke = edits_stroke(s, p, item, &targets, false)?;
+    let geom = GradientGeom { start, end, aspect: 1.0 };
+    edit_items(s, &targets, item, C, "Gradient", !stroke, |n, index| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            return Ok(());
         }
+        let mut gp = match n.appearance.paint_at(index, !stroke) {
+            Some(Paint::Gradient(g)) => (**g).clone(),
+            _ => GradientPaint::new(Gradient::default()),
+        };
+        let aspect = gp.geom.map(|g| g.aspect).unwrap_or(1.0);
+        gp.geom = Some(GradientGeom { aspect, ..geom });
+        gp.angle = geom.angle_deg();
+        n.appearance.set_paint_at(index, !stroke, Paint::Gradient(Box::new(gp)));
         Ok(())
     })?;
     Ok(json!({ "ids": targets.iter().map(|i| i.0).collect::<Vec<_>>() }))
