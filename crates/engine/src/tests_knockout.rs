@@ -145,7 +145,7 @@ fn pdf_and_svg_write_knockout_groups_as_masks() {
     run(&mut s, "transparency.set", json!({"ids": [g], "knockout": "on"}));
     let ko = s.doc().unwrap().doc.clone();
 
-    let pdf = |d: &Document| vectorcraft_pdf::export_with_report(d, &vectorcraft_pdf::PdfOptions { compress: false, ..Default::default() }).unwrap();
+    let pdf = |d: &Document| vectorcraft_pdf::export_with_report(d, &vectorcraft_pdf::PdfOptions::uncompressed()).unwrap();
     let r = pdf(&plain);
     assert!(!String::from_utf8_lossy(&r.bytes).contains("/SMask") && r.warnings.is_empty());
     let r = pdf(&ko);

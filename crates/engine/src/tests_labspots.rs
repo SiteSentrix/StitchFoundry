@@ -149,7 +149,7 @@ fn spot_options_and_lab_colours_round_trip() {
 }
 
 fn pdf_bytes(s: &Session) -> Vec<u8> {
-    let opts = vectorcraft_pdf::PdfOptions { compress: false, created: Some(0), ..Default::default() };
+    let opts = vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() };
     vectorcraft_pdf::export(doc(s), &opts).unwrap()
 }
 

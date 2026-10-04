@@ -43,7 +43,7 @@ fn roundtrip(d: &Document) -> Document {
 }
 
 fn uncompressed(d: &Document) -> String {
-    let bytes = export(d, &PdfOptions { compress: false, ..Default::default() }).expect("export");
+    let bytes = export(d, &PdfOptions::uncompressed()).expect("export");
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
@@ -498,15 +498,29 @@ fn import_rejects_garbage() {
     assert!(matches!(import(b"not a pdf at all"), Err(PdfError::Parse(_)) | Err(PdfError::NoPages)));
 }
 
+/// Options with `settings` changed by `f`.
+fn with(f: impl FnOnce(&mut PdfSettings)) -> PdfOptions {
+    let mut o = PdfOptions::default();
+    f(&mut o.settings);
+    o
+}
+
 #[test]
 fn compatibility_levels() {
     let mut d = doc(100.0, 100.0);
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::rgb(1.0, 0.0, 0.0)));
-    let b14 = export(&d, &PdfOptions { compatibility: Compatibility::Pdf14, ..Default::default() }).unwrap();
-    assert!(b14.starts_with(b"%PDF-1.4"));
-    let a = export(&d, &PdfOptions { compatibility: Compatibility::PdfA2b, ..Default::default() }).unwrap();
+    for (c, header) in [(Compatibility::Pdf14, "%PDF-1.4"), (Compatibility::Pdf16, "%PDF-1.6"), (Compatibility::Pdf20, "%PDF-2.0")] {
+        let b = export(&d, &with(|s| s.compatibility = c)).unwrap();
+        assert!(b.starts_with(header.as_bytes()), "{c:?}");
+    }
+    let a = export(&d, &with(|s| s.standard = Standard::PdfA2b)).unwrap();
     assert!(String::from_utf8_lossy(&a).contains("pdfaid"), "PDF/A identification in XMP");
-    assert!(matches!(export(&d, &PdfOptions { compatibility: Compatibility::PdfX4, ..Default::default() }), Err(PdfError::Unsupported(_))));
+    for x in [Standard::PdfX1a, Standard::PdfX3, Standard::PdfX4] {
+        assert!(matches!(export(&d, &with(|s| s.standard = x)), Err(PdfError::Unsupported(_))), "{x:?}");
+    }
+    // PDF/A-2b is a PDF 1.7 standard.
+    let e = export(&d, &with(|s| (s.standard, s.compatibility) = (Standard::PdfA2b, Compatibility::Pdf20)));
+    assert!(matches!(e, Err(PdfError::BadSetting(_))), "{e:?}");
 }
 
 #[test]
@@ -516,7 +530,7 @@ fn compress_option_changes_output() {
         add(&mut d, rect_node(Rect::new(i as f64, i as f64, 50.0 + i as f64, 50.0), Color::BLACK));
     }
     let c = export(&d, &PdfOptions::default()).unwrap();
-    let u = export(&d, &PdfOptions { compress: false, ..Default::default() }).unwrap();
+    let u = export(&d, &PdfOptions::uncompressed()).unwrap();
     assert!(u.len() > c.len());
     assert!(String::from_utf8_lossy(&u).contains(" re") || String::from_utf8_lossy(&u).contains(" l"));
 }
@@ -555,7 +569,7 @@ fn stroke_alignment_and_arrowheads_export() {
 fn creation_date_written() {
     let d = doc(100.0, 100.0);
     // 2024-02-29 12:34:56 UTC
-    let bytes = export(&d, &PdfOptions { created: Some(1_709_210_096), compress: false, ..Default::default() }).unwrap();
+    let bytes = export(&d, &PdfOptions { created: Some(1_709_210_096), ..PdfOptions::uncompressed() }).unwrap();
     assert!(String::from_utf8_lossy(&bytes).contains("D:20240229123456"));
 }
 
@@ -566,7 +580,7 @@ fn opacity_mask_exports_as_luminosity_soft_mask() {
     let art = rect_node(Rect::new(10.0, 10.0, 50.0, 90.0), Color::WHITE);
     n.mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
     add(&mut d, n);
-    let bytes = export(&d, &PdfOptions { compress: false, ..Default::default() }).unwrap();
+    let bytes = export(&d, &PdfOptions::uncompressed()).unwrap();
     let text = String::from_utf8_lossy(&bytes);
     assert!(text.contains("/SMask"), "soft mask in an ExtGState");
     assert!(text.contains("/Luminosity"));

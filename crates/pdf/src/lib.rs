@@ -5,7 +5,9 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), embedded images and text as outlined glyph
-//!   paths. Hidden objects, guides and template layers are skipped.
+//!   paths. Hidden objects, guides and template layers are skipped. [`PdfSettings`] is the Save PDF
+//!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
+//!   Advanced, Security); options the writer doesn't apply yet come back as warnings.
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
 //!   [`Document`]: one artboard and one layer per page, paths with fill/stroke, clip groups,
 //!   transparency groups, axial/radial shadings → gradients, images (JPEG passthrough, others
@@ -15,49 +17,32 @@
 mod export;
 mod import;
 mod lab_spot;
+mod settings;
 
 pub use export::{export, export_with_report};
 pub use import::{import, import_with_report};
+pub use settings::*;
 
 use vectorcraft_doc::Document;
 
-/// PDF standard / version to target.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Compatibility {
-    /// PDF 1.4.
-    Pdf14,
-    /// PDF 1.5.
-    Pdf15,
-    /// PDF 1.6.
-    Pdf16,
-    /// PDF 1.7. The default.
-    #[default]
-    Pdf17,
-    /// PDF 2.0.
-    Pdf20,
-    /// PDF/A-2b (archival; validated by krilla).
-    PdfA2b,
-    /// PDF/X-4 — not supported by the writer yet; export returns [`PdfError::Unsupported`].
-    PdfX4,
-}
-
-/// Export options.
-#[derive(Clone, Debug)]
+/// Export options: the Save PDF settings plus what one export run decides (pages, title, date).
+#[derive(Clone, Debug, Default)]
 pub struct PdfOptions {
+    pub settings: PdfSettings,
     /// 0-based artboard indices to export, in page order; `None` = all artboards.
     pub artboards: Option<Vec<usize>>,
-    pub compatibility: Compatibility,
-    /// Compress content streams (Flate).
-    pub compress: bool,
     /// Document title for the metadata; `None` = the document's title.
     pub title: Option<String>,
     /// Creation date as Unix seconds (UTC); `None` = now (native) / omitted (wasm). PDF/A needs a date.
     pub created: Option<i64>,
 }
 
-impl Default for PdfOptions {
-    fn default() -> Self {
-        Self { artboards: None, compatibility: Compatibility::Pdf17, compress: true, title: None, created: None }
+impl PdfOptions {
+    /// Default options with uncompressed content streams (readable operators, for tests and
+    /// debugging).
+    pub fn uncompressed() -> Self {
+        let compression = CompressionSettings { compress_text: false, ..Default::default() };
+        Self { settings: PdfSettings { compression, ..Default::default() }, ..Default::default() }
     }
 }
 
@@ -104,6 +89,8 @@ pub enum PdfError {
     Parse(String),
     #[error("the PDF has no pages")]
     NoPages,
+    #[error("invalid PDF setting: {0}")]
+    BadSetting(String),
 }
 
 #[cfg(test)]
@@ -120,6 +107,8 @@ mod tests_dashalign;
 mod tests_focal;
 #[cfg(test)]
 mod tests_fx;
+#[cfg(test)]
+mod tests_settings;
 #[cfg(test)]
 mod tests_stroke;
 #[cfg(test)]

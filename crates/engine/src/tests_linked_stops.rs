@@ -120,7 +120,7 @@ fn spot_stops_separate_on_their_plate() {
 }
 
 fn pdf_of(s: &Session) -> (String, Vec<String>) {
-    let opts = vectorcraft_pdf::PdfOptions { compress: false, created: Some(0), ..Default::default() };
+    let opts = vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() };
     let r = vectorcraft_pdf::export_with_report(doc(s), &opts).unwrap();
     (String::from_utf8_lossy(&r.bytes).into_owned(), r.warnings)
 }

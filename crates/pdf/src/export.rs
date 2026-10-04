@@ -19,15 +19,18 @@ use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 
 use crate::lab_spot::{find, rfind};
-use crate::{Compatibility, ExportReport, PdfError, PdfOptions};
+use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
 pub fn export(doc: &Document, opts: &PdfOptions) -> Result<Vec<u8>, PdfError> {
     export_with_report(doc, opts).map(|r| r.bytes)
 }
 
-/// Like [`export`], also returning warnings about approximated or dropped features.
+/// Like [`export`], also returning warnings: options accepted but not applied yet (see
+/// [`crate::PdfSettings::warnings`]) and features approximated or dropped.
 pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportReport, PdfError> {
+    let set = &opts.settings;
+    set.check()?;
     // Live geometry effects export as their result; raster effects are reported below.
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
@@ -45,21 +48,20 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         return Err(PdfError::BadArtboard(*bad));
     }
 
-    let (version, archival) = match opts.compatibility {
-        Compatibility::Pdf14 => (PdfVersion::Pdf14, None),
-        Compatibility::Pdf15 => (PdfVersion::Pdf15, None),
-        Compatibility::Pdf16 => (PdfVersion::Pdf16, None),
-        Compatibility::Pdf17 => (PdfVersion::Pdf17, None),
-        Compatibility::Pdf20 => (PdfVersion::Pdf20, None),
-        Compatibility::PdfA2b => (PdfVersion::Pdf17, Some(Archival::A2_B)),
-        Compatibility::PdfX4 => return Err(PdfError::Unsupported("PDF/X-4 output is not supported by the PDF writer yet".into())),
+    let version = match set.compatibility {
+        Compatibility::Pdf14 => PdfVersion::Pdf14,
+        Compatibility::Pdf15 => PdfVersion::Pdf15,
+        Compatibility::Pdf16 => PdfVersion::Pdf16,
+        Compatibility::Pdf17 => PdfVersion::Pdf17,
+        Compatibility::Pdf20 => PdfVersion::Pdf20,
     };
     let mut cb = ConfigurationBuilder::new().with_version(version);
-    if let Some(a) = archival {
-        cb = cb.with_archival_validator(a);
+    // `check` has refused the standards (and standard/version pairs) the writer can't produce.
+    if set.standard == Standard::PdfA2b {
+        cb = cb.with_archival_validator(Archival::A2_B);
     }
     let configuration = cb.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
-    let settings = krilla::SerializeSettings { compress_content_streams: opts.compress, configuration, ..Default::default() };
+    let settings = krilla::SerializeSettings { compress_content_streams: set.compression.compress_text, configuration, ..Default::default() };
 
     let mut pdf = krilla::Document::new_with(settings);
     let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
@@ -108,7 +110,8 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         cmyk_blending(&mut bytes);
     }
     let bytes = if ex.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &ex.lab_spots) };
-    let mut warnings = ex.warnings;
+    let mut warnings = set.warnings();
+    warnings.extend(ex.warnings);
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
 }

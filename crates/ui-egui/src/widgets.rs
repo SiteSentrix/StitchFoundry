@@ -378,10 +378,22 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
 
 /// A compact dropdown. Returns the chosen index.
 pub fn dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str, options: &[&str], width: f32) -> Option<usize> {
+    dropdown_with(ui, id, current, options, width, |_| true)
+}
+
+/// [`dropdown`] whose options can be disabled (`enabled(index)`: greyed and not choosable).
+pub fn dropdown_with(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    current: &str,
+    options: &[&str],
+    width: f32,
+    enabled: impl Fn(usize) -> bool,
+) -> Option<usize> {
     combo(ui, id, current, width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.selectable_label(*o == current, *o).clicked() {
+            if ui.add_enabled(enabled(i), egui::Button::selectable(*o == current, *o)).clicked() {
                 chosen = Some(i);
             }
         }

@@ -120,22 +120,51 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
 /// (Export Selection, Save as Template).
-pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value) -> Result<String, String> {
-    let path = target_path(app, params.get("path").and_then(Value::as_str).map(str::to_string), ext)?;
-    if let Some(o) = params.as_object_mut() {
-        o.remove("path");
-        if o.get("format").is_none() && id == "document.exportSelection" {
-            let e = Some(fileio::extension(&path)).filter(|e| !e.is_empty()).unwrap_or_else(|| ext.into());
-            o.insert("format".into(), serde_json::json!(e));
-        }
-    }
-    let v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
-    // Binary output comes as base64, text (swatch libraries) as is.
-    let bytes = v["dataBase64"].as_str().and_then(vectorcraft_format::base64_decode).or_else(|| v["data"].as_str().map(|t| t.as_bytes().to_vec()));
-    let bytes = bytes.ok_or("no data")?;
-    write_out(app, &path, &bytes)?;
+pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, params: Value) -> Result<String, String> {
+    let (path, _) = run_to_file(app, id, ext, params)?;
     app.status(format!("Saved {path}"));
     Ok(path)
+}
+
+/// Run an engine command that returns `{dataBase64}` without its `path` and write the bytes to
+/// that path (else a picked or suggested name) → (path, the command's result without the data).
+/// The command runs before a path is asked for, so bad params never open a save dialog, except
+/// for Export Selection without a `format`, which takes it from the picked path.
+fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value) -> Result<(String, Value), String> {
+    let mut path = params.as_object_mut().and_then(|o| o.remove("path")).and_then(|p| p.as_str().map(str::to_string));
+    if let Some(o) = params.as_object_mut()
+        && o.get("format").is_none()
+        && id == "document.exportSelection"
+    {
+        let picked = target_path(app, path, ext)?;
+        let e = Some(fileio::extension(&picked)).filter(|e| !e.is_empty()).unwrap_or_else(|| ext.into());
+        o.insert("format".into(), serde_json::json!(e));
+        path = Some(picked);
+    }
+    let mut v = app.session.execute(id, &params).map_err(|e| e.to_string())?;
+    // Binary output comes as base64, text (swatch libraries) as is; the result keeps the rest.
+    let o = v.as_object_mut().ok_or("no data")?;
+    let bytes = match (o.remove("dataBase64"), o.remove("data")) {
+        (Some(Value::String(b64)), _) => vectorcraft_format::base64_decode(&b64),
+        (_, Some(Value::String(text))) => Some(text.into_bytes()),
+        _ => None,
+    };
+    let bytes = bytes.ok_or("no data")?;
+    let path = match path {
+        Some(p) => p,
+        None => target_path(app, None, ext)?,
+    };
+    write_out(app, &path, &bytes)?;
+    Ok((path, v))
+}
+
+/// File → Save as PDF: `document.exportPdf` with `params` (the Save PDF dialog's options), written
+/// to `path` (else a picked or suggested name) → `{path, bytes, warnings}`.
+pub fn export_pdf(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let (path, mut v) = run_to_file(app, "document.exportPdf", "pdf", params)?;
+    app.status(format!("Saved {path}"));
+    v["path"] = Value::String(path);
+    Ok(v)
 }
 
 /// File → Place… (embed an image or SVG into the active document).
@@ -267,6 +296,19 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         app.run("file.exportForScreens", Value::Null).unwrap();
         assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("exportForScreens"));
+    }
+
+    #[test]
+    fn export_selection_takes_its_format_from_the_picked_path() {
+        let (mut app, written) = app();
+        app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+        app.services.pick_save = Some(Box::new(|_: &str| Some("/tmp/sel.svg".into())));
+        assert_eq!(app.run("document.exportSelection", json!({})).unwrap()["path"], "/tmp/sel.svg");
+        app.run("document.exportSelection", json!({"path": "/tmp/sel.png"})).unwrap();
+        let w = written.borrow();
+        assert!(String::from_utf8_lossy(&w[0].1).contains("<svg"), "SVG from the picked name");
+        assert_eq!(&w[1].1[1..4], b"PNG", "PNG from the given path");
     }
 
     #[test]

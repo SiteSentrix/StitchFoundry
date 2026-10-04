@@ -103,9 +103,11 @@ fn pdf_writes_registration_as_separation_all() {
     let mut s = session();
     run(&mut s, "shape.rectangle", json!({"x": 30, "y": 30, "width": 40, "height": 40}));
     run(&mut s, "object.createTrimMarks", json!({}));
-    let bytes =
-        vectorcraft_pdf::export(&s.doc().unwrap().doc, &vectorcraft_pdf::PdfOptions { compress: false, created: Some(0), ..Default::default() })
-            .unwrap();
+    let bytes = vectorcraft_pdf::export(
+        &s.doc().unwrap().doc,
+        &vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() },
+    )
+    .unwrap();
     let pdf = String::from_utf8_lossy(&bytes);
     assert!(pdf.contains("/Separation/All/DeviceCMYK"), "Registration prints on every plate");
 }

@@ -120,7 +120,7 @@ fn spot_tints_print_their_percentage_of_the_plate() {
     // A process colour linked to a global swatch separates into process inks.
     assert!(proof::inks(d, &c, &color, Some(("Brand", 0.4)), proof::Intent::RelativeColorimetric).spot.is_none());
     // PDF: the Separation value is the tint (102 / 255 = 0.4).
-    let bytes = vectorcraft_pdf::export(d, &vectorcraft_pdf::PdfOptions { compress: false, created: Some(0), ..Default::default() }).unwrap();
+    let bytes = vectorcraft_pdf::export(d, &vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() }).unwrap();
     let pdf = String::from_utf8_lossy(&bytes);
     assert!(pdf.contains("/Separation/Ink/DeviceCMYK"), "a spot tint is a Separation");
     assert!(pdf.contains("cs 0.4 scn"), "the tint is the Separation value");

@@ -8,7 +8,6 @@ use vectorcraft_doc::Document;
 
 use super::super::*;
 use super::Format;
-use crate::EngineError;
 
 const C: &str = "document.export";
 
@@ -113,11 +112,7 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
             let opts = vectorcraft_svg::ExportOptions { artboard, outline_text: o.outline_text.unwrap_or(false), ..Default::default() };
             vectorcraft_svg::export(doc, &opts).into_bytes()
         }
-        "pdf" => {
-            let o: ArtboardPick = options(f, p)?;
-            let opts = vectorcraft_pdf::PdfOptions { artboards: boards(o.resolve(n))?, ..Default::default() };
-            super::super::rasterfx::export_pdf(doc, &opts).map_err(|e| EngineError::Other(e.to_string()))?
-        }
+        "pdf" => super::pdf::encode(C, doc, p)?.0,
         "png" | "jpg" | "webp" => {
             let o: RasterOptions = options(f, p)?;
             let region = doc.artboards[boards(o.boards.one(n))?].rect;
