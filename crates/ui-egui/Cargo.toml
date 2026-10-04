@@ -22,6 +22,7 @@ vectorcraft-pdf = { workspace = true }
 vectorcraft-format = { workspace = true }
 egui = { workspace = true }
 egui_extras = { workspace = true }
+image = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }

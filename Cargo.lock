@@ -4330,6 +4330,7 @@ version = "0.1.1"
 dependencies = [
  "egui",
  "egui_extras",
+ "image",
  "log",
  "serde",
  "serde_json",

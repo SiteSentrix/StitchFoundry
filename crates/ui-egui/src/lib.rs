@@ -26,6 +26,7 @@ pub mod shortcut_editor;
 pub mod shortcuts;
 pub mod state;
 pub mod theme;
+pub mod titlebar;
 pub mod toolbar;
 pub mod unsaved;
 pub mod widgets;
@@ -146,6 +147,9 @@ pub struct VectorcraftApp {
     pub(crate) clipboard_in: Option<String>,
     /// A URL to open through egui next frame (when the host has no `open_url` service).
     pending_url: Option<String>,
+    /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
+    /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
+    pub custom_titlebar: bool,
 }
 
 impl VectorcraftApp {
@@ -184,6 +188,7 @@ impl VectorcraftApp {
             last_time: 0.0,
             canvas_rect: None,
             hover_doc: None,
+            custom_titlebar: false,
         }
     }
 
@@ -520,6 +525,9 @@ impl VectorcraftApp {
         panels::library_panel::show_window(self, &ctx);
         dialogs::show(self, &ctx);
         palette::show(self, &ctx);
+        if self.custom_titlebar {
+            titlebar::resize_zones(ui);
+        }
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }

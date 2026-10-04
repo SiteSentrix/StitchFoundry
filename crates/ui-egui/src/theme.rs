@@ -78,6 +78,9 @@ pub struct Tokens {
     pub flyout_active: Color32,
     /// Hint-bar / tab-bar heights etc. scale with this base font size.
     pub font_size: f32,
+    /// Window Close button (custom title bar) when hovered, and its glyph there.
+    pub caption_close: Color32,
+    pub caption_close_text: Color32,
 }
 
 impl Tokens {
@@ -116,6 +119,8 @@ impl Tokens {
             anchor_selected: hex(0x3d82ff),
             flyout_active: hex(0x54b2f7),
             font_size: 13.0,
+            caption_close: hex(0xc42b1c),
+            caption_close_text: Color32::WHITE,
         };
         match b {
             Brightness::Dark => base,

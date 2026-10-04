@@ -128,6 +128,10 @@ fn app_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }
 
+/// Windows and Linux: no OS title bar; the app bar is the title bar (`vectorcraft_ui_egui::titlebar`).
+/// macOS keeps its traffic lights over the integrated title strip.
+const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
+
 fn main() -> eframe::Result {
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
@@ -148,6 +152,7 @@ fn main() -> eframe::Result {
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([800.0, 500.0])
             .with_drag_and_drop(true)
+            .with_decorations(!CUSTOM_TITLEBAR)
             .with_fullsize_content_view(true)
             .with_titlebar_shown(false)
             .with_title_shown(false)
@@ -165,6 +170,7 @@ fn main() -> eframe::Result {
             let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
             app.session.swatch_libraries.set_user_dir(swatches);
             app.integrated_titlebar = cfg!(target_os = "macos");
+            app.custom_titlebar = CUSTOM_TITLEBAR;
             if let Some(port) = control_port {
                 let rx = control_server::start(port, cc.egui_ctx.clone());
                 app = app.with_control(rx);

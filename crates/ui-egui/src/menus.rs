@@ -1396,23 +1396,28 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
 }
 
 /// Render the menu bar.
-pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+/// The in-window menu bar. Returns where its titles end (x): the bar itself takes the full width.
+pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     let t = Tokens::get(ui.ctx());
     let mut clicked: Option<(String, Value)> = None;
     let tree = menu_tree();
-    egui::MenuBar::new().ui(ui, |ui| {
-        for (i, (title, items)) in tree.iter().enumerate() {
-            let text = if i == 0 {
-                egui::RichText::new(*title).font(theme::semibold(13.0)).color(t.text)
-            } else {
-                egui::RichText::new(*title).size(13.0).color(t.text)
-            };
-            ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked));
-        }
-    });
+    let end = egui::MenuBar::new()
+        .ui(ui, |ui| {
+            for (i, (title, items)) in tree.iter().enumerate() {
+                let text = if i == 0 {
+                    egui::RichText::new(*title).font(theme::semibold(13.0)).color(t.text)
+                } else {
+                    egui::RichText::new(*title).size(13.0).color(t.text)
+                };
+                ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked));
+            }
+            ui.cursor().min.x
+        })
+        .inner;
     if let Some((id, p)) = clicked {
         invoke(app, &id, p);
     }
+    end
 }
 
 /// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt.

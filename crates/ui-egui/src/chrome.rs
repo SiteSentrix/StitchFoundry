@@ -8,34 +8,54 @@ use crate::panels::stroke as stroke_panel;
 use crate::state::{ZOOM_STOPS, zoom_label};
 use crate::theme::{self, Tokens};
 use crate::widgets::{self, paint_chip};
-use crate::{VectorcraftApp, icons, menus};
+use crate::{VectorcraftApp, icons, menus, titlebar};
 
+/// The application bar: brand mark, Home, menus, then Discord, search and the workspace switcher
+/// at the right. With [`VectorcraftApp::custom_titlebar`] it is also the window's title bar
+/// ([`titlebar`]): the caption buttons take the right end and the rest of the bar drags the window.
 pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
+    let custom = app.custom_titlebar;
     let left = if app.integrated_titlebar { 78 } else { 8 };
-    egui::Panel::top("app_bar").exact_size(44.0).frame(egui::Frame::NONE.fill(t.app_bar).inner_margin(egui::Margin { left, right: 14, top: 0, bottom: 0 }).stroke(Stroke::new(1.0, t.border))).show(ui, |ui| {
+    let frame = egui::Frame::NONE.fill(t.app_bar).inner_margin(egui::Margin { left, right: if custom { 0 } else { 14 }, top: 0, bottom: 0 });
+    let bar = egui::Panel::top("app_bar").exact_size(44.0).frame(frame.stroke(Stroke::new(1.0, t.border))).show(ui, |ui| {
+        if custom {
+            titlebar::drag_area(ui, ui.max_rect());
+        }
         ui.horizontal_centered(|ui| {
-            // Brand mark (our own artwork, matches the app icon).
+            // Brand mark: the app icon.
             let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
-            crate::brand::paint_mark(ui.painter(), r);
+            crate::brand::paint_mark(ui, r);
             ui.add_space(4.0);
             if widgets::icon_button(ui, "house", "Home", false, 24.0).clicked() {
                 app.ui.dialog = Some(crate::state::Dialog::new("newDocument", json!({"preset": "Letter", "width": "612 pt", "height": "792 pt", "units": "Points", "artboards": 1, "colorMode": "RGB", "name": "Untitled-1"})));
             }
             ui.add_space(2.0);
-            if app.native_menu {
+            let menus_end = if app.native_menu {
                 let full = ui.max_rect();
                 ui.painter().text(full.center(), egui::Align2::CENTER_CENTER, "VectorCraft", egui::FontId::proportional(13.5), t.text);
+                ui.cursor().min.x
             } else {
-                menus::menu_bar(app, ui);
-            }
+                menus::menu_bar(app, ui)
+            };
+            // The right-side group fills the space after the menus from the right; when it runs
+            // short, Discord goes first (it is also under Help), then the search box becomes an
+            // icon, then the workspace switcher narrows.
             let full = ui.max_rect();
-            let right = egui::Rect::from_min_max(egui::pos2(full.right() - 440.0, full.top()), full.right_bottom());
+            let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
+            let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
+            let room = right.width();
+            let ws = ui.painter().layout_no_wrap(app.ui.workspace.clone(), egui::FontId::proportional(12.0), t.text);
+            let ws_w = (ws.size().x + 36.0).clamp(112.0, 190.0);
+            let gap = ui.spacing().item_spacing.x;
+            let with_search = ws_w + 8.0 + gap + 200.0;
+            let search_full = room >= with_search;
+            let discord = room >= with_search + 10.0 + gap + crate::community::discord_width(ui, false);
+            let ws_w = if search_full { ws_w } else { ws_w.min(room - 8.0 - gap - 24.0).max(64.0) };
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
-            let ws = ui.painter().layout_no_wrap(app.ui.workspace.clone(), egui::FontId::proportional(12.0), t.text);
-            let (wr, wresp) = ui.allocate_exact_size(vec2((ws.size().x + 36.0).clamp(112.0, 190.0), 24.0), Sense::click());
+            let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, 24.0), Sense::click());
             ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
             ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
             icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
@@ -43,19 +63,29 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
             ui.add_space(8.0);
             // Search box → command palette.
-            let (r, resp) = ui.allocate_exact_size(vec2(200.0, 24.0), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::same(12), t.input);
-            ui.painter().rect_stroke(r, CornerRadius::same(12), Stroke::new(1.0, if resp.hovered() { t.input_border } else { t.divider }), StrokeKind::Inside);
-            icons::paint(ui, "search", egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(13.0, 13.0)), t.text_dim);
-            ui.painter().text(r.left_center() + vec2(26.0, 0.0), egui::Align2::LEFT_CENTER, "Search commands and tools", egui::FontId::proportional(11.5), t.text_dim);
-            if resp.clicked() {
+            let open_palette = if search_full {
+                let (r, resp) = ui.allocate_exact_size(vec2(200.0, 24.0), Sense::click());
+                ui.painter().rect_filled(r, CornerRadius::same(12), t.input);
+                ui.painter().rect_stroke(r, CornerRadius::same(12), Stroke::new(1.0, if resp.hovered() { t.input_border } else { t.divider }), StrokeKind::Inside);
+                icons::paint(ui, "search", egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(13.0, 13.0)), t.text_dim);
+                ui.painter().text(r.left_center() + vec2(26.0, 0.0), egui::Align2::LEFT_CENTER, "Search commands and tools", egui::FontId::proportional(11.5), t.text_dim);
+                resp.clicked()
+            } else {
+                widgets::icon_button(ui, "search", "Search commands and tools", false, 24.0).clicked()
+            };
+            if open_palette {
                 app.ui.palette_open = true;
                 app.ui.palette_query.clear();
             }
-            ui.add_space(10.0);
-            crate::community::discord_button(app, ui, false);
+            if discord {
+                ui.add_space(10.0);
+                crate::community::discord_button(app, ui, false);
+            }
         });
     });
+    if custom {
+        titlebar::caption_buttons(app, ui, bar.response.rect);
+    }
 }
 
 /// A Control bar chip that opens something: `draw` paints the chip, a chevron follows it.

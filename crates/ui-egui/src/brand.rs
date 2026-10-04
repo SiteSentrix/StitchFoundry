@@ -1,52 +1,80 @@
-//! The VectorCraft brand mark (original artwork, drawn in code): a warm diagonal-gradient rounded
-//! square with a white pen nib — the same design as the app icon rendered by `cargo xtask bundle`.
+//! The VectorCraft brand mark: the app icon (the engraved dragon, `assets/app-icon/`, see its
+//! README). The PNG carries the icon's rounded corners; it is decoded once per context into a
+//! mipmapped texture, so it stays crisp from the 22 pt app-bar mark to the About box.
 
-use egui::epaint::{Mesh, Vertex, WHITE_UV};
-use egui::{Color32, Painter, Pos2, Rect, Shape, pos2};
+use egui::{Color32, Context, Id, Rect, TextureHandle, TextureOptions, Ui, pos2};
 
-const TOP: Color32 = Color32::from_rgb(0xff, 0x9a, 0x3c);
-const BOTTOM: Color32 = Color32::from_rgb(0xd4, 0x14, 0x5a);
+/// 128 px: sharp at 44 pt on a 2× display, and the mipmaps keep 22 pt clean.
+const ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/128x128/apps/ai.storyteller.vectorcraft.png");
 
-fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
-    let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
-    Color32::from_rgb(m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()))
+/// The icon's pixels (one transparent pixel if it couldn't be decoded, which a test rules out).
+fn decode() -> egui::ColorImage {
+    match image::load_from_memory_with_format(ICON_PNG, image::ImageFormat::Png) {
+        Ok(img) => {
+            let img = img.to_rgba8();
+            egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw())
+        }
+        Err(_) => egui::ColorImage::filled([1, 1], Color32::TRANSPARENT),
+    }
+}
+
+/// The icon texture, uploaded on first use and kept in the context.
+fn texture(ctx: &Context) -> TextureHandle {
+    let id = Id::new("vectorcraft-brand-mark");
+    if let Some(tex) = ctx.data(|d| d.get_temp::<TextureHandle>(id)) {
+        return tex;
+    }
+    let options = TextureOptions { mipmap_mode: Some(egui::TextureFilter::Linear), ..TextureOptions::LINEAR };
+    let tex = ctx.load_texture("vectorcraft-brand-mark", decode(), options);
+    ctx.data_mut(|d| d.insert_temp(id, tex.clone()));
+    tex
 }
 
 /// Paint the mark into `r` (square).
-pub fn paint_mark(p: &Painter, r: Rect) {
-    let rad = r.width() * 0.22;
-    // Rounded-square outline as a fan so each vertex gets its diagonal-gradient colour.
-    let mut outline = vec![];
-    for (c, a0) in [
-        (pos2(r.max.x - rad, r.min.y + rad), -90.0f32),
-        (pos2(r.max.x - rad, r.max.y - rad), 0.0),
-        (pos2(r.min.x + rad, r.max.y - rad), 90.0),
-        (pos2(r.min.x + rad, r.min.y + rad), 180.0),
-    ] {
-        for i in 0..=6 {
-            let a = (a0 + 90.0 * i as f32 / 6.0).to_radians();
-            outline.push(c + egui::vec2(a.cos(), a.sin()) * rad);
-        }
+pub fn paint_mark(ui: &Ui, r: Rect) {
+    let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+    ui.painter().image(texture(ui.ctx()).id(), r, uv, Color32::WHITE);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::VectorcraftApp;
+
+    #[test]
+    fn the_icon_decodes_to_a_rounded_128_px_tile() {
+        let img = decode();
+        assert_eq!(img.size, [128, 128]);
+        // Rounded corners: the corner pixel is transparent, the centre opaque.
+        assert_eq!(img.pixels[0].a(), 0);
+        assert_eq!(img.pixels[64 * 128 + 64].a(), 255);
     }
-    let colour = |q: Pos2| {
-        let t = ((q.x - r.min.x) + (q.y - r.min.y)) / (r.width() + r.height());
-        lerp(TOP, BOTTOM, t.clamp(0.0, 1.0))
-    };
-    let mut mesh = Mesh::default();
-    mesh.vertices.push(Vertex { pos: r.center(), uv: WHITE_UV, color: colour(r.center()) });
-    for q in &outline {
-        mesh.vertices.push(Vertex { pos: *q, uv: WHITE_UV, color: colour(*q) });
+
+    #[test]
+    fn the_app_bar_paints_the_icon_from_one_cached_texture() {
+        let ctx = Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut frame = || {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::chrome::app_bar(&mut app, ui));
+            let uploads = out.textures_delta.set.values().flat_map(|d| d.iter()).filter(|d| d.image.size() == [128, 128]).count();
+            out.textures_delta.clear();
+            let marks: Vec<Rect> = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Mesh(m) if m.texture_id == texture(&ctx).id() => Some(m.calc_bounds()),
+                    _ => None,
+                })
+                .collect();
+            (uploads, marks)
+        };
+        let (uploads, marks) = frame();
+        assert_eq!(uploads, 1);
+        assert_eq!(marks.len(), 1);
+        assert_eq!(marks[0].size(), egui::vec2(22.0, 22.0));
+        // Later frames reuse the texture.
+        let (uploads, marks) = frame();
+        assert_eq!((uploads, marks.len()), (0, 1));
     }
-    let n = outline.len() as u32;
-    for i in 0..n {
-        mesh.add_triangle(0, 1 + i, 1 + (i + 1) % n);
-    }
-    p.add(Shape::mesh(mesh));
-    // Pen nib (same proportions as the app icon, 1024-unit design space).
-    let s = r.width() / 1024.0;
-    let at = |x: f32, y: f32| pos2(r.min.x + x * s, r.min.y + y * s);
-    let nib = vec![at(512.0, 770.0), at(352.0, 540.0), at(417.0, 290.0), at(607.0, 290.0), at(672.0, 540.0)];
-    p.add(Shape::convex_polygon(nib, Color32::WHITE, egui::Stroke::NONE));
-    p.circle_filled(at(512.0, 490.0), 40.0 * s, colour(at(512.0, 490.0)));
-    p.line_segment([at(512.0, 525.0), at(512.0, 765.0)], egui::Stroke::new((18.0 * s).max(1.0), colour(at(512.0, 650.0))));
 }
