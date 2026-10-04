@@ -1,10 +1,10 @@
 //! New Swatch: the Swatch Options fields (name, colour type, Global, mode, sliders and hex)
-//! prefilled from the active fill or stroke; a gradient or pattern only takes a name. OK runs
-//! `swatch.new`.
+//! prefilled from the active fill or stroke; a gradient, a pattern or a tint of a global colour
+//! (saved as a tint swatch, "Name 40%") only takes a name. OK runs `swatch.new`.
 //!
 //! Fields: `name`, `spot`, `global`, `mode` and `color` as in Swatch Options, `group` (the colour
-//! group the colour goes into; empty for none), `__paint` (the `swatch.new` paint of a gradient or
-//! pattern; absent for a colour) and `__auto` (the default name, which follows the colour until
+//! group the colour goes into; empty for none), `__paint` (the `swatch.new` paint of a gradient,
+//! pattern or tint; absent for a colour) and `__auto` (the default name, which follows the colour until
 //! the name is edited).
 
 use serde_json::{Value, json};
@@ -26,6 +26,9 @@ pub fn open(app: &mut VectorcraftApp, spot: bool, group: Option<&str>) -> Result
     let paint = crate::panels::active_paint(app);
     let name = app.session.active().ok_or("no document open")?.doc.new_swatch_name(&paint);
     let mut fields = match &paint {
+        Paint::Solid { swatch: Some(_), tint, .. } if *tint < 1.0 => {
+            json!({"__paint": crate::panels::paint_params(&paint), "group": group.unwrap_or_default()})
+        }
         Paint::Solid { color, .. } => {
             json!({"color": color, "mode": mode_id(Mode::of(color)), "spot": spot, "global": spot, "group": group.unwrap_or_default()})
         }
@@ -81,5 +84,19 @@ mod tests {
         assert_eq!(params(&d), json!({"name": "Sky", "color": color_of(&d), "mode": "rgb", "spot": true, "global": true, "group": "Mine"}));
         let d = Dialog::new(KIND, json!({"name": "Dots", "__paint": {"pattern": "Dots"}, "group": ""}));
         assert_eq!(params(&d), json!({"name": "Dots", "pattern": "Dots"}));
+    }
+
+    #[test]
+    fn a_tint_opens_as_a_named_tint_swatch() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
+        app.run("paint.setFill", json!({"swatch": "Ink", "tint": 40})).unwrap();
+        open(&mut app, false, None).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!(params(&d), json!({"name": "Ink 40%", "swatch": "Ink", "tint": 40.0}));
+        run_and_close(&mut app, "swatch.new", params(&d)).unwrap();
+        let w = app.session.doc().unwrap().doc.swatch("Ink 40%").cloned().unwrap();
+        assert_eq!(w.tint_of(), Some(("Ink", 0.4)));
     }
 }

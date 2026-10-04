@@ -268,6 +268,15 @@ fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
                 _ => {}
             }
         }
+        // Tints are their converted swatch's colour at their tint (exact ink percentages).
+        let bases: Vec<(String, Color)> = d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect();
+        d.map_solid_paints(&mut |c, link, tint| match bases.iter().find(|(n, _)| Some(n) == link.as_ref()) {
+            Some((_, base)) if *tint < 1.0 => {
+                *c = base.tinted(*tint);
+                true
+            }
+            _ => false,
+        });
         Ok(())
     })?;
     Ok(json!({ "changed": changed }))

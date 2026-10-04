@@ -124,6 +124,8 @@ pub(crate) fn parse_stops(v: &Value) -> Parsed<Vec<GradientStop>> {
                 color,
                 opacity: opacity.clamp(0.0, 1.0) as f32,
                 midpoint: num("midpoint")?.unwrap_or(0.5).clamp(0.13, 0.87) as f32,
+                swatch: None,
+                tint: 1.0,
             })
         })
         .collect::<Parsed<Vec<_>>>()?;

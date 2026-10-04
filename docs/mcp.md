@@ -428,3 +428,19 @@ fills and strokes become objects among its members, and its members are expanded
 ```json
 {"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{"ids":[12]}}}
 ```
+
+## Tints of global and spot colours
+
+A colour linked to a global or spot swatch has a tint (the reference app's T slider): `paint.setFill {swatch,
+tint?: 0..100}` (and `paint.setStroke`) applies the swatch at that percentage, linked, so `swatch.edit` recolours it
+at its own tint. `paint.proxies` and `document.inspect` show the paint as `{type: "solid", color, swatch, tint}`
+(`tint` 0..1, left out at 100 %). `swatch.new {tint?}` with the current fill (or `swatch`) saves a tint swatch,
+"Name 40%": `swatch.list` reports it with `tintOf` and `tint`, applying it links to its base at that tint, and it
+follows edits of its base. A spot tint prints that percentage of its plate (Separations Preview, PDF Separation
+value). `edit.colors.adjustBalance {tint: -100..100}` (Global mode) shifts the tints of the selection's linked
+colours and leaves the rest alone.
+
+```json
+{"name":"run_command","arguments":{"command":"paint.setFill","params":{"swatch":"Ink","tint":40}}}
+{"name":"run_command","arguments":{"command":"edit.colors.adjustBalance","params":{"mode":"global","tint":-20}}}
+```

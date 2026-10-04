@@ -17,6 +17,16 @@ pub struct Swatch {
     pub spot: bool,
 }
 
+impl Swatch {
+    /// A tint swatch's base swatch and tint: its colour links to another (global) swatch.
+    pub fn tint_of(&self) -> Option<(&str, f32)> {
+        match &self.paint {
+            Paint::Solid { swatch: Some(base), tint, .. } => Some((base, *tint)),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SwatchGroup {
     pub name: String,
@@ -101,10 +111,7 @@ fn base_swatches() -> (Vec<Swatch>, Vec<SwatchGroup>) {
         name: name.into(),
         paint: Paint::Gradient(Box::new(crate::GradientPaint::new(Gradient {
             kind,
-            stops: vec![
-                GradientStop { offset: 0.0, color: Color::from_hex(a).unwrap(), opacity: 1.0, midpoint: 0.5 },
-                GradientStop { offset: 1.0, color: Color::from_hex(b).unwrap(), opacity: 1.0, midpoint: 0.5 },
-            ],
+            stops: vec![GradientStop::new(0.0, Color::from_hex(a).unwrap()), GradientStop::new(1.0, Color::from_hex(b).unwrap())],
         }))),
         global: false,
         spot: false,

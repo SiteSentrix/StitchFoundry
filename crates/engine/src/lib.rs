@@ -847,4 +847,6 @@ mod tests_textedit;
 #[cfg(test)]
 mod tests_tileedge;
 #[cfg(test)]
+mod tests_tints;
+#[cfg(test)]
 mod tests_xform;

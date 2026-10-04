@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
 use krilla::color::{cmyk, luma, rgb};
 use krilla::configure::{Archival, ConfigurationBuilder, PdfVersion};
 use krilla::geom::{Path, PathBuilder, Size, Transform};
@@ -242,19 +243,22 @@ impl Exporter<'_> {
         color(c)
     }
 
-    /// A solid paint, as a Separation colour space when it's linked to a spot swatch (the
-    /// swatch's CMYK equivalent is the alternate space).
-    fn solid(&mut self, c: &Color, swatch: Option<&str>) -> krilla::color::Color {
-        use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
-        let spot = swatch.and_then(|n| self.doc.swatch(n).filter(|s| s.spot)).and_then(|s| s.paint.color().map(|sc| (s.name.clone(), sc)));
-        let Some((name, sc)) = spot else { return self.col(c) };
+    /// The Separation colour space of spot swatch `name` (its CMYK equivalent is the alternate
+    /// space); `None` when `name` isn't a spot colour.
+    fn separation(&self, name: &str) -> Option<SeparationSpace> {
+        let sw = self.doc.swatch(name).filter(|s| s.spot)?;
         let cms = vectorcraft_color::cms::active();
-        let intent = cms.settings().intent;
-        let full = cms.to_cmyk(&sc, intent);
-        let total: f32 = full.iter().sum();
-        let tint = if total <= 1e-4 { 1.0 } else { (cms.to_cmyk(c, intent).iter().sum::<f32>() / total).clamp(0.0, 1.0) };
+        let full = cms.to_cmyk(&sw.paint.color()?, cms.settings().intent);
         let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
-        SepColor::new(q(tint), SeparationSpace::new(SeparationColorant::Custom(name), alt)).into()
+        Some(SeparationSpace::new(SeparationColorant::Custom(sw.name.clone()), alt))
+    }
+
+    /// A solid paint, in the Separation colour space at its tint when it's linked to a spot swatch.
+    fn solid(&mut self, c: &Color, link: Option<&str>, tint: f32) -> krilla::color::Color {
+        match link.and_then(|n| self.separation(n)) {
+            Some(space) => SepColor::new(q(tint), space).into(),
+            None => self.col(c),
+        }
     }
 
     /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect.
@@ -275,7 +279,7 @@ impl Exporter<'_> {
     fn paint(&mut self, p: &Paint, bounds: Rect) -> Option<krilla::paint::Paint> {
         match p {
             Paint::None => None,
-            Paint::Solid { color: c, swatch } => Some(self.solid(c, swatch.as_deref()).into()),
+            Paint::Solid { color: c, swatch, tint } => Some(self.solid(c, swatch.as_deref(), *tint).into()),
             Paint::Gradient(g) => {
                 let geom = g.resolve(bounds);
                 let mut stops: Vec<Stop> = Vec::new();

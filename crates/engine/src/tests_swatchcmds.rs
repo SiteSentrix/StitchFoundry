@@ -107,7 +107,10 @@ fn add_used_colors_skips_colours_that_have_swatches() {
     run(&mut s, "select.set", json!({"ids": [d.0]}));
     let r = run(&mut s, "swatch.addUsedColors", json!({"selection": true, "global": true}));
     assert_eq!(r, json!({"added": ["R=171 G=205 B=239"], "linked": 1}));
-    assert_eq!(fill(&s, d), Paint::Solid { color: vectorcraft_color::Color::from_hex("#abcdef").unwrap(), swatch: Some("R=171 G=205 B=239".into()) });
+    assert_eq!(
+        fill(&s, d),
+        Paint::Solid { color: vectorcraft_color::Color::from_hex("#abcdef").unwrap(), swatch: Some("R=171 G=205 B=239".into()), tint: 1.0 }
+    );
     assert!(doc(&s).swatch("R=171 G=205 B=239").unwrap().global);
 }
 
@@ -151,7 +154,7 @@ fn merge_keeps_the_first_and_relinks_the_others_art() {
     let r = run(&mut s, "swatch.merge", json!({"names": ["Red", "Orange"]}));
     assert_eq!(r, json!({"name": "Red", "merged": ["Orange"], "relinked": 1}));
     assert!(doc(&s).swatch("Orange").is_none());
-    assert_eq!(fill(&s, b), Paint::Solid { color: red, swatch: Some("Red".into()) });
+    assert_eq!(fill(&s, b), Paint::Solid { color: red, swatch: Some("Red".into()), tint: 1.0 });
     assert_eq!(undo_len(&s), undo + 1);
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(*doc(&s), before);

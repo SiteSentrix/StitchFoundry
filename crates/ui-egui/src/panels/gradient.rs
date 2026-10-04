@@ -365,7 +365,7 @@ fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: boo
     let stops = &g.stops;
     let sel = app.session.selected_stop().filter(|i| *i < stops.len() && is_grad);
     let mid = selected_mid(app, ui.ctx(), stops.len()).filter(|_| is_grad);
-    let stop = sel.map(|i| stops[i]);
+    let stop = sel.map(|i| &stops[i]);
     if let (Some(i), Some(s)) = (sel, stop) {
         ui.horizontal(|ui| {
             widgets::dim_label(ui, "Color:");

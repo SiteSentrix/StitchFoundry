@@ -84,7 +84,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    let s = stops[i];
+                    let s = &stops[i];
                     widgets::dim_label(ui, "Opacity:");
                     if let Some(v) = widgets::plain_field(ui, "stop-pop-op", s.opacity as f64 * 100.0, "%", 0, 54.0) {
                         let mut v2 = stops.clone();

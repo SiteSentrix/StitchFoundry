@@ -104,7 +104,7 @@ fn swatch_links_survive_mode_conversion() {
     let a = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
     s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Brand"})).unwrap();
     s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
-    let Paint::Solid { color, swatch } = fill_of(&s, a) else { panic!() };
+    let Paint::Solid { color, swatch, .. } = fill_of(&s, a) else { panic!() };
     assert_eq!(swatch.as_deref(), Some("Brand"));
     let sw = s.doc().unwrap().doc.swatches.iter().find(|w| w.name == "Brand").unwrap().paint.color().unwrap();
     assert!(matches!(color, Color::Cmyk { .. }));

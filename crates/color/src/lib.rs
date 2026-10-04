@@ -240,6 +240,22 @@ impl Color {
             }
         }
     }
+    /// Tint `t` (0..1) of this colour, the colour a tint of a global or spot swatch shows: CMYK and
+    /// Gray inks scale by `t`, RGB mixes toward white (`t` = 0 is paper white, 1 the colour itself).
+    pub fn tinted(self, t: f32) -> Color {
+        let t = t.clamp(0.0, 1.0);
+        if t == 1.0 {
+            return self;
+        }
+        match self {
+            Color::Cmyk { c, m, y, k } => Color::Cmyk { c: c * t, m: m * t, y: y * t, k: k * t },
+            Color::Gray { k } => Color::Gray { k: k * t },
+            Color::Rgb { r, g, b } => {
+                let w = |v: f32| v + (1.0 - v) * (1.0 - t);
+                Color::Rgb { r: w(r), g: w(g), b: w(b) }
+            }
+        }
+    }
     pub fn model_name(&self) -> &'static str {
         match self {
             Color::Rgb { .. } => "RGB",
@@ -262,10 +278,15 @@ pub enum Paint {
     #[default]
     None,
     Solid {
+        /// The colour shown: with a link, the swatch's colour at `tint` ([`Color::tinted`]).
         color: Color,
         /// Name of the global swatch this colour is linked to (edits to the swatch update it).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         swatch: Option<String>,
+        /// Tint of the linked swatch (0..1; 1 without a link): a spot tint prints this much of its
+        /// plate, and swatch edits keep it.
+        #[serde(default = "full_tint", skip_serializing_if = "is_full_tint")]
+        tint: f32,
     },
     Gradient(Box<GradientPaint>),
     Pattern {
@@ -281,9 +302,22 @@ fn is_identity(a: &kurbo::Affine) -> bool {
     *a == kurbo::Affine::IDENTITY
 }
 
+pub(crate) fn full_tint() -> f32 {
+    1.0
+}
+
+pub(crate) fn is_full_tint(t: &f32) -> bool {
+    *t == 1.0
+}
+
+/// A tint as a whole percentage ("40" for 0.4).
+pub fn tint_percent(t: f32) -> f32 {
+    (t.clamp(0.0, 1.0) * 100.0).round()
+}
+
 impl Paint {
     pub fn solid(c: Color) -> Self {
-        Paint::Solid { color: c, swatch: None }
+        Paint::Solid { color: c, swatch: None, tint: 1.0 }
     }
     pub fn is_none(&self) -> bool {
         matches!(self, Paint::None)
@@ -297,10 +331,28 @@ impl Paint {
     pub fn label(&self) -> String {
         match self {
             Paint::None => "None".into(),
-            Paint::Solid { color, swatch: Some(n) } => format!("{n} ({})", color.to_hex()),
+            Paint::Solid { color, swatch: Some(n), tint } if *tint < 1.0 => format!("{n} {}% ({})", tint_percent(*tint), color.to_hex()),
+            Paint::Solid { color, swatch: Some(n), .. } => format!("{n} ({})", color.to_hex()),
             Paint::Solid { color, .. } => color.to_hex(),
             Paint::Gradient(g) => format!("{} gradient", g.gradient.kind.label()),
             Paint::Pattern { pattern, .. } => format!("pattern {pattern}"),
+        }
+    }
+    /// Apply `f` to the colours of this paint that can link to a swatch (a solid colour, each
+    /// gradient stop) with their link and tint; `f` returns true when it changed them. A colour
+    /// left without a link gets tint 1. Returns whether anything changed.
+    pub fn map_links(&mut self, f: &mut dyn FnMut(&mut Color, &mut Option<String>, &mut f32) -> bool) -> bool {
+        let mut one = |c: &mut Color, link: &mut Option<String>, tint: &mut f32| {
+            let changed = f(c, link, tint);
+            if link.is_none() {
+                *tint = 1.0;
+            }
+            changed
+        };
+        match self {
+            Paint::Solid { color, swatch, tint } => one(color, swatch, tint),
+            Paint::Gradient(g) => g.gradient.stops.iter_mut().fold(false, |ch, s| one(&mut s.color, &mut s.swatch, &mut s.tint) | ch),
+            _ => false,
         }
     }
 }
@@ -374,6 +426,53 @@ mod tests {
         assert_eq!(keep_model(Color::cmyk(0.1, 0.2, 0.3, 0.0), red).model(), Model::Cmyk);
         assert_eq!(keep_model(Color::gray(0.5), red).model(), Model::Gray);
         assert_eq!(keep_model(red, Color::rgb(0.0, 0.5, 1.0)), Color::rgb(0.0, 0.5, 1.0));
+    }
+
+    #[test]
+    fn tints_scale_inks_and_mix_rgb_toward_white() {
+        let close = |a: Color, b: Color| {
+            let v = |c: Color| match c {
+                Color::Cmyk { c, m, y, k } => vec![c, m, y, k],
+                Color::Rgb { r, g, b } => vec![r, g, b],
+                Color::Gray { k } => vec![k],
+            };
+            a.model() == b.model() && v(a).iter().zip(v(b)).all(|(x, y)| (x - y).abs() < 1e-6)
+        };
+        assert!(close(Color::cmyk(0.5, 1.0, 0.0, 0.2).tinted(0.4), Color::cmyk(0.2, 0.4, 0.0, 0.08)));
+        assert!(close(Color::gray(0.5).tinted(0.5), Color::gray(0.25)));
+        assert!(close(Color::rgb(1.0, 0.0, 0.5).tinted(0.4), Color::rgb(1.0, 0.6, 0.8)), "RGB mixes toward white");
+        assert_eq!(Color::rgb(0.2, 0.4, 0.6).tinted(1.0), Color::rgb(0.2, 0.4, 0.6));
+        assert_eq!(Color::cmyk(0.3, 0.3, 0.3, 0.3).tinted(0.0), Color::cmyk(0.0, 0.0, 0.0, 0.0));
+        assert_eq!(Color::rgb(0.0, 0.0, 0.0).tinted(-1.0).to_hex(), "#ffffff", "clamped");
+        assert_eq!(tint_percent(0.404), 40.0);
+    }
+
+    #[test]
+    fn tints_serialize_only_below_full_and_read_old_files() {
+        let full = serde_json::to_string(&Paint::Solid { color: Color::gray(1.0), swatch: Some("Ink".into()), tint: 1.0 }).unwrap();
+        assert!(!full.contains("tint"), "{full}");
+        let old: Paint = serde_json::from_str(r#"{"type":"solid","color":{"model":"gray","k":1.0},"swatch":"Ink"}"#).unwrap();
+        assert_eq!(old, Paint::Solid { color: Color::gray(1.0), swatch: Some("Ink".into()), tint: 1.0 });
+        let t = Paint::Solid { color: Color::gray(0.4), swatch: Some("Ink".into()), tint: 0.4 };
+        let s = serde_json::to_string(&t).unwrap();
+        assert!(s.contains("\"tint\":0.4"), "{s}");
+        assert_eq!(serde_json::from_str::<Paint>(&s).unwrap(), t);
+        assert_eq!(t.label(), "Ink 40% (#999999)");
+    }
+
+    #[test]
+    fn mapping_links_resets_the_tint_of_unlinked_colours() {
+        let mut p = Paint::Solid { color: Color::gray(0.4), swatch: Some("Ink".into()), tint: 0.4 };
+        assert!(p.map_links(&mut |_, l, _| l.take().is_some()));
+        assert_eq!(p, Paint::solid(Color::gray(0.4)));
+        let mut g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        g.map_links(&mut |_, l, t| {
+            *l = Some("Ink".into());
+            *t = 0.5;
+            true
+        });
+        let Paint::Gradient(g) = g else { unreachable!() };
+        assert!(g.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Ink") && s.tint == 0.5));
     }
 
     #[test]

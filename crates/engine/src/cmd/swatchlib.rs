@@ -397,7 +397,7 @@ fn reset_defaults(s: &mut Session, p: &Value) -> Result<Value> {
             (d.swatches, d.swatch_groups) = (defaults, groups);
             added.extend(d.swatches_iter().filter(|w| !before.contains(&w.name)).map(|w| w.name.clone()));
             live.extend(d.swatches_iter().filter(|w| w.global).map(|w| w.name.clone()));
-            d.map_solid_paints(&mut |_, l| unlink_dead(&live, l));
+            d.map_solid_paints(&mut |_, l, _| unlink_dead(&live, l));
             return Ok(added);
         }
         for (i, w) in defaults.into_iter().enumerate() {
@@ -427,7 +427,7 @@ fn reset_defaults(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(added)
     })?;
     if replace {
-        map_default_paints(s, &mut |_, l| unlink_dead(&live, l));
+        map_default_paints(s, &mut |_, l, _| unlink_dead(&live, l));
     }
     Ok(json!({ "added": added }))
 }

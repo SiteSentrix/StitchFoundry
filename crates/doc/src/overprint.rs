@@ -48,7 +48,7 @@ impl OverprintBlack {
     /// [`Self::spot`]), or a gradient whose every stop is.
     fn black(&self, p: &Paint, spots: &[String]) -> bool {
         match p {
-            Paint::Solid { color, swatch } => {
+            Paint::Solid { color, swatch, .. } => {
                 (self.spot || !swatch.as_ref().is_some_and(|s| spots.contains(s))) && is_black_ink(color, self.min_k, self.rich)
             }
             Paint::Gradient(g) => !g.gradient.stops.is_empty() && g.gradient.stops.iter().all(|s| is_black_ink(&s.color, self.min_k, self.rich)),
@@ -159,7 +159,7 @@ mod tests {
         assert!(!n.appearance.fill().unwrap().overprint, "a gradient with a white stop is not black");
 
         // Spot-linked blacks only with `spot`; type runs too.
-        let spot = Paint::Solid { color: Color::cmyk(0.0, 0.0, 0.0, 1.0), swatch: Some("Ink".into()) };
+        let spot = Paint::Solid { color: Color::cmyk(0.0, 0.0, 0.0, 1.0), swatch: Some("Ink".into()), tint: 1.0 };
         let style = CharStyle { fill: spot, stroke: k, stroke_width: 1.0, ..CharStyle::default() };
         let mut t = Node::new(NodeId(2), NodeKind::Text(Box::new(TextObject::point(Point::ZERO, "Hi", style))));
         OverprintBlack::default().apply(&mut t, &["Ink".to_string()]);

@@ -1,9 +1,9 @@
 //! The Swatches panel: new, delete and duplicate swatches, colour groups and sorting.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup};
+use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup, tint_percent};
 use vectorcraft_doc::pattern::pattern_paint;
-use vectorcraft_doc::swatches::{color_name, node_colors};
+use vectorcraft_doc::swatches::{LinkFn, color_name, node_colors};
 use vectorcraft_doc::{Document, NodeId};
 
 use super::paint::paint_from;
@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Swatch",
             ["Window", "Swatches"],
             None,
-            "{name?, color? | colors?: [colour] (one swatch each, in one undo step) | swatch? | gradient? | pattern?: name (default: the current fill), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped)} save a colour, gradient or pattern as a swatch. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\") → {name, names: [every new swatch]}",
+            "{name?, color? | colors?: [colour] (one swatch each, in one undo step) | swatch? | gradient? | pattern?: name (default: the current fill), tint?: 0..100 (% of the global or spot `swatch`, or of the one the current fill links to), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped)} save a colour, gradient or pattern as a swatch. A tint of a global or spot colour (below 100%, without mode, global or spot) becomes a tint swatch, \"Name 40%\", linked to its base: it follows edits to the base and applies as that tint of it. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\") → {name, names: [every new swatch]}",
             has_doc,
             swatch_new
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Options",
             ["Window", "Swatches"],
             None,
-            "{name, newName?, color?, mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient}, {swatch} or {pattern}) replacing the swatch's colour, gradient or pattern with one of the same kind} edit a swatch in any colour group, as one undo step. Fills, strokes and text linked to a global swatch take its new colour and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only → {name, relinked: paints changed}",
+            "{name, newName?, color?, mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient}, {swatch} or {pattern}) replacing the swatch's colour, gradient or pattern with one of the same kind} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
             has_doc,
             swatch_edit
         ),
@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatches",
             [],
             None,
-            "{group?: name (only that colour group's swatches)} → {swatches: [{name, kind: \"none\"|\"color\"|\"gradient\"|\"pattern\", group, global, spot, color?, hex?, gradient?, pattern?}], groups: [{name, swatches: [names]}]}",
+            "{group?: name (only that colour group's swatches)} → {swatches: [{name, kind: \"none\"|\"color\"|\"gradient\"|\"pattern\", group, global, spot, color?, hex?, tintOf?: base swatch of a tint swatch, tint?: its %, gradient?, pattern?}], groups: [{name, swatches: [names]}]}",
             has_doc,
             swatch_list
         ),
@@ -129,7 +129,17 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
         }
         (None, Some(name)) if s.doc()?.doc.pattern(name).is_some() => vec![pattern_paint(name)],
         (None, Some(name)) => return Err(bad(C, format!("no pattern `{name}`"))),
-        (None, None) => vec![paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone())],
+        (None, None) => {
+            let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone());
+            // `tint` alone: that tint of the global colour the current fill links to.
+            match (super::paint::tint_param(p, C)?, &paint) {
+                (Some(t), Paint::Solid { swatch: Some(l), .. }) if p.get("swatch").is_none() => {
+                    vec![s.doc()?.doc.tint_paint(l, t).ok_or_else(|| bad(C, format!("`{l}` isn't a global or spot colour")))?]
+                }
+                (Some(_), _) if p.get("swatch").is_none() => return Err(bad(C, "`tint` needs a global or spot colour")),
+                _ => vec![paint],
+            }
+        }
     };
     let spot = bool_or(p, "spot", false);
     let global = spot || bool_or(p, "global", false);
@@ -138,6 +148,8 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
     let paints = paints
         .into_iter()
         .map(|paint| match paint {
+            // A tint stays linked to its base: a tint swatch.
+            Paint::Solid { swatch: Some(_), tint, .. } if tint < 1.0 && mode.is_none() && !global => Ok(paint),
             // The swatch holds the colour itself, not a link to the swatch it may have come from.
             Paint::Solid { color, .. } => Ok(Paint::solid(match mode {
                 Some(m) => convert_to_mode(color, m, C)?,
@@ -157,7 +169,9 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(n) => d.free_swatch_name(n),
                 None => d.new_swatch_name(&paint),
             };
-            let swatch = Swatch { name: name.clone(), paint, global, spot };
+            // A tint swatch's kind is its base's.
+            let tint = matches!(paint, Paint::Solid { swatch: Some(_), .. });
+            let swatch = Swatch { name: name.clone(), paint, global: global && !tint, spot: spot && !tint };
             match group {
                 Some(g) => {
                     d.swatch_groups.iter_mut().find(|x| x.name == g).ok_or_else(|| bad(C, format!("no colour group `{g}`")))?.swatches.push(swatch)
@@ -204,7 +218,8 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
     if !bool_or(p, "unlink", true) {
         global.clear();
     }
-    let mut unlink = |_: &mut Color, link: &mut Option<String>| link.as_ref().is_some_and(|l| global.contains(l)) && link.take().is_some();
+    let mut unlink =
+        |_: &mut Color, link: &mut Option<String>, _: &mut f32| link.as_ref().is_some_and(|l| global.contains(l)) && link.take().is_some();
     let unlinked = s.edit("Delete Swatch", |d, _| {
         d.swatch_groups.retain(|g| !names.contains(&g.name));
         for n in &names {
@@ -244,7 +259,7 @@ fn link_colors(d: &mut Document, ids: &[NodeId], links: &[(Color, String)]) -> u
         return 0;
     }
     let live: Vec<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
-    d.map_solid_paints_in(ids, &mut |c, link| {
+    d.map_solid_paints_in(ids, &mut |c, link, _| {
         if link.as_ref().is_some_and(|l| live.contains(l)) {
             return false;
         }
@@ -416,15 +431,15 @@ struct Relink {
     from: String,
     /// The swatch's name after the edit.
     to: String,
-    /// The new colour of a global swatch (linked paints take it).
+    /// The new colour of a global swatch (linked paints take it, at their tint).
     color: Option<Color>,
     /// false: drop the links (the swatch stopped being global); paints keep their colour.
     keep: bool,
 }
 
 impl Relink {
-    /// Apply to one paint; true when it changed.
-    fn apply(&self, c: &mut Color, link: &mut Option<String>) -> bool {
+    /// Apply to one linked colour; true when it changed.
+    fn apply(&self, c: &mut Color, link: &mut Option<String>, tint: &mut f32) -> bool {
         if link.as_deref() != Some(self.from.as_str()) {
             return false;
         }
@@ -436,28 +451,27 @@ impl Relink {
         if renamed {
             *link = Some(self.to.clone());
         }
-        let recolored = self.color.is_some_and(|n| n != *c);
-        if let Some(n) = self.color {
+        let new = self.color.map(|n| n.tinted(*tint));
+        let recolored = new.is_some_and(|n| n != *c);
+        if let Some(n) = new {
             *c = n;
         }
         renamed || recolored
     }
 
     fn defaults(&self, s: &mut Session) {
-        map_default_paints(s, &mut |c, l| self.apply(c, l));
+        map_default_paints(s, &mut |c, l, t| self.apply(c, l, t));
     }
 }
 
 /// Apply a swatch-link rewrite to the default fill and stroke for new art, except during a live
 /// preview (Cancel rolls the document back, not the session).
-pub(super) fn map_default_paints(s: &mut Session, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) {
+pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) {
     if s.in_interaction() {
         return;
     }
     for p in [&mut s.paint.fill, &mut s.paint.stroke] {
-        if let Paint::Solid { color, swatch } = p {
-            f(color, swatch);
-        }
+        p.map_links(f);
     }
 }
 
@@ -473,6 +487,11 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let solid = sw.paint.color();
     if solid.is_none() && (given("color") || given("mode") || bool_or(p, "spot", false)) {
         return Err(bad(C, "colour, mode and spot apply to solid-colour swatches only"));
+    }
+    if let Some((base, _)) = sw.tint_of()
+        && ["color", "mode", "paint", "global", "spot"].iter().any(|k| given(k))
+    {
+        return Err(bad(C, format!("`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)")));
     }
     // A replacement paint of the swatch's kind (a dropped colour or edited gradient).
     let paint = match p.get("paint").filter(|v| !v.is_null()) {
@@ -510,7 +529,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        Ok(d.map_solid_paints(&mut |c, l| relink.apply(c, l)))
+        Ok(d.map_solid_paints(&mut |c, l, t| relink.apply(c, l, t)))
     })?;
     relink.defaults(s);
     Ok(json!({"name": to, "relinked": relinked}))
@@ -520,10 +539,14 @@ pub(super) fn swatch_json(sw: &Swatch, group: Option<&str>) -> Value {
     let mut v = json!({"name": sw.name, "group": group, "global": sw.global, "spot": sw.spot});
     match &sw.paint {
         Paint::None => v["kind"] = json!("none"),
-        Paint::Solid { color, .. } => {
+        Paint::Solid { color, swatch, tint } => {
             v["kind"] = json!("color");
             v["color"] = json!(color);
             v["hex"] = json!(color.to_hex());
+            if let Some(base) = swatch {
+                v["tintOf"] = json!(base);
+                v["tint"] = json!(tint_percent(*tint));
+            }
         }
         Paint::Gradient(g) => {
             v["kind"] = json!("gradient");
@@ -592,20 +615,28 @@ fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
-    let (mut links, mut colors, mut gradients, mut patterns) = (vec![], vec![], vec![], vec![]);
+    // Links with their tints, so a tint swatch is used where its tint of its base is.
+    let (mut links, mut colors, mut gradients, mut patterns, mut gradient_links) = (vec![], vec![], vec![], vec![], vec![]);
+    let mut color = |c: &Color, link: Option<&String>, tint: f32| match link {
+        Some(l) if d.swatch(l).is_some() => links.push((l.clone(), tint)),
+        _ => colors.push(*c),
+    };
     d.visit_paints(&mut |p| match p {
-        Paint::Solid { swatch: Some(l), .. } if d.swatch(l).is_some() => links.push(l.clone()),
-        Paint::Solid { color, .. } => colors.push(*color),
+        Paint::Solid { color: c, swatch, tint } => color(c, swatch.as_ref(), *tint),
         Paint::Gradient(g) => {
-            links.extend(g.swatch.clone());
-            colors.extend(g.gradient.stops.iter().map(|s| s.color));
+            g.gradient.stops.iter().for_each(|s| color(&s.color, s.swatch.as_ref(), s.tint));
+            gradient_links.extend(g.swatch.clone());
             gradients.push(g.gradient.clone());
         }
         Paint::Pattern { pattern, .. } => patterns.push(pattern.clone()),
         Paint::None => {}
     });
     let used = |w: &Swatch| {
-        links.contains(&w.name)
+        gradient_links.contains(&w.name)
+            || links.iter().any(|(l, t)| match w.tint_of() {
+                Some((base, tint)) => l == base && *t == tint,
+                None => *l == w.name,
+            })
             || match &w.paint {
                 Paint::None => true,
                 Paint::Solid { color, .. } => colors.contains(color),
@@ -632,11 +663,12 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let kept = d.swatch(keep).ok_or_else(|| bad(C, format!("no swatch `{keep}`")))?;
     let (color, link) = (kept.paint.color().unwrap_or_default(), kept.global.then(|| keep.clone()));
-    let mut relink = |c: &mut Color, l: &mut Option<String>| {
+    // Tints keep their tint (of the kept colour).
+    let mut relink = |c: &mut Color, l: &mut Option<String>, t: &mut f32| {
         if !l.as_ref().is_some_and(|l| merged.contains(l)) {
             return false;
         }
-        *c = color;
+        *c = color.tinted(*t);
         *l = link.clone();
         true
     };

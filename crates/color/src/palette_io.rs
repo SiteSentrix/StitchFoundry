@@ -241,8 +241,8 @@ mod tests {
         let grad = Paint::Gradient(Box::new(GradientPaint::new(Gradient {
             kind: GradientKind::Linear,
             stops: vec![
-                GradientStop { offset: 0.0, color: Color::cmyk(0.1, 0.2, 0.3, 0.0), opacity: 1.0, midpoint: 0.4 },
-                GradientStop { offset: 1.0, color: Color::rgb8(255, 0, 0), opacity: 0.5, midpoint: 0.5 },
+                GradientStop { midpoint: 0.4, ..GradientStop::new(0.0, Color::cmyk(0.1, 0.2, 0.3, 0.0)) },
+                GradientStop { opacity: 0.5, ..GradientStop::new(1.0, Color::rgb8(255, 0, 0)) },
             ],
         })));
         SwatchLibrary {

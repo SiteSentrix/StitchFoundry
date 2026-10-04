@@ -116,7 +116,11 @@ fn entries(app: &VectorcraftApp, kind: Kind, query: &str) -> Vec<Entry> {
     let q = query.trim().to_lowercase();
     let found = |n: &str| q.is_empty() || n.to_lowercase().contains(&q);
     let mut out = vec![];
-    let sw = |s: &vectorcraft_color::Swatch| Entry::Swatch { name: s.name.clone(), paint: s.paint.clone(), global: s.global, spot: s.spot };
+    // A tint swatch shows its base's kind (global or spot).
+    let sw = |s: &vectorcraft_color::Swatch| {
+        let (global, spot) = s.tint_of().and_then(|(base, _)| d.swatch(base)).map_or((s.global, s.spot), |b| (b.global, b.spot));
+        Entry::Swatch { name: s.name.clone(), paint: s.paint.clone(), global, spot }
+    };
     // None first, then Registration, then the rest (the reference app's order).
     let (specials, rest): (Vec<_>, Vec<_>) = d.swatches.iter().partition(|s| s.paint.is_none());
     for s in specials.iter().filter(|s| kind.accepts(&s.paint, false) && found(&s.name)) {
@@ -616,12 +620,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     widgets::subheader(ui, "Swatch Tiles");
     let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), "Find") } else { String::new() };
     let items = entries(app, kind, &query);
-    let active = active_paint(app);
-    let active_swatch = match &active {
-        Paint::Solid { swatch: Some(n), .. } => Some(n.clone()),
-        Paint::None => Some("[None]".to_string()),
-        _ => None,
-    };
+    let active_swatch = active_swatch(app);
     let selected = selection(app, ui);
     // Without a selection the swatch of the active paint is highlighted.
     let fallback: Vec<String> = if selected.is_empty() { active_swatch.into_iter().collect() } else { vec![] };
@@ -691,6 +690,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
         None => selected,
     };
     bottom(app, ui, &selected);
+}
+
+/// The swatch the active paint comes from: a linked colour's global swatch (a tint's tint swatch
+/// when there is one), or None.
+fn active_swatch(app: &VectorcraftApp) -> Option<String> {
+    match active_paint(app) {
+        Paint::Solid { swatch: Some(n), tint, .. } => {
+            let d = &app.session.active()?.doc;
+            let tint_swatch = d.swatches_iter().find(|w| w.tint_of() == Some((n.as_str(), tint)));
+            Some(tint_swatch.map_or(n.clone(), |w| w.name.clone()))
+        }
+        Paint::None => Some("[None]".to_string()),
+        _ => None,
+    }
 }
 
 /// The thumbnail cells of `items` for `view` in the full available width, row by row; a folder
@@ -1180,7 +1193,7 @@ mod tests {
         let doc = &app.session.doc().unwrap().doc;
         assert_eq!(doc.swatch("Signal").and_then(|w| w.paint.color()).map(|c| c.to_hex()), Some("#00ff00".into()));
         let fill = doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
-        assert_eq!(fill, Paint::Solid { color: Color::from_hex("#00ff00").unwrap(), swatch: Some("Signal".into()) });
+        assert_eq!(fill, Paint::Solid { color: Color::from_hex("#00ff00").unwrap(), swatch: Some("Signal".into()), tint: 1.0 });
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
     }
 
@@ -1309,7 +1322,7 @@ mod tests {
         let g = doc.swatch_groups.iter().find(|g| g.name == "Color Group 2").expect("group made");
         assert_eq!(g.swatches.iter().map(|w| (w.name.as_str(), w.global)).collect::<Vec<_>>(), [("R=18 G=52 B=86", true)]);
         let fill = doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
-        assert_eq!(fill, Paint::Solid { color: Color::from_hex("#123456").unwrap(), swatch: Some("R=18 G=52 B=86".into()) });
+        assert_eq!(fill, Paint::Solid { color: Color::from_hex("#123456").unwrap(), swatch: Some("R=18 G=52 B=86".into()), tint: 1.0 });
     }
 
     /// The centre of the tile or row of `name` as laid out by the last frame.
@@ -1425,10 +1438,8 @@ mod tests {
         let ctx = context();
         frame(&mut app, &ctx, vec![], 0.0, show);
         let grad = |c: &str| {
-            let stops = vec![
-                vectorcraft_color::GradientStop { offset: 0.0, color: Color::from_hex(c).unwrap(), opacity: 1.0, midpoint: 0.5 },
-                vectorcraft_color::GradientStop { offset: 1.0, color: Color::WHITE, opacity: 1.0, midpoint: 0.5 },
-            ];
+            let stops =
+                vec![vectorcraft_color::GradientStop::new(0.0, Color::from_hex(c).unwrap()), vectorcraft_color::GradientStop::new(1.0, Color::WHITE)];
             Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient { kind: GradientKind::Radial, stops })))
         };
         let drop_on = |app: &mut VectorcraftApp, name: &str, paint: Paint, m: Modifiers, time: f64| {
@@ -1468,6 +1479,21 @@ mod tests {
         assert!(Kind::Gradient.accepts(&grad, true));
         assert!(Kind::Groups.accepts(&solid, true));
         assert!(!Kind::Groups.accepts(&solid, false));
+    }
+
+    #[test]
+    fn the_active_tint_swatch_is_highlighted_and_a_tint_edits_its_base() {
+        let mut app = app();
+        app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
+        app.run("paint.setFill", json!({"swatch": "Ink", "tint": 40})).unwrap();
+        assert_eq!(active_swatch(&app).as_deref(), Some("Ink"), "no tint swatch yet: its base");
+        app.run("swatch.new", json!({})).unwrap();
+        assert_eq!(active_swatch(&app).as_deref(), Some("Ink 40%"));
+        let tint = entries(&app, Kind::Color, "Ink 40").into_iter().find(|e| e.name() == "Ink 40%").unwrap();
+        assert!(matches!(tint, Entry::Swatch { global: true, spot: true, .. }), "a tint swatch shows its base's kind");
+        app.run("ui.swatchOptions", json!({"name": "Ink 40%"})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.kind.as_str(), d.str("__swatch").as_str()), (KIND, "Ink"), "a tint swatch opens its base's options");
     }
 
     #[test]

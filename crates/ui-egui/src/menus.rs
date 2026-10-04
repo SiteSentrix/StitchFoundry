@@ -211,7 +211,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorBalanceDialog",
         "Adjust Color Balance…",
         "",
-        "{} open Adjust Colors for the selection (dialog `colorBalance`, fields `mode` gray|rgb|cmyk|global, channels r g b / c m y k / gray −100..100, `convert`, `fill`, `stroke`, `preview`): previews live, OK runs edit.colors.adjustBalance as one undo step",
+        "{} open Adjust Colors for the selection (dialog `colorBalance`, fields `mode` gray|rgb|cmyk|global, channels r g b / c m y k / gray / tint (global) −100..100, `convert`, `fill`, `stroke`, `preview`): previews live, OK runs edit.colors.adjustBalance as one undo step",
     ),
     (
         "ui.saturateDialog",

@@ -2,7 +2,7 @@
 //! three Blend commands. They recolour the selected objects and everything inside them through the
 //! shared colour visitor [`Recolor`]: fills and strokes (solid colours, gradient stops and text
 //! runs), gradient meshes, embedded images and pattern fills. Colours linked to a global swatch are
-//! unlinked when they change.
+//! unlinked when they change; Adjust Color Balance's Global mode shifts their tints instead.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Adjust Color Balance…",
             ["Edit", "Edit Colors"],
             None,
-            "{mode?: \"rgb\"|\"cmyk\"|\"gray\"|\"global\" (default: from the channels given), r?, g?, b? | c?, m?, y?, k? | gray?: -100..100 (% added per channel, default 0), convert?: false (true: the results stay in the adjusted model; false: each colour keeps its own), fill?, stroke?, includeImages?, includePatterns?, ids?} reaching what edit.colors.invert does → {changed}. Global mode (tints of global and spot colours) isn't available yet",
+            "{mode?: \"rgb\"|\"cmyk\"|\"gray\"|\"global\" (default: from the channels given), r?, g?, b? | c?, m?, y?, k? | gray? | tint?: -100..100 (% added per channel, default 0; `tint` is global mode: it shifts the tints of colours and gradient stops linked to global and spot swatches, which stay linked, and leaves other colours and images alone), convert?: false (true: the results stay in the adjusted model; false: each colour keeps its own), fill?, stroke?, includeImages?, includePatterns?, ids?} reaching what edit.colors.invert does → {changed}",
             has_selection,
             adjust_balance
         ),
@@ -131,34 +131,37 @@ pub(crate) fn to_gray(c: Color) -> Color {
     c.in_model(Model::Gray)
 }
 
-/// Apply `f` to a paint; returns whether anything changed.
-pub(crate) fn map_paint(p: &mut Paint, f: &dyn Fn(Color) -> Color) -> bool {
-    match p {
-        Paint::Solid { color, swatch } => {
-            let n = f(*color);
-            if n != *color {
-                *color = n;
-                *swatch = None;
-                return true;
-            }
-            false
-        }
-        Paint::Gradient(g) => {
-            let mut ch = false;
-            for st in &mut g.gradient.stops {
-                let n = f(st.color);
-                if n != st.color {
-                    st.color = n;
-                    ch = true;
-                }
-            }
-            if ch {
-                g.swatch = None;
-            }
-            ch
-        }
-        _ => false,
+/// What a recolouring pass applies to a colour that can link to a swatch (a solid colour or a
+/// gradient stop): `(colour, link, tint)`, true when it changed them.
+pub(crate) type LinkMap<'a> = dyn Fn(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
+
+/// Apply `f` to the solid colour or gradient stops of a paint ([`Paint::map_links`]); a gradient
+/// that changes is no longer its gradient swatch's. Returns whether anything changed.
+fn map_links(p: &mut Paint, f: &LinkMap) -> bool {
+    let changed = p.map_links(&mut |c, l, t| f(c, l, t));
+    if changed && let Paint::Gradient(g) = p {
+        g.swatch = None;
     }
+    changed
+}
+
+/// Apply `f` to a paint's colours; a colour that changes loses its swatch link. Returns whether
+/// anything changed.
+pub(crate) fn map_paint(p: &mut Paint, f: &dyn Fn(Color) -> Color) -> bool {
+    map_links(p, &|c, link, _| {
+        let n = f(*c);
+        if n == *c {
+            return false;
+        }
+        *c = n;
+        *link = None;
+        true
+    })
+}
+
+/// The identity colour map (a pass that only maps linked colours).
+fn same(c: Color) -> Color {
+    c
 }
 
 /// What a recolouring pass covers: fills (with the points of gradient meshes), strokes, the pixels
@@ -191,6 +194,8 @@ impl Scope {
 /// change are kept as copies.
 pub(crate) struct Recolor<'a> {
     f: &'a dyn Fn(Color) -> Color,
+    /// Maps solid colours and gradient stops with their link and tint in place of `f`.
+    links: Option<&'a LinkMap<'a>>,
     scope: Scope,
     /// Image key → the key of its recoloured copy (`None`: unchanged).
     images: HashMap<String, Option<String>>,
@@ -203,7 +208,13 @@ pub(crate) struct Recolor<'a> {
 
 impl<'a> Recolor<'a> {
     pub(crate) fn new(scope: Scope, f: &'a dyn Fn(Color) -> Color) -> Self {
-        Self { f, scope, images: HashMap::new(), patterns: HashMap::new(), new_images: vec![], new_patterns: vec![], changed: 0 }
+        Self { f, links: None, scope, images: HashMap::new(), patterns: HashMap::new(), new_images: vec![], new_patterns: vec![], changed: 0 }
+    }
+
+    /// A pass that maps only solid colours and gradient stops, with their swatch link and tint
+    /// (`links`); meshes and images keep their colours.
+    pub(crate) fn links(scope: Scope, links: &'a LinkMap<'a>) -> Self {
+        Self { links: Some(links), ..Self::new(Scope { images: false, ..scope }, &same) }
     }
 
     /// Recolour the objects `ids` and everything inside them (each once), add the new images and
@@ -294,7 +305,10 @@ impl<'a> Recolor<'a> {
     fn paint(&mut self, d: &Document, p: &mut Paint) {
         let changed = match p {
             Paint::Pattern { pattern, .. } if self.scope.patterns => self.pattern(d, pattern).map(|new| *pattern = new).is_some(),
-            _ => map_paint(p, self.f),
+            _ => match self.links {
+                Some(f) => map_links(p, f),
+                None => map_paint(p, self.f),
+            },
         };
         self.changed += changed as usize;
     }
@@ -348,12 +362,16 @@ impl<'a> Recolor<'a> {
 }
 
 pub(crate) fn recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
+    run_pass(s, p, label, Recolor::new(Scope::of(p), f))
+}
+
+/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step.
+fn run_pass(s: &mut Session, p: &Value, label: &str, pass: Recolor) -> Result<Value> {
     let ids = match ids_param(p, "ids") {
         Some(v) => v,
         None => selected_roots(s)?,
     };
-    let scope = Scope::of(p);
-    let n = s.edit(label, |d, _| Ok(Recolor::new(scope, f).run(d, &ids)))?;
+    let n = s.edit(label, |d, _| Ok(pass.run(d, &ids)))?;
     Ok(json!({ "changed": n }))
 }
 
@@ -376,7 +394,8 @@ fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
         None if given(&["c", "m", "y", "k"]) => "cmyk".into(),
         None if given(&["gray"]) => "gray".into(),
         None if given(&["r", "g", "b"]) => "rgb".into(),
-        None => return Err(bad(C, "give a mode or r/g/b, c/m/y/k or gray adjustments")),
+        None if given(&["tint"]) => "global".into(),
+        None => return Err(bad(C, "give a mode or r/g/b, c/m/y/k, gray or tint adjustments")),
     };
     let g = |k: &str| (f64_or(p, k, 0.0).clamp(-100.0, 100.0) / 100.0) as f32;
     let cl = |v: f32| v.clamp(0.0, 1.0);
@@ -403,7 +422,20 @@ fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
             })
         }
         "global" => {
-            return Err(bad(C, "mode `global` shifts the tints of global and spot colours, which aren't supported yet: use rgb, cmyk or gray"));
+            // Each linked colour moves to the shifted tint of its global swatch's current colour.
+            let d = &s.doc()?.doc;
+            let bases: HashMap<String, Color> = d.swatches_iter().filter_map(|w| Some((w.name.clone(), d.global_color(&w.name)?))).collect();
+            let dt = g("tint");
+            let shift = move |c: &mut Color, link: &mut Option<String>, tint: &mut f32| {
+                let Some(base) = link.as_ref().and_then(|l| bases.get(l)) else { return false };
+                let t = cl(*tint + dt);
+                if t == *tint {
+                    return false;
+                }
+                (*tint, *c) = (t, base.tinted(t));
+                true
+            };
+            return run_pass(s, p, "Adjust Colors", Recolor::links(Scope::of(p), &shift));
         }
         other => return Err(bad(C, format!("unknown mode `{other}` (rgb|cmyk|gray|global)"))),
     };

@@ -280,7 +280,7 @@ impl Importer {
                 .iter()
                 .map(|s| {
                     let c = s.color();
-                    GradientStop { offset: s.offset().get(), color: Color::rgb8(c.red, c.green, c.blue), opacity: s.opacity().get(), midpoint: 0.5 }
+                    GradientStop { opacity: s.opacity().get(), ..GradientStop::new(s.offset().get(), Color::rgb8(c.red, c.green, c.blue)) }
                 })
                 .collect::<Vec<_>>()
         };

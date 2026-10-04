@@ -1,9 +1,10 @@
 //! Edit → Edit Colors → Adjust Color Balance: the colour mode (Gray, RGB, CMYK or Global), a slider
-//! per channel (−100..100 %), Convert, Fill and Stroke, previewed live on the canvas; OK keeps the
-//! preview as one undo step (`edit.colors.adjustBalance`).
+//! per channel (−100..100 %; Global has one, Tint, for the tints of global and spot colours),
+//! Convert, Fill and Stroke, previewed live on the canvas; OK keeps the preview as one undo step
+//! (`edit.colors.adjustBalance`).
 //!
 //! Fields: `mode` (`gray`, `rgb`, `cmyk` or `global`), the channels `r`, `g`, `b`, `c`, `m`, `y`,
-//! `k`, `gray`, then `convert`, `fill`, `stroke` and `preview`.
+//! `k`, `gray`, `tint`, then `convert`, `fill`, `stroke` and `preview`.
 
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
@@ -33,13 +34,16 @@ const MODES: [Mode; 4] = [
     Mode { id: "gray", label: "Grayscale", channels: &[("gray", "Black")] },
     Mode { id: "rgb", label: "RGB", channels: &[("r", "Red"), ("g", "Green"), ("b", "Blue")] },
     Mode { id: "cmyk", label: "CMYK", channels: &[("c", "Cyan"), ("m", "Magenta"), ("y", "Yellow"), ("k", "Black")] },
-    Mode { id: "global", label: "Global", channels: &[] },
+    Mode { id: "global", label: "Global", channels: &[("tint", "Tint")] },
 ];
+
+/// Global mode: it shifts the tints of linked colours, which keep their model (no Convert).
+const GLOBAL: &str = "global";
 
 /// Open the dialog with every channel at 0, adjusting fills and strokes.
 pub fn open(app: &mut VectorcraftApp) {
     let fields = json!({
-        "mode": "rgb", "r": 0, "g": 0, "b": 0, "c": 0, "m": 0, "y": 0, "k": 0, "gray": 0,
+        "mode": "rgb", "r": 0, "g": 0, "b": 0, "c": 0, "m": 0, "y": 0, "k": 0, "gray": 0, "tint": 0,
         "convert": false, "fill": true, "stroke": true, "preview": true,
     });
     app.ui.dialog = Some(Dialog::new(KIND, fields));
@@ -85,16 +89,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             d.fields.insert("mode".into(), json!(MODES[i].id));
         }
         ui.add_space(12.0);
-        if widgets::check(ui, "Convert", d.bool("convert"), !m.channels.is_empty()) {
+        if widgets::check(ui, "Convert", d.bool("convert"), m.id != GLOBAL) {
             d.fields.insert("convert".into(), json!(!d.bool("convert")));
         }
     });
     ui.add_space(8.0);
-    let channels = mode(d).channels;
-    if channels.is_empty() {
-        widgets::dim_label(ui, "Global shifts the tints of global and spot colors (not available yet).");
+    let m = mode(d);
+    if m.id == GLOBAL {
+        widgets::dim_label(ui, "Shifts the tints of global and spot colors; other colors stay.");
     }
-    for (k, label) in channels {
+    for (k, label) in m.channels {
         form::slider(ui, d, k, label, -100.0..=100.0, "%", &|x| track(k, x));
     }
     ui.add_space(8.0);
@@ -166,15 +170,22 @@ mod tests {
     }
 
     #[test]
-    fn global_mode_reports_why_and_stays_open() {
+    fn global_mode_shifts_the_tints_of_global_colours() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"swatch": "Ink", "tint": 50})).unwrap();
         app.run("ui.colorBalanceDialog", json!({})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("mode".into(), json!("global"));
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("mode".into(), json!("global"));
+        d.fields.insert("tint".into(), json!(-20));
         frame(&mut app);
-        let e = super::super::confirm(&mut app).unwrap_err();
-        assert!(e.contains("global"), "{e}");
-        assert!(app.ui.dialog.is_some());
+        assert_eq!(params(app.ui.dialog.as_ref().unwrap())["tint"], json!(-20.0));
+        super::super::confirm(&mut app).unwrap();
+        let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        let vectorcraft_color::Paint::Solid { swatch, tint, .. } = n.appearance.fill_paint() else { panic!() };
+        assert_eq!(swatch.as_deref(), Some("Ink"), "the colour stays linked");
+        assert!((tint - 0.3).abs() < 1e-6, "{tint}");
     }
 }

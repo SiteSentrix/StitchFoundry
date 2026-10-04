@@ -378,10 +378,12 @@ pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// A colour as command JSON, keeping its model.
 pub(crate) use vectorcraft_tools::params::color_json;
 
-/// Paint as command params (`{color}`, `{swatch}`, `{none}`, `{gradient}` (lossless) or `{pattern}`).
+/// Paint as command params (`{color}`, `{swatch, tint?}`, `{none}`, `{gradient}` (lossless) or
+/// `{pattern}`).
 pub(crate) fn paint_params(p: &Paint) -> Value {
     match p {
         Paint::None => json!({"none": true}),
+        Paint::Solid { swatch: Some(n), tint, .. } if *tint < 1.0 => json!({"swatch": n, "tint": tint * 100.0}),
         Paint::Solid { swatch: Some(n), .. } => json!({"swatch": n}),
         Paint::Solid { color, .. } => json!({"color": color_json(color)}),
         Paint::Gradient(g) => json!({"gradient": vectorcraft_tools::params::gradient_params(g)}),
@@ -423,6 +425,8 @@ mod tests {
         assert_eq!(p["gradient"]["stops"].as_array().unwrap().len(), 2);
         assert_eq!(paint_params(&vectorcraft_doc::pattern::pattern_paint("Dots")), json!({"pattern": "Dots"}));
         assert_eq!(p["gradient"]["stops"][0]["midpoint"], json!(0.5));
+        let tint = Paint::Solid { color: Color::gray(0.5), swatch: Some("Ink".into()), tint: 0.5 };
+        assert_eq!(paint_params(&tint), json!({"swatch": "Ink", "tint": 50.0}), "a tint keeps its percentage");
     }
 }
 #[cfg(test)]

@@ -37,9 +37,8 @@ fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
 }
 
 fn map_paint(p: &mut Paint, mode: Colorization, key: &Color) {
-    if let Paint::Solid { color, swatch } = p {
-        *color = map_color(color, mode, key);
-        *swatch = None;
+    if let Paint::Solid { color, .. } = p {
+        *p = Paint::solid(map_color(color, mode, key));
     }
 }
 
@@ -83,9 +82,8 @@ pub fn tint_node(n: &mut Node, color: &Color, amount: f32) {
             AppearanceItem::Fill(f) => &mut f.paint,
             AppearanceItem::Stroke(s) => &mut s.paint,
         };
-        if let Paint::Solid { color: c, swatch } = p {
-            *c = c.lerp(color, amount);
-            *swatch = None;
+        if let Paint::Solid { color: c, .. } = p {
+            *p = Paint::solid(c.lerp(color, amount));
         }
     }
     if let vectorcraft_doc::NodeKind::Text(t) = &mut n.kind {
