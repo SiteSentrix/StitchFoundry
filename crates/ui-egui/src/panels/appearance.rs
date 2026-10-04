@@ -338,7 +338,7 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opaci
     egui::Popup::menu(&resp)
         .open_memory(clicked.then_some(egui::SetOpenCommand::Toggle))
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .show(|ui| match widgets::opacity_blend(ui, ("ap-op", item), opacity, blend, true) {
+        .show(|ui| match widgets::opacity_blend(ui, ("ap-op", item), Some(opacity), Some(blend), true) {
             Some(TransparencyEdit::Blend(b)) => {
                 app.run("transparency.set", json!({"item": item, "blend": b.label()})).ok();
             }

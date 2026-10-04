@@ -132,13 +132,27 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
 
 /// A plain number field (percent, degrees, counts) with optional suffix.
 pub fn plain_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: f64, suffix: &str, decimals: usize, width: f32) -> Option<f64> {
+    mixed_field(ui, id, Some(value), suffix, decimals, width)
+}
+
+/// [`plain_field`] for a value the selected objects may not share: `None` shows a blank field.
+pub fn mixed_field(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: Option<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
-    let shown = {
-        let s = format!("{:.*}", decimals, value);
-        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
-        format!("{s}{suffix}")
-    };
+    let shown = value
+        .map(|value| {
+            let s = format!("{:.*}", decimals, value);
+            let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
+            format!("{s}{suffix}")
+        })
+        .unwrap_or_default();
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
     let resp = ui
@@ -312,15 +326,15 @@ pub fn blend_separator_before(i: usize) -> bool {
 }
 
 /// The blend-mode dropdown, its groups separated (Normal | darken | lighten | contrast | inversion
-/// | component modes). Returns the chosen mode.
-pub fn blend_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: BlendMode, width: f32) -> Option<BlendMode> {
-    combo(ui, id, current.label(), width, |ui| {
+/// | component modes). `None` (objects that differ) shows blank. Returns the chosen mode.
+pub fn blend_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: Option<BlendMode>, width: f32) -> Option<BlendMode> {
+    combo(ui, id, current.map_or("", BlendMode::label), width, |ui| {
         let mut chosen = None;
         for (i, m) in BlendMode::ALL.into_iter().enumerate() {
             if blend_separator_before(i) {
                 ui.separator();
             }
-            if ui.selectable_label(m == current, m.label()).clicked() {
+            if ui.selectable_label(Some(m) == current, m.label()).clicked() {
                 chosen = Some(m);
             }
         }
@@ -336,7 +350,7 @@ pub fn blend_param(key: &str, value: &serde_json::Value) -> Option<BlendMode> {
 
 /// [`blend_dropdown`] for a blend-mode parameter; returns the chosen mode's parameter value.
 pub fn blend_param_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: BlendMode) -> Option<serde_json::Value> {
-    blend_dropdown(ui, id, current, 120.0).map(|m| serde_json::Value::String(m.label().to_ascii_lowercase()))
+    blend_dropdown(ui, id, Some(current), 120.0).map(|m| serde_json::Value::String(m.label().to_ascii_lowercase()))
 }
 
 /// An edit made with [`opacity_blend`].
@@ -349,11 +363,12 @@ pub enum TransparencyEdit {
 
 /// The transparency controls shared by the Transparency panel and the Appearance panel's Opacity
 /// popups: the grouped blend-mode dropdown, the opacity percent field and its slider popup.
+/// `opacity` (0..1) and `blend` are `None` where the objects differ (shown blank).
 pub fn opacity_blend(
     ui: &mut Ui,
     id: impl std::hash::Hash + std::fmt::Debug + Copy,
-    opacity: f32,
-    blend: BlendMode,
+    opacity: Option<f32>,
+    blend: Option<BlendMode>,
     enabled: bool,
 ) -> Option<TransparencyEdit> {
     let t = Tokens::get(ui.ctx());
@@ -367,7 +382,7 @@ pub fn opacity_blend(
         dim_label(ui, "Opacity:");
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.add_enabled_ui(enabled, |ui| {
-            if let Some(o) = plain_field(ui, (id, "opacity"), opacity as f64 * 100.0, "%", 0, 50.0) {
+            if let Some(o) = mixed_field(ui, (id, "opacity"), opacity.map(|o| o as f64 * 100.0), "%", 0, 50.0) {
                 edit = Some(TransparencyEdit::Opacity(o.clamp(0.0, 100.0), Live::Released));
             }
         });
@@ -375,7 +390,7 @@ pub fn opacity_blend(
         ui.painter().rect_stroke(r, 2, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
         icons::paint(ui, "chevron-right", r.shrink2(vec2(3.0, 7.0)), if enabled { t.icon } else { t.text_disabled });
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-            let mut o = opacity * 100.0;
+            let mut o = opacity.unwrap_or(1.0) * 100.0;
             let r = ui.add(egui::Slider::new(&mut o, 0.0..=100.0).show_value(false));
             let phase = if r.drag_stopped() || (r.changed() && !r.dragged()) {
                 Live::Released

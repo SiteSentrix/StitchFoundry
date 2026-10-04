@@ -393,32 +393,15 @@ impl Exporter<'_> {
                 }
             }
             NodeKind::Group { children, clip: true } => {
-                let clip = children.first().and_then(|c| match &c.kind {
-                    NodeKind::Path { path, rule, .. } => Some((path.to_bezpath(), *rule)),
-                    NodeKind::Compound { children, rule } => {
-                        let mut bp = BezPath::new();
-                        for ch in children {
-                            if let Some(p) = ch.path_data() {
-                                bp.extend(p.to_bezpath());
-                            }
-                        }
-                        Some((bp, *rule))
+                // The region every output clips to; nothing to clip by hides the clipped art.
+                if let Some((clip, rest)) = children.split_first()
+                    && let Some((p, r)) = vectorcraft_effects::clip_outline(clip).and_then(|(bp, r)| to_path(&bp).map(|p| (p, r)))
+                {
+                    s.push_clip_path(&p, &rule(r));
+                    for c in rest {
+                        self.node(s, c, page, false);
                     }
-                    _ => None,
-                });
-                match clip.and_then(|(bp, r)| to_path(&bp).map(|p| (p, r))) {
-                    Some((p, r)) => {
-                        s.push_clip_path(&p, &rule(r));
-                        for c in children.iter().skip(1) {
-                            self.node(s, c, page, false);
-                        }
-                        s.pop();
-                    }
-                    None => {
-                        for c in children {
-                            self.node(s, c, page, false);
-                        }
-                    }
+                    s.pop();
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {

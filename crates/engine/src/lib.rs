@@ -723,6 +723,8 @@ mod tests_brushsym;
 #[cfg(test)]
 mod tests_build;
 #[cfg(test)]
+mod tests_clip;
+#[cfg(test)]
 mod tests_cmdsplit;
 #[cfg(test)]
 mod tests_colormgmt;
@@ -738,6 +740,8 @@ mod tests_gradient;
 mod tests_live;
 #[cfg(test)]
 mod tests_menucmds;
+#[cfg(test)]
+mod tests_opacitymask;
 #[cfg(test)]
 mod tests_panelcmds;
 #[cfg(test)]

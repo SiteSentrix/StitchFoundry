@@ -38,8 +38,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{opacity?: 0..100, blend?: name, isolate?, knockout?, item?: appearance item index|null, ids?} opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
-            has_selection,
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?, item?: appearance item index|null} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
+            has_doc,
             transparency
         ),
     ]
@@ -155,39 +155,40 @@ fn default_paint(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.set";
-    let item = item_target(s, p, C)?;
+    let ids = super::opacitymask::transparency_targets(s, p)?;
+    if ids.is_empty() {
+        return Err(bad(C, "select objects or give ids"));
+    }
+    // While an opacity mask is edited the selection is its art, so the Appearance panel's active
+    // item (a row of that art) doesn't stand for the masked object.
+    let editing_mask = p.get("ids").is_none() && p.get("id").is_none() && s.doc()?.doc.mask_edit.is_some();
+    let item = if editing_mask && p.get("item").is_none() { ItemTarget::Top } else { item_target(s, p, C)? };
     let mut q = p.as_object().cloned().unwrap_or_default();
     q.remove("item");
-    let opacity = q.remove("opacity").and_then(|v| v.as_f64()).map(|o| (o / 100.0).clamp(0.0, 1.0));
+    q.remove("id");
+    q.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
     let ItemTarget::Item { index, explicit } = item else {
-        if let Some(o) = opacity {
-            q.insert("opacity".into(), json!(o));
-        }
         return s.execute("object.setProps", &Value::Object(q));
     };
     // Opacity and blend belong to the targeted fill/stroke; isolate/knockout stay object-level.
+    let item_ids = if editing_mask { ids } else { appearance_targets(s, p)? };
     if explicit {
         let d = &s.doc()?.doc;
-        if !appearance_targets(s, p)?.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {
+        if !item_ids.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {
             return Err(bad(C, format!("no appearance item {index}")));
         }
     }
-    let blend = q.remove("blend");
+    let (opacity, blend) = (q.remove("opacity"), q.remove("blend"));
     if let Some(b) = &blend
         && b.as_str().and_then(BlendMode::parse).is_none()
     {
         return Err(bad(C, format!("unknown blend mode {b}")));
     }
     if opacity.is_some() || blend.is_some() {
-        let mut set = json!({ "index": index, "opacity": opacity, "blend": blend });
-        for key in ["ids", "id"] {
-            if let Some(v) = p.get(key) {
-                set[key] = v.clone();
-            }
-        }
-        s.execute("appearance.setItem", &set)?;
+        let ids: Vec<u64> = item_ids.iter().map(|id| id.0).collect();
+        s.execute("appearance.setItem", &json!({ "index": index, "ids": ids, "opacity": opacity, "blend": blend }))?;
     }
-    if q.keys().all(|k| k == "ids" || k == "id") {
+    if q.keys().all(|k| k == "ids") {
         return ok();
     }
     s.execute("object.setProps", &Value::Object(q))

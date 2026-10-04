@@ -259,7 +259,7 @@ fn text_fill_items_composite_with_their_opacity() {
     let opaque = render(&s);
     // A pixel the red fill covers fully (over the black character fill).
     let (x, y) = (0..400u32).flat_map(|y| (0..400u32).map(move |x| (x, y))).find(|&(x, y)| opaque.pixel(x, y) == [255, 0, 0, 255]).expect("red text");
-    run(&mut s, "appearance.setItem", json!({"index": 0, "opacity": 0.5, "blend": "multiply"}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "opacity": 50, "blend": "multiply"}));
     let px = render(&s).pixel(x, y);
     // Half of red multiplied over black: black.
     assert!(px[0] < 20 && px[3] == 255, "{px:?}");
@@ -294,7 +294,7 @@ fn set_item_and_remove_item() {
     let st = stroke(&n, 1);
     assert_eq!((st.opacity, st.blend, st.width), (0.5, BlendMode::Screen, 3.0));
     assert_eq!(st.paint.color().unwrap().to_hex(), "#0000ff");
-    run(&mut s, "appearance.setItem", json!({"index": 0, "visible": false, "opacity": 0.25}));
+    run(&mut s, "appearance.setItem", json!({"index": 0, "visible": false, "opacity": 25}));
     let n = node(&s, id);
     assert!(!n.appearance.items[0].visible() && n.appearance.items[0].opacity() == 0.25);
     assert!(s.execute("appearance.setItem", &json!({})).is_err());
@@ -310,7 +310,7 @@ fn clear_and_reduce_to_basic() {
     let id = rect(&mut s, 100.0);
     run(&mut s, "appearance.addStroke", json!({}));
     run(&mut s, "appearance.setItem", json!({"index": 2, "visible": false, "color": "#00ff00"}));
-    run(&mut s, "appearance.setItem", json!({"index": 1, "opacity": 0.5}));
+    run(&mut s, "appearance.setItem", json!({"index": 1, "opacity": 50}));
     run(&mut s, "effect.apply", json!({"effect": "distort.roughen", "item": 1}));
     run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "item": null}));
     run(&mut s, "transparency.set", json!({"opacity": 40, "blend": "multiply"}));

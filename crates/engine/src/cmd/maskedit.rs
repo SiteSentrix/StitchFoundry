@@ -3,17 +3,22 @@
 //! The mask art moves onto a temporary isolated layer where every tool and command can edit it.
 //! After each edit [`sync`] writes the layer's art back into the object's mask, so the masked
 //! object updates live; the renderer doesn't paint the editing layer (the mask is seen through its
-//! effect, as in Illustrator). Leaving the mode removes the layer.
+//! effect, as in the reference app). Leaving the mode removes the layer, and saving or exporting
+//! never writes it ([`Document::without_edit_modes`]). Meanwhile the Transparency panel's commands
+//! act on the masked object (see `opacitymask::transparency_targets`).
 
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, MaskEdit, Node, NodeId};
+use vectorcraft_doc::{Document, MaskEdit, Node, NodeId, NodeKind, Selection};
 
 use super::*;
 
 /// Name of the temporary mask-editing layer.
 pub const MASK_EDIT_LAYER: &str = "Opacity Mask Editing";
+
+/// Name of the group that holds several mask objects (or none) as one mask art node.
+const MASK_GROUP: &str = "Opacity Mask";
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -22,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Opacity Mask",
             ["Window", "Transparency"],
             None,
-            "{id?} edit the selected object's mask art in place (the mask thumbnail in the Transparency panel) → {layer}",
+            "{id?} edit the mask art of `id` (default: the first selected object with a mask) in place, as clicking the mask thumbnail in the Transparency panel does → {layer}",
             has_doc,
             enter
         ),
@@ -38,55 +43,114 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// Mask art made of `children`: a plain group, so the mask keeps one art node. Editing spreads it
+/// back out onto the editing layer.
+pub(crate) fn mask_group(children: Vec<Arc<Node>>) -> Node {
+    let mut g = Node::group(NodeId(u64::MAX - 1), children);
+    g.name = Some(MASK_GROUP.into());
+    g
+}
+
+/// A group [`mask_group`] made (named so, with nothing of its own that its members would lose).
+fn is_mask_group(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { clip: false, .. })
+        && n.name.as_deref() == Some(MASK_GROUP)
+        && n.opacity >= 1.0
+        && n.blend == vectorcraft_doc::color::BlendMode::Normal
+        && !n.isolate
+        && !n.knockout
+        && n.mask.is_none()
+        && n.appearance.items.is_empty()
+        && n.appearance.effects.is_empty()
+}
+
+/// The objects mask art is made of: the members of a [`mask_group`], else the art itself.
+pub(crate) fn mask_parts(art: &Arc<Node>) -> Vec<Arc<Node>> {
+    match art.children() {
+        Some(ch) if is_mask_group(art) => ch.clone(),
+        _ => vec![art.clone()],
+    }
+}
+
 fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.editOpacityMask";
-    if s.doc()?.doc.mask_edit.is_some() {
+    let st = s.doc()?;
+    if st.doc.mask_edit.is_some() {
         return Err(bad(C, "already editing an opacity mask"));
     }
-    let st = s.doc()?;
     let id = id_param(p, "id")
         .or_else(|| st.selection.objects.iter().copied().find(|i| st.doc.node(*i).is_some_and(|n| n.mask.is_some())))
         .ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
-    let layer = s.edit("Edit Opacity Mask", |d, sel| {
-        let art = d
-            .node(id)
-            .and_then(|n| n.mask.as_ref())
-            .map(|m| m.art.clone())
-            .ok_or_else(|| EngineError::Other("the object has no opacity mask".into()))?;
-        let layer = d.add_layer(Some(MASK_EDIT_LAYER));
-        // Fresh ids: copies of a masked object share the ids inside their mask art.
-        let copy = d.reid(&art);
-        let cid = copy.id;
-        d.insert(Some(layer), 0, copy)?;
-        d.mask_edit = Some(MaskEdit { object: id, layer });
-        sel.set([cid]);
-        Ok(layer)
-    })?;
-    let st = s.doc_mut()?;
-    st.isolation = Some(layer);
-    st.active_layer = Some(layer);
-    st.revision += 1;
+    let layer = s.edit("Edit Opacity Mask", |d, sel| begin(d, sel, id))?;
+    show_editing(s, Some(layer))?;
     Ok(json!({ "layer": layer.0 }))
+}
+
+/// Enter mask editing for `id` inside an edit: copy its mask art onto a new editing layer and
+/// select it. Returns the layer.
+pub(crate) fn begin(d: &mut Document, sel: &mut Selection, id: NodeId) -> Result<NodeId> {
+    let art =
+        d.node(id).and_then(|n| n.mask.as_ref()).map(|m| m.art.clone()).ok_or_else(|| EngineError::Other("the object has no opacity mask".into()))?;
+    let layer = d.add_layer(Some(MASK_EDIT_LAYER));
+    let parts = mask_parts(&art);
+    let mut ids = Vec::with_capacity(parts.len());
+    for part in &parts {
+        // Fresh ids: copies of a masked object share the ids inside their mask art.
+        let copy = d.reid(part);
+        ids.push(d.insert(Some(layer), usize::MAX, copy)?);
+    }
+    d.mask_edit = Some(MaskEdit { object: id, layer });
+    sel.set(ids);
+    Ok(layer)
 }
 
 fn leave(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(me) = s.doc()?.doc.mask_edit else { return Err(bad("transparency.stopEditingOpacityMask", "not editing an opacity mask")) };
     s.edit("Stop Editing Opacity Mask", |d, sel| {
-        sync(d);
-        d.mask_edit = None;
-        let _ = d.remove(me.layer);
-        if d.node(me.object).is_some() {
-            sel.set([me.object]);
-        } else {
-            sel.clear();
-        }
+        finish(d, sel);
         Ok(())
     })?;
-    let st = s.doc_mut()?;
-    st.isolation = None;
-    st.active_layer = st.doc.default_layer();
-    st.revision += 1;
+    show_editing(s, None)?;
     Ok(json!({ "id": me.object.0 }))
+}
+
+/// Leave mask editing inside an edit (no-op when not editing): write the art back into the mask,
+/// drop the editing layer and select the masked object.
+pub(crate) fn finish(d: &mut Document, sel: &mut Selection) {
+    let Some(me) = d.mask_edit else { return };
+    sync(d);
+    d.drop_edit_modes();
+    if d.node(me.object).is_some() {
+        sel.set([me.object]);
+    } else {
+        sel.clear();
+    }
+}
+
+/// Isolate the editing layer and draw into it (`Some`), or return to the document (`None`).
+pub(crate) fn show_editing(s: &mut Session, layer: Option<NodeId>) -> Result<()> {
+    let st = s.doc_mut()?;
+    st.isolation = layer;
+    st.active_layer = layer.or_else(|| st.doc.default_layer());
+    st.revision += 1;
+    Ok(())
+}
+
+/// After undo or redo, isolation follows the restored document into or out of mask editing
+/// (`was` is the editing layer before, if any), so it never names a layer that is gone (whose id
+/// a later object could reuse).
+pub(crate) fn follow_history(st: &mut crate::DocState, was: Option<NodeId>) {
+    match st.doc.mask_edit {
+        Some(me) => {
+            st.isolation = Some(me.layer);
+            st.active_layer = Some(me.layer);
+        }
+        None if was.is_some() && st.isolation == was => {
+            st.isolation = None;
+            st.active_layer = st.doc.default_layer();
+        }
+        None => {}
+    }
 }
 
 /// Write the editing layer's art into the object's mask (called after every edit). Leaves the
@@ -101,12 +165,8 @@ pub(crate) fn sync(d: &mut Document) {
     };
     let new_art = match art.as_slice() {
         [one] => one.clone(),
-        many => {
-            // Several objects (or none): a group, so the mask keeps one art node.
-            let mut g = Node::group(NodeId(u64::MAX - 1), many.to_vec());
-            g.name = Some("Opacity Mask".into());
-            Arc::new(g)
-        }
+        // Several objects (or none): a group, so the mask keeps one art node.
+        many => Arc::new(mask_group(many.to_vec())),
     };
     if let Some(m) = d.node(me.object).and_then(|n| n.mask.as_ref())
         && Arc::ptr_eq(&m.art, &new_art)
@@ -154,6 +214,11 @@ mod tests {
         assert!(st.doc.mask_edit.is_none() && st.isolation.is_none());
         assert!(!st.doc.layers.iter().any(|l| l.name.as_deref() == Some(super::MASK_EDIT_LAYER)));
         assert_eq!(st.selection.objects, vec![NodeId(obj)]);
+        // Two mask objects went back as one group; editing again spreads them out on the layer.
+        let layer = s.execute("transparency.editOpacityMask", &json!({"id": obj})).unwrap()["layer"].as_u64().unwrap();
+        assert_eq!(s.doc().unwrap().doc.node(NodeId(layer)).unwrap().children().unwrap().len(), 2);
+        assert_eq!(s.doc().unwrap().selection.len(), 2);
+        s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
         // Undo returns to editing mode's last state, then to before.
         s.execute("edit.undo", &json!({})).unwrap();
         assert!(s.doc().unwrap().doc.mask_edit.is_some());

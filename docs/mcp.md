@@ -163,3 +163,30 @@ vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
 applies to the `--cmd` just before it. `run` also accepts the host commands `file.open`, `file.save`, `file.export`,
 `file.exportForScreens` and `tool.select`. `run --in`, `convert` and `info` read every format `document.open` reads
 (`vectorcraft-cli --help` lists them).
+
+## Transparency and opacity masks
+
+Transparency and opacity-mask commands take `ids` (or `id`), so they need no selection. Opacity is a percentage
+(0..100) in every command (`transparency.set`, `object.setProps`, `appearance.setItem`). `transparency.info` returns
+the Transparency panel's values, with `null` where the objects differ. Making a mask from one object gives it an
+empty mask and enters mask editing: art drawn then becomes the mask, and the mask commands act on the masked object
+until `transparency.stopEditingOpacityMask`. Saves and exports never include the editing layer.
+
+```json
+{"name":"run_command","arguments":{"command":"transparency.set","params":{"ids":[12],"opacity":40,"blend":"Multiply"}}}
+{"name":"run_command","arguments":{"command":"transparency.makeOpacityMask","params":{"ids":[12,15],"invert":true}}}
+{"name":"run_command","arguments":{"command":"transparency.setOpacityMask","params":{"id":12,"clip":false}}}
+{"name":"run_command","arguments":{"command":"transparency.info","params":{"ids":[12,20]}}}
+```
+
+## Clipping masks
+
+`object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a
+text object (it loses its paint). Compound holes, even-odd fills, glyph outlines and the union of a group's members
+clip alike on screen, in raster export and in SVG and PDF. `object.clippingMask.release` turns the clip group into a
+plain group and keeps the clipping path, unpainted.
+
+```json
+{"name":"run_command","arguments":{"command":"select.set","params":{"ids":[12,15]}}}
+{"name":"run_command","arguments":{"command":"object.clippingMask.make","params":{}}}
+```

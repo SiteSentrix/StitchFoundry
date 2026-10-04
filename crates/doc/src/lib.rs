@@ -325,8 +325,9 @@ pub struct Document {
     /// Pattern editing mode, while active.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pattern_edit: Option<PatternEdit>,
-    /// Opacity-mask editing mode, while active.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Opacity-mask editing mode, while active. Never saved (see [`Document::without_edit_modes`]);
+    /// still read so files saved mid-edit by older versions load without the editing layer.
+    #[serde(default, skip_serializing)]
     pub mask_edit: Option<MaskEdit>,
     next_id: u64,
     /// Foreign data preserved on round-trip.
@@ -608,6 +609,27 @@ impl Document {
             *n.children_mut().unwrap() = fresh;
         }
         n
+    }
+}
+
+impl Document {
+    /// Leave opacity-mask editing: drop the temporary editing layer, a working copy of art the
+    /// mask already holds (the engine syncs it after every edit).
+    pub fn drop_edit_modes(&mut self) {
+        if let Some(me) = self.mask_edit.take() {
+            self.layers.retain(|l| l.id != me.layer);
+        }
+    }
+
+    /// The document as saved and exported: without the opacity-mask editing layer. Borrowed when
+    /// no mask is being edited. (Pattern editing is saved: its tile layer holds unapplied edits.)
+    pub fn without_edit_modes(&self) -> std::borrow::Cow<'_, Document> {
+        if self.mask_edit.is_none() {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let mut d = self.clone();
+        d.drop_edit_modes();
+        std::borrow::Cow::Owned(d)
     }
 }
 

@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::BlendMode;
-use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, shapes};
 
 use crate::appearance::Appearance;
-use crate::live::{BlendSpec, EnvelopeKind, GradientMesh};
+use crate::live::{BlendSpec, EnvelopeKind, GradientMesh, Outliner};
 use crate::pattern::RepeatSpec;
 use crate::text::TextObject;
 
@@ -566,6 +566,72 @@ impl Node {
             geom.transform(to_doc, g.gradient.kind);
         }
         Some((g, geom))
+    }
+}
+
+/// Unites filled regions (each under its own fill rule) into one path filled non-zero. Booleans
+/// live above this crate (`vectorcraft-pathops`), so callers supply it.
+pub type Uniter<'a> = &'a dyn Fn(&[(BezPath, FillRule)]) -> BezPath;
+
+impl Node {
+    /// The filled regions this object clips to as the clipping path of a clip group, in document
+    /// space, each with its fill rule: a path, a compound path (with its holes), an image's frame,
+    /// text outlined by `text` (glyph outlines need the font engine, above this crate), the visible
+    /// members of a group (their union) and the clipping path of a nested clip group. Live objects
+    /// are evaluated first. Guides and symbol instances add nothing.
+    pub fn clip_shapes(&self, text: Outliner) -> Vec<(BezPath, FillRule)> {
+        let mut out = vec![];
+        self.push_clip_shapes(text, &mut out);
+        out
+    }
+
+    fn push_clip_shapes(&self, text: Outliner, out: &mut Vec<(BezPath, FillRule)>) {
+        match &self.kind {
+            NodeKind::Path { guide: true, .. } | NodeKind::SymbolInstance { .. } => {}
+            NodeKind::Path { path, rule, .. } => out.push((path.to_bezpath(), *rule)),
+            NodeKind::Compound { children, rule } => {
+                let mut bp = BezPath::new();
+                for p in children.iter().filter_map(|c| c.path_data()) {
+                    bp.extend(p.to_bezpath());
+                }
+                out.push((bp, *rule));
+            }
+            NodeKind::Group { children, clip: true } => {
+                if let Some(c) = children.first() {
+                    c.push_clip_shapes(text, out);
+                }
+            }
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                for c in children.iter().filter(|c| c.visible) {
+                    c.push_clip_shapes(text, out);
+                }
+            }
+            NodeKind::Text(_) => {
+                if let Some(o) = text.and_then(|f| f(self)) {
+                    o.push_clip_shapes(None, out);
+                }
+            }
+            NodeKind::Image(im) => {
+                let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+                out.push((frame.to_bezpath(), FillRule::NonZero));
+            }
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
+                crate::live::expand_deep(self, text).push_clip_shapes(text, out);
+            }
+        }
+    }
+
+    /// The region this object clips to as one path and fill rule ([`Self::clip_shapes`]), shared
+    /// by the renderer and the SVG and PDF writers so every output clips alike. One shape keeps its
+    /// own rule; several are united by `unite` (filled non-zero). `None` when there is nothing to
+    /// clip by: the clipped art is then hidden.
+    pub fn clip_outline(&self, text: Outliner, unite: Uniter) -> Option<(BezPath, FillRule)> {
+        let mut shapes = self.clip_shapes(text);
+        match shapes.len() {
+            0 => None,
+            1 => shapes.pop(),
+            _ => Some((unite(&shapes), FillRule::NonZero)),
+        }
     }
 }
 

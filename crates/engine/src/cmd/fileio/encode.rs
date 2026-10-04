@@ -90,15 +90,20 @@ const WEBP_SIDE: f64 = 16383.0;
 /// renderer's own size limits are [`vectorcraft_render::raster_size`]'s.
 fn check_format_size(f: &Format, w: f64, h: f64) -> Result<()> {
     if f.id == "webp" && (w.round() > WEBP_SIDE || h.round() > WEBP_SIDE) {
-        return Err(bad(C, format!("{}×{} px is too large for {} (at most {WEBP_SIDE} px a side): lower the scale", w.round(), h.round(), f.label)));
+        return Err(bad(
+            C,
+            format!("{} × {} pixels is too large for {} (at most {WEBP_SIDE} pixels a side): lower the scale", w.round(), h.round(), f.label),
+        ));
     }
     Ok(())
 }
 
 /// Encode `doc` as `format` (an id or extension from [`super::FORMATS`]) with that format's
-/// options from `p` (see `document.formats`). Raster formats leave template layers out.
+/// options from `p` (see `document.formats`). Raster formats leave template layers out, and no
+/// format writes the opacity-mask editing layer.
 pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
     let f = super::writable(C, Some(format), None)?;
+    let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     Ok(match f.id {
         "vectorcraft" => vectorcraft_format::save_file(doc),

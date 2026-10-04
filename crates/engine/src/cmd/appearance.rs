@@ -14,6 +14,7 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node, NodeKind, StrokeLayer};
 
 use super::edit::selected_roots;
+use super::opacitymask::percent;
 use super::paint::paint_from;
 use super::*;
 use crate::EngineError;
@@ -61,8 +62,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index: paint-order item index, opacity?: 0..1 (values above 1 are percent), blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill), ids?} edit one fill/stroke of each selected object's own appearance stack",
-            has_selection,
+            "{index: paint-order item index, ids? (default: the selection), opacity?: 0..100, blend?: name, visible?: bool, weight?: pt (strokes), color?|none?|swatch?|gradient? (as paint.setFill)} edit one fill/stroke of each target object's own appearance stack",
+            has_doc,
             set_item
         ),
         cmd!("appearance.removeItem", "Remove Item", [], None, "{index, ids?}", has_selection, remove_item),
@@ -344,6 +345,9 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     let idx = index_param(p, "index", "appearance.setItem")?;
     let paint = paint_from(s, p)?;
     let ids = appearance_targets(s, p)?;
+    if ids.is_empty() {
+        return Err(bad("appearance.setItem", "select objects or give ids"));
+    }
     let blend = str_param(p, "blend").and_then(BlendMode::parse);
     s.edit("Appearance", |d, _| {
         for id in &ids {
@@ -364,7 +368,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
                 *pp = super::gradient::place_paint(pa, p, bounds);
             }
             if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
-                *op = if o > 1.0 { o / 100.0 } else { o }.clamp(0.0, 1.0) as f32;
+                *op = percent(o);
             }
             if let Some(b) = blend {
                 *bl = b;

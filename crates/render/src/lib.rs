@@ -198,9 +198,14 @@ struct GeomEntry {
     stamp: u64,
 }
 
+/// A clipping path (kept alive so its address can't be reused) and the region it clips to.
+type ClipEntry = (Arc<Node>, Option<Arc<(BezPath, FillRule)>>);
+
 /// Reusable renderer (keeps the render context, decoded images and glyph caches between frames).
 pub struct Renderer {
     texts: PtrMap<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// Clip regions per clipping path (see [`Self::clip_of`]).
+    clips: PtrMap<usize, ClipEntry>,
     /// Context reused when rendering single-threaded (`threads == 0`).
     ctx_st: Option<RenderContext>,
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
@@ -257,6 +262,7 @@ impl Renderer {
     pub fn new() -> Self {
         Self {
             texts: PtrMap::default(),
+            clips: PtrMap::default(),
             ctx_st: None,
             threads: default_threads(),
             geom: PtrMap::default(),
@@ -415,6 +421,23 @@ impl Renderer {
         b
     }
 
+    /// Cached region a clip group's clipping path `a` clips to ([`effects::clip_outline`]):
+    /// outlining text and uniting shapes is too slow to repeat every frame.
+    fn clip_of(&mut self, a: &Arc<Node>) -> Option<Arc<(BezPath, FillRule)>> {
+        let key = Arc::as_ptr(a) as usize;
+        if let Some((node, region)) = self.clips.get(&key)
+            && Arc::ptr_eq(node, a)
+        {
+            return region.clone();
+        }
+        let region = effects::clip_outline(a).map(Arc::new);
+        if self.clips.len() > 1024 {
+            self.clips.clear();
+        }
+        self.clips.insert(key, (a.clone(), region.clone()));
+        region
+    }
+
     /// Cached BezPath of a path node.
     fn path_of(&mut self, a: &Arc<Node>) -> Option<Arc<BezPath>> {
         let key = Arc::as_ptr(a) as usize;
@@ -550,23 +573,23 @@ impl Renderer {
                     self.draw_arc(ctx, f, c);
                 }
             }
+            NodeKind::Group { children, clip: true } if outline => {
+                for c in children {
+                    self.draw_node(ctx, f, c, false);
+                }
+            }
             NodeKind::Group { children, clip: true } => {
-                let clip = children.first().and_then(|c| c.path_data()).map(|p| p.to_bezpath());
-                match (clip, outline) {
-                    (Some(clip), false) => {
-                        ctx.set_transform(f.view);
-                        ctx.set_fill_rule(peniko::Fill::NonZero);
-                        ctx.push_clip_layer(&clip);
-                        for c in children.iter().skip(1) {
-                            self.draw_arc(ctx, f, c);
-                        }
-                        ctx.pop_layer();
+                // Nothing to clip by hides the clipped art (as in the SVG and PDF output).
+                if let Some((clip, rest)) = children.split_first()
+                    && let Some(region) = self.clip_of(clip)
+                {
+                    ctx.set_transform(f.view);
+                    ctx.set_fill_rule(fill_rule(region.1));
+                    ctx.push_clip_layer(&region.0);
+                    for c in rest {
+                        self.draw_arc(ctx, f, c);
                     }
-                    _ => {
-                        for c in children {
-                            self.draw_node(ctx, f, c, false);
-                        }
-                    }
+                    ctx.pop_layer();
                 }
             }
             NodeKind::Path { path, rule, guide, .. } => {
@@ -987,3 +1010,5 @@ fn now() -> u64 {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_clip;
