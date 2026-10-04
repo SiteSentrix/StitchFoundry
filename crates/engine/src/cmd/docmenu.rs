@@ -469,7 +469,7 @@ fn color_mode(s: &mut Session, p: &Value) -> Result<Value> {
             for l in &mut d.layers {
                 map_node_colors(Arc::make_mut(l), &f, true, true);
             }
-            for sw in &mut d.swatches {
+            for sw in d.swatches_iter_mut() {
                 if let vectorcraft_color::Paint::Solid { color, .. } = &mut sw.paint {
                     *color = f(*color);
                 }

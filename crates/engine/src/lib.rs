@@ -733,6 +733,8 @@ mod tests_pattern;
 #[cfg(test)]
 mod tests_prefs;
 #[cfg(test)]
+mod tests_swatches;
+#[cfg(test)]
 mod tests_textedit;
 #[cfg(test)]
 mod tests_xform;
