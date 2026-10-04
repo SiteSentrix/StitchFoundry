@@ -173,18 +173,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             select_row(app, ui.ctx(), Sel::None);
         }
         ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-        let label = match (&node, super::selection_len(app)) {
-            (None, _) => "No Selection".to_string(),
-            (Some(_), n) if n > 1 => "Mixed Objects".to_string(),
-            (Some(n), _) => n.kind_label().to_string(),
-        };
+        let mixed = mixed_appearances(app);
+        let label = if mixed { "Mixed Appearances" } else { object_label(app) };
         if !hide_thumb {
             let th = Rect::from_min_size(r.left_center() + vec2(6.0, -12.0), vec2(24.0, 24.0));
             let fill = node.as_ref().map(|n| n.appearance.fill_paint()).unwrap_or_else(|| app.session.paint.fill.clone());
             chip(ui, th, &fill);
         }
-        text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), &label, true);
+        text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), label, true);
         match &node {
+            // Objects that differ have no common stack to list.
+            Some(_) if mixed => {}
             Some(n) => stack(app, ui, n, sel),
             None => default_stack(app, ui),
         }
@@ -192,6 +191,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
     });
     bottom(app, ui, node.as_ref(), sel);
+}
+
+/// The selection as the Control bar and the object row name it: "No Selection", "Mixed Objects"
+/// or the object's kind ("Path", "Type", …).
+pub(crate) fn object_label(app: &VectorcraftApp) -> &'static str {
+    let Some(st) = app.session.active() else { return "No Selection" };
+    match st.selection.objects.as_slice() {
+        [] => "No Selection",
+        [id] => st.doc.node(*id).map_or("No Selection", Node::kind_label),
+        _ => "Mixed Objects",
+    }
+}
+
+/// Do the selected objects differ in appearance (fills, strokes, effects, opacity or blend mode)?
+fn mixed_appearances(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
+    let Some(first) = nodes.next() else { return false };
+    nodes.any(|n| n.appearance != first.appearance || n.opacity != first.opacity || n.blend != first.blend)
 }
 
 /// The defaults for new art when nothing is selected (read-only rows).

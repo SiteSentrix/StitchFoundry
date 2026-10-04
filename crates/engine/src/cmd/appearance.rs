@@ -38,8 +38,24 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             |s, p| add_item(s, p, false)
         ),
-        cmd!("appearance.clear", "Clear Appearance", ["Window", "Appearance"], None, "{ids?}", has_selection, clear_appearance),
-        cmd!("appearance.reduceToBasic", "Reduce to Basic Appearance", ["Window", "Appearance"], None, "{ids?}", has_selection, reduce_basic),
+        cmd!(
+            "appearance.clear",
+            "Clear Appearance",
+            ["Window", "Appearance"],
+            None,
+            "{ids?} leave each object one empty fill and stroke (None) and reset its opacity and blend mode",
+            has_selection,
+            clear_appearance
+        ),
+        cmd!(
+            "appearance.reduceToBasic",
+            "Reduce to Basic Appearance",
+            ["Window", "Appearance"],
+            None,
+            "{ids?} keep only the topmost visible fill and stroke, without their own opacity, blend mode or effects, and drop the object's effects",
+            has_selection,
+            reduce_basic
+        ),
         cmd!(
             "appearance.setItem",
             "Appearance Item",
@@ -261,7 +277,10 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Clear Appearance", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
+                // No fill, no stroke, and the object's Opacity row back to Default.
                 n.appearance = Appearance::basic(Paint::None, Paint::None, 1.0);
+                n.opacity = 1.0;
+                n.blend = BlendMode::Normal;
             }
         }
         Ok(())
@@ -275,10 +294,12 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Reduce to Basic Appearance", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
-                let f = n.appearance.fill_paint();
-                let st = n.appearance.stroke().cloned();
-                n.appearance = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(f))], effects: vec![] };
-                if let Some(mut st) = st {
+                // The topmost visible fill and stroke stay, without their own transparency or effects.
+                let top = |fill: bool| n.appearance.items.iter().rev().find(|i| i.visible() && i.is_fill() == fill).cloned();
+                let fill = top(true).map_or(Paint::None, |f| f.paint().clone());
+                let stroke = top(false);
+                n.appearance = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(fill))], effects: vec![] };
+                if let Some(AppearanceItem::Stroke(mut st)) = stroke {
                     st.effects.clear();
                     st.opacity = 1.0;
                     st.blend = BlendMode::Normal;

@@ -1638,8 +1638,6 @@ fn effect_menu() -> Vec<Item> {
     for e in cat.iter().filter(|e| !e.menu.last().is_some_and(|m| order.contains(m))) {
         out.push(Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })));
     }
-    out.push(Sep);
-    out.push(c("Expand Appearance", "effect.expandAppearance"));
     out
 }
 
@@ -1770,5 +1768,14 @@ mod tests {
             assert_eq!(pretty_shortcut("Cmd+Alt+2"), "⌥⌘2");
         }
         assert_eq!(pretty_shortcut(""), "");
+    }
+
+    #[test]
+    fn expand_appearance_is_an_object_menu_item_only() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let paths: Vec<Vec<String>> =
+            menu_entries(&app).into_iter().filter(|e| e.command.as_deref() == Some("effect.expandAppearance")).map(|e| e.path).collect();
+        assert_eq!(paths, [vec!["Object".to_string()]]);
     }
 }

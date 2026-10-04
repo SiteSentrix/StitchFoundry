@@ -267,3 +267,77 @@ fn text_fill_items_composite_with_their_opacity() {
     let px = render(&s).pixel(x, y);
     assert!((110..=145).contains(&px[0]) && px[1] < 10, "{px:?}");
 }
+
+#[test]
+fn add_fill_and_stroke_copy_the_top_ones() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "stroke.set", json!({"weight": 4}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.addStroke", json!({})); // [Fill, Stroke, Fill, Stroke]
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.iter().map(AppearanceItem::kind_name).collect::<Vec<_>>(), ["fill", "stroke", "fill", "stroke"]);
+    assert_eq!(fill_paint(&n, 2).color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(stroke(&n, 3).width, 4.0);
+    assert!(!n.appearance.is_basic());
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, id).appearance.items.len(), 3);
+}
+
+#[test]
+fn set_item_and_remove_item() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "appearance.setItem", json!({"index": 1, "opacity": 50, "blend": "screen", "weight": 3, "color": "#0000ff"}));
+    let n = node(&s, id);
+    let st = stroke(&n, 1);
+    assert_eq!((st.opacity, st.blend, st.width), (0.5, BlendMode::Screen, 3.0));
+    assert_eq!(st.paint.color().unwrap().to_hex(), "#0000ff");
+    run(&mut s, "appearance.setItem", json!({"index": 0, "visible": false, "opacity": 0.25}));
+    let n = node(&s, id);
+    assert!(!n.appearance.items[0].visible() && n.appearance.items[0].opacity() == 0.25);
+    assert!(s.execute("appearance.setItem", &json!({})).is_err());
+    run(&mut s, "appearance.removeItem", json!({"index": 0}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance.items.len(), 1);
+    assert!(n.appearance.fill().is_none() && n.appearance.stroke().is_some());
+}
+
+#[test]
+fn clear_and_reduce_to_basic() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "appearance.setItem", json!({"index": 2, "visible": false, "color": "#00ff00"}));
+    run(&mut s, "appearance.setItem", json!({"index": 1, "opacity": 0.5}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen", "item": 1}));
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "item": null}));
+    run(&mut s, "transparency.set", json!({"opacity": 40, "blend": "multiply"}));
+    // Reduce keeps the topmost visible fill and stroke, plain, and the object's transparency.
+    run(&mut s, "appearance.reduceToBasic", json!({}));
+    let n = node(&s, id);
+    assert!(n.appearance.is_basic(), "{:?}", n.appearance);
+    assert_eq!(stroke(&n, 1).paint, Paint::solid(Color::BLACK));
+    assert_eq!((n.opacity, n.blend), (0.4, BlendMode::Multiply));
+    // Clear leaves one None fill and stroke, and resets the object's Opacity row.
+    run(&mut s, "appearance.clear", json!({}));
+    let n = node(&s, id);
+    assert_eq!(n.appearance, vectorcraft_doc::Appearance::basic(Paint::None, Paint::None, 1.0));
+    assert_eq!((n.opacity, n.blend), (1.0, BlendMode::Normal));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, id).opacity, 0.4);
+}
+
+#[test]
+fn graphic_style_apply_replaces_the_stack() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0);
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    let name = run(&mut s, "graphicStyle.new", json!({"name": "Rough"}))["name"].clone();
+    let b = rect(&mut s, 250.0);
+    run(&mut s, "graphicStyle.apply", json!({ "name": name }));
+    assert_eq!(node(&s, b).appearance, node(&s, a).appearance);
+    assert!(s.execute("graphicStyle.apply", &json!({"name": "nope"})).is_err());
+}

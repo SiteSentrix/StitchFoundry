@@ -357,6 +357,11 @@ impl Node {
     pub fn is_container(&self) -> bool {
         self.children().is_some()
     }
+    /// Full opacity, Normal blending, no isolation, knockout or opacity mask (the Layers panel
+    /// fills an object's target circle otherwise).
+    pub fn has_default_transparency(&self) -> bool {
+        self.opacity >= 1.0 && self.blend == BlendMode::Normal && !self.isolate && !self.knockout && self.mask.is_none()
+    }
     /// Kind name as the Layers panel / Properties panel shows it.
     pub fn kind_label(&self) -> &'static str {
         match &self.kind {
@@ -367,7 +372,7 @@ impl Node {
             NodeKind::Path { guide: true, .. } => "Guide",
             NodeKind::Path { .. } => "Path",
             NodeKind::Compound { .. } => "Compound Path",
-            NodeKind::Text(_) => "Text",
+            NodeKind::Text(_) => "Type",
             NodeKind::Image(_) => "Image",
             NodeKind::SymbolInstance { .. } => "Symbol",
             NodeKind::Blend { .. } => "Blend",
@@ -543,6 +548,24 @@ mod tests {
         let l = LiveShape::Rectangle { w: 10.0, h: 20.0, radii: [0.0; 4], xf: Affine::translate((5.0, 5.0)) };
         assert_eq!(l.to_path().bounds(), Some(Rect::new(5.0, 5.0, 15.0, 25.0)));
         assert_eq!(l.label(), "Rectangle");
+    }
+
+    #[test]
+    fn default_transparency() {
+        let p = || Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        assert!(p().has_default_transparency());
+        let tweaks: [fn(&mut Node); 5] = [
+            |n| n.opacity = 0.5,
+            |n| n.blend = BlendMode::Multiply,
+            |n| n.isolate = true,
+            |n| n.knockout = true,
+            |n| n.mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
+        ];
+        for tweak in tweaks {
+            let mut n = p();
+            tweak(&mut n);
+            assert!(!n.has_default_transparency(), "{n:?}");
+        }
     }
 
     #[test]

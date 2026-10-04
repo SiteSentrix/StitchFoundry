@@ -92,16 +92,10 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let units = st.doc.units;
                 let first = sel.first().and_then(|id| st.doc.node(*id)).cloned();
                 let anchor_mode = !st.selection.anchors.is_empty();
-                let label = match (&first, sel.len()) {
-                    (None, _) => "No Selection".to_string(),
-                    (_, n) if n > 1 => "Mixed Objects".to_string(),
-                    (Some(_), _) if anchor_mode => "Anchor Point".to_string(),
-                    (Some(n), _) => match &n.kind {
-                        NodeKind::Text(_) => "Type".into(),
-                        NodeKind::Image(_) => "Embedded".into(),
-                        NodeKind::Path { live: Some(_), .. } => n.kind_label().to_string(),
-                        _ => n.kind_label().to_string(),
-                    },
+                let label = match &first {
+                    Some(_) if sel.len() == 1 && anchor_mode => "Anchor Point",
+                    Some(n) if sel.len() == 1 && matches!(n.kind, NodeKind::Image(_)) => "Embedded",
+                    _ => crate::panels::appearance::object_label(app),
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 ui.add_space(6.0);

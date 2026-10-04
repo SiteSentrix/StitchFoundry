@@ -326,15 +326,14 @@ impl Appearance {
     pub fn stroke_width(&self) -> f64 {
         self.stroke().filter(|s| !s.paint.is_none()).map(|s| s.width).unwrap_or(0.0)
     }
-    /// Is this the basic one-fill-one-stroke appearance without effects?
+    /// Is this a basic appearance: at most one fill and one stroke, none hidden or with its own
+    /// opacity, blend mode or effects, and no object effects?
     pub fn is_basic(&self) -> bool {
+        let count = |fill: bool| self.items.iter().filter(|i| i.is_fill() == fill).count();
         self.effects.is_empty()
-            && self.items.len() <= 2
-            && self.items.iter().filter(|i| matches!(i, AppearanceItem::Fill(_))).count() <= 1
-            && self.items.iter().all(|i| match i {
-                AppearanceItem::Fill(f) => f.effects.is_empty() && f.opacity == 1.0 && f.blend == BlendMode::Normal,
-                AppearanceItem::Stroke(s) => s.effects.is_empty() && s.opacity == 1.0 && s.blend == BlendMode::Normal,
-            })
+            && count(true) <= 1
+            && count(false) <= 1
+            && self.items.iter().all(|i| i.visible() && i.effects().is_empty() && i.opacity() == 1.0 && i.blend() == BlendMode::Normal)
     }
     /// Fill item `index`, or the topmost fill for `None`. `None` when that item is not a fill.
     pub fn fill_at(&self, index: Option<usize>) -> Option<&FillLayer> {
@@ -486,6 +485,27 @@ mod tests {
         assert_eq!(a.effects_at(Some(1)).unwrap().len(), 1);
         assert!(a.effects_at(None).unwrap().is_empty() && a.effects_mut(Some(3)).is_none());
         assert_eq!((a.items[1].kind_name(), a.items[2].kind_name()), ("stroke", "fill"));
+    }
+
+    #[test]
+    fn basic_means_one_plain_fill_and_stroke() {
+        let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 1.0));
+        let mut a = Appearance { items: vec![stroke(), stroke()], effects: vec![] };
+        assert!(!a.is_basic(), "two strokes");
+        a.items.pop();
+        assert!(a.is_basic() && Appearance::default().is_basic());
+        let mut b = Appearance::default_art();
+        b.stroke_mut().unwrap().visible = false;
+        assert!(!b.is_basic(), "a hidden stroke");
+        let mut c = Appearance::default_art();
+        c.fill_mut().unwrap().opacity = 0.5;
+        assert!(!c.is_basic(), "fill opacity");
+        let mut d = Appearance::default_art();
+        d.items.push(AppearanceItem::Fill(FillLayer::new(Paint::None)));
+        assert!(!d.is_basic(), "two fills");
+        let mut e = Appearance::default_art();
+        e.effects.push(Effect { id: "distort.roughen".into(), params: serde_json::Value::Null, visible: true });
+        assert!(!e.is_basic(), "an effect");
     }
 
     #[test]

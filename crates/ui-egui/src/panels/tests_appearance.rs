@@ -157,3 +157,30 @@ fn item_opacity_popup_sets_the_items_opacity() {
     assert_eq!(n.appearance.items[1].opacity(), 0.5);
     assert_eq!((n.appearance.items[0].opacity(), n.opacity), (1.0, 1.0));
 }
+
+#[test]
+fn object_row_names_the_selection_like_the_control_bar() {
+    let mut app = app_with_rect();
+    let a = first_selected(&app).unwrap().id.0;
+    let ctx = egui::Context::default();
+    assert!(frame_in(&ctx, &mut app, appearance::show).contains(&"Rectangle".to_string()));
+    let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].clone();
+    // Objects with one appearance list it under "Mixed Objects".
+    run(&mut app, "select.set", json!({"ids": [a, b]}));
+    let texts = frame_in(&ctx, &mut app, appearance::show);
+    assert!(texts.contains(&"Mixed Objects".to_string()) && texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    // Objects that differ list nothing.
+    run(&mut app, "select.set", json!({"ids": [b]}));
+    run(&mut app, "transparency.set", json!({"opacity": 50}));
+    run(&mut app, "select.set", json!({"ids": [a, b]}));
+    let texts = frame_in(&ctx, &mut app, appearance::show);
+    assert!(texts.contains(&"Mixed Appearances".to_string()) && !texts.contains(&"Stroke:".to_string()), "{texts:?}");
+    // Type objects are "Type" in both places.
+    let t = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi"}))["id"].clone();
+    run(&mut app, "select.set", json!({ "ids": [t] }));
+    assert_eq!(appearance::object_label(&app), "Type");
+    assert!(frame_in(&ctx, &mut app, appearance::show).contains(&"Type".to_string()));
+    let fonts = egui::Context::default();
+    crate::theme::install_fonts(&fonts);
+    assert!(frame_in(&fonts, &mut app, crate::chrome::control_bar).contains(&"Type".to_string()));
+}

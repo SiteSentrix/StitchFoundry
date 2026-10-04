@@ -221,7 +221,7 @@ fn row(
     let col_x = r.right() - 43.5;
     ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
     let tc = egui::pos2(r.right() - 28.0, r.center().y);
-    let styled = !n.appearance.is_basic() || n.opacity < 1.0;
+    let styled = has_styled_target(n);
     ui.painter().circle_stroke(tc, 5.0, Stroke::new(1.0, t.icon));
     if is_sel {
         ui.painter().circle_stroke(tc, 2.8, Stroke::new(1.0, t.icon));
@@ -292,6 +292,12 @@ fn row(
 
 /// A real rendered thumbnail, cached by node identity (unchanged nodes keep their `Arc`
 /// allocation, so the address is a free change detector). Only rendered for visible rows.
+/// Whether an object's target circle is filled: its appearance is not basic or its transparency
+/// (opacity, blend mode, isolation, knockout or an opacity mask) is not the default.
+fn has_styled_target(n: &Node) -> bool {
+    !n.appearance.is_basic() || !n.has_default_transparency()
+}
+
 fn real_thumb(ui: &Ui, doc: &vectorcraft_doc::Document, n: &Node, r: egui::Rect) -> bool {
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -350,4 +356,37 @@ fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    /// Filled target circles drawn by one headless frame of the panel.
+    fn filled_targets(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == 3.2 && cs.fill != Color32::TRANSPARENT)).count()
+    }
+
+    #[test]
+    fn target_circle_fills_for_non_default_transparency() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let id = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        run(&mut app, "select.set", json!({ "ids": [id] }));
+        let ctx = egui::Context::default();
+        assert_eq!(filled_targets(&mut app, &ctx), 0);
+        run(&mut app, "transparency.set", json!({"blend": "multiply"}));
+        assert_eq!(filled_targets(&mut app, &ctx), 1, "a Multiply object");
+        run(&mut app, "transparency.set", json!({"blend": "normal", "knockout": true}));
+        assert_eq!(filled_targets(&mut app, &ctx), 1, "a knockout group");
+        run(&mut app, "transparency.set", json!({"knockout": false}));
+        run(&mut app, "appearance.addStroke", json!({}));
+        assert_eq!(filled_targets(&mut app, &ctx), 1, "two strokes");
+    }
 }
