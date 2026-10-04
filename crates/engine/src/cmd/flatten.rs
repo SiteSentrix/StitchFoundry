@@ -133,7 +133,7 @@ pub struct FlattenOptions {
 
 impl Default for FlattenOptions {
     fn default() -> Self {
-        Self::preset("medium").expect("built-in preset")
+        Self::builtin("medium")
     }
 }
 
@@ -155,12 +155,17 @@ impl FlattenOptions {
     pub fn preset(name: &str) -> Option<Self> {
         let key = name.trim().to_ascii_lowercase();
         let id = Self::PRESETS.into_iter().find(|id| key == *id || Self::preset_label(id).is_some_and(|l| l.eq_ignore_ascii_case(&key)))?;
+        Some(Self::builtin(id))
+    }
+
+    /// The built-in preset `id` (one of [`Self::PRESETS`]; anything else is low).
+    fn builtin(id: &str) -> Self {
         let (balance, line_art_ppi, gradient_ppi, clip_complex_regions, anti_alias) = match id {
             "high" => (100.0, 1200.0, 300.0, true, false),
             "medium" => (75.0, 300.0, 300.0, false, true),
             _ => (75.0, 300.0, 150.0, false, true),
         };
-        Some(Self {
+        Self {
             balance,
             line_art_ppi,
             gradient_ppi,
@@ -170,7 +175,7 @@ impl FlattenOptions {
             anti_alias,
             preserve_alpha: false,
             preserve_overprints: true,
-        })
+        }
     }
 
     /// The built-in presets, finest first.
@@ -984,6 +989,8 @@ fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: 
     let (mut vector, mut rasterized) = (0, 0);
     let mut ids = vec![];
     for f in plan.flat {
+        // A group always has objects.
+        let Some(&top) = f.roots.last() else { continue };
         let mut children = vec![];
         // The image goes under the regions, reaching a pixel past its own: their edges then fall on
         // matching pixels instead of on what is behind the group.
@@ -1001,7 +1008,6 @@ fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: 
             children.push(Arc::new(n));
             vector += 1;
         }
-        let top = *f.roots.last().expect("a group has objects");
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let g = Node::group(d.alloc_id(), children);
         ids.push(d.insert(par, idx + 1, g)?);

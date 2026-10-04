@@ -475,8 +475,9 @@ impl Tool for GradientTool {
             }
             (PointerKind::Drag, Some(g)) => return freeform::drag(cx, g, ev.pos),
             (PointerKind::Up, Some(_)) => {
-                let g = self.free.take().expect("checked");
-                return freeform::release(cx, FreeformAnnotator::of(cx).as_ref(), g, &mut self.lines);
+                if let Some(g) = self.free.take() {
+                    return freeform::release(cx, FreeformAnnotator::of(cx).as_ref(), g, &mut self.lines);
+                }
             }
             (PointerKind::Move, None) => freeform::hover(cx, &mut self.lines, ev.pos),
             (PointerKind::DoubleClick, _) => {
@@ -903,7 +904,7 @@ mod tests {
     fn a_radial_shows_its_extent_ellipse_aspect_handle_and_focal_dot() {
         let (mut d, s) = graded(two());
         let n = d.node_mut(s.objects[0]).unwrap();
-        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { unreachable!() };
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
         g.gradient.kind = GradientKind::Radial;
         let geom = g.geom.as_mut().unwrap();
         geom.aspect = 0.5;

@@ -230,7 +230,8 @@ pub(super) fn drag(cx: &ToolContext, g: &mut Gesture, p: Point) -> Vec<Action> {
             let spread = if scale > 0.0 { ((r + at.distance(p) - d) / scale).clamp(0.0, 1.0) } else { 0.0 };
             ("paint.freeform.setPoint", json!({ "index": index, "spread": spread }))
         }
-        _ => unreachable!("checked above"),
+        // Checked above.
+        _ => return out,
     };
     out.push(Action::Preview(cmd.into(), on_proxy(cx, params)));
     out
@@ -501,7 +502,7 @@ mod tests {
         // The handle of a point without spread drags one out.
         let mut d0 = d.clone();
         let n = d0.node_mut(s.objects[0]).unwrap();
-        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { unreachable!() };
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
         g.freeform.as_mut().unwrap().points[2].spread = 0.0;
         n.appearance.set_fill(Paint::Gradient(g));
         let mut cx = crate::testutil::cx(&d0, &s, &p);

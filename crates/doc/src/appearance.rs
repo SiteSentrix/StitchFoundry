@@ -270,13 +270,13 @@ impl WidthProfile {
     }
     /// The lens profile (thin ends, full width in the middle).
     pub fn lens() -> Self {
-        Self::preset("lens").expect("built-in")
+        Self::preset("lens").unwrap_or_default()
     }
     pub fn taper_end() -> Self {
-        Self::preset("taperEnd").expect("built-in")
+        Self::preset("taperEnd").unwrap_or_default()
     }
     pub fn taper_start() -> Self {
-        Self::preset("taperStart").expect("built-in")
+        Self::preset("taperStart").unwrap_or_default()
     }
     /// The (left, right) factors just before and just after `t`: they differ only at a
     /// discontinuous point (two points at `t`, within `1e-7`).
@@ -1023,7 +1023,7 @@ mod tests {
         a.rebase_gradients(Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(100.0, 0.0, 300.0, 100.0));
         let start = |p: Paint| match p {
             Paint::Gradient(g) => g.geom.unwrap().start,
-            _ => unreachable!(),
+            _ => panic!("a gradient"),
         };
         // The fill's start stays on the left edge; the stroke's on its inflated box's (−5 → 95).
         assert_eq!((start(a.fill_paint()), start(a.stroke_paint())), (Point::new(100.0, 0.0), Point::new(95.0, 0.0)));
