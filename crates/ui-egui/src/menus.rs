@@ -20,7 +20,7 @@ pub enum Item {
     Todo(&'static str, &'static str),
     Sub(&'static str, Vec<Item>),
     Sep,
-    /// Section header (disabled label, e.g. "Illustrator Effects").
+    /// Section header (disabled label, e.g. "Vector Effects").
     Header(&'static str),
 }
 
@@ -38,6 +38,10 @@ fn todos(label: &'static str, sc: &'static str) -> Item {
 }
 fn sub(label: &'static str, items: Vec<Item>) -> Item {
     Item::Sub(label, items)
+}
+/// Window → … Libraries until the code-generated libraries land (disabled entries).
+fn library_placeholders() -> Vec<Item> {
+    vec![todo("Built-in Libraries"), todo("User Defined"), Sep, todo("Other Library…")]
 }
 use Item::Sep;
 
@@ -1218,10 +1222,10 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 todo("Variables"),
                 Sep,
-                sub("Brush Libraries", vec![todo("Arrows"), todo("Artistic"), todo("Borders"), todo("Decorative")]),
-                sub("Graphic Style Libraries", vec![todo("Additive"), todo("Artistic Effects"), todo("Buttons and Rollovers")]),
-                sub("Swatch Libraries", vec![todo("Art History"), todo("Celebration"), todo("Color Properties"), todo("Nature"), todo("Web")]),
-                sub("Symbol Libraries", vec![todo("Arrows"), todo("Charts"), todo("Web Buttons and Bars")]),
+                sub("Brush Libraries", library_placeholders()),
+                sub("Graphic Style Libraries", library_placeholders()),
+                sub("Swatch Libraries", library_placeholders()),
+                sub("Symbol Libraries", library_placeholders()),
             ],
         ),
         (
@@ -1576,7 +1580,7 @@ fn font_items() -> Vec<Item> {
         .collect()
 }
 
-/// The Effect menu, built from the effects catalogue (Illustrator Effects), plus raster effects.
+/// The Effect menu, built from the effects catalogue (vector effects), plus raster effects.
 fn effect_menu() -> Vec<Item> {
     let cat = vectorcraft_effects::effect_catalog();
     let mut out = vec![
@@ -1585,7 +1589,7 @@ fn effect_menu() -> Vec<Item> {
         Sep,
         c("Document Raster Effects Settings…", "document.rasterEffectsSettings"),
         Sep,
-        Item::Header("Illustrator Effects"),
+        Item::Header("Vector Effects"),
     ];
     // Submenus in Illustrator's order.
     let order = ["3D and Materials", "Convert to Shape", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];

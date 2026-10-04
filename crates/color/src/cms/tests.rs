@@ -138,16 +138,31 @@ fn convert_between_models() {
 
 #[test]
 fn wide_gamut_working_space() {
-    let c = Cms::new(&ColorSettings { rgb: ADOBE_RGB.into(), ..Default::default() }).unwrap();
+    let c = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
     assert!(!c.rgb_is_srgb());
     let grey = c.rgb_to_srgb([0.5, 0.5, 0.5]);
     assert!(de(grey, [0.5, 0.5, 0.5]) < 1.5, "{grey:?}");
-    // Adobe RGB green is outside sRGB: it clips to (nearly) full sRGB green.
+    // Wide-gamut green is outside sRGB: it clips to (nearly) full sRGB green.
     let g = c.rgb_to_srgb([0.0, 1.0, 0.0]);
     assert!(g[1] > 0.95 && g[0] < 0.1, "{g:?}");
     let back = c.srgb_to_rgb(c.rgb_to_srgb([0.4, 0.5, 0.3]));
     assert!(de(back, [0.4, 0.5, 0.3]) < 1.0);
     assert!(matches!(Cms::new(&ColorSettings { rgb: "Nope".into(), ..Default::default() }), Err(CmsError::UnknownProfile(_))));
+}
+
+#[test]
+fn legacy_profile_name_resolves() {
+    const OLD: &str = "Adobe RGB (1998) compatible"; // brand-ok: legacy alias under test
+    assert_eq!(canonical_name(OLD), WIDE_GAMUT_RGB);
+    assert_eq!(canonical_name(SRGB), SRGB);
+    assert_eq!(profile(OLD).map(|p| (p.name, p.kind, p.builtin)), Some((WIDE_GAMUT_RGB.to_string(), ProfileKind::Rgb, true)));
+    assert!(profile("Nope").is_none());
+    assert!(profiles().iter().all(|p| p.name != OLD), "only the current name is listed");
+    // Settings saved with the old name load as the current profile, under its current name.
+    let c = Cms::new(&ColorSettings { rgb: OLD.into(), ..Default::default() }).unwrap();
+    assert_eq!(c.settings().rgb, WIDE_GAMUT_RGB);
+    let same = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert_eq!(c.rgb_to_srgb([0.0, 1.0, 0.0]), same.rgb_to_srgb([0.0, 1.0, 0.0]));
 }
 
 #[test]

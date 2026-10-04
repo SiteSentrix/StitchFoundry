@@ -14,8 +14,7 @@ pub const WEIGHT_PRESETS: [f64; 22] =
     [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
 
 /// Width profile presets: (id for `stroke.set`, label).
-pub const PROFILES: [(&str, &str); 4] =
-    [("uniform", "Uniform"), ("lens", "Width Profile 1"), ("taperStart", "Width Profile 4"), ("taperEnd", "Width Profile 5")];
+pub const PROFILES: [(&str, &str); 4] = [("uniform", "Uniform"), ("lens", "Lens"), ("taperStart", "Taper Start"), ("taperEnd", "Taper End")];
 
 /// Which preset a stroke's profile is (None profile = uniform).
 pub fn profile_id(p: Option<&WidthProfile>) -> &'static str {
@@ -165,19 +164,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space((ui.available_width() - 56.0).max(0.0));
         let on = dash.is_some();
-        if widgets::icon_button_enabled(ui, "dc-dash-exact", "Preserves exact dash and gap lengths", on && !align_corners, on, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-dash-exact", "Exact dash lengths", on && !align_corners, on, 24.0).clicked() {
             set(app, json!({"dash": dash_pattern(&fields), "alignDashes": false}));
         }
-        if widgets::icon_button_enabled(
-            ui,
-            "dc-dash-align",
-            "Aligns dashes to corners and path ends, adjusting lengths to fit",
-            on && align_corners,
-            on,
-            24.0,
-        )
-        .clicked()
-        {
+        if widgets::icon_button_enabled(ui, "dc-dash-align", "Fit dashes to corners and ends", on && align_corners, on, 24.0).clicked() {
             set(app, json!({"dash": dash_pattern(&fields), "alignDashes": true}));
         }
     });
@@ -242,8 +232,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.horizontal(|ui| {
         row_label(ui, "Align:");
-        widgets::icon_button_enabled(ui, "dc-cap-square", "Extend arrow tip beyond end of path (on the roadmap)", true, false, 22.0);
-        widgets::icon_button_enabled(ui, "dc-cap-butt", "Place arrow tip at end of path (on the roadmap)", false, false, 22.0);
+        widgets::icon_button_enabled(ui, "dc-cap-square", "Tip extends past the end (on the roadmap)", true, false, 22.0);
+        widgets::icon_button_enabled(ui, "dc-cap-butt", "Tip on the end point (on the roadmap)", false, false, 22.0);
     });
     widgets::divider(ui);
     // Profile.

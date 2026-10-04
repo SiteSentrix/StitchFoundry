@@ -377,3 +377,24 @@ fn intents_reach_the_document_conversion() {
     assert_ne!(first(&a), first(&b));
     let _ = Intent::Perceptual;
 }
+
+#[test]
+fn legacy_profile_name_resolves_in_commands_and_files() {
+    const OLD: &str = "Adobe RGB (1998) compatible"; // brand-ok: legacy alias under test
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let before = cms::active_settings();
+    let r = s.execute("edit.colorSettings", &json!({"rgb": OLD})).unwrap();
+    assert_eq!(r["rgb"], cms::WIDE_GAMUT_RGB);
+    assert_eq!(cms::active_settings().rgb, cms::WIDE_GAMUT_RGB);
+    let names: Vec<&str> = r["profiles"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&cms::WIDE_GAMUT_RGB) && !names.contains(&OLD));
+    let r = s.execute("edit.assignProfile", &json!({"rgb": OLD})).unwrap();
+    assert_eq!(r["rgb"], cms::WIDE_GAMUT_RGB, "stored under the current name");
+    // A document saved by an older version names the profile the old way.
+    let mut d = (*s.doc().unwrap().doc).clone();
+    d.unknown.insert(cmd::colormgmt::PROFILES_KEY.into(), json!({"rgb": OLD, "cmyk": null}));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
+    assert_eq!(cmd::colormgmt::doc_profiles(&back), (Some(cms::WIDE_GAMUT_RGB.to_string()), None));
+    cms::set_active(&before).unwrap();
+}

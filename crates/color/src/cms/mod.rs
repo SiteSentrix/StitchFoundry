@@ -1,8 +1,8 @@
 //! Colour management: working spaces, RGB ↔ CMYK ↔ Lab conversions with rendering intents,
 //! gamut checks and soft-proof transforms.
 //!
-//! * **RGB working spaces** are ICC matrix/shaper profiles via [`moxcms`] (sRGB, Adobe RGB (1998)
-//!   compatible, Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB.
+//! * **RGB working spaces** are ICC matrix/shaper profiles via [`moxcms`] (sRGB, Wide Gamut RGB
+//!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB.
 //! * **CMYK spaces:** [`GENERIC_CMYK`] is our own documented parametric press model
 //!   ([`generic`]); [`DEVICE_CMYK`] is the old profile-free formula (kept for exact legacy numbers);
 //!   any CMYK `.icc` the user loads goes through `moxcms` (LUT-based profiles).
@@ -25,13 +25,22 @@ pub use lab::{Lab, delta_e76, delta_e2000};
 use crate::Color;
 
 pub const SRGB: &str = "sRGB IEC61966-2.1";
-pub const ADOBE_RGB: &str = "Adobe RGB (1998) compatible";
+/// The wide-gamut RGB space with the 1998 primaries (γ 2.2, D65).
+pub const WIDE_GAMUT_RGB: &str = "Wide Gamut RGB (1998 primaries)";
 pub const DISPLAY_P3: &str = "Display P3";
 pub const PROPHOTO_RGB: &str = "ProPhoto RGB";
 /// Our parametric press model (see [`generic`]). Not an Adobe/ECI profile.
 pub const GENERIC_CMYK: &str = "VectorCraft Generic CMYK (SWOP-like)";
 /// Profile-free CMYK (`rgb = (1−c)(1−k)` …): uncalibrated, kept for legacy numbers.
 pub const DEVICE_CMYK: &str = "Device CMYK (uncalibrated)";
+
+/// Built-in RGB and CMYK working spaces, in menu order.
+const BUILTIN_RGB: [&str; 4] = [SRGB, WIDE_GAMUT_RGB, DISPLAY_P3, PROPHOTO_RGB];
+const BUILTIN_CMYK: [&str; 2] = [GENERIC_CMYK, DEVICE_CMYK];
+
+/// Names earlier versions gave built-in profiles: (old name, current name). Settings, documents
+/// and commands that still use an old name get the current profile.
+const LEGACY_NAMES: &[(&str, &str)] = &[("Adobe RGB (1998) compatible", WIDE_GAMUT_RGB)]; // brand-ok: legacy alias
 
 /// ΔE2000 above which a colour counts as out of the CMYK gamut (the gamut warning).
 pub const GAMUT_THRESHOLD: f32 = 2.0;
@@ -169,7 +178,7 @@ fn user_profile(name: &str) -> Option<Arc<IccProfile>> {
 }
 
 fn cmyk_space(name: &str) -> Result<CmykSpace, CmsError> {
-    match name {
+    match canonical_name(name) {
         GENERIC_CMYK => Ok(CmykSpace::Generic(generic())),
         DEVICE_CMYK => Ok(CmykSpace::Device),
         _ => match user_profile(name) {
@@ -194,12 +203,23 @@ fn rgb_space(name: &str) -> Result<RgbSpace, CmsError> {
     }
 }
 
+/// The current name of a profile: names earlier versions used resolve to today's name.
+pub fn canonical_name(name: &str) -> &str {
+    LEGACY_NAMES.iter().find(|(old, _)| *old == name).map_or(name, |(_, new)| new)
+}
+
+/// An available profile by its current or legacy name.
+pub fn profile(name: &str) -> Option<ProfileInfo> {
+    let name = canonical_name(name);
+    profiles().into_iter().find(|p| p.name == name)
+}
+
 /// Every profile available (built-in first, then user-loaded).
 pub fn profiles() -> Vec<ProfileInfo> {
-    let mut v: Vec<ProfileInfo> = [SRGB, ADOBE_RGB, DISPLAY_P3, PROPHOTO_RGB]
+    let mut v: Vec<ProfileInfo> = BUILTIN_RGB
         .iter()
         .map(|n| ProfileInfo { name: (*n).into(), kind: ProfileKind::Rgb, builtin: true })
-        .chain([GENERIC_CMYK, DEVICE_CMYK].iter().map(|n| ProfileInfo { name: (*n).into(), kind: ProfileKind::Cmyk, builtin: true }))
+        .chain(BUILTIN_CMYK.iter().map(|n| ProfileInfo { name: (*n).into(), kind: ProfileKind::Cmyk, builtin: true }))
         .collect();
     for p in USER.read().unwrap_or_else(|e| e.into_inner()).iter() {
         v.push(ProfileInfo { name: p.name.clone(), kind: p.kind, builtin: false });
@@ -214,7 +234,8 @@ pub fn register_icc(bytes: &[u8], name: Option<String>) -> Result<ProfileInfo, C
     if p.kind == ProfileKind::Gray {
         return Err(CmsError::Unsupported("grayscale profiles can't be working spaces yet".into()));
     }
-    if [SRGB, ADOBE_RGB, DISPLAY_P3, PROPHOTO_RGB, GENERIC_CMYK, DEVICE_CMYK].contains(&p.name.as_str()) {
+    let builtin = canonical_name(&p.name);
+    if BUILTIN_RGB.contains(&builtin) || BUILTIN_CMYK.contains(&builtin) {
         return Err(CmsError::Unsupported(format!("{} clashes with a built-in profile name", p.name)));
     }
     if !p.usable() {
@@ -257,8 +278,10 @@ impl Default for Cms {
 }
 
 impl Cms {
+    /// Profiles named by a legacy name are stored under their current name.
     pub fn new(settings: &ColorSettings) -> Result<Self, CmsError> {
-        Ok(Self { settings: settings.clone(), rgb: rgb_space(&settings.rgb)?, cmyk: cmyk_space(&settings.cmyk)? })
+        let settings = ColorSettings { rgb: canonical_name(&settings.rgb).into(), cmyk: canonical_name(&settings.cmyk).into(), ..settings.clone() };
+        Ok(Self { rgb: rgb_space(&settings.rgb)?, cmyk: cmyk_space(&settings.cmyk)?, settings })
     }
     pub fn settings(&self) -> &ColorSettings {
         &self.settings

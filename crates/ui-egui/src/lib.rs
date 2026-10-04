@@ -31,6 +31,9 @@ pub mod unsaved;
 pub mod widgets;
 pub mod workspaces;
 
+#[cfg(test)]
+mod tests_labels;
+
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
