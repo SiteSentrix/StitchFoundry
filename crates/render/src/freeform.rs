@@ -34,6 +34,7 @@ fn hash_color(c: &Color, h: &mut impl Hasher) {
         Color::Rgb { r, g, b } => (0u8, r.to_bits(), g.to_bits(), b.to_bits()).hash(h),
         Color::Cmyk { c, m, y, k } => (1u8, c.to_bits(), m.to_bits(), y.to_bits(), k.to_bits()).hash(h),
         Color::Gray { k } => (2u8, k.to_bits()).hash(h),
+        Color::Lab { l, a, b } => (3u8, l.to_bits(), a.to_bits(), b.to_bits()).hash(h),
     }
 }
 

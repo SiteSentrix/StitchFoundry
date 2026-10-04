@@ -4,7 +4,7 @@
 //! editing ([`open`]).
 //!
 //! Fields: `__swatch` (the swatch being edited), `name`, `spot`, `global`, `mode` (`gray`, `rgb`,
-//! `hsb`, `cmyk` or `web`), `color` (`"#rrggbb"` or a colour object such as
+//! `hsb`, `lab`, `cmyk` or `web`), `color` (`"#rrggbb"` or a colour object such as
 //! `{"model": "cmyk", "c": 0.1, "m": 0.2, "y": 0.3, "k": 0}`) and `preview`; a gradient swatch has
 //! `name`, `preview` and `__gradient` (the gradient shown) only.
 
@@ -25,8 +25,9 @@ pub const KIND: &str = "swatchOptions";
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| "Swatch Options".into(), body, confirm, preview: true, min_width: 340.0, ..DialogSpec::FORM };
 
-/// Colour modes with their `mode` field / `swatch.edit` ids.
-const MODES: [(Mode, &str); 5] = [(Mode::Grayscale, "gray"), (Mode::Rgb, "rgb"), (Mode::Hsb, "hsb"), (Mode::Cmyk, "cmyk"), (Mode::WebSafe, "web")];
+/// Colour modes, in menu order, with their `mode` field / `swatch.edit` ids.
+const MODES: [(Mode, &str); 6] =
+    [(Mode::Grayscale, "gray"), (Mode::Rgb, "rgb"), (Mode::Hsb, "hsb"), (Mode::Lab, "lab"), (Mode::Cmyk, "cmyk"), (Mode::WebSafe, "web")];
 
 const TYPES: [&str; 2] = ["Process Color", "Spot Color"];
 
@@ -178,11 +179,9 @@ pub(super) fn editor(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
         ui.end_row();
         label(ui, "Color Mode:");
-        let mode = mode_of(d);
-        let labels: Vec<&str> = Mode::ALL.iter().map(|m| m.1).collect();
-        let current = Mode::ALL.iter().find(|m| m.0 == mode).map_or("RGB", |m| m.1);
-        if let Some(i) = widgets::dropdown(ui, "swatch-mode", current, &labels, 200.0) {
-            let m = Mode::ALL[i].0;
+        let labels = MODES.map(|m| m.0.label());
+        if let Some(i) = widgets::dropdown(ui, "swatch-mode", mode_of(d).label(), &labels, 200.0) {
+            let m = MODES[i].0;
             // Switching modes converts the colour (HSB is a view of RGB), like the Color panel.
             let base = if m == Mode::Hsb { Mode::Rgb } else { m };
             set_color(d, from_components(base, &components(base, &color_of(d))));
@@ -213,17 +212,16 @@ fn sliders(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             for (i, lbl) in mode.labels().iter().enumerate() {
                 ui.horizontal(|ui| {
                     ui.add_sized(vec2(12.0, 22.0), egui::Label::new(egui::RichText::new(*lbl).size(12.5).color(t.text)));
-                    let max = mode.max(i);
                     let v = comps.get(i).copied().unwrap_or(0.0);
                     let track = |x: f32| crate::panels::c32(&track_color(mode, &comps, i, x));
-                    if let (Some(nv), _) = widgets::color_slider(ui, ("swatch-slider", i), v / max, 200.0, &track) {
+                    if let (Some(nv), _) = widgets::color_slider(ui, ("swatch-slider", i), mode.unit(i, v), 200.0, &track) {
                         let mut c2 = comps.clone();
-                        c2[i] = if mode == Mode::WebSafe { ((nv * 5.0).round() / 5.0) * max } else { (nv * max).round() };
+                        c2[i] = mode.value_at(i, nv);
                         new = Some((from_components(mode, &c2), c2));
                     }
                     if let Some(fv) = widgets::plain_field(ui, ("swatch-field", i), v as f64, mode.suffix(i), 0, 52.0) {
                         let mut c2 = comps.clone();
-                        c2[i] = (fv as f32).clamp(0.0, max);
+                        c2[i] = (fv as f32).clamp(mode.min(i), mode.max(i));
                         new = Some((from_components(mode, &c2), c2));
                     }
                 });
@@ -285,5 +283,30 @@ mod tests {
             (p["name"].as_str(), p["newName"].as_str(), p["spot"].as_bool(), p["mode"].as_str()),
             (Some("A"), Some("B"), Some(true), Some("cmyk"))
         );
+    }
+
+    #[test]
+    fn lab_mode_defines_a_spot_colour_in_lab() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 80, "y": 60, "k": 0}, "spot": true})).unwrap();
+        app.run("ui.swatchOptions", json!({"name": "Ink"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("mode".into(), json!("lab"));
+        // Drawn headlessly: three Lab sliders (a and b signed) preview the edit.
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(Default::default(), |ui| super::super::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        assert_eq!(mode_of(app.ui.dialog.as_ref().unwrap()).labels(), ["L", "a", "b"]);
+        super::super::confirm(&mut app).unwrap();
+        let ink = app.session.active().unwrap().doc.swatch("Ink").unwrap().paint.color().unwrap();
+        assert_eq!(ink.model(), vectorcraft_color::cms::Model::Lab);
+        assert_eq!(ink.to_hex(), Color::cmyk(0.0, 0.8, 0.6, 0.0).to_hex(), "the same colour, now in Lab");
+        // Lab values typed into the fields.
+        app.run("ui.swatchOptions", json!({"name": "Ink"})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("mode"), "lab", "opens in the colour's mode");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!(Color::lab(40.0, -30.0, 20.0)));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.swatch("Ink").unwrap().paint.color(), Some(Color::lab(40.0, -30.0, 20.0)));
     }
 }

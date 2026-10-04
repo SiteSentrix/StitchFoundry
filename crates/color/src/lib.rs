@@ -1,7 +1,7 @@
 //! Colour, paint and blend-mode types for VectorCraft.
 //!
-//! Colours keep the model the user picked them in (RGB, CMYK, Gray, HSB is a UI view of RGB), so
-//! documents don't drift when converting back and forth. Rendering asks for [`Color::to_rgba`].
+//! Colours keep the model the user picked them in (RGB, CMYK, Gray, Lab; HSB is a UI view of RGB),
+//! so documents don't drift when converting back and forth. Rendering asks for [`Color::to_rgba`].
 #![forbid(unsafe_code)]
 
 pub mod blend;
@@ -21,13 +21,31 @@ pub use swatch::{Swatch, SwatchGroup, default_swatches};
 
 use serde::{Deserialize, Serialize};
 
-/// A colour in its authoring model. Components are 0..=1.
+/// A colour in its authoring model. Components are 0..=1, except Lab's.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "model", rename_all = "lowercase")]
 pub enum Color {
-    Rgb { r: f32, g: f32, b: f32 },
-    Cmyk { c: f32, m: f32, y: f32, k: f32 },
-    Gray { k: f32 },
+    Rgb {
+        r: f32,
+        g: f32,
+        b: f32,
+    },
+    Cmyk {
+        c: f32,
+        m: f32,
+        y: f32,
+        k: f32,
+    },
+    Gray {
+        k: f32,
+    },
+    /// CIE L*a*b* (D50): L 0..100, a and b about −128..127. Device independent, the way spot
+    /// colours are defined; it shows and separates through the active colour settings.
+    Lab {
+        l: f32,
+        a: f32,
+        b: f32,
+    },
 }
 
 impl Default for Color {
@@ -52,6 +70,9 @@ impl Color {
     pub fn gray(k: f32) -> Self {
         Color::Gray { k }
     }
+    pub fn lab(l: f32, a: f32, b: f32) -> Self {
+        Color::Lab { l, a, b }
+    }
 
     /// Display (sRGB) colour through the active colour settings ([`cms::active`]): RGB is
     /// converted from the working RGB space, CMYK through the working CMYK profile (relative
@@ -62,15 +83,18 @@ impl Color {
             Color::Cmyk { c, m, y, k } if cms::cmyk_is_device() => cms::naive_cmyk_to_rgb([c, m, y, k]),
             // Illustrator's Gray is ink percentage: 0 = white, 1 = black.
             Color::Gray { k } => [1.0 - k; 3],
+            Color::Lab { l, a, b } => cms::lab::lab_to_srgb(cms::Lab::new(l, a, b)),
             _ => cms::active().display_rgb(self),
         }
     }
-    /// Profile-free display RGB (`(1−c)(1−k)` …), the pre-colour-management formula.
+    /// Profile-free display RGB (`(1−c)(1−k)` …), the pre-colour-management formula (Lab, being
+    /// device independent, is its sRGB colour).
     pub fn to_rgb_uncalibrated(&self) -> [f32; 3] {
         match *self {
             Color::Rgb { r, g, b } => [r, g, b],
             Color::Cmyk { c, m, y, k } => cms::naive_cmyk_to_rgb([c, m, y, k]),
             Color::Gray { k } => [1.0 - k; 3],
+            Color::Lab { l, a, b } => cms::lab::lab_to_srgb(cms::Lab::new(l, a, b)),
         }
     }
     /// CIE Lab (D50) through the active colour settings.
@@ -182,11 +206,12 @@ impl Color {
                 Color::Cmyk { c, m, y, k }
             }
             Color::Gray { k } => Color::Gray { k: 1.0 - k },
+            Color::Lab { .. } => self.invert().in_model(cms::Model::Lab),
         }
     }
     /// Complement in the colour's own model: each component becomes (highest + lowest) − itself,
     /// over R, G, B or over C, M, Y (K kept). For RGB this is the hue turned by 180°; a grey is its
-    /// own complement.
+    /// own complement; Lab turns its hue by 180° (a and b negated).
     pub fn complement_keep_model(&self) -> Self {
         let flip = |v: [f32; 3]| {
             let s = v[0].max(v[1]).max(v[2]) + v[0].min(v[1]).min(v[2]);
@@ -202,6 +227,7 @@ impl Color {
                 Color::Cmyk { c, m, y, k }
             }
             Color::Gray { .. } => *self,
+            Color::Lab { l, a, b } => Color::Lab { l, a: -a, b: -b },
         }
     }
     /// Linear interpolation in display RGB.
@@ -216,11 +242,12 @@ impl Color {
             Color::Rgb { .. } => cms::Model::Rgb,
             Color::Cmyk { .. } => cms::Model::Cmyk,
             Color::Gray { .. } => cms::Model::Gray,
+            Color::Lab { .. } => cms::Model::Lab,
         }
     }
     /// This colour expressed in `model` with the profile-free formulas Edit Colors uses (RGB from
-    /// the display colour, CMYK by [`Color::to_cmyk`], Gray as ink from luminance); unchanged when it
-    /// is in `model` already.
+    /// the display colour, CMYK by [`Color::to_cmyk`], Gray as ink from luminance, Lab by
+    /// [`Color::to_lab`]); unchanged when it is in `model` already.
     pub fn in_model(self, model: cms::Model) -> Color {
         if self.model() == model {
             return self;
@@ -238,10 +265,15 @@ impl Color {
                 let [r, g, b] = self.to_rgb();
                 Color::gray((1.0 - (0.299 * r + 0.587 * g + 0.114 * b)).clamp(0.0, 1.0))
             }
+            cms::Model::Lab => {
+                let cms::Lab { l, a, b } = self.to_lab();
+                Color::Lab { l, a, b }
+            }
         }
     }
     /// Tint `t` (0..1) of this colour, the colour a tint of a global or spot swatch shows: CMYK and
-    /// Gray inks scale by `t`, RGB mixes toward white (`t` = 0 is paper white, 1 the colour itself).
+    /// Gray inks scale by `t`, RGB and Lab mix toward white (`t` = 0 is paper white, 1 the colour
+    /// itself; Lab toward L 100, a = b = 0, as a PDF Lab alternate interpolates).
     pub fn tinted(self, t: f32) -> Color {
         let t = t.clamp(0.0, 1.0);
         if t == 1.0 {
@@ -254,6 +286,7 @@ impl Color {
                 let w = |v: f32| v + (1.0 - v) * (1.0 - t);
                 Color::Rgb { r: w(r), g: w(g), b: w(b) }
             }
+            Color::Lab { l, a, b } => Color::Lab { l: 100.0 - (100.0 - l) * t, a: a * t, b: b * t },
         }
     }
     pub fn model_name(&self) -> &'static str {
@@ -261,6 +294,7 @@ impl Color {
             Color::Rgb { .. } => "RGB",
             Color::Cmyk { .. } => "CMYK",
             Color::Gray { .. } => "Grayscale",
+            Color::Lab { .. } => "Lab",
         }
     }
 }
@@ -443,12 +477,14 @@ mod tests {
                 Color::Cmyk { c, m, y, k } => vec![c, m, y, k],
                 Color::Rgb { r, g, b } => vec![r, g, b],
                 Color::Gray { k } => vec![k],
+                Color::Lab { l, a, b } => vec![l, a, b],
             };
             a.model() == b.model() && v(a).iter().zip(v(b)).all(|(x, y)| (x - y).abs() < 1e-6)
         };
         assert!(close(Color::cmyk(0.5, 1.0, 0.0, 0.2).tinted(0.4), Color::cmyk(0.2, 0.4, 0.0, 0.08)));
         assert!(close(Color::gray(0.5).tinted(0.5), Color::gray(0.25)));
         assert!(close(Color::rgb(1.0, 0.0, 0.5).tinted(0.4), Color::rgb(1.0, 0.6, 0.8)), "RGB mixes toward white");
+        assert!(close(Color::lab(40.0, 60.0, -20.0).tinted(0.25), Color::lab(85.0, 15.0, -5.0)), "Lab mixes toward paper white");
         assert_eq!(Color::rgb(0.2, 0.4, 0.6).tinted(1.0), Color::rgb(0.2, 0.4, 0.6));
         assert_eq!(Color::cmyk(0.3, 0.3, 0.3, 0.3).tinted(0.0), Color::cmyk(0.0, 0.0, 0.0, 0.0));
         assert_eq!(Color::rgb(0.0, 0.0, 0.0).tinted(-1.0).to_hex(), "#ffffff", "clamped");
@@ -481,6 +517,24 @@ mod tests {
         });
         let Paint::Gradient(g) = g else { unreachable!() };
         assert!(g.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Ink") && s.tint == 0.5));
+    }
+
+    #[test]
+    fn lab_colours_serialize_with_their_tag_and_keep_their_model() {
+        let c = Color::lab(52.5, 70.0, -30.0);
+        let s = serde_json::to_string(&c).unwrap();
+        assert_eq!(s, r#"{"model":"lab","l":52.5,"a":70.0,"b":-30.0}"#);
+        assert_eq!(serde_json::from_str::<Color>(&s).unwrap(), c);
+        assert_eq!((c.model(), c.model_name()), (cms::Model::Lab, "Lab"));
+        assert_eq!(c.complement_keep_model(), Color::lab(52.5, -70.0, 30.0));
+        assert_eq!(c.invert_keep_model().model(), cms::Model::Lab);
+        // Results of colour operations on a Lab colour stay Lab, and the conversion is exact.
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let Color::Lab { l, a, b } = keep_model(c, red) else { panic!("Lab") };
+        assert!((l - 54.29).abs() < 0.1 && (a - 80.8).abs() < 0.3 && (b - 69.9).abs() < 0.3, "{l} {a} {b}");
+        assert_eq!(keep_model(c, red).to_hex(), "#ff0000");
+        assert_eq!(Color::lab(100.0, 0.0, 0.0).to_hex(), "#ffffff");
+        assert_eq!(Color::lab(0.0, 0.0, 0.0).to_rgb_uncalibrated(), [0.0; 3]);
     }
 
     #[test]

@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", intent?} set the document colour mode and convert every colour (art, symbols, swatches; swatch links kept) through the colour settings → {changed}",
+            "{mode: \"cmyk\"|\"rgb\", intent?} set the document colour mode and convert every colour (art, symbols, swatches; swatch links kept; Gray and Lab colours stay) through the colour settings → {changed}",
             has_doc,
             convert_mode
         ),
@@ -245,8 +245,9 @@ fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
     let c = cms::active();
     let intent = intent_param(p, C)?.unwrap_or(c.settings().intent);
     let model = if mode == ColorMode::Cmyk { Model::Cmyk } else { Model::Rgb };
-    // Greys stay greys (they print on the black plate in either mode).
-    let conv = |col: &Color| if matches!(col, Color::Gray { .. }) { *col } else { c.convert(col, model, intent) };
+    // Greys stay greys (they print on the black plate in either mode); Lab colours (spot colour
+    // definitions) are device independent and fit either mode.
+    let conv = |col: &Color| if matches!(col, Color::Gray { .. } | Color::Lab { .. }) { *col } else { c.convert(col, model, intent) };
     let mut changed = 0usize;
     s.edit("Document Color Mode", |d, _| {
         d.color_mode = mode;
@@ -287,6 +288,7 @@ fn values(c: &Color) -> Vec<f32> {
         Color::Rgb { r, g, b } => vec![r, g, b],
         Color::Cmyk { c, m, y, k } => vec![c, m, y, k],
         Color::Gray { k } => vec![k],
+        Color::Lab { l, a, b } => vec![l, a, b],
     }
 }
 

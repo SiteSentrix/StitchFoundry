@@ -71,7 +71,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     }
     pdf.set_metadata(meta);
 
-    let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), brushes: None, knockout: doc.page_knockout };
+    let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), brushes: None, knockout: doc.page_knockout, lab_spots: vec![] };
     for i in indices {
         let ab = &doc.artboards[i];
         let r = ab.rect;
@@ -95,6 +95,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         page.finish();
     }
     let bytes = pdf.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
+    let bytes = if ex.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &ex.lab_spots) };
     let mut warnings = ex.warnings;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
@@ -141,6 +142,8 @@ struct Exporter<'a> {
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Whether the group being written is a knockout group (what its neutral children inherit).
     knockout: bool,
+    /// Spot colours written with a Lab alternate ([`crate::lab_spot`]): colorant name, Lab values.
+    lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
 }
 
 fn xf(a: Affine) -> Transform {
@@ -205,6 +208,10 @@ fn color(c: &Color) -> krilla::color::Color {
         Color::Cmyk { c, m, y, k } => cmyk::Color::new(q(c), q(m), q(y), q(k)).into(),
         // VectorCraft grey is ink coverage (0 = white); PDF DeviceGray is lightness.
         Color::Gray { k } => luma::Color::new(q(1.0 - k)).into(),
+        Color::Lab { .. } => {
+            let [r, g, b] = c.to_rgb();
+            rgb::Color::new(q(r), q(g), q(b)).into()
+        }
     }
 }
 
@@ -232,10 +239,10 @@ fn rects_overlap(a: Rect, b: Rect) -> bool {
 }
 
 impl Exporter<'_> {
-    /// A colour for the page: in CMYK documents RGB colours are separated into DeviceCMYK through
-    /// the active colour settings, so the file carries press values.
+    /// A colour for the page: in CMYK documents RGB and Lab colours are separated into DeviceCMYK
+    /// through the active colour settings, so the file carries press values.
     fn col(&mut self, c: &Color) -> krilla::color::Color {
-        if self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && matches!(c, Color::Rgb { .. }) {
+        if self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && matches!(c, Color::Rgb { .. } | Color::Lab { .. }) {
             let cms = vectorcraft_color::cms::active();
             let [cc, m, y, k] = cms.to_cmyk(c, cms.settings().intent);
             return cmyk::Color::new(q(cc), q(m), q(y), q(k)).into();
@@ -244,11 +251,19 @@ impl Exporter<'_> {
     }
 
     /// The Separation colour space of spot swatch `name` (its CMYK equivalent is the alternate
-    /// space); `None` when `name` isn't a spot colour.
-    fn separation(&self, name: &str) -> Option<SeparationSpace> {
-        let sw = self.doc.swatch(name).filter(|s| s.spot)?;
+    /// space; a Lab spot colour also gets a Lab one, [`crate::lab_spot`], unless the Spot Colors
+    /// options use CMYK values); `None` when `name` isn't a spot colour.
+    fn separation(&mut self, name: &str) -> Option<SeparationSpace> {
+        let doc = self.doc;
+        let sw = doc.swatch(name).filter(|s| s.spot)?;
+        let color = doc.linked_color(sw.paint.color()?, true);
+        if let Color::Lab { l, a, b } = color
+            && !self.lab_spots.iter().any(|(n, _)| n == name)
+        {
+            self.lab_spots.push((name.to_string(), vectorcraft_color::cms::Lab::new(l, a, b)));
+        }
         let cms = vectorcraft_color::cms::active();
-        let full = cms.to_cmyk(&sw.paint.color()?, cms.settings().intent);
+        let full = cms.to_cmyk(&color, cms.settings().intent);
         let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
         Some(SeparationSpace::new(SeparationColorant::Custom(sw.name.clone()), alt))
     }

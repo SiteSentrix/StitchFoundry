@@ -30,12 +30,25 @@ impl Document {
     pub fn swatch_mut(&mut self, name: &str) -> Option<&mut Swatch> {
         self.swatches_iter_mut().find(|s| s.name == name)
     }
-    /// The colour of global (or spot) swatch `name`, which its tints scale; `None` when `name`
-    /// isn't a global solid colour of its own (a tint swatch isn't).
+    /// The colour of global (or spot) swatch `name`, which its tints scale ([`Document::linked_color`]
+    /// of its own); `None` when `name` isn't a global solid colour of its own (a tint swatch isn't).
     pub fn global_color(&self, name: &str) -> Option<Color> {
-        match &self.swatch(name).filter(|w| w.global)?.paint {
-            Paint::Solid { color, swatch: None, .. } => Some(*color),
+        let w = self.swatch(name).filter(|w| w.global)?;
+        match &w.paint {
+            Paint::Solid { color, swatch: None, .. } => Some(self.linked_color(*color, w.spot)),
             _ => None,
+        }
+    }
+    /// The colour art linked to a swatch of `color` shows and prints from: a Lab spot colour is
+    /// its working-CMYK equivalent when the Spot Colors options use CMYK values
+    /// ([`Document::spot_use_lab`] off); any other colour is itself.
+    pub fn linked_color(&self, color: Color, spot: bool) -> Color {
+        match color {
+            Color::Lab { .. } if spot && !self.spot_use_lab => {
+                let cms = vectorcraft_color::cms::active();
+                cms.convert(&color, vectorcraft_color::cms::Model::Cmyk, cms.settings().intent)
+            }
+            _ => color,
         }
     }
     /// The link a colour taken from swatch `name` gets: a global solid colour links to itself at
@@ -156,7 +169,7 @@ impl Document {
 }
 
 /// The default name of a solid swatch: its values in its own colour model ("C=10 M=20 Y=30 K=0",
-/// "R=255 G=128 B=0", "Gray K=40").
+/// "R=255 G=128 B=0", "Gray K=40", "L=52 a=70 b=-30").
 pub fn color_name(c: Color) -> String {
     // Clamped first, so a conversion's tiny negative never reads "-0".
     let pct = |v: f32| (v.clamp(0.0, 1.0) * 100.0).round();
@@ -165,6 +178,8 @@ pub fn color_name(c: Color) -> String {
         Color::Cmyk { c, m, y, k } => format!("C={} M={} Y={} K={}", pct(c), pct(m), pct(y), pct(k)),
         Color::Rgb { r, g, b } => format!("R={} G={} B={}", byte(r), byte(g), byte(b)),
         Color::Gray { k } => format!("Gray K={}", pct(k)),
+        // `+ 0.0` turns a rounded -0 into 0.
+        Color::Lab { l, a, b } => format!("L={} a={} b={}", l.round() + 0.0, a.round() + 0.0, b.round() + 0.0),
     }
 }
 

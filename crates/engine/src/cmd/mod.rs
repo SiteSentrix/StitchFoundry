@@ -253,7 +253,8 @@ pub fn matrix_param(p: &Value, key: &str) -> Option<Affine> {
     }
     Some(Affine::new(c))
 }
-/// A colour from `"#rrggbb"`, `[r,g,b]` (0..1), `{"c":..,"m":..,"y":..,"k":..}` or `{"gray":..}`.
+/// A colour from `"#rrggbb"`, `[r,g,b]` (0..1), `{"c":..,"m":..,"y":..,"k":..}`, `{"gray":..}` or
+/// `{"l":..,"a":..,"b":..}` (CIE Lab: L 0..100, a and b about −128..127).
 pub fn color_value(v: &Value) -> Option<Color> {
     match v {
         Value::String(s) => Color::from_hex(s),
@@ -266,6 +267,9 @@ pub fn color_value(v: &Value) -> Option<Color> {
             if let Some(g) = o.get("gray") {
                 let g = g.as_f64()?;
                 return Some(Color::gray(if g > 1.0 { g / 100.0 } else { g } as f32));
+            }
+            if let (Some(l), Some(a), Some(b), None) = (o.get("l"), o.get("a"), o.get("b"), o.get("model")) {
+                return Some(Color::lab(l.as_f64()? as f32, a.as_f64()? as f32, b.as_f64()? as f32));
             }
             serde_json::from_value(v.clone()).ok()
         }
