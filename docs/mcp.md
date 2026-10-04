@@ -672,8 +672,8 @@ the preference `japaneseCropMarks` is on or `style: "japanese"` is given.
 ## Scale Strokes & Effects
 
 `object.scale`, `object.transform` and `object.transformEach` take `strokes?: bool` (Scale Strokes & Effects) and
-`corners?: bool` (Scale Corners); without them the preferences `scaleStrokes` (default on) and `scaleCorners` (default
-off) apply (`prefs.set {key, value}`). With strokes on, a scale by k (the square root of the transform's determinant)
+`corners?: bool` (Scale Corners); without them the preferences `scaleStrokes` and `scaleCorners` (both off by
+default) apply (`prefs.set {key, value}`). With strokes on, a scale by k (the square root of the transform's determinant)
 multiplies stroke weights, dash lengths and dash offsets, and every distance parameter of the object's, its fills' and
 its strokes' effects (drop shadow offsets and blur, offsets, radii…; `effect.list` gives each effect's `lengths`;
 relative Roughen, Tweak and Zig Zag sizes stay percentages), in groups and layers too. With it off, nothing painted

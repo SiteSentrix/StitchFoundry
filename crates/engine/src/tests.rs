@@ -91,7 +91,10 @@ fn rotate_and_scale() {
     s.execute("object.scale", &json!({"sx": 200})).unwrap();
     let b = s.doc().unwrap().doc.node(a).unwrap().geometric_bounds().unwrap();
     assert!((b.width() - 20.0).abs() < 1e-9);
-    // stroke scaled with the object
+    // Scale Strokes & Effects is off by default: the stroke keeps its weight
+    assert_eq!(s.doc().unwrap().doc.node(a).unwrap().appearance.stroke_width(), 1.0);
+    // and scales with the object when asked
+    s.execute("object.scale", &json!({"sx": 200, "strokes": true})).unwrap();
     assert_eq!(s.doc().unwrap().doc.node(a).unwrap().appearance.stroke_width(), 2.0);
 }
 
