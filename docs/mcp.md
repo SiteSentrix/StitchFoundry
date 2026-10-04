@@ -458,3 +458,30 @@ ink with other colours is written in process colours, with a warning).
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stops":[{"offset":0,"swatch":"Ink"},{"offset":1,"swatch":"Ink","tint":20}]}}}
 ```
+
+## Transparency flattener presets
+
+`flattener.presets.list` lists the built-in presets (High, Medium and Low Resolution, `builtIn: true`) and the saved
+ones, each with its `options`. `flattener.presets.save {name?, newName?, preset?, …options}` creates or changes a saved
+preset (a change starts from the preset's own options; `newName` renames it; built-in presets can't change);
+`flattener.presets.delete {name}` deletes one. `flattener.presets.export {names?, path?}` writes them as a
+`.vcflattener` JSON file (without `path` it returns `data`), and `flattener.presets.import {path? | data? |
+dataBase64?, replace?}` adds a file's presets (names in use get a number unless `replace`). Saved presets live with
+the preferences and work as `preset` in `object.flattenTransparency` (and anywhere else flattener options are taken).
+
+```json
+{"name":"run_command","arguments":{"command":"flattener.presets.save","params":{"name":"Press","preset":"high","balance":60}}}
+{"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"preset":"Press"}}}
+```
+
+## Flattener Preview
+
+`flattener.preview {highlight?, overprints?, preset?, …options, ids?}` reports what flattening the document (or
+`ids`) would do without changing it: `counts` of transparent objects, all affected objects, patterns, outlined
+strokes and type, rasterized complex regions (areas the raster/vector balance rasterizes whole), all rasterized areas
+and flat-colour regions, plus `regions` (bounds, and `id` for objects) for the `highlight` asked for. `overprints:
+"discard"` or `"simulate"` flatten without preserving overprints.
+
+```json
+{"name":"run_command","arguments":{"command":"flattener.preview","params":{"highlight":"allRasterized","preset":"low"}}}
+```

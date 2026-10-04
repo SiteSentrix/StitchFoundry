@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
-use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind};
+use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
 
 use crate::state::Dialog;
 use crate::theme::{self, Brightness, Tokens};
@@ -20,7 +20,9 @@ const UI_FIELDS: &[(&str, &str, &str)] = &[
 ];
 
 pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
+    // One field per preference key or group (the flattener presets have commands of their own).
     let mut fields: Map<String, Value> = app.session.prefs.to_json().as_object().cloned().unwrap_or_default();
+    fields.retain(|k, _| vectorcraft_engine::cmd::prefscmds::spec(k).is_some() || PREF_GROUPS.contains(&k.as_str()));
     let cat = category.and_then(|c| PREF_CATEGORIES.iter().find(|x| x.eq_ignore_ascii_case(c))).copied().unwrap_or(PREF_CATEGORIES[0]);
     fields.insert("__category".into(), json!(cat));
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));

@@ -11,6 +11,13 @@
 //! clipped to them with Clip Complex Regions (else the image is a rectangle that takes in the
 //! regions it overlaps). The raster/vector balance rasterizes whole groups that split into more
 //! regions than it allows (all of them at 0).
+//!
+//! Edit → Transparency Flattener Presets: the built-in presets plus the user's, saved with the
+//! preferences ([`crate::Prefs::flattener_presets`]); a `preset` named anywhere options are taken
+//! finds both.
+//!
+//! Window → Flattener Preview: the same plan, worked out without rendering, reports what flattening
+//! the document would touch ([`FlattenReport`], `flattener.preview`).
 
 use std::sync::Arc;
 
@@ -30,15 +37,71 @@ use super::pathops::{node_path, outline_strokes, outline_strokes_under, shape_no
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![cmd!(
-        "object.flattenTransparency",
-        "Flatten Transparency…",
-        ["Object"],
-        None,
-        "{preset?: \"high\"|\"medium\"|\"low\" (default medium), balance?: 0..100 (raster/vector balance; 0 rasterizes everything), lineArtPpi?: 1..2400, gradientPpi?: 1..2400 (areas only gradients and meshes reach), textToOutlines?, strokesToOutlines?, clipComplexRegions? (clip images to the region outlines, else rectangles), antiAlias?, preserveAlpha? (composite over nothing instead of white), preserveOverprints? (areas showing one paint keep its colour and overprint; false clears overprints), options?: {the same keys}, ids?} overlapping transparent objects become one group of flat-colour regions, plus an image where gradients, patterns, images, masks or raster effects reach; objects without transparency stay → {ids, rasterized: images made, vector: regions made, options}",
-        has_doc,
-        flatten
-    )]
+    vec![
+        cmd!(
+            "object.flattenTransparency",
+            "Flatten Transparency…",
+            ["Object"],
+            None,
+            "{preset?: \"high\"|\"medium\"|\"low\" or a saved preset's name (see flattener.presets.list; default medium), balance?: 0..100 (raster/vector balance; 0 rasterizes everything), lineArtPpi?: 1..2400, gradientPpi?: 1..2400 (areas only gradients and meshes reach), textToOutlines?, strokesToOutlines?, clipComplexRegions? (clip images to the region outlines, else rectangles), antiAlias?, preserveAlpha? (composite over nothing instead of white), preserveOverprints? (areas showing one paint keep its colour and overprint; false clears overprints), options?: {the same keys}, ids?} overlapping transparent objects become one group of flat-colour regions, plus an image where gradients, patterns, images, masks or raster effects reach; objects without transparency stay → {ids, rasterized: images made, vector: regions made, options}",
+            has_doc,
+            flatten
+        ),
+        cmd!(
+            query "flattener.presets.list",
+            "Transparency Flattener Presets",
+            [],
+            None,
+            "{} → {presets: [{name, builtIn, options}]} the built-in presets (High, Medium and Low Resolution), then the saved ones; any of these names works as `preset` wherever flattener options are taken",
+            always,
+            presets_list
+        ),
+        cmd!(
+            query "flattener.presets.save",
+            "Save Transparency Flattener Preset",
+            [],
+            None,
+            "{name?: (default: a new \"Flattener Preset N\"), newName?: rename it, preset?: the preset to start from (default: the saved preset `name`, else medium), …options (the keys of object.flattenTransparency, at the top level or in `options`)} create or change a saved preset (built-in ones can't change) → {name, options, created}",
+            always,
+            presets_save
+        ),
+        cmd!(
+            query "flattener.presets.delete",
+            "Delete Transparency Flattener Preset",
+            [],
+            None,
+            "{name} delete a saved preset (built-in ones stay) → {deleted: name}",
+            always,
+            presets_delete
+        ),
+        cmd!(
+            query "flattener.presets.import",
+            "Import Transparency Flattener Presets",
+            [],
+            None,
+            "{path? | data?: file text | dataBase64?, replace?: false (replace saved presets of the same names; else the imported ones get a number)} add the presets of a .vcflattener file (as flattener.presets.export writes) to the saved ones → {imported: [names]}",
+            always,
+            presets_import
+        ),
+        cmd!(
+            query "flattener.presets.export",
+            "Export Transparency Flattener Presets",
+            [],
+            None,
+            "{names?: [preset names, built-in ones too] (default: every saved preset), path?} write the presets as a .vcflattener file (JSON) → {path, count}; without path → {data: the file's text, count}",
+            always,
+            presets_export
+        ),
+        cmd!(
+            query "flattener.preview",
+            "Flattener Preview",
+            [],
+            None,
+            "{highlight?: \"none\"|\"rasterizedRegions\" (areas the raster/vector balance rasterizes whole)|\"transparentObjects\"|\"allAffected\"|\"expandedPatterns\" (pattern art taking part)|\"outlinedStrokes\"|\"outlinedText\"|\"allRasterized\" (default none), overprints?: \"preserve\"|\"simulate\"|\"discard\" (simulate and discard flatten without preserveOverprints), preset?, …options (as object.flattenTransparency), ids?: (default: the whole document)} what flattening would do, without changing anything → {highlight, regions: [{bounds: {x, y, width, height}, id?}] (the highlighted objects, or areas), counts: {transparentObjects, allAffected, expandedPatterns, outlinedStrokes, outlinedText, rasterizedRegions, allRasterized, vectorRegions}, options}",
+            has_doc,
+            preview
+        ),
+    ]
 }
 
 /// Object → Flatten Transparency settings: a preset's, adjusted by the command's params.
@@ -109,11 +172,30 @@ impl FlattenOptions {
         })
     }
 
-    /// The options `p` asks for: `preset` (default medium) adjusted by the option keys given at the
-    /// top level or in `options`.
+    /// The built-in presets, finest first.
+    pub fn builtin_presets() -> Vec<FlattenerPreset> {
+        Self::PRESETS
+            .into_iter()
+            .filter_map(|id| Some(FlattenerPreset { name: Self::preset_label(id)?.into(), options: Self::preset(id)? }))
+            .collect()
+    }
+
+    /// A built-in preset (by id or display name) or one of `saved` (by name), any case.
+    pub fn find_preset(name: &str, saved: &[FlattenerPreset]) -> Option<Self> {
+        Self::preset(name).or_else(|| saved_preset(saved, name).map(|p| p.options.clone()))
+    }
+
+    /// The options `p` asks for, with the built-in presets only ([`Self::from_params_with`]).
     pub fn from_params(p: &Value) -> std::result::Result<Self, String> {
+        Self::from_params_with(p, &[])
+    }
+
+    /// The options `p` asks for: `preset` (built-in or one of `saved`; default medium) adjusted by
+    /// the option keys given at the top level or in `options`.
+    pub fn from_params_with(p: &Value, saved: &[FlattenerPreset]) -> std::result::Result<Self, String> {
         let base = match str_param(p, "preset") {
-            Some(name) => Self::preset(name).ok_or_else(|| format!("unknown preset `{name}` (high, medium or low)"))?,
+            Some(name) => Self::find_preset(name, saved)
+                .ok_or_else(|| format!("unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)"))?,
             None => Self::default(),
         };
         let mut v = serde_json::to_value(&base).map_err(|e| e.to_string())?;
@@ -142,19 +224,198 @@ impl FlattenOptions {
 
 fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.flattenTransparency";
-    let o = FlattenOptions::from_params(p).map_err(|m| bad(C, m))?;
+    let o = s.flatten_options(p).map_err(|m| bad(C, m))?;
     let roots = target_roots(s, p)?;
     if roots.is_empty() {
         return Err(EngineError::Other("Flatten Transparency: select objects to flatten".into()));
     }
     let src = s.doc()?.doc.clone();
-    let plan = plan(&src, &roots, &o);
+    let plan = plan(&src, &roots, &o, true);
     let options = serde_json::to_value(&o).unwrap_or_default();
     if plan.flat.is_empty() && !plan.kept.iter().any(|id| src.node(*id).is_some_and(|n| kept_work(n, &o))) {
         return Ok(json!({ "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": 0, "vector": 0, "options": options }));
     }
     let (ids, vector, rasterized) = s.edit("Flatten Transparency", |d, sel| apply(d, sel, plan, &o))?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": rasterized, "vector": vector, "options": options }))
+}
+
+// ---------- presets ----------
+
+/// A named set of flattener options: a built-in preset or a saved one
+/// ([`crate::Prefs::flattener_presets`]).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlattenerPreset {
+    pub name: String,
+    #[serde(default)]
+    pub options: FlattenOptions,
+}
+
+/// What `flattener.presets.export` writes and `flattener.presets.import` reads.
+#[derive(Serialize, Deserialize)]
+struct PresetFile {
+    format: String,
+    #[serde(default)]
+    presets: Vec<FlattenerPreset>,
+}
+
+/// The `format` of a presets file, also its extension.
+pub const PRESET_FORMAT: &str = "vcflattener";
+
+/// The extensions of presets files (opening one imports it).
+pub const PRESET_EXTS: &[&str] = &[PRESET_FORMAT];
+
+fn saved_preset<'a>(saved: &'a [FlattenerPreset], name: &str) -> Option<&'a FlattenerPreset> {
+    saved.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim()))
+}
+
+impl Session {
+    /// Every flattener preset: the built-in ones, then the saved ones.
+    pub fn flattener_presets(&self) -> Vec<FlattenerPreset> {
+        let mut v = FlattenOptions::builtin_presets();
+        v.extend(self.prefs.flattener_presets.iter().cloned());
+        v
+    }
+
+    /// The preset `name` names: a built-in one (by id or display name) or a saved one, any case.
+    pub fn flattener_preset(&self, name: &str) -> Option<FlattenerPreset> {
+        let key = name.trim();
+        let key = FlattenOptions::preset_label(&key.to_ascii_lowercase()).unwrap_or(key);
+        self.flattener_presets().into_iter().find(|p| p.name.eq_ignore_ascii_case(key))
+    }
+
+    /// The flattener options `p` asks for: a `preset` by name, built-in or saved, adjusted by the
+    /// option keys ([`FlattenOptions::from_params_with`]).
+    pub fn flatten_options(&self, p: &Value) -> std::result::Result<FlattenOptions, String> {
+        FlattenOptions::from_params_with(p, &self.prefs.flattener_presets)
+    }
+
+    /// The first free "Flattener Preset N": the name a new preset gets.
+    pub fn new_preset_name(&self) -> String {
+        (1..).map(|i| format!("Flattener Preset {i}")).find(|n| !self.preset_taken(n, None)).unwrap_or_default()
+    }
+
+    /// The index of the saved preset `name`.
+    fn saved_index(&self, name: &str) -> Option<usize> {
+        self.prefs.flattener_presets.iter().position(|q| q.name.eq_ignore_ascii_case(name.trim()))
+    }
+
+    /// Whether `name` is taken by a built-in preset or a saved one other than the one at `except`.
+    fn preset_taken(&self, name: &str, except: Option<usize>) -> bool {
+        FlattenOptions::preset(name).is_some() || self.saved_index(name).is_some_and(|i| Some(i) != except)
+    }
+}
+
+fn presets_list(s: &mut Session, _: &Value) -> Result<Value> {
+    let rows = FlattenOptions::builtin_presets()
+        .into_iter()
+        .map(|p| (p, true))
+        .chain(s.prefs.flattener_presets.iter().cloned().map(|p| (p, false)))
+        .map(|(p, builtin)| json!({"name": p.name, "builtIn": builtin, "options": p.options}));
+    Ok(json!({ "presets": rows.collect::<Vec<_>>() }))
+}
+
+fn presets_save(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "flattener.presets.save";
+    let name = match str_param(p, "name").map(str::trim) {
+        Some("") => return Err(bad(C, "`name` is empty")),
+        Some(n) => n.to_string(),
+        None => s.new_preset_name(),
+    };
+    if FlattenOptions::preset(&name).is_some() {
+        return Err(bad(C, format!("`{name}` is a built-in preset and can't change: save it under another name")));
+    }
+    let at = s.saved_index(&name);
+    // A saved preset changes from its own options unless `preset` says where to start.
+    let mut q = p.clone();
+    if let (Some(i), Some(o), None) = (at, q.as_object_mut(), str_param(p, "preset")) {
+        o.insert("preset".into(), json!(s.prefs.flattener_presets[i].name));
+    }
+    let options = s.flatten_options(&q).map_err(|m| bad(C, m))?;
+    let name = match str_param(p, "newName").map(str::trim) {
+        Some("") => return Err(bad(C, "`newName` is empty")),
+        Some(n) if s.preset_taken(n, at) => return Err(bad(C, format!("a preset named `{n}` exists"))),
+        Some(n) => n.to_string(),
+        None => at.map_or(name, |i| s.prefs.flattener_presets[i].name.clone()),
+    };
+    let preset = FlattenerPreset { name: name.clone(), options: options.clone() };
+    match at {
+        Some(i) => s.prefs.flattener_presets[i] = preset,
+        None => s.prefs.flattener_presets.push(preset),
+    }
+    Ok(json!({"name": name, "options": options, "created": at.is_none()}))
+}
+
+fn presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "flattener.presets.delete";
+    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
+    if FlattenOptions::preset(name).is_some() {
+        return Err(bad(C, format!("`{name}` is a built-in preset and stays")));
+    }
+    let i = s.saved_index(name).ok_or_else(|| bad(C, format!("no saved preset named `{name}`")))?;
+    Ok(json!({ "deleted": s.prefs.flattener_presets.remove(i).name }))
+}
+
+fn presets_export(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "flattener.presets.export";
+    let presets = match p.get("names").and_then(Value::as_array) {
+        Some(names) => {
+            let find = |n: &Value| {
+                let n = n.as_str().unwrap_or_default();
+                s.flattener_preset(n).ok_or_else(|| bad(C, format!("no preset named `{n}`")))
+            };
+            names.iter().map(find).collect::<Result<Vec<_>>>()?
+        }
+        None => s.prefs.flattener_presets.clone(),
+    };
+    if presets.is_empty() {
+        return Err(bad(C, "no saved presets to export (name built-in ones in `names`)"));
+    }
+    let count = presets.len();
+    let text = serde_json::to_string_pretty(&PresetFile { format: PRESET_FORMAT.into(), presets }).map_err(|e| bad(C, e.to_string()))?;
+    match str_param(p, "path") {
+        Some(path) => {
+            super::fileio::write_file(path, text.as_bytes())?;
+            Ok(json!({"path": path, "count": count}))
+        }
+        None => Ok(json!({"data": text, "count": count})),
+    }
+}
+
+fn presets_import(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "flattener.presets.import";
+    let bytes = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => super::fileio::read_file(path)?,
+        (None, Some(text), _) => text.as_bytes().to_vec(),
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(C, "bad dataBase64"))?,
+        _ => return Err(bad(C, "give `path`, `data` or `dataBase64`")),
+    };
+    let file: PresetFile = serde_json::from_slice(&bytes).map_err(|e| bad(C, format!("not a flattener presets file: {e}")))?;
+    if file.format != PRESET_FORMAT {
+        return Err(bad(C, format!("not a flattener presets file (format `{}`)", file.format)));
+    }
+    // Values a hand-edited file may carry are rejected as the commands reject them.
+    for q in &file.presets {
+        FlattenOptions::from_params(&json!({ "options": q.options })).map_err(|m| bad(C, format!("`{}`: {m}", q.name)))?;
+    }
+    let replace = bool_or(p, "replace", false);
+    let mut imported = vec![];
+    for mut preset in file.presets {
+        let base = Some(preset.name.trim()).filter(|n| !n.is_empty()).unwrap_or("Flattener Preset").to_string();
+        match s.saved_index(&base) {
+            Some(i) if replace => {
+                preset.name = s.prefs.flattener_presets[i].name.clone();
+                imported.push(preset.name.clone());
+                s.prefs.flattener_presets[i] = preset;
+            }
+            _ => {
+                preset.name = unique_name(&base, |n| s.preset_taken(n, None));
+                imported.push(preset.name.clone());
+                s.prefs.flattener_presets.push(preset);
+            }
+        }
+    }
+    Ok(json!({ "imported": imported }))
 }
 
 /// The top-level objects among `ids` (or the selection), in paint order: layers stand for their
@@ -180,6 +441,284 @@ fn target_roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     Ok(roots.into_iter().filter(|id| d.is_visible(*id) && d.is_editable(*id) && !clipping(*id)).collect())
 }
 
+// ---------- preview ----------
+
+/// What the Flattener Preview highlights.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Highlight {
+    /// Nothing: the art in colour.
+    #[default]
+    None,
+    /// Areas the raster/vector balance rasterizes whole.
+    RasterizedRegions,
+    /// Objects with transparency of their own.
+    TransparentObjects,
+    /// Every object flattening changes.
+    AllAffected,
+    /// Objects with pattern paint in the flattened art.
+    ExpandedPatterns,
+    /// Strokes that become filled outlines.
+    OutlinedStrokes,
+    /// Type that becomes outlines.
+    OutlinedText,
+    /// Every area that becomes an image.
+    AllRasterized,
+}
+
+impl Highlight {
+    pub const ALL: [Self; 8] = [
+        Self::None,
+        Self::RasterizedRegions,
+        Self::TransparentObjects,
+        Self::AllAffected,
+        Self::ExpandedPatterns,
+        Self::OutlinedStrokes,
+        Self::OutlinedText,
+        Self::AllRasterized,
+    ];
+
+    /// The id `flattener.preview` takes.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::RasterizedRegions => "rasterizedRegions",
+            Self::TransparentObjects => "transparentObjects",
+            Self::AllAffected => "allAffected",
+            Self::ExpandedPatterns => "expandedPatterns",
+            Self::OutlinedStrokes => "outlinedStrokes",
+            Self::OutlinedText => "outlinedText",
+            Self::AllRasterized => "allRasterized",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "None (Color Preview)",
+            Self::RasterizedRegions => "Rasterized Complex Regions",
+            Self::TransparentObjects => "Transparent Objects",
+            Self::AllAffected => "All Affected Objects",
+            Self::ExpandedPatterns => "Expanded Patterns",
+            Self::OutlinedStrokes => "Outlined Strokes",
+            Self::OutlinedText => "Outlined Text",
+            Self::AllRasterized => "All Rasterized Regions",
+        }
+    }
+
+    /// A highlight by id or label, any case.
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim();
+        Self::ALL.into_iter().find(|h| h.id().eq_ignore_ascii_case(s) || h.label().eq_ignore_ascii_case(s))
+    }
+}
+
+/// How the Flattener Preview treats overprints: kept as they are, simulated in the preview, or
+/// dropped; only Preserve flattens with Preserve Overprints and Spot Colors.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Overprints {
+    #[default]
+    Preserve,
+    Simulate,
+    Discard,
+}
+
+impl Overprints {
+    pub const ALL: [Self; 3] = [Self::Preserve, Self::Simulate, Self::Discard];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Preserve => "preserve",
+            Self::Simulate => "simulate",
+            Self::Discard => "discard",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Preserve => "Preserve",
+            Self::Simulate => "Simulate",
+            Self::Discard => "Discard",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|o| o.id().eq_ignore_ascii_case(s.trim()) || o.label().eq_ignore_ascii_case(s.trim()))
+    }
+}
+
+/// What flattening would do (Window → Flattener Preview, `flattener.preview`).
+#[derive(Clone, Debug, Default)]
+pub struct FlattenReport {
+    /// Top-level objects with transparency of their own.
+    pub transparent: Vec<NodeId>,
+    /// Top-level objects flattening changes: the overlapping groups with transparency, and those
+    /// the outline and overprint options change.
+    pub affected: Vec<NodeId>,
+    /// Objects with pattern paint in the flattened art.
+    pub patterns: Vec<NodeId>,
+    /// Paths whose strokes become filled outlines.
+    pub strokes: Vec<NodeId>,
+    /// Type that becomes outlines.
+    pub text: Vec<NodeId>,
+    /// Areas the raster/vector balance rasterizes whole.
+    pub complex: Vec<PathData>,
+    /// Every area that becomes an image.
+    pub rasterized: Vec<PathData>,
+    /// Flat-colour regions made.
+    pub vector: usize,
+}
+
+impl FlattenReport {
+    /// The objects `h` highlights.
+    pub fn objects(&self, h: Highlight) -> &[NodeId] {
+        match h {
+            Highlight::TransparentObjects => &self.transparent,
+            Highlight::AllAffected => &self.affected,
+            Highlight::ExpandedPatterns => &self.patterns,
+            Highlight::OutlinedStrokes => &self.strokes,
+            Highlight::OutlinedText => &self.text,
+            _ => &[],
+        }
+    }
+
+    /// The areas `h` highlights.
+    pub fn areas(&self, h: Highlight) -> &[PathData] {
+        match h {
+            Highlight::RasterizedRegions => &self.complex,
+            Highlight::AllRasterized => &self.rasterized,
+            _ => &[],
+        }
+    }
+
+    /// How many objects or areas each highlight shows.
+    pub fn counts(&self) -> Value {
+        json!({
+            "transparentObjects": self.transparent.len(),
+            "allAffected": self.affected.len(),
+            "expandedPatterns": self.patterns.len(),
+            "outlinedStrokes": self.strokes.len(),
+            "outlinedText": self.text.len(),
+            "rasterizedRegions": self.complex.len(),
+            "allRasterized": self.rasterized.len(),
+            "vectorRegions": self.vector,
+        })
+    }
+
+    /// The report as `flattener.preview` answers: the highlighted objects (or areas) of `doc` and
+    /// the counts.
+    pub fn to_json(&self, doc: &Document, h: Highlight) -> Value {
+        let rect = |r: Rect| json!({"x": r.x0, "y": r.y0, "width": r.width(), "height": r.height()});
+        let objects = self.objects(h).iter().filter_map(|id| Some(json!({"id": id.0, "bounds": rect(doc.node(*id)?.visual_bounds()?)})));
+        let areas = self.areas(h).iter().filter_map(|p| Some(json!({ "bounds": rect(p.bounds()?) })));
+        json!({"highlight": h.id(), "regions": objects.chain(areas).collect::<Vec<_>>(), "counts": self.counts()})
+    }
+
+    /// The art `h` highlights, opaque, alone in a copy of `doc`: the objects and the areas (filled
+    /// black). Its coverage is the highlight. `None` when nothing is highlighted.
+    pub fn highlight_art(&self, doc: &Document, h: Highlight) -> Option<Document> {
+        let (ids, areas) = (self.objects(h), self.areas(h));
+        if ids.is_empty() && areas.is_empty() {
+            return None;
+        }
+        let mut tmp = doc.clone();
+        let mut art: Vec<Node> = ids.iter().filter_map(|id| doc.node(*id).cloned()).collect();
+        art.iter_mut().for_each(opaque);
+        for path in areas {
+            let mut n = shape_node(&mut tmp, path.clone(), None);
+            n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0);
+            art.push(n);
+        }
+        Some(isolated_doc(&tmp, art))
+    }
+}
+
+/// What flattening `roots` of `doc` with `o` would do.
+pub fn report(doc: &Document, roots: &[NodeId], o: &FlattenOptions) -> FlattenReport {
+    let plan = plan(doc, roots, o, false);
+    let mut r = FlattenReport { transparent: plan.transparent, ..Default::default() };
+    // Every object under `id` (but a compound path's own pieces), visible ones only.
+    fn visit(n: &Node, f: &mut dyn FnMut(&Node)) {
+        if !n.visible {
+            return;
+        }
+        f(n);
+        if !matches!(n.kind, NodeKind::Compound { .. }) {
+            for c in n.children().into_iter().flatten() {
+                visit(c, f);
+            }
+        }
+    }
+    let pattern = |n: &Node| n.appearance.items.iter().any(|i| i.visible() && matches!(i.paint(), Paint::Pattern { .. }));
+    for f in &plan.flat {
+        r.affected.extend(&f.roots);
+        r.vector += f.regions.len();
+        for root in f.roots.iter().filter_map(|id| doc.node(*id)) {
+            visit(root, &mut |n| {
+                // Flattened art is outlined throughout and its patterns become part of the image.
+                if matches!(n.kind, NodeKind::Text(_)) {
+                    r.text.push(n.id);
+                } else if stroked(n) {
+                    r.strokes.push(n.id);
+                }
+                if pattern(n) {
+                    r.patterns.push(n.id);
+                }
+            });
+        }
+        if let Some(a) = &f.area {
+            if a.whole {
+                r.complex.push(a.outline());
+            }
+            r.rasterized.push(a.outline());
+        }
+    }
+    for root in plan.kept.iter().filter_map(|id| doc.node(*id)).filter(|n| kept_work(n, o)) {
+        r.affected.push(root.id);
+        visit(root, &mut |n| {
+            if o.text_to_outlines && matches!(n.kind, NodeKind::Text(_)) {
+                r.text.push(n.id);
+            } else if o.strokes_to_outlines && stroked(n) {
+                r.strokes.push(n.id);
+            }
+        });
+    }
+    r.affected.sort_by_key(|id| doc.index_path(*id));
+    r
+}
+
+impl Session {
+    /// What flattening would do with the options `p` asks for (as `flattener.preview`): the
+    /// options and the report.
+    pub fn flattener_report(&self, p: &Value) -> Result<(FlattenOptions, FlattenReport)> {
+        const C: &str = "flattener.preview";
+        let mut o = self.flatten_options(p).map_err(|m| bad(C, m))?;
+        if let Some(v) = str_param(p, "overprints") {
+            let ov = Overprints::parse(v).ok_or_else(|| bad(C, format!("unknown overprints `{v}` (preserve, simulate or discard)")))?;
+            o.preserve_overprints = ov == Overprints::Preserve;
+        }
+        let roots = if p.get("ids").is_some() {
+            target_roots(self, p)?
+        } else {
+            let layers: Vec<u64> = self.doc()?.doc.layers.iter().map(|l| l.id.0).collect();
+            target_roots(self, &json!({ "ids": layers }))?
+        };
+        let r = report(&self.doc()?.doc, &roots, &o);
+        Ok((o, r))
+    }
+}
+
+fn preview(s: &mut Session, p: &Value) -> Result<Value> {
+    let h = match str_param(p, "highlight") {
+        Some(v) => Highlight::parse(v).ok_or_else(|| bad("flattener.preview", format!("unknown highlight `{v}`")))?,
+        None => Highlight::None,
+    };
+    let (o, r) = s.flattener_report(p)?;
+    let mut out = r.to_json(&s.doc()?.doc, h);
+    out["options"] = serde_json::to_value(&o).unwrap_or_default();
+    Ok(out)
+}
+
 // ---------- plan ----------
 
 /// What the flattening does, worked out before the document changes.
@@ -187,15 +726,39 @@ struct Plan {
     flat: Vec<Flat>,
     /// Objects without transparency (they stay, but for the outline options).
     kept: Vec<NodeId>,
+    /// The objects with transparency of their own.
+    transparent: Vec<NodeId>,
 }
 
 /// One group of overlapping objects with transparency and what replaces it.
 struct Flat {
     /// Its objects in paint order; the result takes the place of the last.
     roots: Vec<NodeId>,
-    regions: Vec<(PathData, RegionFill)>,
+    regions: Regions,
+    /// Where its image goes, and the image (once rendered).
+    area: Option<Area>,
     raster: Option<Raster>,
 }
+
+/// Where a group's image goes.
+struct Area {
+    rect: Rect,
+    ppi: f64,
+    /// The complex regions it is clipped to (Clip Complex Regions).
+    clip: Option<PathData>,
+    /// The raster/vector balance rasterizes the whole group (it splits into too many regions).
+    whole: bool,
+}
+
+impl Area {
+    /// The area's outline.
+    fn outline(&self) -> PathData {
+        self.clip.clone().unwrap_or_else(|| shapes::rectangle(self.rect))
+    }
+}
+
+/// Flat-colour regions: their outlines and paints.
+type Regions = Vec<(PathData, RegionFill)>;
 
 /// A flat-colour region's paint.
 struct RegionFill {
@@ -213,7 +776,9 @@ struct Raster {
     clip: Option<PathData>,
 }
 
-fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions) -> Plan {
+/// The flattening of `roots` with `o`; `render` renders the images (the preview only needs where
+/// they go).
+fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render: bool) -> Plan {
     let tmp = isolated_doc(src, roots.iter().filter_map(|id| src.node(*id).cloned()).collect());
     // Geometry effects first: what is left on the art are raster effects.
     let baked = effects::bake_document(&tmp).unwrap_or(tmp);
@@ -221,26 +786,28 @@ fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions) -> Plan {
     let mut sc = Scratch { brushes: vectorcraft_brush::library(&baked), doc: baked.clone() };
     let plain: Vec<Node> = art.iter().map(|n| sc.plain(n)).collect();
     let reaches: Vec<Option<Rect>> = plain.iter().map(reach).collect();
-    let mut out = Plan { flat: vec![], kept: vec![] };
+    let see_through: Vec<bool> = plain.iter().map(transparent).collect();
+    let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
     for g in overlapping(&reaches) {
         let ids: Vec<NodeId> = g.iter().map(|&i| roots[i]).collect();
-        let flat = g.iter().any(|&i| transparent(&plain[i])).then(|| {
+        let flat = g.iter().any(|&i| see_through[i]).then(|| {
             let art: Vec<Node> = g.iter().map(|&i| art[i].clone()).collect();
             let plain: Vec<&Node> = g.iter().map(|&i| &plain[i]).collect();
-            flatten_group(&baked, &art, &plain, o)
+            let (regions, area) = flatten_group(&plain, o)?;
+            let raster = area.as_ref().filter(|_| render).map(|a| render_raster(&baked, &art, a.rect, a.ppi, a.clip.clone(), o));
+            Some(Flat { roots: ids.clone(), regions, area, raster })
         });
         match flat.flatten() {
-            Some((regions, raster)) => out.flat.push(Flat { roots: ids, regions, raster }),
+            Some(f) => out.flat.push(f),
             None => out.kept.extend(ids),
         }
     }
     out
 }
 
-/// The regions and image replacing one group of overlapping objects (`art` as rendered, `plain`
-/// as composited); `None` when it paints nothing.
-#[allow(clippy::type_complexity)]
-fn flatten_group(doc: &Document, art: &[Node], plain: &[&Node], o: &FlattenOptions) -> Option<(Vec<(PathData, RegionFill)>, Option<Raster>)> {
+/// The regions and the image area replacing one group of overlapping objects (`plain`: the art as
+/// composited); `None` when it paints nothing.
+fn flatten_group(plain: &[&Node], o: &FlattenOptions) -> Option<(Regions, Option<Area>)> {
     let mut b = Builder::default();
     let elems: Vec<Elem> = plain.iter().filter_map(|n| b.elem(n)).collect();
     if b.shapes.is_empty() {
@@ -284,13 +851,13 @@ fn flatten_group(doc: &Document, art: &[Node], plain: &[&Node], o: &FlattenOptio
         }
     }
     let raster_rect = if all { plain.iter().filter_map(|n| reach(n)).reduce(|a, b| a.union(b)) } else { bounds(&complex) };
-    let raster = raster_rect.map(|rect| {
+    let area = raster_rect.map(|rect| {
         let clip = o.clip_complex_regions.then(|| PathData::new(complex.iter().flat_map(|&k| regions[k].path.subpaths.iter().cloned()).collect()));
         let ppi = if gradients_only { o.gradient_ppi } else { o.line_art_ppi };
-        render_raster(doc, art, rect, ppi, clip.filter(|c| !c.is_empty()), o)
+        Area { rect, ppi, clip: clip.filter(|c| !c.is_empty()), whole: all }
     });
     let vector = vector.into_iter().map(|(k, f)| (regions[k].path.clone(), f)).collect();
-    Some((vector, raster))
+    Some((vector, area))
 }
 
 /// The flat colour of a region covered by `sources`; `None` where nothing paints it.
@@ -482,12 +1049,16 @@ fn kept_work(n: &Node, o: &FlattenOptions) -> bool {
     let mut any = false;
     n.walk(&mut |c| {
         any |= (o.text_to_outlines && matches!(c.kind, NodeKind::Text(_)))
-            || (o.strokes_to_outlines
-                && matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
-                && c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0)))
+            || (o.strokes_to_outlines && stroked(c))
             || (!o.preserve_overprints && overprints(c));
     });
     any
+}
+
+/// Whether `n` is a path with a visible stroke (outlining turns it into a fill).
+fn stroked(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+        && n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0))
 }
 
 fn overprints(n: &Node) -> bool {

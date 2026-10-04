@@ -14,7 +14,7 @@ mod draw2;
 mod edit;
 mod effectcmd;
 pub mod fileio;
-pub(crate) mod flatten;
+pub mod flatten;
 mod fonts;
 pub(crate) mod freeform;
 pub(crate) mod gradient;
@@ -363,3 +363,6 @@ pub use overprint::AttributesInfo;
 
 /// Object → Flatten Transparency settings (`object.flattenTransparency`).
 pub use flatten::FlattenOptions;
+
+/// A built-in or saved flattener preset ([`crate::Prefs::flattener_presets`]).
+pub use flatten::FlattenerPreset;

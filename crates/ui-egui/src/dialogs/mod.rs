@@ -18,6 +18,8 @@ mod document_setup;
 mod effect;
 mod export_for_screens;
 pub mod eyedropper;
+pub mod flatten;
+pub mod flattener_presets;
 mod form;
 mod gradient_stop;
 pub mod graphic_style_options;
@@ -156,6 +158,8 @@ registry! {
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
     EyedropperOptions: [eyedropper::KIND] => eyedropper::SPEC,
+    FlattenTransparency: [flatten::KIND] => flatten::SPEC,
+    FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
