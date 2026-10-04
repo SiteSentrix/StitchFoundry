@@ -338,6 +338,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates)",
     ),
+    (
+        "ui.widthPointEdit",
+        "Width Point Edit…",
+        "",
+        "{id, index} open Width Point Edit for width point `index` of path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; double-clicking a width point with the Width tool opens it too): OK runs stroke.widthPoint.set, discard: true (the Delete button) stroke.widthPoint.remove",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -707,6 +713,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             }
             None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
         },
+        "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         _ => return None,
     };
     Some(r)

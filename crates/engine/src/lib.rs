@@ -944,6 +944,8 @@ mod tests_tints;
 #[cfg(test)]
 mod tests_transparencygrid;
 #[cfg(test)]
+mod tests_widthpoints;
+#[cfg(test)]
 mod tests_widthprofiles;
 #[cfg(test)]
 mod tests_xform;

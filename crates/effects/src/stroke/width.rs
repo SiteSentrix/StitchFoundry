@@ -85,7 +85,8 @@ fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> (Vec<Point>, Vec<bool>) 
 }
 
 /// Insert samples where the profile has width points (so the piecewise-linear profile is exact
-/// along straight runs). `span` maps the subpath onto the profile (see [`outline_spans`]).
+/// along straight runs; the two points of a discontinuous point share one sample). `span` maps the
+/// subpath onto the profile (see [`outline_spans`]).
 fn densify(pts: &[Point], corner: &[bool], closed: bool, profile: &WidthProfile, span: (f64, f64)) -> (Vec<Point>, Vec<bool>) {
     let n = pts.len();
     let seg_count = if closed { n } else { n - 1 };
@@ -105,6 +106,7 @@ fn densify(pts: &[Point], corner: &[bool], closed: bool, profile: &WidthProfile,
         out.1.push(corner[i]);
         let mut inner: Vec<f64> = marks.iter().copied().filter(|d| *d > acc + 1e-9 && *d < acc + len - 1e-9).collect();
         inner.sort_by(f64::total_cmp);
+        inner.dedup_by(|a, b| (*a - *b).abs() <= 1e-9);
         for d in inner {
             out.0.push(a.lerp(b, (d - acc) / len));
             out.1.push(false);
@@ -153,26 +155,34 @@ impl Ctx<'_> {
         if total <= 1e-12 {
             return;
         }
-        // Left and right offsets at `d` along this piece.
+        // Left and right offsets just before and just after `d` along this piece (they differ
+        // at a discontinuous point).
         let width_at = |d: f64| {
             let t = span.0 + (span.1 - span.0) * d / total;
-            let (l, r) = self.profile.at(if t > 1.0 { t - 1.0 } else { t });
-            (self.half * l.max(0.0), self.half * r.max(0.0))
+            let (b, a) = self.profile.around(if t > 1.0 { t - 1.0 } else { t });
+            let side = |(l, r): (f64, f64)| (self.half * l.max(0.0), self.half * r.max(0.0));
+            (side(b), side(a))
         };
         let mut lpts = Vec::with_capacity(n);
         let mut rpts = Vec::with_capacity(n);
         for (i, &p) in pts.iter().enumerate() {
-            let (wl, wr) = width_at(cum[i]);
+            let (before, after) = width_at(cum[i]);
             if !closed && (i == 0 || i == n - 1) {
                 let nm = left(seg_dir[i.min(seg_count - 1)]);
+                let (wl, wr) = if i == 0 { after } else { before };
                 lpts.push(p + nm * wl);
                 rpts.push(p - nm * wr);
                 continue;
             }
             let ip = if i == 0 { seg_count - 1 } else { i - 1 };
             let v = Vertex { p, a: seg_dir[ip], b: seg_dir[i], la: cum[ip + 1] - cum[ip], lb: cum[i + 1] - cum[i], corner: corner[i] };
-            self.join(&mut lpts, &v, wl, 1.0);
-            self.join(&mut rpts, &v, wr, -1.0);
+            // A step: the side goes straight out (or in) from the width before to the one after.
+            for (k, (wl, wr)) in [before, after].into_iter().enumerate() {
+                if k == 0 || (wl, wr) != before {
+                    self.join(&mut lpts, &v, wl, 1.0);
+                    self.join(&mut rpts, &v, wr, -1.0);
+                }
+            }
         }
         if closed {
             polygon(out, lpts.into_iter());
@@ -180,7 +190,7 @@ impl Ctx<'_> {
             return;
         }
         let (t0, t1) = (seg_dir[0], seg_dir[seg_count - 1]);
-        let ((wl0, wr0), (wl1, wr1)) = (width_at(0.0), width_at(total));
+        let ((wl0, wr0), (wl1, wr1)) = (width_at(0.0).1, width_at(total).0);
         let mut ring = lpts;
         // End cap: from the left side around the end to the right side.
         cap_points(&mut ring, pts[n - 1], left(t1), t1, wl1, wr1, self.cap);
@@ -302,6 +312,21 @@ mod tests {
         let bb = o.bounding_box();
         // Travelling +x, the left side is up (negative y).
         assert!(bb.y0 < -4.99 && bb.y1 <= 1e-9, "{bb:?}");
+    }
+
+    #[test]
+    fn a_discontinuous_point_steps_the_width() {
+        // 5 pt either side for the first half, 10 pt for the second: a step at the middle.
+        let p = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 2.0, 2.0), (1.0, 2.0, 2.0)] };
+        let o = width_outline(&line(), 10.0, &p, &capped(LineCap::Butt), 0.01);
+        assert!((area(&o) - 1500.0).abs() < 1e-6, "{}", area(&o));
+        // No ramp: just before the middle the outline is still 5 pt from the line.
+        assert!(!o.contains(kurbo::Point::new(49.0, -6.0)) && o.contains(kurbo::Point::new(51.0, -6.0)));
+        // A step at a corner of a polyline renders too.
+        let mut l = line();
+        l.line_to((100.0, 100.0));
+        let a = area(&width_outline(&l, 10.0, &p, &capped(LineCap::Butt), 0.01));
+        assert!(a.is_finite() && (a - 3000.0).abs() < 150.0, "{a}");
     }
 
     #[test]

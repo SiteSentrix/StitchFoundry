@@ -294,10 +294,11 @@ fn encloses(n: &Node) -> bool {
     }
 }
 
-/// Mirror a width profile along the path (t → 1 − t) or across it (swap left/right widths).
+/// Mirror a width profile along the path (t → 1 − t; the two sides of a discontinuous point swap
+/// too) or across it (swap left/right widths).
 pub(crate) fn flip_profile(p: &WidthProfile, along: bool) -> WidthProfile {
     let mut pts: Vec<(f64, f64, f64)> =
-        if along { p.points.iter().map(|&(t, l, r)| (1.0 - t, l, r)).collect() } else { p.points.iter().map(|&(t, l, r)| (t, r, l)).collect() };
+        if along { p.points.iter().rev().map(|&(t, l, r)| (1.0 - t, l, r)).collect() } else { p.points.iter().map(|&(t, l, r)| (t, r, l)).collect() };
     pts.sort_by(|a, b| a.0.total_cmp(&b.0));
     WidthProfile { points: pts }
 }

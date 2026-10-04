@@ -24,11 +24,28 @@ pub fn specs() -> Vec<CommandSpec> {
             "Width Point",
             [],
             None,
-            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to move/replace} → {index}. Creates a uniform profile first if needed",
+            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to edit or move, adjustAdjoining?: bool (with index: the nearest points either side change their widths in proportion)} → {index}. Without index a point already at t is replaced; a point moved onto another one's t joins it as a discontinuous point (on the side it came from), so the width steps there. Creates a uniform profile first if needed",
             has_doc,
             width_point_set
         ),
-        cmd!("stroke.widthPoint.remove", "Delete Width Point", [], None, "{id, index}", has_doc, width_point_remove),
+        cmd!(
+            "stroke.widthPoint.remove",
+            "Delete Width Point",
+            [],
+            None,
+            "{id, index | indices: [..]} remove width points (removing the last one leaves a uniform stroke)",
+            has_doc,
+            width_point_remove
+        ),
+        cmd!(
+            "stroke.widthPoint.copy",
+            "Copy Width Point",
+            [],
+            None,
+            "{id, index: the width point to copy, t: 0..1 where the copy goes} → {index} (Alt-drag with the Width tool). Landing on another point makes a discontinuous point, as a stroke.widthPoint.set move does",
+            has_doc,
+            width_point_copy
+        ),
         cmd!(
             "stroke.widthProfile.set",
             "Width Profile",
@@ -129,6 +146,64 @@ fn uniform() -> WidthProfile {
     WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] }
 }
 
+/// Width points closer than this (in t) are at the same place: a discontinuous point.
+const SAME_T: f64 = 1e-6;
+
+/// The weighted stroke of `id` that width point commands edit.
+fn weighted_stroke(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc::StrokeLayer> {
+    let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
+    let st = n.appearance.stroke_mut().ok_or_else(|| EngineError::Other("the object has no stroke".into()))?;
+    if st.width <= 0.0 {
+        return Err(EngineError::Other("the stroke has no weight".into()));
+    }
+    Ok(st)
+}
+
+/// The `index` param, checked against the points of `prof`.
+fn point_index(p: &Value, prof: &WidthProfile, cmd: &str) -> Result<Option<usize>> {
+    match p.get("index").and_then(Value::as_u64).map(|v| v as usize) {
+        Some(i) if i >= prof.points.len() => Err(bad(cmd, "no such width point")),
+        i => Ok(i),
+    }
+}
+
+/// Insert width point `pt` in order. Landing on another point's position makes a discontinuous
+/// point: `pt` snaps to it and takes the side it came from (`from_below`: before it), replacing
+/// that side of a discontinuous point already there. → where it landed.
+fn place(points: &mut Vec<(f64, f64, f64)>, mut pt: (f64, f64, f64), from_below: bool) -> usize {
+    let at: Vec<usize> = (0..points.len()).filter(|i| (points[*i].0 - pt.0).abs() <= SAME_T).collect();
+    let (Some(&first), Some(&last)) = (at.first(), at.last()) else {
+        let pos = points.iter().position(|q| q.0 > pt.0).unwrap_or(points.len());
+        points.insert(pos, pt);
+        return pos;
+    };
+    pt.0 = points[first].0;
+    let pair = at.len() > 1;
+    let pos = match (from_below, pair) {
+        (true, _) => first,
+        (false, true) => last,
+        (false, false) => last + 1,
+    };
+    if pair {
+        points.remove(pos);
+    }
+    points.insert(pos, pt);
+    pos
+}
+
+/// Adjust Adjoining Width Points: point `i` changes from `old` to `new` widths, and the nearest
+/// points at other positions either side change in proportion (by the same amount from zero).
+fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f64), new: (f64, f64, f64)) {
+    let t = points[i].0;
+    let scale = |v: f64, o: f64, n: f64| if o > 1e-9 { v * n / o } else { v + n - o }.max(0.0);
+    let before = (0..i).rev().find(|j| (points[*j].0 - t).abs() > SAME_T);
+    let after = (i + 1..points.len()).find(|j| (points[*j].0 - t).abs() > SAME_T);
+    for j in before.into_iter().chain(after) {
+        let q = &mut points[j];
+        (q.1, q.2) = (scale(q.1, old.1, new.1), scale(q.2, old.2, new.2));
+    }
+}
+
 fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.set";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
@@ -137,24 +212,48 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
     if !(left.is_finite() && right.is_finite()) || left < 0.0 || right < 0.0 || left.max(right) > 1.0e5 {
         return Err(bad(C, "left/right must be non-negative widths"));
     }
-    let index = p.get("index").and_then(Value::as_u64).map(|v| v as usize);
+    let adjust = bool_or(p, "adjustAdjoining", false);
     let pos = s.edit("Width Point", |d, _| {
-        let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-        let st = n.appearance.stroke_mut().ok_or_else(|| EngineError::Other("the object has no stroke".into()))?;
-        if st.width <= 0.0 {
-            return Err(EngineError::Other("the stroke has no weight".into()));
-        }
+        let st = weighted_stroke(d, id)?;
         let half = st.width / 2.0;
         let mut prof = st.profile.take().unwrap_or_else(uniform);
-        if let Some(i) = index {
-            if i >= prof.points.len() {
-                return Err(bad(C, "no such width point"));
+        let pt = (t, left / half, right / half);
+        let pos = match point_index(p, &prof, C)? {
+            Some(i) => {
+                let old = prof.points[i];
+                if adjust {
+                    adjust_adjoining(&mut prof.points, i, old, pt);
+                }
+                if (old.0 - t).abs() <= SAME_T {
+                    // Widths only: it keeps its place (and its side of a discontinuous point).
+                    prof.points[i] = (old.0, pt.1, pt.2);
+                    i
+                } else {
+                    prof.points.remove(i);
+                    place(&mut prof.points, pt, old.0 < t)
+                }
             }
-            prof.points.remove(i);
-        }
-        prof.points.retain(|q| (q.0 - t).abs() > 1e-6);
-        let pos = prof.points.iter().position(|q| q.0 > t).unwrap_or(prof.points.len());
-        prof.points.insert(pos, (t, left / half, right / half));
+            None => {
+                prof.points.retain(|q| (q.0 - t).abs() > SAME_T);
+                place(&mut prof.points, pt, true)
+            }
+        };
+        st.profile = Some(prof);
+        Ok(pos)
+    })?;
+    Ok(json!({ "index": pos }))
+}
+
+fn width_point_copy(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "stroke.widthPoint.copy";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let t = f64_req(p, "t", C)?.clamp(0.0, 1.0);
+    let pos = s.edit("Copy Width Point", |d, _| {
+        let st = weighted_stroke(d, id)?;
+        let mut prof = st.profile.take().unwrap_or_else(uniform);
+        let i = point_index(p, &prof, C)?.ok_or_else(|| bad(C, "missing index"))?;
+        let (from, l, r) = prof.points[i];
+        let pos = place(&mut prof.points, (t, l, r), from < t);
         st.profile = Some(prof);
         Ok(pos)
     })?;
@@ -164,12 +263,21 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
 fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.remove";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let index = p.get("index").and_then(Value::as_u64).ok_or_else(|| bad(C, "missing index"))? as usize;
+    let mut indices: Vec<usize> = match (p.get("indices").and_then(Value::as_array), p.get("index").and_then(Value::as_u64)) {
+        (Some(a), _) => a.iter().filter_map(Value::as_u64).map(|i| i as usize).collect(),
+        (None, Some(i)) => vec![i as usize],
+        (None, None) => return Err(bad(C, "missing index")),
+    };
+    indices.sort_unstable();
+    indices.dedup();
     s.edit("Delete Width Point", |d, _| {
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
         let st = n.appearance.stroke_mut().ok_or_else(|| EngineError::Other("the object has no stroke".into()))?;
-        let prof = st.profile.as_mut().filter(|pr| index < pr.points.len()).ok_or_else(|| bad(C, "no such width point"))?;
-        prof.points.remove(index);
+        let fits = |pr: &&mut WidthProfile| indices.last().is_some_and(|i| *i < pr.points.len());
+        let prof = st.profile.as_mut().filter(fits).ok_or_else(|| bad(C, "no such width point"))?;
+        for i in indices.iter().rev() {
+            prof.points.remove(*i);
+        }
         if prof.points.is_empty() {
             st.profile = None;
         }

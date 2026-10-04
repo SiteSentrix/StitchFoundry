@@ -660,3 +660,19 @@ Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","bounds":"preview"}}}
 ```
+
+## Width points
+
+`stroke.widthPoint.set {id, t, left, right, index?, adjustAdjoining?}` adds a width point (side widths in points) or,
+with `index`, edits or moves one; `adjustAdjoining` changes the nearest points either side in proportion. Moving a
+point onto another one's `t` (or `stroke.widthPoint.copy {id, index, t}` landing there) makes a discontinuous point:
+two points at the same `t` (the width before it, then after it), and the stroke's width steps there.
+`document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
+for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
+points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.5,"left":4,"right":4}}}
+{"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.8,"left":12,"right":12}}}
+{"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"index":1,"t":0.8,"left":4,"right":4}}}
+```
