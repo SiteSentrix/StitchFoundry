@@ -13,7 +13,7 @@ use vectorcraft_render::{RenderOptions, Renderer};
 
 use super::*;
 
-/// Tests that touch the process-wide proof view or colour settings run one at a time.
+/// Every test here reads or changes the process-wide proof view or colour settings: one at a time.
 static GLOBAL: Mutex<()> = Mutex::new(());
 
 fn session() -> Session {
@@ -45,6 +45,7 @@ fn render(doc: &Document, opts: RenderOptions) -> vectorcraft_render::Rendered {
 
 #[test]
 fn document_mode_converts_through_cms() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#ff0000"));
     let r = s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
@@ -63,6 +64,7 @@ fn document_mode_converts_through_cms() {
 
 #[test]
 fn document_mode_conversion_is_idempotent() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#336699"));
     rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!({"gray": 40}));
@@ -79,6 +81,7 @@ fn document_mode_conversion_is_idempotent() {
 
 #[test]
 fn rgb_cmyk_rgb_document_roundtrip_within_tolerance() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let cols = ["#cc9980", "#808080", "#4d7359", "#e6d94d"];
     let ids: Vec<NodeId> = cols.iter().enumerate().map(|(i, h)| rect(&mut s, i as f64 * 20.0, 0.0, 10.0, 10.0, json!(h))).collect();
@@ -95,6 +98,7 @@ fn rgb_cmyk_rgb_document_roundtrip_within_tolerance() {
 
 #[test]
 fn swatch_links_survive_mode_conversion() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     s.execute("swatch.new", &json!({"name": "Brand", "color": "#2a6fb0", "global": true})).unwrap();
     let a = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
@@ -109,6 +113,7 @@ fn swatch_links_survive_mode_conversion() {
 
 #[test]
 fn gamut_check_flags_unprintable_colours() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#0000ff"));
     rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!("#cc9980"));
@@ -124,6 +129,7 @@ fn gamut_check_flags_unprintable_colours() {
 
 #[test]
 fn convert_query_and_intents() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     let q = |s: &mut Session, intent: &str| s.execute("color.convert", &json!({"color": "#0000ff", "to": "cmyk", "intent": intent})).unwrap();
     let p = q(&mut s, "perceptual");
@@ -170,6 +176,7 @@ fn color_settings_lists_profiles_and_validates() {
 
 #[test]
 fn proof_colors_simulate_press_on_screen() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 100.0, 100.0, json!("#0000ff"));
     let doc = s.doc().unwrap().doc.clone();
@@ -186,6 +193,7 @@ fn proof_colors_simulate_press_on_screen() {
 
 #[test]
 fn separation_plates_render_ink_coverage() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 50.0, 100.0, json!({"c": 100, "m": 0, "y": 0, "k": 0}));
     rect(&mut s, 50.0, 0.0, 50.0, 100.0, json!({"c": 0, "m": 50, "y": 0, "k": 0}));
@@ -223,6 +231,7 @@ fn separation_plates_render_ink_coverage() {
 
 #[test]
 fn rgb_art_separates_with_gcr() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 100.0, 100.0, json!("#000000"));
     let doc = s.doc().unwrap().doc.clone();
@@ -274,6 +283,7 @@ fn spot_colours_get_their_own_plate() {
 
 #[test]
 fn overprint_black_multiplies_in_preview() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 100.0, 100.0, json!({"c": 100, "m": 0, "y": 0, "k": 0}));
     let k = rect(&mut s, 25.0, 25.0, 50.0, 50.0, json!({"c": 0, "m": 0, "y": 0, "k": 100}));
@@ -325,6 +335,7 @@ fn pdf_text(doc: &Document) -> String {
 
 #[test]
 fn pdf_cmyk_document_writes_device_cmyk() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#ff0000"));
     let rgb_pdf = pdf_text(&s.doc().unwrap().doc);
@@ -356,6 +367,7 @@ fn pdf_spot_colour_is_a_separation() {
 
 #[test]
 fn intents_reach_the_document_conversion() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     let mut a = session();
     rect(&mut a, 0.0, 0.0, 10.0, 10.0, json!("#00ff00"));
     let mut b = session();
@@ -380,8 +392,8 @@ fn intents_reach_the_document_conversion() {
 
 #[test]
 fn legacy_profile_name_resolves_in_commands_and_files() {
-    const OLD: &str = "Adobe RGB (1998) compatible"; // brand-ok: legacy alias under test
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    const OLD: &str = "Adobe RGB (1998) compatible"; // brand-ok: legacy alias under test
     let mut s = session();
     let before = cms::active_settings();
     let r = s.execute("edit.colorSettings", &json!({"rgb": OLD})).unwrap();
