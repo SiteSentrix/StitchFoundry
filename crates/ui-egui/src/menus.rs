@@ -201,6 +201,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{tool: id} what double-clicking a tool button opens: gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `command` running eyedropper.setOptions, fields appearance, transparency)",
     ),
+    (
+        "ui.colorGuideOptions",
+        "Color Guide Options…",
+        "",
+        "{} open Color Guide Options (dialog `colorGuideOptions`, fields `steps` 1–20 and `amount` 0–100): OK sets the Color Guide panel's variation grid (read back with `ui.inspect`: ui.color_guide; engine: color.harmony)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -522,6 +528,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
         "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
+        "ui.colorGuideOptions" => {
+            crate::dialogs::color_guide_options::open(app);
+            Ok(Value::Null)
+        }
         _ => return None,
     };
     Some(r)

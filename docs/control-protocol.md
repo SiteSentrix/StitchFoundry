@@ -64,3 +64,9 @@ value: true}` then confirm opens a fresh one that adds another, `ui.dialog.cance
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
 `includeSpotBlacks`); `ui.dialog.set` then `ui.dialog.confirm` runs it on the selection.
+
+Color Guide: `color.harmony {color, rule, steps?, variation?, amount?}` returns the harmony group (base first) and
+its variation grid; the panel draws the same grid. `ui.colorGuideOptions` opens the `colorGuideOptions` dialog
+(fields `steps` 1–20, `amount` 0–100) and `ui.dialog.confirm` sets the panel's options, which `ui.inspect` reports
+as `ui.color_guide` (`variation`, `steps`, `amount`). Save Colors as Swatches runs `swatch.new {colors: [...]}`
+(one swatch per colour, one undo step).

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::cms::Model;
+use vectorcraft_color::harmony::{Guide, GuideOptions, Harmony, Variation};
 use vectorcraft_color::{Color, Paint, keep_model};
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind};
 
@@ -92,6 +93,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} ≥3 filled objects: fills graded between the topmost and bottommost → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Vertical)
+        ),
+        cmd!(
+            query "color.harmony",
+            "Color Guide",
+            [],
+            None,
+            "{color, rule: complementary|complementary2|splitComplementary|leftComplement|rightComplement|analogous|analogous2|monochromatic|shades|triad|triad2|triad3|tetrad|tetrad2|tetrad3|compound|compound2|highContrast|highContrast2|highContrast3|pentagram (or its label), steps?: 1..20 (4), variation?: \"tintsShades\"|\"warmCool\"|\"vividMuted\", amount?: 0..100 (50; how far the outermost steps go)} the Color Guide for a base colour → {rule, colors: [\"#rrggbb\", the base first], grid: [per colour, 2·steps+1 variations from shades/cool/muted to tints/warm/vivid with the colour itself in the centre]}",
+            always,
+            harmony
         ),
     ]
 }
@@ -321,4 +331,27 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         Ok(changed)
     })?;
     Ok(json!({ "changed": changed }))
+}
+
+fn harmony(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "color.harmony";
+    let base = p.get("color").and_then(color_value).ok_or_else(|| bad(C, "missing or invalid `color`"))?;
+    let rule = str_param(p, "rule").ok_or_else(|| bad(C, "missing `rule`"))?;
+    let rule = Harmony::parse(rule).ok_or_else(|| {
+        let ids: Vec<String> = Harmony::ALL.iter().map(|h| h.id()).collect();
+        bad(C, format!("unknown rule `{rule}` ({})", ids.join("|")))
+    })?;
+    let mut opts = GuideOptions::default();
+    if let Some(n) = p.get("steps").and_then(Value::as_u64) {
+        opts.steps = n.min(u32::MAX as u64) as u32;
+    }
+    if let Some(v) = str_param(p, "variation") {
+        opts.variation = Variation::parse(v).ok_or_else(|| bad(C, format!("unknown variation `{v}` (tintsShades|warmCool|vividMuted)")))?;
+    }
+    if let Some(a) = p.get("amount").and_then(Value::as_f64) {
+        opts.amount = a as f32;
+    }
+    let g = Guide::new(base, rule, &opts);
+    let hex = |cs: &[Color]| cs.iter().map(Color::to_hex).collect::<Vec<_>>();
+    Ok(json!({ "rule": rule.id(), "colors": hex(&g.colors), "grid": g.grid.iter().map(|r| hex(r)).collect::<Vec<_>>() }))
 }

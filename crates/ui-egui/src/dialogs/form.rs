@@ -137,3 +137,40 @@ pub(super) fn humanize(k: &str) -> String {
         _ => format!("{s}:"),
     }
 }
+
+/// Widths of [`slider`]'s label column and rail.
+pub(super) const SLIDER_LABEL: f32 = 64.0;
+pub(super) const SLIDER_WIDTH: f32 = 180.0;
+
+/// A labelled slider with a value field for the number `d.fields[key]` in `range` (whole numbers,
+/// `suffix` after the value); `track(t)` colours the rail at 0..1. Returns true when it changed.
+pub(super) fn slider(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    key: &str,
+    label: &str,
+    range: std::ops::RangeInclusive<f64>,
+    suffix: &str,
+    track: &dyn Fn(f32) -> egui::Color32,
+) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (min, max) = (*range.start(), *range.end());
+    let v = d.f64(key, 0.0).clamp(min, max);
+    let mut new = None;
+    ui.horizontal(|ui| {
+        ui.add_sized([SLIDER_LABEL, 22.0], egui::Label::new(egui::RichText::new(label).color(t.text)));
+        if let (Some(x), _) = crate::widgets::color_slider(ui, ("dlg-slider", key), ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track) {
+            new = Some((min + x as f64 * (max - min)).round());
+        }
+        if let Some(x) = crate::widgets::plain_field(ui, ("dlg-field", key), v, suffix, 0, 52.0) {
+            new = Some(x.round().clamp(min, max));
+        }
+    });
+    match new {
+        Some(n) if n != v => {
+            d.fields.insert(key.into(), json!(n));
+            true
+        }
+        _ => false,
+    }
+}

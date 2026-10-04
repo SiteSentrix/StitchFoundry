@@ -104,6 +104,9 @@ Document colour mode: `file.new {colorMode: "cmyk"}` starts a CMYK document with
 colours applied to it (`paint.setFill`/`setStroke` colours and gradient stops, `swatch.new`) are stored as CMYK;
 Gray stays Gray, and `keepModel: true` keeps a colour as given. RGB documents keep colours as given. Harmonies, Edit
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
+`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
+Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
+(shades, cool or muted on the left, tints, warm or vivid on the right).
 
 ## Resources
 

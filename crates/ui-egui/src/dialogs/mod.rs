@@ -9,6 +9,7 @@
 mod about;
 mod all_tools;
 mod artboard_options;
+pub mod color_guide_options;
 mod color_picker;
 mod command;
 pub mod confirm;
@@ -144,6 +145,7 @@ registry! {
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
     EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
+    ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

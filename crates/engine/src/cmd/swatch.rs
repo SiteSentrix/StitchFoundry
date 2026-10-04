@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Swatch",
             ["Window", "Swatches"],
             None,
-            "{name?, color? | swatch? | gradient? | pattern?: name (default: the current fill), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped)} save a colour, gradient or pattern as a swatch. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\") → {name}",
+            "{name?, color? | colors?: [colour] (one swatch each, in one undo step) | swatch? | gradient? | pattern?: name (default: the current fill), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped)} save a colour, gradient or pattern as a swatch. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\") → {name, names: [every new swatch]}",
             has_doc,
             swatch_new
         ),
@@ -118,41 +118,57 @@ pub fn specs() -> Vec<CommandSpec> {
 
 fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.new";
-    let paint = match str_param(p, "pattern") {
-        Some(name) if s.doc()?.doc.pattern(name).is_some() => pattern_paint(name),
-        Some(name) => return Err(bad(C, format!("no pattern `{name}`"))),
-        None => paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone()),
+    let paints = match (p.get("colors").and_then(Value::as_array), str_param(p, "pattern")) {
+        (Some(cs), _) => {
+            let cs: Vec<Paint> =
+                cs.iter().map(|c| color_value(c).map(Paint::solid)).collect::<Option<_>>().ok_or_else(|| bad(C, "bad colour in `colors`"))?;
+            if cs.is_empty() {
+                return Err(bad(C, "`colors` is empty"));
+            }
+            cs
+        }
+        (None, Some(name)) if s.doc()?.doc.pattern(name).is_some() => vec![pattern_paint(name)],
+        (None, Some(name)) => return Err(bad(C, format!("no pattern `{name}`"))),
+        (None, None) => vec![paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone())],
     };
     let spot = bool_or(p, "spot", false);
     let global = spot || bool_or(p, "global", false);
     let mode = str_param(p, "mode");
     let group = str_param(p, "group");
-    let paint = match paint {
-        // The swatch holds the colour itself, not a link to the swatch it may have come from.
-        Paint::Solid { color, .. } => Paint::solid(match mode {
-            Some(m) => convert_to_mode(color, m, C)?,
-            None => color,
-        }),
-        Paint::None => return Err(bad(C, "a swatch needs a colour, gradient or pattern")),
-        _ if spot || mode.is_some() || group.is_some() => return Err(bad(C, "spot, mode and group apply to solid colours only")),
-        other => other,
-    };
-    let requested = name_param(p, "name");
-    let name = s.edit("New Swatch", |d, _| {
-        let name = match requested {
-            Some(n) => d.free_swatch_name(&n),
-            None => d.new_swatch_name(&paint),
-        };
-        let swatch = Swatch { name: name.clone(), paint, global, spot };
-        match group {
-            Some(g) => {
-                d.swatch_groups.iter_mut().find(|x| x.name == g).ok_or_else(|| bad(C, format!("no colour group `{g}`")))?.swatches.push(swatch)
+    let paints = paints
+        .into_iter()
+        .map(|paint| match paint {
+            // The swatch holds the colour itself, not a link to the swatch it may have come from.
+            Paint::Solid { color, .. } => Ok(Paint::solid(match mode {
+                Some(m) => convert_to_mode(color, m, C)?,
+                None => color,
+            })),
+            Paint::None => Err(bad(C, "a swatch needs a colour, gradient or pattern")),
+            _ if spot || mode.is_some() || group.is_some() => Err(bad(C, "spot, mode and group apply to solid colours only")),
+            other => Ok(other),
+        })
+        .collect::<Result<Vec<_>>>()?;
+    // A name applies to a single new swatch.
+    let requested = name_param(p, "name").filter(|_| paints.len() == 1);
+    let names = s.edit("New Swatch", |d, _| {
+        let mut names = vec![];
+        for paint in paints {
+            let name = match &requested {
+                Some(n) => d.free_swatch_name(n),
+                None => d.new_swatch_name(&paint),
+            };
+            let swatch = Swatch { name: name.clone(), paint, global, spot };
+            match group {
+                Some(g) => {
+                    d.swatch_groups.iter_mut().find(|x| x.name == g).ok_or_else(|| bad(C, format!("no colour group `{g}`")))?.swatches.push(swatch)
+                }
+                None => d.swatches.push(swatch),
             }
-            None => d.swatches.push(swatch),
+            names.push(name);
         }
-        Ok(name)
+        Ok(names)
     })?;
-    Ok(json!({ "name": name }))
+    Ok(json!({ "name": names[0], "names": names }))
 }
 
 /// The `names` list and `name` parameters, without repeats; at least one is required.
