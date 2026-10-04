@@ -6,24 +6,10 @@
 //! projecting caps (the round cap blends the two side widths); closed subpaths become two loops
 //! of opposite orientation filled with the non-zero rule.
 
-use vectorcraft_doc::{LineCap, StrokeAlign, StrokeLayer, WidthProfile};
-use vectorcraft_geom::kurbo::{self, BezPath, PathEl, Point, Vec2};
+use kurbo::{BezPath, PathEl, Point, Vec2};
+use vectorcraft_doc::{LineCap, WidthProfile};
 
-/// The outline to fill instead of stroking, when `st` has a width profile (and no dashes).
-pub(crate) fn outline_for(bp: &BezPath, st: &StrokeLayer, tol: f64) -> Option<BezPath> {
-    let profile = st.profile.as_ref()?;
-    if st.dash.as_ref().is_some_and(|d| d.is_dashed()) {
-        return None;
-    }
-    let closed = bp.elements().last().is_some_and(|e| matches!(e, PathEl::ClosePath));
-    let width = match st.align {
-        StrokeAlign::Center => st.width,
-        _ if closed => st.width * 2.0,
-        _ => st.width,
-    };
-    let o = width_outline(bp, width, profile, st.cap, tol);
-    (!o.elements().is_empty()).then_some(o)
-}
+use super::unit;
 
 /// Filled outline of `bp` stroked with `width` scaled by `profile`, flattened to `tol`.
 pub fn width_outline(bp: &BezPath, width: f64, profile: &WidthProfile, cap: LineCap, tol: f64) -> BezPath {
@@ -70,11 +56,6 @@ fn subpaths(bp: &BezPath, tol: f64) -> Vec<(Vec<Point>, bool)> {
         out.push((cur, false));
     }
     out
-}
-
-fn unit(v: Vec2) -> Vec2 {
-    let h = v.hypot();
-    if h > 1e-12 { v / h } else { Vec2::new(1.0, 0.0) }
 }
 
 /// Left normal in y-down space (left of the direction of travel).
@@ -255,7 +236,5 @@ mod tests {
         let a = area(&width_outline(&c, 10.0, &p, LineCap::Butt, 0.001));
         let want = 2.0 * std::f64::consts::PI * 50.0 * 10.0;
         assert!((a - want).abs() / want < 0.01, "{a} vs {want}");
-        let st = StrokeLayer { profile: None, ..StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 4.0) };
-        assert!(outline_for(&c, &st, 0.1).is_none());
     }
 }

@@ -56,7 +56,7 @@ fn library_submenus_are_disabled_placeholders() {
 
 #[test]
 fn stroke_profiles_have_descriptive_names() {
-    let labels: Vec<&str> = crate::panels::stroke::PROFILES.iter().map(|p| p.1).collect();
+    let labels: Vec<&str> = vectorcraft_doc::WidthProfile::PRESETS.iter().map(|p| p.label).collect();
     assert_eq!(labels, ["Uniform", "Lens", "Taper Start", "Taper End"]);
 }
 

@@ -77,10 +77,32 @@ impl Arrowhead {
     ];
 }
 
+/// Where an arrowhead sits relative to the end of its path. In both modes the stroke stops under
+/// the head, so the line never shows through a hollow head or past its tip.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ArrowAlign {
+    /// The tip extends past the end point (the path keeps its length).
+    #[default]
+    Extend,
+    /// The tip sits on the end point (the stroke is shortened by the head).
+    Tip,
+}
+
 /// Variable-width profile: (position 0..1 along the path, left width factor, right width factor).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct WidthProfile {
     pub points: Vec<(f64, f64, f64)>,
+}
+
+/// A built-in width profile (the Stroke panel's Profile list).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProfilePreset {
+    /// Stable id used by `stroke.set {profile}`.
+    pub id: &'static str,
+    /// Menu label.
+    pub label: &'static str,
+    /// (t, left, right) width points.
+    pub points: &'static [(f64, f64, f64)],
 }
 
 impl WidthProfile {
@@ -102,15 +124,34 @@ impl WidthProfile {
         let l = p.last().unwrap();
         (l.1, l.2)
     }
-    /// Illustrator's "Width Profile 1" (lens shape) analogue.
+    /// The built-in profiles, in menu order. "uniform" is the plain stroke (no profile).
+    pub const PRESETS: [ProfilePreset; 4] = [
+        ProfilePreset { id: "uniform", label: "Uniform", points: &[(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] },
+        ProfilePreset { id: "lens", label: "Lens", points: &[(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+        ProfilePreset { id: "taperStart", label: "Taper Start", points: &[(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] },
+        ProfilePreset { id: "taperEnd", label: "Taper End", points: &[(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] },
+    ];
+    /// The built-in profile with this id.
+    pub fn preset(id: &str) -> Option<Self> {
+        Self::PRESETS.iter().find(|p| p.id == id).map(|p| Self { points: p.points.to_vec() })
+    }
+    /// The id of the built-in profile these points match, if any.
+    pub fn preset_id(&self) -> Option<&'static str> {
+        Self::PRESETS.iter().find(|p| p.points == self.points.as_slice()).map(|p| p.id)
+    }
+    /// The id of a stroke's profile: "uniform" without one, "custom" when it matches no preset.
+    pub fn id_of(p: Option<&Self>) -> &'static str {
+        p.map_or(Some("uniform"), Self::preset_id).unwrap_or("custom")
+    }
+    /// The lens profile (thin ends, full width in the middle).
     pub fn lens() -> Self {
-        Self { points: vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)] }
+        Self::preset("lens").expect("built-in")
     }
     pub fn taper_end() -> Self {
-        Self { points: vec![(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)] }
+        Self::preset("taperEnd").expect("built-in")
     }
     pub fn taper_start() -> Self {
-        Self { points: vec![(0.0, 0.0, 0.0), (1.0, 1.0, 1.0)] }
+        Self::preset("taperStart").expect("built-in")
     }
 }
 
@@ -186,6 +227,9 @@ pub struct StrokeLayer {
     pub visible: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    /// Arrowhead placement at both ends.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub arrow_align: ArrowAlign,
 }
 
 fn ten() -> f64 {
@@ -220,7 +264,20 @@ impl StrokeLayer {
             blend: BlendMode::Normal,
             visible: true,
             effects: vec![],
+            arrow_align: ArrowAlign::Extend,
         }
+    }
+    /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
+    /// a quarter point. A head of weight `hw` is `4·hw` long and wide.
+    pub fn arrow_weight(&self, end: bool) -> f64 {
+        let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
+        (self.width * pct / 100.0).max(0.25)
+    }
+    /// How far the arrowheads can reach from the path's end points (0 without heads): the
+    /// head's diagonal, or with [`ArrowAlign::Extend`] its length plus the cap past the end.
+    pub fn arrow_reach(&self) -> f64 {
+        let reach = |head: Option<Arrowhead>, end: bool| head.map_or(0.0, |_| 4.5 * self.arrow_weight(end) + self.width / 2.0);
+        reach(self.start_arrow, false).max(reach(self.end_arrow, true))
     }
     /// The box an unplaced gradient on this stroke fits to (see [`stroke_paint_bounds`]).
     pub fn paint_bounds(&self, geometric: vectorcraft_geom::Rect) -> vectorcraft_geom::Rect {
@@ -313,11 +370,14 @@ impl Appearance {
         self.items
             .iter()
             .filter_map(|i| match i {
-                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(match s.align {
-                    StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
-                    StrokeAlign::Outside => s.width,
-                    StrokeAlign::Inside => 0.0,
-                }),
+                AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(
+                    match s.align {
+                        StrokeAlign::Center => s.width / 2.0 * if s.join == LineJoin::Miter { s.miter_limit.min(4.0) } else { 1.0 },
+                        StrokeAlign::Outside => s.width,
+                        StrokeAlign::Inside => 0.0,
+                    }
+                    .max(s.arrow_reach()),
+                ),
                 _ => None,
             })
             .fold(0.0, f64::max)
@@ -412,6 +472,48 @@ mod tests {
         assert_eq!(p.at(0.5), (1.0, 1.0));
         assert_eq!(p.at(0.25), (0.5, 0.5));
         assert_eq!(p.at(2.0), (0.0, 0.0));
+    }
+
+    #[test]
+    fn profile_presets_round_trip_their_ids() {
+        for p in WidthProfile::PRESETS {
+            let prof = WidthProfile::preset(p.id).unwrap();
+            assert_eq!(prof.preset_id(), Some(p.id));
+            assert_eq!(WidthProfile::id_of(Some(&prof)), p.id);
+        }
+        assert_eq!(WidthProfile::id_of(None), "uniform");
+        assert_eq!(WidthProfile::id_of(Some(&WidthProfile { points: vec![(0.0, 0.3, 0.3)] })), "custom");
+        assert!(WidthProfile::preset("nope").is_none());
+        assert_eq!(WidthProfile::lens().points, vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)]);
+    }
+
+    #[test]
+    fn arrow_align_defaults_to_extend_and_round_trips() {
+        let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+        assert_eq!(st.arrow_align, ArrowAlign::Extend);
+        // The default is not written, so older readers see the same JSON as before.
+        assert!(!serde_json::to_string(&st).unwrap().contains("arrow_align"));
+        let old: StrokeLayer = serde_json::from_str(r#"{"paint":{"type":"none"},"width":2.0}"#).unwrap();
+        assert_eq!(old.arrow_align, ArrowAlign::Extend);
+        st.arrow_align = ArrowAlign::Tip;
+        let back: StrokeLayer = serde_json::from_str(&serde_json::to_string(&st).unwrap()).unwrap();
+        assert_eq!(back, st);
+    }
+
+    #[test]
+    fn outset_covers_arrowheads() {
+        let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+        a.stroke_mut().unwrap().join = LineJoin::Round;
+        assert_eq!(a.outset(), 2.0);
+        let st = a.stroke_mut().unwrap();
+        st.end_arrow = Some(Arrowhead::Triangle);
+        st.arrow_scale = (100.0, 200.0);
+        assert_eq!(st.arrow_weight(false), 4.0);
+        assert_eq!(st.arrow_weight(true), 8.0);
+        // A 32 pt head whose tip sits up to its length (plus the cap) past the end point.
+        assert_eq!(a.outset(), 4.5 * 8.0 + 2.0);
+        a.stroke_mut().unwrap().width = 0.01;
+        assert_eq!(a.stroke().unwrap().arrow_weight(true), 0.25, "heads keep a minimum size");
     }
 
     #[test]
