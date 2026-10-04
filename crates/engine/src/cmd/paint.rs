@@ -80,7 +80,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
         ),
         cmd!(
             "paint.lastColor",
-            "Color",
+            "Apply Last Color",
             [],
             Some(","),
             "{stroke?: bool (default: the active proxy), ids?} apply the last solid colour used (paint.recent lastColor) to the active proxy of the selection and the default",
@@ -92,7 +92,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
         ),
         cmd!(
             "paint.lastGradient",
-            "Gradient",
+            "Apply Last Gradient",
             [],
             Some("."),
             "{stroke?: bool (default: the active proxy), ids?} apply the last gradient used (paint.recent lastGradient), fitted to each object, to the active proxy of the selection and the default",

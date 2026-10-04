@@ -195,3 +195,18 @@ fn a_mixed_selection_shows_a_question_mark_proxy() {
     s.execute("select.none", &json!({})).unwrap();
     assert_eq!(q(&mut s)["fillMixed"], false);
 }
+
+#[test]
+fn live_paint_and_appearance_items_feed_recent_colours() {
+    let mut s = session();
+    let id = rect(&mut s);
+    s.execute("appearance.setItem", &json!({"index": 0, "color": "#0a0b0c"})).unwrap();
+    assert_eq!(hexes(&s)[0], "#0a0b0c");
+    // Opacity alone doesn't change the recent colours.
+    s.execute("appearance.setItem", &json!({"index": 0, "opacity": 50})).unwrap();
+    assert_eq!(hexes(&s).len(), 1);
+    s.execute("livePaint.make", &json!({"ids": [id.0]})).unwrap();
+    let g = s.doc().unwrap().selection.objects[0];
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [50, 30], "color": "#00ff00"})).unwrap();
+    assert_eq!(hexes(&s)[0], "#00ff00");
+}

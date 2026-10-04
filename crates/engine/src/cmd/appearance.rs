@@ -126,6 +126,9 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    if let Some(pa) = &paint {
+        s.remember_paint(pa);
+    }
     ok()
 }
 
