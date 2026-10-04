@@ -218,3 +218,39 @@ fn swatch_list_reports_kinds_and_groups() {
     assert_eq!(grays["groups"][0]["name"], "Grays");
     assert!(s.execute("swatch.list", &json!({"group": "Nope"})).is_err());
 }
+
+#[test]
+fn deleting_a_global_swatch_unlinks_art_that_keeps_its_colour() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": "#2a6fb0", "global": true}));
+    let a = rect(&mut s);
+    run(&mut s, "paint.setFill", json!({"ids": [a.0], "swatch": "Brand"}));
+    run(&mut s, "select.set", json!({"ids": []}));
+    run(&mut s, "paint.setFill", json!({"swatch": "Brand"}));
+    let before = doc(&s).clone();
+    assert_eq!(run(&mut s, "swatch.delete", json!({"name": "Brand"})), json!({"deleted": ["Brand"], "unlinked": 1}));
+    assert!(doc(&s).swatch("Brand").is_none());
+    assert_eq!(fill_of(&s, a), Paint::solid(Color::from_hex("#2a6fb0").unwrap()));
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#2a6fb0").unwrap()), "the default fill is unlinked too");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before, "one undo step restores swatch and link");
+    // unlink: false keeps the stale link.
+    assert_eq!(run(&mut s, "swatch.delete", json!({"name": "Brand", "unlink": false}))["unlinked"], 0);
+    assert_eq!(fill_of(&s, a), linked("#2a6fb0", "Brand"));
+}
+
+#[test]
+fn deleting_several_swatches_and_groups() {
+    let mut s = session();
+    let r = run(&mut s, "swatch.delete", json!({"names": ["Red", "Brights", "Sunset"]}));
+    assert_eq!(r["deleted"], json!(["Red", "Brights", "Sunset"]));
+    let d = doc(&s);
+    assert!(d.swatch("Red").is_none() && d.swatch("Sunset").is_none() && d.swatch("Bright Red").is_none());
+    assert!(d.swatch_groups.iter().all(|g| g.name != "Brights") && d.swatch_groups.iter().any(|g| g.name == "Grays"));
+    assert!(s.execute("swatch.delete", &json!({"name": "[None]"})).is_err(), "None stays");
+    assert!(s.execute("swatch.delete", &json!({"names": ["Orange", "Nope"]})).is_err(), "unknown names fail the whole call");
+    assert!(doc(&s).swatch("Orange").is_some());
+    assert!(s.execute("swatch.delete", &json!({})).is_err());
+    run(&mut s, "edit.undo", json!({}));
+    assert!(doc(&s).swatch("Bright Red").is_some() && doc(&s).swatch("Red").is_some());
+}

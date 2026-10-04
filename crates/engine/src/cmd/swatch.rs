@@ -20,7 +20,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             swatch_new
         ),
-        cmd!("swatch.delete", "Delete Swatch", ["Window", "Swatches"], None, "{name}", has_doc, swatch_delete),
+        cmd!(
+            "swatch.delete",
+            "Delete Swatch",
+            ["Window", "Swatches"],
+            None,
+            "{name? | names?: [swatch or colour group names] (a group goes with its swatches), unlink?: true (art using a deleted global swatch keeps its colour, unlinked; false keeps the stale link)} delete in one undo step → {deleted, unlinked: paints unlinked}",
+            has_doc,
+            swatch_delete
+        ),
         cmd!(
             "swatch.newGroup",
             "New Color Group",
@@ -82,15 +90,42 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
-    let name = str_param(p, "name").ok_or_else(|| bad("swatch.delete", "missing name"))?.to_string();
-    s.edit("Delete Swatch", |d, _| {
-        d.swatches.retain(|sw| sw.name != name);
-        for g in &mut d.swatch_groups {
-            g.swatches.retain(|sw| sw.name != name);
+    const C: &str = "swatch.delete";
+    let mut names: Vec<String> = vec![];
+    for n in str_list(p, "names").into_iter().chain(str_param(p, "name").map(str::to_string)) {
+        if !names.contains(&n) {
+            names.push(n);
         }
-        Ok(())
+    }
+    if names.is_empty() {
+        return Err(bad(C, "give `name` or `names`"));
+    }
+    let d = &s.doc()?.doc;
+    // Global swatches going away (named ones and those in named groups): their links are dropped.
+    let mut global: Vec<String> = vec![];
+    for n in &names {
+        let swatches: Vec<&Swatch> = match d.swatch_groups.iter().find(|g| g.name == *n) {
+            Some(g) => g.swatches.iter().collect(),
+            None => vec![d.swatch(n).ok_or_else(|| bad(C, format!("no swatch or colour group `{n}`")))?],
+        };
+        if swatches.iter().any(|w| w.paint.is_none()) {
+            return Err(bad(C, format!("`{n}` can't be deleted")));
+        }
+        global.extend(swatches.iter().filter(|w| w.global).map(|w| w.name.clone()));
+    }
+    if !bool_or(p, "unlink", true) {
+        global.clear();
+    }
+    let mut unlink = |_: &mut Color, link: &mut Option<String>| link.as_ref().is_some_and(|l| global.contains(l)) && link.take().is_some();
+    let unlinked = s.edit("Delete Swatch", |d, _| {
+        d.swatch_groups.retain(|g| !names.contains(&g.name));
+        for n in &names {
+            d.remove_swatch(n);
+        }
+        Ok(d.map_solid_paints(&mut unlink))
     })?;
-    ok()
+    map_default_paints(s, &mut unlink);
+    Ok(json!({"deleted": names, "unlinked": unlinked}))
 }
 
 /// The default name of a new solid swatch: its values in its own colour model.
@@ -120,8 +155,7 @@ fn free_name(d: &Document, base: &str) -> String {
 }
 
 fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
-    let names: Vec<String> =
-        p.get("swatches").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+    let names = str_list(p, "swatches");
     let colors: Vec<Color> = p.get("colors").and_then(Value::as_array).map(|a| a.iter().filter_map(color_value).collect()).unwrap_or_default();
     let requested = str_param(p, "name").map(str::to_string);
     let name = s.edit("New Color Group", |d, _| {
@@ -162,6 +196,11 @@ fn swatch_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"name": new}))
 }
 
+/// A list-of-strings parameter (missing or non-string entries are skipped).
+fn str_list(p: &Value, key: &str) -> Vec<String> {
+    p.get(key).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
+}
+
 /// A trimmed, non-empty name parameter.
 fn name_param(p: &Value, key: &str) -> Option<String> {
     str_param(p, key).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string)
@@ -193,7 +232,7 @@ struct Relink {
     to: String,
     /// The new colour of a global swatch (linked paints take it).
     color: Option<Color>,
-    /// false: drop the links (the swatch stopped being global or is deleted); paints keep their colour.
+    /// false: drop the links (the swatch stopped being global); paints keep their colour.
     keep: bool,
 }
 
@@ -218,16 +257,20 @@ impl Relink {
         renamed || recolored
     }
 
-    /// Apply to the default fill and stroke for new art, except during a live preview (Cancel rolls
-    /// the document back, not the session).
     fn defaults(&self, s: &mut Session) {
-        if s.in_interaction() {
-            return;
-        }
-        for p in [&mut s.paint.fill, &mut s.paint.stroke] {
-            if let Paint::Solid { color, swatch } = p {
-                self.apply(color, swatch);
-            }
+        map_default_paints(s, &mut |c, l| self.apply(c, l));
+    }
+}
+
+/// Apply a swatch-link rewrite to the default fill and stroke for new art, except during a live
+/// preview (Cancel rolls the document back, not the session).
+fn map_default_paints(s: &mut Session, f: &mut dyn FnMut(&mut Color, &mut Option<String>) -> bool) {
+    if s.in_interaction() {
+        return;
+    }
+    for p in [&mut s.paint.fill, &mut s.paint.stroke] {
+        if let Paint::Solid { color, swatch } = p {
+            f(color, swatch);
         }
     }
 }

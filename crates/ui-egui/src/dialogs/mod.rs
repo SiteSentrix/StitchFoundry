@@ -10,6 +10,7 @@ mod about;
 mod all_tools;
 mod artboard_options;
 mod command;
+pub mod confirm;
 mod document_setup;
 mod effect;
 mod export_for_screens;
@@ -129,6 +130,7 @@ registry! {
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
+    Confirm: [confirm::KIND] => confirm::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

@@ -25,3 +25,6 @@ Swatch editors: `engine.execute` with `ui.swatchOptions {name}` opens the `swatc
 `preview`), which previews on the canvas while open; `ui.dialog.confirm` applies it with `swatch.edit` as one undo
 step and `ui.dialog.cancel` rolls the preview back. Gradient swatches open the Gradient panel and pattern swatches
 pattern editing instead.
+
+Confirmations: deleting swatches from the Swatches panel opens a `confirm` dialog (fields `message`, `detail`);
+`ui.dialog.confirm` runs the command it asks about (here `swatch.delete`) and `ui.dialog.cancel` drops it.
