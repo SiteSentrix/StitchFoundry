@@ -38,7 +38,11 @@ impl Document {
         if !self.swatch_name_taken(base) {
             return base.to_string();
         }
-        (2..).map(|i| format!("{base} {i}")).find(|n| !self.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
+        self.numbered_swatch_name(base, 2)
+    }
+    /// The first of "base `from`", "base `from + 1`"… no swatch or colour group uses.
+    fn numbered_swatch_name(&self, base: &str, from: usize) -> String {
+        (from..).map(|i| format!("{base} {i}")).find(|n| !self.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
     }
     /// The name a new swatch of `paint` gets by default, unused in the document: a colour's values
     /// ([`color_name`], made free like [`Document::free_swatch_name`]), or "New Gradient Swatch 1",
@@ -49,7 +53,7 @@ impl Document {
             Paint::Gradient(_) => "New Gradient Swatch",
             _ => "New Pattern Swatch",
         };
-        (1..).map(|i| format!("{base} {i}")).find(|n| !self.swatch_name_taken(n)).unwrap_or_else(|| base.to_string())
+        self.numbered_swatch_name(base, 1)
     }
     /// Remove swatch `name` from wherever it lives.
     pub fn remove_swatch(&mut self, name: &str) -> Option<Swatch> {
@@ -104,8 +108,9 @@ impl Document {
 /// The default name of a solid swatch: its values in its own colour model ("C=10 M=20 Y=30 K=0",
 /// "R=255 G=128 B=0", "Gray K=40").
 pub fn color_name(c: Color) -> String {
-    let pct = |v: f32| (v * 100.0).round();
-    let byte = |v: f32| (v * 255.0).round();
+    // Clamped first, so a conversion's tiny negative never reads "-0".
+    let pct = |v: f32| (v.clamp(0.0, 1.0) * 100.0).round();
+    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round();
     match c {
         Color::Cmyk { c, m, y, k } => format!("C={} M={} Y={} K={}", pct(c), pct(m), pct(y), pct(k)),
         Color::Rgb { r, g, b } => format!("R={} G={} B={}", byte(r), byte(g), byte(b)),
@@ -266,6 +271,17 @@ mod tests {
         assert!(d.swatch_name_taken("Mine") && d.swatch_name_taken("Brand") && !d.swatch_name_taken("Nope"));
         assert_eq!(d.remove_swatch("Brand").map(|s| s.name), Some("Brand".into()));
         assert!(d.swatch("Brand").is_none() && d.remove_swatch("Brand").is_none());
+    }
+
+    #[test]
+    fn default_names_follow_the_colour_model() {
+        assert_eq!(color_name(Color::cmyk(0.1, 0.2, 0.3, -1e-7)), "C=10 M=20 Y=30 K=0");
+        assert_eq!(color_name(Color::rgb(1.0, 0.5, -1e-7)), "R=255 G=128 B=0");
+        assert_eq!(color_name(Color::Gray { k: 0.4 }), "Gray K=40");
+        let (d, _, _) = doc();
+        assert_eq!(d.free_swatch_name("Brand"), "Brand 2");
+        assert_eq!(d.free_swatch_name("Mine"), "Mine 2", "colour groups share the namespace");
+        assert_eq!(d.new_swatch_name(&Paint::solid(Color::rgb(1.0, 0.0, 0.0))), "R=255 G=0 B=0");
     }
 
     #[test]
