@@ -822,8 +822,7 @@ impl Writer<'_> {
                 let d: Vec<String> = paths.iter().map(|p| self.path_d(p, self.xf)).collect();
                 self.shape(n, &d.join(" "), &paths, *rule, n.geometric_bounds());
             }
-            NodeKind::Text(t) if self.opts.outline_text => self.text_outlines(n, t),
-            NodeKind::Text(t) => self.text(n, t),
+            NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
                 let href = match self.doc.images.get(&im.key) {
                     Some(b) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
@@ -965,13 +964,14 @@ impl Writer<'_> {
             p => self.paint(p, None),
         };
         p.push(("fill", fill));
-        if !st.stroke.is_none() && st.stroke_width > 0.0 {
-            let s = match &st.stroke {
-                Paint::Gradient(g) => g.gradient.stops.first().map(|s| s.color.to_hex()).unwrap_or_else(|| "none".into()),
-                p => self.paint(p, None),
-            };
-            p.push(("stroke", s));
-            p.push(("stroke-width", self.num(st.stroke_width)));
+        if st.has_stroke() {
+            // Weight, cap, join, miter limit and dashes as for object strokes (a gradient: its
+            // first colour, as for the fill).
+            let mut layer = st.stroke_layer();
+            if let Paint::Gradient(g) = &layer.paint {
+                layer.paint = g.gradient.stops.first().map_or(Paint::None, |s| Paint::solid(s.color));
+            }
+            self.stroke_props(&layer, layer.width, None, &mut p);
         }
         if st.tracking != 0.0 {
             p.push(("letter-spacing", self.num(st.tracking / 1000.0 * st.size)));
@@ -996,10 +996,43 @@ impl Writer<'_> {
         p
     }
 
+    /// Type: its characters (live text, or glyph outlines when text is exported as outlines) and,
+    /// as the canvas paints them, the object's own fills and strokes on the glyph outlines: those
+    /// below the Characters row under the characters, the others over them.
+    fn text_node(&mut self, n: &Node, t: &TextObject) {
+        let chars = |w: &mut Self, n: &Node| if w.opts.outline_text { w.text_outlines(n, t) } else { w.text(n, t) };
+        if !n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) {
+            return chars(self, n);
+        }
+        let id = self.id_attr(n);
+        let a = self.attrs(&Self::node_props(n));
+        self.line(&format!("<g{id}{a}>"));
+        self.depth += 1;
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let pd = PathData::from_bezpath(&lay.to_bezpath()).transformed(t.xf);
+        let d = self.path_d(&pd, self.xf);
+        let tb = Some(t.xf.transform_rect_bbox(lay.bounds));
+        let (below, above) = n.appearance.split_contents();
+        let glyphs = |w: &mut Self, items: &[AppearanceItem]| {
+            if !items.is_empty() {
+                let ap = vectorcraft_doc::Appearance { items: items.to_vec(), ..Default::default() };
+                w.shape(&Node::path(NodeId(u64::MAX), pd.clone(), ap), &d, &[&pd], FillRule::NonZero, tb);
+            }
+        };
+        glyphs(self, below);
+        // The group carries the id and the object's transparency.
+        let bare = Node { opacity: 1.0, blend: BlendMode::Normal, isolate: false, ..n.clone() };
+        let anonymous = std::mem::replace(&mut self.anonymous, true);
+        chars(self, &bare);
+        glyphs(self, above);
+        self.anonymous = anonymous;
+        self.depth -= 1;
+        self.line("</g>");
+    }
+
     /// Text as glyph outlines: one compound path per run, painted like the run.
     fn text_outlines(&mut self, n: &Node, t: &TextObject) {
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-        let m = self.xf * t.xf;
         let mut runs: Vec<(usize, kurbo::BezPath)> = vec![];
         for g in &lay.glyphs {
             match runs.last_mut() {
@@ -1013,16 +1046,12 @@ impl Writer<'_> {
         self.depth += 1;
         for (r, mut bp) in runs {
             let Some(run) = t.runs.get(r) else { continue };
-            bp.apply_affine(m);
+            bp.apply_affine(t.xf);
             let pd = PathData::from_bezpath(&bp);
-            let st = &run.style;
             // An unnamed id: the pieces carry no id attribute (the group has it).
-            let glyphs =
-                Node::path(NodeId(u64::MAX), pd.clone(), vectorcraft_doc::Appearance::basic(st.fill.clone(), st.stroke.clone(), st.stroke_width));
-            let d = self.path_d(&pd, Affine::IDENTITY);
-            let bounds = pd.bounds();
-            // Run strokes are plain: they need no document-space geometry.
-            self.shape(&glyphs, &d, &[], FillRule::NonZero, bounds);
+            let glyphs = Node::path(NodeId(u64::MAX), pd.clone(), run.style.appearance());
+            let d = self.path_d(&pd, self.xf);
+            self.shape(&glyphs, &d, &[&pd], FillRule::NonZero, pd.bounds());
         }
         self.depth -= 1;
         self.line("</g>");
@@ -1068,7 +1097,7 @@ impl Writer<'_> {
                 let last = l.pieces.len() - 1;
                 for (k, (ri, text)) in l.pieces.into_iter().enumerate() {
                     let pos = if k == 0 { format!(" x=\"{}\" y=\"{}\"", self.num(l.x), self.num(l.y)) } else { String::new() };
-                    let diff: Props = self.char_props(&t.runs[ri].style).into_iter().filter(|kv| !base.contains(kv)).collect();
+                    let diff = run_diff(&base, self.char_props(&t.runs[ri].style));
                     let a = self.attrs(&diff);
                     let hy = if k == last && l.hyphenated { "-" } else { "" };
                     s.push_str(&format!("<tspan{pos}{a}>{}{hy}</tspan>", xml_escape(text)));
@@ -1078,8 +1107,7 @@ impl Writer<'_> {
             let mut line = 0usize;
             let mut pending = false;
             for run in &t.runs {
-                let rp = self.char_props(&run.style);
-                let diff: Props = rp.into_iter().filter(|kv| !base.contains(kv)).collect();
+                let diff = run_diff(&base, self.char_props(&run.style));
                 for (i, piece) in run.text.split('\n').enumerate() {
                     if i > 0 {
                         line += 1;
@@ -1145,6 +1173,29 @@ impl Writer<'_> {
         }
         out
     }
+}
+
+/// What the `<tspan>` of a run whose properties are `run` sets over its `<text>`'s `base`: the
+/// properties that differ, and the initial value of each one `base` sets and the run doesn't.
+fn run_diff(base: &Props, run: Props) -> Props {
+    let reset: Props =
+        base.iter().filter(|(k, _)| !run.iter().any(|(r, _)| r == k)).filter_map(|(k, _)| initial_value(k).map(|v| (*k, v.to_string()))).collect();
+    run.into_iter().filter(|kv| !base.contains(kv)).chain(reset).collect()
+}
+
+/// The initial value of an inherited property a run may leave unset (decorations can't be undone
+/// on a `<tspan>`).
+fn initial_value(k: &str) -> Option<&'static str> {
+    Some(match k {
+        "font-weight" | "font-style" | "font-feature-settings" => "normal",
+        "stroke" | "stroke-dasharray" => "none",
+        "stroke-width" | "stroke-opacity" => "1",
+        "stroke-linecap" => "butt",
+        "stroke-linejoin" => "miter",
+        "stroke-miterlimit" => "4",
+        "stroke-dashoffset" | "letter-spacing" => "0",
+        _ => return None,
+    })
 }
 
 /// Any visible raster effect (shadow, glow, blur, feather) in `effects`?

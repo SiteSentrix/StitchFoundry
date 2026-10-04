@@ -208,7 +208,7 @@ fn same_in_proxy(a: &Paint, b: &Paint) -> bool {
 /// The objects whose paints the proxies show for a selected `n`, the ones the paint commands
 /// change ([`leaf_targets`]): groups and layers stand for their contents (and so do blends and
 /// other containers inside them), a compound path for its parts.
-fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
+pub(crate) fn painted<'a>(n: &'a Node, top: bool, out: &mut Vec<&'a Node>) {
     let expand = match n.kind {
         NodeKind::Group { .. } | NodeKind::Layer { .. } => true,
         NodeKind::Compound { .. } => false,

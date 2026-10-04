@@ -5,6 +5,7 @@ use serde_json::json;
 use vectorcraft_color::Paint;
 use vectorcraft_doc::NodeKind;
 
+use crate::panels::stroke as stroke_panel;
 use crate::state::{ZOOM_STOPS, zoom_label};
 use crate::theme::{self, Tokens};
 use crate::widgets::{self, paint_chip};
@@ -100,12 +101,10 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 ui.add_space(6.0);
                 let (fill, stroke) = crate::panels::current_paints(app);
-                let (weight, opacity) = match &first {
-                    Some(_) => {
-                        (crate::panels::current_stroke(app).map_or(0.0, |s| s.width), crate::panels::current_transparency(app).map_or(1.0, |t| t.0))
-                    }
-                    None => (app.session.paint.stroke_width, 1.0),
-                };
+                let shown_stroke = crate::panels::current_stroke(app);
+                let mixed = crate::panels::stroke_mixed(app, ui.ctx());
+                let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
+                let opacity = if first.is_some() { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
                 if chip_button(ui, &fill, false, "Fill").clicked() {
                     app.run("paint.toggleActive", json!({})).ok();
                     app.session.fill_active = true;
@@ -115,11 +114,14 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.session.fill_active = false;
                     app.ui.open_panel = Some("swatches".into());
                 }
-                if ui.link(egui::RichText::new("Stroke:").size(12.0).color(t.text).underline()).clicked() {
-                    app.ui.open_panel = Some("stroke".into());
-                }
-                if let Some(w) = widgets::num_field(ui, "cb-stroke", Some(weight), vectorcraft_doc::Unit::Points, 64.0) {
-                    app.run("stroke.set", json!({"weight": w})).ok();
+                // The link opens the Stroke panel as a popover under it; then the weight spinner
+                // (with presets) and the width profile.
+                let link = ui.link(egui::RichText::new("Stroke:").size(12.0).color(t.text).underline()).on_hover_text("Stroke options");
+                stroke_panel::popover(app, &link);
+                stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
+                let profile = vectorcraft_doc::WidthProfile::id_of(shown_stroke.as_ref().and_then(|s| s.profile.as_ref()));
+                if let Some(id) = stroke_panel::profile_dropdown(ui, profile) {
+                    app.run("stroke.set", json!({"profile": id})).ok();
                 }
                 ui.add_space(4.0);
                 ui.separator();

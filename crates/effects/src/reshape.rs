@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Rect, shapes};
 
 use crate::{GeomContext, apply_one, is_geometry, merged_params};
@@ -54,13 +54,7 @@ pub fn outline_text(n: &Node) -> Option<Node> {
         .iter()
         .zip(&t.runs)
         .filter(|(bp, _)| !bp.elements().is_empty())
-        .map(|(bp, run)| {
-            let mut ap = Appearance { items: vec![AppearanceItem::Fill(FillLayer::new(run.style.fill.clone()))], ..Default::default() };
-            if !run.style.stroke.is_none() && run.style.stroke_width > 0.0 {
-                ap.items.push(AppearanceItem::Stroke(StrokeLayer::new(run.style.stroke.clone(), run.style.stroke_width)));
-            }
-            Arc::new(Node::path(n.id, path(bp), ap))
-        })
+        .map(|(bp, run)| Arc::new(Node::path(n.id, path(bp), run.style.appearance())))
         .collect();
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
         let (below, above) = n.appearance.split_contents();

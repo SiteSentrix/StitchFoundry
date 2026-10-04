@@ -1,11 +1,15 @@
 //! The Stroke panel: weight, cap, join, alignment, dashes, arrowheads, width profiles and brushes.
+//! With type selected it edits the characters' stroke (weight, cap, join, miter limit, dashes).
 
 use serde_json::Value;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, CharStyle, Dash, LineCap, LineJoin, Node, NodeKind, StrokeLayer, Unit, WidthProfile};
 
-use super::appearance::{edit_items, item_target};
+use super::appearance::{ItemTarget, edit_items, item_target};
+use super::paint::painted;
 use super::*;
+use crate::DocState;
+use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -14,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke Options",
             ["Window", "Stroke"],
             None,
-            "{weight?, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?}",
+            "{weight?: pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?, align?: center|inside|outside, dash?: [d,g,…]|null (a 0 dash with a round or projecting cap draws dots or squares; a new pattern keeps the current offset and alignment), dashOffset? (exact dashes only), alignDashes?: bool (true: dashes fitted to corners and path ends, every run between them holding whole periods with a dash centred on each corner and end; false, the default for a new pattern: exact lengths), startArrow?, endArrow?: Arrow|ArrowOpen|Triangle|TriangleOpen|Circle|CircleOpen|Square|SquareOpen|Diamond|Bar|null, arrowAlign?: \"extend\" (tip past the end point, default)|\"tip\" (tip on the end point; the stroke is shortened), profile?: \"uniform\"|\"lens\"|\"taperStart\"|\"taperEnd\", item?: stroke item index|null (omitted: the Appearance panel's active item if it is a stroke, else the top stroke, created when missing), ids?} Without a stroke item, type takes weight, cap, join, miterLimit and the dash options as its characters' stroke (every run; text.setRangeStyle `strokeOptions` styles a range), and images and symbol instances (also in groups) are left alone",
             has_doc,
             stroke_set
         ),
@@ -30,13 +34,108 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// The stroke attributes object and character strokes share, parsed from `stroke.set` params
+/// (also the `strokeOptions` of `text.setRangeStyle`).
+#[derive(Debug, Default)]
+pub(crate) struct StrokeChange {
+    pub(crate) weight: Option<f64>,
+    cap: Option<LineCap>,
+    join: Option<LineJoin>,
+    miter_limit: Option<f64>,
+    /// `Some(None)`: solid.
+    dash: Option<Option<Vec<f64>>>,
+    dash_offset: Option<f64>,
+    align_dashes: Option<bool>,
+}
+
+/// The value param `key` names in `table` (see [`crate::inspect::CAPS`]); `None` when absent.
+fn named<T: Copy>(table: &[(T, &str)], p: &Value, key: &str, cmd: &str) -> Result<Option<T>> {
+    let Some(s) = str_param(p, key) else { return Ok(None) };
+    let s = if key == "cap" && s == "projecting" { "square" } else { s };
+    match table.iter().find(|(_, n)| *n == s) {
+        Some((v, _)) => Ok(Some(*v)),
+        None => Err(bad(cmd, format!("{key} must be {}, got {s}", table.iter().map(|(_, n)| *n).collect::<Vec<_>>().join("|")))),
+    }
+}
+
+impl StrokeChange {
+    pub(crate) fn parse(p: &Value, cmd: &str) -> Result<Self> {
+        let num = |k: &str| p.get(k).and_then(Value::as_f64);
+        let dash = match p.get("dash") {
+            None => None,
+            Some(Value::Null) => Some(None),
+            Some(Value::Array(a)) => Some(Some(a.iter().filter_map(Value::as_f64).collect::<Vec<_>>()).filter(|d| !d.is_empty())),
+            Some(v) => return Err(bad(cmd, format!("dash must be a list of lengths or null, got {v}"))),
+        };
+        Ok(Self {
+            weight: num("weight").map(|w| w.clamp(0.0, 1000.0)),
+            cap: named(&CAPS, p, "cap", cmd)?,
+            join: named(&JOINS, p, "join", cmd)?,
+            miter_limit: num("miterLimit").map(|m| m.clamp(1.0, 500.0)),
+            dash,
+            dash_offset: num("dashOffset"),
+            align_dashes: p.get("alignDashes").and_then(Value::as_bool),
+        })
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.weight.is_none()
+            && self.cap.is_none()
+            && self.join.is_none()
+            && self.miter_limit.is_none()
+            && self.dash.is_none()
+            && self.dash_offset.is_none()
+            && self.align_dashes.is_none()
+    }
+
+    pub(crate) fn apply(&self, st: &mut StrokeLayer) {
+        if let Some(w) = self.weight {
+            st.width = w;
+        }
+        if let Some(c) = self.cap {
+            st.cap = c;
+        }
+        if let Some(j) = self.join {
+            st.join = j;
+        }
+        if let Some(m) = self.miter_limit {
+            st.miter_limit = m;
+        }
+        if let Some(pattern) = &self.dash {
+            // A new pattern keeps the offset and alignment of the one it replaces.
+            st.dash = pattern.clone().map(|pattern| Dash { pattern, ..st.dash.take().unwrap_or_default() });
+        }
+        if let Some(d) = st.dash.as_mut() {
+            if let Some(o) = self.dash_offset {
+                d.offset = o;
+            }
+            if let Some(a) = self.align_dashes {
+                d.align_corners = a;
+            }
+        }
+    }
+
+    /// [`Self::apply`] to a character stroke.
+    pub(crate) fn apply_char(&self, style: &mut CharStyle) {
+        let mut st = style.stroke_layer();
+        self.apply(&mut st);
+        style.set_stroke_layer(&st);
+    }
+}
+
 fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.set";
-    if let Some(w) = p.get("weight").and_then(Value::as_f64) {
-        s.paint.stroke_width = w.max(0.0);
+    let change = StrokeChange::parse(p, C)?;
+    if let Some(w) = change.weight {
+        s.paint.stroke_width = w;
     }
     let item = item_target(s, p, C)?.of_kind(s, false);
-    let ids = item.targets(s, p)?;
+    let mut ids = item.targets(s, p)?;
+    if item == ItemTarget::Top {
+        // Images and symbol instances take no stroke from the panel.
+        let d = &s.doc()?.doc;
+        ids.retain(|id| !matches!(d.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::SymbolInstance { .. })));
+    }
     let arrow = |k: &str| -> Result<Option<Option<Arrowhead>>> {
         match p.get(k) {
             None => Ok(None),
@@ -46,6 +145,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     let (sa, ea) = (arrow("startArrow")?, arrow("endArrow")?);
+    let align = named(&ALIGNS, p, "align", C)?;
     let arrow_align = match str_param(p, "arrowAlign") {
         None => None,
         Some("extend") => Some(ArrowAlign::Extend),
@@ -58,50 +158,19 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         Some(id) => Some(Some(WidthProfile::preset(id).ok_or_else(|| bad(C, format!("unknown profile {id}")))?)),
     };
     edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            t.runs.iter_mut().for_each(|r| change.apply_char(&mut r.style));
+            return Ok(());
+        }
         if index.is_none() && n.appearance.stroke().is_none() {
             n.appearance.set_stroke(Paint::solid(Color::BLACK));
         }
         let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };
-        if let Some(w) = p.get("weight").and_then(Value::as_f64) {
-            st.width = w.max(0.0);
-        }
-        match str_param(p, "cap") {
-            Some("round") => st.cap = LineCap::Round,
-            Some("square") | Some("projecting") => st.cap = LineCap::Square,
-            Some("butt") => st.cap = LineCap::Butt,
-            _ => {}
-        }
-        match str_param(p, "join") {
-            Some("round") => st.join = LineJoin::Round,
-            Some("bevel") => st.join = LineJoin::Bevel,
-            Some("miter") => st.join = LineJoin::Miter,
-            _ => {}
-        }
-        if let Some(m) = p.get("miterLimit").and_then(Value::as_f64) {
-            st.miter_limit = m.clamp(1.0, 500.0);
-        }
-        match str_param(p, "align") {
-            Some("inside") => st.align = StrokeAlign::Inside,
-            Some("outside") => st.align = StrokeAlign::Outside,
-            Some("center") => st.align = StrokeAlign::Center,
-            _ => {}
-        }
-        match p.get("dash") {
-            Some(Value::Null) => st.dash = None,
-            Some(Value::Array(a)) => {
-                let pattern: Vec<f64> = a.iter().filter_map(Value::as_f64).collect();
-                // A new pattern keeps the offset and alignment of the one it replaces.
-                st.dash = (!pattern.is_empty()).then(|| Dash { pattern, ..st.dash.take().unwrap_or_default() });
-            }
-            _ => {}
-        }
-        if let Some(d) = st.dash.as_mut() {
-            if let Some(o) = p.get("dashOffset").and_then(Value::as_f64) {
-                d.offset = o;
-            }
-            if let Some(a) = p.get("alignDashes").and_then(Value::as_bool) {
-                d.align_corners = a;
-            }
+        change.apply(st);
+        if let Some(a) = align {
+            st.align = a;
         }
         if let Some(a) = sa {
             st.start_arrow = a;
@@ -118,6 +187,76 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+impl Session {
+    /// Units > Stroke (Preferences): the unit stroke weights and dash lengths show in.
+    pub fn stroke_unit(&self) -> Unit {
+        super::edit::parse_unit(&self.prefs.units_stroke).unwrap_or_default()
+    }
+
+    /// The stroke the Stroke panel, the Control bar and the Properties panel show, picked as the
+    /// Stroke proxy picks its paint: the Appearance panel's active item when it is a stroke, else
+    /// the first selected object's (a group's first painted object's) top stroke, type's first
+    /// run's character stroke. None without a selection or a stroke.
+    pub fn shown_stroke(&self) -> Option<StrokeLayer> {
+        let st = self.active()?;
+        let first = st.doc.node(*st.selection.objects.first()?)?;
+        if let Some(i) = first.appearance.item_of_kind(self.appearance_item(), false) {
+            return first.appearance.stroke_at(Some(i)).cloned();
+        }
+        let mut nodes = vec![];
+        painted(first, true, &mut nodes);
+        node_stroke(nodes.first()?)
+    }
+}
+
+impl DocState {
+    /// Which Stroke panel values the selected objects' strokes (type: every run's) don't share,
+    /// and whether Align Stroke applies to them. One walk of the selection, so callers that ask
+    /// every frame cache it by revision.
+    pub fn stroke_mixed(&self) -> StrokeMixed {
+        let mut nodes = vec![];
+        for id in &self.selection.objects {
+            if let Some(n) = self.doc.node(*id) {
+                painted(n, true, &mut nodes);
+            }
+        }
+        let mut strokes = vec![];
+        let mut can_align = true;
+        for n in &nodes {
+            match &n.kind {
+                NodeKind::Text(t) => {
+                    can_align = false;
+                    strokes.extend(t.runs.iter().map(|r| r.style.stroke_layer()));
+                }
+                _ => {
+                    can_align &= encloses(n);
+                    strokes.extend(n.appearance.stroke().cloned());
+                }
+            }
+        }
+        let Some((first, rest)) = strokes.split_first() else { return StrokeMixed { can_align, ..Default::default() } };
+        let differs = |same: fn(&StrokeLayer, &StrokeLayer) -> bool| rest.iter().any(|s| !same(first, s));
+        StrokeMixed {
+            weight: differs(|a, b| a.width == b.width),
+            cap: differs(|a, b| a.cap == b.cap),
+            join: differs(|a, b| a.join == b.join),
+            miter_limit: differs(|a, b| a.miter_limit == b.miter_limit),
+            align: differs(|a, b| a.align == b.align),
+            dash: differs(|a, b| a.dash == b.dash),
+            can_align,
+        }
+    }
+}
+
+/// Does `n` enclose an area a stroke can be aligned inside or outside of (no open path)?
+fn encloses(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.is_closed(),
+        NodeKind::Compound { children, .. } => children.iter().all(|c| encloses(c)),
+        _ => true,
+    }
 }
 
 /// Mirror a width profile along the path (t → 1 − t) or across it (swap left/right widths).

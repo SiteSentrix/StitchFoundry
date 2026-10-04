@@ -7,6 +7,7 @@ use vectorcraft_doc::{Appearance, CharStyle, Node, NodeId, NodeKind, TextKind, T
 use vectorcraft_geom::Affine;
 use vectorcraft_text::edit;
 
+use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::*;
 
@@ -26,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, underline?, strikethrough?, allCaps?: bool, features?: [\"dlig\", \"-liga\", …]} style a character range (runs are split at the range ends) → {id, runs}",
+            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, features?: [\"dlig\", \"-liga\", …]} style a character range (runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -133,7 +134,8 @@ pub(crate) struct CharChange {
     rotation: Option<f64>,
     fill: Option<Paint>,
     stroke: Option<Paint>,
-    stroke_width: Option<f64>,
+    /// Weight (`strokeWidth`), cap, join, miter limit and dashes of the character stroke.
+    stroke_opts: StrokeChange,
     underline: Option<bool>,
     strikethrough: Option<bool>,
     all_caps: Option<bool>,
@@ -170,6 +172,14 @@ impl CharChange {
     pub(crate) fn parse(p: &Value, cmd: &str) -> Result<Self> {
         let num = |k: &str| p.get(k).and_then(Value::as_f64);
         let flag = |k: &str| p.get(k).and_then(Value::as_bool);
+        let mut stroke_opts = match p.get("strokeOptions") {
+            None | Some(Value::Null) => StrokeChange::default(),
+            Some(o) if o.is_object() => StrokeChange::parse(o, cmd)?,
+            Some(_) => return Err(bad(cmd, "strokeOptions must be an object of stroke.set options")),
+        };
+        if let Some(w) = num("strokeWidth") {
+            stroke_opts.weight = Some(w.clamp(0.0, 1000.0));
+        }
         let c = Self {
             font: str_param(p, "font").map(str::to_string),
             style: str_param(p, "style").map(str::to_string),
@@ -183,7 +193,7 @@ impl CharChange {
             rotation: num("rotation"),
             fill: paint_param(p, "fill", cmd)?,
             stroke: paint_param(p, "stroke", cmd)?,
-            stroke_width: num("strokeWidth"),
+            stroke_opts,
             underline: flag("underline"),
             strikethrough: flag("strikethrough"),
             all_caps: flag("allCaps"),
@@ -208,7 +218,7 @@ impl CharChange {
             && self.rotation.is_none()
             && self.fill.is_none()
             && self.stroke.is_none()
-            && self.stroke_width.is_none()
+            && self.stroke_opts.is_empty()
             && self.underline.is_none()
             && self.strikethrough.is_none()
             && self.all_caps.is_none()
@@ -259,8 +269,8 @@ impl CharChange {
         if let Some(v) = &self.stroke {
             st.stroke = v.clone();
         }
-        if let Some(v) = self.stroke_width {
-            st.stroke_width = v.clamp(0.0, 1000.0);
+        if !self.stroke_opts.is_empty() {
+            self.stroke_opts.apply_char(st);
         }
         if let Some(v) = self.underline {
             st.underline = v;

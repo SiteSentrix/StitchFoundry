@@ -539,6 +539,21 @@ fn char_style(ctx: &TextCtx, n: XNode) -> CharStyle {
     if let Some(s) = ctx.prop(n, "stroke") {
         st.stroke = parse_color_paint(&s);
         st.stroke_width = ctx.prop(n, "stroke-width").map(|w| first_number(Some(&w))).unwrap_or(1.0);
+        st.stroke_cap = match ctx.prop(n, "stroke-linecap").as_deref() {
+            Some("round") => LineCap::Round,
+            Some("square") => LineCap::Square,
+            _ => LineCap::Butt,
+        };
+        st.stroke_join = match ctx.prop(n, "stroke-linejoin").as_deref() {
+            Some("round") => LineJoin::Round,
+            Some("bevel") => LineJoin::Bevel,
+            _ => LineJoin::Miter,
+        };
+        st.stroke_miter_limit = ctx.prop(n, "stroke-miterlimit").map_or(4.0, |m| first_number(Some(&m)).max(1.0));
+        let pattern: Vec<f64> =
+            ctx.prop(n, "stroke-dasharray").map_or(vec![], |d| d.split([' ', ',']).filter_map(|v| v.trim().parse().ok()).collect());
+        let offset = ctx.prop(n, "stroke-dashoffset").map_or(0.0, |o| first_number(Some(&o)));
+        st.stroke_dash = Some(Dash { pattern, offset, align_corners: false }).filter(Dash::is_dashed);
     }
     if let Some(ls) = ctx.prop(n, "letter-spacing") {
         let v = first_number(Some(&ls));

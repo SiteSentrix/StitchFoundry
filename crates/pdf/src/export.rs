@@ -13,7 +13,6 @@ use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, St
 use krilla::surface::Surface;
 use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
-use vectorcraft_doc::appearance::stroke_paint_bounds;
 use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
@@ -494,7 +493,7 @@ impl Exporter<'_> {
                 }
                 self.shape(s, n, &bp, *rule, page);
             }
-            NodeKind::Text(t) => self.text(s, n, t),
+            NodeKind::Text(t) => self.text(s, n, t, page),
             NodeKind::Image(im) => self.image(s, im),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|x| &x.name == symbol) {
@@ -562,7 +561,7 @@ impl Exporter<'_> {
                         continue;
                     }
                     self.warn_raster(&st.effects);
-                    self.stroke(s, bp, &path, r, st, page);
+                    self.stroke(s, bp, &path, r, st, page, bounds);
                 }
             }
         }
@@ -570,11 +569,13 @@ impl Exporter<'_> {
         s.set_stroke(None);
     }
 
-    fn stroke(&mut self, s: &mut Surface, bp: &BezPath, path: &Path, r: FillRule, st: &StrokeLayer, page: Rect) {
+    /// Paint stroke `st` of the shape `bp` (`path`), whose geometric bounds `bounds` place its
+    /// unplaced gradients.
+    #[allow(clippy::too_many_arguments)]
+    fn stroke(&mut self, s: &mut Surface, bp: &BezPath, path: &Path, r: FillRule, st: &StrokeLayer, page: Rect, bounds: Rect) {
         if !stroke::is_plain(st) && self.brush_art(s, bp, st, page) {
             return;
         }
-        let bounds = bp.bounding_box();
         let Some(paint) = self.paint(&st.paint, st.paint_bounds(bounds)) else { return };
         let w = stroke::for_writer(bp, st);
         let mut pushes = 0;
@@ -675,7 +676,7 @@ impl Exporter<'_> {
         true
     }
 
-    fn text(&mut self, s: &mut Surface, n: &Node, t: &TextObject) {
+    fn text(&mut self, s: &mut Surface, n: &Node, t: &TextObject, page: Rect) {
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         let tb = t.xf.transform_rect_bbox(layout.bounds);
         // The object's own fills and strokes paint the whole outline: those below the Characters
@@ -684,11 +685,11 @@ impl Exporter<'_> {
         let all = (!n.appearance.items.is_empty()).then(|| {
             let mut all = layout.to_bezpath();
             all.apply_affine(t.xf);
-            to_path(&all)
+            to_path(&all).map(|p| (all, p))
         });
         let all = all.flatten();
-        if let Some(path) = &all {
-            self.text_items(s, below, path, tb);
+        if let Some((bp, path)) = &all {
+            self.text_items(s, below, bp, path, page, tb);
         }
         s.push_transform(&xf(t.xf));
         for (i, run) in t.runs.iter().enumerate() {
@@ -702,24 +703,23 @@ impl Exporter<'_> {
                 s.set_fill(Some(Fill { paint, opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
                 s.draw_path(&path);
             }
-            if run.style.stroke_width > 0.0
-                && let Some(paint) = self.paint(&run.style.stroke, stroke_paint_bounds(layout.bounds, run.style.stroke_width))
-            {
-                s.set_fill(None);
-                s.set_stroke(Some(Stroke { paint, width: run.style.stroke_width as f32, ..Default::default() }));
-                s.draw_path(&path);
+            if run.style.has_stroke() {
+                // Character strokes are drawn in text space, with their cap, join and dashes.
+                self.stroke(s, &bp, &path, FillRule::NonZero, &run.style.stroke_layer(), page, layout.bounds);
             }
         }
         s.set_fill(None);
         s.set_stroke(None);
         s.pop();
-        if let Some(path) = &all {
-            self.text_items(s, above, path, tb);
+        if let Some((bp, path)) = &all {
+            self.text_items(s, above, bp, path, page, tb);
         }
     }
 
-    /// A type object's own fills and strokes `items` on its glyph outlines `path` (`tb`: their bounds).
-    fn text_items(&mut self, s: &mut Surface, items: &[AppearanceItem], path: &Path, tb: Rect) {
+    /// Some of a type object's own fills and strokes (`items`) on its glyph outlines `bp` (`path`;
+    /// `tb`: their bounds). Strokes take every stroke option, as on paths.
+    #[allow(clippy::too_many_arguments)]
+    fn text_items(&mut self, s: &mut Surface, items: &[AppearanceItem], bp: &BezPath, path: &Path, page: Rect, tb: Rect) {
         for item in items {
             match item {
                 AppearanceItem::Fill(fl) if fl.visible => {
@@ -729,13 +729,7 @@ impl Exporter<'_> {
                         s.draw_path(path);
                     }
                 }
-                AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {
-                    if let Some(paint) = self.paint(&st.paint, st.paint_bounds(tb)) {
-                        s.set_fill(None);
-                        s.set_stroke(Some(Stroke { paint, width: st.width as f32, opacity: norm(st.opacity), ..Default::default() }));
-                        s.draw_path(path);
-                    }
-                }
+                AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => self.stroke(s, bp, path, FillRule::NonZero, st, page, tb),
                 _ => {}
             }
         }

@@ -40,6 +40,7 @@ use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{Node, StrokeLayer};
+use vectorcraft_engine::inspect::StrokeMixed;
 
 use crate::theme::Tokens;
 use crate::widgets::{Live, dim_label};
@@ -205,10 +206,29 @@ pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, 
     }
 }
 
-/// The stroke the Stroke panel, Control bar and Properties show: the Appearance panel's active
-/// item when it is a stroke, else the first selected object's top stroke.
+/// The stroke the Stroke panel, Control bar and Properties show: while the Type tool edits text,
+/// the selected characters' stroke, else [`vectorcraft_engine::Session::shown_stroke`].
 pub(crate) fn current_stroke(app: &VectorcraftApp) -> Option<StrokeLayer> {
-    first_node(app)?.appearance.stroke_for(app.session.appearance_item()).cloned()
+    if character::text_editing(app).is_some() {
+        return character::text_style(app).map(|(c, _)| c.stroke_layer());
+    }
+    app.session.shown_stroke()
+}
+
+/// Which Stroke panel values the selection doesn't share and whether Align Stroke applies
+/// ([`vectorcraft_engine::DocState::stroke_mixed`]), cached per document revision. While the Type
+/// tool edits text, the selected characters' stroke shows as it is.
+pub(crate) fn stroke_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> StrokeMixed {
+    let Some(st) = app.session.active().filter(|_| character::text_editing(app).is_none()) else { return StrokeMixed::default() };
+    let key = (st.uid, st.revision);
+    match pstate::<Option<((u64, u64), StrokeMixed)>>(ctx, "stroke-mixed") {
+        Some((k, mixed)) if k == key => mixed,
+        _ => {
+            let mixed = st.stroke_mixed();
+            set_pstate(ctx, "stroke-mixed", Some((key, mixed)));
+            mixed
+        }
+    }
 }
 
 /// Opacity and blend mode as the Transparency panel and Control bar show them: the Appearance
@@ -361,3 +381,5 @@ mod tests_appearance;
 mod tests_effectedit;
 #[cfg(test)]
 mod tests_stroke;
+#[cfg(test)]
+mod tests_strokeux;

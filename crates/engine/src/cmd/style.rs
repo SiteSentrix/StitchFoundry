@@ -192,7 +192,7 @@ fn captured(n: &Node) -> Appearance {
     match &n.kind {
         NodeKind::Text(t) => {
             if let Some(r) = t.runs.first() {
-                ap.items = Appearance::basic(r.style.fill.clone(), r.style.stroke.clone(), r.style.stroke_width).items;
+                ap.items = r.style.basic_appearance().items;
                 // Type paints its characters in text space.
                 ap = unitized(ap, Some(t.local_bounds()));
             }

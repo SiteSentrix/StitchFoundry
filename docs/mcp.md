@@ -324,3 +324,13 @@ as a library (`.vcswatches` keeps colour models, global, spot, gradients and col
 CSS writes custom properties); without `path` it returns `{data}`, and `user: true` saves into the user library
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
 dataBase64?, name?}` loads a `.vcswatches` or `.gpl` file, or another document's swatches, as a library to add from.
+
+## Strokes on type
+
+`stroke.set` without an `item` gives type its characters' stroke: weight, cap, join, miter limit and the dash
+options go to every run (the object keeps no stroke of its own); an `item` still edits an object-level stroke added
+with `appearance.addStroke`, which takes every stroke option (dashes, profile, opacity, blend) like a path's and paints under or over the
+characters as its place relative to the Characters row says. To stroke
+some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight?, cap?, join?, miterLimit?, dash?,
+dashOffset?, alignDashes?}}`. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first
+run's) in `stroke.set` terms. `stroke.set` on a group leaves the images and symbol instances in it alone.

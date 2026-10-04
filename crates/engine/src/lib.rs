@@ -747,6 +747,8 @@ mod tests_brushsym;
 #[cfg(test)]
 mod tests_build;
 #[cfg(test)]
+mod tests_charstroke;
+#[cfg(test)]
 mod tests_clip;
 #[cfg(test)]
 mod tests_cmdsplit;
@@ -798,6 +800,8 @@ mod tests_pattern;
 mod tests_prefs;
 #[cfg(test)]
 mod tests_strokegeom;
+#[cfg(test)]
+mod tests_strokeux;
 #[cfg(test)]
 mod tests_styles;
 #[cfg(test)]

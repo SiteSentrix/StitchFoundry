@@ -652,7 +652,7 @@ impl Renderer {
                 if st.brush.is_some() && self.draw_brush(ctx, f, n, ig, st) {
                     return;
                 }
-                self.draw_stroke(ctx, f, ig, rule, st, ib);
+                self.draw_stroke(ctx, f, Affine::IDENTITY, ig, rule, st, ib);
             }
         }
     }

@@ -3,9 +3,10 @@
 
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, ProfilePreset, StrokeAlign, StrokeLayer, WidthProfile};
+use vectorcraft_engine::inspect::StrokeMixed;
 
-use super::{current_stroke, pstate, set_pstate};
+use super::{character, current_stroke, pstate, set_pstate, stroke_mixed};
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -73,14 +74,44 @@ fn arrow_label(a: Option<Arrowhead>) -> String {
     }
 }
 
+/// Apply Stroke panel options (`stroke.set` params): while the Type tool edits text, to the
+/// selected characters' stroke.
 fn set(app: &mut VectorcraftApp, p: Value) {
-    app.run("stroke.set", p).ok();
+    if character::text_editing(app).is_some() {
+        character::range_style(app, json!({ "strokeOptions": p }));
+    } else {
+        app.run("stroke.set", p).ok();
+    }
+}
+
+/// The weight the Stroke panel, Control bar and Properties panel show: blank where the selected
+/// objects differ, the default for new art without a stroke.
+pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed: &StrokeMixed) -> Option<f64> {
+    (!mixed.weight).then(|| st.map_or(app.session.paint.stroke_width, |s| s.width))
+}
+
+/// The weight spinner (Stroke panel, Control bar): Units > Stroke, presets, blank when mixed.
+pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weight: Option<f64>, width: f32) {
+    if let Some(w) = widgets::spin_field(ui, id, weight, app.session.stroke_unit(), width, 1.0, 0.0, &WEIGHT_PRESETS) {
+        set(app, json!({"weight": w}));
+    }
+}
+
+/// The Stroke panel in a popover anchored to `resp` (the Control bar's and the Properties
+/// panel's Stroke links), which a click on it toggles.
+pub(crate) fn popover(app: &mut VectorcraftApp, resp: &egui::Response) {
+    egui::Popup::menu(resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        ui.set_width(260.0);
+        show(app, ui);
+    });
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let st = current_stroke(app);
-    let weight = st.as_ref().map(|s| s.width).unwrap_or(app.session.paint.stroke_width);
+    let mixed = stroke_mixed(app, ui.ctx());
+    let unit = app.session.stroke_unit();
+    let weight = shown_weight(app, st.as_ref(), &mixed);
     let hidden: bool = pstate(ui.ctx(), "stroke-hide-options");
     let label_w = 64.0;
     let row_label = |ui: &mut Ui, s: &str| {
@@ -88,16 +119,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     ui.horizontal(|ui| {
         row_label(ui, "Weight:");
-        if let Some(w) = widgets::spin_field(ui, "stroke-weight", Some(weight), Unit::Points, 120.0, 1.0, 0.0, &WEIGHT_PRESETS) {
-            set(app, json!({"weight": w}));
-        }
+        weight_field(app, ui, "stroke-weight", weight, 120.0);
     });
     if hidden {
         return;
     }
-    let cap = st.as_ref().map(|s| s.cap).unwrap_or_default();
-    let join = st.as_ref().map(|s| s.join).unwrap_or_default();
-    let align = st.as_ref().map(|s| s.align).unwrap_or_default();
+    // Mixed values light no button.
+    let cap = st.as_ref().map(|s| s.cap).filter(|_| !mixed.cap);
+    let join = st.as_ref().map(|s| s.join).filter(|_| !mixed.join);
+    let align = st.as_ref().map(|s| s.align).filter(|_| !mixed.align);
     ui.horizontal(|ui| {
         row_label(ui, "Cap:");
         for (v, icon, tip, name) in [
@@ -105,7 +135,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             (LineCap::Round, "dc-cap-round", "Round Cap", "round"),
             (LineCap::Square, "dc-cap-square", "Projecting Cap", "square"),
         ] {
-            if widgets::icon_button(ui, icon, tip, cap == v, 24.0).clicked() {
+            if widgets::icon_button(ui, icon, tip, cap == Some(v), 24.0).clicked() {
                 set(app, json!({"cap": name}));
             }
         }
@@ -117,14 +147,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             (LineJoin::Round, "dc-join-round", "Round Join", "round"),
             (LineJoin::Bevel, "dc-join-bevel", "Bevel Join", "bevel"),
         ] {
-            if widgets::icon_button(ui, icon, tip, join == v, 24.0).clicked() {
+            if widgets::icon_button(ui, icon, tip, join == Some(v), 24.0).clicked() {
                 set(app, json!({"join": name}));
             }
         }
         widgets::dim_label(ui, "Limit:");
         let lim = st.as_ref().map(|s| s.miter_limit).unwrap_or(10.0);
-        if join == LineJoin::Miter {
-            if let Some(v) = widgets::plain_field(ui, "stroke-limit", lim, " x", 0, 50.0) {
+        if !matches!(join, Some(LineJoin::Round | LineJoin::Bevel)) {
+            if let Some(v) = widgets::mixed_field(ui, "stroke-limit", (!mixed.miter_limit).then_some(lim), " x", 0, 50.0) {
                 set(app, json!({"miterLimit": v.clamp(1.0, 500.0)}));
             }
         } else {
@@ -138,7 +168,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             (StrokeAlign::Inside, "dc-stroke-inside", "Align Stroke to Inside", "inside"),
             (StrokeAlign::Outside, "dc-stroke-outside", "Align Stroke to Outside", "outside"),
         ] {
-            if widgets::icon_button(ui, icon, tip, align == v, 24.0).clicked() {
+            // Only closed paths take a stroke inside or outside (not open paths, not type).
+            let enabled = v == StrokeAlign::Center || mixed.can_align;
+            if widgets::icon_button_enabled(ui, icon, tip, align == Some(v), enabled, 24.0).clicked() {
                 set(app, json!({"align": name}));
             }
         }
@@ -147,6 +179,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Dashed line.
     let dash = st.as_ref().and_then(|s| s.dash.as_ref());
     let (fields, align_corners) = dash_state(dash, pstate(ui.ctx(), "stroke-dash-last"));
+    let shown = if mixed.dash { [None; 6] } else { fields };
     ui.horizontal(|ui| {
         if widgets::check(ui, "Dashed Line", dash.is_some(), st.is_some()) {
             if dash.is_some() {
@@ -168,10 +201,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
         let fw = ((ui.available_width() - 15.0) / 6.0).clamp(28.0, 40.0);
-        let mut nf = fields;
+        let mut nf = shown;
         let mut changed = false;
-        for (i, f) in fields.iter().enumerate() {
-            let r = ui.add_enabled_ui(dash.is_some(), |ui| widgets::opt_field(ui, ("dash", i), *f, fw)).inner;
+        for (i, f) in shown.iter().enumerate() {
+            let r = ui.add_enabled_ui(dash.is_some(), |ui| widgets::opt_field(ui, ("dash", i), *f, unit, fw)).inner;
             if let Some(x) = r {
                 nf[i] = x.map(|v| v.max(0.0));
                 changed = true;
@@ -343,7 +376,7 @@ pub fn paint_profile(ui: &Ui, r: Rect, prof: Option<&WidthProfile>, color: Color
     ui.painter().add(egui::Shape::mesh(mesh));
 }
 
-fn profile_dropdown(ui: &mut Ui, cur: &str) -> Option<&'static str> {
+pub(crate) fn profile_dropdown(ui: &mut Ui, cur: &str) -> Option<&'static str> {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(100.0, 24.0), Sense::click());
     ui.painter().rect_filled(r, 2, t.input);
@@ -449,5 +482,29 @@ mod tests {
         let st = current_stroke(&app).unwrap();
         assert_eq!((st.end_arrow, st.arrow_align), (Some(Arrowhead::ArrowOpen), ArrowAlign::Tip));
         assert_eq!(WidthProfile::id_of(st.profile.as_ref()), "lens");
+    }
+
+    #[test]
+    fn while_typing_the_panel_strokes_the_selected_characters() {
+        use vectorcraft_doc::NodeKind;
+        use vectorcraft_engine::{Session, ViewInfo};
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let v = ViewInfo::default();
+        app.session.select_tool("type", v).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(k, 50.0, 200.0), v).unwrap();
+        }
+        app.session.tool_text("Make this bold", v).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 5, "end": 9}));
+        set(&mut app, json!({"weight": 4, "join": "round"}));
+        let id = app.session.active().unwrap().selection.objects[0];
+        let NodeKind::Text(t) = &app.session.active().unwrap().doc.node(id).unwrap().kind else { panic!("type") };
+        let joins: Vec<(&str, LineJoin, f64)> = t.runs.iter().map(|r| (r.text.as_str(), r.style.stroke_join, r.style.stroke_width)).collect();
+        assert_eq!(joins, [("Make ", LineJoin::Miter, 0.0), ("this", LineJoin::Round, 4.0), (" bold", LineJoin::Miter, 0.0)]);
+        // The panel shows the selected characters' stroke.
+        assert_eq!(current_stroke(&app).map(|s| (s.join, s.width)), Some((LineJoin::Round, 4.0)));
+        frame(&mut app);
     }
 }
