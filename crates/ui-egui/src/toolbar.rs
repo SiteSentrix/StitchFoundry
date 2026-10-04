@@ -188,15 +188,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         "gradient" if app.ui.open_panel.as_deref() == Some("gradient") => Ok(json!({ "open": "gradient" })),
         "gradient" => app.run("window.panel", json!({ "panel": "gradient" })),
         "eyedropper" => {
-            let o = app.session.eyedropper;
-            let fields = json!({
-                "__command": "eyedropper.setOptions",
-                "__label": "Eyedropper Options",
-                "appearance": o.appearance,
-                "transparency": o.transparency,
-            });
-            app.ui.dialog = Some(crate::state::Dialog::new("command", fields));
-            Ok(json!({ "dialog": "command" }))
+            crate::dialogs::eyedropper::open(app);
+            Ok(json!({ "dialog": crate::dialogs::eyedropper::KIND }))
         }
         _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
         _ => Err(format!("the {tool} tool has no options")),
@@ -362,11 +355,12 @@ mod tests {
         assert_eq!(app.ui.open_panel.as_deref(), Some("gradient"));
         double_click(&mut app, &ctx, 3.0, eyedropper.center());
         let d = app.ui.dialog.clone().expect("Eyedropper Options");
-        assert_eq!((app.session.tool_id(), d.kind.as_str(), d.str("__command")), ("eyedropper", "command", "eyedropper.setOptions".into()));
+        assert_eq!((app.session.tool_id(), d.kind.as_str()), ("eyedropper", crate::dialogs::eyedropper::KIND));
         // OK applies the options.
-        app.ui.dialog.as_mut().unwrap().fields.insert("transparency".into(), json!(false));
+        app.ui.dialog.as_mut().unwrap().fields.insert("apply".into(), json!({"appearance": {"transparency": false}}));
         crate::dialogs::confirm(&mut app).unwrap();
-        assert!(app.session.eyedropper.appearance && !app.session.eyedropper.transparency);
+        let o = app.session.prefs.eyedropper;
+        assert!(o.pick_up.appearance.transparency && !o.apply.appearance.transparency && o.apply.appearance.fill.color);
         assert!(app.run("tool.options", json!({"tool": "zoom"})).is_err());
     }
 }

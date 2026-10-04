@@ -7,7 +7,7 @@ use vectorcraft_doc::NodeKind;
 use crate::panels::stroke as stroke_panel;
 use crate::state::{ZOOM_STOPS, zoom_label};
 use crate::theme::{self, Tokens};
-use crate::widgets::{self, paint_chip};
+use crate::widgets;
 use crate::{VectorcraftApp, icons, menus, titlebar};
 
 /// The application bar: brand mark, Home, menus, then Discord, search and the workspace switcher
@@ -88,17 +88,6 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// A Control bar chip that opens something: `draw` paints the chip, a chevron follows it.
-fn chip_button(ui: &mut Ui, tip: &str, draw: impl FnOnce(&Ui, egui::Rect)) -> egui::Response {
-    let t = Tokens::get(ui.ctx());
-    let (r, resp) = ui.allocate_exact_size(vec2(34.0, 22.0), Sense::click());
-    let chip = egui::Rect::from_min_size(r.min + vec2(0.0, 2.0), vec2(18.0, 18.0));
-    draw(ui, chip);
-    ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Outside);
-    icons::paint(ui, "chevron-down", egui::Rect::from_min_size(r.min + vec2(21.0, 5.0), vec2(12.0, 12.0)), t.text_dim);
-    resp.on_hover_text(tip)
-}
-
 /// The Control bar (Window → Control), context-sensitive like Illustrator's.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -127,24 +116,12 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 ui.add_space(6.0);
-                let (fill, stroke) = crate::panels::current_paints(app);
                 let shown_stroke = crate::panels::current_stroke(app);
                 let mixed = crate::panels::stroke_mixed(app, ui.ctx());
                 let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
                 let opacity = if first.is_some() { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
-                if chip_button(ui, "Fill", |ui, r| paint_chip(ui, r, &fill)).clicked() {
-                    app.run("paint.toggleActive", json!({})).ok();
-                    app.session.fill_active = true;
-                    app.ui.open_panel = Some("swatches".into());
-                }
-                let stroke_chip = |ui: &Ui, r: egui::Rect| {
-                    paint_chip(ui, r, &stroke);
-                    ui.painter().rect_filled(r.shrink(5.0), 0.0, t.panel);
-                };
-                if chip_button(ui, "Stroke", stroke_chip).clicked() {
-                    app.session.fill_active = false;
-                    app.ui.open_panel = Some("swatches".into());
-                }
+                crate::panels::paint_chip(app, ui, false, 22.0, true);
+                crate::panels::paint_chip(app, ui, true, 22.0, true);
                 // The link opens the Stroke panel as a popover under it; then the weight spinner
                 // (with presets) and the width profile.
                 let link = ui.link(egui::RichText::new("Stroke:").size(12.0).color(t.text).underline()).on_hover_text("Stroke options");
@@ -170,7 +147,8 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     if ui.link(egui::RichText::new("Style:").size(12.0).color(t.text).underline()).clicked() {
                         app.ui.open_panel = Some("graphicStyles".into());
                     }
-                    let resp = chip_button(ui, "Graphic Style", |ui, r| crate::panels::graphic_styles::paint_linked(app, ui, r));
+                    let resp = widgets::chip_button(ui, 22.0, true, |ui, r| crate::panels::graphic_styles::paint_linked(app, ui, r))
+                        .on_hover_text("Graphic Style");
                     egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
                 }
                 ui.separator();
@@ -455,7 +433,14 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             ("Drag", true),
             (" to zoom into an area", false),
         ],
-        "eyedropper" => &[("Click", true), (" an object to copy its appearance  |  ", false), ("Shift+Click", true), (" to sample a color", false)],
+        "eyedropper" => &[
+            ("Click", true),
+            (" an object to copy its attributes  |  ", false),
+            ("Alt+Click", true),
+            (" to apply the selection's to it  |  ", false),
+            ("Shift+Click", true),
+            (" to sample a color", false),
+        ],
         "gradient" => &[("Drag", true), (" across a selected object to set the gradient direction", false)],
         "artboard" => &[("Click", true), (" to select an artboard  |  ", false), ("Drag", true), (" on the canvas to create one", false)],
         _ => &[("Press ", false), ("Cmd+Shift+/", true), (" to search every command", false)],

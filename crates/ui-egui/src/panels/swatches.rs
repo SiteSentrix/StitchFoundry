@@ -578,6 +578,21 @@ fn find_id() -> egui::Id {
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    body(app, ui, TILE);
+}
+
+/// The panel in a Fill/Stroke chip popover (the Control bar's and Properties'): the same body, its
+/// tiles under their own ids so it can be open beside the panel.
+pub(crate) fn popover(app: &mut VectorcraftApp, ui: &mut Ui) {
+    body(app, ui, POPOVER_TILE);
+}
+
+/// Id salts of the panel's tiles and of a popover's.
+const TILE: &str = "swatch-tile";
+const POPOVER_TILE: &str = "swatch-pop-tile";
+
+/// The panel's body; `salt` keys its tiles (see [`tile_id`]).
+fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     if app.session.active().is_none() {
         super::empty_state(ui, "swatch-book", "No document", "Open a document to see its swatches.");
         return;
@@ -621,7 +636,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if view.is_list() {
                 for e in &items {
                     let name = e.name();
-                    let (r, resp, chip) = list_row(ui, tile_id(e), view, is_sel(name));
+                    let (r, resp, chip) = list_row(ui, tile_id(salt, e), view, is_sel(name));
                     match e {
                         Entry::Registration => draw_registration(ui, chip),
                         Entry::Swatch { paint, global, spot, .. } => {
@@ -636,7 +651,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             } else {
                 for (e, cell) in tile_grid(ui, &items, view, Entry::is_folder) {
-                    let resp = ui.interact(cell, tile_id(e), Sense::click_and_drag());
+                    let resp = ui.interact(cell, tile_id(salt, e), Sense::click_and_drag());
                     let name = e.name();
                     match e {
                         Entry::Registration => draw_registration(ui, cell),
@@ -740,9 +755,9 @@ pub(crate) fn folder_tile(ui: &Ui, cell: Rect, selected: bool) {
     }
 }
 
-/// The interaction id of a tile or list row (stable per swatch or group name).
-fn tile_id(e: &Entry) -> egui::Id {
-    egui::Id::new(("swatch-tile", e.name()))
+/// The interaction id of a tile or list row (stable per swatch or group name and host `salt`).
+fn tile_id(salt: &'static str, e: &Entry) -> egui::Id {
+    egui::Id::new((salt, e.name()))
 }
 
 /// The selected swatches and groups that can be deleted (all but None and Registration).

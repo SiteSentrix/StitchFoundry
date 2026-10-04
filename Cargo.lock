@@ -4301,6 +4301,7 @@ dependencies = [
 name = "vectorcraft-tools"
 version = "0.1.1"
 dependencies = [
+ "image",
  "kurbo 0.13.1",
  "serde",
  "serde_json",

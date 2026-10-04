@@ -42,6 +42,48 @@ impl ImageBlob {
     }
 }
 
+impl ImageBlob {
+    /// The colour around pixel (`x`, `y`) (pixel space): the alpha-weighted average of the `size` ×
+    /// `size` pixels centred on it, clipped to the image, as straight RGBA. `None` outside the
+    /// image, where every pixel is transparent, or when the image can't be decoded. The last image
+    /// decoded is kept for the next sample (the Eyedropper samples one image click after click).
+    pub fn sample(&self, x: f64, y: f64, size: u32) -> Option<[u8; 4]> {
+        thread_local! {
+            static LAST: std::cell::RefCell<Option<(String, Arc<image::RgbaImage>)>> = const { std::cell::RefCell::new(None) };
+        }
+        let key = self.content_key();
+        let img = LAST.with_borrow_mut(|last| match last {
+            Some((k, img)) if *k == key => Some(img.clone()),
+            _ => {
+                let img = Arc::new(image::load_from_memory(&self.bytes).ok()?.to_rgba8());
+                *last = Some((key, img.clone()));
+                Some(img)
+            }
+        })?;
+        let (w, h) = (img.width() as i64, img.height() as i64);
+        let (cx, cy) = (x.floor() as i64, y.floor() as i64);
+        if !(0..w).contains(&cx) || !(0..h).contains(&cy) {
+            return None;
+        }
+        let r = size.max(1) as i64 / 2;
+        let (mut sum, mut alpha, mut n) = ([0u64; 3], 0u64, 0u64);
+        for py in (cy - r).max(0)..=(cy + r).min(h - 1) {
+            for px in (cx - r).max(0)..=(cx + r).min(w - 1) {
+                let [pr, pg, pb, pa] = img.get_pixel(px as u32, py as u32).0;
+                let a = pa as u64;
+                sum = [sum[0] + pr as u64 * a, sum[1] + pg as u64 * a, sum[2] + pb as u64 * a];
+                alpha += a;
+                n += 1;
+            }
+        }
+        if alpha == 0 {
+            return None;
+        }
+        let c = |v: u64| ((v + alpha / 2) / alpha) as u8;
+        Some([c(sum[0]), c(sum[1]), c(sum[2]), ((alpha + n / 2) / n) as u8])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -55,6 +97,17 @@ mod tests {
 
     fn pixels(b: &ImageBlob) -> Vec<[u8; 4]> {
         image::load_from_memory(&b.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
+    }
+
+    #[test]
+    fn samples_a_pixel_or_the_average_around_it() {
+        let b = blob(&[[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [9, 9, 9, 0]], 4, 1);
+        assert_eq!(b.sample(1.5, 0.5, 1), Some([0, 255, 0, 255]));
+        assert_eq!(b.sample(1.5, 0.5, 3), Some([85, 85, 85, 255]), "red, green and blue averaged");
+        assert_eq!(b.sample(3.2, 0.5, 3), Some([0, 0, 255, 128]), "transparent pixels don't count towards the colour");
+        assert_eq!(b.sample(3.2, 0.5, 1), None, "all transparent");
+        assert_eq!(b.sample(-0.5, 0.5, 5), None, "outside");
+        assert_eq!(b.sample(0.0, 0.0, 5), Some([85, 85, 85, 255]), "clipped to the image");
     }
 
     #[test]

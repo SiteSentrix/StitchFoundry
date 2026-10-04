@@ -300,6 +300,23 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
     PREF_SPECS.iter().find(|s| s.key == key)
 }
 
+/// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
+/// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`). `prefs.get`
+/// and `prefs.set` take them by key (a partial object updates what it names) and `prefs.reset`
+/// without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper"];
+
+/// Validate a value for preference group `key` against `current`.
+fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
+    match key {
+        "eyedropper" => {
+            let cur: super::EyedropperOptions = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        _ => Err(format!("unknown preference `{key}`")),
+    }
+}
+
 /// Validate (and normalize) a value for `key`. Numbers may be given as strings; booleans as
 /// "true"/"false"; choices by value or label (case-insensitive).
 pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
@@ -354,7 +371,7 @@ impl Prefs {
     pub fn set_values(&mut self, values: &Map<String, Value>) -> std::result::Result<(), String> {
         let mut obj = self.to_json();
         for (k, v) in values {
-            obj[k.as_str()] = validate(k, v)?;
+            obj[k.as_str()] = if PREF_GROUPS.contains(&k.as_str()) { validate_group(k, &obj[k.as_str()], v)? } else { validate(k, v)? };
         }
         *self = serde_json::from_value(obj).map_err(|e| e.to_string())?;
         Ok(())
@@ -366,6 +383,11 @@ impl Prefs {
         let mut obj = self.to_json();
         for sp in PREF_SPECS.iter().filter(|s| category.is_none_or(|c| c.eq_ignore_ascii_case(s.category))) {
             obj[sp.key] = d[sp.key].clone();
+        }
+        if category.is_none() {
+            for g in PREF_GROUPS {
+                obj[*g] = d[*g].clone();
+            }
         }
         if let Ok(p) = serde_json::from_value(obj) {
             *self = p;
@@ -404,13 +426,13 @@ impl Session {
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference, or {prefs: {…all…}}", always, get),
+        cmd!(query "prefs.get", "Get Preferences", [], None, "{key?} → the value of one preference (or preference group: eyedropper), or {prefs: {…all…}}", always, get),
         cmd!(
             query "prefs.set",
             "Set Preference",
             [],
             None,
-            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list)",
+            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; the eyedropper group takes a partial object, as eyedropper.setOptions)",
             always,
             set
         ),
@@ -422,7 +444,7 @@ pub fn specs() -> Vec<CommandSpec> {
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let all = s.prefs.to_json();
     match str_param(p, "key") {
-        Some(k) if spec(k).is_some() => Ok(all[k].clone()),
+        Some(k) if spec(k).is_some() || PREF_GROUPS.contains(&k) => Ok(all[k].clone()),
         Some(k) => Err(bad("prefs.get", format!("unknown preference `{k}`"))),
         None => Ok(json!({ "prefs": all })),
     }

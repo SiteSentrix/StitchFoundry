@@ -19,12 +19,14 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, FillLayer, Node, NodeKind, ParaStyle, StrokeLayer};
+use vectorcraft_geom::Rect;
 
 use super::edit::selected_roots;
 use super::opacitymask::percent;
 use super::paint::paint_from;
 use super::*;
+use super::{AppearanceAttrs, EyedropperAttrs, FillAttrs, StrokeAttrs};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -115,7 +117,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, appearance?: bool, transparency?: bool (default: eyedropper.setOptions)} copy fill, stroke, weight and effects (appearance) and opacity and blend (transparency) from `source` to ids (default: selection), the appearance also to the paint defaults; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art)",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: the selection), the fill, stroke and weight also to the paint defaults; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead; `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
             has_doc,
             copy_from
         ),
@@ -630,68 +632,192 @@ fn target_contents(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
-    let src_id = id_param(p, "source").ok_or_else(|| bad("appearance.copyFrom", "missing `source` id"))?;
-    let src = s.doc()?.doc.node(src_id).cloned().ok_or(EngineError::NoNode(src_id))?;
-    // The appearance and the box its placed gradients are relative to (type: its first run's
-    // paints, in text space).
-    let (appearance, src_box) = match &src.kind {
-        NodeKind::Text(t) if !t.runs.is_empty() => {
-            let r = &t.runs[0];
-            (r.style.basic_appearance(), Some(t.local_bounds()))
-        }
-        _ => (src.appearance.clone(), src.geometric_bounds()),
-    };
-    // `appearance` placed on an object whose box (in its paint space) is `to`.
-    let placed = |to: Option<vectorcraft_geom::Rect>| {
-        let mut ap = appearance.clone();
-        if let (Some(f), Some(t)) = (src_box, to) {
-            ap.rebase_gradients(f, t);
-        }
-        ap
-    };
-    let opts = s.eyedropper.with(p);
-    if opts.appearance {
-        s.paint.fill = super::gradient::unplaced(&appearance.fill_paint());
-        s.paint.stroke = super::gradient::unplaced(&appearance.stroke_paint());
-        s.remember_paint(&s.paint.fill.clone());
-        if appearance.stroke().is_some() {
-            s.paint.stroke_width = appearance.stroke_width();
-        }
-    }
-    let ids = match ids_param(p, "ids") {
+    const C: &str = "appearance.copyFrom";
+    let clicked = id_param(p, "source").ok_or_else(|| bad(C, "missing `source` id"))?;
+    let (reverse, append) = (bool_or(p, "reverse", false), bool_or(p, "append", false));
+    let attrs = s.prefs.eyedropper.attrs(p).map_err(|e| bad(C, e))?;
+    let selected = match ids_param(p, "ids") {
         Some(v) => v,
         None => selected_roots(s)?,
     };
-    let mut targets = leaf_targets(s, &ids)?;
+    // Reversed, the first selected object's attributes go onto the clicked object.
+    let (src_id, mut targets) = if reverse {
+        let first = leaf_targets(s, &selected)?.into_iter().next().ok_or_else(|| bad(C, "select the object to copy from"))?;
+        (first, leaf_targets(s, &[clicked])?)
+    } else {
+        (clicked, leaf_targets(s, &selected)?)
+    };
     targets.retain(|id| *id != src_id);
-    if targets.is_empty() || !(opts.appearance || opts.transparency) {
+    let picked = Picked::of(s.doc()?.doc.node(src_id).ok_or(EngineError::NoNode(src_id))?);
+    if !reverse {
+        picked.to_defaults(s, &attrs.appearance);
+    }
+    if targets.is_empty() || attrs.is_empty() {
         return Ok(json!({ "ids": [] }));
     }
-    let (opacity, blend) = (src.opacity, src.blend);
     s.edit("Eyedropper", |d, _| {
         for id in &targets {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if opts.transparency {
-                n.opacity = opacity;
-                n.blend = blend;
+            if let Some(n) = d.node_mut(*id) {
+                picked.apply(n, &attrs, append);
             }
-            if !opts.appearance {
-                continue;
-            }
-            if let NodeKind::Text(t) = &mut n.kind {
-                let ap = placed(Some(t.local_bounds()));
-                // Characters without a painted stroke get no weight.
-                let stroke =
-                    ap.stroke().map_or_else(|| StrokeLayer::new(Paint::None, 0.0), |s| StrokeLayer { width: ap.stroke_width(), ..s.clone() });
-                for r in &mut t.runs {
-                    r.style.fill = ap.fill_paint();
-                    r.style.set_stroke_layer(&stroke);
-                }
-                continue;
-            }
-            n.appearance = placed(n.geometric_bounds());
         }
         Ok(())
     })?;
     Ok(json!({ "ids": targets.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// What the Eyedropper picks up from an object.
+struct Picked {
+    /// The appearance stack (type: its first run's fill and stroke as a basic appearance).
+    appearance: Appearance,
+    /// The box (in the source's paint space) its placed gradients are relative to.
+    bounds: Option<Rect>,
+    opacity: f32,
+    blend: BlendMode,
+    /// Type's first character style and its paragraph attributes.
+    text: Option<(CharStyle, ParaStyle)>,
+}
+
+impl Picked {
+    fn of(n: &Node) -> Self {
+        let (appearance, bounds, text) = match &n.kind {
+            NodeKind::Text(t) if !t.runs.is_empty() => {
+                let st = &t.runs[0].style;
+                (st.basic_appearance(), Some(t.local_bounds()), Some((st.clone(), t.para.clone())))
+            }
+            _ => (n.appearance.clone(), n.geometric_bounds(), None),
+        };
+        Self { appearance, bounds, opacity: n.opacity, blend: n.blend, text }
+    }
+
+    /// The appearance placed on an object whose box (in its paint space) is `to`: placed gradients
+    /// land at the same place relative to it.
+    fn placed(&self, to: Option<Rect>) -> Appearance {
+        let mut ap = self.appearance.clone();
+        if let (Some(f), Some(t)) = (self.bounds, to) {
+            ap.rebase_gradients(f, t);
+        }
+        ap
+    }
+
+    /// The paint defaults for new art take the picked-up fill, stroke and weight.
+    fn to_defaults(&self, s: &mut Session, a: &AppearanceAttrs) {
+        if a.fill.color {
+            s.paint.fill = super::gradient::unplaced(&self.appearance.fill_paint());
+            s.remember_paint(&s.paint.fill.clone());
+        }
+        if a.stroke.color {
+            s.paint.stroke = super::gradient::unplaced(&self.appearance.stroke_paint());
+        }
+        if a.stroke.weight && self.appearance.stroke().is_some() {
+            s.paint.stroke_width = self.appearance.stroke_width();
+        }
+    }
+
+    /// Apply attributes `a` to `n`. `append` adds the fills and strokes (and effects) on top of its
+    /// stack instead. Type takes the paints on its characters, and character and paragraph
+    /// attributes from type.
+    fn apply(&self, n: &mut Node, a: &EyedropperAttrs, append: bool) {
+        let ap = &a.appearance;
+        if ap.transparency {
+            n.opacity = self.opacity;
+            n.blend = self.blend;
+        }
+        if append {
+            let placed = self.placed(n.geometric_bounds());
+            n.appearance.items.extend(placed.items.into_iter().filter(|it| if it.is_fill() { ap.fill.color } else { ap.stroke.color }));
+            n.appearance.effects.extend(placed.effects);
+            return;
+        }
+        if let NodeKind::Text(t) = &mut n.kind {
+            let placed = self.placed(Some(t.local_bounds()));
+            let text = self.text.as_ref();
+            for r in &mut t.runs {
+                if let Some((cs, _)) = text.filter(|_| a.character) {
+                    // The character attributes; the paints follow the appearance attributes.
+                    let st = &mut r.style;
+                    *st = CharStyle {
+                        fill: std::mem::take(&mut st.fill),
+                        stroke: std::mem::take(&mut st.stroke),
+                        stroke_width: st.stroke_width,
+                        overprint_fill: st.overprint_fill,
+                        overprint_stroke: st.overprint_stroke,
+                        ..cs.clone()
+                    };
+                }
+                run_attrs(&mut r.style, &placed, ap);
+            }
+            if let Some((_, para)) = text.filter(|_| a.paragraph) {
+                t.para = para.clone();
+            }
+            if text.is_some() && a.character {
+                super::typecmd::refresh_bounds(t);
+            }
+            return;
+        }
+        let placed = self.placed(n.geometric_bounds());
+        if ap.fill == FillAttrs::ALL && ap.stroke == StrokeAttrs::ALL {
+            n.appearance = placed;
+        } else {
+            focal_attrs(&mut n.appearance, &placed, ap);
+        }
+    }
+}
+
+/// The focal (topmost) fill and stroke attributes `a` of `from` onto `to`. Taking a colour creates
+/// a missing fill or stroke.
+fn focal_attrs(to: &mut Appearance, from: &Appearance, a: &AppearanceAttrs) {
+    if a.fill.color {
+        to.set_fill(from.fill_paint());
+    }
+    if let (Some(t), Some(f)) = (to.fill_mut(), from.fill()) {
+        if a.fill.transparency {
+            (t.opacity, t.blend) = (f.opacity, f.blend);
+        }
+        if a.fill.overprint {
+            t.overprint = f.overprint;
+        }
+    }
+    if a.stroke.color {
+        to.set_stroke(from.stroke_paint());
+    }
+    if let (Some(t), Some(k)) = (to.stroke_mut(), from.stroke()) {
+        let s = &a.stroke;
+        if s.transparency {
+            (t.opacity, t.blend) = (k.opacity, k.blend);
+        }
+        if s.overprint {
+            t.overprint = k.overprint;
+        }
+        if s.weight {
+            t.width = k.width;
+        }
+        if s.cap {
+            t.cap = k.cap;
+        }
+        if s.join {
+            t.join = k.join;
+        }
+        if s.miter {
+            t.miter_limit = k.miter_limit;
+        }
+        if s.dash {
+            t.dash = k.dash.clone();
+        }
+    }
+}
+
+/// The fill and stroke attributes `a` of `from` onto a type run's characters (their stroke takes
+/// what characters have: paint, weight, cap, join, miter limit, dashes and overprint). Characters
+/// without a painted stroke get no weight, a painted one at least 1 pt.
+fn run_attrs(st: &mut CharStyle, from: &Appearance, a: &AppearanceAttrs) {
+    let mut ap = st.basic_appearance();
+    focal_attrs(&mut ap, from, a);
+    let (Some(f), Some(k)) = (ap.fill(), ap.stroke()) else { return };
+    (st.fill, st.overprint_fill, st.overprint_stroke) = (f.paint.clone(), f.overprint, k.overprint);
+    let width = if a.stroke.color { ap.stroke_width() } else { k.width };
+    st.set_stroke_layer(&StrokeLayer { width, ..k.clone() });
+    if !st.stroke.is_none() {
+        super::gradient::run_stroke_weight(st);
+    }
 }

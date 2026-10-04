@@ -191,7 +191,7 @@ fn a_mixed_selection_shows_a_question_mark_proxy() {
     assert_eq!(q(&mut s)["fillMixed"], false);
     s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     s.execute("paint.setFill", &json!({"gradient": {"stops": [{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]}})).unwrap();
-    assert_eq!(s.doc().unwrap().proxy_mixed(), (false, false));
+    assert_eq!(s.proxy_mixed(), (false, false));
     s.execute("select.none", &json!({})).unwrap();
     assert_eq!(q(&mut s)["fillMixed"], false);
 }
@@ -209,7 +209,7 @@ fn every_selection_change_bumps_the_revision() {
     s.execute("select.magicWand", &json!({"id": a.0})).unwrap();
     assert_eq!(s.doc().unwrap().selection.len(), 2, "{a:?} and {b:?} are within the tolerance");
     assert!(s.doc().unwrap().revision > rev);
-    assert_eq!(s.doc().unwrap().proxy_mixed(), (true, false));
+    assert_eq!(s.proxy_mixed(), (true, false));
     let r = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "Hi"})).unwrap();
     let family = match &node(&s, NodeId(r["id"].as_u64().unwrap())).kind {
         NodeKind::Text(t) => t.first_style().font_family,
@@ -265,7 +265,7 @@ fn a_group_shows_its_contents_in_the_proxies() {
     // The group shows what the paint commands change: its contents' red fill, not mixed.
     assert_eq!(s.doc().unwrap().selection.len(), 1);
     assert_eq!(s.proxy_paints().0.color().unwrap().to_hex(), "#ff0000");
-    assert_eq!(s.doc().unwrap().proxy_mixed(), (false, false));
+    assert_eq!(s.proxy_mixed(), (false, false));
     // Contents that differ make even a single selected group a "?" proxy.
     s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [b.0]})).unwrap();
     assert_eq!(s.execute("paint.proxies", &json!({})).unwrap()["fillMixed"], true);

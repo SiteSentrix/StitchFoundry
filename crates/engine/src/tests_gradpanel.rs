@@ -138,17 +138,20 @@ fn eyedropper_options_choose_what_copy_from_takes() {
     s.execute("transparency.set", &json!({"opacity": 40})).unwrap();
     let dst = rect(&mut s, 200.0, 10.0, 100.0, 100.0);
     s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
-    assert_eq!(s.execute("eyedropper.setOptions", &json!({})).unwrap(), json!({"appearance": true, "transparency": true}));
-    assert_eq!(s.execute("eyedropper.setOptions", &json!({"appearance": false})).unwrap(), json!({"appearance": false, "transparency": true}));
+    let o = s.execute("eyedropper.setOptions", &json!({})).unwrap();
+    assert_eq!((&o["sampleSize"], &o["pickUp"]["appearance"]["fill"]["color"]), (&json!(1), &json!(true)));
+    let o = s.execute("eyedropper.setOptions", &json!({"pickUp": {"appearance": {"fill": false, "stroke": false}}})).unwrap();
+    assert_eq!((&o["pickUp"]["appearance"]["fill"]["overprint"], &o["apply"]["appearance"]["fill"]["color"]), (&json!(false), &json!(true)));
     let n = |s: &Session| s.doc().unwrap().doc.node(dst).unwrap().clone();
     s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0]})).unwrap();
     assert_eq!((n(&s).opacity, n(&s).appearance.fill_paint().color().unwrap().to_hex()), (0.4, "#ffffff".into()));
     // Params override the options for one call.
-    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0], "appearance": true})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0], "pickUp": {"appearance": {"fill": true}}})).unwrap();
     assert_eq!(n(&s).appearance.fill_paint().color().unwrap().to_hex(), "#ff0000");
     // Nothing to copy: no edit.
     let undo = s.doc().unwrap().history.undo.len();
-    assert_eq!(s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0], "transparency": false})).unwrap(), json!({"ids": []}));
+    let r = s.execute("appearance.copyFrom", &json!({"source": src.0, "ids": [dst.0], "apply": false})).unwrap();
+    assert_eq!(r, json!({"ids": []}));
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
 }
 

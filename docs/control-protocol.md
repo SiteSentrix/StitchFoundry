@@ -53,8 +53,9 @@ active proxy) with the paint's params and the object's `ids`; a colour dropped o
 a stop.
 
 Tool options: double-clicking a tool button runs `tool.options {tool}`. For `gradient` it opens the Gradient panel;
-for `eyedropper` it opens Eyedropper Options, a `command` dialog (fields `appearance`, `transparency`) whose
-`ui.dialog.confirm` runs `eyedropper.setOptions` (what `appearance.copyFrom` copies). Gradient tool handles snap to
+for `eyedropper` it opens Eyedropper Options, an `eyedropperOptions` dialog (fields `sampleSize` 1/3/5, `pickUp` and
+`apply`, the attribute trees of `eyedropper.setOptions`) whose `ui.dialog.confirm` runs `eyedropper.setOptions` (what
+`appearance.copyFrom` copies). Gradient tool handles snap to
 anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.
 
 Effect dialogs: `engine.execute {command: "effect.dialog", params: {effect, index?, item?}}` opens the `effect` dialog
@@ -100,3 +101,9 @@ caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 
 not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (the same `saveChanges` questions for
 modified documents), and empty bar space and the 5 pt window edges move and resize the window. macOS and the web
 build are unchanged.
+
+Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
+forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
+a swatch clicked there runs `paint.setFill` / `paint.setStroke`. Panel keys (Color F6, Color Guide Shift+F3,
+Appearance Shift+F6, Graphic Styles Shift+F5, Stroke Cmd+F10, Gradient Cmd+F9, Transparency Cmd+Shift+F10) run
+`window.panel {panel}` and can be pressed with `ui.key`; `ui.menu.list` shows them on the Window menu's items.

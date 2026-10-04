@@ -3,7 +3,7 @@
 use serde_json::json;
 
 use super::*;
-use crate::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, validate};
+use crate::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, validate};
 
 #[test]
 fn every_spec_matches_a_prefs_field_and_back() {
@@ -16,7 +16,7 @@ fn every_spec_matches_a_prefs_field_and_back() {
         assert!(validate(sp.key, &obj[sp.key]).is_ok(), "default of `{}` fails validation", sp.key);
     }
     for k in obj.keys() {
-        assert!(PREF_SPECS.iter().any(|s| s.key == k), "Prefs field `{k}` has no spec");
+        assert!(PREF_SPECS.iter().any(|s| s.key == k) || PREF_GROUPS.contains(&k.as_str()), "Prefs field `{k}` has no spec");
     }
     for c in PREF_CATEGORIES {
         assert!(PREF_SPECS.iter().any(|s| s.category == *c), "category {c} is empty");

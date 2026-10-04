@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper Options",
             [],
             None,
-            "{appearance?: bool (fill, stroke and effects), transparency?: bool (opacity and blend mode)} what the Eyedropper copies (appearance.copyFrom); {} reads them → {appearance, transparency}",
+            "{sampleSize?: 1|3|5 (pixels square averaged when sampling an image: point, 3×3, 5×5), pickUp?, apply?: {appearance?: {transparency?, fill?: {color?, transparency?, overprint?}, stroke?: {color?, transparency?, overprint?, weight?, cap?, join?, miter?, dash?}}, character?, paragraph?} (bools; a bool for a branch sets all of it)} Eyedropper Options, kept in the preferences: what appearance.copyFrom picks up from the clicked object and applies (only attributes in both trees are copied; every fill and stroke attribute copies the whole appearance stack); {} reads them → the options",
             always,
             eyedropper_options
         ),
@@ -171,33 +171,173 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- eyedropper ----------
 
-/// What the Eyedropper copies from the object it clicks (`appearance.copyFrom`).
+/// The focal (topmost) fill's attributes the Eyedropper picks up or applies.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct EyedropperOptions {
-    /// The fill, stroke and effects (the appearance stack; type: its run paints).
-    pub appearance: bool,
-    /// The opacity and blend mode.
+#[serde(default)]
+pub struct FillAttrs {
+    pub color: bool,
+    /// Its own opacity and blend mode.
     pub transparency: bool,
+    pub overprint: bool,
+}
+
+impl FillAttrs {
+    pub const ALL: Self = Self { color: true, transparency: true, overprint: true };
+}
+
+impl Default for FillAttrs {
+    fn default() -> Self {
+        Self::ALL
+    }
+}
+
+/// The focal (topmost) stroke's attributes the Eyedropper picks up or applies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct StrokeAttrs {
+    pub color: bool,
+    /// Its own opacity and blend mode.
+    pub transparency: bool,
+    pub overprint: bool,
+    pub weight: bool,
+    pub cap: bool,
+    pub join: bool,
+    /// The miter limit.
+    pub miter: bool,
+    /// The dash pattern.
+    pub dash: bool,
+}
+
+impl StrokeAttrs {
+    pub const ALL: Self = Self { color: true, transparency: true, overprint: true, weight: true, cap: true, join: true, miter: true, dash: true };
+}
+
+impl Default for StrokeAttrs {
+    fn default() -> Self {
+        Self::ALL
+    }
+}
+
+/// Appearance attributes: the object's transparency (opacity and blend mode) and its focal fill and
+/// stroke. With every fill and stroke attribute, the whole appearance stack (every fill and stroke,
+/// with their effects, and the object's effects) is copied.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct AppearanceAttrs {
+    pub transparency: bool,
+    pub fill: FillAttrs,
+    pub stroke: StrokeAttrs,
+}
+
+impl Default for AppearanceAttrs {
+    fn default() -> Self {
+        Self { transparency: true, fill: FillAttrs::ALL, stroke: StrokeAttrs::ALL }
+    }
+}
+
+/// One of the Eyedropper Options' trees: what it picks up, or what it applies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct EyedropperAttrs {
+    pub appearance: AppearanceAttrs,
+    /// Type's character attributes (font, size, leading, tracking…; its paints follow `appearance`).
+    pub character: bool,
+    /// Type's paragraph attributes.
+    pub paragraph: bool,
+}
+
+impl Default for EyedropperAttrs {
+    fn default() -> Self {
+        Self { appearance: Default::default(), character: true, paragraph: true }
+    }
+}
+
+impl EyedropperAttrs {
+    /// No attribute at all.
+    pub fn is_empty(&self) -> bool {
+        fn any(v: &Value) -> bool {
+            match v {
+                Value::Bool(b) => *b,
+                Value::Object(o) => o.values().any(any),
+                _ => false,
+            }
+        }
+        !any(&json!(self))
+    }
+}
+
+/// Eyedropper Options (stored in the preferences): the raster sample size and what the Eyedropper
+/// picks up from the object it clicks and applies to the selection (`appearance.copyFrom`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct EyedropperOptions {
+    /// Pixels square averaged when sampling an image: 1 (point), 3 or 5.
+    pub sample_size: u32,
+    pub pick_up: EyedropperAttrs,
+    pub apply: EyedropperAttrs,
 }
 
 impl Default for EyedropperOptions {
     fn default() -> Self {
-        Self { appearance: true, transparency: true }
+        Self { sample_size: 1, pick_up: Default::default(), apply: Default::default() }
     }
 }
 
 impl EyedropperOptions {
-    /// These options with any `appearance` / `transparency` booleans in `p` applied.
-    pub(crate) fn with(mut self, p: &Value) -> Self {
-        self.appearance = bool_or(p, "appearance", self.appearance);
-        self.transparency = bool_or(p, "transparency", self.transparency);
-        self
+    /// These options with `sampleSize`, `pickUp` and `apply` from `p` applied: a tree given as an
+    /// object sets the flags it names, a bool sets every flag of its branch.
+    pub(crate) fn merged(&self, p: &Value) -> std::result::Result<Self, String> {
+        let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        if let Some(n) = p.get("sampleSize").filter(|n| !n.is_null()) {
+            let n = n.as_u64().filter(|n| matches!(n, 1 | 3 | 5)).ok_or("`sampleSize` must be 1, 3 or 5")?;
+            v["sampleSize"] = json!(n);
+        }
+        for key in ["pickUp", "apply"] {
+            if let Some(t) = p.get(key).filter(|t| !t.is_null()) {
+                merge_flags(&mut v[key], t, key)?;
+            }
+        }
+        serde_json::from_value(v).map_err(|e| e.to_string())
+    }
+
+    /// What one copy takes: the attributes both picked up and applied, with the `pickUp` / `apply`
+    /// params of that call merged over the options.
+    pub(crate) fn attrs(&self, p: &Value) -> std::result::Result<EyedropperAttrs, String> {
+        let o = self.merged(p)?;
+        let mut both = json!(o.pick_up);
+        and_flags(&mut both, &json!(o.apply));
+        serde_json::from_value(both).map_err(|e| e.to_string())
+    }
+}
+
+/// Set the flags of `dst` named by `src` (`path`: where `dst` is, for errors).
+fn merge_flags(dst: &mut Value, src: &Value, path: &str) -> std::result::Result<(), String> {
+    match (dst, src) {
+        (Value::Bool(d), Value::Bool(b)) => {
+            *d = *b;
+            Ok(())
+        }
+        (Value::Object(d), Value::Bool(_)) => d.values_mut().try_for_each(|v| merge_flags(v, src, path)),
+        (Value::Object(d), Value::Object(s)) => s.iter().try_for_each(|(k, v)| match d.get_mut(k) {
+            Some(dv) => merge_flags(dv, v, &format!("{path}.{k}")),
+            None => Err(format!("unknown option `{path}.{k}`")),
+        }),
+        _ => Err(format!("`{path}` must be a bool or an object of bools")),
+    }
+}
+
+/// `dst` and `other` flag by flag.
+fn and_flags(dst: &mut Value, other: &Value) {
+    match (dst, other) {
+        (Value::Bool(d), Value::Bool(b)) => *d &= *b,
+        (Value::Object(d), Value::Object(o)) => d.iter_mut().for_each(|(k, v)| and_flags(v, &o[k])),
+        _ => {}
     }
 }
 
 fn eyedropper_options(s: &mut Session, p: &Value) -> Result<Value> {
-    s.eyedropper = s.eyedropper.with(p);
-    Ok(serde_json::to_value(s.eyedropper).unwrap_or_default())
+    s.prefs.eyedropper = s.prefs.eyedropper.merged(p).map_err(|e| bad("eyedropper.setOptions", e))?;
+    Ok(json!(s.prefs.eyedropper))
 }
 
 fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {

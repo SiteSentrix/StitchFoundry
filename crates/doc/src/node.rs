@@ -574,7 +574,8 @@ impl Node {
             let b = t.local_bounds();
             return Some(if stroke { (&st.stroke, t.xf, crate::appearance::stroke_paint_bounds(b, st.stroke_width)) } else { (&st.fill, t.xf, b) });
         }
-        let b = self.geometric_bounds()?;
+        // An object without bounds (an empty path) still shows its paints, fitted to an empty box.
+        let b = self.geometric_bounds().unwrap_or(Rect::ZERO);
         if stroke {
             self.appearance.stroke_at(item).map(|s| (&s.paint, Affine::IDENTITY, s.paint_bounds(b)))
         } else {

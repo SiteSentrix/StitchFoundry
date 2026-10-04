@@ -79,11 +79,35 @@ pub fn default_command_shortcut(id: &str) -> Option<&'static str> {
     menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| c.2).filter(|s| !s.is_empty())
 }
 
-/// Default shortcut of an entry key (`tool:<id>` or a command id).
+/// Window menu items that show a panel (`window.panel {panel}`) with a default shortcut: (panel
+/// id, shortcut). Every icon panel can be given one in the editor (entry key `panel:<id>`).
+pub const PANEL_SHORTCUTS: &[(&str, &str)] = &[
+    ("color", "F6"),
+    ("colorGuide", "Shift+F3"),
+    ("appearance", "Shift+F6"),
+    ("graphicStyles", "Shift+F5"),
+    ("stroke", "Cmd+F10"),
+    ("gradient", "Cmd+F9"),
+    ("transparency", "Cmd+Shift+F10"),
+];
+
+/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id).
 pub fn default_of(key: &str) -> Option<&'static str> {
-    match key.strip_prefix("tool:") {
-        Some(t) => vectorcraft_tools::tool_info(t).and_then(|t| t.shortcut),
-        None => default_command_shortcut(key),
+    if let Some(t) = key.strip_prefix("tool:") {
+        return vectorcraft_tools::tool_info(t).and_then(|t| t.shortcut);
+    }
+    if let Some(p) = key.strip_prefix("panel:") {
+        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == p).map(|(_, sc)| *sc);
+    }
+    default_command_shortcut(key)
+}
+
+/// Effective shortcut of an entry key, honouring the user's overrides.
+fn effective(key: &str) -> Option<&'static str> {
+    match global_override(key) {
+        Some("") => None,
+        Some(s) => Some(s),
+        None => default_of(key),
     }
 }
 
@@ -98,20 +122,17 @@ pub fn effective_in(overrides: &BTreeMap<String, String>, key: &str) -> Option<S
 
 /// Effective shortcut of a command, honouring the user's overrides.
 pub fn command_shortcut(id: &str) -> Option<&'static str> {
-    match global_override(id) {
-        Some("") => None,
-        Some(s) => Some(s),
-        None => default_command_shortcut(id),
-    }
+    effective(id)
 }
 
 /// Effective shortcut of a tool.
 pub fn tool_shortcut(tool: &str) -> Option<&'static str> {
-    match global_override(&format!("tool:{tool}")) {
-        Some("") => None,
-        Some(s) => Some(s),
-        None => vectorcraft_tools::tool_info(tool).and_then(|t| t.shortcut),
-    }
+    effective(&format!("tool:{tool}"))
+}
+
+/// Effective shortcut of the Window menu item showing `panel` (`window.panel {panel}`).
+pub fn panel_shortcut(panel: &str) -> Option<&'static str> {
+    effective(&format!("panel:{panel}"))
 }
 
 /// Tool whose (effective) shortcut is `key` ("V", "Shift+M").
@@ -205,6 +226,12 @@ pub fn entries() -> &'static [Entry] {
             }
             v.push(Entry { key: c.id.into(), label: c.label.into(), group: c.menu.join(" › "), is_tool: false });
         }
+        v.extend(crate::state::ICON_PANELS.iter().map(|(id, label, _)| Entry {
+            key: format!("panel:{id}"),
+            label: label.to_string(),
+            group: "Window".into(),
+            is_tool: false,
+        }));
         for (id, label, sc, params) in menus::UI_COMMANDS {
             if !seen.insert(id) || (sc.is_empty() && !params.starts_with("{}") && !params.starts_with("{path")) {
                 continue;

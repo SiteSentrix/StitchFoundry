@@ -17,3 +17,6 @@ vectorcraft-text = { workspace = true }
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+image = { workspace = true }

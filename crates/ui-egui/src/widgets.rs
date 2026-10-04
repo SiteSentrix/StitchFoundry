@@ -236,6 +236,45 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
     }
 }
 
+/// A Fill chip of `paint` into `rect` or, with `ring`, a Stroke chip: a frame `ring` wide round a
+/// panel-coloured hole (returned; the whole chip for fills). A selection whose paints differ
+/// (`mixed`) shows a white chip with a "?" (in the hole for strokes).
+pub fn proxy_chip(ui: &Ui, rect: Rect, paint: &Paint, mixed: bool, ring: Option<f32>) -> Rect {
+    let t = Tokens::get(ui.ctx());
+    if mixed {
+        ui.painter().rect_filled(rect, 0.0, Color32::WHITE);
+    } else {
+        paint_chip(ui, rect, paint);
+    }
+    let (hole, mark) = match ring {
+        Some(w) => {
+            let inner = rect.shrink(w);
+            ui.painter().rect_filled(inner, 0.0, t.panel);
+            (inner, t.text_strong)
+        }
+        None => (rect, Color32::BLACK),
+    };
+    if mixed {
+        ui.painter().text(hole.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(hole.height() * 0.8), mark);
+    }
+    hole
+}
+
+/// A chip that opens something (the Control bar's and Properties' Fill/Stroke chips, the Control
+/// bar's Style picker): `draw` paints the `size`-square chip, which gets a frame, and with
+/// `chevron` a chevron follows it.
+pub fn chip_button(ui: &mut Ui, size: f32, chevron: bool, draw: impl FnOnce(&Ui, Rect)) -> Response {
+    let t = Tokens::get(ui.ctx());
+    let (r, resp) = ui.allocate_exact_size(vec2(if chevron { size + 16.0 } else { size }, size), Sense::click());
+    let chip = Rect::from_min_size(r.min, vec2(size, size)).shrink(2.0);
+    draw(ui, chip);
+    ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.input_border), StrokeKind::Outside);
+    if chevron {
+        icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(chip.right() + 9.0, r.center().y), vec2(12.0, 12.0)), t.text_dim);
+    }
+    resp
+}
+
 /// What the user did on a [`fill_stroke_proxy`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ProxyClicks {
@@ -263,31 +302,13 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
             drag_source(ui, resp, || PanelDrag::paint(paint.clone()));
         }
     }
-    let question = |ui: &Ui, r: Rect, color: Color32| {
-        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(r.height() * 0.8), color);
-    };
     let draw_fill = |ui: &Ui| {
-        if mixed.0 {
-            ui.painter().rect_filled(fill_r, 0.0, Color32::WHITE);
-            question(ui, fill_r, Color32::BLACK);
-        } else {
-            paint_chip(ui, fill_r, fill);
-        }
+        proxy_chip(ui, fill_r, fill, mixed.0, None);
         ui.painter().rect_stroke(fill_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(fill_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
     };
     let draw_stroke = |ui: &Ui| {
-        let w = s * 0.28;
-        if mixed.1 {
-            ui.painter().rect_filled(stroke_r, 0.0, Color32::WHITE);
-        } else {
-            paint_chip(ui, stroke_r, stroke);
-        }
-        let inner = stroke_r.shrink(w);
-        ui.painter().rect_filled(inner, 0.0, t.panel);
-        if mixed.1 {
-            question(ui, inner, t.text_strong);
-        }
+        let inner = proxy_chip(ui, stroke_r, stroke, mixed.1, Some(s * 0.28));
         ui.painter().rect_stroke(stroke_r, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Inside);
         ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, Color32::from_gray(20)), StrokeKind::Outside);
         ui.painter().rect_stroke(stroke_r.expand(1.0), 0.0, Stroke::new(1.0, Color32::from_gray(150)), StrokeKind::Outside);
