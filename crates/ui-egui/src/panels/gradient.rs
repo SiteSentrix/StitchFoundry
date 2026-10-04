@@ -1,23 +1,41 @@
-//! Gradient panel: type buttons, angle / aspect ratio / reverse, the gradient slider with draggable
-//! stops and midpoint diamonds (click below the ramp adds a stop, drag a stop off to remove it),
-//! and stop Opacity / Location fields. Stop colours are edited with the Color panel.
+//! Gradient panel: the gradient thumbnail (drag it onto art; its menu lists the document's
+//! gradient swatches and Save to Swatches), type buttons, the Fill/Stroke proxy, angle and aspect
+//! ratio fields with preset menus, Reverse, the gradient slider and the selected stop's fields.
+//!
+//! On the slider: click below the ramp to add a stop, drag a stop to move it (Alt drags a copy;
+//! Alt-dropping it on another stop swaps their colours), drag it off to remove it, double-click it
+//! for the stop popover, and drag a diamond to move a midpoint (a selected diamond's midpoint
+//! shows in Location). Dropping a colour swatch on the ramp adds a stop of that colour, or
+//! recolours the stop it lands on. Hide Options leaves the thumbnail, the proxy and the slider.
 
-use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::gradient::{MIN_STOPS, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint};
-use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::gradient::{
+    MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
+};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_doc::NodeId;
 
 use super::{active_paint, live_run, pstate, set_pstate};
+use crate::state::Dialog;
 use crate::theme::Tokens;
-use crate::widgets::{self, Live, menu_item};
+use crate::widgets::{self, Live, PanelDrag, menu_item};
 use crate::{VectorcraftApp, icons};
 
 /// Dragging a stop this far below the ramp removes it.
-pub const REMOVE_DISTANCE: f32 = 28.0;
+const REMOVE_DISTANCE: f32 = 28.0;
+/// The Angle field's preset menu, degrees.
+const ANGLE_PRESETS: [f64; 9] = [-180.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 180.0];
+/// The Aspect Ratio field's preset menu, percent.
+const ASPECT_PRESETS: [f64; 9] = [10.0, 25.0, 50.0, 75.0, 100.0, 150.0, 200.0, 300.0, 400.0];
+/// Panel-state key of Show/Hide Options.
+const HIDE_OPTIONS: &str = "gradient-hide-options";
+/// Panel-state key of the selected midpoint diamond.
+const MID_SELECTED: &str = "grad-mid";
 
 /// Select stop `i` (the session's selected stop, shared with the Gradient tool's annotator, the
-/// Color panel and agents). Run after the edit that creates it.
-fn select_stop(app: &mut VectorcraftApp, i: usize) {
+/// Color panel and agents), or none.
+fn select_stop(app: &mut VectorcraftApp, i: Option<usize>) {
     app.run("gradient.selectStop", json!({ "index": i })).ok();
 }
 
@@ -31,8 +49,32 @@ pub fn x_to_offset(x: f32, left: f32, width: f32) -> f32 {
 /// Stops as `paint.editGradient` JSON.
 pub use vectorcraft_tools::params::stops_json;
 
-// ---------- UI ----------
+/// A colour dropped on the ramp: recolours stop `on` (fully opaque), or adds an opaque stop of
+/// that colour at `offset`. Returns the stops and the index of the stop that took the colour.
+fn drop_color(g: &Gradient, on: Option<usize>, offset: f32, c: Color) -> (Vec<GradientStop>, usize) {
+    let (mut v, i) = match on.filter(|i| *i < g.stops.len()) {
+        Some(i) => (g.stops.clone(), i),
+        None => insert_stop(g, offset),
+    };
+    v[i].color = c;
+    v[i].opacity = 1.0;
+    (v, i)
+}
 
+/// The stops after dragging stop `i` of `origin` to `offset`: moved, or with `copy` (Alt) a copy
+/// left there, or the colours swapped with stop `over` when the copy is dropped on it. Returns
+/// the stops and the stop to select.
+fn dragged_stops(origin: &[GradientStop], i: usize, offset: f32, copy: bool, over: Option<usize>) -> (Vec<GradientStop>, usize) {
+    match (copy, over.filter(|j| *j != i)) {
+        (true, Some(j)) => (swap_stop_colors(origin, i, j), i),
+        (true, None) => duplicate_stop(origin, i, offset),
+        (false, _) => move_stop(origin, i, offset),
+    }
+}
+
+// ---------- shared edits ----------
+
+/// The gradient behind the active proxy.
 fn current(app: &VectorcraftApp) -> Option<GradientPaint> {
     match active_paint(app) {
         Paint::Gradient(g) => Some(*g),
@@ -40,36 +82,86 @@ fn current(app: &VectorcraftApp) -> Option<GradientPaint> {
     }
 }
 
+/// Edit the gradient behind the active proxy (`paint.editGradient` params).
 fn edit(app: &mut VectorcraftApp, params: Value, phase: Live) {
     let mut p = params;
     p["stroke"] = json!(!app.session.fill_active);
     live_run(app, "Gradient", "paint.editGradient", p, phase);
 }
 
+/// Write `stops` to the gradient behind the active proxy (live while dragging) and, once
+/// released, select stop `select` (the panel, the stop popover and the Color panel share this).
+pub(crate) fn set_stops(app: &mut VectorcraftApp, stops: &[GradientStop], select: Option<usize>, phase: Live) {
+    edit(app, json!({ "stops": stops_json(stops) }), phase);
+    if phase == Live::Released
+        && let Some(i) = select
+        && app.session.selected_stop() != Some(i)
+    {
+        select_stop(app, Some(i));
+    }
+}
+
+/// Save the gradient as a swatch.
+fn save_to_swatches(app: &mut VectorcraftApp, g: &GradientPaint) {
+    app.run("swatch.new", super::paint_params(&Paint::Gradient(Box::new(g.clone())))).ok();
+}
+
+/// The document's gradient swatches (groups included): name and gradient.
+fn gradient_swatches(app: &VectorcraftApp) -> Vec<(String, Gradient)> {
+    let Some(st) = app.session.active() else { return vec![] };
+    let d = &st.doc;
+    d.swatches
+        .iter()
+        .chain(d.swatch_groups.iter().flat_map(|g| g.swatches.iter()))
+        .filter_map(|s| match &s.paint {
+            Paint::Gradient(g) => Some((s.name.clone(), g.gradient.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The selected midpoint diamond: kept for the object it was picked on, and given up when a stop
+/// is selected.
+fn selected_mid(app: &VectorcraftApp, ctx: &egui::Context, stops: usize) -> Option<usize> {
+    let (i, owner) = pstate::<Option<(usize, Option<NodeId>)>>(ctx, MID_SELECTED)?;
+    (app.session.selected_stop().is_none() && i + 1 < stops && owner == first_id(app)).then_some(i)
+}
+
+fn first_id(app: &VectorcraftApp) -> Option<NodeId> {
+    app.session.active().and_then(|d| d.selection.objects.first().copied())
+}
+
+// ---------- UI ----------
+
 /// Drag state of the ramp: which handle is being dragged.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 enum Drag {
     #[default]
     None,
-    Stop(usize),
+    /// Stop `index`; `copy` (Alt held when the drag began) drags a copy.
+    Stop {
+        index: usize,
+        copy: bool,
+    },
     Mid(usize),
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let gp = current(app);
-    let fallback = GradientPaint::new(Gradient::default());
-    let g = gp.clone().unwrap_or(fallback);
     let is_grad = gp.is_some();
+    let g = gp.unwrap_or_else(|| GradientPaint::new(Gradient::default()));
     let kind = g.gradient.kind;
-    // Header: gradient swatch + type buttons + Edit Gradient.
+    let hidden: bool = pstate(ui.ctx(), HIDE_OPTIONS);
+    // Header: thumbnail + its swatch menu, the type buttons and Edit Gradient.
     ui.horizontal(|ui| {
-        let (r, resp) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::click());
-        widgets::paint_chip(ui, r, &Paint::Gradient(Box::new(g.clone())));
-        ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
-        if resp.on_hover_text("Gradient Fill — click to apply").clicked() && !is_grad {
-            edit(app, json!({}), Live::Released);
+        thumbnail(app, ui, &g, is_grad);
+        if hidden {
+            ui.add_space(6.0);
+            super::proxy(app, ui, 36.0);
+            return;
         }
+        ui.add_space(4.0);
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 widgets::dim_label(ui, "Type:");
@@ -83,13 +175,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
             });
-            ui.horizontal(|ui| {
-                if widgets::flat_button(ui, "Edit Gradient", 96.0).clicked() {
-                    app.select_tool("gradient");
-                }
-            });
+            if widgets::flat_button(ui, "Edit Gradient", 96.0).clicked() {
+                app.select_tool("gradient");
+            }
         });
     });
+    if hidden {
+        ui.add_space(6.0);
+        ramp(app, ui, &g.gradient, is_grad);
+        return;
+    }
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, "Stroke:");
@@ -101,87 +196,170 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             widgets::icon_button_enabled(ui, icon, tip, icon == "dc-stroke-center" && !app.session.fill_active, false, 22.0);
         }
     });
+    // The proxy beside the angle and aspect ratio fields.
     ui.horizontal(|ui| {
-        icons::icon(ui, "rotate-ccw", 15.0, t.icon).on_hover_text("Angle");
-        if let Some(a) = widgets::plain_field(ui, "grad-angle", g.geom.map(|x| x.angle_deg()).unwrap_or(g.angle), "°", 1, 64.0) {
-            edit(app, json!({"angle": a}), Live::Released);
-        }
+        super::proxy(app, ui, 36.0);
         ui.add_space(4.0);
-        let radial = kind == GradientKind::Radial;
-        icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text("Aspect Ratio");
-        let asp = g.geom.map(|x| x.aspect * 100.0).unwrap_or(100.0);
-        if radial {
-            if let Some(a) = widgets::plain_field(ui, "grad-aspect", asp, "%", 1, 60.0) {
-                edit(app, json!({"aspect": a}), Live::Released);
-            }
-        } else {
-            ui.add_enabled(false, egui::Label::new(egui::RichText::new(format!("{asp:.0}%")).color(t.text_disabled)));
-        }
-        if widgets::icon_button_enabled(ui, "dc-reverse", "Reverse Gradient", false, is_grad, 22.0).clicked() {
-            edit(app, json!({"reverse": true}), Live::Released);
-        }
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                icons::icon(ui, "rotate-ccw", 15.0, t.icon).on_hover_text("Angle");
+                let angle = g.geom.map_or(g.angle, |x| x.angle_deg());
+                if let Some(a) = widgets::spin_plain(ui, "grad-angle", (angle * 10.0).round() / 10.0, "°", 1, 104.0, 1.0, -180.0, &ANGLE_PRESETS) {
+                    edit(app, json!({"angle": a}), Live::Released);
+                }
+                if widgets::icon_button_enabled(ui, "dc-reverse", "Reverse Gradient", false, is_grad, 22.0).clicked() {
+                    edit(app, json!({"reverse": true}), Live::Released);
+                }
+            });
+            let radial = kind == GradientKind::Radial;
+            ui.horizontal(|ui| {
+                icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text("Aspect Ratio");
+                let asp = g.geom.map_or(100.0, |x| (x.aspect * 1000.0).round() / 10.0);
+                let set = ui.add_enabled_ui(radial, |ui| widgets::spin_plain(ui, "grad-aspect", asp, "%", 1, 104.0, 1.0, 0.5, &ASPECT_PRESETS)).inner;
+                if let Some(a) = set {
+                    edit(app, json!({"aspect": a}), Live::Released);
+                }
+            });
+        });
     });
     ui.add_space(6.0);
     ramp(app, ui, &g.gradient, is_grad);
     ui.add_space(4.0);
-    // Stop fields.
-    let sel = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len());
-    ui.horizontal(|ui| {
-        let enabled = is_grad && sel.is_some();
-        let stop = sel.and_then(|i| g.gradient.stops.get(i)).copied();
-        widgets::dim_label(ui, "Opacity:");
-        let op = stop.map(|s| s.opacity as f64 * 100.0).unwrap_or(100.0);
-        if let Some(v) = widgets::plain_field(ui, "grad-op", op, "%", 0, 54.0)
-            && enabled
-            && let Some(i) = sel
-        {
-            let mut stops = g.gradient.stops.clone();
-            stops[i].opacity = (v / 100.0).clamp(0.0, 1.0) as f32;
-            edit(app, json!({"stops": stops_json(&stops)}), Live::Released);
-        }
-        widgets::dim_label(ui, "Location:");
-        let loc = stop.map(|s| s.offset as f64 * 100.0).unwrap_or(0.0);
-        if let Some(v) = widgets::plain_field(ui, "grad-loc", loc, "%", 1, 54.0)
-            && enabled
-            && let Some(i) = sel
-        {
-            let (stops, ni) = move_stop(&g.gradient.stops, i, (v / 100.0) as f32);
-            edit(app, json!({"stops": stops_json(&stops)}), Live::Released);
-            select_stop(app, ni);
-        }
-        let can_del = enabled && g.gradient.stops.len() > MIN_STOPS;
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Stop", false, can_del, 22.0).clicked()
-            && let Some(i) = sel
-            && let Some(stops) = remove_stop(&g.gradient.stops, i)
-        {
-            edit(app, json!({"stops": stops_json(&stops)}), Live::Released);
-            select_stop(app, i.min(stops.len() - 1));
-        }
-    });
-    if let Some(i) = sel
-        && is_grad
-    {
-        let c = g.gradient.stops[i].color;
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, "Stop color:");
-            let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
-            widgets::swatch_tile(ui, r, &Paint::solid(c), false, resp.hovered());
-            widgets::dim_label(ui, &c.to_hex().to_uppercase());
-            if resp.on_hover_text("Edit the stop in the Color panel").clicked() {
-                app.ui.open_panel = Some("color".into());
-            }
-        });
-    }
+    stop_fields(app, ui, &g.gradient, is_grad);
     if !is_grad {
         widgets::dim_label(ui, "Click the ramp or a type button to apply a gradient.");
     }
+}
+
+/// The gradient thumbnail (click: apply a gradient; drag: onto art) and its menu of gradient
+/// swatches with Save to Swatches.
+fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: bool) {
+    let t = Tokens::get(ui.ctx());
+    let (r, resp) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::click_and_drag());
+    widgets::gradient_chip(ui, r, &g.gradient);
+    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+    let resp = resp.on_hover_text("Gradient Fill: click to apply, drag onto art");
+    if resp.clicked() && !is_grad {
+        edit(app, json!({}), Live::Released);
+    }
+    // The dragged copy carries no placement: it fits the art it lands on.
+    widgets::drag_source(ui, &resp, || PanelDrag::paint(Paint::Gradient(Box::new(g.clone()))));
+    let dr = Rect::from_min_size(r.right_top() + vec2(1.0, 0.0), vec2(14.0, 40.0));
+    ui.advance_cursor_after_rect(dr);
+    let dresp = ui.interact(dr, ui.id().with("grad-swatches"), Sense::click());
+    icons::paint(ui, "chevron-down", Rect::from_center_size(dr.center(), vec2(12.0, 12.0)), if dresp.hovered() { t.text_strong } else { t.icon });
+    let dresp = dresp.on_hover_text("Gradient swatches");
+    egui::Popup::menu(&dresp).show(|ui| {
+        ui.set_min_width(200.0);
+        let mut chosen = None;
+        let swatches = gradient_swatches(app);
+        if swatches.is_empty() {
+            widgets::dim_label(ui, "No gradient swatches");
+        }
+        for (name, grad) in &swatches {
+            let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(row, 0.0, t.hover);
+            }
+            let chip = Rect::from_min_size(row.left_center() + vec2(4.0, -8.0), vec2(16.0, 16.0));
+            widgets::gradient_chip(ui, chip, grad);
+            ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
+            ui.painter().text(chip.right_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.5), t.text);
+            if resp.clicked() {
+                chosen = Some(name.clone());
+            }
+        }
+        ui.separator();
+        if menu_item(ui, "Save to Swatches", is_grad, false) {
+            save_to_swatches(app, g);
+        }
+        if let Some(name) = chosen {
+            super::apply_click(app, ui, json!({ "swatch": name }));
+            ui.close();
+        }
+    });
+}
+
+/// The selected stop's colour (click: its popover; the eyedropper samples one from the art),
+/// opacity and location (a selected diamond's midpoint instead), and Delete Stop.
+fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
+    let stops = &g.stops;
+    let sel = app.session.selected_stop().filter(|i| *i < stops.len() && is_grad);
+    let mid = selected_mid(app, ui.ctx(), stops.len()).filter(|_| is_grad);
+    let stop = sel.map(|i| stops[i]);
+    if let (Some(i), Some(s)) = (sel, stop) {
+        ui.horizontal(|ui| {
+            widgets::dim_label(ui, "Color:");
+            let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
+            widgets::swatch_tile(ui, r, &Paint::solid(s.color), false, resp.hovered());
+            widgets::dim_label(ui, &s.color.to_hex().to_uppercase());
+            if resp.on_hover_text("Edit the stop").clicked() {
+                open_popover(app, i, r.left_bottom() + vec2(0.0, 4.0));
+            }
+            ui.add_space(ui.available_width() - 22.0);
+            if widgets::icon_button(ui, "pipette", "Eyedropper: click the art to sample the stop's colour", false, 22.0).clicked() {
+                stop_eyedropper(app);
+            }
+        });
+    }
+    ui.horizontal(|ui| {
+        ui.add_enabled_ui(sel.is_some(), |ui| {
+            widgets::dim_label(ui, "Opacity:");
+            if let Some(v) = widgets::plain_field(ui, "grad-op", stop.map_or(100.0, |s| s.opacity as f64 * 100.0), "%", 0, 54.0)
+                && let Some(i) = sel
+            {
+                let mut v2 = stops.clone();
+                v2[i].opacity = (v / 100.0).clamp(0.0, 1.0) as f32;
+                set_stops(app, &v2, Some(i), Live::Released);
+            }
+        });
+        ui.add_enabled_ui(sel.is_some() || mid.is_some(), |ui| {
+            widgets::dim_label(ui, "Location:");
+            let loc = match (mid, stop) {
+                (Some(m), _) => stops[m].midpoint as f64 * 100.0,
+                (None, Some(s)) => s.offset as f64 * 100.0,
+                _ => 0.0,
+            };
+            if let Some(v) = widgets::plain_field(ui, ("grad-loc", mid.is_some()), loc, "%", 1, 54.0) {
+                let v = (v / 100.0) as f32;
+                if let Some(m) = mid {
+                    set_stops(app, &set_midpoint(stops, m, v), None, Live::Released);
+                } else if let Some(i) = sel {
+                    let (v2, ni) = move_stop(stops, i, v);
+                    set_stops(app, &v2, Some(ni), Live::Released);
+                }
+            }
+        });
+        let can_del = sel.is_some() && stops.len() > MIN_STOPS;
+        if widgets::icon_button_enabled(ui, "trash-2", "Delete Stop", false, can_del, 22.0).clicked()
+            && let Some(i) = sel
+            && let Some(v) = remove_stop(stops, i)
+        {
+            let next = i.min(v.len() - 1);
+            set_stops(app, &v, Some(next), Live::Released);
+        }
+    });
+}
+
+/// The stop's eyedropper: the Eyedropper tool samples the next colour clicked on the art into the
+/// selected stop, then hands back to the current tool.
+fn stop_eyedropper(app: &mut VectorcraftApp) {
+    let back = app.session.tool_id();
+    app.select_tool("eyedropper");
+    app.session.set_tool_option("stop", &json!(back));
+}
+
+/// Open the stop popover for stop `i` at screen position `at`.
+fn open_popover(app: &mut VectorcraftApp, i: usize, at: Pos2) {
+    select_stop(app, Some(i));
+    app.ui.dialog = Some(Dialog::new("gradientStop", json!({ "index": i, "screen": [at.x, at.y], "tab": "color" })));
 }
 
 /// The gradient slider: ramp, stops below, midpoint diamonds above.
 fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     let t = Tokens::get(ui.ctx());
     let w = ui.available_width();
-    let (area, _) = ui.allocate_exact_size(vec2(w, 50.0), Sense::hover());
+    let (area, area_resp) = ui.allocate_exact_size(vec2(w, 50.0), Sense::hover());
     let bar = Rect::from_min_size(area.min + vec2(8.0, 10.0), vec2(w - 16.0, 18.0));
     // Checkerboard under the ramp (opacity).
     let cell = 6.0;
@@ -208,29 +386,59 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
             Rect::from_min_size(pos2(bar.left() + i as f32 * bar.width() / n as f32, bar.top()), vec2(bar.width() / n as f32 + 0.5, bar.height()));
         ui.painter().rect_filled(rr, 0.0, Color32::from_rgba_unmultiplied(r, gg, b, a));
     }
-    ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
+    // A colour swatch held over the ramp: outline it as a drop target.
+    let droppable = is_grad && area_resp.dnd_hover_payload::<PanelDrag>().is_some_and(|d| d.color().is_some());
+    let edge = if droppable { Stroke::new(2.0, t.accent) } else { Stroke::new(1.0, t.border) };
+    ui.painter().rect_stroke(bar, 0.0, edge, StrokeKind::Outside);
     let x_of = |o: f32| bar.left() + o * bar.width();
+    let offset_at = |p: Pos2| x_to_offset(p.x, bar.left(), bar.width());
+    let marker = |o: f32| Rect::from_min_size(pos2(x_of(o) - 6.0, bar.bottom() + 2.0), vec2(12.0, 16.0));
     let sel = app.session.selected_stop();
-    let mut drag: Drag = pstate(ui.ctx(), "grad-drag");
     let stops = &g.stops;
+    let mid_sel = selected_mid(app, ui.ctx(), stops.len());
+    let mut drag: Drag = pstate(ui.ctx(), "grad-drag");
     // While dragging, edits are computed against the stops as they were when the drag began (the
     // document shows the preview).
     let origin: Vec<GradientStop> = if drag == Drag::None { stops.clone() } else { pstate::<Vec<GradientStop>>(ui.ctx(), "grad-origin") };
-    let origin = if origin.len() == stops.len() { origin } else { stops.clone() };
+    let origin = if origin.is_empty() { stops.clone() } else { origin };
+    // The stop of `origin` other than `i` whose marker is under `p`.
+    let stop_under = |p: Pos2, i: usize| origin.iter().enumerate().position(|(j, s)| j != i && marker(s.offset).contains(p));
     let mut changed: Option<(Vec<GradientStop>, Live)> = None;
     // The stop to select once `changed` is applied.
     let mut select: Option<usize> = None;
+    let mut pick_mid: Option<usize> = None;
+    let mut popover: Option<(usize, Pos2)> = None;
+    // The ramp and the strip below it, under the stops and diamonds (interacted first): a click
+    // below adds a stop, and without a gradient either applies one.
+    let below = Rect::from_min_max(pos2(bar.left(), bar.bottom()), pos2(bar.right(), area.bottom()));
+    let add_resp = ui.interact(below, ui.id().with("grad-add"), Sense::click());
+    let bar_resp = ui.interact(bar, ui.id().with("grad-bar"), Sense::click());
+    if add_resp.hovered() && is_grad {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
+    }
+    if !is_grad && (bar_resp.clicked() || add_resp.clicked()) {
+        edit(app, json!({}), Live::Released);
+    } else if add_resp.clicked()
+        && let Some(p) = add_resp.interact_pointer_pos()
+    {
+        let (v, i) = insert_stop(g, offset_at(p));
+        select = Some(i);
+        changed = Some((v, Live::Released));
+    }
     // Midpoint diamonds.
     for i in 0..stops.len().saturating_sub(1) {
         let Some(p) = midpoint_pos(stops, i) else { continue };
         let c = pos2(x_of(p), bar.top() - 5.0);
         let rect = Rect::from_center_size(c, vec2(10.0, 10.0));
         let resp = ui.interact(rect, ui.id().with(("grad-mid", i)), Sense::click_and_drag());
-        let active = drag == Drag::Mid(i) || resp.hovered();
+        let lit = drag == Drag::Mid(i) || mid_sel == Some(i) || resp.hovered();
         let pts = vec![c + vec2(0.0, -4.0), c + vec2(4.0, 0.0), c + vec2(0.0, 4.0), c + vec2(-4.0, 0.0)];
-        ui.painter().add(egui::Shape::convex_polygon(pts, if active { Color32::WHITE } else { t.icon }, Stroke::new(1.0, t.border)));
+        ui.painter().add(egui::Shape::convex_polygon(pts, if lit { Color32::WHITE } else { t.icon }, Stroke::new(1.0, t.border)));
         if !is_grad {
             continue;
+        }
+        if resp.clicked() || resp.drag_started() {
+            pick_mid = Some(i);
         }
         if resp.drag_started() {
             drag = Drag::Mid(i);
@@ -238,7 +446,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         }
         if (resp.dragged() || resp.drag_stopped())
             && let Some(pp) = resp.interact_pointer_pos()
-            && let Some(m) = midpoint_from_pos(&origin, i, x_to_offset(pp.x, bar.left(), bar.width()))
+            && let Some(m) = midpoint_from_pos(&origin, i, offset_at(pp))
         {
             let phase = if resp.drag_stopped() { Live::Released } else { Live::Dragging };
             changed = Some((set_midpoint(&origin, i, m), phase));
@@ -248,15 +456,19 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         }
     }
     // Stops (house-shaped markers under the ramp).
-    let mut hit_stop = false;
+    let alt = super::alt_held(ui);
     for (i, s) in stops.iter().enumerate() {
         let x = x_of(s.offset);
-        let top = bar.bottom() + 2.0;
-        let marker = Rect::from_min_size(pos2(x - 6.0, top), vec2(12.0, 16.0));
-        let resp = ui.interact(marker, ui.id().with(("grad-stop", i)), Sense::click_and_drag());
-        hit_stop |= resp.hovered() || resp.dragged();
-        let dragging_this = drag == Drag::Stop(i);
-        let off = dragging_this && resp.interact_pointer_pos().is_some_and(|p| p.y > bar.bottom() + REMOVE_DISTANCE) && origin.len() > MIN_STOPS;
+        let m = marker(s.offset);
+        let top = m.top();
+        let resp = ui.interact(m, ui.id().with(("grad-stop", i)), Sense::click_and_drag());
+        let (dragging_this, copy) = match drag {
+            Drag::Stop { index, copy } => (index == i, copy),
+            _ => (false, false),
+        };
+        // A moved stop (not a copy) dragged this far below the ramp is removed on release.
+        let off_ramp = |p: Pos2| !copy && p.y > bar.bottom() + REMOVE_DISTANCE && origin.len() > MIN_STOPS;
+        let off = dragging_this && resp.interact_pointer_pos().is_some_and(off_ramp);
         let outline = if sel == Some(i) { t.accent } else { t.border };
         let body = vec![pos2(x, top), pos2(x + 6.0, top + 5.0), pos2(x + 6.0, top + 15.0), pos2(x - 6.0, top + 15.0), pos2(x - 6.0, top + 5.0)];
         if !off {
@@ -267,89 +479,97 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
         if !is_grad {
             continue;
         }
+        if resp.double_clicked() {
+            popover = Some((i, m.left_bottom() + vec2(0.0, 4.0)));
+        }
         if resp.clicked() || resp.drag_started() {
             select = Some(i);
         }
         if resp.drag_started() {
-            drag = Drag::Stop(i);
+            drag = Drag::Stop { index: i, copy: alt };
             set_pstate(ui.ctx(), "grad-origin", stops.clone());
         }
         if (resp.dragged() || resp.drag_stopped())
             && dragging_this
             && let Some(pp) = resp.interact_pointer_pos()
         {
-            let removing = pp.y > bar.bottom() + REMOVE_DISTANCE && origin.len() > MIN_STOPS;
+            let phase = if resp.drag_stopped() { Live::Released } else { Live::Dragging };
             if resp.drag_stopped() {
                 drag = Drag::None;
-                if removing {
-                    if let Some(v) = remove_stop(&origin, i) {
-                        select = Some(i.min(v.len() - 1));
-                        changed = Some((v, Live::Released));
-                    }
-                } else {
-                    let (v, ni) = move_stop(&origin, i, x_to_offset(pp.x, bar.left(), bar.width()));
-                    select = Some(ni);
-                    changed = Some((v, Live::Released));
+            }
+            if !off_ramp(pp) {
+                let over = if copy { stop_under(pp, i) } else { None };
+                let (v, ni) = dragged_stops(&origin, i, offset_at(pp), copy, over);
+                select = Some(ni);
+                changed = Some((v, phase));
+            } else if phase == Live::Released {
+                if let Some(v) = remove_stop(&origin, i) {
+                    select = Some(i.min(v.len() - 1));
+                    changed = Some((v, phase));
                 }
-            } else if removing {
-                // Dragged off: show the gradient without moving the stop until release.
-                changed = Some((origin.clone(), Live::Dragging));
             } else {
-                let (v, _) = move_stop(&origin, i, x_to_offset(pp.x, bar.left(), bar.width()));
-                changed = Some((v, Live::Dragging));
+                // Dragged off: show the gradient without the stop moving until release.
+                changed = Some((origin.clone(), phase));
             }
         }
     }
-    // Click below the ramp (not on a stop) adds a stop; clicking the ramp applies a gradient.
-    let below = Rect::from_min_max(pos2(bar.left(), bar.bottom()), pos2(bar.right(), area.bottom()));
-    let resp = ui.interact(below, ui.id().with("grad-add"), Sense::click());
-    if resp.hovered() && !hit_stop && is_grad {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
-    }
-    if resp.clicked()
-        && !hit_stop
-        && let Some(p) = resp.interact_pointer_pos()
+    // A colour swatch dropped on the ramp.
+    if is_grad
+        && let Some(d) = area_resp.dnd_release_payload::<PanelDrag>()
+        && let Some(c) = d.color()
+        && let Some(p) = ui.input(|i| i.pointer.latest_pos())
     {
-        if is_grad {
-            let (v, i) = insert_stop(g, x_to_offset(p.x, bar.left(), bar.width()));
-            select = Some(i);
-            changed = Some((v, Live::Released));
-        } else {
-            edit(app, json!({}), Live::Released);
-        }
-    }
-    let bar_resp = ui.interact(bar, ui.id().with("grad-bar"), Sense::click());
-    if bar_resp.clicked() && !is_grad {
-        edit(app, json!({}), Live::Released);
+        let (v, i) = drop_color(g, stops.iter().position(|s| marker(s.offset).contains(p)), offset_at(p), c);
+        select = Some(i);
+        changed = Some((v, Live::Released));
     }
     set_pstate(ui.ctx(), "grad-drag", drag);
-    if let Some((v, phase)) = changed {
-        edit(app, json!({"stops": stops_json(&v)}), phase);
+    if let Some(i) = pick_mid {
+        set_pstate(ui.ctx(), MID_SELECTED, Some((i, first_id(app))));
+        if sel.is_some() {
+            select_stop(app, None);
+        }
+    } else if select.is_some() {
+        set_pstate(ui.ctx(), MID_SELECTED, None::<(usize, Option<NodeId>)>);
     }
-    if let Some(i) = select {
-        select_stop(app, i);
+    match changed {
+        Some((v, phase)) => set_stops(app, &v, select, phase),
+        None => {
+            if let Some(i) = select.filter(|i| sel != Some(*i)) {
+                select_stop(app, Some(i));
+            }
+        }
+    }
+    if let Some((i, at)) = popover {
+        open_popover(app, i, at);
     }
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let g = current(app);
-    menu_item(ui, "Hide Options", false, false);
-    if menu_item(ui, "Add to Swatches", g.is_some(), false)
-        && let Some(g) = g
-    {
-        app.run("swatch.new", super::paint_params(&Paint::Gradient(Box::new(g)))).ok();
+    let hidden: bool = pstate(ui.ctx(), HIDE_OPTIONS);
+    if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
+        set_pstate(ui.ctx(), HIDE_OPTIONS, !hidden);
     }
-    if menu_item(ui, "Reverse Gradient", current(app).is_some(), false) {
+    ui.separator();
+    if menu_item(ui, "Add to Swatches", g.is_some(), false)
+        && let Some(g) = &g
+    {
+        save_to_swatches(app, g);
+    }
+    if menu_item(ui, "Reverse Gradient", g.is_some(), false) {
         edit(app, json!({"reverse": true}), Live::Released);
     }
     if menu_item(ui, "Reset to White, Black", true, false) {
-        let d = Gradient::default();
-        edit(app, json!({"stops": stops_json(&d.stops)}), Live::Released);
+        set_stops(app, &Gradient::default().stops, None, Live::Released);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use egui::{Event, Modifiers, PointerButton};
+    use vectorcraft_engine::Session;
+
     use super::*;
 
     #[test]
@@ -360,5 +580,252 @@ mod tests {
         let j = stops_json(&Gradient::default().stops);
         assert_eq!(j.as_array().unwrap().len(), 2);
         assert_eq!(j[1]["midpoint"], json!(0.5));
+    }
+
+    #[test]
+    fn dropped_colours_recolour_or_add_an_opaque_stop() {
+        let mut g = Gradient::default();
+        g.stops[1].opacity = 0.5;
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let (v, i) = drop_color(&g, Some(1), 0.3, red);
+        assert_eq!((v.len(), i, v[1].color, v[1].opacity), (2, 1, red, 1.0));
+        let (v, i) = drop_color(&g, None, 0.3, red);
+        assert_eq!((v.len(), i, v[1].color, v[1].offset, v[1].opacity), (3, 1, red, 0.3, 1.0));
+    }
+
+    #[test]
+    fn dragged_stops_move_copy_or_swap() {
+        let g = Gradient::default();
+        let (v, i) = dragged_stops(&g.stops, 0, 0.4, false, Some(1));
+        assert_eq!((v.len(), i, v[0].offset), (2, 0, 0.4));
+        let (v, i) = dragged_stops(&g.stops, 0, 0.4, true, None);
+        assert_eq!((v.len(), i, v[1].offset, v[1].color), (3, 1, 0.4, Color::WHITE));
+        let (v, i) = dragged_stops(&g.stops, 0, 1.0, true, Some(1));
+        assert_eq!((v.len(), i, v[0].color, v[1].color), (2, 0, Color::BLACK, Color::WHITE));
+        // Dropped on itself: a copy.
+        assert_eq!(dragged_stops(&g.stops, 0, 0.0, true, Some(0)).0.len(), 3);
+    }
+
+    // ---------- headless frames ----------
+
+    /// A selected rectangle filled with `fill` (`paint.setFill` params).
+    fn app(fill: Value) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+        app.run("paint.setFill", fill).unwrap();
+        app
+    }
+
+    /// A headless Gradient panel: frames share one context and a clock.
+    struct Panel {
+        ctx: egui::Context,
+        time: f64,
+    }
+
+    impl Panel {
+        fn new() -> Self {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            Self { ctx, time: 0.0 }
+        }
+
+        /// One frame with `events` (and `modifiers` held); returns the texts drawn and where.
+        fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>, modifiers: Modifiers) -> Vec<(String, Pos2)> {
+            fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2)>) {
+                match s {
+                    egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.pos + t.galley.rect.center().to_vec2())),
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                    _ => {}
+                }
+            }
+            self.time += 0.1;
+            let mut events = events;
+            events.insert(0, Event::ModifiersChanged(modifiers));
+            let input = egui::RawInput {
+                time: Some(self.time),
+                events,
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
+                ..Default::default()
+            };
+            let mut out = self.ctx.run_ui(input, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let mut v = vec![];
+            out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+            v
+        }
+
+        /// The rect of the widget its parent ui keyed `key` (last frame).
+        fn widget(&self, key: impl std::hash::Hash + std::fmt::Debug + Copy) -> Rect {
+            self.ctx
+                .viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.id == w.parent_id.with(key)).map(|w| w.rect))
+                .expect("widget drawn")
+        }
+
+        fn click(&mut self, app: &mut VectorcraftApp, at: Pos2) -> Vec<(String, Pos2)> {
+            let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+            self.frame(app, vec![Event::PointerMoved(at), b(true)], Modifiers::NONE);
+            self.frame(app, vec![b(false)], Modifiers::NONE);
+            self.frame(app, vec![], Modifiers::NONE)
+        }
+
+        /// Press at `from`, move to `to` in steps and release there, with `m` held.
+        fn drag(&mut self, app: &mut VectorcraftApp, from: Pos2, to: Pos2, m: Modifiers) {
+            let b = |at, pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: m };
+            self.frame(app, vec![Event::PointerMoved(from), b(from, true)], m);
+            for k in 1..=4 {
+                self.frame(app, vec![Event::PointerMoved(from + (to - from) * (k as f32 / 4.0))], m);
+            }
+            self.frame(app, vec![b(to, false)], m);
+            self.frame(app, vec![], Modifiers::NONE);
+        }
+    }
+
+    fn fill(app: &VectorcraftApp) -> GradientPaint {
+        match crate::panels::current_paints(app).0 {
+            Paint::Gradient(g) => *g,
+            p => panic!("expected a gradient fill, got {p:?}"),
+        }
+    }
+
+    fn hexes(app: &VectorcraftApp) -> Vec<String> {
+        fill(app).gradient.stops.iter().map(|s| s.color.to_hex()).collect()
+    }
+
+    #[test]
+    fn the_proxy_toggles_fill_and_stroke_and_stays_with_options_hidden() {
+        let mut app = app(json!({"gradient": {}}));
+        let mut p = Panel::new();
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        assert!(texts.iter().any(|(t, _)| t == "Opacity:"));
+        let stroke = p.widget("stroke-proxy");
+        p.click(&mut app, stroke.right_bottom() - vec2(2.0, 2.0));
+        assert!(!app.session.fill_active, "the Stroke proxy came to the front");
+        set_pstate(&p.ctx, HIDE_OPTIONS, true);
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        assert!(!texts.iter().any(|(t, _)| t == "Opacity:" || t == "Type:"), "{texts:?}");
+        let fill = p.widget("fill-proxy");
+        p.click(&mut app, fill.left_top() + vec2(2.0, 2.0));
+        assert!(app.session.fill_active, "the proxy works with the options hidden");
+        p.widget(("grad-stop", 1));
+    }
+
+    #[test]
+    fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
+        let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+        let mut app = app(json!({"gradient": {"stops": stops}}));
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        let mut p = Panel::new();
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        assert!(texts.iter().any(|(t, _)| t == "100%"), "the stop's location: {texts:?}");
+        let diamond = p.widget(("grad-mid", 0));
+        let texts = p.click(&mut app, diamond.center());
+        assert_eq!(app.session.selected_stop(), None, "the diamond replaces the stop selection");
+        assert!(texts.iter().any(|(t, _)| t == "30%"), "the midpoint: {texts:?}");
+        // Typing a location moves the midpoint.
+        let field = texts.iter().find(|(t, _)| t == "30%").unwrap().1;
+        p.click(&mut app, field);
+        let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+        p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("60".into())], Modifiers::NONE);
+        p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+        assert!((fill(&app).gradient.stops[0].midpoint - 0.6).abs() < 1e-6, "{:?}", fill(&app).gradient.stops);
+        // Clicking a stop selects it again.
+        let stop = p.widget(("grad-stop", 0));
+        let texts = p.click(&mut app, stop.center());
+        assert_eq!(app.session.selected_stop(), Some(0));
+        assert!(texts.iter().any(|(t, _)| t == "0%"));
+    }
+
+    #[test]
+    fn the_thumbnail_menu_applies_gradient_swatches_and_saves_one() {
+        let mut app = app(json!({"color": "#336699"}));
+        let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+        app.run("swatch.new", json!({"name": "Dusk", "gradient": {"stops": stops}})).unwrap();
+        let mut p = Panel::new();
+        p.frame(&mut app, vec![], Modifiers::NONE);
+        let menu = p.widget("grad-swatches").center();
+        let texts = p.click(&mut app, menu);
+        let dusk = texts.iter().find(|(t, _)| t == "Dusk").unwrap_or_else(|| panic!("the menu lists the swatch: {texts:?}")).1;
+        assert!(texts.iter().any(|(t, _)| t.ends_with("Save to Swatches")));
+        p.click(&mut app, dusk);
+        assert_eq!(hexes(&app), ["#ff0000", "#0000ff"]);
+        // Save to Swatches adds the current gradient.
+        let before = gradient_swatches(&app).len();
+        let texts = p.click(&mut app, menu);
+        let save = texts.iter().find(|(t, _)| t.ends_with("Save to Swatches")).unwrap().1;
+        p.click(&mut app, save);
+        assert_eq!(gradient_swatches(&app).len(), before + 1);
+    }
+
+    #[test]
+    fn alt_drag_copies_a_stop_and_alt_dropping_on_a_stop_swaps_colours() {
+        let mut app = app(json!({"gradient": {}}));
+        let mut p = Panel::new();
+        p.frame(&mut app, vec![], Modifiers::NONE);
+        let (a, b) = (p.widget(("grad-stop", 0)).center(), p.widget(("grad-stop", 1)).center());
+        let mid = pos2((a.x + b.x) / 2.0, a.y);
+        let offsets = |app: &VectorcraftApp| fill(app).gradient.stops.iter().map(|s| (s.offset * 10.0).round() / 10.0).collect::<Vec<_>>();
+        // A plain drag moves the stop.
+        p.drag(&mut app, a, mid, Modifiers::NONE);
+        assert_eq!(offsets(&app), [0.5, 1.0]);
+        app.run("edit.undo", json!({})).unwrap();
+        // Alt leaves the original and drags a copy, selected on release; one undo step.
+        p.frame(&mut app, vec![], Modifiers::NONE);
+        p.drag(&mut app, a, mid, Modifiers::ALT);
+        assert_eq!((offsets(&app), hexes(&app)), (vec![0.0, 0.5, 1.0], vec!["#ffffff".to_string(), "#ffffff".into(), "#000000".into()]));
+        assert_eq!(app.session.selected_stop(), Some(1));
+        // Alt-dropping the first stop on the last swaps their colours.
+        p.drag(&mut app, a, b, Modifiers::ALT);
+        assert_eq!((offsets(&app), hexes(&app)), (vec![0.0, 0.5, 1.0], vec!["#000000".to_string(), "#ffffff".into(), "#ffffff".into()]));
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+    }
+
+    #[test]
+    fn a_dropped_swatch_adds_or_recolours_a_stop() {
+        let mut app = app(json!({"gradient": {}}));
+        let mut p = Panel::new();
+        p.frame(&mut app, vec![], Modifiers::NONE);
+        let (a, b) = (p.widget(("grad-stop", 0)).center(), p.widget(("grad-stop", 1)).center());
+        let drop = |p: &mut Panel, app: &mut VectorcraftApp, at: Pos2| {
+            egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::paint(Paint::solid(Color::rgb(1.0, 0.0, 0.0))));
+            p.frame(app, vec![Event::PointerMoved(at)], Modifiers::NONE);
+            let up = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+            p.frame(app, vec![up], Modifiers::NONE);
+        };
+        drop(&mut p, &mut app, pos2((a.x + b.x) / 2.0, a.y - 20.0));
+        assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
+        p.frame(&mut app, vec![], Modifiers::NONE);
+        let last = p.widget(("grad-stop", 2)).center();
+        drop(&mut p, &mut app, last);
+        assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#ff0000"]);
+    }
+
+    #[test]
+    fn double_clicking_a_stop_opens_the_shared_popover_beside_it() {
+        let mut app = app(json!({"gradient": {}}));
+        let mut p = Panel::new();
+        p.frame(&mut app, vec![], Modifiers::NONE);
+        let stop = p.widget(("grad-stop", 1));
+        let b = |pressed| Event::PointerButton { pos: stop.center(), button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        p.frame(&mut app, vec![Event::PointerMoved(stop.center()), b(true), b(false), b(true), b(false)], Modifiers::NONE);
+        let d = app.ui.dialog.clone().expect("the popover opened");
+        assert_eq!(
+            (d.kind.as_str(), &d.fields["index"], &d.fields["screen"]),
+            ("gradientStop", &json!(1), &json!([stop.left(), stop.bottom() + 4.0]))
+        );
+        assert_eq!(app.session.selected_stop(), Some(1));
+    }
+
+    #[test]
+    fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
+        let mut app = app(json!({"gradient": {}}));
+        app.select_tool("gradient");
+        app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+        let texts = Panel::new().frame(&mut app, vec![], Modifiers::NONE);
+        assert!(texts.iter().any(|(t, _)| t == "#FFFFFF"), "the stop's colour row: {texts:?}");
+        stop_eyedropper(&mut app);
+        assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient"})));
     }
 }

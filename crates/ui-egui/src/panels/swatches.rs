@@ -2,8 +2,8 @@
 //! or list, colour groups as folders, None/Registration first, bottom bar and panel menu.
 //!
 //! Swatches drag to reorder, into and out of colour groups (`swatch.move`) and onto art (the active
-//! proxy's paint command with the object's id); a Fill/Stroke proxy dropped on the panel becomes a
-//! swatch (`swatch.new`).
+//! proxy's paint command with the object's id) and onto the Gradient panel's ramp; a Fill/Stroke
+//! proxy or the Gradient panel's thumbnail dropped on the panel becomes a swatch (`swatch.new`).
 
 use egui::{Color32, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -12,7 +12,7 @@ use vectorcraft_doc::Document;
 
 use super::{active_paint, pstate, set_pstate};
 use crate::theme::Tokens;
-use crate::widgets::{self, menu_item, swatch_tile};
+use crate::widgets::{self, PanelDrag, SwatchRows, menu_item, swatch_tile};
 use crate::{VectorcraftApp, icons};
 
 /// View modes of the swatch list.
@@ -135,18 +135,19 @@ fn entries(app: &VectorcraftApp, kind: Kind, query: &str) -> Vec<Entry> {
     out
 }
 
-/// The paint command params that apply swatch (or Registration) `name`; `None` for colour groups
-/// and unknown names.
-fn swatch_params(d: &Document, name: &str) -> Option<Value> {
-    if name == REGISTRATION {
-        return Some(json!({"color": {"c": 1.0, "m": 1.0, "y": 1.0, "k": 1.0}}));
-    }
-    Some(if d.swatch(name)?.paint.is_none() { json!({"none": true}) } else { json!({"swatch": name}) })
+/// The paint command params that apply entry `e` (`paint.setFill`); none for a colour group.
+fn swatch_params(e: &Entry) -> Option<Value> {
+    Some(match e {
+        Entry::Registration => json!({"color": {"c": 1.0, "m": 1.0, "y": 1.0, "k": 1.0}}),
+        Entry::Swatch { paint, .. } if paint.is_none() => json!({"none": true}),
+        Entry::Swatch { name, .. } => json!({"swatch": name}),
+        Entry::Folder(_) => return None,
+    })
 }
 
 /// Apply a clicked swatch to the active proxy (Alt: the inactive one).
 fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
-    if let Some(params) = app.session.active().and_then(|st| swatch_params(&st.doc, e.name())) {
+    if let Some(params) = swatch_params(e) {
         super::apply_click(app, ui, params);
     }
 }
@@ -329,32 +330,34 @@ fn click_selection(ui: &Ui, mut sel: Vec<String>, order: &[&str], name: &str, m:
     sel
 }
 
-/// What the Swatches panel drags: the swatch, None, Registration or colour group under the pointer
-/// when the drag started (it paints art it's dropped on) and the names it moves: the panel
-/// selection when the grabbed one is part of it (only colour groups, or only swatches, like the
-/// grabbed one), in panel order.
-#[derive(Clone, Debug)]
-pub(crate) struct SwatchDrag {
-    pub grabbed: String,
-    pub names: Vec<String>,
-    /// The names are colour groups.
-    pub groups: bool,
-}
-
 /// A drag released on the panel.
 enum Drop {
     /// Swatches (or colour groups) dropped before or `after` row `target`, into folder `target`, or
     /// at the end (`None`).
     Move { names: Vec<String>, target: Option<String>, after: bool },
-    /// A Fill/Stroke proxy's paint dropped on row `target` (or between rows) becomes a swatch.
+    /// A paint from elsewhere (a Fill/Stroke proxy, the Gradient panel's thumbnail) dropped on row
+    /// `target` (or between rows) becomes a swatch.
     New { paint: Paint, target: Option<String> },
 }
 
-/// A drag payload of type `T` released on `resp`. (egui's release takes any payload, so the type is
-/// checked first: a payload of another type stays for the next drop target.)
-fn released<T: std::any::Any + Send + Sync>(resp: &Response) -> Option<std::sync::Arc<T>> {
-    resp.dnd_hover_payload::<T>()?;
-    resp.dnd_release_payload::<T>()
+impl Drop {
+    /// What releasing `d` before or `after` row `target` (`None`: at the end) does: move the rows
+    /// it carries, or make a swatch of a paint dragged from elsewhere.
+    fn of(d: &PanelDrag, target: Option<String>, after: bool) -> Self {
+        let PanelDrag::Paint { paint, rows, .. } = d;
+        match rows {
+            Some(r) => Drop::Move { names: r.names.clone(), target, after },
+            None => Drop::New { paint: paint.clone(), target },
+        }
+    }
+}
+
+/// The drag a tile or row of `e` starts, moving rows `names`. Registration and colour groups have
+/// no paint of their own (the chip under the pointer draws Registration's mark).
+fn drag_of(e: &Entry, names: Vec<String>) -> PanelDrag {
+    let paint = if let Entry::Swatch { paint, .. } = e { paint.clone() } else { Paint::None };
+    let rows = SwatchRows { grabbed: e.name().to_string(), names, groups: e.is_folder() };
+    PanelDrag::Paint { paint, params: swatch_params(e).unwrap_or_default(), rows: Some(rows) }
 }
 
 /// What the tiles or rows saw this frame.
@@ -370,8 +373,7 @@ struct TileEvents {
 
 /// Clicks, double-clicks, tooltips and drag and drop of the tile or row `resp` of entry `e`
 /// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A drag from it
-/// starts a [`SwatchDrag`]; a drag held over it shows where it would land (before or after it by
-/// the pointer's half, or into a folder) and a release there sets the drop.
+/// starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held over it.
 fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String], list: bool, ev: &mut TileEvents) {
     let name = e.name();
     if matches!(e, Entry::Swatch { .. }) && resp.double_clicked() {
@@ -384,36 +386,9 @@ fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String
             .filter(|x| x.is_folder() == e.is_folder() && (x.name() == name || (with_sel && sel.iter().any(|s| s == x.name()))))
             .map(|x| x.name().to_string())
             .collect();
-        egui::DragAndDrop::set_payload(ui.ctx(), SwatchDrag { grabbed: name.to_string(), names, groups: e.is_folder() });
+        egui::DragAndDrop::set_payload(ui.ctx(), drag_of(e, names));
     }
-    let moving = resp.dnd_hover_payload::<SwatchDrag>();
-    // Swatches dropped on one of themselves stay where they are.
-    if moving.as_ref().is_some_and(|d| d.names.iter().any(|n| n == name)) {
-        ev.over = true;
-        released::<SwatchDrag>(&resp);
-    } else if moving.is_some() || resp.dnd_hover_payload::<Paint>().is_some() {
-        ev.over = true;
-        let t = Tokens::get(ui.ctx());
-        let r = resp.rect;
-        let at = ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center());
-        let after = if list { at.y > r.center().y } else { at.x > r.center().x };
-        // A proxy's paint, or swatches over a folder, go into it; otherwise a bar marks the slot.
-        if moving.as_ref().is_none_or(|d| e.is_folder() && !d.groups) {
-            ui.painter().rect_stroke(r.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
-        } else if list {
-            let y = if after { r.bottom() } else { r.top() };
-            ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], Stroke::new(2.0, t.accent));
-        } else {
-            let x = if after { r.right() + 0.75 } else { r.left() - 0.75 };
-            ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
-        }
-        let target = Some(name.to_string());
-        if let Some(d) = moving.and_then(|_| released::<SwatchDrag>(&resp)) {
-            ev.drop = Some(Drop::Move { names: d.names.clone(), target, after });
-        } else if let Some(p) = released::<Paint>(&resp) {
-            ev.drop = Some(Drop::New { paint: (*p).clone(), target });
-        }
-    }
+    tile_drop(ui, &resp, e, list, ev);
     let resp = match e {
         Entry::Folder(n) => resp.on_hover_text(format!("Color Group: {n}")),
         Entry::Swatch { paint, global, spot, .. } if list => resp.on_hover_ui(|ui| {
@@ -426,17 +401,46 @@ fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String
     }
 }
 
+/// A drag held over the tile or row `resp` of entry `e` shows where it would land (before or after
+/// it by the pointer's half, or into a folder); a release there sets the drop.
+fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvents) {
+    let Some(d) = resp.dnd_hover_payload::<PanelDrag>() else { return };
+    let PanelDrag::Paint { rows, .. } = &*d;
+    let name = e.name();
+    ev.over = true;
+    // Swatches dropped on one of themselves stay where they are.
+    if rows.as_ref().is_some_and(|r| r.names.iter().any(|n| n == name)) {
+        resp.dnd_release_payload::<PanelDrag>();
+        return;
+    }
+    let t = Tokens::get(ui.ctx());
+    let r = resp.rect;
+    let at = ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center());
+    let after = if list { at.y > r.center().y } else { at.x > r.center().x };
+    // A paint from elsewhere, or swatches over a folder, go into it; otherwise a bar marks the slot.
+    if rows.as_ref().is_none_or(|d| e.is_folder() && !d.groups) {
+        ui.painter().rect_stroke(r.expand(1.0), 0.0, Stroke::new(1.5, t.accent), StrokeKind::Outside);
+    } else if list {
+        let y = if after { r.bottom() } else { r.top() };
+        ui.painter().line_segment([pos2(r.left(), y), pos2(r.right(), y)], Stroke::new(2.0, t.accent));
+    } else {
+        let x = if after { r.right() + 0.75 } else { r.left() - 0.75 };
+        ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
+    }
+    if resp.dnd_release_payload::<PanelDrag>().is_some() {
+        ev.drop = Some(Drop::of(&d, Some(name.to_string()), after));
+    }
+}
+
 /// Drops between and after the tiles (`zone`: the list's viewport) go to the end of the ungrouped
 /// swatches (colour groups to the end of the groups); the list is outlined while one is held there.
 fn zone_input(ui: &Ui, zone: &Response, ev: &mut TileEvents) {
-    let held = zone.dnd_hover_payload::<SwatchDrag>().is_some() || zone.dnd_hover_payload::<Paint>().is_some();
-    if held && !ev.over {
+    let Some(d) = zone.dnd_hover_payload::<PanelDrag>() else { return };
+    if !ev.over {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
     }
-    if let Some(d) = released::<SwatchDrag>(zone) {
-        ev.drop = Some(Drop::Move { names: d.names.clone(), target: None, after: false });
-    } else if let Some(p) = released::<Paint>(zone) {
-        ev.drop = Some(Drop::New { paint: (*p).clone(), target: None });
+    if zone.dnd_release_payload::<PanelDrag>().is_some() {
+        ev.drop = Some(Drop::of(&d, None, false));
     }
 }
 
@@ -505,33 +509,16 @@ fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
     }
 }
 
-/// Paint command params for swatches or a Fill/Stroke proxy released on `resp`: the grabbed swatch
-/// (`None` for a colour group), or the proxy's paint (a gradient fits the new object afresh).
-pub(crate) fn released_paint(app: &VectorcraftApp, resp: &Response) -> Option<Value> {
-    if let Some(d) = released::<SwatchDrag>(resp) {
-        return swatch_params(&app.session.active()?.doc, &d.grabbed);
-    }
-    let mut paint = (*released::<Paint>(resp)?).clone();
-    if let Paint::Gradient(g) = &mut paint {
-        g.geom = None;
-    }
-    Some(super::paint_params(&paint))
-}
-
-/// While swatches or a Fill/Stroke proxy are dragged, a chip of the grabbed paint follows the
-/// pointer.
+/// While a paint is dragged (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail), a chip
+/// of it follows the pointer.
 pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
-    let (paint, registration) = if let Some(d) = egui::DragAndDrop::payload::<SwatchDrag>(ctx) {
-        match app.session.active().and_then(|st| st.doc.swatch(&d.grabbed)) {
-            Some(w) => (w.paint.clone(), false),
-            None if d.grabbed == REGISTRATION => (Paint::None, true),
-            None => return,
-        }
-    } else if let Some(p) = egui::DragAndDrop::payload::<Paint>(ctx) {
-        ((*p).clone(), false)
-    } else {
+    let Some(d) = egui::DragAndDrop::payload::<PanelDrag>(ctx) else { return };
+    let PanelDrag::Paint { paint, params, rows } = &*d;
+    // Colour groups paint nothing.
+    if params.is_null() {
         return;
-    };
+    }
+    let registration = rows.as_ref().is_some_and(|r| r.grabbed == REGISTRATION);
     let Some(at) = ctx.pointer_hover_pos() else { return };
     let area = egui::Area::new(egui::Id::new("swatch-drag-preview")).order(egui::Order::Tooltip).fixed_pos(at + vec2(12.0, 12.0));
     area.interactable(false).show(ctx, |ui| {
@@ -539,8 +526,8 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
         if registration {
             draw_registration(ui, r);
         } else {
-            swatch_tile(ui, r, &paint, false, false);
-            pattern_thumb(app, ui, r.shrink(1.0), &paint);
+            swatch_tile(ui, r, paint, false, false);
+            pattern_thumb(app, ui, r.shrink(1.0), paint);
         }
     });
 }
@@ -1184,7 +1171,7 @@ mod tests {
         let ctx = context();
         frame(&mut app, &ctx, vec![], 0.0, show);
         let at = tile_center(&ctx, "Bright Red");
-        egui::DragAndDrop::set_payload(&ctx, Paint::solid(Color::from_hex("#123456").unwrap()));
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::paint(Paint::solid(Color::from_hex("#123456").unwrap())));
         let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
         frame(&mut app, &ctx, vec![Event::PointerMoved(at), release], 1.0, show);
         assert_eq!(
@@ -1192,7 +1179,7 @@ mod tests {
             Some("R=18 G=52 B=86"),
             "dropped on a group's colour: into that group"
         );
-        assert!(egui::DragAndDrop::payload::<Paint>(&ctx).is_none());
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
     }
 
     #[test]

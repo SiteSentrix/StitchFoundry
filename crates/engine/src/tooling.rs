@@ -81,6 +81,7 @@ impl Session {
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
             appearance_item: self.appearance_item(),
+            constrain_angle: self.prefs.constrain_angle,
         };
         f(self.tool.as_mut(), &cx)
     }

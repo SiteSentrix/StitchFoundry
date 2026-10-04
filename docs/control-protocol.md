@@ -40,3 +40,16 @@ The Color Picker is a dialog too: `engine.execute {command: "ui.colorPicker", pa
 Graphic styles: `ui.graphicStyleOptions {name}` opens the `graphicStyleOptions` dialog (field `name`) for a style and
 `ui.dialog.confirm` renames it with `graphicStyle.rename` (a name another style has returns an error and keeps the
 dialog open); without `name` it names a new style made from the selection (`graphicStyle.new`).
+
+Gradient panel: double-clicking a stop on the panel's slider opens the same `gradientStop` popover, with a `screen`
+field (`[x, y]`, screen points) in place of `x`/`y`. The panel's stop eyedropper selects the Eyedropper tool with the
+tool option `stop` (the tool to return to; `tool.setOption {key: "stop", value: "gradient"}`): its next click on art
+samples the colour there into the selected stop (`paint.sampleColor {color, stop}`) and switches back. Dragging a
+swatch, a Fill/Stroke proxy or the panel's gradient thumbnail onto art runs `paint.setFill` / `paint.setStroke` (the
+active proxy) with the paint's params and the object's `ids`; a colour dropped on the panel's ramp adds or recolours
+a stop.
+
+Tool options: double-clicking a tool button runs `tool.options {tool}`. For `gradient` it opens the Gradient panel;
+for `eyedropper` it opens Eyedropper Options, a `command` dialog (fields `appearance`, `transparency`) whose
+`ui.dialog.confirm` runs `eyedropper.setOptions` (what `appearance.copyFrom` copies). Gradient tool handles snap to
+anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.

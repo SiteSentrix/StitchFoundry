@@ -4,11 +4,16 @@
 //! Applying a style links the targeted objects to it ([`Node::graphic_style`]). An object stays
 //! linked while it keeps the style's look; editing its appearance or transparency breaks the link
 //! ([`in_sync`]), and Redefine Graphic Style updates only the objects still linked.
+//!
+//! Styles keep placed gradients relative to the unit box ([`GraphicStyle::unit_box`]): a new or
+//! redefined style stores them relative to its source's bounds, and each object a style is applied
+//! to gets them at the same place relative to its own.
 
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, Node, NodeId, NodeKind};
+use vectorcraft_geom::Rect;
 
 use super::*;
 use crate::EngineError;
@@ -20,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?} give the objects (default: the selection; a group's contents) the style's appearance, and themselves its opacity, blend mode, isolate and knockout, and link them to it; add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks",
+            "{name, add?: bool, ids?} give the objects (default: the selection; a group's contents) the style's appearance, and themselves its opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks",
             has_doc,
             style_apply
         ),
@@ -29,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name?, id?} a style from object `id` or the first selected object: its appearance, opacity, blend mode, isolate and knockout (a group without fills or strokes of its own lends its topmost object's, type its characters'); links the object. Names are made unique → {name}",
+            "{name?, id?} a style from object `id` or the first selected object: its appearance, opacity, blend mode, isolate and knockout (a group without fills or strokes of its own lends its topmost object's, type its characters'; placed gradients are kept relative to its bounds); links the object. Names are made unique → {name}",
             has_doc,
             style_new
         ),
@@ -136,7 +141,7 @@ fn paint_mut(n: &mut Node, top: bool, f: &mut impl FnMut(&mut Node)) {
 pub(crate) fn in_sync(n: &Node, g: &GraphicStyle) -> bool {
     let mut leaves = vec![];
     painted(n, true, &mut leaves);
-    g.transparency_matches(n) && leaves.iter().all(|l| l.appearance == g.appearance)
+    g.transparency_matches(n) && leaves.iter().all(|l| g.appearance_on(l).approx_eq(&l.appearance))
 }
 
 /// The style `n` is linked to (and still looks like).
@@ -170,18 +175,29 @@ fn links(d: &Document) -> HashMap<u32, Vec<NodeId>> {
     out
 }
 
+/// `ap` with its placed gradients moved from box `from` (an object's bounds) to the unit box.
+fn unitized(mut ap: Appearance, from: Option<Rect>) -> Appearance {
+    if let Some(b) = from.filter(|_| ap.has_placed_gradient()) {
+        ap.rebase_gradients(b, GraphicStyle::UNIT_BOX);
+    }
+    ap
+}
+
 /// The appearance a new or redefined style takes from `n`: its own. A group without fills or
 /// strokes of its own lends those of its topmost painted object, and type its characters' fill
-/// and stroke.
+/// and stroke. Placed gradients come relative to the unit box (from the bounds of the object
+/// they're on).
 fn captured(n: &Node) -> Appearance {
     let mut ap = n.appearance.clone();
     if !ap.items.is_empty() {
-        return ap;
+        return unitized(ap, n.geometric_bounds());
     }
     match &n.kind {
         NodeKind::Text(t) => {
             if let Some(r) = t.runs.first() {
                 ap.items = Appearance::basic(r.style.fill.clone(), r.style.stroke.clone(), r.style.stroke_width).items;
+                // Type paints its characters in text space.
+                ap = unitized(ap, Some(t.local_bounds()));
             }
         }
         _ => {
@@ -201,7 +217,7 @@ fn captured(n: &Node) -> Appearance {
 /// Give `id` style `g` (its painted objects the appearance, itself the transparency) and link it.
 fn apply_style(d: &mut Document, id: NodeId, g: &GraphicStyle) {
     if let Some(n) = d.node_mut(id) {
-        paint_mut(n, true, &mut |l| l.appearance = g.appearance.clone());
+        paint_mut(n, true, &mut |l| l.appearance = g.appearance_on(l).into_owned());
         g.apply_transparency(n);
         n.graphic_style = Some(g.id);
     }
@@ -251,12 +267,13 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.edit("Apply Graphic Style", |d, _| {
         if add {
-            let ap = d.graphic_styles[i].appearance.clone();
+            let g = d.graphic_styles[i].clone();
             for id in &ids {
                 if let Some(n) = d.node_mut(*id) {
                     paint_mut(n, true, &mut |l| {
-                        l.appearance.items.extend(ap.items.iter().cloned());
-                        l.appearance.effects.extend(ap.effects.iter().cloned());
+                        let ap = g.appearance_on(l).into_owned();
+                        l.appearance.items.extend(ap.items);
+                        l.appearance.effects.extend(ap.effects);
                     });
                     n.graphic_style = None;
                 }

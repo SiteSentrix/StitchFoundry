@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use vectorcraft_color::Paint;
 use vectorcraft_doc::{Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -26,9 +27,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color, stroke?: bool (default: whichever proxy is active), ids?} sample a colour into the active fill/stroke (and the selection)",
+            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index} sample a colour into the active fill/stroke (and the selection); with `stop`, recolour that stop of the gradient behind the proxy instead (paint.editGradient)",
             has_doc,
             sample_color
+        ),
+        cmd!(
+            "eyedropper.setOptions",
+            "Eyedropper Options",
+            [],
+            None,
+            "{appearance?: bool (fill, stroke and effects), transparency?: bool (opacity and blend mode)} what the Eyedropper copies (appearance.copyFrom); {} reads them → {appearance, transparency}",
+            always,
+            eyedropper_options
         ),
         cmd!(
             "artboard.move",
@@ -161,14 +171,57 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- eyedropper ----------
 
+/// What the Eyedropper copies from the object it clicks (`appearance.copyFrom`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EyedropperOptions {
+    /// The fill, stroke and effects (the appearance stack; type: its run paints).
+    pub appearance: bool,
+    /// The opacity and blend mode.
+    pub transparency: bool,
+}
+
+impl Default for EyedropperOptions {
+    fn default() -> Self {
+        Self { appearance: true, transparency: true }
+    }
+}
+
+impl EyedropperOptions {
+    /// These options with any `appearance` / `transparency` booleans in `p` applied.
+    pub(crate) fn with(mut self, p: &Value) -> Self {
+        self.appearance = bool_or(p, "appearance", self.appearance);
+        self.transparency = bool_or(p, "transparency", self.transparency);
+        self
+    }
+}
+
+fn eyedropper_options(s: &mut Session, p: &Value) -> Result<Value> {
+    s.eyedropper = s.eyedropper.with(p);
+    Ok(serde_json::to_value(s.eyedropper).unwrap_or_default())
+}
+
 fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "paint.sampleColor";
     let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
-    let c = p.get("color").ok_or_else(|| bad("paint.sampleColor", "missing color"))?;
-    let mut q = json!({ "color": c });
+    let c = p.get("color").ok_or_else(|| bad(C, "missing color"))?;
+    let (id, mut q) = match p.get("stop") {
+        None | Some(Value::Null) => (if stroke { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": c })),
+        Some(v) => {
+            let i = v.as_u64().ok_or_else(|| bad(C, "`stop` must be a stop index"))? as usize;
+            let color = color_value(c).ok_or_else(|| bad(C, format!("bad color {c}")))?;
+            let (fill, stroke_paint) = s.proxy_paints();
+            let Paint::Gradient(g) = (if stroke { stroke_paint } else { fill }) else {
+                return Err(bad(C, "the paint behind the proxy is not a gradient"));
+            };
+            let mut stops = g.gradient.stops;
+            let n = stops.len();
+            stops.get_mut(i).ok_or_else(|| bad(C, format!("no stop {i} (the gradient has {n})")))?.color = color;
+            ("paint.editGradient", json!({ "stops": vectorcraft_tools::params::stops_json(&stops), "stroke": stroke }))
+        }
+    };
     if let Some(ids) = p.get("ids") {
         q["ids"] = ids.clone();
     }
-    let id = if stroke { "paint.setStroke" } else { "paint.setFill" };
     let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
     (spec.run)(s, &q)
 }

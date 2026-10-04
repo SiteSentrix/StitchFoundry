@@ -299,8 +299,7 @@ fn apply(app: &mut VectorcraftApp, tgt: &Target, c: Color, phase: Live, behind: 
             if let Some(s) = stops.get_mut(*index) {
                 s.color = c;
             }
-            let params = json!({"stroke": !app.session.fill_active, "stops": super::gradient::stops_json(&stops)});
-            live_run(app, "Gradient", "paint.editGradient", params, phase);
+            super::gradient::set_stops(app, &stops, None, phase);
         }
         _ => {
             let cmd = super::proxy_cmd(app, behind);

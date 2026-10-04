@@ -259,8 +259,8 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
     let fill_resp = ui.interact(fill_r, ui.id().with("fill-proxy"), Sense::click_and_drag());
     // A proxy drags its paint (onto the Swatches panel or art), unless it shows "?".
     for (resp, paint, mixed) in [(&fill_resp, fill, mixed.0), (&stroke_resp, stroke, mixed.1)] {
-        if resp.drag_started() && !mixed {
-            egui::DragAndDrop::set_payload(ui.ctx(), paint.clone());
+        if !mixed {
+            drag_source(ui, resp, || PanelDrag::paint(paint.clone()));
         }
     }
     let question = |ui: &Ui, r: Rect, color: Color32| {
@@ -942,5 +942,54 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         if s.is_empty() { Some(None) } else { s.parse::<f64>().ok().map(Some) }
     } else {
         None
+    }
+}
+
+/// What panels drag onto art and onto each other. One payload type, so the canvas has one drop
+/// handler for all of them (`canvas::panel_drop`); a chip of a dragged paint follows the pointer.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PanelDrag {
+    /// A paint: Swatches panel tiles, a Fill/Stroke proxy or the Gradient panel's thumbnail. Art it
+    /// is dropped on takes `params` (`{swatch}`, `{color}`, `{gradient}`…; null for a colour group,
+    /// which paints nothing) through the active proxy's `paint.setFill`/`paint.setStroke`; the
+    /// Gradient panel's ramp takes its colour as a stop; the Swatches panel moves `rows`, or makes
+    /// a swatch of a paint dragged from elsewhere.
+    Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows> },
+}
+
+/// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour
+/// group under the pointer when the drag started (`grabbed`) and `names`, the panel selection when
+/// the grabbed one is part of it (only colour groups, or only swatches, like the grabbed one), in
+/// panel order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwatchRows {
+    pub grabbed: String,
+    pub names: Vec<String>,
+    /// The names are colour groups.
+    pub groups: bool,
+}
+
+impl PanelDrag {
+    /// `paint` dragged from a Fill/Stroke proxy or the Gradient panel's thumbnail. A gradient
+    /// carries no placement: it fits the art it lands on.
+    pub fn paint(mut paint: Paint) -> Self {
+        if let Paint::Gradient(g) = &mut paint {
+            g.geom = None;
+        }
+        Self::Paint { params: crate::panels::paint_params(&paint), paint, rows: None }
+    }
+    /// The dragged colour (a solid paint's), which the Gradient panel's ramp takes.
+    pub fn color(&self) -> Option<vectorcraft_color::Color> {
+        match self {
+            Self::Paint { paint, .. } => paint.color(),
+        }
+    }
+}
+
+/// Make `resp` (which senses drags) a source of the [`PanelDrag`] `drag` builds when a drag starts
+/// on it.
+pub fn drag_source(ui: &Ui, resp: &Response, drag: impl FnOnce() -> PanelDrag) {
+    if resp.drag_started() {
+        egui::DragAndDrop::set_payload(ui.ctx(), drag());
     }
 }

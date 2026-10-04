@@ -83,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?} copy fill, stroke, weight, opacity and blend from `source` to ids (default: selection) and to the paint defaults",
+            "{source: id, ids?, appearance?: bool, transparency?: bool (default: eyedropper.setOptions)} copy fill, stroke, weight and effects (appearance) and opacity and blend (transparency) from `source` to ids (default: selection), the appearance also to the paint defaults; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art)",
             has_doc,
             copy_from
         ),
@@ -461,18 +461,31 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
 fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     let src_id = id_param(p, "source").ok_or_else(|| bad("appearance.copyFrom", "missing `source` id"))?;
     let src = s.doc()?.doc.node(src_id).cloned().ok_or(EngineError::NoNode(src_id))?;
-    let appearance = match &src.kind {
-        NodeKind::Text(t) => match t.runs.first() {
-            Some(r) => Appearance::basic(r.style.fill.clone(), r.style.stroke.clone(), r.style.stroke_width),
-            None => src.appearance.clone(),
-        },
-        _ => src.appearance.clone(),
+    // The appearance and the box its placed gradients are relative to (type: its first run's
+    // paints, in text space).
+    let (appearance, src_box) = match &src.kind {
+        NodeKind::Text(t) if !t.runs.is_empty() => {
+            let r = &t.runs[0];
+            (Appearance::basic(r.style.fill.clone(), r.style.stroke.clone(), r.style.stroke_width), Some(t.local_bounds()))
+        }
+        _ => (src.appearance.clone(), src.geometric_bounds()),
     };
-    s.paint.fill = appearance.fill_paint();
-    s.paint.stroke = appearance.stroke_paint();
-    s.remember_paint(&s.paint.fill.clone());
-    if appearance.stroke().is_some() {
-        s.paint.stroke_width = appearance.stroke_width();
+    // `appearance` placed on an object whose box (in its paint space) is `to`.
+    let placed = |to: Option<vectorcraft_geom::Rect>| {
+        let mut ap = appearance.clone();
+        if let (Some(f), Some(t)) = (src_box, to) {
+            ap.rebase_gradients(f, t);
+        }
+        ap
+    };
+    let opts = s.eyedropper.with(p);
+    if opts.appearance {
+        s.paint.fill = super::gradient::unplaced(&appearance.fill_paint());
+        s.paint.stroke = super::gradient::unplaced(&appearance.stroke_paint());
+        s.remember_paint(&s.paint.fill.clone());
+        if appearance.stroke().is_some() {
+            s.paint.stroke_width = appearance.stroke_width();
+        }
     }
     let ids = match ids_param(p, "ids") {
         Some(v) => v,
@@ -480,24 +493,30 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut targets = leaf_targets(s, &ids)?;
     targets.retain(|id| *id != src_id);
-    if targets.is_empty() {
+    if targets.is_empty() || !(opts.appearance || opts.transparency) {
         return Ok(json!({ "ids": [] }));
     }
     let (opacity, blend) = (src.opacity, src.blend);
     s.edit("Eyedropper", |d, _| {
         for id in &targets {
             let Some(n) = d.node_mut(*id) else { continue };
-            n.opacity = opacity;
-            n.blend = blend;
+            if opts.transparency {
+                n.opacity = opacity;
+                n.blend = blend;
+            }
+            if !opts.appearance {
+                continue;
+            }
             if let NodeKind::Text(t) = &mut n.kind {
+                let ap = placed(Some(t.local_bounds()));
                 for r in &mut t.runs {
-                    r.style.fill = appearance.fill_paint();
-                    r.style.stroke = appearance.stroke_paint();
-                    r.style.stroke_width = appearance.stroke_width();
+                    r.style.fill = ap.fill_paint();
+                    r.style.stroke = ap.stroke_paint();
+                    r.style.stroke_width = ap.stroke_width();
                 }
                 continue;
             }
-            n.appearance = appearance.clone();
+            n.appearance = placed(n.geometric_bounds());
         }
         Ok(())
     })?;

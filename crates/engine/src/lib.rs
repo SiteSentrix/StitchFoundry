@@ -18,6 +18,7 @@ use vectorcraft_doc::{Document, NodeId, NodeKind, Selection};
 use vectorcraft_geom::Affine;
 use vectorcraft_tools::{PaintDefaults, Tool};
 
+pub use cmd::EyedropperOptions;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use tooling::{UiRequest, ViewInfo};
@@ -459,6 +460,8 @@ pub struct Session {
     pub recent_colors: Vec<Color>,
     /// A paint applied by a live preview: remembered when the interaction commits.
     pub(crate) pending_paint: Option<Paint>,
+    /// What the Eyedropper copies (`eyedropper.setOptions`); not saved.
+    pub eyedropper: EyedropperOptions,
 }
 
 impl Default for Session {
@@ -490,6 +493,7 @@ impl Session {
             last_gradient: GradientPaint::new(Default::default()),
             recent_colors: vec![],
             pending_paint: None,
+            eyedropper: Default::default(),
         }
     }
 
@@ -753,6 +757,8 @@ mod tests_draw2;
 mod tests_file;
 #[cfg(test)]
 mod tests_gradient;
+#[cfg(test)]
+mod tests_gradpanel;
 #[cfg(test)]
 mod tests_knockout;
 #[cfg(test)]

@@ -163,6 +163,8 @@ pub struct ToolContext<'a> {
     /// The Appearance panel's active fill/stroke (paint-order index into the first selected
     /// object's stack); paint tools show and edit that item.
     pub appearance_item: Option<usize>,
+    /// General → Constrain Angle (degrees): Shift constrains drags to 45° steps from it.
+    pub constrain_angle: f64,
 }
 
 impl ToolContext<'_> {
@@ -346,6 +348,7 @@ pub(crate) mod testutil {
             fill_active: true,
             gradient_stop: None,
             appearance_item: None,
+            constrain_angle: 0.0,
         }
     }
 }

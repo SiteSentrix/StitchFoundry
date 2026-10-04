@@ -136,7 +136,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     handle_input(app, ui, &resp, rect);
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
-    paint_drop(app, ui, &resp, &xf);
+    panel_drop(app, ui, &resp, &xf);
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
@@ -674,21 +674,33 @@ fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::
     vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, p, opt)
 }
 
-/// Swatches and Fill/Stroke proxies dropped on art paint the object under the pointer (the active
-/// proxy's fill or stroke); a chip of the dragged paint follows the pointer meanwhile.
-fn paint_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
-    use crate::panels::swatches;
-    swatches::drag_preview(app, ui.ctx());
+/// A panel drag ([`widgets::PanelDrag`]) dropped on art acts on the object under the pointer,
+/// selected or not: a paint (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail) goes
+/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it). A
+/// chip of a dragged paint follows the pointer meanwhile.
+fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
+    crate::panels::swatches::drag_preview(app, ui.ctx());
     let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
     // Not through a floating panel over the canvas.
     if ui.ctx().layer_id_at(pos).is_some_and(|l| l != resp.layer_id) {
         return;
     }
-    let Some(mut params) = swatches::released_paint(app, resp) else { return };
+    let Some(d) = resp.dnd_release_payload::<widgets::PanelDrag>() else { return };
     let Some(hit) = hit_at(app, xf.to_doc(pos), xf.zoom) else { return };
-    params["ids"] = json!([hit.leaf.0]);
-    params["focus"] = json!(false);
-    if let Err(e) = app.run(crate::panels::proxy_cmd(app, false), params) {
+    let Some(st) = app.session.active() else { return };
+    let (cmd, params) = match &*d {
+        widgets::PanelDrag::Paint { params, .. } => {
+            // Colour groups paint nothing.
+            if params.is_null() {
+                return;
+            }
+            let mut params = params.clone();
+            params["ids"] = json!([vectorcraft_tools::xform::paint_owner(&st.doc, hit.leaf).0]);
+            params["focus"] = json!(false);
+            (crate::panels::proxy_cmd(app, false), params)
+        }
+    };
+    if let Err(e) = app.run(cmd, params) {
         app.status(e);
     }
 }
@@ -1109,8 +1121,8 @@ mod tests {
 
     #[test]
     fn swatches_and_proxy_paints_dropped_on_art_fill_the_object_hit() {
-        use crate::panels::swatches::SwatchDrag;
-        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_color::{Color, GradientGeom, GradientPaint, Paint};
+        use widgets::{PanelDrag, SwatchRows};
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
@@ -1118,25 +1130,29 @@ mod tests {
         let ctx = egui::Context::default();
         frame(&mut app, &ctx, vec![]);
         let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
-        let release = |at: Pos2| {
-            vec![
-                egui::Event::PointerMoved(at),
-                egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() },
-            ]
+        let drop = |app: &mut VectorcraftApp, d: PanelDrag, at: Point| {
+            let at = xf.to_screen(at);
+            egui::DragAndDrop::set_payload(&ctx, d);
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
         };
         let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
-        let drag = SwatchDrag { grabbed: "Red".into(), names: vec!["Red".into()], groups: false };
+        let red = Paint::solid(Color::from_hex("#ed1c24").unwrap());
+        let rows = SwatchRows { grabbed: "Red".into(), names: vec!["Red".into()], groups: false };
+        let swatch = PanelDrag::Paint { paint: red.clone(), params: json!({"swatch": "Red"}), rows: Some(rows) };
         // Off the art nothing happens.
-        egui::DragAndDrop::set_payload(&ctx, drag.clone());
-        frame(&mut app, &ctx, release(xf.to_screen(Point::new(300.0, 250.0))));
+        drop(&mut app, swatch.clone(), Point::new(300.0, 250.0));
         assert_eq!(fill(&app), Paint::solid(Color::WHITE));
-        egui::DragAndDrop::set_payload(&ctx, drag);
-        frame(&mut app, &ctx, release(xf.to_screen(Point::new(100.0, 100.0))));
-        assert_eq!(fill(&app), Paint::solid(Color::from_hex("#ed1c24").unwrap()), "paint.setFill with the hit id");
+        drop(&mut app, swatch, Point::new(100.0, 100.0));
+        assert_eq!(fill(&app), red, "paint.setFill with the hit id");
         assert!(app.session.active().unwrap().selection.is_empty(), "the selection stays as it was");
         // A proxy's paint works the same.
-        egui::DragAndDrop::set_payload(&ctx, Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
-        frame(&mut app, &ctx, release(xf.to_screen(Point::new(60.0, 60.0))));
+        drop(&mut app, PanelDrag::paint(Paint::solid(Color::rgb(0.0, 0.0, 1.0))), Point::new(60.0, 60.0));
         assert_eq!(fill(&app), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+        // A dragged gradient (the Gradient panel's thumbnail, a proxy) fits the object it lands on.
+        let mut g = GradientPaint::new(Default::default());
+        g.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0 });
+        drop(&mut app, PanelDrag::paint(Paint::Gradient(Box::new(g))), Point::new(100.0, 100.0));
+        assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()));
     }
 }

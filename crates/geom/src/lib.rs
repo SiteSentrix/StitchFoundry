@@ -42,12 +42,18 @@ pub fn normalize_deg(mut a: f64) -> f64 {
 
 /// Snap a vector to the nearest multiple of `step_deg` (used for Shift-constrained drags).
 pub fn constrain_angle(v: Vec2, step_deg: f64) -> Vec2 {
+    constrain_angle_from(v, step_deg, 0.0)
+}
+
+/// [`constrain_angle`] in steps counted from `base_deg` (the Constrain Angle preference,
+/// counter-clockwise as seen on the y-down page).
+pub fn constrain_angle_from(v: Vec2, step_deg: f64, base_deg: f64) -> Vec2 {
     let len = v.hypot();
     if len < EPS {
         return v;
     }
-    let step = step_deg.to_radians();
-    let a = (v.y.atan2(v.x) / step).round() * step;
+    let (step, base) = (step_deg.to_radians(), -base_deg.to_radians());
+    let a = base + ((v.y.atan2(v.x) - base) / step).round() * step;
     Vec2::new(a.cos() * len, a.sin() * len)
 }
 
@@ -81,6 +87,15 @@ mod tests {
         assert!((v.y).abs() < 1e-9);
         let v = constrain_angle(Vec2::new(10.0, 9.0), 45.0);
         assert!((v.x - v.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn constrain_from_a_base_angle() {
+        // 30° base: 45° steps land on 30°, 75°, … (counter-clockwise on the page, y down).
+        let deg = |v: Vec2| (-v.y).atan2(v.x).to_degrees();
+        assert!((deg(constrain_angle_from(Vec2::new(10.0, -4.0), 45.0, 30.0)) - 30.0).abs() < 1e-9);
+        assert!((deg(constrain_angle_from(Vec2::new(3.0, -10.0), 45.0, 30.0)) - 75.0).abs() < 1e-9);
+        assert!((deg(constrain_angle_from(Vec2::new(10.0, 1.0), 45.0, 30.0)) + 15.0).abs() < 1e-9);
     }
 
     #[test]

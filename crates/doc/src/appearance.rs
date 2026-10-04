@@ -540,13 +540,48 @@ impl Appearance {
             _ => None,
         })
     }
-    /// Does a fill or stroke carry a gradient that is fitted to the bounds on each render?
-    pub fn has_unplaced_gradient(&self) -> bool {
+    /// Gradient paints of the fills and strokes.
+    fn gradients(&self) -> impl Iterator<Item = &vectorcraft_color::GradientPaint> {
+        self.items.iter().filter_map(|i| match i {
+            AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. })
+            | AppearanceItem::Stroke(StrokeLayer { paint: Paint::Gradient(g), .. }) => Some(&**g),
+            _ => None,
+        })
+    }
+    /// Is `self` equal to `other`, placed gradients within rounding (1e-6 pt) of each other, as
+    /// moving them between boxes leaves them?
+    pub fn approx_eq(&self, other: &Appearance) -> bool {
+        if self == other {
+            return true;
+        }
+        let mut a = self.clone();
+        for (g, o) in a.gradients_mut().zip(other.gradients()) {
+            if let (Some(ga), Some(go)) = (&mut g.geom, &o.geom)
+                && ga.start.distance(go.start) <= 1e-6
+                && ga.end.distance(go.end) <= 1e-6
+                && (ga.aspect - go.aspect).abs() <= 1e-6
+            {
+                *ga = *go;
+            }
+        }
+        a == *other
+    }
+    /// Does a fill or stroke carry a gradient whose placement `placed` is (some: placed in document
+    /// space; none: fitted to the bounds on each render)?
+    fn has_gradient(&self, placed: bool) -> bool {
         self.items.iter().any(|i| match i {
             AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. })
-            | AppearanceItem::Stroke(StrokeLayer { paint: Paint::Gradient(g), .. }) => g.geom.is_none(),
+            | AppearanceItem::Stroke(StrokeLayer { paint: Paint::Gradient(g), .. }) => g.geom.is_some() == placed,
             _ => false,
         })
+    }
+    /// Does a fill or stroke carry a gradient that is fitted to the bounds on each render?
+    pub fn has_unplaced_gradient(&self) -> bool {
+        self.has_gradient(false)
+    }
+    /// Does a fill or stroke carry a placed gradient (start and end in document space)?
+    pub fn has_placed_gradient(&self) -> bool {
+        self.has_gradient(true)
     }
     /// Fix unplaced gradients to their fit on `bounds` (the object's geometric bounds; strokes fit
     /// the stroke-inflated box), so they can follow transforms that refitting wouldn't reproduce.
@@ -558,6 +593,23 @@ impl Appearance {
                     let b = s.paint_bounds(bounds);
                     if let Paint::Gradient(g) = &mut s.paint {
                         g.pin(b);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    /// Move placed gradients from an object whose geometric bounds are `from` to one whose bounds
+    /// are `to`, keeping them at the same place relative to the box (strokes: relative to their
+    /// stroke-inflated boxes, as they fit).
+    pub fn rebase_gradients(&mut self, from: vectorcraft_geom::Rect, to: vectorcraft_geom::Rect) {
+        for i in &mut self.items {
+            match i {
+                AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. }) => g.rebase(from, to),
+                AppearanceItem::Stroke(s) => {
+                    let (f, t) = (s.paint_bounds(from), s.paint_bounds(to));
+                    if let Paint::Gradient(g) = &mut s.paint {
+                        g.rebase(f, t);
                     }
                 }
                 _ => {}
@@ -592,6 +644,25 @@ mod tests {
         assert!(a.is_basic());
         assert_eq!(a.fill_paint(), Paint::solid(Color::WHITE));
         assert_eq!(a.stroke_width(), 1.0);
+    }
+
+    #[test]
+    fn rebase_moves_fills_by_the_box_and_strokes_by_their_inflated_box() {
+        use vectorcraft_color::{Gradient, GradientGeom, GradientPaint};
+        use vectorcraft_geom::{Point, Rect};
+        let placed = |x: f64| {
+            let mut g = GradientPaint::new(Gradient::default());
+            g.geom = Some(GradientGeom { start: Point::new(x, 0.0), end: Point::new(x + 10.0, 0.0), aspect: 1.0 });
+            Paint::Gradient(Box::new(g))
+        };
+        let mut a = Appearance::basic(placed(0.0), placed(-5.0), 10.0);
+        a.rebase_gradients(Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(100.0, 0.0, 300.0, 100.0));
+        let start = |p: Paint| match p {
+            Paint::Gradient(g) => g.geom.unwrap().start,
+            _ => unreachable!(),
+        };
+        // The fill's start stays on the left edge; the stroke's on its inflated box's (−5 → 95).
+        assert_eq!((start(a.fill_paint()), start(a.stroke_paint())), (Point::new(100.0, 0.0), Point::new(95.0, 0.0)));
     }
 
     #[test]
