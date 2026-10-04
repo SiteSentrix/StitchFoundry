@@ -12,6 +12,7 @@ pub mod live;
 pub mod node;
 pub mod overprint;
 pub mod pattern;
+mod pixels;
 pub mod selection;
 pub mod swatches;
 pub mod text;

@@ -4103,6 +4103,7 @@ dependencies = [
 name = "vectorcraft-doc"
 version = "0.1.1"
 dependencies = [
+ "image",
  "kurbo 0.13.1",
  "proptest",
  "serde",

@@ -246,6 +246,9 @@ pub struct UiState {
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
+    /// Color Guide panel: variation kind, steps and amount (Color Guide Options).
+    #[serde(default)]
+    pub color_guide: vectorcraft_color::harmony::GuideOptions,
 }
 
 impl UiState {
@@ -297,6 +300,7 @@ impl Default for UiState {
             recent_files: vec![],
             recent_fonts: vec![],
             engine_prefs: Value::Null,
+            color_guide: Default::default(),
         }
     }
 }

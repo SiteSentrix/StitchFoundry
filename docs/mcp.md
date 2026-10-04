@@ -104,6 +104,9 @@ Document colour mode: `file.new {colorMode: "cmyk"}` starts a CMYK document with
 colours applied to it (`paint.setFill`/`setStroke` colours and gradient stops, `swatch.new`) are stored as CMYK;
 Gray stays Gray, and `keepModel: true` keeps a colour as given. RGB documents keep colours as given. Harmonies, Edit
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
+`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
+Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
+(shades, cool or muted on the left, tints, warm or vivid on the right).
 
 ## Resources
 
@@ -255,4 +258,19 @@ it by multiplying. Older files that listed Overprint Black objects in the docume
 {"name":"run_command","arguments":{"command":"object.setOverprint","params":{"ids":[12],"stroke":true}}}
 {"name":"run_command","arguments":{"command":"attributes.info","params":{"ids":[12]}}}
 {"name":"run_command","arguments":{"command":"view.overprintPreview","params":{"on":true}}}
+```
+
+## Edit Colors and Recolor Artwork
+
+`edit.colors.invert`, `edit.colors.toCMYK`, `edit.colors.toGrayscale`, `edit.colors.toRGB`, `edit.colors.saturate`,
+`edit.colors.adjustBalance` and `recolor.apply` recolour everything inside the selection (or `ids`) in one undo step:
+fills, strokes, text, gradient stops, gradient-mesh points, embedded images (a recoloured copy of the image; linked
+images are left alone) and the tiles of pattern fills and strokes (a recoloured copy saved as a new pattern swatch,
+e.g. "Dots 2"; the original pattern is untouched). `includeImages: false` / `includePatterns: false` leave images or
+patterns out. The Blend commands also grade gradient meshes, which keep their shading.
+
+```json
+{"name":"run_command","arguments":{"command":"recolor.colors","params":{}}}
+{"name":"run_command","arguments":{"command":"recolor.apply","params":{"map":{"#ff0000":"#0055ff"},"includeImages":false}}}
+{"name":"run_command","arguments":{"command":"edit.colors.adjustBalance","params":{"mode":"cmyk","m":-20,"k":10}}}
 ```

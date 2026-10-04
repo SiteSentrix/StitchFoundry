@@ -748,6 +748,8 @@ mod tests_clip;
 #[cfg(test)]
 mod tests_cmdsplit;
 #[cfg(test)]
+mod tests_colorguide;
+#[cfg(test)]
 mod tests_colormgmt;
 #[cfg(test)]
 mod tests_dashalign;
@@ -755,6 +757,8 @@ mod tests_dashalign;
 mod tests_distort;
 #[cfg(test)]
 mod tests_draw2;
+#[cfg(test)]
+mod tests_editcolors;
 #[cfg(test)]
 mod tests_effectedit;
 #[cfg(test)]

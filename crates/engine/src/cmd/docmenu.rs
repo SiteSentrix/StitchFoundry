@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{CharStyle, ColorMode, Guide, Node, NodeId, NodeKind, TextKind};
 
-use super::colorcmds::{map_node_colors, to_cmyk};
+use super::colorcmds::{Recolor, Scope, to_cmyk};
 use super::edit::selected_roots;
 use super::*;
 
@@ -466,9 +466,8 @@ fn color_mode(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Document Color Mode", |d, _| {
         d.color_mode = mode;
         if convert {
-            for l in &mut d.layers {
-                map_node_colors(Arc::make_mut(l), &f, true, true);
-            }
+            let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
+            Recolor::new(Scope { fill: true, stroke: true, images: false, patterns: false }, &f).run(d, &layers);
             for sw in d.swatches_iter_mut() {
                 if let vectorcraft_color::Paint::Solid { color, .. } = &mut sw.paint {
                     *color = f(*color);

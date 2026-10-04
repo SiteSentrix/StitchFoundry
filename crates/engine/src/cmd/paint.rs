@@ -435,7 +435,8 @@ fn proxy_recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> C
         s.remember_paint(&shown);
         return Ok(json!({ "changed": changed as usize }));
     }
-    let q = json!({"fill": !stroke, "stroke": stroke, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
+    // The proxy's colours only: images and pattern tiles stay as they are.
+    let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
     let r = super::colorcmds::recolor(s, &q, label, f)?;
     let first = leaf_targets(s, &ids)?.first().and_then(|id| s.doc().ok()?.doc.node(*id).map(|n| proxy_paint(n, stroke, None)));
     if let Some(shown) = first {

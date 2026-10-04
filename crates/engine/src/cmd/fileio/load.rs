@@ -143,7 +143,8 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if width == 0 || height == 0 {
         return Err(err("the image is empty"));
     }
-    Ok(RasterImage { key: format!("img{:016x}", fnv1a(&bytes)), blob: ImageBlob { mime: mime.into(), bytes: Arc::new(bytes) }, width, height })
+    let blob = ImageBlob { mime: mime.into(), bytes: Arc::new(bytes) };
+    Ok(RasterImage { key: blob.content_key(), blob, width, height })
 }
 
 /// An image as a document of its pixel size (1 px = 1 pt), the image named after the file.
@@ -163,9 +164,4 @@ fn gunzip(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     flate2::read::GzDecoder::new(bytes).read_to_end(&mut out).map_err(|e| err(format!("not a valid SVGZ file: {e}")))?;
     Ok(out)
-}
-
-/// FNV-1a: a stable content key for embedded images.
-fn fnv1a(b: &[u8]) -> u64 {
-    b.iter().fold(0xcbf29ce484222325, |h, x| (h ^ *x as u64).wrapping_mul(0x100000001b3))
 }
