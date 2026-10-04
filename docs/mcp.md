@@ -549,3 +549,21 @@ Visual bounds (Fit to Selected Art, Rasterize, exporting all art) and clicks on 
 in the whole stroke as drawn: arrowheads, inside/outside alignment (an outside stroke is hit outside the path, an
 inside one inside it), the width profile's width where you click, projecting caps and miter spikes up to the miter
 limit. A rectangle's right-angle miters stay within half the weight of its edges.
+
+## Expand
+
+`object.expand {object?, fill?, stroke?, gradient?, steps?}` (Object → Expand…) turns the selection into plain art in
+one undo step. `object` (on by default) outlines type, turns live shapes into paths and bakes effects; `stroke` (on)
+outlines strokes into filled paths; `fill` (on) expands gradient fills: with `gradient: "objects"` (the default) into
+`steps` (1–1000, default 255) solid objects (rectangles across a linear gradient, each from its band to the far end so
+no seams show; concentric ellipses for a radial one, largest first; just the bands when stops are translucent), with
+`gradient: "mesh"` into a gradient mesh that paints the gradient (columns or rings where its colour changes, sharp at
+coincident stops), each inside a clip group shaped like the object. A freeform gradient becomes a mesh shaped like the
+object either way. Expanded colours keep the colour model their stops share. With `fill: false` gradient fills stay
+live. `object.expand.info` answers which options have something to expand in the selection (`{object, fill,
+stroke}`), and `object.mesh.create` on a gradient-filled object colours the mesh points as the gradient paints them.
+
+```json
+{"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
+{"name":"run_command","arguments":{"command":"object.expand","params":{"steps":16}}}
+```

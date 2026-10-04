@@ -13,6 +13,7 @@ mod docmenu;
 mod draw2;
 mod edit;
 mod effectcmd;
+pub mod expand;
 pub mod fileio;
 pub mod flatten;
 mod fonts;
@@ -202,6 +203,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(freeform::specs());
         v.extend(flatten::specs());
         v.extend(stylelib::specs());
+        v.extend(expand::specs());
         v
     })
 }

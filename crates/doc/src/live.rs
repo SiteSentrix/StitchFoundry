@@ -812,6 +812,12 @@ impl Coons {
 // Gradient meshes
 // =====================================================================================
 
+/// `0, 1/n, …, 1` for `n` (clamped to 1..=200) even steps.
+fn even_steps(n: u32) -> Vec<f64> {
+    let n = n.clamp(1, 200);
+    (0..=n).map(|i| i as f64 / n as f64).collect()
+}
+
 impl GradientMesh {
     pub fn idx(&self, r: usize, c: usize) -> usize {
         r * (self.cols as usize + 1) + c
@@ -822,43 +828,73 @@ impl GradientMesh {
 
     /// A mesh over surface `s` (u, v ∈ [0,1]) with handles from its partial derivatives.
     pub fn from_surface(rows: u32, cols: u32, s: &dyn Fn(f64, f64) -> Point, color: &dyn Fn(f64, f64) -> Color) -> Self {
-        let (rows, cols) = (rows.clamp(1, 200), cols.clamp(1, 200));
-        let (du, dv) = (1.0 / cols as f64, 1.0 / rows as f64);
+        let (us, vs) = (even_steps(cols), even_steps(rows));
+        Self::from_grid(&us, &vs, s, &|r, c, _| (color(us[c], vs[r]), 1.0))
+    }
+
+    /// A mesh over surface `s` (u, v ∈ [0,1]) whose column lines sit at `us` and row lines at `vs`
+    /// (ascending, at least two each; equal neighbours make a patch of no width, a sharp colour
+    /// change), with handles from its partial derivatives. `color(row, col, point)` gives each
+    /// point its colour and opacity.
+    pub fn from_grid(us: &[f64], vs: &[f64], s: &dyn Fn(f64, f64) -> Point, color: &dyn Fn(usize, usize, Point) -> (Color, f32)) -> Self {
+        let (rows, cols) = (vs.len().saturating_sub(1), us.len().saturating_sub(1));
         let eps = 1e-3;
-        let mut points = Vec::with_capacity(((rows + 1) * (cols + 1)) as usize);
-        for r in 0..=rows {
-            for c in 0..=cols {
-                let (u, v) = (c as f64 * du, r as f64 * dv);
+        let mut points = Vec::with_capacity(us.len() * vs.len());
+        for (r, &v) in vs.iter().enumerate() {
+            for (c, &u) in us.iter().enumerate() {
                 let p = s(u, v);
                 let d_u = (s((u + eps).min(1.0), v) - s((u - eps).max(0.0), v)) / ((u + eps).min(1.0) - (u - eps).max(0.0));
                 let d_v = (s(u, (v + eps).min(1.0)) - s(u, (v - eps).max(0.0))) / ((v + eps).min(1.0) - (v - eps).max(0.0));
-                let hu = d_u * (du / 3.0);
-                let hv = d_v * (dv / 3.0);
-                // Outward handles on the border are unused: keep them at the point.
-                let z = Vec2::ZERO;
-                let handles =
-                    [if c < cols { hu } else { z }, if c > 0 { -hu } else { z }, if r < rows { hv } else { z }, if r > 0 { -hv } else { z }];
-                points.push(MeshPoint { p, color: color(u, v), opacity: 1.0, handles });
+                // A third of the way to the neighbouring line along the tangent; outward handles on
+                // the border are unused, so they stay at the point.
+                let h = |d: Vec2, from: f64, to: Option<&f64>| to.map_or(Vec2::ZERO, |to| d * ((to - from) / 3.0));
+                let handles = [
+                    h(d_u, u, us.get(c + 1)),
+                    h(d_u, u, c.checked_sub(1).map(|i| &us[i])),
+                    h(d_v, v, vs.get(r + 1)),
+                    h(d_v, v, r.checked_sub(1).map(|i| &vs[i])),
+                ];
+                let (color, opacity) = color(r, c, p);
+                points.push(MeshPoint { p, color, opacity, handles });
             }
         }
-        Self { rows, cols, points }
+        Self { rows: rows as u32, cols: cols as u32, points }
     }
 
     /// Create Gradient Mesh for a path: the outline split at its corners, coloured per `appearance`.
     pub fn for_path(path: &PathData, rows: u32, cols: u32, base: Color, appearance: MeshAppearance, highlight: f64) -> Option<Self> {
+        let mut m = Self::for_path_with(path, rows, cols, &|_| (base, 1.0))?;
+        m.highlight(appearance, highlight);
+        Some(m)
+    }
+
+    /// Create Gradient Mesh for a path: the outline split at its corners, each point taking the
+    /// colour and opacity `color_at` gives at its position (a gradient fill's, say).
+    pub fn for_path_with(path: &PathData, rows: u32, cols: u32, color_at: &dyn Fn(Point) -> (Color, f32)) -> Option<Self> {
         let coons = Coons::from_path(path)?;
+        Some(Self::from_grid(&even_steps(cols), &even_steps(rows), &|u, v| coons.eval(u, v), &|_, _, p| color_at(p)))
+    }
+
+    /// Create Gradient Mesh → Appearance: lighten the points towards white, to the centre or to
+    /// the edges, by at most `highlight` %.
+    pub fn highlight(&mut self, appearance: MeshAppearance, highlight: f64) {
         let h = (highlight / 100.0).clamp(0.0, 1.0) as f32;
-        let color = |u: f64, v: f64| -> Color {
-            let d = ((u - 0.5).abs().max((v - 0.5).abs()) * 2.0) as f32; // 0 centre … 1 edge
-            let w = match appearance {
-                MeshAppearance::Flat => 0.0,
-                MeshAppearance::ToCenter => (1.0 - d) * h,
-                MeshAppearance::ToEdge => d * h,
-            };
-            if w > 0.0 { lerp_color(&base, &Color::WHITE, w) } else { base }
-        };
-        let s = |u: f64, v: f64| coons.eval(u, v);
-        Some(Self::from_surface(rows, cols, &s, &color))
+        let (rows, cols) = (self.rows as usize, self.cols as usize);
+        for r in 0..=rows {
+            for c in 0..=cols {
+                let (u, v) = (c as f64 / cols as f64, r as f64 / rows as f64);
+                let d = ((u - 0.5).abs().max((v - 0.5).abs()) * 2.0) as f32; // 0 centre … 1 edge
+                let w = match appearance {
+                    MeshAppearance::Flat => 0.0,
+                    MeshAppearance::ToCenter => (1.0 - d) * h,
+                    MeshAppearance::ToEdge => d * h,
+                };
+                if w > 0.0 {
+                    let i = self.idx(r, c);
+                    self.points[i].color = lerp_color(&self.points[i].color, &Color::WHITE, w);
+                }
+            }
+        }
     }
 
     /// Horizontal edge from (r, c) to (r, c+1).

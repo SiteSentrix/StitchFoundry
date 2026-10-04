@@ -171,7 +171,8 @@ fn expand_live_shape_and_text_in_one_undo_step() {
     let t = text(&mut s, "Hi");
     sel(&mut s, &[a, t]);
     let n = undo_len(&s);
-    s.execute("object.expand", &json!({})).unwrap();
+    // Stroke off: the rectangle stays one path (its stroke isn't outlined).
+    s.execute("object.expand", &json!({"stroke": false})).unwrap();
     assert!(matches!(node(&s, a).kind, NodeKind::Path { live: None, .. }));
     assert!(s.doc().unwrap().doc.node(t).is_none(), "text became outlines");
     assert_eq!(undo_len(&s), n + 1);

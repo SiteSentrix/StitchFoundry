@@ -1,5 +1,5 @@
 //! Object menu long tail: Lock/Hide All Artwork Above & Other Layers, Transform Each, Reset
-//! Bounding Box, Expand, Rasterize, Crop Image, Create Trim Marks, Convert to Shape and
+//! Bounding Box, Rasterize, Crop Image, Create Trim Marks, Convert to Shape and
 //! Artboards → Convert / Rearrange. (Live blends are in `live.rs`.)
 
 use std::sync::Arc;
@@ -82,15 +82,6 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} no-op: VectorCraft bounding boxes are always axis-aligned to the document → {changed: 0}",
             has_selection,
             |_, _| Ok(json!({ "changed": 0 }))
-        ),
-        cmd!(
-            "object.expand",
-            "Expand…",
-            ["Object"],
-            None,
-            "{object?: true (text → outlines, live shapes → paths, effects baked), fill?: true, stroke?: false (strokes → filled outlines)} one undo step → {ids}",
-            has_selection,
-            expand
         ),
         cmd!(
             "object.rasterize",
@@ -297,69 +288,6 @@ fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(targets)
     })?;
     Ok(ids_json(&ids))
-}
-
-// ---------- Expand ----------
-
-fn expand(s: &mut Session, p: &Value) -> Result<Value> {
-    let object = bool_or(p, "object", true);
-    let fill = bool_or(p, "fill", true);
-    let stroke = bool_or(p, "stroke", false);
-    let from = s.doc()?.history.undo.len();
-    let rev0 = s.doc()?.revision;
-    let roots = selected_roots(s)?;
-    let d = &s.doc()?.doc;
-    let (mut has_text, mut has_fx, mut has_live, mut has_stroke) = (false, false, false, false);
-    for r in &roots {
-        if let Some(n) = d.node(*r) {
-            n.walk(&mut |c| {
-                has_text |= matches!(c.kind, NodeKind::Text(_));
-                has_live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
-                has_fx |= !c.appearance.effects.is_empty();
-                has_stroke |= matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && !c.appearance.stroke_paint().is_none();
-            });
-        }
-    }
-    if object && has_fx {
-        let _ = run_raw(s, "effect.expandAppearance", &json!({}));
-    }
-    if object && has_live {
-        let roots = selected_roots(s)?;
-        s.edit("Expand", |d, _| {
-            for r in &roots {
-                if let Some(n) = d.node_mut(*r) {
-                    drop_live(n);
-                }
-            }
-            Ok(())
-        })?;
-    }
-    if object && has_text {
-        let _ = run_raw(s, "type.createOutlines", &json!({}));
-    }
-    if stroke && has_stroke {
-        let _ = run_raw(s, "object.path.outlineStroke", &json!({}));
-    }
-    if !fill {
-        // Fill unchecked: strokes only survive (Illustrator expands just the selected attributes).
-    }
-    if s.doc()?.revision == rev0 {
-        return Err(EngineError::Other("Expand: nothing to expand".into()));
-    }
-    squash(s, from, "Expand");
-    let ids = s.doc()?.selection.objects.clone();
-    Ok(ids_json(&ids))
-}
-
-fn drop_live(n: &mut Node) {
-    if let NodeKind::Path { live, .. } = &mut n.kind {
-        *live = None;
-    }
-    if let Some(ch) = n.children_mut() {
-        for c in ch.iter_mut() {
-            drop_live(Arc::make_mut(c));
-        }
-    }
 }
 
 // ---------- Rasterize / Crop ----------

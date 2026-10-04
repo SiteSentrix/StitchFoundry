@@ -16,6 +16,7 @@ mod command;
 pub mod confirm;
 mod document_setup;
 mod effect;
+pub mod expand;
 mod export_for_screens;
 pub mod eyedropper;
 pub mod flatten;
@@ -162,6 +163,7 @@ registry! {
     FlattenTransparency: [flatten::KIND] => flatten::SPEC,
     FlattenerPresets: [flattener_presets::KIND] => flattener_presets::SPEC,
     SaveStyleLibrary: [save_style_library::KIND] => save_style_library::SPEC,
+    Expand: [expand::KIND] => expand::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
