@@ -706,6 +706,39 @@ fn import_invalid_is_error() {
 }
 
 #[test]
+fn import_absolute_units_keep_their_physical_size() {
+    // An A4 drawing in millimetres (the usual Inkscape document) is 595.3 × 841.9 pt, not its CSS
+    // pixel size (793.7 × 1122.5, i.e. 280 × 396 mm): 1 px = 1 pt as we export, so absolute units go
+    // through 72 pt per inch.
+    let a4 = import(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">
+        <rect x="10" y="20" width="100" height="50" fill="red" stroke="blue" stroke-width="2"/></svg>"#,
+    )
+    .unwrap();
+    let mm = 72.0 / 25.4;
+    assert!(close_rect(a4.artboards[0].rect, Rect::new(0.0, 0.0, 210.0 * mm, 297.0 * mm), 0.01), "{:?}", a4.artboards[0].rect);
+    let r = art(&a4)[0];
+    assert!(close_rect(r.geometric_bounds().unwrap(), Rect::new(10.0 * mm, 20.0 * mm, 110.0 * mm, 70.0 * mm), 0.01), "{:?}", r.geometric_bounds());
+    assert!((r.appearance.stroke_width() - 2.0 * mm).abs() < 0.01, "{}", r.appearance.stroke_width());
+    // Inches without a viewBox: user units are CSS px (96 per inch).
+    let letter = import(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="8.5in" height="11in"><rect x="96" y="96" width="96" height="48"/>
+        <text x="96" y="300" font-size="24">Hi</text></svg>"#,
+    )
+    .unwrap();
+    assert!(close_rect(letter.artboards[0].rect, Rect::new(0.0, 0.0, 612.0, 792.0), 0.01), "{:?}", letter.artboards[0].rect);
+    let a = art(&letter);
+    assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(72.0, 72.0, 144.0, 108.0), 0.01), "{:?}", a[0].geometric_bounds());
+    let NodeKind::Text(t) = &a[1].kind else { panic!() };
+    assert!(t.xf.translation().to_point().distance(Point::new(72.0, 225.0)) < 0.01, "{:?}", t.xf);
+    // Pixels and unitless sizes stay 1 px = 1 pt.
+    for size in [r#"width="400px" height="300""#, r#"viewBox="0 0 400 300""#] {
+        let d = import(&format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {size}><rect width="10" height="10"/></svg>"#)).unwrap();
+        assert!(close_rect(d.artboards[0].rect, Rect::new(0.0, 0.0, 400.0, 300.0), 1e-6), "{size}");
+    }
+}
+
+#[test]
 fn full_document_roundtrip_is_stable() {
     // export → import → export produces identical SVG.
     let mut d = Document::new(300.0, 300.0);

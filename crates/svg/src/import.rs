@@ -18,12 +18,15 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     let opt = usvg::Options::default();
     let tree = usvg::Tree::from_str(svg, &opt).map_err(|e| SvgError::Parse(e.to_string()))?;
     let size = tree.size();
-    let doc = Document::new(size.width() as f64, size.height() as f64);
+    // Document points from CSS pixels: 1 px = 1 pt (as we export), except that a root size in
+    // absolute units is that physical size (usvg resolves it to 96 px per inch, i.e. 4/3 px per pt).
+    let (kx, ky) = physical_scale(svg);
+    let doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
     let mut im = Importer { doc, warnings: Vec::new() };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
-    let mut base = aff(top.transform());
+    let mut base = Affine::scale_non_uniform(kx, ky) * aff(top.transform());
     if let [usvg::Node::Group(g)] = top.children()
         && g.id().is_empty()
         && is_plain(g)
@@ -57,8 +60,26 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
         }
     }
 
-    text_fallback(&mut im, svg, size.width() as f64, size.height() as f64, layer_mode);
+    text_fallback(&mut im, svg, size.width() as f64, size.height() as f64, (kx, ky), layer_mode);
     Ok((im.doc, im.warnings))
+}
+
+/// Points per CSS pixel along x and y for the root `<svg>`'s `width` / `height`: 0.75 (72 / 96) for
+/// absolute units (in, cm, mm, pt, pc), so that `width="210mm"` is 595.3 pt wide; 1 otherwise
+/// (unitless, px, %, em, or absent).
+fn physical_scale(svg: &str) -> (f64, f64) {
+    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
+        return (1.0, 1.0);
+    };
+    let root = xml.root_element();
+    let k = |name: &str| {
+        use svgtypes::LengthUnit as U;
+        match root.attribute(name).and_then(|v| svgtypes::Length::from_str(v.trim()).ok()).map(|l| l.unit) {
+            Some(U::In | U::Cm | U::Mm | U::Pt | U::Pc) => 0.75,
+            _ => 1.0,
+        }
+    };
+    (k("width"), k("height"))
 }
 
 struct Importer {
@@ -656,11 +677,11 @@ fn collect_runs(ctx: &TextCtx, el: XNode, rb: &mut RunBuilder) {
     }
 }
 
-fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, layer_mode: bool) {
+fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, (kx, ky): (f64, f64), layer_mode: bool) {
     let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else { return };
     let ctx = TextCtx::new(&xml);
     let root = xml.root_element();
-    let vb = view_box_transform(root, w, h);
+    let vb = Affine::scale_non_uniform(kx, ky) * view_box_transform(root, w, h);
     const SKIP: [&str; 8] = ["defs", "clipPath", "mask", "pattern", "symbol", "marker", "title", "desc"];
     for t in root.descendants().filter(|n| n.is_element() && n.tag_name().name() == "text") {
         if t.ancestors().skip(1).any(|a| a.is_element() && SKIP.contains(&a.tag_name().name())) {

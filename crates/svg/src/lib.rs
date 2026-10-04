@@ -19,6 +19,9 @@
 //!
 //! ## Import approximations
 //!
+//! * One CSS pixel (user unit) is one point, as on export; a root `width`/`height` in absolute units
+//!   (`in`, `cm`, `mm`, `pt`, `pc`) keeps its physical size (72 pt per inch), so a 210 mm SVG opens on
+//!   a 210 mm artboard.
 //! * Masks and filters are ignored (reported as warnings); nested clip paths use the outer clip only.
 //! * usvg only keeps `<text>` when fonts are loaded; we don't load a font database (too expensive and
 //!   unavailable on wasm), so `<text>` elements are read directly from the XML as live point-type
