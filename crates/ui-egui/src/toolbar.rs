@@ -178,10 +178,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
-    let (fill, stroke) = match app.session.active().and_then(|d| d.selection.objects.first().and_then(|id| d.doc.node(*id))) {
-        Some(n) if !n.is_container() => (n.appearance.fill_paint(), n.appearance.stroke_paint()),
-        _ => (app.session.paint.fill.clone(), app.session.paint.stroke.clone()),
-    };
+    let (fill, stroke) = crate::panels::current_paints(app);
     ui.vertical_centered(|ui| {
         let (f, s, swap, def) = widgets::fill_stroke_proxy(ui, &fill, &stroke, app.session.fill_active, 36.0);
         if f {

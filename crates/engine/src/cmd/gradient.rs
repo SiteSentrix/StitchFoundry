@@ -3,9 +3,10 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::appearance::stroke_paint_bounds;
-use vectorcraft_doc::{AppearanceItem, NodeKind};
+use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Affine, Point, Rect};
 
+use super::appearance::{ItemTarget, edit_items, edits_stroke, item_target};
 use super::edit::selected_roots;
 use super::*;
 use crate::EngineError;
@@ -17,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the active proxy), kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2), angle?: deg, aspect?: %, reverse?: bool, ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2), angle?: deg, aspect?: %, reverse?: bool, item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?} edit the gradient in place (keeps its placement); solid/none paints become the default gradient",
             has_doc,
             edit_gradient
         ),
@@ -26,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient Vector",
             [],
             None,
-            "{start: [x,y], end: [x,y] (document coordinates), ids?, stroke?: bool (default: the active proxy), index?: appearance item index (as appearance.setItem; targets that fill or stroke instead of the top one)} set the gradient vector (solid paints become the default gradient; type objects set it on their runs, in text space; the aspect ratio is kept)",
+            "{start: [x,y], end: [x,y] (document coordinates), ids?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (alias: index; omitted: the Appearance panel's active item when it is of the edited kind)} set the gradient vector (solid paints become the default gradient; type objects set it on their runs, in text space; the aspect ratio is kept)",
             has_doc,
             set_gradient_geom
         ),
@@ -43,12 +44,13 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// The gradient behind the active proxy: the first selected object's (see
-/// `Node::proxy_paint`), else the default paint for new art.
+/// `Node::proxy_paint`; the Appearance panel's active item when it is of the proxy's kind), else
+/// the default paint for new art.
 pub(crate) fn active_gradient(s: &Session) -> Option<GradientPaint> {
     let stroke = !s.fill_active;
     let first = s.active().and_then(|d| d.selection.objects.first().and_then(|id| d.doc.node(*id)));
     let paint = match first {
-        Some(n) => n.proxy_paint(stroke).map(|(p, ..)| p.clone()),
+        Some(n) => n.proxy_paint(stroke, s.appearance_item()).map(|(p, ..)| p.clone()),
         None => Some(if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() }),
     };
     match paint {
@@ -76,18 +78,19 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Whose gradient a selected stop belongs to: the active document, its first selected object
-/// (None: the default paint) and the proxy in front. Selecting other art or toggling the proxy
-/// leaves no stop selected.
+/// (None: the default paint), the proxy in front and the Appearance panel's active item.
+/// Selecting other art, toggling the proxy or picking another item leaves no stop selected.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct StopOwner {
     doc: Option<usize>,
     object: Option<NodeId>,
     fill: bool,
+    item: Option<usize>,
 }
 
 impl StopOwner {
     fn of(s: &Session) -> Self {
-        Self { doc: s.active, object: s.active().and_then(|d| d.selection.objects.first().copied()), fill: s.fill_active }
+        Self { doc: s.active, object: s.active().and_then(|d| d.selection.objects.first().copied()), fill: s.fill_active, item: s.appearance_item() }
     }
 }
 
@@ -255,52 +258,28 @@ pub(crate) fn apply_gradient_edit(paint: &Paint, p: &Value, bounds: Option<Rect>
 
 fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.editGradient";
-    let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
-    let ids = paint_targets(s, p)?;
+    let item = item_target(s, p, C)?;
+    let stroke = edits_stroke(s, p, item, !s.fill_active)?;
+    let item = item.of_kind(s, !stroke);
+    let ids = item.targets(s, p)?;
     // Validate against the defaults first so bad params fail without touching the document.
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
     let new_default = apply_gradient_edit(&default_paint, p, None).map_err(|e| bad(C, e))?;
-    if ids.is_empty() {
-        if stroke {
-            s.paint.stroke = new_default;
-        } else {
-            s.paint.fill = new_default;
-        }
-        return Ok(json!({"ids": []}));
-    }
-    let mut err = None;
-    s.edit("Gradient", |d, _| {
-        for id in &ids {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if let NodeKind::Text(t) = &mut n.kind {
-                let lb = t.local_bounds();
-                for r in &mut t.runs {
-                    let (cur, b) = run_paint_mut(r, stroke, lb);
-                    match apply_gradient_edit(cur, p, Some(b)) {
-                        Ok(np) => *cur = np,
-                        Err(e) => err = Some(e),
-                    }
-                }
-                continue;
+    edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            let lb = t.local_bounds();
+            for r in &mut t.runs {
+                let (cur, b) = run_paint_mut(r, stroke, lb);
+                *cur = apply_gradient_edit(cur, p, Some(b)).map_err(|e| bad(C, e))?;
             }
-            let b = n.geometric_bounds();
-            let ap = &mut n.appearance;
-            let (cur, b) = if stroke { (ap.stroke_paint(), b.zip(ap.stroke()).map(|(b, st)| st.paint_bounds(b))) } else { (ap.fill_paint(), b) };
-            match apply_gradient_edit(&cur, p, b) {
-                Ok(np) => {
-                    if stroke {
-                        ap.set_stroke(np)
-                    } else {
-                        ap.set_fill(np)
-                    }
-                }
-                Err(e) => err = Some(e),
-            }
+            return Ok(());
         }
-        match err.take() {
-            Some(e) => Err(bad(C, e)),
-            None => Ok(()),
-        }
+        let b = item_paint_bounds(n, index, !stroke);
+        let np = apply_gradient_edit(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), p, b).map_err(|e| bad(C, e))?;
+        n.appearance.set_paint_at(index, !stroke, np);
+        Ok(())
     })?;
     if stroke {
         s.paint.stroke = new_default;
@@ -319,6 +298,13 @@ pub(crate) fn run_paint_mut(r: &mut vectorcraft_doc::TextRun, stroke: bool, lb: 
     } else {
         (&mut r.style.fill, lb)
     }
+}
+
+/// The box an unplaced gradient on fill or stroke `index` of `n` fits (`None`: the topmost): the
+/// geometric bounds, grown by half the weight for a stroke (`None` without that stroke).
+pub(crate) fn item_paint_bounds(n: &Node, index: Option<usize>, fill: bool) -> Option<Rect> {
+    let b = n.geometric_bounds()?;
+    if fill { Some(b) } else { n.appearance.stroke_at(index).map(|st| st.paint_bounds(b)) }
 }
 
 /// `paint` as applied to a type run whose text space `xf` maps to the document: a vector given in
@@ -369,65 +355,43 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.setGradientGeom";
     let start = point_param(p, "start").ok_or_else(|| bad(C, "missing start [x,y]"))?;
     let end = point_param(p, "end").ok_or_else(|| bad(C, "missing end [x,y]"))?;
-    let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
-    let index = p.get("index").map(|v| v.as_u64().map(|i| i as usize).ok_or_else(|| bad(C, "`index` must be a whole number"))).transpose()?;
-    let ids = match ids_param(p, "ids") {
-        Some(v) => v,
-        None => selected_roots(s)?,
+    // `index` is an alias of `item`.
+    let mut p = p.clone();
+    if let (None, Some(i)) = (p.get("item"), p.get("index").cloned()) {
+        p["item"] = i;
+    }
+    let p = &p;
+    let item = item_target(s, p, C)?;
+    let stroke = edits_stroke(s, p, item, !s.fill_active)?;
+    let item = item.of_kind(s, !stroke);
+    let targets = match item {
+        ItemTarget::Top => leaf_targets(s, &ids_param(p, "ids").map_or_else(|| selected_roots(s), Ok)?)?,
+        _ => item.targets(s, p)?,
     };
-    let targets = leaf_targets(s, &ids)?;
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
-    s.edit("Gradient", |d, _| {
-        let mut hit = false;
-        for id in &targets {
-            let Some(n) = d.node_mut(*id) else { continue };
-            let b = n.geometric_bounds();
-            if let Some(i) = index {
-                let Some(item) = n.appearance.items.get_mut(i) else { continue };
-                let (paint, b) = match item {
-                    AppearanceItem::Fill(f) => (&mut f.paint, b),
-                    AppearanceItem::Stroke(st) => {
-                        let b = b.map(|b| st.paint_bounds(b));
-                        (&mut st.paint, b)
-                    }
-                };
-                if let Some(np) = vector_paint(paint, start, end, Affine::IDENTITY, b) {
+    edit_items(s, &targets, item, C, "Gradient", !stroke, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            let (xf, lb) = (t.xf, t.local_bounds());
+            for r in &mut t.runs {
+                if stroke && r.style.stroke_width == 0.0 {
+                    r.style.stroke_width = 1.0;
+                }
+                let (paint, b) = run_paint_mut(r, stroke, lb);
+                if let Some(np) = vector_paint(paint, start, end, xf, Some(b)) {
                     *paint = np;
-                    hit = true;
                 }
-                continue;
             }
-            if let NodeKind::Text(t) = &mut n.kind {
-                let (xf, lb) = (t.xf, t.local_bounds());
-                for r in &mut t.runs {
-                    if stroke && r.style.stroke_width == 0.0 {
-                        r.style.stroke_width = 1.0;
-                    }
-                    let (paint, b) = run_paint_mut(r, stroke, lb);
-                    if let Some(np) = vector_paint(paint, start, end, xf, Some(b)) {
-                        *paint = np;
-                        hit = true;
-                    }
-                }
-                continue;
-            }
-            let ap = &mut n.appearance;
-            let (cur, b) = if stroke { (ap.stroke_paint(), b.zip(ap.stroke()).map(|(b, st)| st.paint_bounds(b))) } else { (ap.fill_paint(), b) };
-            if let Some(np) = vector_paint(&cur, start, end, Affine::IDENTITY, b) {
-                if stroke {
-                    ap.set_stroke(np);
-                } else {
-                    ap.set_fill(np);
-                }
-                hit = true;
-            }
+            return Ok(());
         }
-        match (hit, index) {
-            (false, Some(i)) => Err(bad(C, format!("no appearance item at index {i}"))),
-            _ => Ok(()),
+        let b = item_paint_bounds(n, index, !stroke);
+        if let Some(np) = vector_paint(n.appearance.paint_at(index, !stroke).unwrap_or(&Paint::None), start, end, Affine::IDENTITY, b) {
+            n.appearance.set_paint_at(index, !stroke, np);
         }
+        Ok(())
     })?;
     Ok(json!({ "ids": targets.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }

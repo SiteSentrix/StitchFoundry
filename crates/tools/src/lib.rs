@@ -160,6 +160,9 @@ pub struct ToolContext<'a> {
     pub fill_active: bool,
     /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator.
     pub gradient_stop: Option<usize>,
+    /// The Appearance panel's active fill/stroke (paint-order index into the first selected
+    /// object's stack); paint tools show and edit that item.
+    pub appearance_item: Option<usize>,
 }
 
 impl ToolContext<'_> {
@@ -342,6 +345,7 @@ pub(crate) mod testutil {
             corner_widgets: true,
             fill_active: true,
             gradient_stop: None,
+            appearance_item: None,
         }
     }
 }

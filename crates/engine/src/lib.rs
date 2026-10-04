@@ -447,6 +447,9 @@ pub struct Session {
     /// shared by the Gradient tool's annotator, the Gradient and Color panels and agents: read it
     /// with [`Session::selected_stop`].
     pub(crate) gradient_stop: Option<(usize, cmd::gradient::StopOwner)>,
+    /// The Appearance panel's active fill/stroke row (`appearance.setActiveItem`); not saved. Read
+    /// it through [`Session::appearance_item`], which drops it once the selection changes.
+    pub(crate) active_appearance_item: Option<cmd::appearance::ActiveItem>,
 }
 
 impl Default for Session {
@@ -473,6 +476,7 @@ impl Session {
             untitled_counter: 0,
             menu: Default::default(),
             gradient_stop: None,
+            active_appearance_item: None,
         }
     }
 
@@ -624,6 +628,7 @@ impl Session {
 
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
+        self.active_appearance_item = None;
         let st = self.doc_mut()?;
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
@@ -712,6 +717,8 @@ impl Session {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_appearance;
+#[cfg(test)]
 mod tests_brushsym;
 #[cfg(test)]
 mod tests_build;
@@ -740,9 +747,9 @@ mod tests_pattern;
 #[cfg(test)]
 mod tests_prefs;
 #[cfg(test)]
-mod tests_swatches;
-#[cfg(test)]
 mod tests_strokegeom;
+#[cfg(test)]
+mod tests_swatches;
 #[cfg(test)]
 mod tests_textedit;
 #[cfg(test)]

@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Effect, Node, NodeKind};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
-use super::edit::selected_roots;
+use super::appearance::{ItemTarget, appearance_targets, index_param, item_target};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -20,17 +20,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\"), params?: {…} (missing keys take the dialog defaults), ids?: [..]} append a live effect to each selected object's appearance → {ids, index}",
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\"), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..]} append a live effect to each selected object's appearance → {ids, index, item}",
             has_selection,
             apply
         ),
-        cmd!(query "effect.list", "Effects", [], None, "{} → {catalog: [{id, label, menu, params, defaults, raster}], applied: [{id, effects}]} for the selection", always, list),
+        cmd!(
+            query "effect.list",
+            "Effects",
+            [],
+            None,
+            "{} → {catalog: [{id, label, menu, params, defaults, raster}], applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
+            always,
+            list
+        ),
         cmd!(
             "effect.remove",
             "Remove Effect",
             [],
             None,
-            "{index: int (position in the object's effect list), ids?: [..]} → {ids}",
+            "{index: int (position in the effect list), item?: appearance item index|null (that fill/stroke's effects; omitted: the active item, else the object's), ids?: [..]} → {ids}",
             has_selection,
             remove
         ),
@@ -39,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Effect Options",
             [],
             None,
-            "{index: int, params?: {…} (merged into the current parameters), visible?: bool, ids?: [..]} → {ids}",
+            "{index: int, params?: {…} (merged into the current parameters), visible?: bool, item?: appearance item index|null (as effect.remove), ids?: [..]} → {ids}",
             has_selection,
             set_params
         ),
@@ -52,21 +60,52 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             expand_appearance
         ),
+        cmd!(
+            "effect.duplicate",
+            "Duplicate Effect",
+            [],
+            None,
+            "{index: int, item?: appearance item index|null (as effect.remove), ids?: [..]} insert a copy of the effect right after it → {ids}",
+            has_selection,
+            duplicate
+        ),
     ]
-}
-
-fn target_roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    if p.get("ids").is_some() || p.get("id").is_some() {
-        return targets(s, p);
-    }
-    selected_roots(s)
 }
 
 fn ids_json(ids: &[NodeId]) -> Value {
     json!(ids.iter().map(|i| i.0).collect::<Vec<_>>())
 }
 
-fn apply(s: &mut Session, p: &Value) -> Result<Value> {
+/// One undo step (`label`) running `f` on the effect list `item` addresses on each target (an
+/// appearance item's own effects, or the object's). Errors with `none` when `f` changed no object;
+/// returns the changed ids.
+fn edit_effects(
+    s: &mut Session,
+    p: &Value,
+    item: ItemTarget,
+    cmd: &str,
+    label: &str,
+    none: &str,
+    mut f: impl FnMut(&mut Vec<Effect>) -> bool,
+) -> Result<Vec<NodeId>> {
+    let roots = appearance_targets(s, p)?;
+    s.edit(label, |d, _| {
+        let mut done = vec![];
+        for id in &roots {
+            let Some(n) = d.node_mut(*id) else { continue };
+            let index = item.effects_item(&n.appearance, cmd)?;
+            if n.appearance.effects_mut(index).is_some_and(&mut f) {
+                done.push(*id);
+            }
+        }
+        if done.is_empty() {
+            return Err(EngineError::Other(none.into()));
+        }
+        Ok(done)
+    })
+}
+
+pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.apply";
     let id = str_param(p, "effect").or_else(|| str_param(p, "id")).ok_or_else(|| bad(C, "missing `effect` id"))?;
     let params = p.get("params").cloned().unwrap_or(Value::Null);
@@ -74,26 +113,18 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`params` must be an object"));
     }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
-    let roots = target_roots(s, p)?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
-    let (ids, index) = s.edit(&label, |d, _| {
-        let mut done = vec![];
-        let mut index = 0;
-        for id in &roots {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if n.is_layer() {
-                continue;
-            }
-            n.appearance.effects.push(effect.clone());
-            index = n.appearance.effects.len() - 1;
-            done.push(*id);
-        }
-        if done.is_empty() {
-            return Err(EngineError::Other("Apply Effect: select objects".into()));
-        }
-        Ok((done, index))
+    let item = item_target(s, p, C)?;
+    let mut index = 0;
+    let ids = edit_effects(s, p, item, C, &label, "Apply Effect: select objects", |fx| {
+        fx.push(effect.clone());
+        index = fx.len() - 1;
+        true
     })?;
-    Ok(json!({ "ids": ids_json(&ids), "index": index }))
+    // The item the effect landed on in the first object (the active item applies where it fits).
+    let first = ids.first().and_then(|id| s.doc().ok()?.doc.node(*id));
+    let landed = first.and_then(|n| item.effects_item(&n.appearance, C).ok().flatten());
+    Ok(json!({ "ids": ids_json(&ids), "index": index, "item": landed }))
 }
 
 fn list(s: &mut Session, p: &Value) -> Result<Value> {
@@ -103,73 +134,72 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         .collect();
     let mut applied = vec![];
     if s.active().is_some() {
-        for id in target_roots(s, p)? {
+        let fx = |e: &[Effect]| serde_json::to_value(e).unwrap_or(Value::Null);
+        for id in appearance_targets(s, p)? {
             if let Some(n) = s.doc()?.doc.node(id) {
-                applied.push(json!({"id": id.0, "effects": serde_json::to_value(&n.appearance.effects).unwrap_or(Value::Null)}));
+                let items: Vec<Value> = n
+                    .appearance
+                    .items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, it)| json!({"index": i, "kind": it.kind_name(), "effects": fx(it.effects())}))
+                    .collect();
+                applied.push(json!({"id": id.0, "effects": fx(&n.appearance.effects), "items": items}));
             }
         }
     }
-    Ok(json!({ "catalog": catalog, "applied": applied }))
-}
-
-fn index_param(p: &Value, cmd: &str) -> Result<usize> {
-    p.get("index").and_then(Value::as_u64).map(|i| i as usize).ok_or_else(|| bad(cmd, "missing integer `index`"))
+    Ok(json!({ "catalog": catalog, "applied": applied, "activeItem": s.appearance_item() }))
 }
 
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.remove";
-    let index = index_param(p, C)?;
-    let roots = target_roots(s, p)?;
-    let ids = s.edit("Remove Effect", |d, _| {
-        let mut done = vec![];
-        for id in &roots {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if index < n.appearance.effects.len() {
-                n.appearance.effects.remove(index);
-                done.push(*id);
-            }
+    let index = index_param(p, "index", C)?;
+    let item = item_target(s, p, C)?;
+    let ids = edit_effects(s, p, item, C, "Remove Effect", &format!("{C}: no effect at index {index}"), |fx| {
+        (index < fx.len()).then(|| fx.remove(index)).is_some()
+    })?;
+    Ok(json!({ "ids": ids_json(&ids) }))
+}
+
+fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "effect.duplicate";
+    let index = index_param(p, "index", C)?;
+    let item = item_target(s, p, C)?;
+    let ids = edit_effects(s, p, item, C, "Duplicate Effect", &format!("{C}: no effect at index {index}"), |fx| match fx.get(index).cloned() {
+        Some(e) => {
+            fx.insert(index + 1, e);
+            true
         }
-        if done.is_empty() {
-            return Err(bad(C, format!("no effect at index {index}")));
-        }
-        Ok(done)
+        None => false,
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
-    let index = index_param(p, C)?;
+    let index = index_param(p, "index", C)?;
     let params = p.get("params").cloned().unwrap_or(Value::Null);
     if !params.is_null() && !params.is_object() {
         return Err(bad(C, "`params` must be an object"));
     }
     let visible = p.get("visible").and_then(Value::as_bool);
-    let roots = target_roots(s, p)?;
-    let ids = s.edit("Effect Options", |d, _| {
-        let mut done = vec![];
-        for id in &roots {
-            let Some(n) = d.node_mut(*id) else { continue };
-            let Some(e) = n.appearance.effects.get_mut(index) else { continue };
-            if let (Value::Object(new), cur) = (&params, &mut e.params) {
-                if !cur.is_object() {
-                    *cur = effects::merged_params(&e.id, &Value::Null);
-                }
-                if let Value::Object(m) = cur {
-                    for (k, v) in new {
-                        m.insert(k.clone(), v.clone());
-                    }
+    let item = item_target(s, p, C)?;
+    let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), |fx| {
+        let Some(e) = fx.get_mut(index) else { return false };
+        if let (Value::Object(new), cur) = (&params, &mut e.params) {
+            if !cur.is_object() {
+                *cur = effects::merged_params(&e.id, &Value::Null);
+            }
+            if let Value::Object(m) = cur {
+                for (k, v) in new {
+                    m.insert(k.clone(), v.clone());
                 }
             }
-            if let Some(v) = visible {
-                e.visible = v;
-            }
-            done.push(*id);
         }
-        if done.is_empty() {
-            return Err(bad(C, format!("no effect at index {index}")));
+        if let Some(v) = visible {
+            e.visible = v;
         }
-        Ok(done)
+        true
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
 }
@@ -242,7 +272,7 @@ fn expand_node(d: &mut vectorcraft_doc::Document, id: NodeId, out: &mut Vec<Node
 }
 
 fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
-    let roots = target_roots(s, p)?;
+    let roots = appearance_targets(s, p)?;
     let ids = s.edit("Expand Appearance", |d, _| {
         let mut out = vec![];
         for id in &roots {

@@ -72,7 +72,7 @@ pub enum Part {
 impl Annotator {
     pub fn of(cx: &ToolContext) -> Option<Self> {
         cx.selection.objects.iter().find_map(|id| {
-            let (g, geom) = cx.doc.node(*id)?.proxy_gradient(!cx.fill_active)?;
+            let (g, geom) = cx.doc.node(*id)?.proxy_gradient(!cx.fill_active, cx.appearance_item)?;
             Some(Self { geom, gradient: g.gradient.clone() })
         })
     }
@@ -216,10 +216,10 @@ fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
 fn click_vector(cx: &ToolContext, id: NodeId) -> Option<Vec2> {
     let stroke = !cx.fill_active;
     let n = cx.doc.node(id)?;
-    if let Some((_, g)) = n.proxy_gradient(stroke) {
+    if let Some((_, g)) = n.proxy_gradient(stroke, cx.appearance_item) {
         return Some(g.end - g.start);
     }
-    let (to_doc, b) = match n.proxy_paint(stroke) {
+    let (to_doc, b) = match n.proxy_paint(stroke, cx.appearance_item) {
         Some((_, a, b)) => (a, b),
         None => (Affine::IDENTITY, n.geometric_bounds()?),
     };
@@ -343,6 +343,10 @@ impl GradientTool {
                 let Some(v) = cx.selection.objects.contains(&id).then(|| click_vector(cx, id)).flatten() else { return vec![] };
                 let mut params = Self::geom_params(cx, p, p + v);
                 params["ids"] = json!([id.0]);
+                // With `ids` the engine edits the topmost fill or stroke unless an item is named.
+                if let Some(i) = cx.doc.node(id).and_then(|n| n.appearance.item_of_kind(cx.appearance_item, cx.fill_active)) {
+                    params["item"] = json!(i);
+                }
                 vec![Action::Exec("paint.setGradientGeom".into(), params)]
             }
             _ => vec![],
@@ -698,5 +702,30 @@ mod tests {
         let chips: Vec<bool> = o.iter().filter_map(|o| if let Overlay::Swatch { selected, .. } = o { Some(*selected) } else { None }).collect();
         assert_eq!(chips, vec![false, true]);
         assert_eq!(o.iter().filter(|o| matches!(o, Overlay::Path { .. })).count(), 1, "one midpoint diamond");
+    }
+
+    #[test]
+    fn annotator_follows_the_active_appearance_item() {
+        let (mut d, id) = doc_with_rect();
+        let geom = GradientGeom { start: Point::new(100.0, 120.0), end: Point::new(200.0, 120.0), aspect: 1.0 };
+        let mut gp = GradientPaint::new(Default::default());
+        gp.geom = Some(geom);
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().paint = Paint::Gradient(Box::new(gp));
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        // The fill is solid: no annotator until the stroke row (item 1) is the active item, which
+        // brings the Stroke proxy forward.
+        assert!(Annotator::of(&cx).is_none());
+        cx.appearance_item = Some(1);
+        assert!(Annotator::of(&cx).is_none(), "a stroke row does not stand in for the fill");
+        cx.fill_active = false;
+        assert_eq!(Annotator::of(&cx).unwrap().geom, geom);
+        // A click inside the art edits that item.
+        let mut t = GradientTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, Point::new(150.0, 180.0)));
+        let a = t.pointer(&cx, &ev(PointerKind::Up, Point::new(150.0, 180.0)));
+        assert_eq!(exec(&a[0]).1["item"], 1);
     }
 }

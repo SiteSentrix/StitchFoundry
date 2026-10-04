@@ -213,7 +213,7 @@ fn gradient_vector_follows_the_active_proxy_or_an_item_index() {
     s.execute("paint.setGradientGeom", &json!({"start": [50, 0], "end": [50, 100], "index": 0})).unwrap();
     assert_eq!(fill_geom(&s, id).start, Point::new(50.0, 0.0));
     let err = s.execute("paint.setGradientGeom", &json!({"start": [0, 0], "end": [1, 1], "index": 7})).unwrap_err();
-    assert!(err.to_string().contains("index 7"), "{err}");
+    assert!(err.to_string().contains("item 7"), "{err}");
 }
 
 #[test]
@@ -226,14 +226,14 @@ fn type_objects_take_the_vector_on_their_runs_in_text_space() {
     // Text space starts at the first baseline (100, 200).
     assert!(geom.start.distance(Point::new(0.0, -10.0)) < 1e-9 && geom.end.distance(Point::new(200.0, -10.0)) < 1e-9, "{geom:?}");
     // The annotator reads it back in document coordinates, and it turns with the text.
-    let (_, doc) = node(&s, id).proxy_gradient(false).unwrap();
+    let (_, doc) = node(&s, id).proxy_gradient(false, None).unwrap();
     assert!(doc.start.distance(Point::new(100.0, 190.0)) < 1e-9, "{doc:?}");
     s.execute("object.rotate", &json!({"angle": 90, "origin": [100, 200]})).unwrap();
-    let (_, doc) = node(&s, id).proxy_gradient(false).unwrap();
+    let (_, doc) = node(&s, id).proxy_gradient(false, None).unwrap();
     assert!(doc.start.distance(Point::new(90.0, 200.0)) < 1e-9 && doc.end.distance(Point::new(90.0, 0.0)) < 1e-9, "{doc:?}");
     // paint.setFill's vector is in document coordinates too.
     s.execute("paint.setFill", &json!({"gradient": {"start": [90, 200], "end": [90, 100]}})).unwrap();
-    let (_, doc) = node(&s, id).proxy_gradient(false).unwrap();
+    let (_, doc) = node(&s, id).proxy_gradient(false, None).unwrap();
     assert!(doc.end.distance(Point::new(90.0, 100.0)) < 1e-9, "{doc:?}");
 }
 
@@ -255,7 +255,7 @@ fn aspect_works_on_type_and_run_strokes_fit_the_inflated_box() {
     assert!((geom.length() - (lb.width().max(lb.height()) + w) / 2.0).abs() < 1e-9, "{geom:?}");
     // The Stroke proxy's vector lands on the runs' strokes.
     s.execute("paint.setGradientGeom", &json!({"start": [100, 190], "end": [150, 190], "stroke": true})).unwrap();
-    let (g, doc) = node(&s, id).proxy_gradient(true).unwrap();
+    let (g, doc) = node(&s, id).proxy_gradient(true, None).unwrap();
     assert!(doc.end.distance(Point::new(150.0, 190.0)) < 1e-9 && (doc.aspect - 2.0).abs() < 1e-9, "aspect kept: {doc:?}");
     assert_eq!(g.gradient.kind, GradientKind::Radial);
 }
@@ -370,7 +370,7 @@ fn swatches_and_new_art_fit_a_placed_gradient_to_themselves() {
     // On type, in text space.
     let t = text(&mut s, 100.0, 400.0);
     s.execute("paint.setFill", &json!({"swatch": "Placed"})).unwrap();
-    let (_, doc) = node(&s, t).proxy_gradient(false).unwrap();
+    let (_, doc) = node(&s, t).proxy_gradient(false, None).unwrap();
     let tb = node(&s, t).geometric_bounds().unwrap();
     assert!(doc.start.distance(tb.center()) < 1e-9 && (doc.aspect - 0.5).abs() < 1e-9, "{doc:?} on {tb:?}");
 }

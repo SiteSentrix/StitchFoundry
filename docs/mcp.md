@@ -68,6 +68,16 @@ or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
 | `undo` / `redo` | `{}` | |
 
+Appearance stacks: an object can carry several fills and strokes (`appearance.addFill`, `appearance.addStroke`), indexed
+in paint order (0 is painted first, the bottom row of the Appearance panel). `paint.setFill`, `paint.setStroke`,
+`stroke.set`, `stroke.setAdvanced`, `paint.editGradient`, `paint.setGradientGeom` and `transparency.set` take
+`item` to edit one of them; `run_command appearance.setActiveItem {"index": n}` makes that row the target of later
+calls that omit `item` (as clicking the row in the Appearance panel does) until the selection changes.
+`inspect_document` reports it as `paint.appearanceItem`. Live effects take the same `item` to apply to one fill or
+stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
+`effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
+`apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.
+
 Errors (unknown tool, bad arguments, a disabled or failing command) come back as a normal result with
 `isError: true` and a message. The model can read the message and retry.
 

@@ -80,6 +80,7 @@ impl Session {
             corner_widgets: view.corner_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
+            appearance_item: self.appearance_item(),
         };
         f(self.tool.as_mut(), &cx)
     }

@@ -357,6 +357,11 @@ impl Node {
     pub fn is_container(&self) -> bool {
         self.children().is_some()
     }
+    /// Full opacity, Normal blending, no isolation, knockout or opacity mask (the Layers panel
+    /// fills an object's target circle otherwise).
+    pub fn has_default_transparency(&self) -> bool {
+        self.opacity >= 1.0 && self.blend == BlendMode::Normal && !self.isolate && !self.knockout && self.mask.is_none()
+    }
     /// Kind name as the Layers panel / Properties panel shows it.
     pub fn kind_label(&self) -> &'static str {
         match &self.kind {
@@ -367,7 +372,7 @@ impl Node {
             NodeKind::Path { guide: true, .. } => "Guide",
             NodeKind::Path { .. } => "Path",
             NodeKind::Compound { .. } => "Compound Path",
-            NodeKind::Text(_) => "Text",
+            NodeKind::Text(_) => "Type",
             NodeKind::Image(_) => "Image",
             NodeKind::SymbolInstance { .. } => "Symbol",
             NodeKind::Blend { .. } => "Blend",
@@ -530,27 +535,31 @@ impl Node {
         }
     }
     /// The paint behind the Fill (or Stroke) proxy, the map from its space to the document and
-    /// the box (in that space) an unplaced gradient fits. Type objects paint their runs (the first
-    /// run speaks for all) in text space, fitted to the layout bounds; everything else paints its
-    /// top fill or stroke in the document, fitted to the geometric bounds. Strokes fit the box
-    /// grown by half their weight.
-    pub fn proxy_paint(&self, stroke: bool) -> Option<(&vectorcraft_color::Paint, Affine, Rect)> {
-        if let NodeKind::Text(t) = &self.kind {
+    /// the box (in that space) an unplaced gradient fits. `item` (the Appearance panel's active
+    /// item) stands in for the topmost fill or stroke when it is of the proxy's kind. Otherwise
+    /// type objects paint their runs (the first run speaks for all) in text space, fitted to the
+    /// layout bounds; everything else paints its fill or stroke in the document, fitted to the
+    /// geometric bounds. Strokes fit the box grown by half their weight.
+    pub fn proxy_paint(&self, stroke: bool, item: Option<usize>) -> Option<(&vectorcraft_color::Paint, Affine, Rect)> {
+        let item = self.appearance.item_of_kind(item, !stroke);
+        if item.is_none()
+            && let NodeKind::Text(t) = &self.kind
+        {
             let st = &t.runs.first()?.style;
             let b = t.local_bounds();
             return Some(if stroke { (&st.stroke, t.xf, crate::appearance::stroke_paint_bounds(b, st.stroke_width)) } else { (&st.fill, t.xf, b) });
         }
         let b = self.geometric_bounds()?;
         if stroke {
-            self.appearance.stroke().map(|s| (&s.paint, Affine::IDENTITY, s.paint_bounds(b)))
+            self.appearance.stroke_at(item).map(|s| (&s.paint, Affine::IDENTITY, s.paint_bounds(b)))
         } else {
-            self.appearance.fill().map(|f| (&f.paint, Affine::IDENTITY, b))
+            self.appearance.fill_at(item).map(|f| (&f.paint, Affine::IDENTITY, b))
         }
     }
     /// The gradient behind the Fill (or Stroke) proxy and its placement in document coordinates
     /// (see [`Node::proxy_paint`]): what the gradient annotator shows and edits.
-    pub fn proxy_gradient(&self, stroke: bool) -> Option<(&vectorcraft_color::GradientPaint, vectorcraft_color::GradientGeom)> {
-        let (paint, to_doc, b) = self.proxy_paint(stroke)?;
+    pub fn proxy_gradient(&self, stroke: bool, item: Option<usize>) -> Option<(&vectorcraft_color::GradientPaint, vectorcraft_color::GradientGeom)> {
+        let (paint, to_doc, b) = self.proxy_paint(stroke, item)?;
         let vectorcraft_color::Paint::Gradient(g) = paint else { return None };
         let mut geom = g.resolve(b);
         if to_doc != Affine::IDENTITY {
@@ -576,6 +585,24 @@ mod tests {
         let l = LiveShape::Rectangle { w: 10.0, h: 20.0, radii: [0.0; 4], xf: Affine::translate((5.0, 5.0)) };
         assert_eq!(l.to_path().bounds(), Some(Rect::new(5.0, 5.0, 15.0, 25.0)));
         assert_eq!(l.label(), "Rectangle");
+    }
+
+    #[test]
+    fn default_transparency() {
+        let p = || Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        assert!(p().has_default_transparency());
+        let tweaks: [fn(&mut Node); 5] = [
+            |n| n.opacity = 0.5,
+            |n| n.blend = BlendMode::Multiply,
+            |n| n.isolate = true,
+            |n| n.knockout = true,
+            |n| n.mask = Some(Box::new(OpacityMask::new(n.clone(), true))),
+        ];
+        for tweak in tweaks {
+            let mut n = p();
+            tweak(&mut n);
+            assert!(!n.has_default_transparency(), "{n:?}");
+        }
     }
 
     #[test]

@@ -798,18 +798,27 @@ impl Renderer {
         if !n.appearance.items.is_empty() {
             let mut all = g.all.clone();
             all.apply_affine(t.xf);
-            for item in &n.appearance.items {
+            for item in n.appearance.items.iter().filter(|i| i.visible() && !i.paint().is_none()) {
+                // Each item composites with its own opacity and blend mode.
+                let layered = item.opacity() < 1.0 || item.blend() != vectorcraft_color::BlendMode::Normal;
+                if layered {
+                    ctx.set_transform(Affine::IDENTITY);
+                    ctx.push_layer(None, Some(blend_mode(item.blend())), Some(item.opacity()), None, None);
+                }
                 ctx.set_transform(f.view);
                 match item {
-                    AppearanceItem::Fill(fl) if fl.visible && paint::set_paint(ctx, &fl.paint, tb, f.doc) => {
+                    AppearanceItem::Fill(fl) if paint::set_paint(ctx, &fl.paint, tb, f.doc) => {
                         ctx.set_fill_rule(peniko::Fill::NonZero);
                         ctx.fill_path(&all);
                     }
-                    AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 && paint::set_paint(ctx, &st.paint, st.paint_bounds(tb), f.doc) => {
+                    AppearanceItem::Stroke(st) if st.width > 0.0 && paint::set_paint(ctx, &st.paint, st.paint_bounds(tb), f.doc) => {
                         ctx.set_stroke(kurbo::Stroke::new(st.width));
                         ctx.stroke_path(&all);
                     }
                     _ => {}
+                }
+                if layered {
+                    ctx.pop_layer();
                 }
             }
         }

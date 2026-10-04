@@ -6,9 +6,9 @@ use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
 
-use super::{current_paints, first_selected, live_run, pstate, selection_len, set_pstate};
+use super::{current_paints, current_transparency, first_selected, live_run, pstate, selection_len, set_pstate};
 use crate::theme::Tokens;
-use crate::widgets::{self, Live, menu_item};
+use crate::widgets::{self, TransparencyEdit, menu_item};
 use crate::{VectorcraftApp, icons};
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -20,38 +20,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         None => first_selected(app),
     };
     let has = n.is_some();
-    let (blend, op, isolate, knockout) =
-        n.as_ref().map(|n| (n.blend, n.opacity, n.isolate, n.knockout)).unwrap_or((BlendMode::Normal, 1.0, false, false));
-    ui.horizontal(|ui| {
-        let labels: Vec<&str> = BlendMode::ALL.iter().map(|b| b.label()).collect();
-        ui.add_enabled_ui(has, |ui| {
-            if let Some(i) = widgets::dropdown(ui, "tr-blend", blend.label(), &labels, 104.0) {
-                app.run("transparency.set", json!({"blend": labels[i]})).ok();
-            }
-        });
-        widgets::dim_label(ui, "Opacity:");
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_enabled_ui(has, |ui| {
-            if let Some(o) = widgets::plain_field(ui, "tr-op", op as f64 * 100.0, "%", 0, 50.0) {
-                app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
-            }
-        });
-        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 26.0), if has { Sense::click() } else { Sense::hover() });
-        ui.painter().rect_stroke(r, 2, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
-        icons::paint(ui, "chevron-right", r.shrink2(vec2(3.0, 7.0)), if has { t.icon } else { t.text_disabled });
-        egui::Popup::menu(&resp).show(|ui| {
-            let mut o = op * 100.0;
-            let r = ui.add(egui::Slider::new(&mut o, 0.0..=100.0).show_value(false));
-            let phase = if r.drag_stopped() || (r.changed() && !r.dragged()) {
-                Live::Released
-            } else if r.changed() {
-                Live::Dragging
-            } else {
-                Live::Idle
-            };
-            live_run(app, "Opacity", "transparency.set", json!({"opacity": o.round()}), phase);
-        });
-    });
+    let (isolate, knockout) = n.as_ref().map_or((false, false), |n| (n.isolate, n.knockout));
+    // Opacity and blend of the Appearance panel's active item, else of the object.
+    let (op, blend) = match editing {
+        None => current_transparency(app),
+        Some(_) => n.as_ref().map(|n| (n.opacity, n.blend)),
+    }
+    .unwrap_or((1.0, BlendMode::Normal));
+    match widgets::opacity_blend(ui, "tr", op, blend, has) {
+        Some(TransparencyEdit::Blend(b)) => {
+            app.run("transparency.set", json!({"blend": b.label()})).ok();
+        }
+        Some(TransparencyEdit::Opacity(o, phase)) => live_run(app, "Opacity", "transparency.set", json!({ "opacity": o }), phase),
+        None => {}
+    }
     widgets::divider(ui);
     // Thumbnails and the opacity-mask controls.
     let hide_thumbs: bool = pstate(ui.ctx(), "tr-hide-thumbs");

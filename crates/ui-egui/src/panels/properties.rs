@@ -265,11 +265,10 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(n) = first_selected(app) else { return };
     section_header(ui, "Appearance");
-    let (fill, stroke, weight) = if let NodeKind::Text(tx) = &n.kind {
-        let s = tx.first_style();
-        (s.fill.clone(), s.stroke.clone(), s.stroke_width)
-    } else {
-        (n.appearance.fill_paint(), n.appearance.stroke_paint(), n.appearance.stroke().map(|s| s.width).unwrap_or(0.0))
+    let (fill, stroke) = super::current_paints(app);
+    let weight = match &n.kind {
+        NodeKind::Text(tx) if app.session.appearance_item().is_none() => tx.first_style().stroke_width,
+        _ => super::current_stroke(app).map_or(0.0, |s| s.width),
     };
     for (label, paint, is_fill) in [("Fill", fill, true), ("Stroke", stroke, false)] {
         ui.horizontal(|ui| {

@@ -42,8 +42,8 @@ impl Tool for EyedropperTool {
         let src = paint_owner(cx.doc, h.leaf);
         let Some(n) = cx.doc.node(src) else { return vec![] };
         if ev.mods.shift {
-            let fill_none = n.proxy_paint(false).is_none_or(|(p, ..)| p.is_none());
-            let Some((paint, to_doc, bounds)) = n.proxy_paint(h.kind == HitKind::Stroke || fill_none) else { return vec![] };
+            let fill_none = n.proxy_paint(false, None).is_none_or(|(p, ..)| p.is_none());
+            let Some((paint, to_doc, bounds)) = n.proxy_paint(h.kind == HitKind::Stroke || fill_none, None) else { return vec![] };
             // Sample in the paint's own space (text space for type runs) and box.
             let p = if to_doc.determinant().abs() > 1e-12 { to_doc.inverse() * ev.pos } else { ev.pos };
             return match paint_color_at(paint, Some(bounds), p) {

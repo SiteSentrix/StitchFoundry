@@ -1,10 +1,11 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{Appearance, NodeKind};
 
-use super::gradient::{place_paint, place_run_paint, run_paint_mut, unplaced};
+use super::appearance::{ItemTarget, appearance_targets, edit_items, item_target};
+use super::gradient::{item_paint_bounds, place_paint, place_run_paint, run_paint_mut, unplaced};
 use super::*;
 use crate::EngineError;
 
@@ -15,11 +16,13 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a gradient swatch fits each object, keeping its aspect), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, ids?} sets selection fill and the default (new art fits a gradient to itself)",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name (a gradient swatch fits each object, keeping its aspect), gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?} sets the selection's fill and the default (new art fits a gradient to itself)",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
-        cmd!("paint.setStroke", "Stroke", [], None, "same as paint.setFill, for the stroke", has_doc, |s, p| set_paint(s, p, false)),
+        cmd!("paint.setStroke", "Stroke", [], None, "same as paint.setFill, for the stroke (item?: the stroke item to set)", has_doc, |s, p| {
+            set_paint(s, p, false)
+        }),
         cmd!("paint.swap", "Swap Fill and Stroke", [], Some("Shift+X"), "{}", has_doc, swap),
         cmd!("paint.default", "Default Fill and Stroke", [], Some("D"), "{}", has_doc, default_paint),
         cmd!("paint.toggleActive", "Toggle Fill/Stroke Focus", [], Some("X"), "{}", always, |s, _| {
@@ -35,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{opacity?: 0..100, blend?: name, isolate?, knockout?}",
+            "{opacity?: 0..100, blend?: name, isolate?, knockout?, item?: appearance item index|null, ids?} opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects)",
             has_selection,
             transparency
         ),
@@ -74,7 +77,8 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
 }
 
 fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
-    let paint = paint_from(s, p)?.ok_or_else(|| bad("paint.setFill", "give color, none, swatch or gradient"))?;
+    let cmd = if fill { "paint.setFill" } else { "paint.setStroke" };
+    let paint = paint_from(s, p)?.ok_or_else(|| bad(cmd, "give color, none, swatch or gradient"))?;
     // New art gets the paint fitted to itself, not placed where this one is.
     if fill {
         s.paint.fill = unplaced(&paint);
@@ -82,34 +86,29 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         s.paint.stroke = unplaced(&paint);
     }
     s.fill_active = fill;
-    let ids = paint_targets(s, p)?;
-    if ids.is_empty() {
-        return ok();
-    }
-    s.edit(if fill { "Fill Color" } else { "Stroke Color" }, |d, _| {
-        for id in &ids {
-            let Some(n) = d.node_mut(*id) else { continue };
-            if let NodeKind::Text(t) = &mut n.kind {
-                let (xf, lb) = (t.xf, t.local_bounds());
-                for r in &mut t.runs {
-                    if !fill && r.style.stroke_width == 0.0 {
-                        r.style.stroke_width = 1.0;
-                    }
-                    let (cur, b) = run_paint_mut(r, !fill, lb);
-                    *cur = place_run_paint(&paint, p, xf, b);
+    let item = item_target(s, p, cmd)?.of_kind(s, fill);
+    let ids = item.targets(s, p)?;
+    edit_items(s, &ids, item, cmd, if fill { "Fill Color" } else { "Stroke Color" }, fill, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            let (xf, lb) = (t.xf, t.local_bounds());
+            for r in &mut t.runs {
+                if !fill && r.style.stroke_width == 0.0 {
+                    r.style.stroke_width = 1.0;
                 }
-                continue;
+                let (cur, b) = run_paint_mut(r, !fill, lb);
+                *cur = place_run_paint(&paint, p, xf, b);
             }
-            let b = n.geometric_bounds();
-            if fill {
-                n.appearance.set_fill(place_paint(&paint, p, b));
-            } else {
-                n.appearance.set_stroke(paint.clone());
-                if let Some(st) = n.appearance.stroke_mut() {
-                    st.paint = place_paint(&paint, p, b.map(|b| st.paint_bounds(b)));
-                }
-            }
+            return Ok(());
         }
+        // A missing top fill or stroke is created first: a new stroke's weight sizes the box its
+        // gradient fits.
+        if n.appearance.paint_at(index, fill).is_none() {
+            n.appearance.set_paint_at(index, fill, Paint::None);
+        }
+        let placed = place_paint(&paint, p, item_paint_bounds(n, index, fill));
+        n.appearance.set_paint_at(index, fill, placed);
         Ok(())
     })?;
     ok()
@@ -155,9 +154,41 @@ fn default_paint(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
-    let mut q = p.clone();
-    if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
-        q["opacity"] = json!(o / 100.0);
+    const C: &str = "transparency.set";
+    let item = item_target(s, p, C)?;
+    let mut q = p.as_object().cloned().unwrap_or_default();
+    q.remove("item");
+    let opacity = q.remove("opacity").and_then(|v| v.as_f64()).map(|o| (o / 100.0).clamp(0.0, 1.0));
+    let ItemTarget::Item { index, explicit } = item else {
+        if let Some(o) = opacity {
+            q.insert("opacity".into(), json!(o));
+        }
+        return s.execute("object.setProps", &Value::Object(q));
+    };
+    // Opacity and blend belong to the targeted fill/stroke; isolate/knockout stay object-level.
+    if explicit {
+        let d = &s.doc()?.doc;
+        if !appearance_targets(s, p)?.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {
+            return Err(bad(C, format!("no appearance item {index}")));
+        }
     }
-    s.execute("object.setProps", &q)
+    let blend = q.remove("blend");
+    if let Some(b) = &blend
+        && b.as_str().and_then(BlendMode::parse).is_none()
+    {
+        return Err(bad(C, format!("unknown blend mode {b}")));
+    }
+    if opacity.is_some() || blend.is_some() {
+        let mut set = json!({ "index": index, "opacity": opacity, "blend": blend });
+        for key in ["ids", "id"] {
+            if let Some(v) = p.get(key) {
+                set[key] = v.clone();
+            }
+        }
+        s.execute("appearance.setItem", &set)?;
+    }
+    if q.keys().all(|k| k == "ids" || k == "id") {
+        return ok();
+    }
+    s.execute("object.setProps", &Value::Object(q))
 }
