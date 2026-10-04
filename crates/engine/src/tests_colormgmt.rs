@@ -14,7 +14,7 @@ use vectorcraft_render::{RenderOptions, Renderer};
 use super::*;
 
 /// Every test here reads or changes the process-wide proof view or colour settings: one at a time.
-static GLOBAL: Mutex<()> = Mutex::new(());
+pub(crate) static GLOBAL: Mutex<()> = Mutex::new(());
 
 fn session() -> Session {
     let mut s = Session::new();

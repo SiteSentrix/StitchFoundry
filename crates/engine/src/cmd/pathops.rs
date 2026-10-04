@@ -490,7 +490,7 @@ fn outlined_stroke(d: &mut Document, brushes: &[vectorcraft_brush::Brush], path:
 /// Path `l` with every stroke outlined, in appearance order: runs of fills stay on copies of
 /// the path, each stroke becomes its outline (or brush art), grouped when there are several.
 /// `None` when `l` has no stroke to outline.
-fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
+pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
@@ -536,6 +536,29 @@ fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &N
     Some(root)
 }
 
+/// Outline the strokes of every path under `root` in place: → (the id now standing for `root`,
+/// how many paths changed).
+pub(crate) fn outline_strokes_under(d: &mut Document, brushes: &[vectorcraft_brush::Brush], root: NodeId) -> Result<(NodeId, usize)> {
+    let Some(n) = d.node(root).cloned() else { return Ok((root, 0)) };
+    let mut lv = vec![];
+    leaves(&n, &mut lv);
+    let (mut replacement, mut changed) = (root, 0);
+    for l in lv {
+        if matches!(l.kind, NodeKind::Text(_)) {
+            continue;
+        }
+        let Some(new) = outline_strokes(d, brushes, &l) else { continue };
+        let (par, idx, _) = d.position(l.id).ok_or(EngineError::NoNode(l.id))?;
+        let nid = d.insert(par, idx, new)?;
+        d.remove(l.id)?;
+        changed += 1;
+        if l.id == root {
+            replacement = nid;
+        }
+    }
+    Ok((replacement, changed))
+}
+
 fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
@@ -543,24 +566,9 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
         let mut new_sel = vec![];
         let mut changed = 0;
         for root in &roots {
-            let Some(n) = d.node(*root).cloned() else { continue };
-            let mut lv = vec![];
-            leaves(&n, &mut lv);
-            let mut root_replacement = None;
-            for l in lv {
-                if matches!(l.kind, NodeKind::Text(_)) {
-                    continue;
-                }
-                let Some(new) = outline_strokes(d, &brushes, &l) else { continue };
-                let (par, idx, _) = d.position(l.id).ok_or(EngineError::NoNode(l.id))?;
-                let nid = d.insert(par, idx, new)?;
-                d.remove(l.id)?;
-                changed += 1;
-                if l.id == *root {
-                    root_replacement = Some(nid);
-                }
-            }
-            new_sel.push(root_replacement.unwrap_or(*root));
+            let (id, n) = outline_strokes_under(d, &brushes, *root)?;
+            new_sel.push(id);
+            changed += n;
         }
         if changed == 0 {
             return Err(EngineError::Other("Outline Stroke: no stroked paths selected".into()));

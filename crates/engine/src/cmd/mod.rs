@@ -14,6 +14,7 @@ mod draw2;
 mod edit;
 mod effectcmd;
 pub mod fileio;
+pub(crate) mod flatten;
 mod fonts;
 pub(crate) mod freeform;
 pub(crate) mod gradient;
@@ -198,6 +199,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(overprint::specs());
         v.extend(swatchlib::specs());
         v.extend(freeform::specs());
+        v.extend(flatten::specs());
         v
     })
 }
@@ -358,3 +360,6 @@ pub use xform::EyedropperOptions;
 
 /// The Attributes panel's state ([`Session::attributes_info`]).
 pub use overprint::AttributesInfo;
+
+/// Object → Flatten Transparency settings (`object.flattenTransparency`).
+pub use flatten::FlattenOptions;

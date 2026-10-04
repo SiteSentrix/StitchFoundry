@@ -775,6 +775,8 @@ mod tests_effectedit;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]
+mod tests_flatten;
+#[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
 mod tests_gradient;

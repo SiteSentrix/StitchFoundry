@@ -63,7 +63,7 @@ pub(crate) fn cull_bounds(n: &Node) -> Option<Rect> {
 
 /// A symbol's art for instance `inst`, stained by the instance's fill (Symbol Stainer: the fill
 /// colour mixed in by the fill layer's opacity).
-pub(crate) fn instance_art(art: &Node, inst: &Node) -> Node {
+pub fn instance_art(art: &Node, inst: &Node) -> Node {
     let mut a = art.clone();
     if let Some(f) = inst.appearance.fill()
         && f.visible

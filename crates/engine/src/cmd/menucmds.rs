@@ -364,10 +364,10 @@ fn drop_live(n: &mut Node) {
 
 // ---------- Rasterize / Crop ----------
 
-const MAX_PIXELS: f64 = 64.0e6;
+pub(crate) const MAX_PIXELS: f64 = 64.0e6;
 
 /// A copy of `doc` whose only content is `nodes` (paint order), for offscreen rendering.
-fn isolated_doc(doc: &vectorcraft_doc::Document, nodes: Vec<Node>) -> vectorcraft_doc::Document {
+pub(crate) fn isolated_doc(doc: &vectorcraft_doc::Document, nodes: Vec<Node>) -> vectorcraft_doc::Document {
     let mut tmp = doc.clone();
     let mut layer = Node::layer(NodeId(u64::MAX), "raster", vectorcraft_doc::LayerColor::Preset(0));
     if let Some(ch) = layer.children_mut() {
@@ -377,7 +377,7 @@ fn isolated_doc(doc: &vectorcraft_doc::Document, nodes: Vec<Node>) -> vectorcraf
     tmp
 }
 
-fn unique_key(d: &vectorcraft_doc::Document, stem: &str) -> String {
+pub(crate) fn unique_key(d: &vectorcraft_doc::Document, stem: &str) -> String {
     let mut i = d.images.len() + 1;
     loop {
         let k = format!("{stem}-{i}");

@@ -1,0 +1,891 @@
+//! Object → Flatten Transparency: transparent art becomes opaque art that looks the same.
+//!
+//! The targets (`ids` or the selection) split into groups of overlapping objects. Groups without
+//! transparency stay as they are (their type and strokes are outlined on request). The others are
+//! cut into atomic regions: the faces of the planar arrangement of every fill, outlined stroke and
+//! clipping path in them ([`po::regions`]). The same paints cover each whole region, so its colour
+//! is exact: those paints composited as the renderer composites them ([`Composer`], blend modes by
+//! [`composite`]), over white (or over nothing with Preserve Alpha). Each region becomes a path
+//! filled with that flat colour. Where gradients, patterns, images, opacity masks or raster
+//! effects reach there is no single colour: those regions are rendered into one image per group,
+//! clipped to them with Clip Complex Regions (else the image is a rectangle that takes in the
+//! regions it overlaps). The raster/vector balance rasterizes whole groups that split into more
+//! regions than it allows (all of them at 0).
+
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use vectorcraft_color::blend::composite;
+use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::appearance::{AppearanceItem, FillLayer};
+use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, ImageObject, Knockout, Node, NodeId, NodeKind};
+use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
+use vectorcraft_pathops as po;
+use vectorcraft_render::effects;
+
+use super::edit::roots_of;
+use super::menucmds::{MAX_PIXELS, isolated_doc, unique_key};
+use super::pathops::{node_path, outline_strokes, outline_strokes_under, shape_node};
+use super::*;
+
+pub fn specs() -> Vec<CommandSpec> {
+    vec![cmd!(
+        "object.flattenTransparency",
+        "Flatten Transparency…",
+        ["Object"],
+        None,
+        "{preset?: \"high\"|\"medium\"|\"low\" (default medium), balance?: 0..100 (raster/vector balance; 0 rasterizes everything), lineArtPpi?: 1..2400, gradientPpi?: 1..2400 (areas only gradients and meshes reach), textToOutlines?, strokesToOutlines?, clipComplexRegions? (clip images to the region outlines, else rectangles), antiAlias?, preserveAlpha? (composite over nothing instead of white), preserveOverprints? (areas showing one paint keep its colour and overprint; false clears overprints), options?: {the same keys}, ids?} overlapping transparent objects become one group of flat-colour regions, plus an image where gradients, patterns, images, masks or raster effects reach; objects without transparency stay → {ids, rasterized: images made, vector: regions made, options}",
+        has_doc,
+        flatten
+    )]
+}
+
+/// Object → Flatten Transparency settings: a preset's, adjusted by the command's params.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FlattenOptions {
+    /// Raster/vector balance, 0–100: 0 rasterizes all flattened art; 100 keeps everything vector
+    /// that can be; in between, groups that split into more regions than it allows are rasterized.
+    pub balance: f64,
+    /// Resolution (ppi) of rasterized art.
+    pub line_art_ppi: f64,
+    /// Resolution (ppi) of rasterized areas that only gradients and meshes reach.
+    pub gradient_ppi: f64,
+    /// Outline all type, also where it isn't transparent.
+    pub text_to_outlines: bool,
+    /// Outline all strokes, also where they aren't transparent.
+    pub strokes_to_outlines: bool,
+    /// Clip rasterized areas to their region outlines (else they are rectangles).
+    pub clip_complex_regions: bool,
+    /// Smooth the edges of rasterized areas.
+    pub anti_alias: bool,
+    /// Keep the art's own alpha: composite over nothing instead of over white.
+    pub preserve_alpha: bool,
+    /// Areas showing a single paint keep it (spot and process colours, swatches) with its
+    /// overprint; off, the flattened objects lose their overprints.
+    pub preserve_overprints: bool,
+}
+
+impl Default for FlattenOptions {
+    fn default() -> Self {
+        Self::preset("medium").expect("built-in preset")
+    }
+}
+
+impl FlattenOptions {
+    /// Preset ids, finest first.
+    pub const PRESETS: [&'static str; 3] = ["high", "medium", "low"];
+
+    /// Display name of a preset id.
+    pub fn preset_label(id: &str) -> Option<&'static str> {
+        Some(match id {
+            "high" => "High Resolution",
+            "medium" => "Medium Resolution",
+            "low" => "Low Resolution",
+            _ => return None,
+        })
+    }
+
+    /// A preset by id or display name, any case.
+    pub fn preset(name: &str) -> Option<Self> {
+        let key = name.trim().to_ascii_lowercase();
+        let id = Self::PRESETS.into_iter().find(|id| key == *id || Self::preset_label(id).is_some_and(|l| l.eq_ignore_ascii_case(&key)))?;
+        let (balance, line_art_ppi, gradient_ppi, clip_complex_regions, anti_alias) = match id {
+            "high" => (100.0, 1200.0, 300.0, true, false),
+            "medium" => (75.0, 300.0, 300.0, false, true),
+            _ => (75.0, 300.0, 150.0, false, true),
+        };
+        Some(Self {
+            balance,
+            line_art_ppi,
+            gradient_ppi,
+            text_to_outlines: false,
+            strokes_to_outlines: false,
+            clip_complex_regions,
+            anti_alias,
+            preserve_alpha: false,
+            preserve_overprints: true,
+        })
+    }
+
+    /// The options `p` asks for: `preset` (default medium) adjusted by the option keys given at the
+    /// top level or in `options`.
+    pub fn from_params(p: &Value) -> std::result::Result<Self, String> {
+        let base = match str_param(p, "preset") {
+            Some(name) => Self::preset(name).ok_or_else(|| format!("unknown preset `{name}` (high, medium or low)"))?,
+            None => Self::default(),
+        };
+        let mut v = serde_json::to_value(&base).map_err(|e| e.to_string())?;
+        for src in [Some(p), p.get("options")].into_iter().flatten().filter_map(Value::as_object) {
+            for (k, val) in src {
+                if let Some(slot) = v.get_mut(k) {
+                    *slot = val.clone();
+                }
+            }
+        }
+        let o: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;
+        if !(0.0..=100.0).contains(&o.balance) {
+            return Err("balance must be between 0 and 100".into());
+        }
+        if ![o.line_art_ppi, o.gradient_ppi].iter().all(|r| (1.0..=2400.0).contains(r)) {
+            return Err("resolutions must be between 1 and 2400 ppi".into());
+        }
+        Ok(o)
+    }
+
+    /// Whether a group that splits into `regions` atomic regions is rasterized whole.
+    fn rasterize_all(&self, regions: usize) -> bool {
+        self.balance <= 0.0 || (self.balance < 100.0 && regions as f64 > 10f64.powf(self.balance / 20.0))
+    }
+}
+
+fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.flattenTransparency";
+    let o = FlattenOptions::from_params(p).map_err(|m| bad(C, m))?;
+    let roots = target_roots(s, p)?;
+    if roots.is_empty() {
+        return Err(EngineError::Other("Flatten Transparency: select objects to flatten".into()));
+    }
+    let src = s.doc()?.doc.clone();
+    let plan = plan(&src, &roots, &o);
+    let options = serde_json::to_value(&o).unwrap_or_default();
+    if plan.flat.is_empty() && !plan.kept.iter().any(|id| src.node(*id).is_some_and(|n| kept_work(n, &o))) {
+        return Ok(json!({ "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": 0, "vector": 0, "options": options }));
+    }
+    let (ids, vector, rasterized) = s.edit("Flatten Transparency", |d, sel| apply(d, sel, plan, &o))?;
+    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "rasterized": rasterized, "vector": vector, "options": options }))
+}
+
+/// The top-level objects among `ids` (or the selection), in paint order: layers stand for their
+/// contents; hidden and locked objects and clipping paths are left alone.
+fn target_roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let d = &s.doc()?.doc;
+    let mut ids = vec![];
+    for id in targets(s, p)? {
+        match d.node(id) {
+            Some(n) if n.is_layer() => ids.extend(n.children().into_iter().flatten().map(|c| c.id)),
+            Some(_) => ids.push(id),
+            None => {}
+        }
+    }
+    let mut keyed: Vec<(Vec<usize>, NodeId)> = ids.into_iter().filter_map(|id| d.index_path(id).map(|p| (p, id))).collect();
+    keyed.sort();
+    keyed.dedup();
+    let roots = roots_of(d, keyed.into_iter().map(|(_, id)| id).collect());
+    // A clipping path stays where it clips.
+    let clipping = |id: NodeId| {
+        d.parent_of(id).and_then(|p| d.node(p)).is_some_and(|p| p.clips() && p.children().and_then(|c| c.first()).is_some_and(|c| c.id == id))
+    };
+    Ok(roots.into_iter().filter(|id| d.is_visible(*id) && d.is_editable(*id) && !clipping(*id)).collect())
+}
+
+// ---------- plan ----------
+
+/// What the flattening does, worked out before the document changes.
+struct Plan {
+    flat: Vec<Flat>,
+    /// Objects without transparency (they stay, but for the outline options).
+    kept: Vec<NodeId>,
+}
+
+/// One group of overlapping objects with transparency and what replaces it.
+struct Flat {
+    /// Its objects in paint order; the result takes the place of the last.
+    roots: Vec<NodeId>,
+    regions: Vec<(PathData, RegionFill)>,
+    raster: Option<Raster>,
+}
+
+/// A flat-colour region's paint.
+struct RegionFill {
+    paint: Paint,
+    alpha: f32,
+    overprint: bool,
+}
+
+/// A rendered image of complex regions, clipped to them or not.
+struct Raster {
+    png: Vec<u8>,
+    width: u32,
+    height: u32,
+    xf: Affine,
+    clip: Option<PathData>,
+}
+
+fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions) -> Plan {
+    let tmp = isolated_doc(src, roots.iter().filter_map(|id| src.node(*id).cloned()).collect());
+    // Geometry effects first: what is left on the art are raster effects.
+    let baked = effects::bake_document(&tmp).unwrap_or(tmp);
+    let art: Vec<Node> = baked.layers[0].children().into_iter().flatten().map(|a| (**a).clone()).collect();
+    let mut sc = Scratch { brushes: vectorcraft_brush::library(&baked), doc: baked.clone() };
+    let plain: Vec<Node> = art.iter().map(|n| sc.plain(n)).collect();
+    let reaches: Vec<Option<Rect>> = plain.iter().map(reach).collect();
+    let mut out = Plan { flat: vec![], kept: vec![] };
+    for g in overlapping(&reaches) {
+        let ids: Vec<NodeId> = g.iter().map(|&i| roots[i]).collect();
+        let flat = g.iter().any(|&i| transparent(&plain[i])).then(|| {
+            let art: Vec<Node> = g.iter().map(|&i| art[i].clone()).collect();
+            let plain: Vec<&Node> = g.iter().map(|&i| &plain[i]).collect();
+            flatten_group(&baked, &art, &plain, o)
+        });
+        match flat.flatten() {
+            Some((regions, raster)) => out.flat.push(Flat { roots: ids, regions, raster }),
+            None => out.kept.extend(ids),
+        }
+    }
+    out
+}
+
+/// The regions and image replacing one group of overlapping objects (`art` as rendered, `plain`
+/// as composited); `None` when it paints nothing.
+#[allow(clippy::type_complexity)]
+fn flatten_group(doc: &Document, art: &[Node], plain: &[&Node], o: &FlattenOptions) -> Option<(Vec<(PathData, RegionFill)>, Option<Raster>)> {
+    let mut b = Builder::default();
+    let elems: Vec<Elem> = plain.iter().filter_map(|n| b.elem(n)).collect();
+    if b.shapes.is_empty() {
+        return None;
+    }
+    // An unclipped full raster needs no regions.
+    let whole = o.balance <= 0.0 && !o.clip_complex_regions;
+    let regions = if whole { vec![] } else { po::regions(&b.shapes) };
+    // An arrangement that failed (degenerate geometry) leaves only rasterizing.
+    let all = regions.is_empty() || o.rasterize_all(regions.len());
+    let mut vector: Vec<(usize, RegionFill)> = vec![];
+    let mut complex: Vec<usize> = vec![];
+    let mut gradients_only = !all;
+    for (k, r) in regions.iter().enumerate() {
+        if all || r.sources.iter().any(|&i| b.kinds[i] != Kind::Vector) {
+            gradients_only &= r.sources.iter().all(|&i| b.kinds[i] == Kind::Gradient);
+            complex.push(k);
+        } else if let Some(fill) = region_fill(&elems, &r.sources, o) {
+            vector.push((k, fill));
+        }
+    }
+    let bounds = |ks: &[usize]| ks.iter().filter_map(|&k| regions[k].path.bounds()).reduce(|a, b| a.union(b));
+    if !o.clip_complex_regions && !all {
+        // A rectangle of raster takes in every region it overlaps.
+        while let Some(r) = bounds(&complex) {
+            let before = complex.len();
+            let rect = shapes::rectangle(r);
+            vector.retain(|(k, _)| {
+                let path = &regions[*k].path;
+                let hit = path.bounds().is_some_and(|b| b.intersect(r).area() > 0.0)
+                    && po::area(&po::boolean(path, FillRule::NonZero, &rect, FillRule::NonZero, po::BoolOp::Intersect), FillRule::NonZero) > 1e-6;
+                if hit {
+                    complex.push(*k);
+                }
+                !hit
+            });
+            if complex.len() == before {
+                break;
+            }
+            gradients_only = false;
+        }
+    }
+    let raster_rect = if all { plain.iter().filter_map(|n| reach(n)).reduce(|a, b| a.union(b)) } else { bounds(&complex) };
+    let raster = raster_rect.map(|rect| {
+        let clip = o.clip_complex_regions.then(|| PathData::new(complex.iter().flat_map(|&k| regions[k].path.subpaths.iter().cloned()).collect()));
+        let ppi = if gradients_only { o.gradient_ppi } else { o.line_art_ppi };
+        render_raster(doc, art, rect, ppi, clip.filter(|c| !c.is_empty()), o)
+    });
+    let vector = vector.into_iter().map(|(k, f)| (regions[k].path.clone(), f)).collect();
+    Some((vector, raster))
+}
+
+/// The flat colour of a region covered by `sources`; `None` where nothing paints it.
+fn region_fill(elems: &[Elem], sources: &[usize], o: &FlattenOptions) -> Option<RegionFill> {
+    let mut c = Composer { sources, top: None };
+    let alone = c.eval(elems, CLEAR);
+    if alone[3] < 0.5 / 255.0 {
+        return None;
+    }
+    let px = if o.preserve_alpha {
+        alone
+    } else {
+        c.top = None;
+        c.eval(elems, WHITE)
+    };
+    let rgb = [px[0], px[1], px[2]];
+    // A paint showing as it is keeps its colour (spot, process, swatch) and overprint.
+    let same = |f: &Fill| px[3] >= 1.0 - 1e-4 && f.rgb.iter().zip(rgb).all(|(a, b)| (a - b).abs() < 1e-3);
+    let (paint, overprint) = match c.top {
+        Some(f) if o.preserve_overprints && same(f) => (f.paint.clone(), f.overprint),
+        _ => (Paint::solid(Color::rgb(rgb[0], rgb[1], rgb[2])), false),
+    };
+    Some(RegionFill { paint, alpha: px[3], overprint })
+}
+
+/// `art` rendered over `rect` at `ppi`: over white with the white the art doesn't cover taken out
+/// again (so blend modes see the white page), or over nothing with Preserve Alpha. The image and
+/// its `clip` reach a pixel further.
+fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Option<PathData>, o: &FlattenOptions) -> Raster {
+    let mut scale = ppi / 72.0;
+    scale = scale.min((MAX_PIXELS / (rect.width() * rect.height()).max(1.0)).sqrt());
+    let px = 1.0 / scale;
+    let rect = rect.inflate(px, px);
+    let clip = clip.map(|c| Some(po::offset_path(&c, px, po::Join::Miter, 4.0)).filter(|g| !g.is_empty()).unwrap_or(c));
+    let region = Rect::new(
+        rect.x0,
+        rect.y0,
+        rect.x0 + (rect.width() * scale).ceil().max(1.0) / scale,
+        rect.y0 + (rect.height() * scale).ceil().max(1.0) / scale,
+    );
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut img = r.render_region(&isolated_doc(doc, art.to_vec()), region, scale, !o.preserve_alpha);
+    if !o.preserve_alpha || !o.anti_alias {
+        // The art's coverage: drawn opaque, so only its own edges (and soft effects) are partial.
+        let cover: Vec<Node> = art
+            .iter()
+            .map(|n| {
+                let mut c = n.clone();
+                opaque(&mut c);
+                c
+            })
+            .collect();
+        let cover = r.render_region(&isolated_doc(doc, cover), region, scale, false);
+        for (px, c) in img.pixels.chunks_exact_mut(4).zip(cover.pixels.chunks_exact(4)) {
+            let k = c[3];
+            let k2 = if o.anti_alias || k == 0 || k == 255 {
+                k
+            } else if k >= 128 {
+                255
+            } else {
+                0
+            };
+            if o.preserve_alpha {
+                let f = k2 as f32 / k.max(1) as f32;
+                for v in px.iter_mut() {
+                    *v = (*v as f32 * f).round().min(255.0) as u8;
+                }
+            } else {
+                let white = 255 - k2;
+                for v in &mut px[..3] {
+                    *v = v.saturating_sub(white).min(k2);
+                }
+                px[3] = k2;
+            }
+        }
+    }
+    let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
+    Raster { png: img.to_png(), width: img.width, height: img.height, xf, clip }
+}
+
+/// `n` at full opacity with Normal blending throughout (objects, fills and strokes).
+fn opaque(n: &mut Node) {
+    n.opacity = 1.0;
+    n.blend = BlendMode::Normal;
+    for i in &mut n.appearance.items {
+        match i {
+            AppearanceItem::Fill(f) => (f.opacity, f.blend) = (1.0, BlendMode::Normal),
+            AppearanceItem::Stroke(s) => (s.opacity, s.blend) = (1.0, BlendMode::Normal),
+        }
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch {
+            opaque(Arc::make_mut(c));
+        }
+    }
+}
+
+// ---------- apply ----------
+
+fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: &FlattenOptions) -> Result<(Vec<NodeId>, usize, usize)> {
+    let (mut vector, mut rasterized) = (0, 0);
+    let mut ids = vec![];
+    for f in plan.flat {
+        let mut children = vec![];
+        // The image goes under the regions, reaching a pixel past its own: their edges then fall on
+        // matching pixels instead of on what is behind the group.
+        if let Some(r) = f.raster {
+            children.push(Arc::new(raster_node(d, r)));
+            rasterized += 1;
+        }
+        for (path, fill) in f.regions {
+            let mut n = shape_node(d, path, None);
+            n.appearance = Appearance {
+                items: vec![AppearanceItem::Fill(FillLayer { overprint: fill.overprint, ..FillLayer::new(fill.paint) })],
+                ..Appearance::default()
+            };
+            n.opacity = fill.alpha.min(1.0);
+            children.push(Arc::new(n));
+            vector += 1;
+        }
+        let top = *f.roots.last().expect("a group has objects");
+        let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
+        let g = Node::group(d.alloc_id(), children);
+        ids.push(d.insert(par, idx + 1, g)?);
+        for r in &f.roots {
+            d.remove(*r)?;
+        }
+    }
+    let brushes = if o.strokes_to_outlines { vectorcraft_brush::library(d) } else { vec![] };
+    for mut id in plan.kept {
+        if o.text_to_outlines {
+            id = outline_texts_under(d, id)?;
+        }
+        if o.strokes_to_outlines {
+            id = outline_strokes_under(d, &brushes, id)?.0;
+        }
+        if !o.preserve_overprints
+            && let Some(n) = d.node_mut(id)
+        {
+            drop_overprints(n);
+        }
+        ids.push(id);
+    }
+    ids.sort_by_key(|id| d.index_path(*id));
+    sel.set(ids.iter().copied());
+    Ok((ids, vector, rasterized))
+}
+
+/// An image of `r` (in a clip group when it is clipped).
+fn raster_node(d: &mut Document, r: Raster) -> Node {
+    let key = unique_key(d, "flattened");
+    d.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(r.png) });
+    let image = Node::new(d.alloc_id(), NodeKind::Image(ImageObject { key, width: r.width, height: r.height, xf: r.xf, link: None }));
+    let Some(path) = r.clip else { return image };
+    let mut clip = shape_node(d, path, None);
+    clip.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })
+}
+
+/// Replace the type under `root` by its outlines: → the id now standing for `root`.
+fn outline_texts_under(d: &mut Document, root: NodeId) -> Result<NodeId> {
+    let mut texts = vec![];
+    if let Some(n) = d.node(root) {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::Text(_)) {
+                texts.push(c.clone());
+            }
+        });
+    }
+    let mut out = root;
+    for t in texts {
+        let Some(o) = outlined_text(&t) else { continue };
+        let o = d.reid(&o);
+        let (par, idx, _) = d.position(t.id).ok_or(EngineError::NoNode(t.id))?;
+        let nid = d.insert(par, idx, o)?;
+        d.remove(t.id)?;
+        if t.id == root {
+            out = nid;
+        }
+    }
+    Ok(out)
+}
+
+/// Whether the outline and overprint options change `n`, an object without transparency.
+fn kept_work(n: &Node, o: &FlattenOptions) -> bool {
+    let mut any = false;
+    n.walk(&mut |c| {
+        any |= (o.text_to_outlines && matches!(c.kind, NodeKind::Text(_)))
+            || (o.strokes_to_outlines
+                && matches!(c.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+                && c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0)))
+            || (!o.preserve_overprints && overprints(c));
+    });
+    any
+}
+
+fn overprints(n: &Node) -> bool {
+    n.appearance.items.iter().any(AppearanceItem::overprint)
+        || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
+}
+
+fn drop_overprints(n: &mut Node) {
+    if overprints(n) {
+        for i in &mut n.appearance.items {
+            *i.overprint_mut() = false;
+        }
+        if let NodeKind::Text(t) = &mut n.kind {
+            for r in &mut t.runs {
+                (r.style.overprint_fill, r.style.overprint_stroke) = (false, false);
+            }
+        }
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch {
+            drop_overprints(Arc::make_mut(c));
+        }
+    }
+}
+
+// ---------- plain art ----------
+
+/// Converts art into what the compositor works on.
+struct Scratch {
+    /// A copy of the document the art comes from (outlining allocates ids in it).
+    doc: Document,
+    brushes: Vec<vectorcraft_brush::Brush>,
+}
+
+impl Scratch {
+    /// `n` as plain filled shapes: type outlined, symbol instances replaced by their art, live
+    /// objects evaluated and strokes outlined (brush strokes as their art), each keeping the
+    /// object's transparency.
+    fn plain(&mut self, n: &Node) -> Node {
+        if !n.visible {
+            return n.clone();
+        }
+        let made = match &n.kind {
+            NodeKind::Text(_) => outlined_text(n),
+            NodeKind::SymbolInstance { symbol, .. } => {
+                let art = self.doc.symbols.iter().find(|s| &s.name == symbol).map(|s| vectorcraft_render::instance_art(&s.art, n));
+                art.and_then(|a| effects::outline_art(n, Some(&a))).map(|g| carry(n, g))
+            }
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
+                let hook: &dyn Fn(&Node) -> Option<Node> = &effects::outline_text;
+                Some(carry(n, vectorcraft_doc::live::expanded_group(n, Some(hook))))
+            }
+            NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => outline_strokes(&mut self.doc, &self.brushes, n),
+            _ => None,
+        };
+        let mut m = match made {
+            // The pieces of one object never knock each other out.
+            Some(m) if m.is_container() => Node { knockout: Knockout::Off, ..m },
+            Some(m) => m,
+            None => n.clone(),
+        };
+        if !matches!(m.kind, NodeKind::Compound { .. })
+            && let Some(ch) = m.children_mut()
+        {
+            for c in ch.iter_mut() {
+                *c = Arc::new(self.plain(c));
+            }
+        }
+        m
+    }
+}
+
+/// Type as outlines painted like it ([`effects::outline_text`]), keeping its transparency.
+fn outlined_text(n: &Node) -> Option<Node> {
+    effects::outline_text(n).map(|g| Node { knockout: Knockout::Off, ..carry(n, g) })
+}
+
+/// `to` (art made from `from`) with `from`'s name, transparency, opacity mask and effects.
+fn carry(from: &Node, mut to: Node) -> Node {
+    to.name = from.name.clone();
+    to.opacity = from.opacity;
+    to.blend = from.blend;
+    to.isolate = from.isolate;
+    to.knockout_shape = from.knockout_shape;
+    to.mask = from.mask.clone();
+    to.appearance.effects = from.appearance.effects.clone();
+    to
+}
+
+fn visible_fx(fx: &[Effect]) -> bool {
+    fx.iter().any(|e| e.visible)
+}
+
+/// Effects on the object or on one of its fills or strokes (raster effects, once baked).
+fn has_effects(n: &Node) -> bool {
+    visible_fx(&n.appearance.effects) || n.appearance.items.iter().any(|i| visible_fx(i.effects()))
+}
+
+fn masked(n: &Node) -> bool {
+    n.mask.as_ref().is_some_and(|m| !m.disabled)
+}
+
+/// Whether plain art `n` shows any transparency: opacity, blend modes, masks, raster effects or
+/// transparent gradient stops.
+fn transparent(n: &Node) -> bool {
+    let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
+    n.visible
+        && (n.opacity < 1.0
+            || n.blend != BlendMode::Normal
+            || masked(n)
+            || has_effects(n)
+            || n.appearance.items.iter().any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint())))
+            || n.children().is_some_and(|ch| ch.iter().any(|c| transparent(c))))
+}
+
+/// Where `n` can paint: its visual bounds grown by its effects (and a margin for antialiasing).
+fn reach(n: &Node) -> Option<Rect> {
+    if !n.visible {
+        return None;
+    }
+    let fx = n.appearance.items.iter().map(|i| effects::outset(i.effects())).fold(effects::outset(&n.appearance.effects), f64::max);
+    let b = match n.children() {
+        Some(ch) if !n.clips() && !matches!(n.kind, NodeKind::Compound { .. }) => ch.iter().filter_map(|c| reach(c)).reduce(|a, b| a.union(b))?,
+        _ => n.visual_bounds()?,
+    };
+    Some(b.inflate(fx + 1.0, fx + 1.0))
+}
+
+/// Indices of `bounds` grouped by overlap (transitively), each group in index order.
+fn overlapping(bounds: &[Option<Rect>]) -> Vec<Vec<usize>> {
+    fn find(p: &mut [usize], mut i: usize) -> usize {
+        while p[i] != i {
+            p[i] = p[p[i]];
+            i = p[i];
+        }
+        i
+    }
+    let mut parent: Vec<usize> = (0..bounds.len()).collect();
+    let mut order: Vec<(usize, Rect)> = bounds.iter().enumerate().filter_map(|(i, b)| b.map(|b| (i, b))).collect();
+    order.sort_by(|a, b| a.1.x0.total_cmp(&b.1.x0));
+    // Sweep left to right, comparing each box with those still open at its left edge.
+    let mut open: Vec<(usize, Rect)> = vec![];
+    for (i, b) in order {
+        open.retain(|(_, o)| o.x1 >= b.x0);
+        for (j, o) in &open {
+            if o.y0 <= b.y1 && b.y0 <= o.y1 {
+                let (a, c) = (find(&mut parent, i), find(&mut parent, *j));
+                parent[a.max(c)] = a.min(c);
+            }
+        }
+        open.push((i, b));
+    }
+    let mut groups: Vec<Vec<usize>> = vec![];
+    let mut slot: Vec<Option<usize>> = vec![None; bounds.len()];
+    for i in 0..bounds.len() {
+        let r = find(&mut parent, i);
+        match slot[r] {
+            Some(g) => groups[g].push(i),
+            None => {
+                slot[r] = Some(groups.len());
+                groups.push(vec![i]);
+            }
+        }
+    }
+    groups
+}
+
+// ---------- the compositor ----------
+
+/// What an arrangement shape stands for.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Kind {
+    /// Solid fills and clipping paths: regions inside get a flat colour.
+    Vector,
+    /// A gradient or mesh: regions inside are rasterized at the gradient resolution.
+    Gradient,
+    /// Anything else that has no single colour (patterns, images, masks, raster effects).
+    Other,
+}
+
+/// A solid fill as the compositor uses it.
+struct Fill {
+    rgb: [f32; 3],
+    opacity: f32,
+    blend: BlendMode,
+    paint: Paint,
+    overprint: bool,
+}
+
+/// One object of the art being flattened, with the transparency the renderer gives it.
+struct Elem {
+    opacity: f32,
+    blend: BlendMode,
+    isolate: bool,
+    knockout: Knockout,
+    knockout_shape: bool,
+    /// Blending inside reaches the backdrop ([`Node::blends_through`]).
+    blends: bool,
+    /// Inside a knockout group its children are elements of their own ([`Node::passes_knockout_through`]).
+    pass_through: bool,
+    body: Body,
+}
+
+enum Body {
+    /// Solid fills (bottom first) of arrangement shape `shape`.
+    Fills { shape: usize, fills: Vec<Fill> },
+    /// A group's children, clipped to arrangement shape `clip` in a clip group.
+    Group { clip: Option<usize>, children: Vec<Elem> },
+    /// Art without a flat colour: its regions are rasterized, so it never composites here.
+    Complex,
+}
+
+/// Builds the compositor's objects and the arrangement shapes they cover.
+#[derive(Default)]
+struct Builder {
+    shapes: Vec<po::Shape>,
+    kinds: Vec<Kind>,
+}
+
+impl Builder {
+    fn shape(&mut self, path: PathData, rule: FillRule, kind: Kind) -> Option<usize> {
+        path.bounds()?;
+        self.shapes.push(po::Shape::new(path, rule, self.shapes.len() as u64));
+        self.kinds.push(kind);
+        Some(self.shapes.len() - 1)
+    }
+
+    fn elem(&mut self, n: &Node) -> Option<Elem> {
+        if !n.visible {
+            return None;
+        }
+        let body = if masked(n) || has_effects(n) {
+            self.shape(shapes::rectangle(reach(n)?), FillRule::NonZero, Kind::Other)?;
+            Body::Complex
+        } else {
+            match &n.kind {
+                NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                    let (clip, rest) = if n.clips() {
+                        let (first, rest) = children.split_first()?;
+                        // Nothing to clip by hides the clipped art.
+                        let (bp, rule) = effects::clip_outline(first)?;
+                        (Some(self.shape(PathData::from_bezpath(&bp), rule, Kind::Vector)?), rest)
+                    } else {
+                        (None, &children[..])
+                    };
+                    Body::Group { clip, children: rest.iter().filter_map(|c| self.elem(c)).collect() }
+                }
+                NodeKind::Path { guide: true, .. } => return None,
+                NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+                    let (path, rule) = node_path(n)?;
+                    let mut fills = vec![];
+                    for item in n.appearance.items.iter().filter(|i| i.is_fill() && i.visible() && !i.paint().is_none()) {
+                        match item.paint() {
+                            Paint::Solid { color, .. } => fills.push(Fill {
+                                rgb: color.to_rgb(),
+                                opacity: item.opacity(),
+                                blend: item.blend(),
+                                paint: item.paint().clone(),
+                                overprint: item.overprint(),
+                            }),
+                            p => {
+                                let kind = if matches!(p, Paint::Gradient(_)) { Kind::Gradient } else { Kind::Other };
+                                self.shape(path.clone(), rule, kind);
+                            }
+                        }
+                    }
+                    if fills.is_empty() { Body::Complex } else { Body::Fills { shape: self.shape(path, rule, Kind::Vector)?, fills } }
+                }
+                NodeKind::Image(im) => {
+                    let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+                    self.shape(frame, FillRule::NonZero, Kind::Other)?;
+                    Body::Complex
+                }
+                NodeKind::Mesh(_) => {
+                    self.shape(shapes::rectangle(reach(n)?), FillRule::NonZero, Kind::Gradient)?;
+                    Body::Complex
+                }
+                _ => {
+                    self.shape(shapes::rectangle(reach(n)?), FillRule::NonZero, Kind::Other)?;
+                    Body::Complex
+                }
+            }
+        };
+        Some(Elem {
+            opacity: n.opacity,
+            blend: n.blend,
+            isolate: n.isolate,
+            knockout: n.knockout,
+            knockout_shape: n.knockout_shape,
+            blends: n.blends_through(),
+            pass_through: n.passes_knockout_through(),
+            body,
+        })
+    }
+}
+
+/// A straight (not premultiplied) RGBA colour in 0..=1.
+type Px = [f32; 4];
+const CLEAR: Px = [0.0; 4];
+const WHITE: Px = [1.0; 4];
+
+fn premul(p: Px) -> Px {
+    [p[0] * p[3], p[1] * p[3], p[2] * p[3], p[3]]
+}
+
+fn unpremul(q: Px) -> Px {
+    if q[3] <= 0.0 { CLEAR } else { [q[0] / q[3], q[1] / q[3], q[2] / q[3], q[3].min(1.0)] }
+}
+
+/// Composites the objects covering one atomic region exactly as the renderer composites pixels
+/// (its transparency groups, non-isolated groups, knockout groups and clip groups): the same
+/// paints cover the whole region, so one colour stands for all of it.
+struct Composer<'a> {
+    /// Arrangement shapes covering the region, ascending.
+    sources: &'a [usize],
+    /// The last solid fill composited.
+    top: Option<&'a Fill>,
+}
+
+impl<'a> Composer<'a> {
+    fn inside(&self, shape: usize) -> bool {
+        self.sources.binary_search(&shape).is_ok()
+    }
+
+    /// `elems` (paint order) composited over `start`.
+    fn eval(&mut self, elems: &'a [Elem], start: Px) -> Px {
+        elems.iter().fold(start, |acc, e| self.draw(e, acc, false, false, false))
+    }
+
+    /// `e` drawn over backdrop `b` inside a group that knocks out when `enclosing`. `as_shape`
+    /// draws it as its knockout shape (full object opacity); `nested` is drawing inside a layer,
+    /// where a non-isolated group can't copy its backdrop and is drawn isolated.
+    fn draw(&mut self, e: &'a Elem, b: Px, enclosing: bool, as_shape: bool, nested: bool) -> Px {
+        let opacity = if as_shape { 1.0 } else { e.opacity };
+        let ko = matches!(e.body, Body::Group { .. }) && e.knockout.resolve(enclosing);
+        if opacity >= 1.0 && e.blend == BlendMode::Normal && !e.isolate && !ko {
+            return self.content(e, b, ko, None, nested);
+        }
+        if e.blends && !e.isolate && !nested {
+            // Drawn over a copy of the backdrop, so blending inside reaches it.
+            let c = self.content(e, b, ko, Some(b), false);
+            if e.blend == BlendMode::Normal {
+                let (pb, pc) = (premul(b), premul(c));
+                return unpremul([0, 1, 2, 3].map(|i| pb[i] + (pc[i] - pb[i]) * opacity));
+            }
+            // The group's own colour: the backdrop's share taken out by the group's coverage.
+            let (pc, pa, pb) = (premul(c), premul(self.content(e, CLEAR, ko, None, false)), premul(b));
+            let keep = 1.0 - pa[3];
+            let g = [0, 1, 2].map(|i| (pc[i] - keep * pb[i]).clamp(0.0, pa[3]));
+            let g = unpremul([g[0], g[1], g[2], pa[3]]);
+            return composite(e.blend, b, [g[0], g[1], g[2], g[3] * opacity]);
+        }
+        let inner_nested = !(e.blends && (e.isolate || !nested));
+        let g = self.content(e, CLEAR, ko, None, inner_nested);
+        composite(e.blend, b, [g[0], g[1], g[2], g[3] * opacity])
+    }
+
+    /// What `e` draws over `b` inside its group (`ko`: its children knock each other out, against
+    /// `backdrop` when the group was drawn over a copy of it).
+    fn content(&mut self, e: &'a Elem, b: Px, ko: bool, backdrop: Option<Px>, nested: bool) -> Px {
+        match &e.body {
+            Body::Fills { shape, fills } if self.inside(*shape) => fills.iter().fold(b, |acc, f| {
+                self.top = Some(f);
+                composite(f.blend, acc, [f.rgb[0], f.rgb[1], f.rgb[2], f.opacity])
+            }),
+            Body::Group { clip, children } if clip.is_none_or(|c| self.inside(c)) => {
+                if ko {
+                    self.knockout(children, b, backdrop)
+                } else {
+                    children.iter().fold(b, |acc, c| self.draw(c, acc, false, false, nested))
+                }
+            }
+            _ => b,
+        }
+    }
+
+    /// The children of a knockout group over `b`: each first erases what the ones below it drew
+    /// by its knockout shape, then adds itself composited against the group's backdrop.
+    fn knockout(&mut self, children: &'a [Elem], b: Px, backdrop: Option<Px>) -> Px {
+        fn elements<'e>(children: &'e [Elem], out: &mut Vec<&'e Elem>) {
+            for c in children {
+                match &c.body {
+                    Body::Group { children, .. } if c.pass_through => elements(children, out),
+                    _ => out.push(c),
+                }
+            }
+        }
+        let mut els = vec![];
+        elements(children, &mut els);
+        let mut acc = premul(b);
+        for c in els {
+            let s = self.draw(c, CLEAR, true, !c.knockout_shape, true)[3];
+            let own = match backdrop {
+                Some(b0) => premul(self.draw(c, b0, true, false, true)).map(|v| v * s),
+                None => premul(self.draw(c, CLEAR, true, false, true)),
+            };
+            acc = [0, 1, 2, 3].map(|i| acc[i] * (1.0 - s) + own[i]);
+        }
+        unpremul(acc)
+    }
+}
