@@ -84,8 +84,9 @@ web build has no net at all.
 
 Untrusted input has property tests that must never panic:
 
-- `crates/engine/tests/import_fuzz.rs`: garbage, hostile and mutated SVG and PDF, imported, then
-  rendered and exported.
+- `crates/engine/tests/import_fuzz.rs`: garbage, hostile and mutated SVG and PDF, and swatch
+  (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset (`.vcflattener`)
+  libraries, loaded and used, then rendered and exported.
 - `crates/engine/tests/command_sweep.rs`: every command with junk parameters.
 - `crates/format/tests/prop_format.rs`: garbage and mutated `.vectorcraft` files.
 - `crates/mcp/tests/protocol_props.rs`: malformed MCP messages.

@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] `cargo xtask ci` passes (fmt, clippy, tests, assets, layers, wasm).
+- [ ] `cargo xtask ci` passes (fmt, clippy, tests, assets, brands, layers, wasm).
 - [ ] No panics in shipped code: no `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!` or
       `unimplemented!` outside tests, and no unchecked indexing on data from files, parameters or
       messages. Errors are returned as `Result` and shown to the user
