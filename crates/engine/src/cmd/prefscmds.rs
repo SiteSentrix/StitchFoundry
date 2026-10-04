@@ -292,6 +292,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("touchGestures", "Devices", "", "Enable Touch Gestures", bool),
     // Graphic Styles panel menu
     p!("overrideCharColor", "Type", "Graphic Styles", "Override Character Color", bool),
+    // Object → Pattern → Tile Edge Color
+    p!("patternTileEdgeColor", "Guides & Grid", "Pattern Editing", "Tile Edge Color", color),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -377,6 +379,7 @@ impl Session {
     pub fn apply_prefs(&mut self, p: Prefs) {
         let grid_changed = p.gridline_every != self.prefs.gridline_every || p.grid_subdivisions != self.prefs.grid_subdivisions;
         let history_changed = p.history_states != self.prefs.history_states;
+        let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         self.prefs = p;
         vectorcraft_render::set_default_threads(u16::try_from(self.prefs.render_threads).ok());
         for st in &mut self.docs {
@@ -384,6 +387,10 @@ impl Session {
                 st.history.limit = self.prefs.history_states as usize;
                 let over = st.history.undo.len().saturating_sub(st.history.limit);
                 st.history.undo.drain(..over);
+            }
+            // Documents in pattern editing mode redraw their tile edge.
+            if tile_edge_changed && st.doc.pattern_edit.is_some() {
+                st.revision += 1;
             }
             if grid_changed {
                 let d = std::sync::Arc::make_mut(&mut st.doc);

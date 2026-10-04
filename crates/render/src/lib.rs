@@ -79,6 +79,9 @@ pub struct RenderOptions {
     pub trim: bool,
     /// Leave template layers out (exports and thumbnails: templates are guides, not artwork).
     pub skip_templates: bool,
+    /// Pattern editing mode's tile edge and swatch bounds colour (Object → Pattern → Tile Edge
+    /// Color), RGB.
+    pub tile_edge: [u8; 3],
 }
 
 impl Default for RenderOptions {
@@ -93,6 +96,7 @@ impl Default for RenderOptions {
             overprint_preview: false,
             trim: false,
             skip_templates: false,
+            tile_edge: vectorcraft_doc::LAYER_COLORS[0].1,
         }
     }
 }
@@ -1170,3 +1174,5 @@ mod tests_isolation;
 mod tests_knockout;
 #[cfg(test)]
 mod tests_objectfx;
+#[cfg(test)]
+mod tests_tileedge;

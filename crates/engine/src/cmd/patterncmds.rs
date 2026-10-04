@@ -65,7 +65,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pattern Options",
             ["Window", "Pattern Options"],
             None,
-            "{name? (default: the pattern being edited), newName?, tileType?, brickOffset?, width?, height?, hSpacing?, vSpacing?, sizeTileToArt?: bool, overlap?: {h: left|right, v: top|bottom}, copies?: 3|5|7|9, dimCopies?: %, showTileEdge?: bool}",
+            "{name? (default: the pattern being edited), newName?, tileType?, brickOffset?, width?, height?, hSpacing?, vSpacing?, sizeTileToArt?: bool, overlap?: {h: left|right, v: top|bottom}, copies?: 3|5|7|9, dimCopies?: %, showTileEdge?: bool, showSwatchBounds?: bool (outline the part of the tiling the swatch repeats, dashed)}",
             has_doc,
             pattern_options
         ),
@@ -457,6 +457,9 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(v) = p.get("showTileEdge").and_then(Value::as_bool) {
             def.show_tile_edge = v;
         }
+        if let Some(v) = p.get("showSwatchBounds").and_then(Value::as_bool) {
+            def.show_swatch_bounds = v;
+        }
         if def.size_tile_to_art {
             let saved = std::mem::take(&mut def.art);
             def.art = live_art.clone().unwrap_or_else(|| saved.clone());
@@ -574,6 +577,7 @@ fn pattern_list(s: &mut Session, _: &Value) -> Result<Value> {
                 "copies": p.copies,
                 "dimCopies": p.dim_copies,
                 "showTileEdge": p.show_tile_edge,
+                "showSwatchBounds": p.show_swatch_bounds,
                 "artCount": p.art.len(),
             })
         })

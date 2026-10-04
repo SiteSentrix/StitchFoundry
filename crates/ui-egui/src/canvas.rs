@@ -213,6 +213,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             proof: vectorcraft_render::proof::active_proof(),
             overprint_preview: vectorcraft_render::proof::overprint_preview_on(),
             trim: app.ui.view.trim_view,
+            tile_edge: vectorcraft_color::Color::from_hex(&app.session.prefs.pattern_tile_edge_color).map_or(opts.tile_edge, |c| {
+                let [r, g, b, _] = c.to_rgba8(1.0);
+                [r, g, b]
+            }),
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.

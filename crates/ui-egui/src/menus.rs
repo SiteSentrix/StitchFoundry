@@ -253,6 +253,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{names: [two or more styles]} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`) to name the style OK merges from them (graphicStyle.merge)",
     ),
+    (
+        "ui.tileEdgeColor",
+        "Tile Edge Color…",
+        "",
+        "{} open Tile Edge Color (dialog `tileEdgeColor`, field `color`: #rrggbb or a preset name such as \"Light Blue\"); OK sets the preference patternTileEdgeColor (prefs.set), the colour of the tile edge and swatch bounds in pattern editing mode",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -600,6 +606,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             let names = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
             crate::dialogs::graphic_style_options::open_merge(app, names.unwrap_or_default())
         }
+        "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
         _ => return None,
     };
     Some(r)
@@ -996,7 +1003,10 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 sub("Shape", vec![c("Convert to Shape", "object.shape.convertToShape"), c("Expand Shape", "object.expandShape")]),
-                sub("Pattern", vec![c("Make", "object.pattern.make"), c("Edit Pattern", "object.pattern.edit"), todo("Tile Edge Color…")]),
+                sub(
+                    "Pattern",
+                    vec![c("Make", "object.pattern.make"), c("Edit Pattern", "object.pattern.edit"), c("Tile Edge Color…", "ui.tileEdgeColor")],
+                ),
                 sub(
                     "Repeat",
                     vec![

@@ -371,4 +371,14 @@ that split into many regions. The result reports `{ids, vector, rasterized, opti
 ```json
 {"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"ids":[12,15],"preset":"high"}}}
 {"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"balance":0,"lineArtPpi":150}}}
+
+## Pattern editing display
+
+In pattern editing mode the tile edge (`pattern.options {showTileEdge}`) and the swatch bounds (`pattern.options
+{showSwatchBounds}`: the part of the tiling the swatch repeats, dashed) are drawn in the preference
+`patternTileEdgeColor`.
+
+```json
+{"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"patternTileEdgeColor","value":"#ff4f4f"}}}
 ```
