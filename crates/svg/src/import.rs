@@ -574,6 +574,9 @@ fn view_box_transform(root: XNode, w: f64, h: f64) -> Affine {
     Affine::translate(((w - vb.w * s) * fx, (h - vb.h * s) * fy)) * Affine::scale(s) * Affine::translate((-vb.x, -vb.y))
 }
 
+/// Most line breaks one absolutely positioned `<tspan>` adds before itself.
+const MAX_TSPAN_LINE_GAP: f64 = 10_000.0;
+
 struct RunBuilder {
     runs: Vec<TextRun>,
     last_y: f64,
@@ -630,7 +633,17 @@ fn collect_runs(ctx: &TextCtx, el: XNode, rb: &mut RunBuilder) {
                 let lead = char_style(ctx, c).effective_leading().max(1e-6);
                 if let Some(y) = c.attribute("y") {
                     let y = first_number(Some(y));
-                    let n = ((y - rb.last_y) / lead).round().max(1.0) as usize;
+                    // One line break per line of baseline gap: none for a tspan on the same baseline
+                    // (a styled or kerned run of the same line), at least one for a tspan placed
+                    // higher up, and capped so that a far-off (or non-finite) y can't ask for billions.
+                    let gap = ((y - rb.last_y) / lead).round();
+                    let n = if !gap.is_finite() {
+                        1
+                    } else if (y - rb.last_y).abs() < lead * 0.5 {
+                        0
+                    } else {
+                        gap.clamp(1.0, MAX_TSPAN_LINE_GAP) as usize
+                    };
                     rb.newline(n);
                     rb.last_y = y;
                 } else if c.attribute("dy").is_some_and(|dy| first_number(Some(dy)) > 1e-9) {

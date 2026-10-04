@@ -618,6 +618,38 @@ fn import_text_tspans_and_css() {
 }
 
 #[test]
+fn import_tspan_far_below_is_bounded() {
+    // A <tspan y> far below the text's first line is a line break per line of gap, but not without
+    // limit: y="1e15" used to ask for ~7e13 line breaks and aborted the process (out of memory).
+    let d = import_art(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <text x="5" y="20" font-size="12">first<tspan x="5" y="48.8">third</tspan><tspan x="5" y="2000000">far</tspan></text></svg>"#,
+    );
+    let a = art(&d);
+    let NodeKind::Text(t) = &a[0].kind else { panic!() };
+    let text = t.plain_text();
+    // One blank line between "first" and "third" (auto leading 14.4 pt: two lines down).
+    assert!(text.starts_with("first\n\nthird\n"), "{text:?}");
+    assert!(text.ends_with("far"), "{text:?}");
+    let breaks = text.matches('\n').count();
+    assert!(breaks <= 10_002, "{breaks} line breaks");
+}
+
+#[test]
+fn import_tspan_on_the_same_baseline_stays_on_the_line() {
+    // Styled runs positioned on the line's own baseline (as Illustrator writes them, with x and y on
+    // every tspan) are one line, not a line break before each run.
+    let d = import_art(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100">
+        <text transform="translate(10 40)" font-size="20"><tspan x="0" y="0">Hello </tspan><tspan x="55.6" y="0" fill="red">world</tspan><tspan x="0" y="24">next</tspan></text></svg>"#,
+    );
+    let a = art(&d);
+    let NodeKind::Text(t) = &a[0].kind else { panic!() };
+    assert_eq!(t.plain_text(), "Hello world\nnext");
+    assert_eq!(t.runs.len(), 3);
+}
+
+#[test]
 fn import_invalid_is_error() {
     assert!(import("not svg").is_err());
     assert!(import("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect").is_err());
