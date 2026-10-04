@@ -56,7 +56,34 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             clip_toggle
         ),
+        cmd!(
+            "layer.target",
+            "Target",
+            [],
+            None,
+            "{id} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]}",
+            has_doc,
+            target
+        ),
     ]
+}
+
+/// The Layers panel's target circle.
+fn target(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "layer.target";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let st = s.doc()?;
+    let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
+    if !st.doc.is_editable(id) {
+        return Err(bad(C, "the object is hidden or locked"));
+    }
+    let layer = n.is_layer();
+    s.select(|d, sel| sel.set_target(d, id))?;
+    let st = s.doc_mut()?;
+    if layer {
+        st.active_layer = Some(id);
+    }
+    Ok(json!({ "id": id.0, "selected": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
 /// The Layers panel's clipping mask button: the top object of a layer (or group) clips the rest,

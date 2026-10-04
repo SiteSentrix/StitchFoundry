@@ -64,6 +64,8 @@ pub fn document(s: &Session) -> Value {
         "isolation": st.isolation.map(|l| l.0),
         "selection": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>(),
         "selectionBounds": rect_json(d.bounds_of(&st.selection.objects, false)),
+        // The layer, group or object targeted through the Layers panel (`layer.target`).
+        "target": st.selection.target.map(|t| t.0),
         "history": st.history.undo.iter().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "redo": st.history.redo.iter().rev().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "objects": d.node_count(),

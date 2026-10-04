@@ -396,3 +396,20 @@ branch sets all of it. `paint.sampleColor {color}` puts a sampled colour (in its
 {"name":"run_command","arguments":{"command":"eyedropper.setOptions","params":{"pickUp":{"appearance":{"stroke":{"weight":false}}}}}}
 {"name":"run_command","arguments":{"command":"appearance.copyFrom","params":{"source":12,"ids":[7,8]}}}
 ```
+
+## Targeting layers and moving appearances
+
+`layer.target {id}` is the Layers panel's target circle: a layer gets its visible, unlocked art selected and is itself
+the target, so `appearance.*`, `effect.*`, `transparency.*` and the opacity-mask commands without `ids` act on the
+layer (its opacity, its own fills and effects, an opacity mask on the whole layer); a group or object is simply
+selected. `document.inspect` reports it as `target`, and any other selection change ends it.
+`appearance.transfer {source, target, copy?}` is dragging a target circle onto another: the target gets the source's
+fills, strokes, effects and transparency, and the source is cleared unless `copy` (Alt-drag). Dropping a circle on the
+panel's trash is `appearance.clear {ids: [id]}`. Masked objects' names have a dashed underline; while an opacity mask
+is edited the panel lists only an `<Opacity Mask>` entry and the document tab says `(<Opacity Mask>/Opacity Mask)`.
+
+```json
+{"name":"run_command","arguments":{"command":"layer.target","params":{"id":2}}}
+{"name":"run_command","arguments":{"command":"transparency.set","params":{"opacity":50}}}
+{"name":"run_command","arguments":{"command":"appearance.transfer","params":{"source":12,"target":2,"copy":true}}}
+```

@@ -12,7 +12,6 @@ use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
 use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask, Selection};
 
-use super::edit::selected_roots;
 use super::maskedit::{begin, finish, mask_group, mask_parts, show_editing};
 use super::*;
 use crate::EngineError;
@@ -134,12 +133,17 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// The objects the Transparency panel's commands act on: `ids` / `id`, else the object whose
-/// opacity mask is being edited (the selection then is its mask art), else the selection.
+/// opacity mask is being edited (the selection then is its mask art), else the targeted object,
+/// group or layer (`layer.target`), else the selection.
 pub(crate) fn transparency_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match s.doc()?.doc.mask_edit {
-        Some(me) if p.get("ids").is_none() && p.get("id").is_none() => Ok(vec![me.object]),
-        _ => targets(s, p),
+    let st = s.doc()?;
+    if p.get("ids").is_some() || p.get("id").is_some() {
+        return targets(s, p);
     }
+    Ok(match st.doc.mask_edit {
+        Some(me) => vec![me.object],
+        None => st.selection.subjects().to_vec(),
+    })
 }
 
 /// An opacity parameter, in percent (0..100) everywhere, as the model's 0..1.
@@ -170,7 +174,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
             }
             Selection { objects: ids, ..Default::default() }.in_paint_order(d)
         }
-        None => selected_roots(s)?,
+        None => super::appearance::subject_roots(s)?,
     };
     let Some((&top, below)) = ids.split_last() else { return Err(bad(C, "select the art and, on top of it, the mask object")) };
     let clip = bool_or(p, "clip", !s.menu.new_masks_unclipped);
@@ -202,7 +206,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         let mut m = OpacityMask::new(mask_art, clip);
         m.invert = invert;
         n.mask = Some(Box::new(m));
-        sel.set([target]);
+        sel.set_target(d, target);
         let layer = if mask_id.is_none() { Some(begin(d, sel, target)?) } else { None };
         Ok((target, layer))
     })?;

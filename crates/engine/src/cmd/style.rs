@@ -302,7 +302,7 @@ impl Session {
     /// it is still linked (still has that style's look).
     pub fn selection_graphic_style(&self) -> Option<(&GraphicStyle, bool)> {
         let st = self.active()?;
-        let n = st.doc.node(*st.selection.objects.first()?)?;
+        let n = st.doc.node(*st.selection.subjects().first()?)?;
         let g = st.doc.graphic_style_by_id(n.graphic_style?)?;
         Some((g, in_sync(n, g)))
     }

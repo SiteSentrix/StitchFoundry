@@ -839,6 +839,8 @@ mod tests_swatches;
 #[cfg(test)]
 mod tests_swatchlib;
 #[cfg(test)]
+mod tests_targeting;
+#[cfg(test)]
 mod tests_textedit;
 #[cfg(test)]
 mod tests_tileedge;
