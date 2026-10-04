@@ -1,0 +1,165 @@
+//! The dialog registry and the shared frame, drawn headlessly.
+
+use serde_json::json;
+use vectorcraft_engine::Session;
+
+use super::*;
+
+fn app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app
+}
+
+/// One headless frame of the dialog layer.
+fn frame(app: &mut VectorcraftApp, input: egui::RawInput) {
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    let mut out = ctx.run_ui(input, |ui| show(app, ui.ctx()));
+    out.textures_delta.clear();
+}
+
+fn enter() -> egui::RawInput {
+    let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    egui::RawInput { events: vec![key], ..Default::default() }
+}
+
+fn open(app: &mut VectorcraftApp, kind: &str, fields: serde_json::Value) {
+    app.ui.dialog = Some(Dialog::new(kind, fields));
+}
+
+fn objects(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+}
+
+#[test]
+fn kinds_map_to_their_dialogs() {
+    for (kind, want) in [
+        ("newDocument", DialogKind::NewDocument),
+        ("roundedRectangle", DialogKind::Shape),
+        ("lineSegment", DialogKind::Shape),
+        ("shear", DialogKind::Transform),
+        ("splitIntoGrid", DialogKind::PathOp),
+        ("artboardOptions", DialogKind::ArtboardOptions),
+        ("command", DialogKind::Command),
+        ("effect", DialogKind::Effect),
+        (crate::unsaved::KIND, DialogKind::SaveChanges),
+        ("manageWorkspaces", DialogKind::Workspaces),
+        ("findFont", DialogKind::FindFont),
+    ] {
+        assert_eq!(DialogKind::of(kind), Some(want), "{kind}");
+    }
+    assert_eq!(DialogKind::of("nope"), None);
+    assert!(spec("allTools").ok.is_none());
+    assert!(spec("effect").preview && spec("recolor").preview && !spec("move").preview);
+    assert!(spec("preferences").window.is_some() && spec("rectangle").window.is_none());
+}
+
+#[test]
+fn every_dialog_draws() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let openers: [(&str, serde_json::Value); 8] = [
+        ("file.newDialog", json!({})),
+        ("file.documentSetup", json!({})),
+        ("file.exportForScreens", json!({})),
+        ("ui.recolorDialog", json!({})),
+        ("ui.paramDialog", json!({"command": "object.path.simplify", "label": "Simplify", "params": {"tolerance": 2, "csv": "a\nb"}})),
+        ("effect.dialog", json!({"effect": "distort.roughen"})),
+        ("edit.preferences", json!({})),
+        ("type.findFont", json!({})),
+    ];
+    for (id, p) in openers {
+        app.run(id, p).unwrap();
+        assert!(app.ui.dialog.is_some(), "{id} opened nothing");
+        frame(&mut app, Default::default());
+        app.ui.dialog = None;
+        let _ = app.session.cancel_interaction();
+    }
+    for kind in
+        ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment", "rotate", "reflect", "scale", "shear", "artboardOptions"]
+    {
+        open_tool_dialog(&mut app, kind, json!({"x": 5, "y": 5, "index": 0}));
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| d.kind == kind), "{kind}");
+        frame(&mut app, Default::default());
+    }
+    for (kind, fields) in [
+        ("move", json!({"dx": "0 pt", "dy": "0 pt"})),
+        ("average", json!({"axis": "both"})),
+        ("allTools", json!({})),
+        (crate::unsaved::KIND, json!({"index": 0, "name": "Untitled-1", "then": "close"})),
+        ("newWorkspace", json!({"name": "Mine"})),
+        ("shortcuts", json!({})),
+        ("unregistered", json!({"value": "1"})),
+    ] {
+        open(&mut app, kind, fields);
+        frame(&mut app, Default::default());
+    }
+}
+
+#[test]
+fn enter_confirms_through_the_dialog_spec() {
+    let mut app = app();
+    open_tool_dialog(&mut app, "rectangle", json!({"x": 10, "y": 20}));
+    frame(&mut app, enter());
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(objects(&app), 1);
+    // All Tools has no OK: Enter leaves it open.
+    open(&mut app, "allTools", json!({}));
+    frame(&mut app, enter());
+    assert!(app.ui.dialog.is_some());
+    // An unregistered kind still closes on OK without running anything.
+    open(&mut app, "unregistered", json!({}));
+    assert_eq!(confirm(&mut app), Ok(serde_json::Value::Null));
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(confirm(&mut app), Err("no dialog open".into()));
+}
+
+#[test]
+fn confirm_runs_each_dialogs_command() {
+    let mut app = app();
+    open(&mut app, "star", json!({"x": 50, "y": 50, "radius1": "40 pt", "radius2": "20 pt", "points": 6}));
+    confirm(&mut app).unwrap();
+    open(&mut app, "lineSegment", json!({"x": 0, "y": 0, "length": "30 pt", "angle": 90}));
+    confirm(&mut app).unwrap();
+    assert_eq!(objects(&app), 2);
+    app.run("select.all", json!({})).unwrap();
+    // Scale with Uniform uses the horizontal value for both axes; Copy keeps the original.
+    open(&mut app, "scale", json!({"sx": 200, "sy": 50, "uniform": true, "copy": true}));
+    confirm(&mut app).unwrap();
+    assert_eq!(objects(&app), 4);
+    // The parameter dialog closes before its command runs, then runs it with the edited values.
+    app.run("ui.paramDialog", json!({"command": "view.saved.new", "label": "New View", "params": {"name": "Close-up"}})).unwrap();
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.doc().unwrap().doc.views.last().map(|v| v.name.as_str()), Some("Close-up"));
+    // New Document creates the document and closes.
+    let docs = app.session.documents().len();
+    open(
+        &mut app,
+        "newDocument",
+        json!({"width": "300 pt", "height": "200 pt", "units": "Points", "name": "Card", "artboards": 1, "colorMode": "RGB"}),
+    );
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.documents().len(), docs + 1);
+}
+
+#[test]
+fn effect_preview_is_kept_as_one_undo_step() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(true));
+    frame(&mut app, Default::default());
+    assert!(app.session.in_interaction(), "the preview runs as an interaction");
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.last_effect.as_ref().map(|e| e.0.as_str()), Some("distort.roughen"));
+    assert_ne!(app.session.doc().unwrap().doc, before);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
