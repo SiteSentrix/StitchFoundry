@@ -35,7 +35,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(w) = p.get("weight").and_then(Value::as_f64) {
         s.paint.stroke_width = w.max(0.0);
     }
-    let item = item_target(s, p, C)?;
+    let item = item_target(s, p, C)?.of_kind(s, false);
     let ids = item.targets(s, p)?;
     let arrow = |k: &str| -> Result<Option<Option<Arrowhead>>> {
         match p.get(k) {
@@ -139,7 +139,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
     if scale.is_none() && flip.is_none() && !swap && brush.is_none() {
         return Err(bad(C, "nothing to change"));
     }
-    let item = item_target(s, p, C)?;
+    let item = item_target(s, p, C)?.of_kind(s, false);
     let ids = item.targets(s, p)?;
     edit_items(s, &ids, item, C, "Stroke", false, |n, index| {
         let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };

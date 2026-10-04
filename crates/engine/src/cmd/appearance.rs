@@ -119,9 +119,12 @@ impl Session {
         (a.index < n.appearance.items.len()).then_some(a.index)
     }
 
-    /// Re-point the active item after its stack changed (`None` drops it).
-    fn remap_appearance_item(&mut self, f: impl FnOnce(usize) -> Option<usize>) {
-        if let Some(a) = &mut self.active_appearance_item {
+    /// Re-point the active item after an edit of `ids` changed its stack (`None` drops it). Edits
+    /// of other objects leave it alone.
+    fn remap_appearance_item(&mut self, ids: &[NodeId], f: impl FnOnce(usize) -> Option<usize>) {
+        if let Some(a) = &mut self.active_appearance_item
+            && a.objects.first().is_some_and(|o| ids.contains(o))
+        {
             match f(a.index) {
                 Some(i) => a.index = i,
                 None => self.active_appearance_item = None,
@@ -161,6 +164,15 @@ impl ItemTarget {
             ItemTarget::Top => paint_targets(s, p),
             ItemTarget::Item { .. } => appearance_targets(s, p),
         }
+    }
+
+    /// The target of a fill (`fill`) or stroke edit: the panel's active item stands only for edits
+    /// of its own kind, so a fill row leaves stroke edits on the topmost stroke of the painted
+    /// leaves (as without an active item) and vice versa. Explicit items are kept (and checked).
+    pub(crate) fn of_kind(self, s: &Session, fill: bool) -> Self {
+        let ItemTarget::Item { index, explicit: false } = self else { return self };
+        let fits = s.active().and_then(|st| st.doc.node(*st.selection.objects.first()?)?.appearance.items.get(index).map(|it| it.is_fill() == fill));
+        if fits == Some(true) { self } else { ItemTarget::Top }
     }
 
     /// The item of `ap` a fill (`fill`) or stroke edit changes; `None` = the topmost one.
@@ -219,13 +231,14 @@ pub(crate) fn edit_items(
     })
 }
 
-/// Whether an edit aimed at `item` on `ids` changes a stroke: the `stroke` param, else the kind of
-/// the targeted item (on the first target), else `default`.
-pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, ids: &[NodeId], default: bool) -> Result<bool> {
+/// Whether an edit aimed at `item` changes a stroke: the `stroke` param, else the kind of the
+/// targeted item (on the first target object), else `default`.
+pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bool) -> Result<bool> {
     if let Some(b) = p.get("stroke").and_then(Value::as_bool) {
         return Ok(b);
     }
     let ItemTarget::Item { index, .. } = item else { return Ok(default) };
+    let ids = appearance_targets(s, p)?;
     let d = &s.doc()?.doc;
     Ok(ids.first().and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
 }
@@ -362,7 +375,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    s.remap_appearance_item(|a| match a.cmp(&idx) {
+    s.remap_appearance_item(&ids, |a| match a.cmp(&idx) {
         std::cmp::Ordering::Less => Some(a),
         std::cmp::Ordering::Equal => None,
         std::cmp::Ordering::Greater => Some(a - 1),
@@ -384,7 +397,7 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if any { Ok(()) } else { Err(bad("appearance.duplicateItem", format!("no item at index {idx}"))) }
     })?;
-    s.remap_appearance_item(|a| Some(if a > idx { a + 1 } else { a }));
+    s.remap_appearance_item(&ids, |a| Some(if a > idx { a + 1 } else { a }));
     ok()
 }
 
@@ -408,7 +421,7 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     // The moved row stays the active one; the rows it passed shift by one.
-    s.remap_appearance_item(|a| {
+    s.remap_appearance_item(&ids, |a| {
         Some(if a == from {
             landed
         } else if from < a && a <= landed {

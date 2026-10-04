@@ -114,8 +114,9 @@ pub(crate) fn apply_gradient_edit(paint: &Paint, p: &Value, bounds: Option<vecto
 fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "paint.editGradient";
     let item = item_target(s, p, C)?;
+    let stroke = edits_stroke(s, p, item, !s.fill_active)?;
+    let item = item.of_kind(s, !stroke);
     let ids = item.targets(s, p)?;
-    let stroke = edits_stroke(s, p, item, &ids, !s.fill_active)?;
     // Validate against the defaults first so bad params fail without touching the document.
     let default_paint = if stroke { s.paint.stroke.clone() } else { s.paint.fill.clone() };
     let new_default = apply_gradient_edit(&default_paint, p, None).map_err(|e| bad(C, e))?;
@@ -147,6 +148,8 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     let start = point_param(p, "start").ok_or_else(|| bad(C, "missing start [x,y]"))?;
     let end = point_param(p, "end").ok_or_else(|| bad(C, "missing end [x,y]"))?;
     let item = item_target(s, p, C)?;
+    let stroke = edits_stroke(s, p, item, false)?;
+    let item = item.of_kind(s, !stroke);
     let targets = match item {
         ItemTarget::Top => leaf_targets(s, &ids_param(p, "ids").map_or_else(|| selected_roots(s), Ok)?)?,
         _ => item.targets(s, p)?,
@@ -154,7 +157,6 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
-    let stroke = edits_stroke(s, p, item, &targets, false)?;
     let geom = GradientGeom { start, end, aspect: 1.0 };
     edit_items(s, &targets, item, C, "Gradient", !stroke, |n, index| {
         if matches!(n.kind, NodeKind::Text(_)) {

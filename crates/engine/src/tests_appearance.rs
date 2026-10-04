@@ -341,3 +341,47 @@ fn graphic_style_apply_replaces_the_stack() {
     assert_eq!(node(&s, b).appearance, node(&s, a).appearance);
     assert!(s.execute("graphicStyle.apply", &json!({"name": "nope"})).is_err());
 }
+
+#[test]
+fn an_active_row_of_the_other_kind_leaves_edits_on_the_painted_leaves() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0);
+    let b = rect(&mut s, 250.0);
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({}));
+    // The group's own fill row is active: stroke edits still go to the members' strokes.
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "stroke.set", json!({"weight": 5}));
+    run(&mut s, "paint.setStroke", json!({"color": "#00ff00"}));
+    assert_eq!(node(&s, g).appearance.items.len(), 1, "no stroke row added to the group");
+    for id in [a, b] {
+        assert_eq!(stroke(&node(&s, id), 1).width, 5.0);
+        assert_eq!(stroke(&node(&s, id), 1).paint.color().unwrap().to_hex(), "#00ff00");
+    }
+}
+
+#[test]
+fn the_active_row_follows_only_edits_of_its_object() {
+    let mut s = session();
+    let other = rect(&mut s, 250.0);
+    rect(&mut s, 100.0);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1}));
+    run(&mut s, "appearance.removeItem", json!({"index": 0, "ids": [other.0]}));
+    run(&mut s, "appearance.duplicateItem", json!({"index": 0, "ids": [other.0]}));
+    assert_eq!(s.appearance_item(), Some(1));
+}
+
+#[test]
+fn item_transparency_is_one_step_and_checks_the_blend_mode() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0);
+    run(&mut s, "appearance.setActiveItem", json!({"index": 1}));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    run(&mut s, "transparency.set", json!({"knockout": true}));
+    assert_eq!(steps(&s), before + 1, "isolate/knockout alone do not touch the item");
+    assert!(node(&s, id).knockout);
+    assert!(s.execute("transparency.set", &json!({"blend": "nope"})).is_err());
+    assert_eq!(stroke(&node(&s, id), 1).blend, BlendMode::Normal);
+}

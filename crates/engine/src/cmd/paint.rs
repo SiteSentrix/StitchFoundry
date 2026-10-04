@@ -1,7 +1,7 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, NodeKind};
 
 use super::appearance::{ItemTarget, appearance_targets, edit_items, item_target};
@@ -104,7 +104,7 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         s.paint.stroke = paint.clone();
     }
     s.fill_active = fill;
-    let item = item_target(s, p, cmd)?;
+    let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let ids = item.targets(s, p)?;
     edit_items(s, &ids, item, cmd, if fill { "Fill Color" } else { "Stroke Color" }, fill, |n, index| {
         if index.is_none()
@@ -173,30 +173,36 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     let mut q = p.as_object().cloned().unwrap_or_default();
     q.remove("item");
     let opacity = q.remove("opacity").and_then(|v| v.as_f64()).map(|o| (o / 100.0).clamp(0.0, 1.0));
-    if let ItemTarget::Item { index, explicit } = item {
-        // Opacity and blend belong to the targeted fill/stroke; isolate/knockout stay object-level.
-        if explicit {
-            let d = &s.doc()?.doc;
-            if !appearance_targets(s, p)?.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {
-                return Err(bad(C, format!("no appearance item {index}")));
-            }
+    let ItemTarget::Item { index, explicit } = item else {
+        if let Some(o) = opacity {
+            q.insert("opacity".into(), json!(o));
         }
-        let mut set = json!({ "index": index });
-        for key in ["blend", "ids", "id"] {
+        return s.execute("object.setProps", &Value::Object(q));
+    };
+    // Opacity and blend belong to the targeted fill/stroke; isolate/knockout stay object-level.
+    if explicit {
+        let d = &s.doc()?.doc;
+        if !appearance_targets(s, p)?.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {
+            return Err(bad(C, format!("no appearance item {index}")));
+        }
+    }
+    let blend = q.remove("blend");
+    if let Some(b) = &blend
+        && b.as_str().and_then(BlendMode::parse).is_none()
+    {
+        return Err(bad(C, format!("unknown blend mode {b}")));
+    }
+    if opacity.is_some() || blend.is_some() {
+        let mut set = json!({ "index": index, "opacity": opacity, "blend": blend });
+        for key in ["ids", "id"] {
             if let Some(v) = p.get(key) {
                 set[key] = v.clone();
             }
         }
-        if let Some(o) = opacity {
-            set["opacity"] = json!(o);
-        }
-        q.remove("blend");
         s.execute("appearance.setItem", &set)?;
-        if q.keys().all(|k| k == "ids" || k == "id") {
-            return ok();
-        }
-    } else if let Some(o) = opacity {
-        q.insert("opacity".into(), json!(o));
+    }
+    if q.keys().all(|k| k == "ids" || k == "id") {
+        return ok();
     }
     s.execute("object.setProps", &Value::Object(q))
 }

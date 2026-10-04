@@ -7,7 +7,6 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::AppearanceItem;
 use vectorcraft_doc::hit::hit_test;
 use vectorcraft_geom::{Point, Vec2};
 
@@ -27,10 +26,8 @@ pub struct GradientTool {
 pub fn annotator(cx: &ToolContext) -> Option<(Point, Point, Vec<f32>)> {
     cx.selection.objects.iter().find_map(|id| {
         let n = cx.doc.node(*id)?;
-        let item = cx.appearance_item.and_then(|i| n.appearance.items.get(i));
-        let paint = match item {
-            Some(AppearanceItem::Stroke(s)) => &s.paint,
-            Some(AppearanceItem::Fill(f)) => &f.paint,
+        let paint = match cx.appearance_item.and_then(|i| n.appearance.items.get(i)) {
+            Some(item) => item.paint(),
             None => &n.appearance.fill()?.paint,
         };
         let Paint::Gradient(g) = paint else { return None };

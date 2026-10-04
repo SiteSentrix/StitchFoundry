@@ -46,8 +46,7 @@ use crate::{VectorcraftApp, icons};
 
 /// The first selected node (cloned), if any.
 pub fn first_selected(app: &VectorcraftApp) -> Option<Node> {
-    let st = app.session.active()?;
-    st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned()
+    first_node(app).cloned()
 }
 
 /// Number of selected objects.
