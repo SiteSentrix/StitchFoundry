@@ -253,11 +253,13 @@ pub fn matrix_param(p: &Value, key: &str) -> Option<Affine> {
     }
     Some(Affine::new(c))
 }
-/// A colour from `"#rrggbb"`, `[r,g,b]` (0..1), `{"c":..,"m":..,"y":..,"k":..}`, `{"gray":..}` or
-/// `{"l":..,"a":..,"b":..}` (CIE Lab: L 0..100, a and b about −128..127).
+/// A colour from `"#rrggbb"`, a colour key (`"cmyk 0 100 100 0"`, `"lab 55 60 40"`), `[r,g,b]` (0..1),
+/// `{"c":..,"m":..,"y":..,"k":..}`, `{"gray":..}` or `{"l":..,"a":..,"b":..}` (CIE Lab: L 0..100, a and b about
+/// −128..127).
 pub fn color_value(v: &Value) -> Option<Color> {
     match v {
-        Value::String(s) => Color::from_hex(s),
+        // A hex, or a colour key ("cmyk 0 100 100 0", as Recolor Artwork lists colours).
+        Value::String(s) => Color::from_hex(s).or_else(|| vectorcraft_color::recolor::ColorKey::parse(s).map(|k| k.color())),
         Value::Array(a) if a.len() >= 3 => Some(Color::rgb(a[0].as_f64()? as f32, a[1].as_f64()? as f32, a[2].as_f64()? as f32)),
         Value::Object(o) => {
             if let (Some(c), Some(m), Some(y), Some(k)) = (o.get("c"), o.get("m"), o.get("y"), o.get("k")) {

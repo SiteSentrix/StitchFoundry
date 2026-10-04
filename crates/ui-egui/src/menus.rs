@@ -158,7 +158,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{effect: id, index?: int (edit that applied effect in place, prefilled; OK runs effect.setParams), item?: appearance item index|null (the fill/stroke whose effects, null the object's; default: the Appearance panel's active item)} open the effect's dialog with live preview; without `index`, an effect already in that list first opens `effectExists` (confirm edits it, discard adds another) → {pending: \"effectExists\"}",
     ),
     ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
-    ("ui.recolorDialog", "Recolor Artwork…", "", "{} open Recolor Artwork (engine: recolor.colors / recolor.apply)"),
+    (
+        "ui.recolorDialog",
+        "Recolor Artwork…",
+        "",
+        "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order), library?: id or name (Limit to Library; \"\" the first library)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
+    ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
     ("file.export.pdf", "Save as PDF…", "", "{path?, artboard? | artboards? | range?: \"1-3, 5\"} (document.export options)"),
     ("help.about", "About VectorCraft", "", "{}"),
@@ -604,14 +609,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(app.session.tool_options())
         }
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
-        "ui.recolorDialog" => match app.run("recolor.colors", json!({})) {
-            Ok(v) => {
-                let pairs: Vec<Value> = v["colors"].as_array().cloned().unwrap_or_default().iter().map(|c| json!([c["hex"], c["hex"]])).collect();
-                app.ui.dialog = Some(crate::state::Dialog::new("recolor", json!({"pairs": pairs, "preview": true})));
-                Ok(Value::Null)
-            }
-            Err(e) => Err(e),
-        },
+        "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
@@ -990,6 +988,15 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "Edit Colors",
                     vec![
                         c("Recolor Artwork…", "ui.recolorDialog"),
+                        sub(
+                            "Recolor with Preset",
+                            vec![
+                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1})),
+                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2})),
+                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3})),
+                                cp("Color Library…", "ui.recolorDialog", json!({"library": ""})),
+                            ],
+                        ),
                         c("Adjust Color Balance…", "ui.colorBalanceDialog"),
                         c("Blend Front to Back", "edit.colors.blendFrontToBack"),
                         c("Blend Horizontally", "edit.colors.blendHorizontally"),

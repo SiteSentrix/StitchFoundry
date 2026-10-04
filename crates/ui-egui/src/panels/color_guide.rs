@@ -133,7 +133,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     widgets::bottom_bar(ui, |ui| {
         widgets::icon_button_enabled(ui, "library", "Limit to Swatch Library (on the roadmap)", false, false, 24.0);
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
-        widgets::icon_button_enabled(ui, "palette", "Edit or Apply Colors (on the roadmap)", false, false, 24.0);
+        // Recolor Artwork with the harmony colours as the new colours (the selected art's, if any).
+        let art = app.session.active().is_some_and(|d| !d.selection.is_empty());
+        if widgets::icon_button_enabled(ui, "palette", "Edit or Apply Colors", false, art, 24.0).clicked() {
+            app.run("ui.recolorDialog", json!({ "colors": g.colors.iter().map(color_json).collect::<Vec<_>>() })).ok();
+        }
         if widgets::icon_button_enabled(ui, "dc-new-item", "Save selected colors as swatches", false, !sel.is_empty(), 24.0).clicked() {
             save_selected(app, &ctx);
         }

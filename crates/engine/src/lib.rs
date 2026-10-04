@@ -908,6 +908,8 @@ mod tests_previewbounds;
 #[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]
+mod tests_recolor;
+#[cfg(test)]
 mod tests_registration;
 #[cfg(test)]
 mod tests_scalestrokes;
