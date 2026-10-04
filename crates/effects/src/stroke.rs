@@ -8,7 +8,7 @@
 //! - [`width_outline`]: variable-width (profile) strokes;
 //! - [`line_outline`]: the line part of a stroke as one filled outline (profile, dashes, dots,
 //!   caps and joins);
-//! - [`outline_region`]: a stroke as one clean filled path (Outline Stroke).
+//! - [`for_writer`] and [`outline_region`]: strokes for the SVG/PDF writers and Outline Stroke.
 
 mod arrow;
 mod dash;
@@ -22,7 +22,7 @@ use vectorcraft_doc::{LineCap, LineJoin, StrokeAlign, StrokeLayer};
 
 pub use arrow::Arrow;
 pub use dash::{Dashed, Dot, dash, dot_outline};
-pub use outline::{OUTLINE_TOL, outline_region};
+pub use outline::{OUTLINE_TOL, Written, WrittenShape, for_writer, is_plain, outline_region};
 pub use width::width_outline;
 
 /// Arc-length accuracy for dashing and trimming (document points).

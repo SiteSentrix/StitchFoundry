@@ -1,14 +1,14 @@
-//! Stroke geometry in PDF export: arrowheads and the trimmed line come from the shared
-//! `vectorcraft_effects::stroke` geometry, and they take the stroke opacity once.
+//! Stroke geometry in PDF export: arrowheads and the trimmed line are written as the shared
+//! `vectorcraft_effects::stroke` outlines, and they take the stroke opacity once.
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, ArrowAlign, Arrowhead, Document, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_effects::stroke::stroke_pieces;
+use vectorcraft_effects::stroke::{OUTLINE_TOL, line_outline, stroke_pieces};
 use vectorcraft_geom::{Point, Rect, Shape, shapes};
 
 use crate::*;
 
-fn line_doc(st: StrokeLayer) -> (Document, Node) {
+pub(crate) fn line_doc(st: StrokeLayer) -> (Document, Node) {
     let mut d = Document::new(100.0, 100.0);
     let mut n = Node::path(
         NodeId(0),
@@ -34,7 +34,7 @@ fn close(a: Rect, b: Rect) -> bool {
 }
 
 /// Bounding boxes of the filled and the stroked paths of a PDF read back.
-fn painted_boxes(d: &Document) -> (Vec<Rect>, Vec<Rect>) {
+pub(crate) fn painted_boxes(d: &Document) -> (Vec<Rect>, Vec<Rect>) {
     let back = import(&export(d, &PdfOptions::default()).unwrap()).unwrap();
     let (mut fills, mut strokes) = (vec![], vec![]);
     back.walk(|m| {
@@ -54,15 +54,17 @@ fn arrowheads_and_the_trimmed_line_match_the_shared_geometry() {
         for kind in Arrowhead::ALL {
             let (d, n) = line_doc(arrow_stroke(kind, align, 1.0));
             let bp = n.path_data().unwrap().to_bezpath();
-            let pieces = stroke_pieces(&bp, n.appearance.stroke().unwrap());
+            let st = n.appearance.stroke().unwrap();
+            let pieces = stroke_pieces(&bp, st);
             let (fills, strokes) = painted_boxes(&d);
             let head = pieces.heads[0].outline.bounding_box();
-            assert_eq!(fills.len(), 1, "{kind:?} {align:?}: one head");
-            assert!(close(fills[0], head), "{kind:?} {align:?}: {:?} vs {head:?}", fills[0]);
-            assert_eq!(strokes.len(), 1, "{kind:?} {align:?}: one line");
-            assert!(close(strokes[0], pieces.line.bounding_box()), "{kind:?} {align:?}: {:?}", strokes[0]);
+            let line = line_outline(&pieces.line, st, st.width, OUTLINE_TOL).bounding_box();
+            assert!(strokes.is_empty(), "{kind:?} {align:?}: the line is written as its outline");
+            assert_eq!(fills.len(), 2, "{kind:?} {align:?}: the line, then the head");
+            assert!(close(fills[0], line), "{kind:?} {align:?}: {:?} vs {line:?}", fills[0]);
+            assert!(close(fills[1], head), "{kind:?} {align:?}: {:?} vs {head:?}", fills[1]);
             if align == ArrowAlign::Tip {
-                assert!((strokes[0].x1 - (80.0 - pieces.heads[0].inset)).abs() < 0.01, "{kind:?}: the stroke stops under the head");
+                assert!((fills[0].x1 - (80.0 - pieces.heads[0].inset)).abs() < 0.01, "{kind:?}: the stroke stops under the head");
             }
         }
     }
