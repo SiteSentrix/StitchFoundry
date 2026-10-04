@@ -74,3 +74,53 @@ fn document_info_counts_grouped_swatches() {
     assert!(all > d.swatches.len());
     assert_eq!(run(&mut s, "document.info", json!({}))["swatches"], json!(all));
 }
+
+#[test]
+fn new_swatches_are_named_by_their_colour_model() {
+    let mut s = session();
+    let name = |s: &mut Session, p: Value| run(s, "swatch.new", p)["name"].as_str().unwrap().to_string();
+    assert_eq!(name(&mut s, json!({"color": {"c": 10, "m": 20, "y": 30, "k": 0}})), "C=10 M=20 Y=30 K=0");
+    assert_eq!(name(&mut s, json!({"color": "#ff8000"})), "R=255 G=128 B=0");
+    assert_eq!(name(&mut s, json!({"color": {"gray": 40}})), "Gray K=40");
+    // The same colour again (or an explicit name in use) gets the next free number, document-wide.
+    assert_eq!(name(&mut s, json!({"color": {"c": 10, "m": 20, "y": 30, "k": 0}})), "C=10 M=20 Y=30 K=0 2");
+    assert_eq!(name(&mut s, json!({"name": "Grays", "color": "#000000"})), "Grays 2");
+    assert_eq!(name(&mut s, json!({"name": "Bright Red", "color": "#000000"})), "Bright Red 2");
+    // A spot swatch is always global; saving a linked colour stores the colour, not the link.
+    let spot = name(&mut s, json!({"name": "Ink", "color": "#336699", "spot": true}));
+    assert!(doc(&s).swatch(&spot).is_some_and(|w| w.spot && w.global));
+    let copy = name(&mut s, json!({"swatch": "Ink"}));
+    assert_eq!(doc(&s).swatch(&copy).unwrap().paint, Paint::solid(Color::from_hex("#336699").unwrap()));
+    assert!(s.execute("swatch.new", &json!({"none": true})).is_err(), "None is not a swatch");
+}
+
+#[test]
+fn new_swatch_saves_the_active_pattern_or_gradient() {
+    let mut s = session();
+    let a = rect(&mut s);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "object.pattern.make", json!({}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let pattern = doc(&s).patterns[0].name.clone();
+    let name = run(&mut s, "swatch.new", json!({"pattern": pattern}))["name"].as_str().unwrap().to_string();
+    assert_eq!(name, "New Pattern Swatch 1");
+    assert!(matches!(&doc(&s).swatch(&name).unwrap().paint, Paint::Pattern { pattern: p, .. } if *p == pattern));
+    assert!(s.execute("swatch.new", &json!({"pattern": "Nope"})).is_err());
+    let g = json!({"gradient": {"kind": "radial", "stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]}});
+    let name = run(&mut s, "swatch.new", g)["name"].as_str().unwrap().to_string();
+    assert_eq!(name, "New Gradient Swatch 1");
+    assert!(matches!(doc(&s).swatch(&name).unwrap().paint, Paint::Gradient(_)));
+    assert!(s.execute("swatch.new", &json!({"pattern": pattern, "spot": true})).is_err(), "only colours are spot");
+}
+
+#[test]
+fn colour_groups_hold_solid_colours_only() {
+    let mut s = session();
+    let g = run(&mut s, "swatch.newGroup", json!({"name": "Mix", "swatches": ["Sunset", "Red", "[None]", "Bright Blue"], "colors": ["#00ff00"]}));
+    let d = doc(&s);
+    let group = d.swatch_groups.iter().find(|x| x.name == g["name"]).unwrap();
+    let names: Vec<&str> = group.swatches.iter().map(|w| w.name.as_str()).collect();
+    assert_eq!(names, ["Red", "Bright Blue", "R=0 G=255 B=0"]);
+    assert!(d.swatches.iter().any(|w| w.name == "Sunset") && d.swatches.iter().any(|w| w.name == "[None]"), "gradients and None stay put");
+    assert!(d.swatch_groups.iter().find(|x| x.name == "Brights").unwrap().swatches.iter().all(|w| w.name != "Bright Blue"), "moved, not copied");
+}

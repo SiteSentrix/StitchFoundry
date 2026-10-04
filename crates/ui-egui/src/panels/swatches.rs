@@ -370,8 +370,9 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui) {
             let names: Vec<String> = deletable(ui).into_iter().collect();
             app.run("swatch.newGroup", json!({"swatches": names})).ok();
         }
+        // Ctrl/Cmd-click makes a spot colour (Alt-click skips the dialog).
         if widgets::icon_button(ui, "dc-new-item", "New Swatch", false, 24.0).clicked() {
-            new_swatch(app);
+            new_swatch(app, ui.input(|i| i.modifiers.command));
         }
         let del = deletable(ui);
         if widgets::icon_button_enabled(ui, "trash-2", "Delete Swatch", false, del.is_some(), 24.0).clicked()
@@ -383,12 +384,10 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
-fn new_swatch(app: &mut VectorcraftApp) {
-    let p = active_paint(app);
-    let params = match &p {
-        Paint::None => json!({}),
-        other => super::paint_params(other),
-    };
+/// Save the active paint as a new swatch (a spot colour with `spot`).
+fn new_swatch(app: &mut VectorcraftApp, spot: bool) {
+    let mut params = super::paint_params(&active_paint(app));
+    params["spot"] = json!(spot);
     app.run("swatch.new", params).ok();
 }
 
@@ -396,7 +395,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let view: View = pstate(ui.ctx(), "swatch-view");
     let sel = deletable(ui);
     if menu_item(ui, "New Swatch…", true, false) {
-        new_swatch(app);
+        new_swatch(app, false);
     }
     if menu_item(ui, "New Color Group…", true, false) {
         app.run("swatch.newGroup", json!({"swatches": sel.clone().into_iter().collect::<Vec<_>>()})).ok();
