@@ -70,11 +70,6 @@ fn aff(t: usvg::Transform) -> Affine {
     Affine::new([t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64])
 }
 
-/// Linear part of `m` applied to `v`.
-fn lin(m: Affine, v: Vec2) -> Vec2 {
-    (m * v.to_point()) - (m * Point::ZERO)
-}
-
 fn is_plain(g: &usvg::Group) -> bool {
     g.clip_path().is_none() && g.mask().is_none() && g.filters().is_empty() && g.opacity().get() >= 1.0 && g.blend_mode() == usvg::BlendMode::Normal
 }
@@ -277,17 +272,10 @@ impl Importer {
                 if lg.spread_method() != usvg::SpreadMethod::Pad {
                     self.warn(format!("gradient '{}': spreadMethod approximated as pad", lg.id()));
                 }
-                let t = m * aff(lg.transform());
-                let (p1, p2) = (Point::new(lg.x1() as f64, lg.y1() as f64), Point::new(lg.x2() as f64, lg.y2() as f64));
-                let start = t * p1;
-                let far = t * p2;
-                // Isolines (perpendicular to the vector in gradient space) stay parallel under an
-                // affine map; the document gradient vector is the normal to their image.
-                let dir = p2 - p1;
-                let iso = lin(t, Vec2::new(-dir.y, dir.x));
-                let nrm = Vec2::new(-iso.y, iso.x);
-                let end = if nrm.hypot2() > 1e-18 { start + nrm * ((far - start).dot(nrm) / nrm.hypot2()) } else { far };
-                gp(GradientKind::Linear, stops(lg), GradientGeom { start, end, aspect: 1.0 })
+                let mut geom =
+                    GradientGeom { start: Point::new(lg.x1() as f64, lg.y1() as f64), end: Point::new(lg.x2() as f64, lg.y2() as f64), aspect: 1.0 };
+                geom.transform(m * aff(lg.transform()), GradientKind::Linear);
+                gp(GradientKind::Linear, stops(lg), geom)
             }
             usvg::Paint::RadialGradient(rg) => {
                 if rg.spread_method() != usvg::SpreadMethod::Pad {
@@ -296,14 +284,10 @@ impl Importer {
                 if (rg.fx() - rg.cx()).abs() > 1e-4 || (rg.fy() - rg.cy()).abs() > 1e-4 {
                     self.warn(format!("gradient '{}': focal point ignored", rg.id()));
                 }
-                let t = m * aff(rg.transform());
-                let r = rg.r().get() as f64;
                 let c = Point::new(rg.cx() as f64, rg.cy() as f64);
-                let vx = lin(t, Vec2::new(r, 0.0));
-                let vy = lin(t, Vec2::new(0.0, r));
-                let start = t * c;
-                let aspect = if vx.hypot() > 1e-12 { vy.hypot() / vx.hypot() } else { 1.0 };
-                gp(GradientKind::Radial, stops(rg), GradientGeom { start, end: start + vx, aspect })
+                let mut geom = GradientGeom { start: c, end: c + Vec2::new(rg.r().get() as f64, 0.0), aspect: 1.0 };
+                geom.transform(m * aff(rg.transform()), GradientKind::Radial);
+                gp(GradientKind::Radial, stops(rg), geom)
             }
             usvg::Paint::Pattern(pt) => {
                 self.warn(format!("pattern '{}' not supported; painted as none", pt.id()));

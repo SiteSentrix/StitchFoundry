@@ -131,3 +131,46 @@ fn geometry_and_aspect_in_one_call() {
     s.execute("appearance.setItem", &q).unwrap();
     assert_eq!(fill_gradient(&s, id).gradient, g.gradient);
 }
+
+// ---------- M3.15: gradients follow every transform ----------
+
+fn fill_geom(s: &Session, id: NodeId) -> GradientGeom {
+    fill_gradient(s, id).geom.expect("placed")
+}
+
+#[test]
+fn rotate_reflect_and_scale_carry_unplaced_gradients() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setFill", &json!({"gradient": {}})).unwrap();
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert!(fill_gradient(&s, id).geom.is_none(), "a move keeps refitting");
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    let g = fill_geom(&s, id);
+    assert!((g.end.x - g.start.x).abs() < 1e-9 && (g.length() - 100.0).abs() < 1e-9, "vertical after a 90° turn: {g:?}");
+    s.execute("object.reflect", &json!({"axis": "horizontal"})).unwrap();
+    let r = fill_geom(&s, id);
+    // The vertical vector is centred on the object, so the reflection swaps its ends.
+    assert!(r.start.distance(g.end) < 1e-9 && r.end.distance(g.start) < 1e-9, "{g:?} → {r:?}");
+
+    // A circle's radial gradient becomes an ellipse under a non-uniform scale.
+    let c = s.execute("shape.ellipse", &json!({"x": 300, "y": 300, "width": 100, "height": 100})).unwrap();
+    let c = NodeId(c["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100})).unwrap();
+    let e = fill_geom(&s, c);
+    assert!((e.aspect - 0.5).abs() < 1e-9 && (e.length() - 100.0).abs() < 1e-9, "{e:?}");
+}
+
+#[test]
+fn free_distort_maps_gradients_once() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {}})).unwrap();
+    // An affine distort (a sheared parallelogram) maps the gradient exactly like object.transform.
+    s.execute("object.distort", &json!({"corners": [[20, 0], [120, 0], [100, 100], [0, 100]]})).unwrap();
+    let g = fill_geom(&s, id);
+    let mut want = GradientGeom::fit(GradientKind::Linear, vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
+    want.transform(vectorcraft_geom::Affine::new([1.0, 0.0, -0.2, 1.0, 20.0, 0.0]), GradientKind::Linear);
+    assert!(g.start.distance(want.start) < 1e-6 && g.end.distance(want.end) < 1e-6, "{g:?} vs {want:?}");
+}

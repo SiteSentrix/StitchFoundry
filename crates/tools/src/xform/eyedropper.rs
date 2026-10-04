@@ -14,17 +14,14 @@ use crate::{Action, Cursor, Mods, PointerEvent, PointerKind, Tool, ToolContext};
 
 pub struct EyedropperTool;
 
-/// The colour of `paint` at `p` (gradients are sampled along their vector).
+/// The colour of `paint` at `p` (gradients are sampled along their vector, radial ones honouring
+/// their aspect ratio).
 pub fn paint_color_at(paint: &Paint, bounds: Option<vectorcraft_geom::Rect>, p: Point) -> Option<Color> {
     match paint {
         Paint::Solid { color, .. } => Some(*color),
         Paint::Gradient(g) => {
-            let geom = g.resolve(bounds?);
-            let v = geom.end - geom.start;
-            let t = match g.gradient.kind {
-                vectorcraft_color::GradientKind::Radial => (p - geom.start).hypot() / v.hypot().max(1e-9),
-                _ => (p - geom.start).dot(v) / v.hypot2().max(1e-9),
-            };
+            let geom = g.geom.or_else(|| bounds.map(|b| g.resolve(b)))?;
+            let t = geom.param_at(g.gradient.kind, p);
             Some(g.gradient.sample(t.clamp(0.0, 1.0) as f32).0)
         }
         _ => None,
@@ -97,5 +94,18 @@ mod tests {
         let r = vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 10.0);
         assert_eq!(paint_color_at(&paint, Some(r), Point::new(0.0, 5.0)).unwrap().to_hex(), "#ffffff");
         assert_eq!(paint_color_at(&paint, Some(r), Point::new(100.0, 5.0)).unwrap().to_hex(), "#000000");
+    }
+
+    #[test]
+    fn radial_sample_honours_aspect() {
+        let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient {
+            kind: vectorcraft_color::GradientKind::Radial,
+            ..Default::default()
+        });
+        // Radius 100 along x, 50 across: 50 pt above the centre is already the outer (black) edge.
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::ZERO, end: Point::new(100.0, 0.0), aspect: 0.5 });
+        let paint = Paint::Gradient(Box::new(g));
+        assert_eq!(paint_color_at(&paint, None, Point::new(0.0, -50.0)).unwrap().to_hex(), "#000000");
+        assert_eq!(paint_color_at(&paint, None, Point::new(50.0, 0.0)).unwrap().to_hex(), "#808080");
     }
 }
