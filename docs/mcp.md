@@ -349,3 +349,20 @@ characters as its place relative to the Characters row says. To stroke
 some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight?, cap?, join?, miterLimit?, dash?,
 dashOffset?, alignDashes?}}`. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first
 run's) in `stroke.set` terms. `stroke.set` on a group leaves the images and symbol instances in it alone.
+
+## Flatten Transparency
+
+`object.flattenTransparency {ids?, preset?, …options}` turns transparent art into opaque art that looks the same, in
+one undo step. The targets split into groups of overlapping objects; groups without transparency stay as they are.
+Each other group becomes one group of atomic regions: paths filled with the flat colour the art showed there (over
+white; over nothing, keeping alpha, with `preserveAlpha: true`), plus one image where gradients, patterns, images,
+opacity masks or raster effects reach (clipped to those regions with `clipComplexRegions`, a rectangle without).
+`preset` is `high`, `medium` (the default) or `low`; option keys (`balance` 0–100, `lineArtPpi`, `gradientPpi`,
+`textToOutlines`, `strokesToOutlines`, `clipComplexRegions`, `antiAlias`, `preserveAlpha`, `preserveOverprints`)
+override it, at the top level or in `options`. `balance: 0` rasterizes everything; lower balances rasterize groups
+that split into many regions. The result reports `{ids, vector, rasterized, options}`.
+
+```json
+{"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"ids":[12,15],"preset":"high"}}}
+{"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"balance":0,"lineArtPpi":150}}}
+```

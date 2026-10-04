@@ -26,6 +26,7 @@ use vello_cpu::{Pixmap, RenderContext, Resources};
 
 use group::Composite;
 
+pub use brush_fx::instance_art;
 pub use effects::stroke::width_outline;
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;

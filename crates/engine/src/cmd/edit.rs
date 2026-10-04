@@ -151,26 +151,29 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
 /// Selected top-level objects in paint order, dropping any whose ancestor is also selected.
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
     let st = s.doc()?;
-    // A selected compound-path member acts as its compound (Illustrator treats compounds as one object).
-    let mut sel: Vec<NodeId> = st
-        .selection
-        .in_paint_order(&st.doc)
+    Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+}
+
+/// The top-level objects among `ids` (in paint order): compound-path members stand for their
+/// compound, and ids whose ancestor is also listed, and layers, are dropped.
+pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
+    // A compound-path member acts as its compound (compounds are one object).
+    let mut sel: Vec<NodeId> = ids
         .into_iter()
-        .map(|id| match st.doc.parent_of(id).and_then(|p| st.doc.node(p).map(|n| (p, n))) {
+        .map(|id| match doc.parent_of(id).and_then(|p| doc.node(p).map(|n| (p, n))) {
             Some((p, n)) if matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. }) => p,
             _ => id,
         })
         .collect();
     sel.dedup();
-    Ok(sel
-        .iter()
+    sel.iter()
         .copied()
         .filter(|id| {
-            let anc = st.doc.ancestry(*id).unwrap_or_default();
+            let anc = doc.ancestry(*id).unwrap_or_default();
             !anc[..anc.len().saturating_sub(1)].iter().any(|a| sel.contains(a))
         })
-        .filter(|id| st.doc.node(*id).is_some_and(|n| !n.is_layer()))
-        .collect())
+        .filter(|id| doc.node(*id).is_some_and(|n| !n.is_layer()))
+        .collect()
 }
 
 fn copy(s: &mut Session, _: &Value) -> Result<Value> {
