@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Item",
             [],
             None,
-            "{index, opacity?, blend?, visible?, color?|none?} edit one fill/stroke of the selection's appearance stack",
+            "{index, opacity?, blend?, visible?, weight?, color?|none?|swatch?|gradient? (as paint.setFill)} edit one fill/stroke of the selection's appearance stack",
             has_selection,
             set_item
         ),
@@ -101,18 +101,20 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Appearance", |d, _| {
         for id in &ids {
             let Some(n) = d.node_mut(*id) else { continue };
+            let bounds = n.geometric_bounds();
             let Some(item) = n.appearance.items.get_mut(idx) else { continue };
-            let (pp, op, bl, vis) = match item {
-                AppearanceItem::Fill(f) => (&mut f.paint, &mut f.opacity, &mut f.blend, &mut f.visible),
+            let (pp, op, bl, vis, bounds) = match item {
+                AppearanceItem::Fill(f) => (&mut f.paint, &mut f.opacity, &mut f.blend, &mut f.visible, bounds),
                 AppearanceItem::Stroke(st) => {
                     if let Some(w) = p.get("weight").and_then(Value::as_f64) {
                         st.width = w.max(0.0);
                     }
-                    (&mut st.paint, &mut st.opacity, &mut st.blend, &mut st.visible)
+                    let bounds = bounds.map(|b| st.paint_bounds(b));
+                    (&mut st.paint, &mut st.opacity, &mut st.blend, &mut st.visible, bounds)
                 }
             };
             if let Some(pa) = &paint {
-                *pp = pa.clone();
+                *pp = super::gradient::place_paint(pa, p, bounds);
             }
             if let Some(o) = p.get("opacity").and_then(Value::as_f64) {
                 *op = if o > 1.0 { o / 100.0 } else { o }.clamp(0.0, 1.0) as f32;

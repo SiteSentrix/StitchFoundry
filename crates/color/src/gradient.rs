@@ -15,6 +15,10 @@ pub enum GradientKind {
 }
 
 impl GradientKind {
+    /// Parse a kind name (`linear`, `radial`, `freeform`; any case).
+    pub fn parse(s: &str) -> Option<Self> {
+        [GradientKind::Linear, GradientKind::Radial, GradientKind::Freeform].into_iter().find(|k| k.label().eq_ignore_ascii_case(s))
+    }
     pub fn label(self) -> &'static str {
         match self {
             GradientKind::Linear => "Linear",

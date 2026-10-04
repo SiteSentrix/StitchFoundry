@@ -1,9 +1,10 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, NodeKind};
 
+use super::gradient::place_paint;
 use super::*;
 use crate::EngineError;
 
@@ -14,7 +15,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind, stops:[{offset,color}], angle?}, ids?} sets selection fill and the default",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}, none?: true, swatch?: name, gradient?: {kind?: linear|radial|freeform, stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector; both or neither), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), swatch?: linked gradient swatch name}, ids?} sets selection fill and the default",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -62,27 +63,7 @@ pub(crate) fn paint_from(s: &Session, p: &Value) -> Result<Option<Paint>> {
         return Ok(Some(paint));
     }
     if let Some(g) = p.get("gradient") {
-        let kind = match str_param(g, "kind") {
-            Some("radial") => GradientKind::Radial,
-            _ => GradientKind::Linear,
-        };
-        let mut grad = Gradient { kind, ..Default::default() };
-        if let Some(stops) = g.get("stops").and_then(Value::as_array) {
-            grad.stops = stops
-                .iter()
-                .filter_map(|st| {
-                    Some(vectorcraft_color::GradientStop {
-                        offset: st.get("offset")?.as_f64()? as f32,
-                        color: color_value(st.get("color")?)?,
-                        opacity: st.get("opacity").and_then(Value::as_f64).unwrap_or(1.0) as f32,
-                        midpoint: 0.5,
-                    })
-                })
-                .collect();
-            grad.sort();
-        }
-        let mut gp = GradientPaint::new(grad);
-        gp.angle = f64_or(g, "angle", 0.0);
+        let gp = super::gradient::parse_gradient(g).map_err(|e| bad("paint", e))?;
         return Ok(Some(Paint::Gradient(Box::new(gp))));
     }
     if let Some(c) = p.get("color") {
@@ -120,10 +101,14 @@ fn set_paint(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                 }
                 continue;
             }
+            let b = n.geometric_bounds();
             if fill {
-                n.appearance.set_fill(paint.clone());
+                n.appearance.set_fill(place_paint(&paint, p, b));
             } else {
                 n.appearance.set_stroke(paint.clone());
+                if let Some(st) = n.appearance.stroke_mut() {
+                    st.paint = place_paint(&paint, p, b.map(|b| st.paint_bounds(b)));
+                }
             }
         }
         Ok(())

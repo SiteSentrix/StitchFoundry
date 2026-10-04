@@ -10,7 +10,15 @@ use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("swatch.new", "New Swatch", ["Window", "Swatches"], None, "{name?, color?, global?} (default: current fill)", has_doc, swatch_new),
+        cmd!(
+            "swatch.new",
+            "New Swatch",
+            ["Window", "Swatches"],
+            None,
+            "{name?, color?|gradient? (as paint.setFill), global?} (default: current fill)",
+            has_doc,
+            swatch_new
+        ),
         cmd!("swatch.delete", "Delete Swatch", ["Window", "Swatches"], None, "{name}", has_doc, swatch_delete),
         cmd!(
             "swatch.newGroup",

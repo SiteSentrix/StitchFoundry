@@ -17,6 +17,7 @@ pub mod draw2;
 pub mod extra;
 pub mod guides;
 pub mod meshblend;
+pub mod params;
 pub mod pen;
 pub mod select;
 pub mod shape;

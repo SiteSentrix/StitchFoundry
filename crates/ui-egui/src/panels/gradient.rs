@@ -6,7 +6,7 @@ use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
 
-use super::{active_paint, color_json, live_run, pstate, set_pstate};
+use super::{active_paint, live_run, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, Live, menu_item};
 use crate::{VectorcraftApp, icons};
@@ -88,11 +88,7 @@ pub fn midpoint_from_pos(stops: &[GradientStop], i: usize, pos: f32) -> Option<f
 }
 
 /// Stops as `paint.editGradient` JSON.
-pub fn stops_json(stops: &[GradientStop]) -> Value {
-    Value::Array(
-        stops.iter().map(|s| json!({"offset": s.offset, "color": color_json(&s.color), "opacity": s.opacity, "midpoint": s.midpoint})).collect(),
-    )
-}
+pub use vectorcraft_tools::params::stops_json;
 
 // ---------- UI ----------
 

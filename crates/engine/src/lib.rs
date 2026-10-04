@@ -721,6 +721,8 @@ mod tests_draw2;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]
+mod tests_gradient;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_menucmds;
