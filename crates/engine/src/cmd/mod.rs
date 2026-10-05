@@ -45,6 +45,7 @@ mod pathops;
 mod patterncmds;
 pub mod pdfcmds;
 mod place;
+pub mod plugin;
 pub mod prefscmds;
 pub mod print;
 pub(crate) mod printadvanced;
@@ -244,6 +245,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(css::specs());
         v.extend(printpresets::specs());
         v.extend(printtiling::specs());
+        v.extend(plugin::specs());
         v
     })
 }

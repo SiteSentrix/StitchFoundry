@@ -1678,3 +1678,18 @@ to `object.setBounds`, which scales the other dimension by the same factor; agen
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"constrainProportions","value":true}}}
 {"name":"run_command","arguments":{"command":"object.setBounds","params":{"width":200,"proportional":true}}}
 ```
+
+## Plug-ins
+
+WebAssembly plug-ins ([plugins.md](plugins.md)) are installed per process and reached through commands:
+`plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
+schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
+undo step; it may change, delete or add objects, and the result is selected). A live-effect plug-in is an effect with
+id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
+`effect.list` lists it. A failing plug-in returns an error and leaves the document as it was.
+
+```json
+{"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
+{"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+```

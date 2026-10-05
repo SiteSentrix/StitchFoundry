@@ -133,19 +133,25 @@ fn click_item(app: &mut VectorcraftApp, ctx: &egui::Context, n: &Node, sel: Sel,
     set_pstate(ctx, "ap-multi", (Some(n.id), set));
 }
 
-fn catalog() -> &'static [(String, String, Vec<String>)] {
-    static C: OnceLock<Vec<(String, String, Vec<String>)>> = OnceLock::new();
-    C.get_or_init(|| {
-        vectorcraft_effects::effect_catalog()
-            .into_iter()
-            .map(|e| (e.id.to_string(), e.label.trim_end_matches('…').to_string(), e.menu.iter().map(|s| s.to_string()).collect()))
-            .collect()
-    })
+/// An effect as the fx menu lists it: (id, label without the ellipsis, Effect-menu path).
+fn catalog_entry(e: vectorcraft_effects::EffectInfo) -> (String, String, Vec<String>) {
+    (e.id.to_string(), e.label.trim_end_matches('…').to_string(), e.menu.iter().map(|s| s.to_string()).collect())
 }
 
-/// Display label of an effect id ("stylize.dropShadow" → "Drop Shadow").
+fn catalog() -> &'static [(String, String, Vec<String>)] {
+    static C: OnceLock<Vec<(String, String, Vec<String>)>> = OnceLock::new();
+    C.get_or_init(|| vectorcraft_effects::effect_catalog().into_iter().map(catalog_entry).collect())
+}
+
+/// Display label of an effect id ("stylize.dropShadow" → "Drop Shadow"; plug-in effects by their
+/// plug-in's name).
 pub fn effect_label(id: &str) -> String {
-    catalog().iter().find(|c| c.0 == id).map(|c| c.1.clone()).unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string())
+    catalog()
+        .iter()
+        .find(|c| c.0 == id)
+        .map(|c| c.1.clone())
+        .or_else(|| vectorcraft_effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()))
+        .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string())
 }
 
 /// "Opacity: Default" or "Opacity: 50% Multiply".
@@ -704,7 +710,7 @@ fn has_options(id: &str) -> bool {
 /// edits go through `effect.setParams`.
 fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect) {
     let t = Tokens::get(ui.ctx());
-    let defaults = vectorcraft_effects::effect_catalog().into_iter().find(|c| c.id == e.id).map(|c| c.defaults).unwrap_or(Value::Null);
+    let defaults = vectorcraft_effects::default_params(&e.id).unwrap_or(Value::Null);
     let mut params = defaults.as_object().cloned().unwrap_or_default();
     if let Some(cur) = e.params.as_object() {
         for (key, v) in cur {
@@ -861,7 +867,8 @@ fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: 
 /// opens the effect dialog.
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
-    for (id, label, menu) in catalog() {
+    let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
+    for (id, label, menu) in catalog().iter().chain(&plugins) {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());
         match groups.iter_mut().find(|(n, _)| *n == g) {
             Some((_, v)) => v.push((id.clone(), label.clone())),

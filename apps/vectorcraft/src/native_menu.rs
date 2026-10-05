@@ -25,6 +25,8 @@ pub struct NativeMenu {
     generation: u64,
     /// Saved views and recent files listed (empty slots are left out, so a change rebuilds).
     slots: usize,
+    /// Plug-in registry revision the Plug-ins submenus were built for.
+    plugins: u64,
 }
 
 /// Accelerator for a shortcut like "Cmd+Shift+]" (modifier-less shortcuts stay in the app so they
@@ -56,7 +58,7 @@ impl NativeMenu {
             .filter(|(_, p, _, c)| (p.is_null() || p.as_object().is_some_and(|o| o.is_empty())) && menus::shortcut_of(c).and_then(accel).is_some())
             .map(|(_, _, _, c)| c.clone())
             .collect();
-        Self { _menu: menu, items, last_refresh: 0.0, generation, slots: menus::listed_slots(app) }
+        Self { _menu: menu, items, last_refresh: 0.0, generation, slots: menus::listed_slots(app), plugins: menus::plugin_revision() }
     }
 
     /// Dispatch clicked items and refresh state.
@@ -72,10 +74,11 @@ impl NativeMenu {
             return;
         }
         self.last_refresh = now;
-        // Shortcuts edited, workspaces added, saved views or recent files changed: rebuild so
+        // Shortcuts edited, workspaces added, saved views, recent files or plug-ins changed: rebuild so
         // accelerators and lists are current.
         if vectorcraft_ui_egui::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed) != self.generation
             || menus::listed_slots(app) != self.slots
+            || menus::plugin_revision() != self.plugins
         {
             *self = NativeMenu::install(app);
             return;

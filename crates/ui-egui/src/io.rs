@@ -19,6 +19,13 @@ const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"
 /// files are imported.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<(), String> {
     let ext = fileio::extension(name);
+    // A WebAssembly plug-in is installed.
+    if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
+        let r =
+            app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}))?;
+        app.status(format!("Installed plug-in {}", r["name"].as_str().unwrap_or(name)));
+        return Ok(());
+    }
     let presets = [
         (vectorcraft_engine::cmd::flatten::PRESET_EXTS, "flattener.presets.import", "flattener presets"),
         (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
@@ -63,6 +70,19 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 /// A path from the open dialog, or "cancelled".
 fn pick_open(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
     app.services.pick_open.as_mut().and_then(|f| f(pick)).ok_or_else(|| "cancelled".into())
+}
+
+/// Object › Plug-ins › Install Plug-in…: installs the `.wasm` at `path`, else a picked one (the
+/// web's file picker hands the file to [`open_bytes`], which installs it).
+pub fn install_plugin(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
+    let path = match path {
+        Some(p) => p,
+        None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
+        None => pick_open(app, &FilePick { filters: vec![("Plug-ins", vectorcraft_engine::cmd::plugin::EXTS)], ..Default::default() })?,
+    };
+    let r = app.run("plugin.install", json!({ "path": path }))?;
+    app.status(format!("Installed plug-in {}", r["name"].as_str().unwrap_or_default()));
+    Ok(r)
 }
 
 /// File → Open…
