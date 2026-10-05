@@ -25,6 +25,10 @@ pub fn node_summary(n: &Node) -> Value {
     if n.opacity < 1.0 {
         v["opacity"] = json!(n.opacity);
     }
+    // The angle of its rotated bounding box (counter-clockwise degrees).
+    if n.bbox_angle != 0.0 {
+        v["rotation"] = json!(n.bbox_angle);
+    }
     if !n.is_container() {
         v["fill"] = json!(n.appearance.fill_paint().label());
         v["stroke"] = json!(n.appearance.stroke_paint().label());
@@ -64,6 +68,8 @@ pub fn document(s: &Session) -> Value {
         "isolation": st.isolation.map(|l| l.0),
         "selection": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>(),
         "selectionBounds": rect_json(d.bounds_of(&st.selection.objects, false)),
+        // The angle the selection's bounding box stands at (counter-clockwise degrees).
+        "selectionRotation": d.bbox_angle(&st.selection.objects),
         // The layer, group or object targeted through the Layers panel (`layer.target`).
         "target": st.selection.target.map(|t| t.0),
         "history": st.history.undo.iter().map(|h| h.label.clone()).collect::<Vec<_>>(),
