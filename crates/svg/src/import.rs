@@ -676,19 +676,18 @@ impl Importer {
         if !matches!(kids.get(main), Some(usvg::Node::Path(p)) if p.is_visible()) {
             return Some(vec![]);
         }
-        let text::PendingText { name, mut obj, servers, paints, non_scaling, .. } = self.slots.texts.get(i)?.clone();
+        let text::PendingText { name, mut obj, servers, paints, non_scaling, under, .. } = self.slots.texts.get(i)?.clone();
         // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
         // space; runs paint in text space.
         let to_text = obj.xf.inverse();
-        let resolved: Vec<Paint> = (0..paints)
-            .map(|k| match kids.get(main + 1 + k) {
-                Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
-                    let area = kurbo::Shape::bounding_box(&bezpath(p.data(), to_text));
-                    self.paint(f.paint(), to_text, Some(area))
-                }),
-                _ => Paint::None,
-            })
-            .collect();
+        let slot_paint = |im: &mut Self, k: usize, m: Affine| match kids.get(main + 1 + k) {
+            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
+                let area = kurbo::Shape::bounding_box(&bezpath(p.data(), m));
+                im.paint(f.paint(), m, Some(area))
+            }),
+            _ => Paint::None,
+        };
+        let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
         let server = |k: usize| resolved.get(k).cloned().unwrap_or(Paint::None);
         for (run, (fill, stroke)) in obj.runs.iter_mut().zip(servers) {
             if let Some(k) = fill {
@@ -703,7 +702,21 @@ impl Importer {
             let label = if name.is_empty() || made_up(&name) { "a text".to_string() } else { format!("text '{name}'") };
             self.warn(format!("non-scaling stroke on {label} approximated: the text is stretched or skewed"));
         }
-        Some(vec![Arc::new(self.named(&name, NodeKind::Text(Box::new(obj))))])
+        // A stroke under the characters is the object's own: it paints in the document.
+        let under = under.map(|(mut sl, k)| {
+            if let Some(k) = k {
+                sl.paint = slot_paint(self, k, ts);
+            }
+            let mut ap = Appearance { items: vec![AppearanceItem::Stroke(sl)], ..Default::default() };
+            ap.scale_strokes(if non_scaling { self.screen } else { obj.xf.determinant().abs().sqrt() });
+            ap.set_contents_at(1);
+            ap
+        });
+        let mut n = self.named(&name, NodeKind::Text(Box::new(obj)));
+        if let Some(ap) = under {
+            n.appearance = ap;
+        }
+        Some(vec![Arc::new(n)])
     }
 
     fn group_node(&mut self, g: &usvg::Group, acc: Affine) -> Option<Node> {

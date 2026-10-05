@@ -26,7 +26,7 @@ use std::str::FromStr;
 
 use usvg::roxmltree;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, StrokeLayer, TextKind, TextObject, TextRun};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect};
 use vectorcraft_text::{FontDb, TextLayout};
@@ -72,6 +72,8 @@ struct ElemStyle {
     stroke: Option<String>,
     /// Extra space after each space character (`word-spacing`).
     word_spacing: f64,
+    /// `paint-order` paints the stroke before the fill.
+    stroke_first: bool,
 }
 
 /// One character of a text and the adjustments its position needs.
@@ -82,6 +84,8 @@ struct Cell {
     stroke: Option<usize>,
     /// Space added after the character, in points (becomes manual kerning).
     kern: f64,
+    /// Its stroke paints before its fill (`paint-order`).
+    stroke_first: bool,
 }
 
 impl Cell {
@@ -125,6 +129,9 @@ pub(super) struct PendingText {
     pub paints: usize,
     /// `vector-effect="non-scaling-stroke"`: the character strokes keep their width on screen.
     pub non_scaling: bool,
+    /// The character stroke `paint-order` puts under the characters (in text space; it becomes
+    /// the object's own stroke below the Characters row) and the index of its `url(#…)` paint.
+    pub under: Option<(StrokeLayer, Option<usize>)>,
     /// The placeholder rectangle in the element's user space.
     marker: Rect,
 }
@@ -412,7 +419,10 @@ impl Ctx {
             (st.fill, st.stroke, fill_url, stroke_url) = (Paint::None, Paint::None, None, None);
         }
         let word_spacing = css.prop(n, "word-spacing").and_then(|v| self.length(&v, size, size)).unwrap_or(0.0);
-        let e = Rc::new(ElemStyle { style: st, fill: fill_url, stroke: stroke_url, word_spacing });
+        let order = css.prop(n, "paint-order").and_then(|v| svgtypes::PaintOrder::from_str(&v).ok()).unwrap_or_default().order;
+        let at = |k| order.iter().position(|o| *o == k);
+        let stroke_first = at(svgtypes::PaintOrderKind::Stroke) < at(svgtypes::PaintOrderKind::Fill);
+        let e = Rc::new(ElemStyle { style: st, fill: fill_url, stroke: stroke_url, word_spacing, stroke_first });
         self.elems.borrow_mut().insert(n.id(), e.clone());
         e
     }
@@ -536,9 +546,11 @@ impl Ctx {
                     fill: paint_index(&e.fill),
                     stroke: paint_index(&e.stroke),
                     kern: if *ch == ' ' { e.word_spacing } else { 0.0 },
+                    stroke_first: e.stroke_first,
                 }
             })
             .collect();
+        let under = stroke_under(&mut cells, label, warnings);
 
         let anchor = match self.css.prop(cs.chars[0].1, "text-anchor").as_deref() {
             Some("middle") => 0.5,
@@ -605,8 +617,33 @@ impl Ctx {
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
         let name = t.attribute("id").unwrap_or("").to_string();
         let non_scaling = vector_effect::is_non_scaling(&self.css, t);
-        Some((PendingText { name, obj, servers, paints: paints.len(), non_scaling, marker }, paints))
+        Some((PendingText { name, obj, servers, paints: paints.len(), non_scaling, under, marker }, paints))
     }
+}
+
+/// `paint-order` with the stroke first: the characters' stroke moves under all of them, as the
+/// object's own stroke (returned with its `url(#…)` paint index), and their own strokes go. Only
+/// when every character has that same stroke under a fill; otherwise a warning.
+fn stroke_under(cells: &mut [Cell], label: &str, warnings: &mut Vec<String>) -> Option<(StrokeLayer, Option<usize>)> {
+    let stroked = |c: &Cell| (c.stroke.is_some() || !c.style.stroke.is_none()) && c.style.stroke_width > 0.0;
+    let filled = |c: &Cell| c.fill.is_some() || !c.style.fill.is_none();
+    // Spaces paint nothing.
+    let mut ink = cells.iter().filter(|c| !c.ch.is_whitespace());
+    if !ink.clone().any(|c| c.stroke_first && stroked(c) && filled(c)) {
+        return None;
+    }
+    let key = |c: &Cell| (c.stroke_first && stroked(c)).then(|| (c.style.stroke_layer(), c.stroke));
+    let first = ink.next().and_then(key);
+    if first.is_none() || !ink.all(|c| key(c) == first) {
+        warnings.push(format!("paint-order on {label} ignored: its characters' strokes differ"));
+        return None;
+    }
+    let none = CharStyle::default().stroke_layer();
+    for c in cells.iter_mut() {
+        c.style.set_stroke_layer(&none);
+        c.stroke = None;
+    }
+    first
 }
 
 /// `v`, or 0 when far-off positions added up past f64's range.
