@@ -1,11 +1,15 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
-//! JPEG Options (quality instead of interlacing; no transparency) and WebP Options. Fields are
-//! `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the dialog's.
+//! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
+//! map), WebP Options, and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
+//! transparency and matte). Fields are `document.export` params (format, path, artboard
+//! choice…); `__`-prefixed ones are the dialog's.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format};
 use vectorcraft_render::AntiAlias;
+use vectorcraft_render::encode::jpeg::{self, ColorModel, Method};
+use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 
 use super::{DialogSpec, form};
 use crate::state::Dialog;
@@ -15,15 +19,26 @@ use crate::{VectorcraftApp, io, widgets};
 pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, ok: Some("Export"), min_width: 360.0, ..DialogSpec::FORM };
 
 /// Resolution presets (pixels per inch).
-const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
+pub(super) const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
 /// Their labels, then `Other` (any resolution).
-const RESOLUTION_LABELS: [&str; 4] = ["Screen (72 ppi)", "Medium (150 ppi)", "High (300 ppi)", "Other"];
+pub(super) const RESOLUTION_LABELS: [&str; 4] = ["Screen (72 ppi)", "Medium (150 ppi)", "High (300 ppi)", "Other"];
 /// Background param values.
 const BACKGROUNDS: [&str; 3] = ["transparent", "white", "black"];
 /// Their labels, then `Other` (a colour).
 const BACKGROUND_LABELS: [&str; 4] = ["Transparent", "White", "Black", "Other"];
+/// JPEG image map param values and their labels.
+const IMAGE_MAPS: [&str; 3] = ["none", "client", "server"];
+const IMAGE_MAP_LABELS: [&str; 3] = ["None", "Client-side (.html)", "Server-side (.map)"];
+/// Palette sizes offered (any 2–256 can be typed).
+const COLOR_COUNTS: [&str; 8] = ["2", "4", "8", "16", "32", "64", "128", "256"];
+/// Matte param values and their labels (`Other`: a colour).
+const MATTES: [&str; 3] = ["none", "white", "black"];
+const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
+/// JPEG quality on the dialog's 0–10 scale: the band each step falls in.
+const QUALITY_BANDS: [&str; 11] = ["Low", "Low", "Low", "Medium", "Medium", "Medium", "High", "High", "Maximum", "Maximum", "Maximum"];
 
-/// The dialog kind of a raster format (`pngOptions`, `jpgOptions`, `webpOptions`).
+/// The dialog kind of a raster format (`pngOptions`, `jpgOptions`, `webpOptions`, `gifOptions`,
+/// `png8Options`).
 fn kind(f: &Format) -> String {
     format!("{}Options", f.id)
 }
@@ -43,10 +58,37 @@ pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
         o.insert("background".into(), json!(if white { "white" } else { "transparent" }));
         o.insert("antiAlias".into(), json!(AntiAlias::default().id()));
         match f.id {
-            "png" => o.insert("interlaced".into(), json!(false)),
-            "jpg" => o.insert("quality".into(), json!(90)),
-            _ => None,
-        };
+            "png" => {
+                o.insert("interlaced".into(), json!(false));
+            }
+            "jpg" => {
+                // A CMYK document exports CMYK by default.
+                let cmyk = app.session.active().is_some_and(|st| st.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
+                let model = if cmyk { ColorModel::Cmyk } else { ColorModel::Rgb };
+                let defaults = jpeg::JpegOptions::default();
+                o.extend([
+                    ("quality".into(), json!(90)),
+                    ("colorModel".into(), json!(model.id())),
+                    ("method".into(), json!(defaults.method.id())),
+                    ("scans".into(), json!(defaults.scans)),
+                    ("embedIcc".into(), json!(defaults.embed_icc)),
+                    ("imageMap".into(), json!(IMAGE_MAPS[0])),
+                ]);
+            }
+            "gif" | "png8" => {
+                let p = PaletteOptions::default();
+                o.extend([
+                    ("reduction".into(), json!(p.reduction.id())),
+                    ("colors".into(), json!(p.colors)),
+                    ("dither".into(), json!(p.dither.id())),
+                    ("ditherAmount".into(), json!(p.dither_amount)),
+                    ("transparency".into(), json!(p.transparency)),
+                    ("matte".into(), json!(MATTES[1])),
+                    ("interlaced".into(), json!(false)),
+                ]);
+            }
+            _ => {}
+        }
         if let Some((w, h)) = size {
             o.insert("__size".into(), json!([w, h]));
         }
@@ -109,11 +151,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("background".into(), json!(value));
             }
             if choice == 3 {
-                let c = vectorcraft_color::Color::from_hex(&bg).map_or([128, 128, 128, 255], |c| c.to_rgba8(1.0));
-                let mut rgb = [c[0], c[1], c[2]];
-                if ui.color_edit_button_srgb(&mut rgb).changed() {
-                    d.fields.insert("background".into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
-                }
+                color_button(ui, d, "background");
             }
         });
         ui.end_row();
@@ -131,12 +169,11 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 form::check(ui, d, "interlaced", "Interlaced");
                 ui.end_row();
             }
-            "jpg" => {
-                label(ui, "Quality:");
-                let mut q = d.f64("quality", 90.0).round() as u8;
-                if ui.add(egui::Slider::new(&mut q, 1..=100)).changed() {
-                    d.fields.insert("quality".into(), json!(q));
-                }
+            "jpg" => jpeg_rows(ui, d, &label),
+            "gif" | "png8" => palette_rows(ui, d, &label),
+            "webp" => {
+                ui.label("");
+                label(ui, "Lossless (lossy WebP isn't available yet)");
                 ui.end_row();
             }
             _ => {}
@@ -152,6 +189,118 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     false
+}
+
+/// The JPEG Options rows: colour model, quality (0–10, stored ×10), method and scans, profile and
+/// image map.
+fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
+    label(ui, "Color Model:");
+    choice(ui, d, "colorModel", &ColorModel::ALL.map(ColorModel::id), &ColorModel::ALL.map(ColorModel::label));
+    ui.end_row();
+
+    label(ui, "Quality:");
+    let mut q = (d.f64("quality", 90.0) / 10.0).round().clamp(0.0, 10.0) as u8;
+    ui.horizontal(|ui| {
+        if ui.add(egui::Slider::new(&mut q, 0..=10)).changed() {
+            d.fields.insert("quality".into(), json!(u32::from(q) * 10));
+        }
+        label(ui, QUALITY_BANDS[q as usize]);
+    });
+    ui.end_row();
+
+    label(ui, "Method:");
+    ui.horizontal(|ui| {
+        choice(ui, d, "method", &Method::ALL.map(Method::id), &Method::ALL.map(Method::label));
+        if Method::from_id(&d.str("method")) == Some(Method::Progressive) {
+            label(ui, "Scans:");
+            let mut scans = d.f64("scans", 3.0).round().clamp(*jpeg::SCANS.start() as f64, *jpeg::SCANS.end() as f64) as u8;
+            if ui.add(egui::DragValue::new(&mut scans).range(jpeg::SCANS)).changed() {
+                d.fields.insert("scans".into(), json!(scans));
+            }
+        }
+    });
+    ui.end_row();
+
+    label(ui, "Image Map:");
+    choice(ui, d, "imageMap", &IMAGE_MAPS, &IMAGE_MAP_LABELS);
+    ui.end_row();
+
+    ui.label("");
+    form::check(ui, d, "embedIcc", "Embed ICC Profile");
+    ui.end_row();
+}
+
+/// The PNG-8 and GIF Options rows: the palette (reduction, colours, dither and amount),
+/// transparency and matte, interlacing.
+fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
+    label(ui, "Color Reduction:");
+    choice(ui, d, "reduction", &Reduction::ALL.map(Reduction::id), &Reduction::ALL.map(Reduction::label));
+    ui.end_row();
+
+    label(ui, "Colors:");
+    let mut n = d.f64("colors", 256.0).round().clamp(2.0, 256.0) as u16;
+    ui.horizontal(|ui| {
+        if let Some(i) = widgets::dropdown(ui, "ro-colors", &n.to_string(), &COLOR_COUNTS, 70.0) {
+            n = COLOR_COUNTS.get(i).and_then(|c| c.parse().ok()).unwrap_or(n);
+            d.fields.insert("colors".into(), json!(n));
+        }
+        if ui.add(egui::DragValue::new(&mut n).range(2..=256)).changed() {
+            d.fields.insert("colors".into(), json!(n));
+        }
+    });
+    ui.end_row();
+
+    label(ui, "Dither:");
+    ui.horizontal(|ui| {
+        choice(ui, d, "dither", &Dither::ALL.map(Dither::id), &Dither::ALL.map(Dither::label));
+        if Dither::from_id(&d.str("dither")).is_some_and(|x| x != Dither::None) {
+            let mut amount = d.f64("ditherAmount", 100.0).round().clamp(0.0, 100.0) as u8;
+            if ui.add(egui::DragValue::new(&mut amount).range(0..=100).suffix("%")).changed() {
+                d.fields.insert("ditherAmount".into(), json!(amount));
+            }
+        }
+    });
+    ui.end_row();
+
+    label(ui, "Matte:");
+    let matte = d.str("matte");
+    let at = MATTES.iter().position(|v| matte.eq_ignore_ascii_case(v)).unwrap_or(3);
+    ui.horizontal(|ui| {
+        if let Some(i) = widgets::dropdown(ui, "ro-matte", MATTE_LABELS[at], &MATTE_LABELS, 150.0) {
+            d.fields.insert("matte".into(), json!(MATTES.get(i).copied().unwrap_or("#808080")));
+        }
+        if at == 3 {
+            color_button(ui, d, "matte");
+        }
+    });
+    ui.end_row();
+
+    ui.label("");
+    ui.horizontal(|ui| {
+        form::check(ui, d, "transparency", "Transparency");
+        form::check(ui, d, "interlaced", "Interlaced");
+    });
+    ui.end_row();
+}
+
+/// A colour button bound to `d.fields[key]` (`"#rrggbb"`; grey when unset).
+pub(super) fn color_button(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
+    let c = vectorcraft_color::Color::from_hex(&d.str(key)).map_or([128, 128, 128, 255], |c| c.to_rgba8(1.0));
+    let mut rgb = [c[0], c[1], c[2]];
+    if ui.color_edit_button_srgb(&mut rgb).changed() {
+        d.fields.insert(key.into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
+    }
+}
+
+/// A dropdown bound to `d.fields[key]`: one of `ids`, shown by its label (the first when unknown).
+pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str], labels: &[&str]) {
+    let cur = d.str(key);
+    let at = ids.iter().position(|v| v.eq_ignore_ascii_case(&cur)).unwrap_or(0);
+    if let Some(i) = widgets::dropdown(ui, ("ro", key), labels.get(at).copied().unwrap_or_default(), labels, 150.0)
+        && let Some(v) = ids.get(i)
+    {
+        d.fields.insert(key.into(), json!(v));
+    }
 }
 
 /// Write the file(s) with the chosen options.

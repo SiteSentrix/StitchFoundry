@@ -20,6 +20,8 @@ vello_cpu = { workspace = true }
 vello_common = { version = "0.2", default-features = false }
 image = { workspace = true }
 flate2 = { workspace = true }
+jpeg-encoder = { workspace = true }
+gif = { workspace = true }
 log = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

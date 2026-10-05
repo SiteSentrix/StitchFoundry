@@ -790,6 +790,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "ui.pdfPresetDialog" => crate::dialogs::open_pdf_preset(app, p),
+        // Save for Office Documents…: its dialog; with options, pick the file (or write `path`).
+        "document.exportForOffice" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::office_export::open(app),
+        "document.exportForOffice" => io::save_command_output(app, id, "png", p.clone()).map(|path| json!({ "path": path })),
         _ => return None,
     };
     Some(r)
@@ -1057,6 +1060,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Save a Copy…", "file.saveCopy"),
                 c("Save as Template…", "file.saveAsTemplate"),
                 c("Save as PDF…", "file.export.pdf"),
+                c("Save for Office Documents…", "document.exportForOffice"),
                 c("Revert", "file.revert"),
                 Sep,
                 c("Place…", "file.place"),

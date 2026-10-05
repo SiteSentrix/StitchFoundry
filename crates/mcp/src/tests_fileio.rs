@@ -55,7 +55,7 @@ fn export_tool_lists_engine_formats_and_options() {
     let tools = tool_definitions();
     let export = tools.iter().find(|t| t["name"] == "export").unwrap();
     let props = &export["inputSchema"]["properties"];
-    assert_eq!(props["format"]["enum"], json!(["vectorcraft", "svg", "svgz", "pdf", "png", "jpg", "webp", "template"]));
+    assert_eq!(props["format"]["enum"], json!(["vectorcraft", "svg", "svgz", "pdf", "png", "jpg", "gif", "webp", "template", "png8", "txt"]));
     for k in ["artboard", "range", "options"] {
         assert!(props.get(k).is_some(), "export takes {k}");
     }

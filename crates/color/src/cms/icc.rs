@@ -1,10 +1,14 @@
-//! ICC profiles through `moxcms` (pure Rust): built-in RGB spaces and user-supplied `.icc` files.
+//! ICC profiles through `moxcms` (pure Rust): built-in RGB spaces and user-supplied `.icc` files,
+//! and the profiles exports embed ([`encode_builtin`]), written in code from the CMS.
 
 use std::sync::{Arc, OnceLock};
 
-use moxcms::{ColorProfile, DataColorSpace, Layout, ProfileText, RenderingIntent, TransformF32Executor, TransformOptions};
+use moxcms::{
+    ColorProfile, DataColorSpace, Layout, LocalizableString, LutMultidimensionalType, LutStore, LutWarehouse, Matrix3d, ProfileClass, ProfileText,
+    RenderingIntent, ToneReprCurve, TransformF32Executor, TransformOptions, Vector3d,
+};
 
-use super::{CmsError, Intent, ProfileKind};
+use super::{CmsError, Intent, ProfileKind, lab};
 
 fn moxcms_intent(i: Intent) -> RenderingIntent {
     match i {
@@ -27,6 +31,8 @@ type Xf = Option<Arc<TransformF32Executor>>;
 pub struct IccProfile {
     pub name: String,
     pub kind: ProfileKind,
+    /// The file it was loaded from (empty for profiles made in code).
+    source: Vec<u8>,
     profile: ColorProfile,
     srgb: ColorProfile,
     to_srgb: [OnceLock<Xf>; 4],
@@ -58,12 +64,25 @@ impl IccProfile {
             other => return Err(CmsError::Unsupported(format!("profile colour space {other:?} is not RGB, CMYK or Gray"))),
         };
         let name = name.or_else(|| text(&profile.description)).unwrap_or_else(|| format!("Untitled {kind:?} profile"));
-        Ok(Self { name, kind, profile, srgb: ColorProfile::new_srgb(), to_srgb: Default::default(), from_srgb: Default::default() })
+        Ok(Self {
+            name,
+            kind,
+            source: Vec::new(),
+            profile,
+            srgb: ColorProfile::new_srgb(),
+            to_srgb: Default::default(),
+            from_srgb: Default::default(),
+        })
     }
 
     pub fn from_bytes(name: Option<String>, bytes: &[u8]) -> Result<Self, CmsError> {
         let p = ColorProfile::new_from_slice(bytes).map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
-        Self::from_profile(name, p)
+        Ok(Self { source: bytes.to_vec(), ..Self::from_profile(name, p)? })
+    }
+
+    /// The profile as an ICC file: the bytes it was loaded from, else encoded.
+    pub fn bytes(&self) -> Result<Vec<u8>, CmsError> {
+        if self.source.is_empty() { encode(&self.profile) } else { Ok(self.source.clone()) }
     }
 
     fn layout(&self) -> Layout {
@@ -122,14 +141,104 @@ impl IccProfile {
     }
 }
 
-/// Built-in RGB working spaces from `moxcms`'s standard primaries.
-pub fn builtin_rgb(name: &str) -> Option<IccProfile> {
-    let p = match name {
+/// The primaries and tone curves of built-in RGB space `name`.
+fn rgb_space(name: &str) -> Option<ColorProfile> {
+    Some(match name {
         super::WIDE_GAMUT_RGB => ColorProfile::new_adobe_rgb(),
         super::DISPLAY_P3 => ColorProfile::new_display_p3(),
         super::PROPHOTO_RGB => ColorProfile::new_pro_photo_rgb(),
         super::SRGB => ColorProfile::new_srgb(),
         _ => return None,
+    })
+}
+
+/// Built-in RGB working spaces from `moxcms`'s standard primaries.
+pub fn builtin_rgb(name: &str) -> Option<IccProfile> {
+    IccProfile::from_profile(Some(name.to_string()), rgb_space(name)?).ok()
+}
+
+/// Built-in RGB space `name` as an ICC file, under its name here.
+pub(super) fn builtin_rgb_bytes(name: &str) -> Result<Vec<u8>, CmsError> {
+    encode(&labelled(rgb_space(name).ok_or_else(|| CmsError::UnknownProfile(name.into()))?, name))
+}
+
+/// Encode `p` as an ICC file. The creation date is fixed so exports are reproducible.
+pub(super) fn encode(p: &ColorProfile) -> Result<Vec<u8>, CmsError> {
+    let mut bytes = p.encode().map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
+    // Header bytes 24..36: year, month, day, hours, minutes, seconds (u16 each).
+    if let Some(date) = bytes.get_mut(24..36) {
+        date.copy_from_slice(&[2026u16, 1, 1, 0, 0, 0].map(u16::to_be_bytes).concat());
+    }
+    Ok(bytes)
+}
+
+fn text_tag(s: &str) -> Option<ProfileText> {
+    Some(ProfileText::Localizable(vec![LocalizableString::new("en".into(), "US".into(), s.into())]))
+}
+
+/// Profiles made here carry their name and no copyright claim.
+fn labelled(mut p: ColorProfile, name: &str) -> ColorProfile {
+    p.description = text_tag(name);
+    p.copyright = text_tag("No copyright, use freely");
+    p
+}
+
+/// Grid points per input channel of the CMYK → Lab table and of the Lab → CMYK table.
+const A2B_GRID: usize = 9;
+const B2A_GRID: usize = 17;
+
+/// A CMYK output profile sampled from a conversion: `to_lab` (CMYK → media-relative Lab) in a
+/// 9⁴ table, `from_lab` (Lab → CMYK, gamut-mapped) in a 17³ table, Lab PCS (ICC v4 encoding).
+pub(super) fn cmyk_profile(name: &str, to_lab: impl Fn([f32; 4]) -> lab::Lab, from_lab: impl Fn(lab::Lab) -> [f32; 4]) -> ColorProfile {
+    let unit = |i: usize, n: usize| i as f32 / (n - 1) as f32;
+    let q = |v: f32| (v.clamp(0.0, 1.0) * 65535.0).round() as u16;
+    let mut a2b = Vec::with_capacity(A2B_GRID.pow(4) * 3);
+    for i in 0..A2B_GRID.pow(4) {
+        let cmyk = [3, 2, 1, 0].map(|d| unit(i / A2B_GRID.pow(d) % A2B_GRID, A2B_GRID));
+        let l = to_lab(cmyk);
+        a2b.extend([l.l / 100.0, (l.a + 128.0) / 255.0, (l.b + 128.0) / 255.0].map(q));
+    }
+    let mut b2a = Vec::with_capacity(B2A_GRID.pow(3) * 4);
+    for i in 0..B2A_GRID.pow(3) {
+        let [l, a, b] = [2, 1, 0].map(|d| unit(i / B2A_GRID.pow(d) % B2A_GRID, B2A_GRID));
+        b2a.extend(from_lab(lab::Lab::new(l * 100.0, a * 255.0 - 128.0, b * 255.0 - 128.0)).map(q));
+    }
+    let identity = |n: usize| vec![ToneReprCurve::Parametric(vec![1.0]); n];
+    let table = |inputs: usize, outputs: usize, grid: usize, clut: Vec<u16>| {
+        let mut grid_points = [0u8; 16];
+        grid_points[..inputs].fill(grid as u8);
+        LutWarehouse::Multidimensional(LutMultidimensionalType {
+            num_input_channels: inputs as u8,
+            num_output_channels: outputs as u8,
+            grid_points,
+            clut: Some(LutStore::Store16(clut)),
+            // A curves sit on the device side, B curves on the PCS side.
+            a_curves: identity(4),
+            b_curves: identity(3),
+            m_curves: vec![],
+            matrix: Matrix3d::IDENTITY,
+            bias: Vector3d::default(),
+        })
     };
-    IccProfile::from_profile(Some(name.to_string()), p).ok()
+    let a2b = table(4, 3, A2B_GRID, a2b);
+    let b2a = table(3, 4, B2A_GRID, b2a);
+    let mut p = ColorProfile::default();
+    p.profile_class = ProfileClass::OutputDevice;
+    p.color_space = DataColorSpace::Cmyk;
+    p.pcs = DataColorSpace::Lab;
+    p.rendering_intent = RenderingIntent::RelativeColorimetric;
+    p.white_point = moxcms::WHITE_POINT_D50.to_xyzd();
+    p.media_white_point = Some(p.white_point);
+    p.lut_a_to_b_perceptual = Some(a2b.clone());
+    p.lut_a_to_b_colorimetric = Some(a2b);
+    p.lut_b_to_a_perceptual = Some(b2a.clone());
+    p.lut_b_to_a_colorimetric = Some(b2a);
+    labelled(p, name)
+}
+
+/// The grey space of greyscale exports: sRGB's tone curve, D50 white.
+pub(super) fn gray_profile(name: &str) -> ColorProfile {
+    let mut p = ColorProfile::new_gray_with_gamma(2.2);
+    p.gray_trc = ColorProfile::new_srgb().red_trc;
+    labelled(p, name)
 }

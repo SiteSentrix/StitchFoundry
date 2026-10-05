@@ -23,3 +23,6 @@ list (author, source, license) is in ASSETS.md.
 Rust dependencies (vello_cpu, kurbo, peniko, skrifa, harfrust, usvg, linesweeper, egui, eframe, …) are
 fetched through crates.io under their own permissive licenses (mostly MIT and/or Apache-2.0; also
 BSD, ISC, Zlib, BSL-1.0 and Unicode-3.0).
+
+JPEG export uses the jpeg-encoder crate (MIT OR Apache-2.0, and the IJG License): this software is
+based in part on the work of the Independent JPEG Group.

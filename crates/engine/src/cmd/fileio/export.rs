@@ -1,11 +1,12 @@
 //! `document.export`, `document.serialize`, `document.exportSelection`, `document.exportForScreens`.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind};
 
 use super::super::*;
 use super::encode::single_artboard;
@@ -18,7 +19,7 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
     let expanded = super::pdf::expand_preset(s, "document.serialize", p)?;
     let p = &*expanded;
-    let doc = &s.doc()?.doc;
+    let doc = &*source(s, f, p, "document.serialize")?;
     let enc = encode_all(doc, f.id, p)?;
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
@@ -27,7 +28,7 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
         "svg" => json!({ "text": String::from_utf8_lossy(bytes) }),
         _ => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
-    let mut out = merge(data(main.first().map_or(&[][..], |m| m.1)), json!({ "warnings": enc.warnings }));
+    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.warnings }));
     if main.len() > 1 {
         out["files"] = main.iter().map(|(name, bytes)| merge(json!({ "name": name }), data(bytes))).collect();
     }
@@ -42,7 +43,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.export", str_param(p, "format"), path)?;
     let expanded = super::pdf::expand_preset(s, "document.export", p)?;
     let p = &*expanded;
-    let doc = &s.doc()?.doc;
+    let doc = &*source(s, f, p, "document.export")?;
     let enc = encode_all(doc, f.id, p)?;
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
@@ -61,6 +62,34 @@ pub(super) fn without_artboards(p: &Value) -> Value {
     q
 }
 
+/// The document an export of `f` writes: the active one, or for text with `selectionOnly` the
+/// selected objects alone.
+fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Cow<'a, Document>> {
+    if f.id == "txt" && bool_or(p, "selectionOnly", false) {
+        return Ok(Cow::Owned(selection(s, cmd)?.0));
+    }
+    Ok(Cow::Borrowed(&s.doc()?.doc))
+}
+
+/// The selected objects (not on template layers) alone on one layer, with one artboard: their
+/// visual bounds.
+fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::Rect)> {
+    let ids = edit::selected_roots(s)?;
+    let st = s.doc()?;
+    let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
+    // On a template layer or sublayer, at any depth.
+    let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
+    let nodes: Vec<Arc<Node>> = ids.into_iter().filter(|id| !on_template(*id)).filter_map(|id| st.doc.node(id).cloned().map(Arc::new)).collect();
+    let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b)).ok_or_else(|| bad(cmd, "select something to export"))?;
+    let mut d = single_artboard(&st.doc, bounds, "Selection");
+    let mut layer = Node::layer(d.alloc_id(), "Selection", vectorcraft_doc::LayerColor::Preset(0));
+    if let Some(ch) = layer.children_mut() {
+        *ch = nodes;
+    }
+    d.layers = vec![Arc::new(layer)];
+    Ok((d, bounds))
+}
+
 /// File → Export Selection: the selected objects alone, cropped to their visual bounds. Objects on
 /// template layers are guides, not artwork, and are left out.
 pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
@@ -69,19 +98,7 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable(C, str_param(p, "format"), path)?;
     let expanded = super::pdf::expand_preset(s, C, p)?;
     let p = &*expanded;
-    let ids = edit::selected_roots(s)?;
-    let st = s.doc()?;
-    let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
-    // On a template layer or sublayer, at any depth.
-    let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
-    let nodes: Vec<Arc<Node>> = ids.into_iter().filter(|id| !on_template(*id)).filter_map(|id| st.doc.node(id).cloned().map(Arc::new)).collect();
-    let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b)).ok_or_else(|| bad(C, "select something to export"))?;
-    let mut d = single_artboard(&st.doc, bounds, "Selection");
-    let mut layer = Node::layer(d.alloc_id(), "Selection", vectorcraft_doc::LayerColor::Preset(0));
-    if let Some(ch) = layer.children_mut() {
-        *ch = nodes;
-    }
-    d.layers = vec![Arc::new(layer)];
+    let (d, bounds) = selection(s, C)?;
     let bytes = encode(&d, f.id, &without_artboards(p))?;
     write_or_return(path, &bytes, json!({ "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
 }
@@ -101,7 +118,7 @@ fn screen_format(row: &Value) -> Result<ScreenFormat> {
     }
     let format = writable(C, Some(str_param(row, "format").unwrap_or("png")), None)?;
     if matches!(format.id, "vectorcraft" | "template") {
-        return Err(bad(C, "Export for Screens writes png, jpg, webp, svg, svgz or pdf"));
+        return Err(bad(C, "Export for Screens writes png, jpg, webp, gif, png8, svg, svgz or pdf"));
     }
     // Vector formats have no pixel size: scale doesn't apply and adds no @Nx suffix (not even one
     // left over from a raster row switched to SVG or PDF).
@@ -178,4 +195,25 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     Ok(json!({ "files": files }))
+}
+
+/// File → Save for Office Documents: one artboard as a PNG at `ppi`, on white unless
+/// `transparent`.
+pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "document.exportForOffice";
+    let path = str_param(p, "path");
+    let ppi = f64_or(p, "ppi", 150.0);
+    let doc = &s.doc()?.doc;
+    let artboard = match p.get("artboard") {
+        None | Some(Value::Null) => 0,
+        Some(v) => v.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(|| bad(C, "artboard is a 0-based index"))?,
+    };
+    if artboard >= doc.artboards.len() {
+        return Err(bad(C, format!("no artboard {artboard} (0-based; the document has {})", doc.artboards.len())));
+    }
+    let background = if bool_or(p, "transparent", false) { "transparent" } else { "white" };
+    let bytes = encode(doc, "png", &json!({ "ppi": ppi, "background": background, "artboard": artboard }))?;
+    // The pixel size, from the PNG header.
+    let side = |at: usize| bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).map_or(0, u32::from_be_bytes);
+    write_or_return(path, &bytes, json!({ "width": side(16), "height": side(20) }))
 }

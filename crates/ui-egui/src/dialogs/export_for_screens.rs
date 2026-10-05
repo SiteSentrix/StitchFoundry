@@ -102,7 +102,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     }
                     let cur = f["format"].as_str().unwrap_or("png").to_string();
                     egui::ComboBox::from_id_salt(("efs-fmt", i)).selected_text(cur.to_uppercase()).width(70.0).show_ui(ui, |ui| {
-                        for fm in ["png", "jpg", "webp", "svg", "pdf"] {
+                        for fm in ["png", "jpg", "webp", "gif", "png8", "svg", "pdf"] {
                             if ui.selectable_label(cur == fm, fm.to_uppercase()).clicked() {
                                 f["format"] = json!(fm);
                             }
