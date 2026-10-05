@@ -160,10 +160,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 command: b("cmd"),
             };
             app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: m });
-            app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: false, repeat: false, modifiers: m });
+            // Typed text comes with the press, so it shares the key's frame and modifiers.
             if let Some(t) = s("text") {
                 app.synthetic.push(egui::Event::Text(t.to_string()));
             }
+            app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: false, repeat: false, modifiers: m });
             ctx.request_repaint();
             ok(Value::Null)
         }

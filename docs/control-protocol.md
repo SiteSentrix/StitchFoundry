@@ -416,3 +416,9 @@ from)}` opens too: dialog `printPreset`, the Print dialog's settings fields plus
 `print.presets.save` and returns to Print Presets (a new preset can't take a name in use). Delete, Import… and
 Export… are `print.presets.delete`, `print.presets.import` and `print.presets.export`; `ui.dialog.confirm` closes.
 Opening a `.vcprintpresets` file with `app.open` imports its presets.
+
+Modifiers on synthetic input: `ui.key`, `ui.click` and `ui.drag` take `shift`, `alt`, `ctrl` and `cmd` (Command on
+macOS, Ctrl elsewhere), and the app holds them for the frames the input spans, as if the keys were down: a key's
+press, its `text` and its release; a click's press and release; a drag from the press through every move to the
+release. Every handler sees them (Shift+arrow nudges by the big increment, Alt+arrow nudges a copy, Shift-clicking a
+Layers selection square adds to the selection); the keyboard's own modifiers apply again afterwards.
