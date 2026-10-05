@@ -17,6 +17,7 @@ vectorcraft-color = { workspace = true }
 vectorcraft-text = { workspace = true }
 kurbo = { workspace = true }
 thiserror = { workspace = true }
+flate2 = { workspace = true }
 image = { workspace = true }
 krilla = { workspace = true }
 hayro-syntax = "0.7.2"

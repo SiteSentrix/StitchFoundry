@@ -894,6 +894,8 @@ mod tests_dxfimport;
 mod tests_metafile;
 
 #[cfg(test)]
+mod tests_pdfoutput;
+#[cfg(test)]
 mod tests_tiffbmp;
 
 #[cfg(test)]

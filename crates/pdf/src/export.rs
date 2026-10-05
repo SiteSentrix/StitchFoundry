@@ -1,6 +1,7 @@
 //! Document → PDF (krilla). Mirrors the tree walk of `vectorcraft-render`.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
 use krilla::color::{cmyk, luma, rgb};
@@ -20,6 +21,7 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 
 use crate::lab_spot::{find, rfind};
 use crate::marks::PageBoxes;
+use crate::output::ColorOut;
 use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
@@ -63,6 +65,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
 
     let mut ex = Exporter::new(doc, set);
     ex.non_printing = set.include_non_printing || set.create_layers;
+    ex.out = w.out.clone();
     // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed, and by the
     // printer's marks around that.
     let bleed = set.bleed_of(doc);
@@ -102,7 +105,10 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
 /// its pages ([`Self::page`]), each drawn by an [`Exporter`].
 pub(crate) struct Writer {
     pub pdf: krilla::Document,
-    /// Groups blend in CMYK (a CMYK document's composite, see `cmyk_blending`).
+    /// How colours are written (the Output settings).
+    pub out: Arc<ColorOut>,
+    /// Groups blend in CMYK (a CMYK document's composite, or converting to CMYK; see
+    /// `cmyk_blending`).
     cmyk: bool,
     /// Spot colours written with a Lab alternate, gathered from the exporters ([`Self::absorb`]).
     lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
@@ -134,9 +140,17 @@ pub(crate) struct Sheet<'a> {
 }
 
 impl Writer {
-    /// A PDF with `set`'s version, standard and compression, and `doc`'s metadata under `title`,
-    /// created at `created` (Unix seconds). With `cmyk`, transparency blends in CMYK.
+    /// A PDF with `set`'s version, standard, compression and colour output, and `doc`'s metadata
+    /// under `title`, created at `created` (Unix seconds). With `cmyk`, transparency blends in
+    /// CMYK (unless the colours are converted to RGB).
     pub(crate) fn new(doc: &Document, set: &crate::PdfSettings, title: &str, created: Option<i64>, cmyk: bool) -> Result<Self, PdfError> {
+        let out = ColorOut::new(doc, set)?;
+        let mut warnings = vec![];
+        // Tagged CMYK colours need the profile (PDF/A tags every colour).
+        let cmyk_profile = if out.tagged { out.cmyk_icc() } else { None };
+        if out.tagged && cmyk_profile.is_none() {
+            warnings.push(format!("the CMYK profile {} can't be embedded: CMYK colours are written untagged", out.cmyk_profile()));
+        }
         let version = match set.compatibility {
             Compatibility::Pdf14 => PdfVersion::Pdf14,
             Compatibility::Pdf15 => PdfVersion::Pdf15,
@@ -150,7 +164,13 @@ impl Writer {
             cb = cb.with_archival_validator(Archival::A2_B);
         }
         let configuration = cb.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
-        let settings = krilla::SerializeSettings { compress_content_streams: set.compression.compress_text, configuration, ..Default::default() };
+        let settings = krilla::SerializeSettings {
+            compress_content_streams: set.compression.compress_text,
+            no_device_cs: out.tagged,
+            cmyk_profile,
+            configuration,
+            ..Default::default()
+        };
 
         let mut pdf = krilla::Document::new_with(settings);
         let mut meta = Metadata::new().creator("VectorCraft".into()).producer("VectorCraft".into());
@@ -173,7 +193,7 @@ impl Writer {
             meta = meta.creation_date(t);
         }
         pdf.set_metadata(meta);
-        Ok(Self { pdf, cmyk, lab_spots: vec![], warnings: vec![] })
+        Ok(Self { pdf, cmyk: out.blends_cmyk(cmyk), out: Arc::new(out), lab_spots: vec![], warnings })
     }
 
     /// Draw one page: the art of `ex`'s document placed as `sheet` says, then its marks.
@@ -227,8 +247,10 @@ impl Writer {
             // The drawing space the page shows (the marks' area).
             let shown = sheet.view.inverse().transform_rect_bbox(paper);
             let knockout = std::mem::replace(&mut ex.knockout, false);
+            // Marks keep their inks: they aren't converted to the destination.
+            let convert = std::mem::replace(&mut ex.convert, false);
             ex.node(&mut s, art, sheet.window.map_or(shown, |r| r.intersect(shown)), true);
-            ex.knockout = knockout;
+            (ex.knockout, ex.convert) = (knockout, convert);
         }
         if window.is_some() {
             s.pop();
@@ -258,44 +280,80 @@ impl Writer {
         }
     }
 
-    /// The finished file and the warnings of its drawing.
-    pub(crate) fn finish(self) -> Result<(Vec<u8>, Vec<String>), PdfError> {
+    /// The finished file (with the output intent and Trapped entries) and the warnings of its
+    /// drawing.
+    pub(crate) fn finish(mut self) -> Result<(Vec<u8>, Vec<String>), PdfError> {
         let mut bytes = self.pdf.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
         if self.cmyk {
-            cmyk_blending(&mut bytes);
+            cmyk_blending(&mut bytes, self.out.tagged);
         }
         let bytes = if self.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) };
+        let (bytes, more) = self.out.write_catalog(bytes)?;
+        self.warnings.extend(more);
         Ok((bytes, self.warnings))
     }
 }
 
-/// Make the transparency groups of `pdf` blend in DeviceCMYK. The PDF writer gives every group
-/// DeviceRGB as its blending space, so the group dictionaries are rewritten in place, keeping their
-/// length so the cross-reference offsets stay valid. Luminosity masks' groups keep RGB: mask
-/// luminance is that of screen colours, as on screen.
-fn cmyk_blending(pdf: &mut [u8]) {
+/// Make the transparency groups of `pdf` blend in CMYK. The PDF writer gives every group RGB as
+/// its blending space (DeviceRGB, or sRGB when colours are `tagged`), so the group dictionaries
+/// are rewritten in place to DeviceCMYK (or the CMYK profile's space), keeping their length so the
+/// cross-reference offsets stay valid. Luminosity masks' groups keep RGB: mask luminance is that
+/// of screen colours, as on screen.
+fn cmyk_blending(pdf: &mut [u8], tagged: bool) {
     let masks = luminosity_mask_groups(pdf);
+    let mut spaces = vec![("/CS/DeviceRGB".to_string(), "/CS/DeviceCMYK".to_string())];
+    if tagged {
+        spaces.extend(icc_spaces(pdf));
+    }
     let mut from = 0;
     while let Some(at) = find(pdf, b"/Group<<", from).map(|i| i + b"/Group".len()) {
         let end = find(pdf, b">>", at).map_or(pdf.len(), |i| i + 2);
-        if !object_number(&pdf[..at]).is_some_and(|n| masks.contains(&n)) {
-            cmyk_group(&mut pdf[at..end]);
+        let mask = pdf.get(..at).and_then(object_number).is_some_and(|n| masks.contains(&n));
+        if let (false, Some(dict)) = (mask, pdf.get_mut(at..end)) {
+            cmyk_group(dict, &spaces);
         }
         from = end;
     }
 }
 
-/// Rewrite transparency group dictionary `dict` (`<<…>>`) to blend in DeviceCMYK, at the same
-/// length: leaving out the optional `/Type/Group` makes room for the longer name, spaces pad the
-/// rest.
-fn cmyk_group(dict: &mut [u8]) {
+/// The ICC-based RGB colour spaces of `pdf`, each with the ICC-based CMYK one to blend in instead,
+/// as group `/CS` entries (`/CS 3 0 R`); none without a CMYK one.
+fn icc_spaces(pdf: &[u8]) -> Vec<(String, String)> {
+    const ICC: &[u8] = b"[/ICCBased ";
+    let (mut rgb, mut cmyk) = (vec![], None);
+    let mut from = 0;
+    while let Some(at) = find(pdf, ICC, from) {
+        from = at + ICC.len();
+        let digits = pdf.get(from..).map_or(0, |r| r.iter().take_while(|b| b.is_ascii_digit()).count());
+        let (Some(array), Some(stream)) = (pdf.get(..at).and_then(object_number), pdf.get(from..from + digits).and_then(number)) else {
+            continue;
+        };
+        // The profile stream's dictionary says how many components it has.
+        let Some(head) = find(pdf, format!("\n{stream} 0 obj").as_bytes(), 0) else { continue };
+        let dict = pdf.get(head..find(pdf, b"stream", head).unwrap_or(pdf.len())).unwrap_or_default();
+        if find(dict, b"/N 4", 0).is_some() {
+            cmyk.get_or_insert(format!("/CS {array} 0 R"));
+        } else if find(dict, b"/N 3", 0).is_some() {
+            rgb.push(format!("/CS {array} 0 R"));
+        }
+    }
+    let Some(cmyk) = cmyk else { return vec![] };
+    rgb.into_iter().map(|r| (r, cmyk.clone())).collect()
+}
+
+/// Rewrite transparency group dictionary `dict` (`<<…>>`) to blend in the CMYK space of the first
+/// of `spaces` (RGB `/CS` entry, CMYK one) it has, at the same length: leaving out the optional
+/// `/Type/Group` makes room for the longer entry, spaces pad the rest.
+fn cmyk_group(dict: &mut [u8], spaces: &[(String, String)]) {
     let Ok(text) = std::str::from_utf8(dict) else { return };
-    if !(text.contains("/S/Transparency") && text.contains("/Type/Group") && text.contains("/CS/DeviceRGB")) {
+    if !(text.contains("/S/Transparency") && text.contains("/Type/Group")) {
         return;
     }
-    let body = text.replacen("/Type/Group", "", 1).replacen("/CS/DeviceRGB", "/CS/DeviceCMYK", 1);
+    let Some((rgb, cmyk)) = spaces.iter().find(|(rgb, _)| text.contains(rgb.as_str())) else { return };
+    let body = text.replacen("/Type/Group", "", 1).replacen(rgb.as_str(), cmyk, 1);
     let body = body.strip_suffix(">>").unwrap_or(&body);
-    let new = format!("{body}{}>>", " ".repeat(dict.len() - body.len() - 2));
+    let Some(pad) = dict.len().checked_sub(body.len() + 2) else { return };
+    let new = format!("{body}{}>>", " ".repeat(pad));
     dict.copy_from_slice(new.as_bytes());
 }
 
@@ -361,6 +419,10 @@ pub(crate) struct Exporter<'a> {
     pub intent: vectorcraft_color::cms::Intent,
     /// Whether a layer shows transparency (found out on the first page that asks).
     transparent: Option<bool>,
+    /// How colours are written (the Output settings; print writes them as they are).
+    pub out: Arc<ColorOut>,
+    /// Colours are converted to the destination (printer's marks aren't).
+    convert: bool,
 }
 
 impl<'a> Exporter<'a> {
@@ -379,6 +441,8 @@ impl<'a> Exporter<'a> {
             non_printing: false,
             intent: vectorcraft_color::cms::active().settings().intent,
             transparent: None,
+            out: Arc::default(),
+            convert: true,
         }
     }
 
@@ -485,14 +549,17 @@ fn rects_overlap(a: Rect, b: Rect) -> bool {
 }
 
 impl Exporter<'_> {
-    /// A colour for the page: in CMYK documents RGB and Lab colours are separated into DeviceCMYK
-    /// through the active colour settings, so the file carries press values.
+    /// A colour for the page, as the Output settings write it ([`ColorOut::color`]): without
+    /// conversion, RGB and Lab colours of CMYK documents are separated into CMYK through the
+    /// active colour settings, so the file carries press values.
     fn col(&mut self, c: &Color) -> krilla::color::Color {
-        if self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && matches!(c, Color::Rgb { .. } | Color::Lab { .. }) {
-            let [cc, m, y, k] = vectorcraft_color::cms::active().to_cmyk(c, self.intent);
-            return cmyk::Color::new(q(cc), q(m), q(y), q(k)).into();
+        let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
+        let c = self.out.color(c, self.intent, cmyk_doc, self.convert);
+        if let (Color::Rgb { .. }, Some(note)) = (c, &self.out.srgb_note) {
+            let note = note.clone();
+            self.warn(note);
         }
-        color(c)
+        color(&c)
     }
 
     /// The Separation colour space of spot swatch `name` (its CMYK equivalent is the alternate
@@ -507,7 +574,7 @@ impl Exporter<'_> {
         {
             self.lab_spots.push((name.to_string(), vectorcraft_color::cms::Lab::new(l, a, b)));
         }
-        let full = vectorcraft_color::cms::active().to_cmyk(&color, self.intent);
+        let full = self.out.cmyk(&color, self.intent);
         let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
         Some(SeparationSpace::new(SeparationColorant::Custom(sw.name.clone()), alt))
     }
@@ -665,7 +732,7 @@ impl Exporter<'_> {
                                 acc[i] += c[i] / n;
                             }
                         }
-                        Some(color(&Color::rgb(acc[0], acc[1], acc[2])).into())
+                        Some(self.col(&Color::rgb(acc[0], acc[1], acc[2])).into())
                     }
                 }
             }
@@ -958,9 +1025,11 @@ impl Exporter<'_> {
         let (cols, rows) = (along(area.width()), along(area.height()));
         let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
         let rgba: Vec<u8> = field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
-        let (Some(img), Some(size)) =
-            (crate::images::from_rgba(&rgba, cols.into(), rows.into(), self.interpolate), Size::from_wh(area.width() as f32, area.height() as f32))
-        else {
+        let pixels = if self.convert { self.out.pixels() } else { None };
+        let (Some(img), Some(size)) = (
+            crate::images::from_rgba_in(rgba, cols.into(), rows.into(), self.interpolate, pixels),
+            Size::from_wh(area.width() as f32, area.height() as f32),
+        ) else {
             return;
         };
         s.push_transform(&xf(Affine::translate(area.origin().to_vec2())));
@@ -1187,8 +1256,9 @@ impl Exporter<'_> {
         }
         let interpolate = self.interpolate;
         let doc = self.doc;
+        let out = self.out.clone();
         let img = doc.images.get(key).and_then(|blob| {
-            let r = crate::images::recode(&blob.bytes, size, c, interpolate);
+            let r = crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels());
             if let Some(w) = r.warning {
                 self.warn(w);
             }

@@ -1,6 +1,6 @@
 //! Images in the PDF: the document's images as the Compression settings say (resampled above a
-//! resolution, compressed with ZIP or JPEG), and pixels the writer makes itself (freeform
-//! gradients).
+//! resolution, compressed with ZIP or JPEG) and converted as the Output settings say
+//! ([`Pixels`]), and pixels the writer makes itself (freeform gradients).
 //!
 //! Every image is classified as the settings are split: colour, greyscale (a grey colour type) or
 //! monochrome (greyscale that is only black and white). An image already as asked (not resampled,
@@ -10,20 +10,22 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
+use image::buffer::ConvertBuffer;
 use image::imageops::FilterType;
-use image::{DynamicImage, ExtendedColorType, ImageDecoder, ImageFormat, ImageReader};
+use image::{DynamicImage, ExtendedColorType, ImageDecoder, ImageFormat, ImageReader, RgbaImage};
 use krilla::image::{BitsPerComponent, CustomImage, Image, ImageColorspace};
 
+use crate::output::Pixels;
 use crate::{CompressionSettings, Downsample, ImageCodec, JpegQuality, MonoCodec};
 
-/// Raw 8-bit pixels: colour samples (RGB, or grey with `luma`) and an optional alpha channel.
+/// Raw 8-bit pixels: colour samples (RGB, grey or CMYK) and an optional alpha channel.
 #[derive(Clone, Hash)]
 struct Raw {
     color: Arc<Vec<u8>>,
     alpha: Option<Arc<Vec<u8>>>,
     width: u32,
     height: u32,
-    luma: bool,
+    space: ImageColorspace,
 }
 
 impl CustomImage for Raw {
@@ -48,7 +50,7 @@ impl CustomImage for Raw {
     }
 
     fn color_space(&self) -> ImageColorspace {
-        if self.luma { ImageColorspace::Luma } else { ImageColorspace::Rgb }
+        self.space
     }
 }
 
@@ -57,14 +59,34 @@ impl CustomImage for Raw {
 /// `interpolate` asks viewers to smooth it when enlarged (PDF/A forbids it). `None` when `rgba`
 /// doesn't hold that many pixels.
 pub(crate) fn from_rgba(rgba: &[u8], width: u32, height: u32, interpolate: bool) -> Option<Image> {
+    from_rgba_as(rgba, width, height, interpolate, None)
+}
+
+/// [`from_rgba`], colour pixels written as CMYK when `pixels` converts to CMYK (grey ones stay
+/// grey).
+fn from_rgba_as(rgba: &[u8], width: u32, height: u32, interpolate: bool, pixels: Option<&Pixels>) -> Option<Image> {
     let px = rgba.as_chunks::<4>().0;
     if px.len() as u64 != width as u64 * height as u64 || px.is_empty() {
         return None;
     }
     let luma = px.iter().all(|p| p[0] == p[1] && p[1] == p[2]);
-    let color = if luma { px.iter().map(|p| p[0]).collect() } else { px.iter().flat_map(|p| [p[0], p[1], p[2]]).collect() };
+    let (color, space) = if luma {
+        (px.iter().map(|p| p[0]).collect(), ImageColorspace::Luma)
+    } else if let Some(cmyk) = pixels.and_then(|p| p.cmyk(rgba)) {
+        (cmyk, ImageColorspace::Cmyk)
+    } else {
+        (px.iter().flat_map(|p| [p[0], p[1], p[2]]).collect(), ImageColorspace::Rgb)
+    };
     let alpha = px.iter().any(|p| p[3] < 255).then(|| Arc::new(px.iter().map(|p| p[3]).collect()));
-    Image::from_custom(Raw { color: Arc::new(color), alpha, width, height, luma }, interpolate).ok()
+    Image::from_custom(Raw { color: Arc::new(color), alpha, width, height, space }, interpolate).ok()
+}
+
+/// [`from_rgba`] of pixels converted by `pixels` (when given).
+pub(crate) fn from_rgba_in(mut rgba: Vec<u8>, width: u32, height: u32, interpolate: bool, pixels: Option<&Pixels>) -> Option<Image> {
+    if let Some(p) = pixels {
+        p.rgb_in_place(&mut rgba);
+    }
+    from_rgba_as(&rgba, width, height, interpolate, pixels)
 }
 
 /// The kinds of images the Compression section has settings for.
@@ -96,6 +118,7 @@ struct Rule {
 }
 
 const UNCOMPRESSED: &str = "uncompressed images are not written: images are compressed with ZIP";
+const CMYK_ZIP: &str = "images converted to CMYK are compressed with ZIP, not JPEG";
 
 /// JPEG quality (1–100) of a quality setting.
 fn quality(q: JpegQuality) -> u8 {
@@ -144,9 +167,10 @@ fn bilevel(img: &DynamicImage) -> bool {
 }
 
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
-/// resampled when its resolution is above the threshold, compressed with ZIP or JPEG.
-/// `interpolate` lets viewers smooth it. An image that can't be decoded is kept as it is.
-pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, interpolate: bool) -> Recoded {
+/// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
+/// converted by `convert` (colour images). `interpolate` lets viewers smooth it. An image that
+/// can't be decoded is kept as it is.
+pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, interpolate: bool, convert: Option<&Pixels>) -> Recoded {
     let keep = Recoded { image: None, warning: None };
     let Ok(reader) = ImageReader::new(Cursor::new(bytes)).with_guessed_format() else { return keep };
     let jpeg = reader.format() == Some(ImageFormat::Jpeg);
@@ -183,7 +207,8 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
         (Kind::Color, None)
     };
     let rule = rule(c, kind);
-    if kept(&rule) {
+    let convert = convert.filter(|_| kind == Kind::Color);
+    if kept(&rule) && convert.is_none() {
         return Recoded { image: None, warning: rule.instead };
     }
     let Some(img) = pixels.or_else(|| image::load_from_memory(bytes).ok()) else { return keep };
@@ -210,14 +235,27 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
         Codec::Auto(q) if jpeg => Some(q),
         _ => None,
     };
-    let image = quality.filter(|_| rgba.pixels().all(|p| p[3] == 255)).and_then(|q| to_jpeg(&img, kind != Kind::Color, q, interpolate));
+    // CMYK images are written losslessly (the PDF writer's CMYK JPEGs need the reader's
+    // conventions).
+    let cmyk = convert.is_some_and(|p| p.is_cmyk());
     let (width, height) = rgba.dimensions();
-    Recoded { image: image.or_else(|| from_rgba(rgba.as_raw(), width, height, interpolate)), warning: rule.instead }
+    let opaque = rgba.pixels().all(|p| p[3] == 255);
+    let image = match quality.filter(|_| opaque && !cmyk) {
+        Some(q) => {
+            if let Some(p) = convert {
+                p.rgb_in_place(&mut rgba);
+            }
+            to_jpeg(&rgba, kind != Kind::Color, q, interpolate).or_else(|| from_rgba(rgba.as_raw(), width, height, interpolate))
+        }
+        None => from_rgba_in(rgba.into_raw(), width, height, interpolate, convert),
+    };
+    let warning = rule.instead.or((cmyk && quality.is_some() && opaque).then_some(CMYK_ZIP));
+    Recoded { image, warning }
 }
 
-/// Opaque `img` as a JPEG image at `quality` (a greyscale JPEG with `grey`).
-fn to_jpeg(img: &DynamicImage, grey: bool, quality: u8, interpolate: bool) -> Option<Image> {
-    let img = if grey { DynamicImage::ImageLuma8(img.to_luma8()) } else { DynamicImage::ImageRgb8(img.to_rgb8()) };
+/// Opaque `rgba` as a JPEG image at `quality` (a greyscale JPEG with `grey`).
+fn to_jpeg(rgba: &RgbaImage, grey: bool, quality: u8, interpolate: bool) -> Option<Image> {
+    let img = if grey { DynamicImage::ImageLuma8(rgba.convert()) } else { DynamicImage::ImageRgb8(rgba.convert()) };
     let mut out = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode_image(&img).ok()?;
     Image::from_jpeg(out.into(), interpolate).ok()
