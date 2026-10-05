@@ -96,6 +96,22 @@ pub fn painted_box(bounds: Rect) -> Option<Rect> {
     (side > 1e-9 && side.is_finite()).then(|| Rect::from_center_size(b.center(), (b.width().max(side * 1e-3), b.height().max(side * 1e-3))))
 }
 
+/// Device pixels per cell of the grid a freeform gradient is sampled on.
+const CELL_PX: f64 = 4.0;
+/// Fewest and most cells along the painted box's longer side.
+const MIN_CELLS: f64 = 8.0;
+const MAX_CELLS: f64 = 256.0;
+
+/// The grid (columns, rows) a freeform gradient on box `b` (see [`painted_box`]) is sampled on
+/// when the box's longer side spans `device` pixels: a cell per few pixels, in power-of-two steps
+/// (so zooming reuses grids), 8 to 256 cells along the longer side.
+pub fn grid_size(b: Rect, device: f64) -> (u16, u16) {
+    let side = b.width().max(b.height());
+    let cells = 2f64.powf((device / CELL_PX).max(1.0).log2().ceil()).clamp(MIN_CELLS, MAX_CELLS);
+    let along = |len: f64| (cells * len / side).ceil().clamp(2.0, MAX_CELLS) as u16;
+    (along(b.width()), along(b.height()))
+}
+
 /// Where a point lies nearest on a line (see [`Freeform::nearest_on_lines`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineHit {

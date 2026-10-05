@@ -73,6 +73,24 @@ pub const OPTIONS: &[FormatOption] = &[
         description: "keep hidden layers, not displayed (display:none); document.save sets it unless given",
     },
     FormatOption {
+        name: "encoding",
+        ty: "string",
+        default: "\"utf8\"",
+        description: "utf8 | utf16 (big-endian, with a byte order mark) | latin1 (ISO 8859-1; other characters as &#x…; references)",
+    },
+    FormatOption {
+        name: "profile",
+        ty: "string",
+        default: "\"svg11\"",
+        description: "svg11 (SVG 1.1) | tiny12 (SVG Tiny 1.2, simplified: presentation attributes only; no filters, masks, symbols, blend modes or embedded fonts)",
+    },
+    FormatOption {
+        name: "embedFonts",
+        ty: "boolean",
+        default: "false",
+        description: "embed the fonts type uses as @font-face, subset to the characters used (whole when the font's licence forbids subsetting, left out with a warning when it forbids embedding)",
+    },
+    FormatOption {
         name: "svg",
         ty: "object",
         default: "null",
@@ -134,7 +152,8 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
     let native = opts.preserve_editing.then(|| vectorcraft_format::save(doc, false));
     let mut enc = Encoded::default();
     for artboard in boards {
-        let out = vectorcraft_svg::export_full(doc, &ExportOptions { artboard, ..opts.clone() }, native.as_deref());
+        let mut out = vectorcraft_svg::export_full(doc, &ExportOptions { artboard, ..opts.clone() }, native.as_deref());
+        let bytes = out.take_bytes();
         for l in out.linked {
             if !enc.linked.iter().any(|e| e.name == l.name) {
                 enc.linked.push(l);
@@ -145,7 +164,7 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
                 enc.warnings.push(w);
             }
         }
-        enc.files.push((artboard, if compressed { vectorcraft_svg::compress(&out.svg) } else { out.svg.into_bytes() }));
+        enc.files.push((artboard, if compressed { vectorcraft_svg::compress_bytes(&bytes) } else { bytes }));
     }
     Ok(enc)
 }

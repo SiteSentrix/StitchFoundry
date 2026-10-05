@@ -77,6 +77,10 @@ impl FontFace {
     pub(crate) fn hb(&self) -> Option<harfrust::FontRef<'_>> {
         harfrust::FontRef::from_index(self.data(), self.index).ok()
     }
+    /// The face's index in its font file (collections hold several).
+    pub(crate) fn index(&self) -> u32 {
+        self.index
+    }
     /// Unique id of this face within the process.
     pub fn id(&self) -> u32 {
         self.id
@@ -243,8 +247,8 @@ fn norm(s: &str) -> String {
     s.chars().filter(|c| c.is_alphanumeric()).flat_map(|c| c.to_lowercase()).collect()
 }
 
-/// Weight implied by a style name.
-fn style_weight(style: &str) -> f32 {
+/// Weight implied by a style name (400 = regular).
+pub fn style_weight(style: &str) -> f32 {
     let s = norm(style);
     const TABLE: &[(&str, f32)] = &[
         ("extralight", 200.0),
@@ -439,6 +443,11 @@ impl FontDb {
             return Some(f);
         }
         self.find(FALLBACK_FAMILY, style).or_else(|| self.find(FALLBACK_FAMILY, "Regular")).or_else(|| self.read_faces().first().cloned())
+    }
+
+    /// The loaded face with [`FontFace::id`] `id` (the face a laid-out glyph came from).
+    pub fn face_by_id(&self, id: u32) -> Option<Arc<FontFace>> {
+        self.read_faces().iter().find(|f| f.id == id).cloned()
     }
 
     /// Is `family` available (loaded)?

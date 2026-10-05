@@ -21,9 +21,16 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let enc = encode_all(doc, f.id, p)?;
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
-    // Text formats come back as text.
+    // Text formats come back as text; an SVG in UTF-16 or ISO 8859-1 also as its bytes.
     let data = |bytes: &[u8]| match f.id {
-        "svg" => json!({ "text": String::from_utf8_lossy(bytes) }),
+        "svg" => {
+            let text = vectorcraft_svg::text_of(bytes).unwrap_or_else(|_| String::from_utf8_lossy(bytes));
+            let mut v = json!({ "text": text });
+            if text.as_bytes() != bytes {
+                v["dataBase64"] = json!(vectorcraft_format::base64_encode(bytes));
+            }
+            v
+        }
         _ => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
     let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.warnings }));

@@ -1,16 +1,23 @@
 //! The SVG writer.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::fmt::Write as _;
+use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
     AppearanceItem, Document, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind, TextObject,
 };
-use vectorcraft_doc::{CharStyle, Justify};
+use vectorcraft_doc::{CharStyle, ImageBlob, Justify};
 use vectorcraft_effects::stroke::{self, Written, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
-use crate::{EDITING_NS, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Styling, base64_encode, body_hash, fmt_num, fnv1a, xml_escape};
+use vectorcraft_text::{FontDb, FontFace};
+
+use crate::{
+    EDITING_NS, Encoding, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Profile, Styling, base64_encode, body_hash, fmt_num, fnv1a,
+    xml_escape,
+};
 
 type Props = Vec<(&'static str, String)>;
 
@@ -59,6 +66,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         instance_xf: Affine::IDENTITY,
         symbols: HashMap::new(),
         symbol_nest: 0,
+        fonts: Vec::new(),
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -76,8 +84,9 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
 
     let nl = if opts.minify { "" } else { "\n" };
     let mut out = String::new();
-    if !opts.minify {
-        out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    // A file in neither UTF-8 nor UTF-16 must name its encoding.
+    if !opts.minify || opts.encoding == Encoding::Latin1 {
+        out.push_str(&format!("<?xml version=\"1.0\" encoding=\"{}\"?>{nl}", opts.encoding.xml_name()));
     }
     if opts.styling == Styling::StyleEntities && !w.classes.is_empty() {
         out.push_str("<!DOCTYPE svg [");
@@ -88,19 +97,24 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
     }
     let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
     out.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
+    if w.tiny() {
+        out.push_str(" version=\"1.2\" baseProfile=\"tiny\"");
+    }
     if !opts.responsive {
         out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
     }
     out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();
-    if !w.defs.is_empty() || css {
+    let fonts = w.font_faces();
+    if !w.defs.is_empty() || css || !fonts.is_empty() {
         out.push_str(&w.indent(1));
         out.push_str(&format!("<defs>{nl}"));
-        if css {
+        if css || !fonts.is_empty() {
             out.push_str(&w.indent(2));
             out.push_str("<style>");
-            for (i, c) in w.classes.iter().enumerate() {
-                out.push_str(&format!("{nl}{}.{id_prefix}cls-{}{{{}}}", w.indent(3), i + 1, xml_escape(c)));
+            let classes = w.classes.iter().enumerate().filter(|_| css).map(|(i, c)| format!(".{id_prefix}cls-{}{{{c}}}", i + 1));
+            for rule in classes.chain(fonts) {
+                out.push_str(&format!("{nl}{}{}", w.indent(3), xml_escape(&rule)));
             }
             out.push_str(&format!("{nl}{}</style>{nl}", w.indent(2)));
         }
@@ -117,13 +131,65 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(&w.indent(1));
         out.push_str(&format!("<desc>{}</desc>{nl}", xml_escape(&doc.metadata.description)));
     }
+    let latin1 = opts.encoding == Encoding::Latin1;
+    if latin1 {
+        latin1_refs(&mut out);
+        latin1_refs(&mut w.body);
+    }
     // The editing data carries a hash of the markup around its `<metadata>`.
     let native = native.filter(|_| opts.preserve_editing).map(|bytes| (bytes, body_hash(&[&out, &w.body, "</svg>", nl])));
-    w.metadata(&mut out, native);
+    let mut meta = String::new();
+    w.metadata(&mut meta, native);
+    if latin1 {
+        latin1_refs(&mut meta);
+    }
+    out.push_str(&meta);
     out.push_str(&w.body);
     out.push_str("</svg>");
     out.push_str(nl);
-    Output { svg: out, linked: w.linked, warnings: w.warnings }
+    Output { svg: out, linked: w.linked, warnings: w.warnings, encoding: opts.encoding }
+}
+
+/// Write every character of `s` beyond ISO 8859-1 as a character reference (all of them sit in
+/// attribute values, text or style sheets, where references read as the character).
+fn latin1_refs(s: &mut String) {
+    if s.chars().all(|c| u32::from(c) < 0x100) {
+        return;
+    }
+    let mut o = String::with_capacity(s.len() + 64);
+    for c in s.chars() {
+        if u32::from(c) < 0x100 {
+            o.push(c);
+        } else {
+            let _ = write!(o, "&#x{:X};", u32::from(c));
+        }
+    }
+    *s = o;
+}
+
+/// The weight and italic of the face style `st` asks for: what embedded fonts' `@font-face`
+/// rules and the characters using them say, so each face is told apart (Semibold from Bold).
+fn font_descriptor(st: &CharStyle) -> (u16, bool) {
+    let fs = st.font_style.to_ascii_lowercase();
+    (vectorcraft_text::style_weight(&st.font_style).round().clamp(1.0, 1000.0) as u16, fs.contains("italic") || fs.contains("oblique"))
+}
+
+/// `chars` (sorted) as a CSS `unicode-range` (`U+41-5A,U+61`).
+fn unicode_range(chars: &BTreeSet<char>) -> String {
+    let mut runs: Vec<(u32, u32)> = Vec::new();
+    for c in chars.iter().map(|c| u32::from(*c)) {
+        match runs.last_mut() {
+            Some((_, end)) if c == *end + 1 => *end = c,
+            _ => runs.push((c, c)),
+        }
+    }
+    let one = |(a, b): (u32, u32)| if a == b { format!("U+{a:X}") } else { format!("U+{a:X}-{b:X}") };
+    runs.into_iter().map(one).collect::<Vec<_>>().join(",")
+}
+
+/// A CSS string.
+fn css_string(s: &str) -> String {
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// A CSS declaration block as the literal value of an `<!ENTITY>`: quotes, `%` and markup
@@ -191,6 +257,18 @@ struct Writer<'a> {
     /// Symbols being written inside one another (instances nested deeper are left out: a symbol
     /// can't contain itself).
     symbol_nest: u32,
+    /// The characters type uses from each face ([`ExportOptions::embed_fonts`]).
+    fonts: Vec<FontUse>,
+}
+
+/// The characters type uses from one face, under one `@font-face` description: the family the
+/// type names and the weight and italic its style asks for.
+struct FontUse {
+    family: String,
+    weight: u16,
+    italic: bool,
+    face: Arc<FontFace>,
+    chars: BTreeSet<char>,
 }
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
@@ -320,6 +398,8 @@ fn dublin_core(doc: &Document) -> Vec<(&'static str, String)> {
     terms
 }
 
+/// What SVG Tiny 1.2 does without masks.
+const TINY_MASKS: &str = "SVG Tiny 1.2 has no masks: opacity masks are left out and knockout groups written as plain groups";
 /// A region covering any artwork (mask and filter extents).
 const BIG: &str = "x=\"-100000\" y=\"-100000\" width=\"200000\" height=\"200000\"";
 /// Attributes of every `<mask>`: user-space units, and luminance taken from the sRGB values (as the
@@ -360,6 +440,14 @@ fn sanitize_id(name: &str) -> String {
 }
 
 impl Writer<'_> {
+    /// Writing the SVG Tiny 1.2 profile?
+    fn tiny(&self) -> bool {
+        self.opts.profile == Profile::Tiny12
+    }
+    /// Are the fonts type uses embedded?
+    fn embeds_fonts(&self) -> bool {
+        self.opts.embed_fonts && !self.opts.outline_text && !self.tiny()
+    }
     fn num(&self, v: f64) -> String {
         fmt_num(v, self.opts.decimals)
     }
@@ -444,14 +532,20 @@ impl Writer<'_> {
             return String::new();
         }
         let css = |ps: &[&(&str, String)]| ps.iter().map(|(k, v)| format!("{k}:{v}")).collect::<Vec<_>>().join(";");
-        match self.opts.styling {
+        // SVG Tiny has presentation attributes alone.
+        let styling = if self.tiny() { Styling::PresentationAttributes } else { self.opts.styling };
+        match styling {
             Styling::PresentationAttributes => {
-                // CSS-only properties go in a style attribute.
+                // CSS-only properties go in a style attribute (SVG Tiny has none: left out).
                 let (style, attrs): (Vec<_>, Vec<_>) =
                     props.iter().partition(|(k, _)| matches!(*k, "mix-blend-mode" | "isolation" | "font-feature-settings" | "font-kerning"));
                 let mut s: String = attrs.iter().map(|(k, v)| format!(" {k}=\"{}\"", xml_escape(v))).collect();
                 if !style.is_empty() {
-                    s.push_str(&format!(" style=\"{}\"", xml_escape(&css(&style))));
+                    if self.tiny() {
+                        self.warn("SVG Tiny 1.2 has no style sheets: blend modes, isolation and font features are left out");
+                    } else {
+                        s.push_str(&format!(" style=\"{}\"", xml_escape(&css(&style))));
+                    }
                 }
                 s
             }
@@ -618,6 +712,10 @@ impl Writer<'_> {
     /// id. A midpoint other than halfway is written as an extra stop marked `data-vc-midpoint`
     /// (what import turns back into a midpoint).
     fn gradient_def(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        if g.gradient.kind == GradientKind::Freeform {
+            // Object fills and strokes are images (see `raster_paint`); characters' paints aren't.
+            self.warn("freeform gradients on characters are written as linear gradients");
+        }
         let mut geom = g.resolve(bounds);
         geom.transform(self.xf, g.gradient.kind);
         let (s, e) = (geom.start, geom.end);
@@ -719,13 +817,7 @@ impl Writer<'_> {
         if stroke::is_plain(st) {
             return StrokePlan::Written(stroke::for_writer(&BezPath::new(), st));
         }
-        let bp = bp.get_or_insert_with(|| {
-            let mut bp = BezPath::new();
-            for p in paths {
-                bp.extend(p.to_bezpath());
-            }
-            bp
-        });
+        let bp = bp.get_or_insert_with(|| doc_path(paths));
         let doc = self.doc;
         let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
         match st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) {
@@ -744,6 +836,16 @@ impl Writer<'_> {
                 let r = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
                 self.def(1, &format!("<clipPath id=\"{cid}\">"));
                 self.def(2, &format!("<path d=\"{d}\"{r}/>"));
+                self.def(1, "</clipPath>");
+                format!(" clip-path=\"url(#{cid})\"")
+            }
+            Some(StrokeAlign::Outside) if self.tiny() => {
+                // No masks: clipped by everything around the shape instead.
+                let cid = self.fresh_id("clip-path");
+                let b = self.xf.transform_rect_bbox(reach).inflate(1.0, 1.0);
+                let (x0, y0, x1, y1) = (self.num(b.x0), self.num(b.y0), self.num(b.x1), self.num(b.y1));
+                self.def(1, &format!("<clipPath id=\"{cid}\">"));
+                self.def(2, &format!("<path d=\"M{x0} {y0} H{x1} V{y1} H{x0} Z {d}\" clip-rule=\"evenodd\"/>"));
                 self.def(1, "</clipPath>");
                 format!(" clip-path=\"url(#{cid})\"")
             }
@@ -790,6 +892,7 @@ impl Writer<'_> {
             && strokes <= 1
             && !items.iter().any(|i| has_raster(i.effects()))
             && items.iter().all(|i| i.blend() == BlendMode::Normal)
+            && !items.iter().any(|i| freeform(i.paint()).is_some())
             && plans.iter().flatten().all(|p| matches!(p, StrokePlan::Written(Written { shape: WrittenShape::Stroke { .. }, side: None })));
         if simple {
             let mut p = Props::new();
@@ -822,12 +925,17 @@ impl Writer<'_> {
             let mut p = Props::new();
             match (it, plan) {
                 (AppearanceItem::Fill(f), _) => {
-                    self.fill_props(f, rule, bounds, &mut p);
-                    if f.blend != BlendMode::Normal {
-                        p.push(("mix-blend-mode", blend_css(f.blend).into()));
+                    let blend = (f.blend != BlendMode::Normal).then(|| ("mix-blend-mode", blend_css(f.blend).to_string()));
+                    if let (Some(g), Some(b)) = (freeform(&f.paint), bounds) {
+                        p.extend((f.opacity < 1.0).then(|| ("opacity", fmt_num(f.opacity as f64, 3))));
+                        p.extend(blend);
+                        self.raster_paint(g, b, &[d.to_string()], rule, &p, "");
+                    } else {
+                        self.fill_props(f, rule, bounds, &mut p);
+                        p.extend(blend);
+                        let a = self.attrs(&p);
+                        self.line(&format!("<path d=\"{d}\"{a}/>"));
                     }
-                    let a = self.attrs(&p);
-                    self.line(&format!("<path d=\"{d}\"{a}/>"));
                 }
                 (AppearanceItem::Stroke(s), Some(StrokePlan::Brush(art))) => {
                     // The brush art takes the stroke's opacity and blend mode as a group.
@@ -849,23 +957,39 @@ impl Writer<'_> {
                 (AppearanceItem::Stroke(s), Some(StrokePlan::Written(w))) => {
                     let side = self.side_attr(w.side, d, rule, w.reach(s, bounds.unwrap_or_default()));
                     let blend = (s.blend != BlendMode::Normal).then(|| ("mix-blend-mode", blend_css(s.blend).to_string()));
-                    match &w.shape {
-                        WrittenShape::Stroke { width } => {
+                    let opacity = (s.opacity < 1.0).then(|| ("opacity", fmt_num(s.opacity as f64, 3)));
+                    match (&w.shape, freeform(&s.paint).zip(paint_bounds(s))) {
+                        (WrittenShape::Stroke { width }, Some((g, b))) => {
+                            // The stroke's outline clips the gradient's image.
+                            let bp = bp.get_or_insert_with(|| doc_path(paths));
+                            let outline = stroke::line_outline(bp, s, *width, OUTLINE_TOLERANCE);
+                            let clip = self.path_d(&PathData::from_bezpath(&outline), self.xf);
+                            p.extend(opacity);
+                            p.extend(blend);
+                            self.raster_paint(g, b, &[clip], FillRule::NonZero, &p, &side);
+                        }
+                        (WrittenShape::Fill(outlines), Some((g, b))) if s.path_gradient().is_none() => {
+                            let clip: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
+                            p.extend(opacity);
+                            p.extend(blend);
+                            self.raster_paint(g, b, &clip, FillRule::NonZero, &p, &side);
+                        }
+                        (WrittenShape::Stroke { width }, _) => {
                             p.push(("fill", "none".into()));
                             self.stroke_props(s, *width, paint_bounds(s), &mut p);
                             p.extend(blend);
                             let a = self.attrs(&p);
                             self.line(&format!("<path d=\"{d}\"{a}{side}/>"));
                         }
-                        WrittenShape::Fill(outlines) if s.path_gradient().is_some() => {
+                        (WrittenShape::Fill(outlines), _) if s.path_gradient().is_some() => {
                             // A gradient along or across the stroke: slices clipped to its outlines.
                             if let Some(ws) = bp.as_ref().and_then(|bp| stroke::written_slices(bp, rule, s, outlines)) {
-                                p.extend((s.opacity < 1.0).then(|| ("opacity", fmt_num(s.opacity as f64, 3))));
+                                p.extend(opacity);
                                 p.extend(blend);
                                 self.sliced(&ws, &p, &side);
                             }
                         }
-                        WrittenShape::Fill(outlines) => {
+                        (WrittenShape::Fill(outlines), _) => {
                             let paint = self.paint(&s.paint, paint_bounds(s));
                             let ds: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
                             let opacity = (s.opacity < 1.0).then(|| fmt_num(s.opacity as f64, 3));
@@ -935,6 +1059,12 @@ impl Writer<'_> {
     /// An object with an opacity mask: `<g mask="url(#…)">` around the unmasked object. The mask
     /// art goes in `<defs>`; no-clip adds a white backdrop and invert a colour-inverting filter.
     fn masked(&mut self, n: &Node, m: &vectorcraft_doc::OpacityMask) {
+        if self.tiny() {
+            self.warn(TINY_MASKS);
+            let mut bare = n.clone();
+            bare.mask = None;
+            return self.node_body(&bare);
+        }
         let mid = self.fresh_id("mask");
         // Mask art is a picture of its own: it takes no part in a knockout group around the object.
         let knockout = std::mem::take(&mut self.knockout);
@@ -1005,7 +1135,10 @@ impl Writer<'_> {
     /// drawn through a mask of where the elements above it don't paint (the same look for Normal
     /// blending). The masks nest, so element i sits inside the masks of elements i+1…n.
     fn children(&mut self, children: &[std::sync::Arc<Node>]) {
-        if !self.knockout {
+        if self.knockout && self.tiny() {
+            self.warn(TINY_MASKS);
+        }
+        if !self.knockout || self.tiny() {
             for c in children {
                 self.node(c);
             }
@@ -1152,18 +1285,10 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
-                let link = self.opts.images == ImageMode::Link;
-                let href = match (im.link.as_ref().filter(|_| link), self.doc.images.get(&im.key)) {
+                let (doc, link) = (self.doc, self.opts.images == ImageMode::Link);
+                let href = match (im.link.as_ref().filter(|_| link), doc.images.get(&im.key)) {
                     (Some(l), _) => l.path.clone(),
-                    (None, Some(b)) if !b.bytes.is_empty() && link => {
-                        // Named after the bytes: image keys ("raster-1"…) repeat across documents.
-                        let name = format!("{}.{}", b.content_key(), image_ext(&b.mime));
-                        if !self.linked.iter().any(|l| l.name == name) {
-                            self.linked.push(LinkedImage { name: name.clone(), bytes: b.bytes.clone() });
-                        }
-                        name
-                    }
-                    (None, Some(b)) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
+                    (None, Some(b)) if !b.bytes.is_empty() => self.blob_href(b),
                     _ => match &im.link {
                         Some(l) => l.path.clone(),
                         None => return,
@@ -1223,11 +1348,76 @@ impl Writer<'_> {
         }
     }
 
+    /// The `href` of image bytes `b`: a `data:` URI, or with [`ImageMode::Link`] a file written
+    /// next to the SVG, named after the bytes (image keys such as "raster-1" repeat across
+    /// documents).
+    fn blob_href(&mut self, b: &ImageBlob) -> String {
+        if self.opts.images != ImageMode::Link {
+            return format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes));
+        }
+        let name = format!("{}.{}", b.content_key(), image_ext(&b.mime));
+        if !self.linked.iter().any(|l| l.name == name) {
+            self.linked.push(LinkedImage { name: name.clone(), bytes: b.bytes.clone() });
+        }
+        name
+    }
+
+    /// A freeform gradient `g` painted over `bounds` (the space [`Self::xf`] maps into user
+    /// space), which SVG can't express: an `<image>` of the colour field over its painted box,
+    /// sampled as the canvas samples it (at twice the box's size in points) and clipped to
+    /// `clip` (outlines in user space filled by `rule`), in a group with `props` and the `side`
+    /// attribute. Nothing is written for an empty box.
+    fn raster_paint(&mut self, g: &GradientPaint, bounds: Rect, clip: &[String], rule: FillRule, props: &Props, side: &str) {
+        use vectorcraft_color::freeform::{grid_size, painted_box, spread_scale};
+        let Some(b) = painted_box(bounds) else { return };
+        let (cols, rows) = grid_size(b, 2.0 * b.width().max(b.height()));
+        let field = g.freeform_on(b).field(spread_scale(b));
+        let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let rgba: Vec<u8> = field.grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect();
+        let mut png = Vec::new();
+        let Some(img) = image::RgbaImage::from_raw(u32::from(cols), u32::from(rows), rgba) else { return };
+        if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+            return;
+        }
+        self.warn("freeform gradients are written as images clipped to their shapes");
+        let href = self.blob_href(&ImageBlob::new("image/png", png));
+        let cid = self.fresh_id("clip-path");
+        let r = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
+        self.def(1, &format!("<clipPath id=\"{cid}\">"));
+        for d in clip {
+            self.def(2, &format!("<path d=\"{d}\"{r}/>"));
+        }
+        self.def(1, "</clipPath>");
+        let a = self.attrs(props);
+        let nested = !side.is_empty();
+        if nested {
+            self.line(&format!("<g{a}{side}>"));
+            self.depth += 1;
+            self.line(&format!("<g clip-path=\"url(#{cid})\">"));
+        } else {
+            self.line(&format!("<g clip-path=\"url(#{cid})\"{a}>"));
+        }
+        self.depth += 1;
+        let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
+        let tr = if self.xf == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(self.xf)) };
+        self.line(&format!(
+            "<image x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{tr} preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+            xml_escape(&href)
+        ));
+        self.depth -= 1;
+        self.line("</g>");
+        if nested {
+            self.depth -= 1;
+            self.line("</g>");
+        }
+    }
+
     /// The id of the `<symbol>` def instance `inst` (transform `xf`) can `<use>`, written on first
     /// use. `None` when the instance needs its own copy of the art: stained by its fill, or moved
     /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
     fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {
-        if vectorcraft_brush::stain(inst).is_some() {
+        // SVG Tiny has no `<symbol>`.
+        if self.tiny() || vectorcraft_brush::stain(inst).is_some() {
             return None;
         }
         if !self.symbols.contains_key(&sym.name) {
@@ -1276,6 +1466,12 @@ impl Writer<'_> {
     fn open_filters(&mut self, n: &Node, effects: &[vectorcraft_doc::Effect]) -> usize {
         use vectorcraft_effects::RasterFx;
         let fx = vectorcraft_effects::raster_effects(effects);
+        if self.tiny() {
+            if !fx.is_empty() {
+                self.warn("SVG Tiny 1.2 has no filters: shadows, glows, blurs and feathers are left out");
+            }
+            return 0;
+        }
         let reach: f64 = fx.iter().map(RasterFx::outset).sum::<f64>() + 2.0;
         let region = n.visual_bounds().map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
         for f in fx.iter().rev() {
@@ -1362,10 +1558,16 @@ impl Writer<'_> {
         // Vertical scale is the font size; horizontal scale stretches it (`textLength`).
         p.push(("font-size", self.num(st.size * st.v_scale / 100.0)));
         let fs = st.font_style.to_ascii_lowercase();
-        if fs.contains("bold") || fs.contains("black") || fs.contains("heavy") {
+        let (weight, italic) = font_descriptor(st);
+        if self.embeds_fonts() {
+            // Embedded faces are told apart by their weight.
+            if weight != 400 {
+                p.push(("font-weight", weight.to_string()));
+            }
+        } else if fs.contains("bold") || fs.contains("black") || fs.contains("heavy") {
             p.push(("font-weight", "bold".into()));
         }
-        if fs.contains("italic") || fs.contains("oblique") {
+        if italic {
             p.push(("font-style", "italic".into()));
         }
         // Character paints resolve in the text's space (`to_user` maps it into user space).
@@ -1483,6 +1685,7 @@ impl Writer<'_> {
             return self.text_on_path(n, t, path, *start);
         }
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        self.note_fonts(t, &lay);
         let lines = text_lines(t, &lay, self.opts.fewer_tspans);
         // A tab starts a new chunk at its stop: only lines without tabs can be anchored.
         let anchor = match t.para.justify {
@@ -1568,6 +1771,75 @@ impl Writer<'_> {
         }
     }
 
+    /// Record the characters of laid-out type `t` under the faces that supply them, for
+    /// [`Self::font_faces`] (when fonts are embedded).
+    fn note_fonts(&mut self, t: &TextObject, lay: &vectorcraft_text::TextLayout) {
+        if !self.opts.embed_fonts || self.opts.outline_text {
+            return;
+        }
+        if self.tiny() {
+            return self.warn("SVG Tiny 1.2 has no web fonts: fonts are not embedded");
+        }
+        let db = FontDb::global();
+        let plain = t.plain_text();
+        let mut face: Option<Arc<FontFace>> = None;
+        for g in &lay.glyphs {
+            let Some(st) = t.runs.get(g.run).map(|r| &r.style) else { continue };
+            if face.as_ref().is_none_or(|f| f.id() != g.font_id) {
+                face = db.face_by_id(g.font_id);
+            }
+            let Some(f) = &face else { continue };
+            let (weight, italic) = font_descriptor(st);
+            let at = self.fonts.iter().position(|u| u.face.id() == f.id() && (u.weight, u.italic) == (weight, italic) && u.family == st.font_family);
+            let at = at.unwrap_or_else(|| {
+                let family = st.font_family.clone();
+                self.fonts.push(FontUse { family, weight, italic, face: f.clone(), chars: BTreeSet::new() });
+                self.fonts.len() - 1
+            });
+            let Some(chars) = self.fonts.get_mut(at).map(|u| &mut u.chars) else { continue };
+            // As written: a hyphen where a line breaks, capitals for All Caps.
+            let src = if g.len == 0 { "-" } else { plain.get(g.byte..g.byte + g.len).unwrap_or("") };
+            for c in src.chars().filter(|c| !c.is_control() && *c != '\u{ad}') {
+                if st.all_caps {
+                    chars.extend(c.to_uppercase());
+                } else {
+                    chars.insert(c);
+                }
+            }
+        }
+    }
+
+    /// The `@font-face` rules of the faces type uses ([`ExportOptions::embed_fonts`]): each face
+    /// subset to its characters (whole when its licence forbids subsetting, left out with a
+    /// warning when it forbids embedding). Faces sharing a description cover their own
+    /// characters (`unicode-range`).
+    fn font_faces(&mut self) -> Vec<String> {
+        let uses = std::mem::take(&mut self.fonts);
+        let mut rules = Vec::new();
+        for u in &uses {
+            let chars: Vec<char> = u.chars.iter().copied().collect();
+            let name = format!("{} {}", u.face.family, u.face.style);
+            let Some(font) = u.face.embed(&chars) else {
+                self.warn(&format!("the licence of the font {name} doesn't allow embedding: viewers show its type in their own fonts"));
+                continue;
+            };
+            if !font.subset {
+                self.warn(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
+            }
+            let shared = uses.iter().filter(|o| (&o.family, o.weight, o.italic) == (&u.family, u.weight, u.italic)).count() > 1;
+            let range = if shared { format!(";unicode-range:{}", unicode_range(&u.chars)) } else { String::new() };
+            let (mime, format) = if font.cff { ("font/otf", "opentype") } else { ("font/ttf", "truetype") };
+            rules.push(format!(
+                "@font-face{{font-family:{};font-weight:{};font-style:{};src:url(data:{mime};base64,{}) format(\"{format}\"){range}}}",
+                css_string(&u.family),
+                u.weight,
+                if u.italic { "italic" } else { "normal" },
+                base64_encode(&font.data)
+            ));
+        }
+        rules
+    }
+
     /// Type on a path: a `<textPath>` along the path (a def).
     fn text_on_path(&mut self, n: &Node, t: &TextObject, path: &PathData, start: f64) {
         let id = self.id_attr(n);
@@ -1576,6 +1848,7 @@ impl Writer<'_> {
         self.def(1, &format!("<path id=\"{pid}\" d=\"{d}\"/>"));
         // The <text> element's user space is the document's; gradients span the laid-out text.
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        self.note_fonts(t, &lay);
         let space = (lay.bounds, self.xf * t.xf);
         let base = self.char_props(&t.first_style(), space);
         let mut props = base.clone();
@@ -1620,6 +1893,26 @@ fn initial_value(k: &str) -> Option<&'static str> {
         "font-kerning" => "auto",
         _ => return None,
     })
+}
+
+/// A shape's paths as one path (document space).
+fn doc_path(paths: &[&PathData]) -> BezPath {
+    let mut bp = BezPath::new();
+    for p in paths {
+        bp.extend(p.to_bezpath());
+    }
+    bp
+}
+
+/// How closely stroke outlines that clip an image follow the stroke (points).
+const OUTLINE_TOLERANCE: f64 = 0.01;
+
+/// The freeform gradient a paint is, if it is one (SVG has no freeform gradients).
+fn freeform(p: &Paint) -> Option<&GradientPaint> {
+    match p {
+        Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => Some(g),
+        _ => None,
+    }
 }
 
 /// Any visible raster effect (shadow, glow, blur, feather) in `effects`?

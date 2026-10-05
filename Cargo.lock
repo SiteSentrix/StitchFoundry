@@ -4301,6 +4301,7 @@ dependencies = [
  "resvg",
  "serde",
  "serde_json",
+ "skrifa 0.47.0",
  "svgtypes 0.16.1",
  "thiserror 2.0.21",
  "usvg 0.48.1",
@@ -4338,6 +4339,7 @@ dependencies = [
  "kurbo 0.13.1",
  "log",
  "skrifa 0.47.0",
+ "subsetter",
  "vectorcraft-doc",
  "vectorcraft-geom",
 ]
