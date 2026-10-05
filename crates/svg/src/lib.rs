@@ -36,7 +36,7 @@
 //!   unit of the root `width` (pixels when it has none).
 //! * `<mask>` imports as a luminance opacity mask; a mask we exported keeps its options and art
 //!   (its `data-vectorcraft-mask="noclip invert"` lists the options that differ from clipping and
-//!   not inverted). Nested clip paths use the outer clip only.
+//!   not inverted). Nested clip paths (`<clipPath clip-path>`) are clip groups in clip groups.
 //! * Filters that are a Gaussian blur, a drop shadow (`feDropShadow` or the usual chains of offset,
 //!   blur, flood or colour matrix, composite and merge), a glow or a feather (as we export them)
 //!   become those live effects; other filters are ignored (reported as warnings).
@@ -47,8 +47,12 @@
 //!   differently (see the export's symbol rules) becomes plain art, as do `<use>`s of other
 //!   elements.
 //! * A `<g id>` layer (top-level, or inside one) that isn't displayed (`display: none`) comes back
-//!   as a hidden layer or group, unless a `<use>` refers to it. Other undisplayed elements are left
-//!   out.
+//!   as a hidden layer; other undisplayed objects as hidden objects, unless a `<use>` refers to
+//!   them.
+//! * `spreadMethod` reflect and repeat are expanded into stops over the painted area (at most
+//!   64 periods).
+//! * `<image>` files are read through [`ImportOptions`]: rasters stay linked, SVG files (and SVG
+//!   `data:` URLs) become art (without their text), missing ones a placeholder keeping the link.
 //! * Text lines after the first start at the first line's x; text in a clip path is ignored;
 //!   absolute positions inside type on a path are ignored; vertical text sets every glyph sideways.
 //!
@@ -336,8 +340,31 @@ pub fn import(svg: &str) -> Result<Document, SvgError> {
 }
 
 /// Import an SVG document, also returning warnings about unsupported or approximated features.
+/// Linked files (`<image href="photo.png">`) aren't read: see [`import_with`].
 pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
-    import::import(svg)
+    import_with(svg, &ImportOptions::default())
+}
+
+/// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
+pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
+    import::import(svg, opts)
+}
+
+/// Reads a linked file: its bytes and the link to it (absolute path, size, time and hash), or
+/// `None` when there is no readable file at the (absolute) path.
+pub type ReadFile<'a> = &'a dyn Fn(&str) -> Option<(Vec<u8>, vectorcraft_doc::LinkInfo)>;
+
+/// How [`import_with`] reads the files an SVG's `<image>` elements link to.
+///
+/// A raster file stays linked ([`vectorcraft_doc::ImageObject::link`]); an SVG file imports as
+/// vector art. A file that can't be read imports as a placeholder that keeps the link (and a
+/// warning), so it can be relinked.
+#[derive(Clone, Copy, Default)]
+pub struct ImportOptions<'a> {
+    /// The folder relative links are found in: the SVG file's own. Without it they can't be read.
+    pub folder: Option<&'a str>,
+    /// Reads a linked file. Without it no file is read.
+    pub read: Option<ReadFile<'a>>,
 }
 
 /// FNV-1a: a stable content hash (image keys, unique id prefixes).

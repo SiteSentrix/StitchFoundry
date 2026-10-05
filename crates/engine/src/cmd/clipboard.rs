@@ -188,7 +188,7 @@ fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
         }
         (None, None) => return Err(bad(C, "give svg, or dataBase64 of an SVG or SVGZ file")),
     };
-    let src = vectorcraft_svg::import(&svg).map_err(|e| bad(C, e.to_string()))?;
+    let (src, _) = super::fileio::import_svg(&svg, None).map_err(|e| bad(C, e.to_string()))?;
     let clip = Clipboard::from_document(&src);
     if clip.is_empty() {
         return Err(bad(C, "the SVG has no drawable objects"));

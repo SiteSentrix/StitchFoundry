@@ -8,7 +8,7 @@ use vectorcraft_geom::Affine;
 
 use super::super::*;
 use super::pdfimport::LoadOptions;
-use super::{Format, SAVE_FORMATS, format, format_for_name, read_file};
+use super::{Format, SAVE_FORMATS, absolute_path, file_stamp, format, format_for_name, read_file};
 use crate::EngineError;
 
 /// A file read into a document, with its format and non-fatal import notes.
@@ -102,7 +102,8 @@ fn restore_or_import(
     Ok((doc, warnings, false))
 }
 
-/// Read a file of any readable format (`name`: its file name or path, for the extension and title).
+/// Read a file of any readable format (`name`: its file name or path, for the extension and title;
+/// a path's folder is where an SVG's relative image links are found).
 pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
     load_with(name, bytes, &LoadOptions::default())
 }
@@ -129,7 +130,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         "svg" | "svgz" => {
             let text = vectorcraft_svg::text_of(bytes).map_err(err)?;
             let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
-            restore_or_import(editing, || vectorcraft_svg::import_with_report(&text).map_err(err))?
+            // Relative links are found in the SVG's folder (when `name` is a path).
+            let folder = std::path::Path::new(name).parent().map(|f| f.to_string_lossy()).filter(|f| !f.is_empty()).map(|f| absolute_path(&f));
+            restore_or_import(editing, || import_svg(&text, folder.as_deref()))?
         }
         "pdf" | "ai" | "ait" => {
             // Saved with Preserve Editing: the document it carries, unless some pages are picked.
@@ -148,6 +151,20 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         doc.title = title;
     }
     Ok(Loaded { doc, format, warnings, restored, converted })
+}
+
+/// Import SVG text, reading the files its images link to (relative links from `folder`, the SVG's
+/// own): rasters stay linked, SVG files become art, missing ones placeholders (see
+/// [`vectorcraft_svg::ImportOptions`]).
+pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    let read = |path: &str| {
+        // Only files (not folders or devices) are read.
+        file_stamp(path)?;
+        let bytes = read_file(path).ok()?;
+        let link = crate::cmd::links::link_info(path, &bytes);
+        Some((bytes, link))
+    };
+    vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →

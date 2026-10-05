@@ -154,7 +154,10 @@ symbol (named after its `data-name`, else its id) with an instance per `<use>`; 
 (paint inherited from the `<use>`, a viewport that cuts the art) or that the canvas would draw otherwise (a scaled
 symbol with strokes) stays art. `feGaussianBlur`, `feDropShadow` and the usual shadow chains (offset, blur, flood or
 colour matrix, composite, merge) become Gaussian Blur, Drop Shadow, Outer Glow, Inner Glow and Feather effects; other
-filters are listed in `warnings`.
+filters are listed in `warnings`. Undisplayed objects (`display:none`) come back hidden, nested clip paths intersect,
+and reflected or repeated gradients (`spreadMethod`) are expanded into stops. `<image>` files (relative links are
+found in the SVG's folder) stay linked images (see Linked images); SVG files and `data:` SVGs become art; a file that
+can't be read becomes a placeholder in its box, named in `warnings` and `missingLinks`.
 
 ## Resources
 

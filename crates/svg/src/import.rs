@@ -14,26 +14,36 @@ use vectorcraft_doc::{
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2, shapes};
 
 use crate::export::Reuse;
-use crate::{SvgError, fnv1a};
+use crate::{ImportOptions, SvgError, fnv1a};
 use css::XNode;
 use text::TextSlots;
 
 pub(crate) use fx::BLEND;
 
 mod css;
+mod files;
 mod fx;
+mod spread;
 mod text;
 
-pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
-    let (svg, found) = prepass(svg);
+pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
+    let (svg, found) = prepass(svg, opts);
     let svg = svg.as_ref();
     let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() })
         .map_err(|e| SvgError::Parse(e.to_string()))?;
     let units = RootUnits::of(xml.root_element());
-    let mut warnings = Vec::new();
+    let mut warnings = found.warnings;
     let (src, slots) = text::prepare(svg, &xml, units.dpi, &mut warnings);
-    let opt = usvg::Options { dpi: units.dpi as f32, font_size: DEFAULT_FONT_SIZE as f32, ..usvg::Options::default() };
-    let tree = usvg::Tree::from_str(&src, &opt).map_err(|e| SvgError::Parse(e.to_string()))?;
+    let files = found.files;
+    let tree = {
+        let opt = usvg::Options {
+            dpi: units.dpi as f32,
+            font_size: DEFAULT_FONT_SIZE as f32,
+            image_href_resolver: files.resolver(),
+            ..usvg::Options::default()
+        };
+        usvg::Tree::from_str(&src, &opt).map_err(|e| SvgError::Parse(e.to_string()))?
+    };
     let size = tree.size();
     let (kx, ky) = units.k;
     let mut doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
@@ -51,7 +61,11 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
         uses: found.uses,
         symbols: HashMap::new(),
         blends: fx::blends(&xml),
+        files,
     };
+    if im.files.nested_text() {
+        im.warn("text inside an SVG image isn't imported".into());
+    }
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
@@ -144,6 +158,9 @@ impl RootUnits {
     }
 }
 
+/// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
+const MAX_CLIP_NEST: usize = 16;
+
 /// Points per inch.
 pub(super) const PT_PER_IN: f64 = 72.0;
 /// CSS pixels per inch.
@@ -164,7 +181,7 @@ struct Importer {
     midpoints: HashMap<String, Vec<Option<f32>>>,
     /// Object names by element id (see [`labels`]).
     labels: HashMap<String, String>,
-    /// Ids of the hidden groups shown for usvg ([`prepass`]).
+    /// Ids of the undisplayed objects shown for usvg ([`prepass`]).
     hidden: HashSet<String>,
     /// The `<symbol>` id each `<use>` of a symbol shows, by the `<use>`'s id ([`prepass`]).
     uses: HashMap<String, String>,
@@ -172,6 +189,8 @@ struct Importer {
     symbols: HashMap<String, SymbolMade>,
     /// Blend modes of the shadows and glows our export wrote, by filter id ([`fx::blends`]).
     blends: HashMap<String, String>,
+    /// The files `<image>` elements link to.
+    files: files::Files,
 }
 
 /// A `<symbol>` made a symbol: its name, its art with no object ids (what each `<use>` has to show
@@ -271,15 +290,18 @@ pub(super) fn href<'a>(a: XNode<'a, '_>) -> Option<&'a str> {
 struct Found {
     /// The URL of each `<a href>`'s group, by its id.
     links: HashMap<String, String>,
-    /// Ids of the hidden groups shown for usvg: they come back hidden.
+    /// Ids of the undisplayed objects shown for usvg: they come back hidden.
     hidden: HashSet<String>,
     /// The `<symbol>` id each `<use>` of a symbol shows, by the `<use>`'s id.
     uses: HashMap<String, String>,
+    /// The files `<image>` elements link to.
+    files: files::Files,
+    warnings: Vec<String>,
 }
 
 /// Changes to the SVG text: `(range, replacement)`, an empty range inserting.
 #[derive(Default)]
-struct Edits {
+pub(super) struct Edits {
     list: Vec<(std::ops::Range<usize>, String)>,
     /// The ids made up so far, by element.
     ids: HashMap<roxmltree::NodeId, String>,
@@ -305,7 +327,7 @@ impl Edits {
     }
 
     /// Set attribute `name` of element `n` (in `svg`) to `value` (XML-escaped already).
-    fn set(&mut self, svg: &str, n: XNode, name: &str, value: &str) {
+    pub(super) fn set(&mut self, svg: &str, n: XNode, name: &str, value: &str) {
         match n.attributes().find(|a| a.name() == name && a.namespace().is_none()) {
             Some(a) => self.list.push((a.range_value(), value.to_string())),
             None => self.insert(tag_name_end(svg, n), format!(" {name}=\"{value}\"")),
@@ -333,16 +355,17 @@ impl Edits {
     }
 }
 
-/// usvg reads `<a href>` and `<use>` as plain groups and drops what isn't displayed. Before it
-/// runs, the SVG is changed so that what we keep can be found:
+/// usvg reads `<a href>` and `<use>` as plain groups, drops what isn't displayed and reads linked
+/// files on its own. Before it runs, the SVG is changed so that what we keep can be found:
 /// * every `<a href>` and every `<use>` of a `<symbol>` gets an id when it has none
 ///   ([`MADE_UP_ID`]…), recorded with its URL or symbol;
-/// * hidden layers (as Save writes them: `display: none` on a top-level `<g id>`, or on such a
-///   group inside groups) are shown and recorded, to come back hidden; a group something links to
-///   (a `<use>` template) stays as it is.
-fn prepass(svg: &str) -> (Cow<'_, str>, Found) {
+/// * undisplayed objects (`display: none`, as Save writes hidden layers) are shown and recorded,
+///   to come back hidden; one something links to (a `<use>` template) stays as it is;
+/// * linked files are read ([`files`]).
+fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     let mut found = Found::default();
-    if !["<a", "display", "<use"].iter().any(|t| svg.contains(t)) {
+    // (`:` for prefixed elements such as `<svg:image>`.)
+    if !["<a", "display", "<use", ":use", "<image", ":image"].iter().any(|t| svg.contains(t)) {
         return (svg.into(), found);
     }
     let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
@@ -362,28 +385,36 @@ fn prepass(svg: &str) -> (Cow<'_, str>, Found) {
         }
     }
     if svg.contains("display") {
-        hidden_groups(svg, &xml, &mut edits, &mut found.hidden);
+        hidden_objects(svg, &xml, &mut edits, &mut found.hidden);
     }
+    found.files = files::Files::read(svg, &xml, opts, &mut edits, &mut found.warnings);
     (edits.apply(svg), found)
 }
 
-/// Show the hidden `<g id>` layers for usvg, recording their ids.
-fn hidden_groups(svg: &str, xml: &roxmltree::Document, edits: &mut Edits, ids: &mut HashSet<String>) {
+/// The elements that are objects (what [`hidden_objects`] shows).
+const OBJECTS: &[&str] = &["g", "a", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "image", "text", "use"];
+
+/// Show the undisplayed objects outside `<defs>` (and the like) for usvg, recording their ids.
+fn hidden_objects(svg: &str, xml: &roxmltree::Document, edits: &mut Edits, ids: &mut HashSet<String>) {
     let css = css::Styles::new(xml);
     let linked: HashSet<&str> = xml.descendants().filter_map(href).filter_map(|h| h.strip_prefix('#')).collect();
-    let group = |n: &XNode| n.is_element() && n.tag_name().name() == "g" && n.attribute("id").is_none_or(|id| !linked.contains(id));
-    let mut groups: Vec<XNode> = xml.root_element().children().filter(group).collect();
-    while let Some(g) = groups.pop() {
-        groups.extend(g.children().filter(group));
-        let Some(id) = g.attribute("id").filter(|id| !id.is_empty()) else { continue };
-        if css.own(g, "display").as_deref() != Some("none") {
+    let mut todo: Vec<XNode> = xml.root_element().children().filter(XNode::is_element).collect();
+    while let Some(n) = todo.pop() {
+        let tag = n.tag_name().name();
+        if !OBJECTS.contains(&tag) || n.attribute("id").is_some_and(|id| linked.contains(id)) {
             continue;
         }
-        ids.insert(id.to_string());
+        if matches!(tag, "g" | "a") {
+            todo.extend(n.children().filter(XNode::is_element));
+        }
+        if css.own(n, "display").as_deref() != Some("none") {
+            continue;
+        }
+        ids.insert(edits.id(svg, n));
         // A `style` declaration wins over the attribute and style sheet rules.
-        match g.attributes().find(|a| a.name() == "style" && a.namespace().is_none()) {
+        match n.attributes().find(|a| a.name() == "style" && a.namespace().is_none()) {
             Some(a) => edits.insert(a.range_value().end, ";display:inline".to_string()),
-            None => edits.insert(tag_name_end(svg, g), " style=\"display:inline\"".to_string()),
+            None => edits.insert(tag_name_end(svg, n), " style=\"display:inline\"".to_string()),
         }
     }
 }
@@ -634,7 +665,10 @@ impl Importer {
         let to_text = obj.xf.inverse();
         let resolved: Vec<Paint> = (0..paints)
             .map(|k| match kids.get(main + 1 + k) {
-                Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| self.paint(f.paint(), to_text)),
+                Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
+                    let area = kurbo::Shape::bounding_box(&bezpath(p.data(), to_text));
+                    self.paint(f.paint(), to_text, Some(area))
+                }),
                 _ => Paint::None,
             })
             .collect();
@@ -686,11 +720,25 @@ impl Importer {
                 inner.appearance.effects = effects.clone();
                 children = vec![Arc::new(inner)];
             }
-            if cp.clip_path().is_some() {
-                self.warn(format!("nested clip path on {label} approximated by its outer clip"));
+            // A clip path clipped in turn (`<clipPath clip-path>`): one clip group in another, so
+            // the clips intersect.
+            let mut clips = vec![self.clip_node(cp, ts)?];
+            let mut next = cp.clip_path();
+            while let Some(c) = next {
+                if clips.len() > MAX_CLIP_NEST {
+                    self.warn(format!("clip paths nested more than {MAX_CLIP_NEST} deep on {label}: the deeper ones are ignored"));
+                    break;
+                }
+                clips.push(self.clip_node(c, ts)?);
+                next = c.clip_path();
             }
-            let clip = self.clip_node(cp, ts)?;
-            let mut ch = vec![Arc::new(clip)];
+            let outer = clips.pop()?;
+            for clip in clips {
+                let mut ch = vec![Arc::new(clip)];
+                ch.extend(children);
+                children = vec![Arc::new(self.named("", NodeKind::Group { children: ch, clip: true }))];
+            }
+            let mut ch = vec![Arc::new(outer)];
             ch.extend(children);
             self.named(id, NodeKind::Group { children: ch, clip: true })
         } else {
@@ -788,35 +836,23 @@ impl Importer {
         Some(self.named(&id, NodeKind::Compound { children, rule: r }))
     }
 
-    fn paint(&mut self, p: &usvg::Paint, m: Affine) -> Paint {
-        let gp = |kind, stops, geom: GradientGeom| {
-            Paint::Gradient(Box::new(GradientPaint {
-                gradient: Gradient { kind, stops },
-                geom: Some(geom),
-                angle: geom.angle_deg(),
-                swatch: None,
-                freeform: None,
-            }))
-        };
-        match p {
-            usvg::Paint::Color(c) => Paint::solid(Color::rgb8(c.red, c.green, c.blue)),
+    /// A usvg paint mapped by `m`, for art covering `area` (after `m`: where a reflected or
+    /// repeated gradient has to reach).
+    fn paint(&mut self, p: &usvg::Paint, m: Affine, area: Option<Rect>) -> Paint {
+        let (kind, base, mut geom) = match p {
+            usvg::Paint::Color(c) => return Paint::solid(Color::rgb8(c.red, c.green, c.blue)),
+            usvg::Paint::Pattern(pt) => return self.pattern(pt, m),
             usvg::Paint::LinearGradient(lg) => {
-                if lg.spread_method() != usvg::SpreadMethod::Pad {
-                    self.warn(format!("gradient '{}': spreadMethod approximated as pad", lg.id()));
-                }
-                let mut geom = GradientGeom {
+                let geom = GradientGeom {
                     start: Point::new(lg.x1() as f64, lg.y1() as f64),
                     end: Point::new(lg.x2() as f64, lg.y2() as f64),
                     aspect: 1.0,
                     focal: None,
                 };
-                geom.transform(m * aff(lg.transform()), GradientKind::Linear);
-                gp(GradientKind::Linear, self.stops(lg), geom)
+                let base: &usvg::BaseGradient = lg;
+                (GradientKind::Linear, base, geom)
             }
             usvg::Paint::RadialGradient(rg) => {
-                if rg.spread_method() != usvg::SpreadMethod::Pad {
-                    self.warn(format!("gradient '{}': spreadMethod approximated as pad", rg.id()));
-                }
                 if rg.fr().get() > 1e-4 {
                     self.warn(format!("gradient '{}': focal radius ignored", rg.id()));
                 }
@@ -824,11 +860,33 @@ impl Importer {
                 let mut geom = GradientGeom { start: c, end: c + Vec2::new(rg.r().get() as f64, 0.0), aspect: 1.0, focal: None };
                 // A focal point outside the circle is pulled inside it.
                 geom.set_focal(Some(Point::new(rg.fx() as f64, rg.fy() as f64)));
-                geom.transform(m * aff(rg.transform()), GradientKind::Radial);
-                gp(GradientKind::Radial, self.stops(rg), geom)
+                let base: &usvg::BaseGradient = rg;
+                (GradientKind::Radial, base, geom)
             }
-            usvg::Paint::Pattern(pt) => self.pattern(pt, m),
+        };
+        geom.transform(m * aff(base.transform()), kind);
+        let mut stops = self.stops(base);
+        let reflect = match base.spread_method() {
+            usvg::SpreadMethod::Pad => None,
+            usvg::SpreadMethod::Reflect => Some(true),
+            usvg::SpreadMethod::Repeat => Some(false),
+        };
+        if let Some(reflect) = reflect {
+            match area.map(|a| spread::expand(kind, &mut geom, &mut stops, reflect, a)) {
+                Some(spread::Expanded::Whole) => {}
+                Some(spread::Expanded::Capped) => {
+                    self.warn(format!("gradient '{}': spreadMethod repeats more than {} times; it pads after that", base.id(), spread::MAX_PERIODS))
+                }
+                None => self.warn(format!("gradient '{}': spreadMethod approximated as pad", base.id())),
+            }
         }
+        Paint::Gradient(Box::new(GradientPaint {
+            gradient: Gradient { kind, stops },
+            geom: Some(geom),
+            angle: geom.angle_deg(),
+            swatch: None,
+            freeform: None,
+        }))
     }
 
     /// `<pattern>` → a pattern swatch painted with the pattern's tile placement. The swatch art is
@@ -859,11 +917,12 @@ impl Importer {
         Paint::Pattern { pattern: name, xf }
     }
 
-    fn appearance(&mut self, p: &usvg::Path, m: Affine) -> (Appearance, FillRule) {
+    /// The fill and stroke of `p` mapped by `m`; `area`: the bounds of the path after `m`.
+    fn appearance(&mut self, p: &usvg::Path, m: Affine, area: Option<Rect>) -> (Appearance, FillRule) {
         let mut fill = None;
         let mut r = FillRule::NonZero;
         if let Some(f) = p.fill() {
-            let paint = self.paint(f.paint(), m);
+            let paint = self.paint(f.paint(), m, area);
             let mut fl = FillLayer::new(paint);
             fl.opacity = f.opacity().get();
             r = rule(f.rule());
@@ -872,7 +931,9 @@ impl Importer {
         let mut stroke = None;
         if let Some(s) = p.stroke() {
             let scale = m.determinant().abs().sqrt();
-            let paint = self.paint(s.paint(), m);
+            // The stroke reaches past the path (miters further: a generous margin).
+            let reach = s.width().get() as f64 * scale * (s.miterlimit().get() as f64).max(1.0);
+            let paint = self.paint(s.paint(), m, area.map(|a| a.inflate(reach, reach)));
             let mut sl = StrokeLayer::new(paint, s.width().get() as f64 * scale);
             sl.opacity = s.opacity().get();
             sl.cap = match s.linecap() {
@@ -910,7 +971,7 @@ impl Importer {
         if path.is_empty() {
             return None;
         }
-        let (appearance, r) = self.appearance(p, acc);
+        let (appearance, r) = self.appearance(p, acc, path.bounds());
         let mut n = if path.subpaths.len() > 1 {
             // Multi-subpath SVG paths are compound paths (as in Illustrator).
             let children = path
@@ -940,10 +1001,7 @@ impl Importer {
             usvg::ImageKind::PNG(d) => (d, "image/png"),
             usvg::ImageKind::GIF(d) => (d, "image/gif"),
             usvg::ImageKind::WEBP(d) => (d, "image/webp"),
-            usvg::ImageKind::SVG(_) => {
-                self.warn("embedded SVG image skipped".into());
-                return None;
-            }
+            usvg::ImageKind::SVG(tree) => return self.svg_image(tree, acc),
         };
         let size = i.size();
         let (pw, ph) = image::ImageReader::new(std::io::Cursor::new(&bytes[..]))
@@ -952,8 +1010,25 @@ impl Importer {
             .and_then(|r| r.into_dimensions().ok())
             .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
         let key = format!("img-{:016x}", fnv1a(bytes));
-        self.doc.images.entry(key.clone()).or_insert_with(|| ImageBlob::new(mime, bytes.to_vec()));
+        // A linked file keeps a preview; a placeholder is all a missing one has (its preview).
+        let linked = self.files.linked(i.kind());
+        let missing = linked.is_some_and(|l| l.missing);
+        let link = linked.map(|l| l.link.clone());
+        self.doc.images.entry(key.clone()).or_insert_with(|| {
+            let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()) };
+            if link.is_some() && !missing { blob.with_proxy() } else { blob }
+        });
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);
-        Some(self.named(i.id(), NodeKind::Image(ImageObject { key, width: pw, height: ph, xf, link: None })))
+        Some(self.named(i.id(), NodeKind::Image(ImageObject { key, width: pw, height: ph, xf, link })))
+    }
+
+    /// An SVG shown as an image (a data URL or a linked file) → its art, `acc` mapping its size.
+    /// Its ids are its own: they mean nothing in the SVG around it.
+    fn svg_image(&mut self, tree: &usvg::Tree, acc: Affine) -> Option<Node> {
+        let outer =
+            (std::mem::take(&mut self.links), std::mem::take(&mut self.hidden), std::mem::take(&mut self.uses), std::mem::take(&mut self.labels));
+        let art = self.group_node(tree.root(), acc);
+        (self.links, self.hidden, self.uses, self.labels) = outer;
+        art
     }
 }
