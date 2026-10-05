@@ -435,6 +435,87 @@ proptest! {
     }
 }
 
+/// Hostile content over layers (optional content, one group off), soft masks, tiling patterns,
+/// a patch mesh, an unextended shading and fonts: the import's own readings of the file.
+fn rich_resources_pdf(content: &str, config: &str) -> Vec<u8> {
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with_catalog};
+    let x = first_extra(1);
+    let stream = |dict: &str, data: &str| format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len());
+    let extra = [
+        "<< /Type /OCG /Name (A) >>".to_string(),
+        "<< /Type /OCG /Name <FEFF> /Usage << /Print << /PrintState /OFF >> >> >>".to_string(),
+        stream(
+            "/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceRGB /I true /K true >>",
+            "1 g 0 0 50 50 re f /OC /MC0 BDC 0 g 0 0 5 5 re f EMC",
+        ),
+        stream(
+            "/PatternType 1 /PaintType 2 /TilingType 1 /BBox [0 0 1e-9 10] /XStep 0.001 /YStep 10 /Resources << >>",
+            "0 0 5 5 re f /P0 scn 0 0 1 1 re f",
+        ),
+        stream(
+            "/ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 255 0 255 0 1 0 1 0 1] /Filter /ASCIIHexDecode",
+            "000A0A0A250A3F0A5A255A3F5A5A5A5A3F5A255A0A3F0A250AFF000000FF000000FFFFFFFF>",
+        ),
+        stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /OC 6 0 R", "/X0 Do"),
+    ];
+    let (a, b, form, pat, mesh, hidden) = (x, x + 1, x + 2, x + 3, x + 4, x + 5);
+    let resources = format!(
+        "/Properties << /MC0 {a} 0 R /MC1 {b} 0 R >> /XObject << /X0 {form} 0 R /X1 {hidden} 0 R >> /Pattern << /P0 {pat} 0 R >> /Shading << /Sh0 {mesh} 0 R /Sh1 << /ShadingType 3 /ColorSpace /DeviceGray /Coords [50 50 0 50 50 40] /Extend [false false] /Function << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> >> >> /ExtGState << /GS0 << /SMask << /Type /Mask /S /Luminosity /G {form} 0 R /BC [1] /TR << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >> >> >> /GS1 << /SMask << /Type /Mask /S /Alpha /G {form} 0 R >> >> >> /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /ABCDEF+Odd-Name,Bold >> >> /ColorSpace << /CS0 [/Pattern /DeviceRGB] >>"
+    );
+    let catalog = format!("/OCProperties << /OCGs [{a} 0 R {b} 0 R 99 0 R] /D << {} >> >> ", config.replace("{B}", &format!("{b} 0 R")));
+    let extra: Vec<&str> = extra.iter().map(String::as_str).collect();
+    pdf_with_catalog(&[PdfPage { resources, ..PdfPage::new(100.0, 100.0, content) }], &extra, &catalog, None)
+}
+
+fn arb_rich_op() -> impl Strategy<Value = String> {
+    prop_oneof![
+        arb_pdf_op(),
+        prop::sample::select(vec![
+            "/OC /MC0 BDC",
+            "/OC /MC1 BDC",
+            "/OC /Nope BDC",
+            "/Span << /MCID 3 >> BDC",
+            "/X BMC",
+            "EMC",
+            "/X0 Do",
+            "/X1 Do",
+            "/GS0 gs",
+            "/GS1 gs",
+            "/CS0 cs 1 0 0 /P0 scn",
+            "/Pattern cs /P0 scn",
+            "/Sh0 sh",
+            "/Sh1 sh",
+            "BT /F1 12 Tf 10 10 Td (Hi there) Tj [(a) -900 (b)] TJ ET",
+            "7 Tr",
+            "q 10 10 50 50 re W n",
+            "Q",
+            "0 0 100 100 re f",
+            "10 10 20 20 re B",
+        ])
+        .prop_map(String::from),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn pdf_layers_masks_patterns_and_text_never_panic(
+        ops in prop::collection::vec(arb_rich_op(), 0..40),
+        config in prop::sample::select(vec!["/OFF [{B}]", "/BaseState /OFF", "/BaseState /Unchanged /ON [{B}] /Locked [{B}]", "", "/OFF {B}"]),
+        layers in any::<bool>(),
+        outlines in any::<bool>(),
+    ) {
+        let bytes = rich_resources_pdf(&ops.join("\n"), config);
+        let opts = vectorcraft_pdf::ImportOptions {
+            layers,
+            text_as: if outlines { vectorcraft_pdf::TextAs::Outlines } else { vectorcraft_pdf::TextAs::Text },
+            ..Default::default()
+        };
+        survive(&ops.join(" "), || vectorcraft_pdf::import_with_report(&bytes, &opts).ok().map(|r| r.document))?;
+    }
+}
+
 // ---------- library files ----------
 
 /// The `data` of a library file `cmd` writes for the rich document.

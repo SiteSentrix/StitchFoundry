@@ -65,6 +65,11 @@ pub fn first_extra(pages: usize) -> usize {
 /// [`pdf`] with `extra` objects (written as given, not encrypted: streams such as functions and
 /// ICC profiles that resources refer to by number, from [`first_extra`] on).
 pub fn pdf_with(pages: &[PdfPage], extra: &[&str], password: Option<&str>) -> Vec<u8> {
+    pdf_with_catalog(pages, extra, "", password)
+}
+
+/// [`pdf_with`] with more entries in the catalog (`/OCProperties << … >>`).
+pub fn pdf_with_catalog(pages: &[PdfPage], extra: &[&str], catalog: &str, password: Option<&str>) -> Vec<u8> {
     let id = md5(b"vectorcraft test file");
     // (O, U, file key) of the standard security handler, revision 2, permissions -4.
     let crypt = password.map(|pw| {
@@ -80,7 +85,7 @@ pub fn pdf_with(pages: &[PdfPage], extra: &[&str], password: Option<&str>) -> Ve
     });
     let mut objects: Vec<Vec<u8>> = vec![];
     let kids: Vec<String> = (0..pages.len()).map(|i| format!("{} 0 R", 3 + 2 * i)).collect();
-    objects.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
+    objects.push(format!("<< /Type /Catalog /Pages 2 0 R {catalog}>>").into_bytes());
     objects.push(format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), pages.len()).into_bytes());
     for (i, p) in pages.iter().enumerate() {
         let mut d = format!("<< /Type /Page /Parent 2 0 R /MediaBox {} /Contents {} 0 R /Resources << {} >>", rect(p.media), 4 + 2 * i, p.resources);

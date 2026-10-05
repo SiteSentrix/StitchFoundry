@@ -887,6 +887,14 @@ fn default_graphic_styles() -> Vec<GraphicStyle> {
     .collect()
 }
 
+impl Document {
+    /// Make the next id allocated at least `next`: ids handed out outside the layer tree (such
+    /// as an importer's opacity mask and pattern art), which [`Document::fix_next_id`] doesn't see.
+    pub fn reserve_ids(&mut self, next: u64) {
+        self.next_id = self.next_id.max(next);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

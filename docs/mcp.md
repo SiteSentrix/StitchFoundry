@@ -235,6 +235,19 @@ and Separation and DeviceN inks become spot swatches the art links to at its tin
 PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) can't be opened yet and
 say so, as does an `.ai` whose PDF part is only a placeholder page.
 
+What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
+the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
+tiling patterns become pattern swatches, patch and triangle mesh shadings become gradient meshes, and gradients keep
+their stop opacity and stop where the shading doesn't extend. Text becomes point type, one object per run of a line in
+the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font) —
+`textAs: "outlines"` keeps glyph outlines instead. Optional content groups (the layers of PDF and PDF-compatible `.ai`
+files) become layers with their name, visibility, print state and lock, art that is off coming in as a hidden layer;
+art outside them goes to a layer per page. `layers: false` gives one layer per page of only what shows:
+
+```json
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/map.pdf","textAs":"outlines","layers":false}}}
+```
+
 Preserve Editing (`preserveEditing`, on in the `VectorCraft Default` preset) embeds the native document in the PDF as
 an embedded file (`vectorcraft-editing.vectorcraft`; files named `drawcraft-editing.drawcraft` are read too) with a
 hash of the pages it was written with. `open_file` / `document.open` of such a PDF, `.ai` or `.ait` (no `pages` picked) restores the
