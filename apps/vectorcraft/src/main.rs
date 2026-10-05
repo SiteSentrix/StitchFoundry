@@ -13,7 +13,7 @@ mod native_menu;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
-use vectorcraft_ui_egui::{Services, VectorcraftApp};
+use vectorcraft_ui_egui::{FilePick, Services, VectorcraftApp};
 
 struct App(VectorcraftApp, #[cfg(target_os = "macos")] Option<native_menu::NativeMenu>);
 
@@ -97,14 +97,49 @@ fn save_prefs(app: &VectorcraftApp) {
     }
 }
 
+/// A native file dialog showing `pick`'s file types, folder and suggested name.
+fn file_dialog(pick: &FilePick) -> rfd::FileDialog {
+    let d = pick.filters.iter().fold(rfd::FileDialog::new(), |d, (name, exts)| d.add_filter(*name, exts));
+    let d = match &pick.folder {
+        Some(folder) => d.set_directory(folder),
+        None => d,
+    };
+    if pick.name.is_empty() { d } else { d.set_file_name(&pick.name) }
+}
+
+/// File → Show in Folder: select `path` in Finder / Explorer, or open its folder elsewhere.
+fn reveal(path: &str) -> Result<(), String> {
+    reveal_command(path).spawn().map(|_| ()).map_err(|e| format!("can't show {path}: {e}"))
+}
+
+#[cfg(target_os = "macos")]
+fn reveal_command(path: &str) -> std::process::Command {
+    let mut c = std::process::Command::new("open");
+    c.args(["-R", path]);
+    c
+}
+
+#[cfg(windows)]
+fn reveal_command(path: &str) -> std::process::Command {
+    use std::os::windows::process::CommandExt as _;
+    // Explorer reads `/select,"path"` itself (the usual argument quoting breaks paths with spaces)
+    // and needs backslashes.
+    let mut c = std::process::Command::new("explorer");
+    c.raw_arg(format!("/select,\"{}\"", path.replace('/', "\\")));
+    c
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn reveal_command(path: &str) -> std::process::Command {
+    let folder = std::path::Path::new(path).parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+    let mut c = std::process::Command::new("xdg-open");
+    c.arg(folder);
+    c
+}
+
 fn services() -> Services {
     Services {
-        pick_open: Some(Box::new(|| {
-            fileio::open_filters()
-                .fold(rfd::FileDialog::new(), |d, (name, exts)| d.add_filter(name, exts))
-                .pick_file()
-                .map(|p| p.to_string_lossy().to_string())
-        })),
+        pick_open: Some(Box::new(|pick: &FilePick| file_dialog(pick).pick_file().map(|p| p.to_string_lossy().to_string()))),
         pick_open_multi: Some(Box::new(|| {
             fileio::place_filters()
                 .fold(rfd::FileDialog::new().set_title("Place"), |d, (name, exts)| d.add_filter(name, exts))
@@ -114,13 +149,12 @@ fn services() -> Services {
                 .map(|p| p.to_string_lossy().to_string())
                 .collect()
         })),
-        // Saving a document offers every format Save writes (.vectorcraft, .ai, .svg, .svgz).
-        pick_save: Some(Box::new(|name: &str| {
-            fileio::save_filters(name)
-                .into_iter()
-                .fold(rfd::FileDialog::new().set_file_name(name), |d, (label, exts)| d.add_filter(label, exts))
-                .save_file()
-                .map(|p| p.to_string_lossy().to_string())
+        pick_save: Some(Box::new(|pick: &FilePick| {
+            // The Templates folder may not exist yet.
+            if let Some(folder) = &pick.folder {
+                let _ = std::fs::create_dir_all(folder);
+            }
+            file_dialog(pick).save_file().map(|p| p.to_string_lossy().to_string())
         })),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
@@ -130,6 +164,7 @@ fn services() -> Services {
         open_url: Some(Box::new(|url: &str| {
             let _ = webbrowser::open(url);
         })),
+        reveal: Some(Box::new(reveal)),
         ..Default::default()
     }
 }

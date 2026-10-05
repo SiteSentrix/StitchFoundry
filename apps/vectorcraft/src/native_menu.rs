@@ -1,6 +1,7 @@
 //! macOS: VectorCraft's menu tree as the native system menu bar (like Illustrator on the Mac).
 //! Items dispatch through the same command path as the in-window menus; enablement, check marks
-//! and dynamic labels ("Undo Move") are refreshed a few times per second.
+//! and dynamic labels ("Undo Move") are refreshed a few times per second, and the menu is rebuilt
+//! when saved views or recent files come and go.
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -22,6 +23,8 @@ pub struct NativeMenu {
     last_refresh: f64,
     /// Shortcut-override / workspace-list generation the menu was built for.
     generation: u64,
+    /// Saved views and recent files listed (empty slots are left out, so a change rebuilds).
+    slots: usize,
 }
 
 /// Accelerator for a shortcut like "Cmd+Shift+]" (modifier-less shortcuts stay in the app so they
@@ -53,7 +56,7 @@ impl NativeMenu {
             .filter(|(_, p, _, c)| (p.is_null() || p.as_object().is_some_and(|o| o.is_empty())) && menus::shortcut_of(c).and_then(accel).is_some())
             .map(|(_, _, _, c)| c.clone())
             .collect();
-        Self { _menu: menu, items, last_refresh: 0.0, generation }
+        Self { _menu: menu, items, last_refresh: 0.0, generation, slots: menus::listed_slots(app) }
     }
 
     /// Dispatch clicked items and refresh state.
@@ -69,8 +72,11 @@ impl NativeMenu {
             return;
         }
         self.last_refresh = now;
-        // Shortcuts edited or workspaces added: rebuild so accelerators and lists are current.
-        if vectorcraft_ui_egui::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed) != self.generation {
+        // Shortcuts edited, workspaces added, saved views or recent files changed: rebuild so
+        // accelerators and lists are current.
+        if vectorcraft_ui_egui::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed) != self.generation
+            || menus::listed_slots(app) != self.slots
+        {
             *self = NativeMenu::install(app);
             return;
         }
@@ -137,6 +143,8 @@ fn build(
                 build(app, &sub, children, items, counter);
                 let _ = parent.append(&sub);
             }
+            // Unused saved-view and recent-file slots are left out, as in the in-window menus.
+            Item::Cmd(_, cmd, _) if menus::hidden_slot(app, cmd) => {}
             Item::Cmd(label, cmd, params) => {
                 *counter += 1;
                 let id = format!("dc{counter}");

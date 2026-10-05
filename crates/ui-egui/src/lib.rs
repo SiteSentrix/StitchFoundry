@@ -51,6 +51,8 @@ mod tests_place;
 #[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
+mod tests_save;
+#[cfg(test)]
 mod tests_svg;
 #[cfg(test)]
 mod tests_svgsave;
@@ -63,13 +65,32 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse};
 pub use state::{UiState, View};
 pub use sysclip::SystemClipboard;
 
-pub type PickSave = Box<dyn FnMut(&str) -> Option<String>>;
+/// What a file dialog shows: a suggested file name (save dialogs), the folder to start in and the
+/// file-type filters.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FilePick {
+    pub name: String,
+    pub folder: Option<String>,
+    /// `(label, extensions without the dot)`, the default type first; empty = every file.
+    pub filters: Vec<(&'static str, &'static [&'static str])>,
+}
+
+impl FilePick {
+    /// A save dialog suggesting `name`.
+    pub fn named(name: &str) -> Self {
+        Self { name: name.to_string(), ..Default::default() }
+    }
+}
+
+pub type PickOpen = Box<dyn FnMut(&FilePick) -> Option<String>>;
+pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 pub type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
@@ -78,12 +99,15 @@ pub type DownloadFn = Box<dyn FnMut(&str, &[u8])>;
 /// Opens a URL in the system browser.
 pub type OpenUrlFn = Box<dyn FnMut(&str)>;
 
+/// Shows a file in the system file manager.
+pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
+
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]
 pub struct Services {
     /// Show an open dialog; returns a path.
-    pub pick_open: Option<Box<dyn FnMut() -> Option<String>>>,
-    /// Show a save dialog with a suggested file name; returns a path.
+    pub pick_open: Option<PickOpen>,
+    /// Show a save dialog (suggested name, folder, file types); returns a path.
     pub pick_save: Option<PickSave>,
     pub read: Option<ReadFn>,
     pub write: Option<WriteFn>,
@@ -109,6 +133,8 @@ pub struct Services {
     /// Paste takes SVG, PDF, text and bitmaps from other apps. Without it, SVG text only (through
     /// egui and `clipboard_read`).
     pub system_clipboard: Option<Box<dyn SystemClipboard>>,
+    /// File → Show in Folder: select a file in the system file manager (desktop).
+    pub reveal: Option<RevealFn>,
 }
 
 /// Cached canvas raster.
@@ -201,7 +227,7 @@ const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
     pub fn new(session: Session, services: Services) -> Self {
-        let views = session.documents().iter().map(|_| View::default()).collect();
+        let views = session.documents().iter().map(View::of).collect();
         Self {
             session,
             ui: UiState::default(),
@@ -248,13 +274,11 @@ impl VectorcraftApp {
         self
     }
 
-    /// Keep `views` aligned with the session's documents.
+    /// Keep `views` aligned with the session's documents (a new one starts at its saved view).
     pub fn sync_views(&mut self) {
-        let n = self.session.documents().len();
-        while self.views.len() < n {
-            self.views.push(View::default());
-        }
-        self.views.truncate(n);
+        let docs = self.session.documents();
+        self.views.truncate(docs.len());
+        self.views.extend(docs.iter().skip(self.views.len()).map(View::of));
     }
 
     pub fn view(&self) -> Option<&View> {
@@ -301,6 +325,10 @@ impl VectorcraftApp {
             if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
                 return r;
             }
+        }
+        // Native files carry the view they reopen at.
+        if fileio::SaveMode::of(id).is_some() {
+            io::remember_view(self);
         }
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") {

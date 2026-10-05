@@ -112,16 +112,27 @@ pub struct DocState {
     pub mask_view: Option<NodeId>,
     /// View → Show Transparency Grid, per document (view state: not saved, not undoable).
     pub transparency_grid: bool,
-    /// The SVG options this document was last saved with as SVG (Save reuses them; JSON as in
-    /// `document.save {svg}`, null when none).
-    pub save_options: Value,
+    /// The format Save writes ([`cmd::fileio::SAVE_FORMATS`]): the one the document was opened
+    /// from or last saved as.
+    pub format: &'static str,
+    /// That format's options as last saved (SVG options for SVG, the Save PDF settings for PDF;
+    /// empty for native files): Save reuses them and `file.formatOptions` reads them back.
+    pub save_options: serde_json::Map<String, Value>,
+    /// Opened from an older native file (former name or format version): the title says
+    /// "[Converted]" and Save asks for a new name instead of overwriting it.
+    pub converted: bool,
+    /// The view saved into native files (`Document::last_view`); the UI keeps it current before a
+    /// save and restores it when the document opens.
+    pub view: Option<vectorcraft_doc::SavedView>,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl DocState {
-    pub fn new(doc: Document, path: Option<String>) -> Self {
+    pub fn new(mut doc: Document, path: Option<String>) -> Self {
         let active_layer = doc.default_layer();
+        // The saved view lives here while the document is open (saves write it back).
+        let view = doc.last_view.take();
         let doc = Arc::new(doc);
         Self {
             saved_doc: doc.clone(),
@@ -138,7 +149,10 @@ impl DocState {
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             mask_view: None,
             transparency_grid: false,
-            save_options: Value::Null,
+            format: "vectorcraft",
+            save_options: Default::default(),
+            converted: false,
+            view,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -150,11 +164,13 @@ impl DocState {
         self.saved_doc = self.doc.clone();
     }
     pub fn title(&self) -> String {
-        self.path
+        let name = self
+            .path
             .as_deref()
             .and_then(|p| std::path::Path::new(p).file_name())
             .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| self.doc.title.clone())
+            .unwrap_or_else(|| self.doc.title.clone());
+        if self.converted { format!("{} [Converted]", cmd::fileio::file_stem(&name)) } else { name }
     }
     /// Where new art is inserted: the isolation container, else the active layer.
     /// The current layer, if the remembered id still names a layer (ids are reused after undo).
@@ -368,6 +384,11 @@ pub struct Prefs {
     /// not a Preferences dialog field: resetting the preferences keeps it; `pdf.preset.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub pdf_presets: Vec<vectorcraft_pdf::PdfPreset>,
+    // File Handling (continued)
+    /// Where Save as Template and New from Template start ("" = `Documents/VectorCraft Templates`).
+    pub templates_folder: String,
+    /// Open older native files as "<name> [Converted]" so Save asks for a new name.
+    pub append_converted: bool,
 }
 
 impl Default for Prefs {
@@ -494,6 +515,8 @@ impl Default for Prefs {
             new_doc_presets: vec![],
             recent_new_docs: vec![],
             pdf_presets: vec![],
+            templates_folder: String::new(),
+            append_converted: true,
         }
     }
 }
@@ -639,10 +662,9 @@ impl Session {
         self.untitled_counter += 1;
         format!("Untitled-{}", self.untitled_counter)
     }
-    /// Add a document and make it active.
-    pub fn add_document(&mut self, mut doc: Document, path: Option<String>) -> usize {
-        // Text layout bounds are a cache (not saved): compute them now, or selection boxes and
-        // hit testing would use the rough estimate until each text object is edited.
+    /// Text layout bounds are a cache (not saved): compute them for a document just read, or
+    /// selection boxes and hit testing would use the rough estimate until each text is edited.
+    fn refresh_text_bounds(doc: &mut Document) {
         let mut texts = vec![];
         doc.walk(|n| {
             if matches!(n.kind, NodeKind::Text(_)) {
@@ -656,6 +678,10 @@ impl Session {
                 cmd::typecmd::refresh_bounds(t);
             }
         }
+    }
+    /// Add a document and make it active.
+    pub fn add_document(&mut self, mut doc: Document, path: Option<String>) -> usize {
+        Self::refresh_text_bounds(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -663,6 +689,30 @@ impl Session {
         let i = self.docs.len() - 1;
         self.active = Some(i);
         i
+    }
+    /// Replace the document in tab `index` (File → Revert): new content, cleared history and
+    /// selection, saved state. The tab keeps its place, path, format and view.
+    pub fn replace_document(&mut self, index: usize, mut doc: Document) -> bool {
+        if index >= self.docs.len() {
+            return false;
+        }
+        Self::refresh_text_bounds(&mut doc);
+        if self.active == Some(index) {
+            // Pending tool work (typing, a drag) belongs to the content being thrown away.
+            self.reset_tool_for_doc_switch();
+        }
+        let old = &self.docs[index];
+        let mut st = DocState::new(doc, old.path.clone());
+        st.history.limit = old.history.limit;
+        // Same open document (caches keyed by uid stay valid); a new revision redraws it.
+        st.uid = old.uid;
+        st.revision = old.revision + 1;
+        st.format = old.format;
+        st.save_options = old.save_options.clone();
+        st.converted = old.converted;
+        st.view = old.view.clone();
+        self.docs[index] = st;
+        true
     }
     pub fn close_document(&mut self, index: usize) -> bool {
         if index >= self.docs.len() {
@@ -1013,6 +1063,8 @@ mod tests_rastersettings;
 mod tests_recolor;
 #[cfg(test)]
 mod tests_registration;
+#[cfg(test)]
+mod tests_save;
 #[cfg(test)]
 mod tests_scalestrokes;
 #[cfg(test)]

@@ -165,7 +165,7 @@ fn save_writes_svg_and_remembers_its_options() {
     let native = dir.join("doc.vectorcraft").to_string_lossy().to_string();
     s.execute("document.save", &json!({"path": native})).unwrap();
     assert!(vectorcraft_format::sniff(&std::fs::read(&native).unwrap()));
-    assert_eq!(s.doc().unwrap().save_options, Value::Null);
+    assert!(s.doc().unwrap().save_options.is_empty(), "a native save remembers no options");
     let _ = std::fs::remove_dir_all(dir);
 }
 

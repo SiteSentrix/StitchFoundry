@@ -49,7 +49,9 @@ fn color_mode_opens_the_file_in_the_mode_asked_for() {
     s.execute("document.open", &json!({"name": "press.pdf", "dataBase64": cmyk_pdf(), "colorMode": "RGB"})).unwrap();
     assert_eq!(s.active().unwrap().doc.color_mode, ColorMode::Rgb);
     let f = fills(&s);
-    assert!(f.iter().all(|p| matches!(p.color(), Some(Color::Rgb { .. }))), "converted as Document Color Mode does: {f:?}");
+    // Converted as Document Color Mode does: no CMYK left, greys stay grey.
+    assert!(f.iter().all(|p| matches!(p.color(), Some(Color::Rgb { .. } | Color::Gray { .. }))), "{f:?}");
+    assert!(matches!(f[0].color(), Some(Color::Rgb { .. })) && matches!(f[1].color(), Some(Color::Gray { .. })), "{f:?}");
     // Any format opens in the mode asked for.
     let mut svg = Session::new();
     svg.execute("file.new", &json!({"width": 20, "height": 20})).unwrap();

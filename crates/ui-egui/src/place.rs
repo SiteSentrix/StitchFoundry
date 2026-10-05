@@ -106,7 +106,7 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
     }
     let paths = match (app.services.pick_open_multi.as_mut(), app.services.pick_open.as_mut()) {
         (Some(f), _) => f(),
-        (None, Some(f)) => f().into_iter().collect(),
+        (None, Some(f)) => f(&crate::FilePick { filters: fileio::place_filters().collect(), ..Default::default() }).into_iter().collect(),
         (None, None) => vec![],
     };
     if paths.is_empty() {

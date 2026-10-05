@@ -71,7 +71,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let i = i.ok_or("no such document")?;
     if !d.bool("discard") {
         app.session.set_active(i);
-        io::save(app, None, false, &Value::Null)?;
+        io::save(app, vectorcraft_engine::cmd::fileio::SaveMode::Save, &json!({}), false)?;
     }
     close_now(app, i)?;
     match d.str("then").as_str() {
@@ -91,7 +91,7 @@ mod tests {
         let written = Arc::new(Mutex::new(vec![]));
         let w = written.clone();
         let services = crate::Services {
-            pick_save: Some(Box::new(|_: &str| Some("out.vectorcraft".to_string()))),
+            pick_save: Some(Box::new(|_: &crate::FilePick| Some("out.vectorcraft".to_string()))),
             write: Some(Box::new(move |p: &str, _: &[u8]| {
                 w.lock().unwrap().push(p.to_string());
                 Ok(())
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn a_cancelled_save_as_keeps_the_document_open() {
         let (mut app, _) = app();
-        app.services.pick_save = Some(Box::new(|_: &str| None));
+        app.services.pick_save = Some(Box::new(|_: &crate::FilePick| None));
         new_doc(&mut app, true);
         close(&mut app, 0).unwrap();
         assert!(confirm(&mut app).is_err());

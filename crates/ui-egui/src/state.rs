@@ -25,6 +25,21 @@ impl Default for View {
     }
 }
 
+impl View {
+    /// The view a document opens at: the one it was saved with, else fitted on first display.
+    pub fn of(st: &vectorcraft_engine::DocState) -> Self {
+        match &st.view {
+            Some(v) if v.zoom.is_finite() && v.zoom > 0.0 && v.center.x.is_finite() && v.center.y.is_finite() => Self {
+                zoom: v.zoom.clamp(0.0313, 640.0),
+                center: v.center,
+                fitted: true,
+                rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
+            },
+            _ => Self::default(),
+        }
+    }
+}
+
 /// Illustrator's preset zoom stops, in percent.
 pub const ZOOM_STOPS: [f64; 26] = [
     3.13, 4.17, 6.25, 8.33, 12.5, 16.67, 25.0, 33.33, 50.0, 66.67, 100.0, 150.0, 200.0, 300.0, 400.0, 600.0, 800.0, 1200.0, 1600.0, 2400.0, 3200.0,

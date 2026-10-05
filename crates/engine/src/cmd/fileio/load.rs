@@ -8,7 +8,7 @@ use vectorcraft_geom::Affine;
 
 use super::super::*;
 use super::pdfimport::LoadOptions;
-use super::{Format, format, format_for_name, read_file};
+use super::{Format, SAVE_FORMATS, format, format_for_name, read_file};
 use crate::EngineError;
 
 /// A file read into a document, with its format and non-fatal import notes.
@@ -18,6 +18,9 @@ pub struct Loaded {
     pub warnings: Vec<String>,
     /// The document is the native one the file carries (SVG or PDF saved with Preserve Editing).
     pub restored: bool,
+    /// An older native file (the former `.drawcraft` name or format version): saving it again
+    /// rewrites it in today's format.
+    pub converted: bool,
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
@@ -46,7 +49,8 @@ pub fn file_name(name: &str) -> String {
 pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     let by_name = format_for_name(name).filter(|f| f.read);
     if vectorcraft_format::sniff(bytes) {
-        return format("vectorcraft");
+        // A template keeps its meaning from the extension, like .ait.
+        return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
     }
     if vectorcraft_svg::is_svgz(bytes) {
         return format("svgz");
@@ -112,8 +116,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     }
     let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")))?;
     let title = file_name(name);
+    let mut converted = false;
     let (mut doc, warnings, restored) = match format.id {
-        "vectorcraft" => (vectorcraft_format::load(bytes).map_err(err)?, vec![], false),
+        "vectorcraft" | "template" => {
+            let (d, info) = vectorcraft_format::load_info(bytes).map_err(err)?;
+            converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
+            (d, vec![], false)
+        }
         "svg" | "svgz" => {
             let text = vectorcraft_svg::text_of(bytes).map_err(err)?;
             let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
@@ -128,21 +137,21 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
-        super::super::docmenu::set_color_mode(&mut doc, mode, true);
+        super::super::colormgmt::set_color_mode(&mut doc, mode, true, None);
     }
     // Imports are named after the file; a native document keeps its own title (the tab shows the
     // file name once it has a path).
-    if format.id != "vectorcraft" || doc.title.is_empty() {
+    if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
         doc.title = title;
     }
-    Ok(Loaded { doc, format, warnings, restored })
+    Ok(Loaded { doc, format, warnings, restored, converted })
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →
-/// `{index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks}`. `path`
-/// is kept for Save only for a non-template native file or a `.ai` file whose native document came
-/// back (Save writes both again); the document's linked files are looked for from it
-/// ([`crate::cmd::links::resolve`]).
+/// `{index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks}`. The
+/// document keeps `path` (and its format, for Save) when Save can write that format back: not a
+/// template, a partly read PDF, or a `.ai` file whose native document didn't come back. The
+/// document's linked files are looked for from `path` ([`crate::cmd::links::resolve`]).
 pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value> {
     open_bytes_with(s, name, bytes, path, &Value::Null)
 }
@@ -150,16 +159,40 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let Loaded { mut doc, format, warnings, restored } = load_with(name, bytes, &opts)?;
+    open_loaded(s, load_with(name, bytes, &opts)?, path, &opts, false)
+}
+
+/// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
+/// from there) as a new untitled document.
+pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value> {
+    open_loaded(s, load(name, bytes)?, path.map(str::to_string), &LoadOptions::default(), true)
+}
+
+/// Make a loaded file the new active document; `opts` are the options it was read with.
+fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
+    let Loaded { mut doc, format, warnings, restored, converted } = loaded;
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
-    // A template (saved by Save as Template, or an .ait file) opens as a new untitled document.
-    let template = doc.template || format.id == "ait";
+    // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
+    // document.
+    let template = as_template || doc.template || matches!(format.id, "ait" | "template");
     if template {
         doc.template = false;
         doc.title = s.next_untitled();
     }
-    let keep_path = (format.id == "vectorcraft" || (format.id == "ai" && restored)) && !template;
-    let index = s.add_document(doc, path.filter(|_| keep_path));
+    // Save writes the file back only in a format it writes, only a whole PDF (see
+    // [`LoadOptions::is_partial`]), and a .ai file only when it carried the native document (Save
+    // writes .ai that way).
+    let partial = format.id == "pdf" && opts.is_partial();
+    let lossy_ai = format.id == "ai" && !restored;
+    let path = path.filter(|_| !template && !partial && !lossy_ai && SAVE_FORMATS.contains(&format.id));
+    let saves_back = path.is_some();
+    let converted = saves_back && converted && s.prefs.append_converted;
+    let index = s.add_document(doc, path);
+    let st = s.doc_mut()?;
+    if saves_back {
+        st.format = format.id;
+    }
+    st.converted = converted;
     let title = s.documents()[index].title();
     Ok(super::merge(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings, "restored": restored }), links.to_json()))
 }
@@ -187,6 +220,11 @@ pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
 pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
     let src = source(p, "document.open")?;
     open_bytes_with(s, src.name, &src.bytes, src.path.map(str::to_string), p)
+}
+
+pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
+    let src = source(p, "file.newFromTemplate")?;
+    open_template(s, src.name, &src.bytes, src.path)
 }
 
 /// Decode an image's header (and, for formats stored as PNG, its pixels).

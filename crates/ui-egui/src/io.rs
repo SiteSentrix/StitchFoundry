@@ -1,11 +1,17 @@
-//! File I/O through the injected services (pick, read, write, download); the engine's `fileio`
-//! decodes and encodes every format.
+//! File I/O through the injected services (pick, read, write, download, reveal); the engine's
+//! `fileio` decodes, encodes and saves every format.
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::fileio;
+use vectorcraft_doc::SavedView;
+use vectorcraft_engine::EngineError;
+use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, SavePlan};
 
-use crate::VectorcraftApp;
 use crate::dialogs::svg_options;
+use crate::state::Dialog;
+use crate::{FilePick, Services, VectorcraftApp, dialogs};
+
+/// Template extensions New from Template's open dialog lists first.
+const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"];
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
 /// graphic style library files open in the library panel and flattener and PDF presets files are
@@ -49,48 +55,107 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
     Ok(())
 }
 
+/// A path from the open dialog, or "cancelled".
+fn pick_open(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
+    app.services.pick_open.as_mut().and_then(|f| f(pick)).ok_or_else(|| "cancelled".into())
+}
+
 /// File → Open…
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
     if let Some(f) = app.services.open_async.as_mut() {
         f();
         return Ok(());
     }
-    let path = app.services.pick_open.as_mut().and_then(|f| f()).ok_or("cancelled")?;
+    let path = pick_open(app, &FilePick { filters: fileio::open_filters().collect(), ..Default::default() })?;
     open_path(app, &path)
 }
 
+fn read(app: &VectorcraftApp, path: &str) -> Result<Vec<u8>, String> {
+    app.services.read.as_ref().ok_or("no file reader")?(path)
+}
+
 pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
-    let read = app.services.read.as_ref().ok_or("no file reader")?;
-    let bytes = read(path)?;
+    let bytes = read(app, path)?;
     open_bytes(app, path, &bytes, Some(path.to_string()))?;
     note_recent(app, path);
     Ok(())
 }
 
-fn write_out(app: &mut VectorcraftApp, path: &str, bytes: &[u8]) -> Result<(), String> {
-    if let Some(dl) = app.services.download.as_mut() {
+/// File → New from Template…: a template (or any readable file) as a new untitled document. Without
+/// a path the open dialog starts in the Templates folder. On the web the browser's file picker
+/// opens it (`.vctemplate`, `.ait` and template files open untitled there too).
+pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
+    let path = match path {
+        Some(p) => p,
+        None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
+        None => {
+            let filters = std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::open_filters()).collect();
+            pick_open(app, &FilePick { folder: fileio::templates_folder(&app.session.prefs), filters, ..Default::default() })?
+        }
+    };
+    let bytes = read(app, &path)?;
+    let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
+    app.sync_views();
+    crate::dialogs::missing_links::after_open(app, &r);
+    Ok(r)
+}
+
+/// Web: download `bytes` under `path`'s file name; desktop: write them to `path`.
+fn write_to(services: &mut Services, path: &str, bytes: &[u8]) -> Result<(), String> {
+    if let Some(dl) = services.download.as_mut() {
         dl(&fileio::file_name(path), bytes);
         return Ok(());
     }
-    let w = app.services.write.as_mut().ok_or("no file writer")?;
-    w(path, bytes)
+    services.write.as_mut().ok_or("no file writer")?(path, bytes)
 }
 
-fn suggested(app: &VectorcraftApp, ext: &str) -> String {
-    let t = app.session.active().map(|d| d.title()).unwrap_or_else(|| "Untitled".into());
-    let stem = std::path::Path::new(&t).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or(t);
-    format!("{stem}.{ext}")
+/// The web saves by downloading: no save panel, no folders.
+fn is_web(app: &VectorcraftApp) -> bool {
+    app.services.download.is_some()
 }
 
-/// `path`, else a suggested name (web download) or one picked in a save dialog.
+/// Where a file goes when no path was given: the suggested name on the web (a download), else the
+/// save panel's choice.
+fn pick_path(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
+    if is_web(app) {
+        return Ok(pick.name.clone());
+    }
+    app.services.pick_save.as_mut().and_then(|f| f(pick)).ok_or_else(|| "cancelled".into())
+}
+
+/// The active document's file name with extension `ext`, and its folder.
+fn suggested(app: &VectorcraftApp, ext: &str) -> (String, Option<String>) {
+    let st = app.session.active();
+    let t = st.map(|d| d.path.clone().unwrap_or_else(|| d.doc.title.clone())).unwrap_or_else(|| "Untitled".into());
+    let folder = st.and_then(|d| d.path.as_deref()).and_then(|p| std::path::Path::new(p).parent()).map(|p| p.to_string_lossy().to_string());
+    (format!("{}.{ext}", fileio::file_stem(&t)), folder.filter(|f| !f.is_empty()))
+}
+
+/// `path`, else one picked in a save panel (the web: the suggested name) for the active document
+/// with extension `ext`, filtered to that format when it is one.
 pub(crate) fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &str) -> Result<String, String> {
-    match path {
-        Some(p) => Ok(p),
-        None if app.services.download.is_some() => Ok(suggested(app, ext)),
-        None => {
-            let s = suggested(app, ext);
-            app.services.pick_save.as_mut().and_then(|f| f(&s)).ok_or_else(|| "cancelled".into())
-        }
+    if let Some(p) = path {
+        return Ok(p);
+    }
+    let (name, folder) = suggested(app, ext);
+    let filters = fileio::format(ext).map(|f| vec![(f.label, f.extensions)]).unwrap_or_default();
+    pick_path(app, &FilePick { name, folder, filters })
+}
+
+/// Keep the active document's saved view current before a save (native files reopen at it).
+pub fn remember_view(app: &mut VectorcraftApp) {
+    let Some(v) = app.view().copied().filter(|v| v.fitted) else { return };
+    if let Some(st) = app.session.active_mut() {
+        st.view = Some(SavedView { name: String::new(), center: v.center, zoom: v.zoom, rotation: v.rotation });
+    }
+}
+
+/// A path typed in a save panel: kept when its extension names a save format (the panel's file
+/// type), else `f`'s extension is added.
+fn with_save_extension(path: &str, f: &Format) -> String {
+    match fileio::format_for_name(path) {
+        Some(g) if SAVE_FORMATS.contains(&g.id) => path.to_string(),
+        _ => format!("{path}.{}", f.extensions[0]),
     }
 }
 
@@ -99,78 +164,156 @@ pub(crate) fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &
 fn write_encoded(app: &mut VectorcraftApp, doc: &vectorcraft_doc::Document, path: &str, enc: &fileio::Encoded) -> Result<Vec<String>, String> {
     let named = enc.named(doc, path);
     for (p, bytes) in &named {
-        write_out(app, p, bytes)?;
+        write_to(&mut app.services, p, bytes)?;
     }
     Ok(named.into_iter().take(enc.files.len()).map(|(p, _)| p).collect())
 }
 
-fn format_param(p: &Value) -> Option<&str> {
-    p.get("format").and_then(Value::as_str)
+fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, String> {
+    fileio::save_plan(&app.session, mode, p).map_err(|e| e.to_string())
 }
 
-/// File → Save / Save As: native, SVG for an .svg path (with the SVG options in `params`, else
-/// the ones the document was last saved with), or a PDF-compatible .ai file (with the PDF options
-/// in `params`) that reopens editable.
-pub fn save(app: &mut VectorcraftApp, path: Option<String>, save_as: bool, params: &Value) -> Result<String, String> {
-    let st = app.session.active().ok_or("no document")?;
-    let existing = if save_as { None } else { st.path.clone() };
-    let path = target_path(app, path.or(existing), vectorcraft_format::EXTENSION)?;
-    let f = fileio::save_format(format_param(params), Some(&path))?;
-    fileio::stamp_save_dates(app.session.active_mut().ok_or("no document")?);
-    let params = fileio::pdf::expand_preset(&app.session, "file.save", params).map_err(|e| e.to_string())?;
-    let params = &*params;
-    let st = app.session.active().ok_or("no document")?;
-    let (enc, opts) = fileio::save_encoding(st, f, params, Some(&path)).map_err(|e| e.to_string())?;
-    let doc = st.doc.clone();
-    write_encoded(app, &doc, &path, &enc)?;
-    if let Some(st) = app.session.active_mut() {
-        st.path = Some(path.clone());
-        st.save_options = opts;
-        st.mark_saved();
-    }
-    app.status(format!("Saved {path}"));
-    note_recent(app, &path);
-    Ok(path)
-}
-
-/// File → Save As / Save a Copy: the path (asked for when missing); an SVG path without SVG
-/// options in `p` opens SVG Options, whose OK saves. A copy leaves the document's path alone.
-pub fn save_as(app: &mut VectorcraftApp, copy: bool, p: &Value) -> Result<Value, String> {
-    let path = target_path(app, p.get("path").and_then(Value::as_str).map(str::to_string), vectorcraft_format::EXTENSION)?;
-    let f = fileio::save_format(format_param(p), Some(&path))?;
-    let given = p.get("svg").is_some_and(|v| !v.is_null()) || !fileio::svg_options(p)?.is_empty();
-    if matches!(f.id, "svg" | "svgz") && !given {
-        let mode = if copy { svg_options::Mode::SaveCopy } else { svg_options::Mode::Save };
-        svg_options::open(app, mode, Some(&path));
-        return Ok(json!({ "dialog": svg_options::KIND, "path": path }));
-    }
-    if !copy {
-        return save(app, Some(path), true, p).map(|p| json!({ "path": p }));
-    }
-    let st = app.session.active().ok_or("no document")?;
-    let doc = st.doc.clone();
-    // A .ai copy is written as Save writes it (PDF plus the native document).
-    let enc = match f.id {
-        "ai" => fileio::pdf::expand_preset(&app.session, "file.saveCopy", p)
-            .and_then(|p| fileio::save_encoding(st, f, &p, Some(&path)))
-            .map(|(enc, _)| enc),
-        _ => {
-            let copy = vectorcraft_engine::cmd::links::with_relative_paths(&doc, &path);
-            fileio::encode_all(copy.as_ref().unwrap_or(&doc), f.id, p)
+/// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
+/// engine command's `{path?, format?, options?, svg?}`.
+///
+/// When no path is known, desktop asks with a save panel (one file type per save format) and the
+/// web opens the Save As dialog (file name and format). With `ask_options` and no options in `p`,
+/// a format picked that way that has options asks for them before anything is written (SVG
+/// Options, the Save PDF dialog, or the save options dialog), and so does Save As or Save a Copy
+/// to a given SVG path. → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
+/// path?}` while a dialog is open.
+pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool) -> Result<Value, String> {
+    remember_view(app);
+    let first = plan(app, mode, p)?;
+    let ask = ask_options && !has_options(p);
+    if let Some(path) = first.path.clone() {
+        if ask && matches!(mode, SaveMode::SaveAs | SaveMode::Copy) && matches!(first.format.id, "svg" | "svgz") {
+            return ask_format_options(app, mode, first.format, &path);
         }
+        return write_plan(app, first);
     }
-    .map_err(|e| e.to_string())?;
-    write_encoded(app, &doc, &path, &enc)?;
-    app.status(format!("Saved a copy as {path}"));
-    Ok(json!({ "path": path }))
+    if is_web(app) && ask_options {
+        return Ok(open_options(app, mode.command(), first.format, &first.name, true));
+    }
+    let filters = match mode {
+        SaveMode::Template => vec![(first.format.label, first.format.extensions)],
+        _ => fileio::save_filters(first.format.id),
+    };
+    let picked = pick_path(app, &FilePick { name: first.name.clone(), folder: first.folder.clone(), filters })?;
+    // The picked file type wins over a `format` param.
+    let mut q = if p.is_object() { p.clone() } else { json!({}) };
+    if let Some(o) = q.as_object_mut() {
+        o.remove("format");
+        o.insert("path".into(), json!(with_save_extension(&picked, first.format)));
+    }
+    let chosen = plan(app, mode, &q)?;
+    if ask && !chosen.format.options.is_empty() {
+        let path = chosen.path.clone().unwrap_or_default();
+        return ask_format_options(app, mode, chosen.format, &path);
+    }
+    write_plan(app, chosen)
 }
 
-/// Put `path` at the top of File → Open Recent Files (capped by Preferences → Recent Files).
+/// Does `p` give format options (`options`, `svg: {…}` or SVG options at its top level)?
+fn has_options(p: &Value) -> bool {
+    ["options", "svg"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) || fileio::svg_options(p).is_ok_and(|m| !m.is_empty())
+}
+
+/// Ask for format `f`'s options before a save (`mode`) to `path`: SVG Options for SVG, the Save
+/// PDF dialog for PDF, else the save options dialog. OK finishes the save.
+pub fn ask_format_options(app: &mut VectorcraftApp, mode: SaveMode, f: &Format, path: &str) -> Result<Value, String> {
+    match f.id {
+        "pdf" => ask_pdf_options(app, mode, path),
+        "svg" | "svgz" => {
+            let m = if mode == SaveMode::Copy { svg_options::Mode::SaveCopy } else { svg_options::Mode::Save };
+            svg_options::open(app, m, Some(path));
+            Ok(json!({ "pending": svg_options::KIND, "dialog": svg_options::KIND, "path": path }))
+        }
+        _ => Ok(open_options(app, mode.command(), f, path, false)),
+    }
+}
+
+/// A save as PDF asks with the Save PDF dialog, filled with the PDF options the document was last
+/// saved with; its OK finishes the save ([`save_pdf`]).
+pub fn ask_pdf_options(app: &mut VectorcraftApp, mode: SaveMode, path: &str) -> Result<Value, String> {
+    let mut p = Value::Object(plan(app, mode, &json!({ "path": path, "format": "pdf" }))?.options);
+    p["path"] = json!(path);
+    dialogs::open_save_pdf(app, &p)?;
+    let d = app.ui.dialog.as_mut().ok_or("the Save PDF dialog didn't open")?;
+    d.fields.insert("__save".into(), json!(mode.command()));
+    Ok(json!({ "pending": d.kind }))
+}
+
+/// The Save PDF dialog's OK during a save (`mode`): `params` are its `document.exportPdf` options
+/// and `path`.
+pub fn save_pdf(app: &mut VectorcraftApp, mode: SaveMode, mut params: Value) -> Result<Value, String> {
+    let path = params.as_object_mut().and_then(|o| o.remove("path"));
+    let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false);
+    let r = save(app, mode, &json!({ "path": path, "format": "pdf", "options": params }), false)?;
+    if view && let Some(path) = r["path"].as_str() {
+        view_file(app, path);
+    }
+    Ok(r)
+}
+
+/// Open a written file in the system viewer (not on the web, which downloads it).
+fn view_file(app: &mut VectorcraftApp, path: &str) {
+    if !is_web(app) {
+        app.open_url(&file_url(path));
+    }
+}
+
+/// "Saved <path>", with the first of the result's warnings.
+fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
+    let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    app.status(match warnings.first() {
+        Some(first) => format!("Saved {path} with {} note(s): {first}", warnings.len()),
+        None => format!("Saved {path}"),
+    });
+}
+
+/// Write a planned save through the services and report it in the status bar.
+fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String> {
+    let retargets = plan.retargets();
+    let services = &mut app.services;
+    let r = fileio::save_with(&mut app.session, plan, |path, bytes| write_to(services, path, bytes).map_err(EngineError::Other))
+        .map_err(|e| e.to_string())?;
+    let path = r["path"].as_str().unwrap_or_default().to_string();
+    if retargets {
+        note_recent(app, &path);
+    }
+    report_saved(app, &path, &r);
+    Ok(r)
+}
+
+/// Open the save options dialog of format `f` before writing `path`: `action` is the save command
+/// it finishes, and `pick` (the web's Save As) also names the file and chooses the format.
+fn open_options(app: &mut VectorcraftApp, action: &str, f: &Format, path: &str, pick: bool) -> Value {
+    let mut fields = dialogs::save_options::option_values(app, f);
+    fields.insert("__action".into(), json!(action));
+    fields.insert("__pick".into(), json!(pick));
+    fields.insert("path".into(), json!(path));
+    fields.insert("format".into(), json!(f.id));
+    app.ui.dialog = Some(Dialog { kind: dialogs::save_options::KIND.into(), fields });
+    json!({ "pending": dialogs::save_options::KIND })
+}
+
+/// The most recent files remembered: Preferences → File Handling → Number of Recent Files to Display
+/// shows 0 to this many of them.
+pub const MAX_RECENT_FILES: usize = 30;
+
+/// Put `path` at the top of File → Open Recent Files.
 pub fn note_recent(app: &mut VectorcraftApp, path: &str) {
     let r = &mut app.ui.recent_files;
     r.retain(|p| p != path);
     r.insert(0, path.to_string());
-    r.truncate((app.session.prefs.recent_files_count as usize).clamp(1, 10));
+    r.truncate(MAX_RECENT_FILES);
+}
+
+/// The recent files File → Open Recent Files lists.
+pub fn recent_files(app: &VectorcraftApp) -> &[String] {
+    let r = &app.ui.recent_files;
+    &r[..r.len().min(app.session.prefs.recent_files_count as usize)]
 }
 
 /// Export the active document in `format` (default: the path's extension, else PNG) with the
@@ -239,7 +382,7 @@ fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value)
         Some(p) => p,
         None => target_path(app, None, ext)?,
     };
-    write_out(app, &path, &bytes)?;
+    write_to(&mut app.services, &path, &bytes)?;
     Ok((path, v))
 }
 
@@ -250,14 +393,10 @@ fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value)
 pub fn export_pdf(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false);
     let (path, mut v) = run_to_file(app, "document.exportPdf", "pdf", params)?;
-    if view && app.services.download.is_none() {
-        app.open_url(&file_url(&path));
+    if view {
+        view_file(app, &path);
     }
-    let warnings: Vec<&str> = v["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-    app.status(match warnings.first() {
-        Some(first) => format!("Saved {path} with {} note(s): {first}", warnings.len()),
-        None => format!("Saved {path}"),
-    });
+    report_saved(app, &path, &v);
     v["path"] = Value::String(path);
     Ok(v)
 }
@@ -276,6 +415,23 @@ fn file_url(path: &str) -> String {
         }
     }
     url
+}
+
+/// File → Revert: ask first; OK runs `file.revert` with `confirmed`, which goes to the engine.
+pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let c = vectorcraft_engine::find_command("file.revert").ok_or("no revert command")?;
+    (c.enabled)(&app.session)?;
+    let name = app.session.active().map(|d| d.title()).unwrap_or_default();
+    let message = format!("Revert to the saved version of “{name}”?");
+    dialogs::confirm::ask(app, &message, "Changes made since it was last saved will be lost.", "file.revert", json!({ "confirmed": true }));
+    Ok(json!({ "pending": dialogs::confirm::KIND }))
+}
+
+/// File → Show in Folder: the document's file in the system file manager.
+pub fn reveal(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let path = app.session.active().and_then(|d| d.path.clone()).ok_or("the document has never been saved")?;
+    app.services.reveal.as_mut().ok_or("no file manager here")?(&path)?;
+    Ok(json!({ "path": path }))
 }
 
 /// Place a file's bytes (no path, so embedded) centred in the view: `file.place`.
@@ -385,7 +541,7 @@ mod tests {
         let (mut app, written) = app();
         app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
-        app.services.pick_save = Some(Box::new(|_: &str| Some("/tmp/sel.svg".into())));
+        app.services.pick_save = Some(Box::new(|_: &FilePick| Some("/tmp/sel.svg".into())));
         assert_eq!(app.run("document.exportSelection", json!({})).unwrap()["path"], "/tmp/sel.svg");
         app.run("document.exportSelection", json!({"path": "/tmp/sel.png"})).unwrap();
         let w = written.borrow();

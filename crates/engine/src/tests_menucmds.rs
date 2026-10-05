@@ -1,7 +1,7 @@
 //! Menu long-tail commands (Object/Edit/Select/Type/View/File), driven through `Session::execute`.
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::Color;
 use vectorcraft_doc::{ColorMode, LiveShape, Node, NodeKind, TextKind};
 use vectorcraft_geom::Rect;
 
@@ -672,7 +672,9 @@ fn document_color_mode_converts_colours() {
     fill(&mut s, a, "#ff0000");
     s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
     assert_eq!(s.doc().unwrap().doc.color_mode, ColorMode::Cmyk);
-    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
+    // Converted through the colour settings: a press red, mostly magenta and yellow.
+    let Some(Color::Cmyk { c, m, y, k }) = node(&s, a).appearance.fill_paint().color() else { panic!("not CMYK") };
+    assert!(m > 0.8 && y > 0.8 && c < 0.05 && k < 0.05, "{c} {m} {y} {k}");
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc.color_mode, ColorMode::Rgb);
     assert!(s.execute("file.documentColorMode", &json!({"mode": "lab"})).is_err());

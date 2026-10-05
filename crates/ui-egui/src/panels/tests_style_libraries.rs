@@ -164,7 +164,7 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
     let written = std::rc::Rc::new(std::cell::RefCell::new(vec![]));
     let w = written.clone();
     let services = crate::Services {
-        pick_save: Some(Box::new(|name: &str| Some(format!("/tmp/{name}")))),
+        pick_save: Some(Box::new(|p: &crate::FilePick| Some(format!("/tmp/{}", p.name)))),
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())

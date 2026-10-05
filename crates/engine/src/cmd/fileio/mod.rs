@@ -5,7 +5,8 @@
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
-//! - `save`: `document.save`, `file.saveAsTemplate`.
+//! - `save`: `document.save`, Save As / a Copy / as Template, New from Template, Revert and the
+//!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
 //! - `pdfimport`: the PDF pages, box and password `document.open` and Place read, `document.pdfInfo`.
 //!
@@ -29,9 +30,9 @@ pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, enc
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 use load::err;
 pub(crate) use load::source;
-pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, raster_image};
+pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
 pub use pdfimport::{LoadOptions, page_document};
-pub use save::{SAVE_FORMATS, save_encoding, save_filters, save_format, stamp_save_dates};
+pub use save::{SAVE_FORMATS, SaveMode, SavePlan, save_filters, save_format, save_plan, save_with, stamp_save_dates, templates_folder};
 pub use svg::options_map as svg_options;
 
 use super::*;
@@ -49,20 +50,11 @@ pub fn specs() -> Vec<CommandSpec> {
             load::open
         ),
         cmd!(
-            "document.save",
-            "Save Document",
-            [],
-            None,
-            "{path?, format?: vectorcraft|ai|svg|svgz (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}, …document.exportPdf options (.ai)} (default path: the document's) → {path, linked?, warnings?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with, and keeps hidden layers (display:none) unless hiddenLayers is false. A .ai save is a PDF-compatible file: every artboard as a PDF page with the native document embedded (preserveEditing is always on), so document.open restores it exactly. A never-saved document without path → {dataBase64} (stays modified)",
-            has_doc,
-            save::save
-        ),
-        cmd!(
             query "document.serialize",
             "Serialize Document",
             [],
             None,
-            "{format?: vectorcraft (default)|svg|svgz|pdf|png|jpg|webp, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
+            "{format?: vectorcraft (default)|template|svg|svgz|pdf|png|jpg|webp, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
             has_doc,
             export::serialize
         ),
@@ -71,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), quality?: 90 (jpg); SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft|template (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), quality?: 90 (jpg); SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -83,15 +75,6 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path?, format?: png|jpg|webp|svg|svgz|pdf (default: from the extension, else png), scale?: 1, …the format's options} the selected objects cropped to their bounds (template layers left out) → {path, bytes, bounds} (no path → {dataBase64, bounds})",
             has_selection,
             export::export_selection
-        ),
-        cmd!(
-            "file.saveAsTemplate",
-            "Save as Template…",
-            ["File"],
-            None,
-            "{path?} a native copy that opens as a new untitled document (no path → {dataBase64})",
-            has_doc,
-            save::save_template
         ),
         cmd!(
             "document.exportForScreens",
@@ -122,6 +105,9 @@ pub fn specs() -> Vec<CommandSpec> {
             pdfimport::pdf_info
         ),
     ]
+    .into_iter()
+    .chain(save::specs())
+    .collect()
 }
 
 /// One option a format's encoder reads from the export params.
@@ -287,18 +273,28 @@ pub const FORMATS: &[Format] = &[
     },
     reader("tiff", "TIFF", &["tif", "tiff"], "image/tiff", true),
     reader("bmp", "BMP", &["bmp"], "image/bmp", true),
+    Format {
+        id: "template",
+        label: "VectorCraft Template",
+        extensions: &["vctemplate"],
+        mime: "application/json",
+        read: true,
+        write: true,
+        raster: false,
+        options: &[],
+    },
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
 pub const OPEN_EXTS: &[&str] =
-    &["vectorcraft", "drawcraft", "svg", "svgz", "pdf", "ai", "ait", "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp"];
+    &["vectorcraft", "drawcraft", "svg", "svgz", "pdf", "ai", "ait", "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp", "vctemplate"];
 
 /// Text files: File → Place sets them as area type (Text Import Options).
 pub const TEXT_EXTS: &[&str] = &["txt"];
 
 /// Every extension File → Place reads: [`OPEN_EXTS`] and [`TEXT_EXTS`].
 pub const PLACE_EXTS: &[&str] =
-    &["vectorcraft", "drawcraft", "svg", "svgz", "pdf", "ai", "ait", "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp", "txt"];
+    &["vectorcraft", "drawcraft", "svg", "svgz", "pdf", "ai", "ait", "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp", "vctemplate", "txt"];
 
 /// One dialog filter per readable format.
 fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
@@ -329,6 +325,11 @@ pub fn format(id_or_ext: &str) -> Option<&'static Format> {
 /// The lower-case extension of a file name or path (empty when it has none).
 pub fn extension(name: &str) -> String {
     std::path::Path::new(name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default()
+}
+
+/// A file name or path without its folder and extension (`/a/Poster.svg` → `Poster`).
+pub fn file_stem(name: &str) -> String {
+    std::path::Path::new(name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string())
 }
 
 /// The format a file name's extension names.

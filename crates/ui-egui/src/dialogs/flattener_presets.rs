@@ -9,7 +9,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::FlattenOptions;
-use vectorcraft_engine::cmd::flatten::PRESET_FORMAT;
+use vectorcraft_engine::cmd::flatten::{PRESET_EXTS, PRESET_FORMAT};
 
 use super::flatten::{options_editor, put_options};
 use super::{DialogSpec, form};
@@ -180,7 +180,8 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action, current: &str) -> 
                 f();
                 return Ok(());
             }
-            let path = app.services.pick_open.as_mut().and_then(|f| f()).ok_or("cancelled")?;
+            let pick = crate::FilePick { filters: vec![("Flattener presets", PRESET_EXTS)], ..Default::default() };
+            let path = app.services.pick_open.as_mut().and_then(|f| f(&pick)).ok_or("cancelled")?;
             let r = app.run("flattener.presets.import", json!({ "path": path }))?;
             if let Some(first) = r["imported"].get(0).and_then(Value::as_str) {
                 select(d, first);
@@ -274,7 +275,7 @@ mod tests {
         let file = dir.join("mine.vcflattener").to_string_lossy().to_string();
         let picked = file.clone();
         let services = crate::Services {
-            pick_save: Some(Box::new(move |_: &str| Some(picked.clone()))),
+            pick_save: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
             write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
             ..Default::default()
         };

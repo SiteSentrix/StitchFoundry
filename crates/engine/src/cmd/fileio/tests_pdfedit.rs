@@ -106,8 +106,9 @@ fn ai_files_are_pdfs_that_save_and_reopen_editable() {
     s.execute("document.save", &json!({})).unwrap();
     let again = vectorcraft_pdf::editing(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(vectorcraft_format::load(&again.data).unwrap().layers, s.doc().unwrap().doc.layers);
-    // PDF stays an export.
-    assert!(s.execute("document.save", &json!({"path": tmp("x.pdf")})).is_err(), "PDF is written with document.exportPdf");
+    // Save As also writes a plain PDF (the document then saves back as PDF); PNG stays an export.
+    assert_eq!(s.execute("document.save", &json!({"path": tmp("x.pdf")})).unwrap()["format"], "pdf");
+    assert!(s.execute("document.save", &json!({"path": tmp("x.png")})).is_err(), "PNG is written with document.export");
     // A plain PDF named .ai opens as artwork, without a path to save over.
     let plain = b64(&s.execute("document.exportPdf", &json!({"preserveEditing": false})).unwrap());
     let plain_path = tmp("plain.ai");

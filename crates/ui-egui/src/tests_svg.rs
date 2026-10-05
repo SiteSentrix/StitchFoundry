@@ -20,7 +20,7 @@ pub(super) fn app(picked: &str) -> (VectorcraftApp, Written) {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
         })),
-        pick_save: Some(Box::new(move |_: &str| Some(picked.clone()))),
+        pick_save: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);

@@ -171,12 +171,13 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
         let index = if pdf { 0 } else { page - 1 };
         let n = doc.artboards.len();
         let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| {
-            let what = if format.id == "vectorcraft" { "artboard" } else { "page" };
+            let what = if matches!(format.id, "vectorcraft" | "template") { "artboard" } else { "page" };
             bad(cmd, format!("page {page}: `{name}` has {n} {what}(s)"))
         })?;
         // A PDF import has one layer per page; a native document's art is whatever lies on the
         // artboard.
-        let pages: Vec<&Arc<Node>> = if format.id == "vectorcraft" { layers.iter().collect() } else { layers.get(index).into_iter().collect() };
+        let pages: Vec<&Arc<Node>> =
+            if matches!(format.id, "vectorcraft" | "template") { layers.iter().collect() } else { layers.get(index).into_iter().collect() };
         let on_board = |c: &&Arc<Node>| c.visual_bounds().is_some_and(|b| b.intersect(board).area() > 0.0 || board.contains(b.origin()));
         let nodes = art_of(pages.into_iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten()).filter(on_board));
         (nodes, crop.then_some(board))

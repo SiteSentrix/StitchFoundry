@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_engine::cmd::fileio::pdf;
+use vectorcraft_engine::cmd::fileio::{SaveMode, pdf};
 use vectorcraft_pdf::{
     Changes, Choice, ColorConversion, Compatibility, Downsample, ImageCodec, JpegQuality, MarkKind, MonoCodec, Overprint, PdfSettings, Printing,
     ProfileInclusion, Standard,
@@ -100,8 +100,9 @@ fn params(d: &Dialog) -> Value {
     p
 }
 
-/// Save PDF: write the file; the dialog stays open when that fails (bad range, cancelled save…).
-/// While Save Preset… asks for a name, OK (and Enter) saves the preset instead.
+/// Save PDF: write the file (a PDF copy, or the PDF a Save As / Save a Copy asked for, `__save`);
+/// the dialog stays open when that fails (bad range, cancelled save…). While Save Preset… asks for
+/// a name, OK (and Enter) saves the preset instead.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if d.fields.contains_key(SAVE_AS) {
         let mut d = d.clone();
@@ -109,7 +110,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.ui.dialog = Some(d);
         return r;
     }
-    let r = io::export_pdf(app, params(d));
+    let r = match SaveMode::of(&d.str("__save")) {
+        Some(mode) => io::save_pdf(app, mode, params(d)),
+        None => io::export_pdf(app, params(d)),
+    };
     if r.is_ok() {
         app.ui.dialog = None;
     }
@@ -759,9 +763,9 @@ mod tests {
         // Without a path, bad options are refused before a save dialog asks for one.
         let asked = Rc::new(RefCell::new(0));
         let a = asked.clone();
-        app.services.pick_save = Some(Box::new(move |name: &str| {
+        app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
             *a.borrow_mut() += 1;
-            Some(format!("/tmp/picked-{name}"))
+            Some(format!("/tmp/picked-{}", pick.name))
         }));
         app.run("ui.savePdfDialog", json!({"range": "7"})).unwrap();
         assert!(super::super::confirm(&mut app).is_err());
