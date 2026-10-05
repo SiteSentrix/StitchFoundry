@@ -75,7 +75,8 @@ fn export_tool_lists_engine_formats_and_options() {
             "eps",
             "emf",
             "wmf",
-            "tga"
+            "tga",
+            "psd"
         ])
     );
     for k in ["artboard", "range", "options"] {

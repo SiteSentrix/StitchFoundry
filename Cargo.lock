@@ -2997,6 +2997,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "psd"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a25f9b8cfffd65d911baf31a033239f7a0facb755faa2481575b70db5dc9195"
+dependencies = [
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4419,6 +4428,7 @@ dependencies = [
  "jpeg-encoder",
  "log",
  "proptest",
+ "psd",
  "serde_json",
  "tiff",
  "vectorcraft-brush",

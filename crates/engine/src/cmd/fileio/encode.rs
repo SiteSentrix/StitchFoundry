@@ -12,7 +12,7 @@ use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 use vectorcraft_render::encode::tiff::{ByteOrder, TiffOptions};
-use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, bmp, tga};
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, bmp, psd, tga};
 
 use super::super::*;
 use super::Format;
@@ -171,6 +171,10 @@ struct RasterOptions {
     file_format: Option<String>,
     rle: Option<bool>,
     flip_rows: Option<bool>,
+    /// PSD: Write Layers.
+    layers: Option<bool>,
+    max_editability: Option<bool>,
+    hidden_layers: Option<bool>,
 }
 
 impl RasterOptions {
@@ -228,6 +232,13 @@ impl RasterOptions {
                 gray: color_model == jpeg::ColorModel::Gray,
             },
             tga: tga::TgaOptions { depth: self.depth.unwrap_or(24) },
+            psd: psd::PsdOptions {
+                color_model,
+                layers: self.layers.unwrap_or(true),
+                max_editability: self.max_editability.unwrap_or(false),
+                hidden_layers: self.hidden_layers.unwrap_or(false),
+                embed_icc,
+            },
         })
     }
 }
@@ -321,10 +332,15 @@ const WEBP_SIDE: f64 = 16383.0;
 /// Refuse a raster export its format can't store (instead of writing an empty file). The
 /// renderer's own size limits are [`vectorcraft_render::raster_size`]'s.
 fn check_format_size(f: &Format, w: f64, h: f64) -> Result<()> {
-    if f.id == "webp" && (w.round() > WEBP_SIDE || h.round() > WEBP_SIDE) {
+    let max = match f.id {
+        "webp" => WEBP_SIDE,
+        "psd" => f64::from(psd::MAX_SIDE),
+        _ => return Ok(()),
+    };
+    if w.round() > max || h.round() > max {
         return Err(bad(
             C,
-            format!("{} × {} pixels is too large for {} (at most {WEBP_SIDE} pixels a side): lower the scale", w.round(), h.round(), f.label),
+            format!("{} × {} pixels is too large for {} (at most {max} pixels a side): lower the scale", w.round(), h.round(), f.label),
         ));
     }
     Ok(())
@@ -379,7 +395,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });
         }
-        "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" | "bmp" | "tga" => {
+        "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" | "bmp" | "tga" | "psd" => {
             let o: RasterOptions = options(f, p)?;
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
@@ -394,6 +410,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
                 "tiff" => RasterFormat::Tiff,
                 "bmp" => RasterFormat::Bmp,
                 "tga" => RasterFormat::Tga,
+                "psd" => RasterFormat::Psd,
                 _ => RasterFormat::WebP,
             };
             check_options(format, &settings)?;

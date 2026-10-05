@@ -3,12 +3,13 @@
 //! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless WebP, or
 //! a palette image ([`quantize`]) as PNG-8 or [`gif`], [`tiff`] (RGB, CMYK or grey, LZW, either byte
 //! order, the profile), [`bmp`] (1–32 bits, RLE) or [`tga`]; [`web`] adds what Save for Web optimises
-//! further (web snap, colour table edits, lossy GIF, comments).
+//! further (web snap, colour table edits, lossy GIF, comments); [`psd`] writes layered bitmaps.
 
 pub mod bmp;
 pub mod gif;
 pub mod jpeg;
 pub mod png;
+pub mod psd;
 pub mod quantize;
 pub mod tga;
 pub mod tiff;
@@ -31,6 +32,8 @@ pub enum RasterFormat {
     Tiff,
     Bmp,
     Tga,
+    /// Layered bitmap (.psd).
+    Psd,
 }
 
 /// How a raster export renders and encodes.
@@ -55,6 +58,8 @@ pub struct RasterExportOptions {
     pub bmp: bmp::BmpOptions,
     /// Targa depth.
     pub tga: tga::TgaOptions,
+    /// PSD colour model, layers and profile.
+    pub psd: psd::PsdOptions,
 }
 
 impl Default for RasterExportOptions {
@@ -70,6 +75,7 @@ impl Default for RasterExportOptions {
             tiff: tiff::TiffOptions::default(),
             bmp: bmp::BmpOptions::default(),
             tga: tga::TgaOptions::default(),
+            psd: psd::PsdOptions::default(),
         }
     }
 }
@@ -81,9 +87,10 @@ impl RasterExportOptions {
     }
 
     /// What the renderer draws for `format`: template layers left out, over the background
-    /// (white for a JPEG without one).
+    /// (white for a JPEG or a flat PSD without one).
     pub fn render_options(&self, format: RasterFormat) -> RenderOptions {
-        let background = self.background.or((format == RasterFormat::Jpeg).then_some([255; 3]));
+        let flat = format == RasterFormat::Jpeg || (format == RasterFormat::Psd && !self.psd.layers);
+        let background = self.background.or(flat.then_some([255; 3]));
         RenderOptions {
             background: background.map(|[r, g, b]| [r, g, b, 255]),
             skip_templates: true,
@@ -92,8 +99,8 @@ impl RasterExportOptions {
         }
     }
 
-    /// Encode a rendered image as `format`. A CMYK JPEG separates the screen colours;
-    /// [`Renderer::export_region`] draws the inks instead.
+    /// Encode a rendered image as `format`. A CMYK JPEG separates the screen colours, and a PSD is
+    /// flat; [`Renderer::export_region`] draws the inks and the layers instead.
     pub fn encode(&self, img: &Rendered, format: RasterFormat) -> Result<Vec<u8>, String> {
         match format {
             RasterFormat::Png => {
@@ -117,6 +124,7 @@ impl RasterExportOptions {
             RasterFormat::Tiff => tiff::encode(img, self.ppi, &self.tiff),
             RasterFormat::Bmp => bmp::encode(&img.to_straight(), img.width, img.height, self.ppi, &self.bmp, &self.palette),
             RasterFormat::Tga => tga::encode(&img.to_straight(), img.width, img.height, &self.tga),
+            RasterFormat::Psd => psd::encode(img, self.ppi, &self.psd),
         }
     }
 
@@ -133,8 +141,11 @@ impl RasterExportOptions {
 impl Renderer {
     /// Render `region` of `doc` (an artboard or any rect) as exported and encode it as `format`.
     /// Callers check the size first ([`crate::raster_size`]). A CMYK JPEG or TIFF is drawn as ink
-    /// amounts ([`Renderer::render_region_inks`]).
+    /// amounts ([`Renderer::render_region_inks`]); a PSD with its layers ([`psd::export`]).
     pub fn export_region(&mut self, doc: &Document, region: Rect, format: RasterFormat, opts: &RasterExportOptions) -> Result<Vec<u8>, String> {
+        if format == RasterFormat::Psd {
+            return psd::export(self, doc, region, opts);
+        }
         if opts.cmyk(format) {
             let (w, h) = crate::region_pixels(region, opts.scale());
             let inks = self.render_region_inks(doc, region, opts.scale(), &opts.render_options(format));
@@ -198,6 +209,8 @@ mod tests_bmp;
 mod tests_jpeg;
 #[cfg(test)]
 mod tests_palette;
+#[cfg(test)]
+mod tests_psd;
 #[cfg(test)]
 mod tests_tga;
 #[cfg(test)]
