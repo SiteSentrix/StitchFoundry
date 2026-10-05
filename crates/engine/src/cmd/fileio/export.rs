@@ -16,6 +16,8 @@ use super::{
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
+    let expanded = super::pdf::expand_preset(s, "document.serialize", p)?;
+    let p = &*expanded;
     let doc = &s.doc()?.doc;
     let enc = encode_all(doc, f.id, p)?;
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
@@ -38,6 +40,8 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path");
     let f = writable("document.export", str_param(p, "format"), path)?;
+    let expanded = super::pdf::expand_preset(s, "document.export", p)?;
+    let p = &*expanded;
     let doc = &s.doc()?.doc;
     let enc = encode_all(doc, f.id, p)?;
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
@@ -63,6 +67,8 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportSelection";
     let path = str_param(p, "path");
     let f = writable(C, str_param(p, "format"), path)?;
+    let expanded = super::pdf::expand_preset(s, C, p)?;
+    let p = &*expanded;
     let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
@@ -114,6 +120,8 @@ fn screen_format(row: &Value) -> Result<ScreenFormat> {
     let mut options = without_artboards(row);
     if let Some(o) = options.as_object_mut() {
         o.insert("scale".into(), json!(scale));
+        // A file per artboard is for viewing: it doesn't carry the whole document to edit.
+        o.entry("preserveEditing").or_insert(json!(false));
     }
     Ok(ScreenFormat { format, options, suffix })
 }

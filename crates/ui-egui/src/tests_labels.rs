@@ -74,7 +74,12 @@ fn swatches_menu_offers_save_swatch_library() {
 #[test]
 fn edit_menu_lists_pdf_presets() {
     let app = app();
-    assert!(menus::menu_entries(&app).iter().any(|e| e.path == ["Edit"] && e.label == "PDF Presets…" && !e.enabled));
+    // Implemented (M4.44): enabled, and it opens Edit → PDF Presets.
+    assert!(
+        menus::menu_entries(&app)
+            .iter()
+            .any(|e| e.path == ["Edit"] && e.label == "PDF Presets…" && e.enabled && e.command.as_deref() == Some("ui.pdfPresetsDialog"))
+    );
 }
 
 #[test]

@@ -31,7 +31,7 @@ use load::err;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, raster_image};
 pub use pdfimport::{LoadOptions, page_document};
-pub use save::{save_encoding, save_format, stamp_save_dates};
+pub use save::{SAVE_FORMATS, save_encoding, save_filters, save_format, stamp_save_dates};
 pub use svg::options_map as svg_options;
 
 use super::*;
@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Open Document",
             [],
             None,
-            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK) → {index, title, format, warnings, missingLinks, modifiedLinks, updatedLinks: [{name, path, ids}]}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). Templates (native templates, .ait) open as a new untitled document. Linked images are read from their files (looked for at their path, then relative to the document): missing ones show their saved preview (links.relink), modified ones are read again only with Preferences › Update Links: Automatically (else links.update)",
+            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK) → {index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks: [{name, path, ids}]}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). A PDF/.ai/.ait or SVG saved with Preserve Editing restores the native document it carries (restored: true; a PDF only when no pages are picked), unless the file was changed elsewhere since or the data can't be read: then its artwork is imported and the first warning says why. Templates (native templates, .ait) open as a new untitled document; a restored .ai keeps its path (Save writes .ai again). Linked images are read from their files (looked for at their path, then relative to the document): missing ones show their saved preview (links.relink), modified ones are read again only with Preferences › Update Links: Automatically (else links.update)",
             always,
             load::open
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|svg|svgz (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}} (default path: the document's) → {path, linked?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with, and keeps hidden layers (display:none) unless hiddenLayers is false. A never-saved document without path → {dataBase64} (stays modified)",
+            "{path?, format?: vectorcraft|ai|svg|svgz (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}, …document.exportPdf options (.ai)} (default path: the document's) → {path, linked?, warnings?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with, and keeps hidden layers (display:none) unless hiddenLayers is false. A .ai save is a PDF-compatible file: every artboard as a PDF page with the native document embedded (preserveEditing is always on), so document.open restores it exactly. A never-saved document without path → {dataBase64} (stays modified)",
             has_doc,
             save::save
         ),
@@ -306,12 +306,13 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
 }
 
 /// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
-/// libraries (which open in the library panel) and flattener presets (imported).
+/// libraries (which open in the library panel), flattener presets and PDF presets (imported).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All readable files", OPEN_EXTS))
         .chain(format_filters())
         .chain(std::iter::once(("Swatch libraries", super::swatchlib::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", super::flatten::PRESET_EXTS)))
+        .chain(std::iter::once(("PDF presets", super::pdfcmds::PRESET_EXTS)))
 }
 
 /// File → Place dialog filters: "All placeable files", then one per readable format, then text.
@@ -512,6 +513,8 @@ mod tests;
 mod tests_pdf;
 #[cfg(test)]
 mod tests_pdfcolor;
+#[cfg(test)]
+mod tests_pdfedit;
 #[cfg(test)]
 mod tests_pdfimport;
 #[cfg(test)]

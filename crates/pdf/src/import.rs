@@ -122,7 +122,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             }
         }
     }
-    Ok(ImportReport { document: doc, warnings })
+    Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf) })
 }
 
 /// Is this art text and nothing else (in groups and clips), with some text?

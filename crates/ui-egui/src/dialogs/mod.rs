@@ -32,6 +32,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 mod path_ops;
+pub mod pdf_presets;
 pub mod place;
 mod png_options;
 pub mod raster_effects;
@@ -61,7 +62,7 @@ pub use effect::open as open_effect_dialog;
 pub use export_as::open as open_export_as;
 pub use new_document::{open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
-pub use save_pdf::open as open_save_pdf;
+pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
 pub use tools::open_tool_dialog;
 
 use crate::state::Dialog;
@@ -198,6 +199,8 @@ registry! {
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
     MissingLinks: [missing_links::KIND] => missing_links::SPEC,
     TextImport: [text_import::KIND] => text_import::SPEC,
+    PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
+    PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

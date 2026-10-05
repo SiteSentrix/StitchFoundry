@@ -34,6 +34,8 @@ pub mod widgets;
 pub mod workspaces;
 
 #[cfg(test)]
+mod tests_aisave;
+#[cfg(test)]
 mod tests_clipboard;
 #[cfg(test)]
 mod tests_docsetup;

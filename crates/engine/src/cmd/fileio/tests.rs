@@ -146,7 +146,7 @@ fn open_exts_cover_every_readable_format() {
     }
     let filters: Vec<_> = open_filters().collect();
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
-    assert_eq!(filters.len(), 3 + FORMATS.iter().filter(|f| f.read).count(), "and swatch libraries and flattener presets");
+    assert_eq!(filters.len(), 4 + FORMATS.iter().filter(|f| f.read).count(), "and swatch libraries, flattener presets and PDF presets");
 }
 
 #[test]

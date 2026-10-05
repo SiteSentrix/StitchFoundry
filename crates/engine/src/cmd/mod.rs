@@ -40,6 +40,7 @@ mod panelcmds;
 mod path;
 mod pathops;
 mod patterncmds;
+pub mod pdfcmds;
 mod place;
 pub mod prefscmds;
 pub mod rasterfx;
@@ -220,6 +221,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(newdoc::specs());
         v.extend(place::specs());
         v.extend(links::specs());
+        v.extend(pdfcmds::specs());
         v
     })
 }

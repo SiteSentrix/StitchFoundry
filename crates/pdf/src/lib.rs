@@ -7,7 +7,8 @@
 //!   clip groups, linear/radial gradients (shadings), embedded images and text as outlined glyph
 //!   paths. Hidden objects, guides and template layers are skipped. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
-//!   Advanced, Security); options the writer doesn't apply yet come back as warnings.
+//!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
+//!   Editing the native document rides along as an embedded file ([`editing()`]).
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
 //!   [`Document`]: one artboard and one layer per page, paths with fill/stroke, clip groups,
 //!   transparency groups, axial/radial shadings → gradients, images (JPEG passthrough, others
@@ -15,18 +16,24 @@
 //!   inks (Separation, DeviceN) as spot swatches at a tint; a file painted mostly in CMYK opens as a
 //!   CMYK document. [`ImportOptions`] pick the pages, the box each
 //!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
+//!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]).
+//! - Presets: named settings, the built-in ones generated in code ([`builtin_presets`]).
 #![forbid(unsafe_code)]
 
+mod editing;
 mod export;
 mod import;
 mod import_color;
 mod lab_spot;
 mod pages;
+mod presets;
 mod settings;
 
+pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing};
 pub use export::{export, export_with_report};
 pub use import::{import, import_with_report};
 pub use pages::{PageInfo, PdfInfo, info, is_postscript};
+pub use presets::*;
 pub use settings::*;
 
 use vectorcraft_doc::Document;
@@ -41,6 +48,8 @@ pub struct PdfOptions {
     pub title: Option<String>,
     /// Creation date as Unix seconds (UTC); `None` = now (native) / omitted (wasm). PDF/A needs a date.
     pub created: Option<i64>,
+    /// The native document (`.vectorcraft` bytes) Preserve Editing embeds.
+    pub native: Option<Vec<u8>>,
 }
 
 impl PdfOptions {
@@ -93,6 +102,8 @@ settings::choice! {
 pub struct ImportReport {
     pub document: Document,
     pub warnings: Vec<String>,
+    /// The native document the PDF carries (written with Preserve Editing), if any.
+    pub native: Option<Editing>,
 }
 
 /// Result of an export with non-fatal warnings (features approximated or dropped).
@@ -145,6 +156,8 @@ mod tests_cmykblend;
 #[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
+mod tests_editing;
+#[cfg(test)]
 mod tests_focal;
 #[cfg(test)]
 mod tests_fx;
@@ -152,6 +165,8 @@ mod tests_fx;
 mod tests_import_color;
 #[cfg(test)]
 mod tests_import_options;
+#[cfg(test)]
+mod tests_presets;
 #[cfg(test)]
 mod tests_settings;
 #[cfg(test)]

@@ -81,10 +81,19 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     if !info.keywords.is_empty() {
         meta = meta.keywords(info.keywords.clone());
     }
-    if let Some(t) = opts.created.or_else(vectorcraft_doc::metadata::now_unix) {
-        meta = meta.creation_date(date_time(t));
+    let created = opts.created.or_else(vectorcraft_doc::metadata::now_unix).map(date_time);
+    if let Some(t) = created {
+        meta = meta.creation_date(t);
     }
     pdf.set_metadata(meta);
+    // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
+    let mut warnings = set.warnings();
+    let native = opts.native.as_deref().filter(|_| set.preserve_editing);
+    if let Some(native) = native {
+        pdf.embed_file(crate::editing::embedded_file(native, set.compression.compress_text, created));
+    } else if set.preserve_editing {
+        warnings.push("Preserve editing needs the native document, which wasn't given: the PDF reopens as plain artwork".into());
+    }
 
     let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), brushes: None, knockout: doc.page_knockout, lab_spots: vec![] };
     // CMYK documents blend in CMYK, as on screen: their groups' blending space is rewritten (see
@@ -122,7 +131,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         cmyk_blending(&mut bytes);
     }
     let bytes = if ex.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &ex.lab_spots) };
-    let mut warnings = set.warnings();
+    let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
     warnings.extend(ex.warnings);
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })

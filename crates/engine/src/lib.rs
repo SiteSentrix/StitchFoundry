@@ -364,6 +364,10 @@ pub struct Prefs {
     /// New Document → Recent: the settings of the last documents made (newest first).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub recent_new_docs: Vec<cmd::newdoc::DocSettings>,
+    /// Edit → PDF Presets: the user's presets (the built-in ones aren't stored). A local library,
+    /// not a Preferences dialog field: resetting the preferences keeps it; `pdf.preset.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub pdf_presets: Vec<vectorcraft_pdf::PdfPreset>,
 }
 
 impl Default for Prefs {
@@ -489,6 +493,7 @@ impl Default for Prefs {
             color_themes: vec![],
             new_doc_presets: vec![],
             recent_new_docs: vec![],
+            pdf_presets: vec![],
         }
     }
 }
@@ -990,6 +995,8 @@ mod tests_panelcmds;
 mod tests_pathops;
 #[cfg(test)]
 mod tests_pattern;
+#[cfg(test)]
+mod tests_pdfpresets;
 #[cfg(test)]
 mod tests_place;
 #[cfg(test)]

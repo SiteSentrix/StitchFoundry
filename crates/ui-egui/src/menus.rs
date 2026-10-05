@@ -48,14 +48,24 @@ use Item::Sep;
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.open", "Open…", "Cmd+O", "{path?}"),
-    ("file.save", "Save", "Cmd+S", "{path?, svg?: {…SVG options}} (a document saved as .svg saves as SVG again, with the same options)"),
+    (
+        "file.save",
+        "Save",
+        "Cmd+S",
+        "{path?, svg?: {…SVG options}, …PDF options for .ai} (a document saved as .svg saves as SVG again, with the same options; one saved or opened as .ai saves as .ai again)",
+    ),
     (
         "file.saveAs",
         "Save As…",
         "Cmd+Shift+S",
-        "{path?, svg?: {…SVG options}} .vectorcraft, or .svg/.svgz (such a path without svg options opens SVG Options)",
+        "{path?, svg?: {…SVG options}, …document.exportPdf options for .ai} .vectorcraft, .ai (PDF-compatible: a PDF carrying the native document, which reopens editable) or .svg/.svgz (such a path without svg options opens SVG Options)",
     ),
-    ("file.saveCopy", "Save a Copy…", "Cmd+Alt+S", "{path?, svg?: {…SVG options}} like Save As, but the document keeps its path"),
+    (
+        "file.saveCopy",
+        "Save a Copy…",
+        "Cmd+Alt+S",
+        "{path?, svg?: {…SVG options}, …PDF options for .ai} like Save As, but the document keeps its path",
+    ),
     ("file.newFromTemplate", "New from Template…", "Cmd+Shift+N", "{path?} open a template as a new untitled document"),
     ("file.revert", "Revert", "F12", "{}"),
     (
@@ -393,6 +403,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Document Raster Effects Settings Dialog",
         "",
         "{} open Document Raster Effects Settings (dialog `rasterEffectsSettings`: the document.rasterEffectsSettings fields); OK runs it. The menu item opens it too",
+    ),
+    (
+        "ui.pdfPresetsDialog",
+        "PDF Presets…",
+        "",
+        "{selected?: preset name} open Edit → PDF Presets (dialog `pdfPresets`, field `selected`): the built-in presets (read-only) and the saved ones, with the selected one's description and settings. New… and Edit… open the preset editor (ui.pdfPresetDialog); Delete, Import… and Export… run pdf.preset.delete / import / export",
+    ),
+    (
+        "ui.pdfPresetDialog",
+        "PDF Preset",
+        "",
+        "{name?: a saved preset to edit | preset?: the preset a new one starts from (default VectorCraft Default)} open the preset editor (dialog `pdfPreset`: the Save PDF dialog's option fields plus `name` and `description`); OK runs pdf.preset.save and returns to PDF Presets",
     ),
 ];
 
@@ -767,6 +789,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.exportAs" => io::export(app, s("format").as_deref(), s("path"), p),
         "ui.fileInfoDialog" => crate::dialogs::file_info::open(app),
         "ui.rasterEffectsSettingsDialog" => crate::dialogs::raster_effects::open(app),
+        "ui.pdfPresetsDialog" => {
+            crate::dialogs::pdf_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
+        "ui.pdfPresetDialog" => crate::dialogs::open_pdf_preset(app, p),
         _ => return None,
     };
     Some(r)
@@ -1080,7 +1107,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 todo("Print Presets…"),
-                todo("PDF Presets…"),
+                c("PDF Presets…", "ui.pdfPresetsDialog"),
                 cp("Perspective Grid Presets…", "perspective.grid.preset", json!({"kind": 2})),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),

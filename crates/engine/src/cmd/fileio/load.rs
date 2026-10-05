@@ -16,6 +16,8 @@ pub struct Loaded {
     pub doc: Document,
     pub format: &'static Format,
     pub warnings: Vec<String>,
+    /// The document is the native one the file carries (SVG or PDF saved with Preserve Editing).
+    pub restored: bool,
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
@@ -67,10 +69,34 @@ fn image_format(f: image::ImageFormat) -> Option<&'static Format> {
     f.extensions_str().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
 }
 
-/// Why an SVG carrying editing data opened as plain SVG: it was changed after it was saved.
-pub const EDITING_STALE: &str = "this SVG was changed in another app after it was saved with its editing data: it opened as plain SVG";
-/// Why an SVG carrying editing data opened as plain SVG: the data can't be read.
-pub const EDITING_DAMAGED: &str = "this SVG's editing data can't be read: it opened as plain SVG";
+/// Why a file carrying editing data (an SVG or PDF saved with Preserve Editing) opened as plain
+/// artwork: it was changed in another app after it was saved.
+pub const EDITING_STALE: &str = "this file was changed in another app after it was saved with its editing data: it opened as plain artwork";
+/// Why a file carrying editing data opened as plain artwork: the data can't be read.
+pub const EDITING_DAMAGED: &str = "this file's editing data can't be read: it opened as plain artwork";
+
+/// Preserve Editing, for every format that carries the native document: that document when the
+/// file around it is unchanged (`editing`: whether it is, and how to get the document's bytes) and
+/// it reads, else `import()`'s document with a first warning saying why the editing data wasn't
+/// used → (document, warnings, restored).
+fn restore_or_import(
+    editing: Option<(bool, impl FnOnce() -> Option<Vec<u8>>)>,
+    import: impl FnOnce() -> Result<(Document, Vec<String>)>,
+) -> Result<(Document, Vec<String>, bool)> {
+    let mut fallback = None;
+    if let Some((intact, bytes)) = editing {
+        let native = if intact { bytes() } else { None };
+        match native.and_then(|b| vectorcraft_format::load(&b).ok()) {
+            Some(doc) => return Ok((doc, vec![], true)),
+            None => fallback = Some(if intact { EDITING_DAMAGED } else { EDITING_STALE }),
+        }
+    }
+    let (doc, mut warnings) = import()?;
+    if let Some(why) = fallback {
+        warnings.insert(0, why.to_string());
+    }
+    Ok((doc, warnings, false))
+}
 
 /// Read a file of any readable format (`name`: its file name or path, for the extension and title).
 pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
@@ -86,37 +112,19 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     }
     let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")))?;
     let title = file_name(name);
-    let mut warnings = vec![];
-    let mut doc = match format.id {
-        "vectorcraft" => vectorcraft_format::load(bytes).map_err(err)?,
+    let (mut doc, warnings, restored) = match format.id {
+        "vectorcraft" => (vectorcraft_format::load(bytes).map_err(err)?, vec![], false),
         "svg" | "svgz" => {
             let text = vectorcraft_svg::text_of(bytes).map_err(err)?;
-            // An SVG saved with Preserve Editing carries the native document: open that, unless
-            // the SVG was edited since (or the data is damaged).
-            let editing = vectorcraft_svg::editing(&text);
-            let native = editing
-                .as_ref()
-                .filter(|e| e.intact)
-                .and_then(|e| vectorcraft_format::base64_decode(&e.data))
-                .and_then(|b| vectorcraft_format::load(&b).ok());
-            match native {
-                Some(d) => d,
-                None => {
-                    let (d, w) = vectorcraft_svg::import_with_report(&text).map_err(err)?;
-                    warnings = w;
-                    if let Some(e) = editing {
-                        warnings.insert(0, (if e.intact { EDITING_DAMAGED } else { EDITING_STALE }).to_string());
-                    }
-                    d
-                }
-            }
+            let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
+            restore_or_import(editing, || vectorcraft_svg::import_with_report(&text).map_err(err))?
         }
         "pdf" | "ai" | "ait" => {
-            let (d, w) = super::pdfimport::import(bytes, opts)?;
-            warnings = w;
-            d
+            // Saved with Preserve Editing: the document it carries, unless some pages are picked.
+            let editing = opts.pages.is_none().then(|| vectorcraft_pdf::editing(bytes)).flatten().map(|e| (e.intact, move || Some(e.data)));
+            restore_or_import(editing, || super::pdfimport::import(bytes, opts))?
         }
-        _ if format.raster => raster_doc(&title, bytes)?,
+        _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
@@ -127,13 +135,14 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if format.id != "vectorcraft" || doc.title.is_empty() {
         doc.title = title;
     }
-    Ok(Loaded { doc, format, warnings })
+    Ok(Loaded { doc, format, warnings, restored })
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →
-/// `{index, title, format, warnings, missingLinks, modifiedLinks, updatedLinks}`. `path` is kept
-/// for Save only for a native, non-template file; the document's linked files are looked for from
-/// it ([`crate::cmd::links::resolve`]).
+/// `{index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks}`. `path`
+/// is kept for Save only for a non-template native file or a `.ai` file whose native document came
+/// back (Save writes both again); the document's linked files are looked for from it
+/// ([`crate::cmd::links::resolve`]).
 pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value> {
     open_bytes_with(s, name, bytes, path, &Value::Null)
 }
@@ -141,7 +150,7 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let Loaded { mut doc, format, warnings } = load_with(name, bytes, &opts)?;
+    let Loaded { mut doc, format, warnings, restored } = load_with(name, bytes, &opts)?;
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait file) opens as a new untitled document.
     let template = doc.template || format.id == "ait";
@@ -149,10 +158,10 @@ pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<S
         doc.template = false;
         doc.title = s.next_untitled();
     }
-    let keep_path = format.id == "vectorcraft" && !template;
+    let keep_path = (format.id == "vectorcraft" || (format.id == "ai" && restored)) && !template;
     let index = s.add_document(doc, path.filter(|_| keep_path));
     let title = s.documents()[index].title();
-    Ok(super::merge(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings }), links.to_json()))
+    Ok(super::merge(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings, "restored": restored }), links.to_json()))
 }
 
 /// A file named by a command's params: `{path}` (read from disk) or `{name, dataBase64}`.

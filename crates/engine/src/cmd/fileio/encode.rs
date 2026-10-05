@@ -70,7 +70,7 @@ pub struct Encoded {
 }
 
 impl Encoded {
-    fn one(bytes: Vec<u8>) -> Self {
+    pub(super) fn one(bytes: Vec<u8>) -> Self {
         Self { files: vec![(None, bytes)], ..Self::default() }
     }
 

@@ -387,18 +387,27 @@ fn within(name: &str, v: f64, lo: f64, hi: f64, unit: &str) -> Result<(), PdfErr
 }
 
 impl PdfSettings {
-    /// Refuse settings the writer can't honour: an unsupported standard, a standard with a PDF
-    /// version it doesn't allow, a password (the file would not be protected) or an out-of-range
-    /// value.
+    /// Refuse settings the writer can't honour: an unsupported standard, a password (the file
+    /// would not be protected), or what [`Self::check_values`] refuses.
     pub fn check(&self) -> Result<(), PdfError> {
         if !self.standard.supported() {
             return Err(PdfError::Unsupported(format!("{} output is not supported yet", self.standard.label())));
         }
+        if !self.security.open_password.is_empty() || !self.security.permissions_password.is_empty() {
+            return Err(PdfError::Unsupported("password protection is not supported yet (the PDF would not be encrypted)".into()));
+        }
+        self.check_values()
+    }
+
+    /// The part of [`Self::check`] a preset must pass (it may name a standard the writer can't
+    /// produce yet): a standard with a PDF version it doesn't allow, PDF/A with editing data, or
+    /// an out-of-range value.
+    pub fn check_values(&self) -> Result<(), PdfError> {
         if !self.standard.allows(self.compatibility) {
             return Err(PdfError::BadSetting(format!("{} files can't be {}", self.standard.label(), self.compatibility.label())));
         }
-        if !self.security.open_password.is_empty() || !self.security.permissions_password.is_empty() {
-            return Err(PdfError::Unsupported("password protection is not supported yet (the PDF would not be encrypted)".into()));
+        if self.preserve_editing && self.standard == Standard::PdfA2b {
+            return Err(PdfError::BadSetting(format!("{} files can't carry editing data: turn off preserveEditing", self.standard.label())));
         }
         let c = &self.compression;
         for (name, img) in
@@ -415,6 +424,12 @@ impl PdfSettings {
         within("advanced.fontSubsetPercent", self.advanced.font_subset_percent, 0.0, 100.0, "%")
     }
 
+    /// Forget the passwords (presets never store them).
+    pub fn clear_passwords(&mut self) {
+        self.security.open_password.clear();
+        self.security.permissions_password.clear();
+    }
+
     /// Options that are accepted but not applied by the writer yet, one warning each.
     pub fn warnings(&self) -> Vec<String> {
         let d = Self::default();
@@ -422,7 +437,6 @@ impl PdfSettings {
         let o = &self.output;
         let s = &self.security;
         [
-            (self.preserve_editing, "Preserve editing is not written yet: the PDF reopens as plain artwork"),
             (self.thumbnails, "page thumbnails are not embedded yet"),
             (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers, "PDF layers are not written yet: every layer is plain page content"),
