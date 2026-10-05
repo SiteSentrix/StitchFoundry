@@ -711,6 +711,8 @@ mod tests_text;
 mod tests_dxf;
 
 #[cfg(test)]
+mod tests_pdfsecurity;
+#[cfg(test)]
 mod tests_svgenc;
 #[cfg(test)]
 mod tests_svgimport;

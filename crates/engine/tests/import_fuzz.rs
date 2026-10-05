@@ -857,3 +857,30 @@ proptest! {
         survive("mutated EPS file", || vectorcraft_eps::native(&bytes).and_then(|n| vectorcraft_format::load(&n).ok()))?;
     }
 }
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Damaged password-protected PDFs, opened with the open password, the permissions password
+    /// (which reads the encryption dictionary to find the open password) or a wrong one.
+    #[test]
+    fn mutated_encrypted_pdfs_never_panic(
+        cut in 0usize..2_000,
+        edits in prop::collection::vec((0usize..2_000, any::<u8>()), 0..12),
+        password in prop::sample::select(vec!["pw", "pw-owner", "wrong", ""]),
+    ) {
+        use vectorcraft_testkit::pdf::{PdfPage, pdf};
+        let bytes = pdf(&[PdfPage::new(100.0, 100.0, "0 0 1 rg 20 20 50 50 re f")], Some("pw"));
+        let b64 = mutated_b64(bytes, cut, &edits);
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let p = json!({"name": "x.pdf", "dataBase64": b64, "password": password});
+            let _ = s.execute("document.pdfInfo", &p);
+            if s.execute("document.open", &p).is_ok() {
+                let d = (*s.doc().unwrap().doc).clone();
+                survive("encrypted pdf", || Some(d)).unwrap();
+            }
+        });
+        r.map_err(|msg| TestCaseError::fail(format!("{password}: panicked: {msg}")))?;
+    }
+}
