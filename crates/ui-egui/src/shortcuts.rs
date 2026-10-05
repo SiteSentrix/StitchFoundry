@@ -8,6 +8,8 @@ use vectorcraft_tools::{Mods, ToolKey};
 use crate::VectorcraftApp;
 
 /// Parse "Cmd+Shift+]" into an egui shortcut. `Cmd` is Command on macOS and Ctrl elsewhere.
+/// `+` and `=` name one chord key ([`Key::Equals`]): `+` is Shift+`=` on many layouts, so a
+/// `Cmd+=` chord also answers `+` however it is typed (see [`consume`]).
 pub fn parse(s: &str) -> Option<KeyboardShortcut> {
     if s.is_empty() {
         return None;
@@ -31,9 +33,8 @@ pub fn parse(s: &str) -> Option<KeyboardShortcut> {
         "'" => Key::Quote,
         "/" => Key::Slash,
         "\\" => Key::Backslash,
-        "=" => Key::Equals,
+        "=" | "+" => Key::Equals,
         "-" => Key::Minus,
-        "+" => Key::Plus,
         "Delete" => Key::Delete,
         "Backspace" => Key::Backspace,
         "Tab" => Key::Tab,
@@ -67,6 +68,14 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
         std::cmp::Reverse(sc.modifiers.shift as u8 + sc.modifiers.alt as u8 + sc.modifiers.command as u8 + sc.modifiers.ctrl as u8)
     });
     v
+}
+
+/// Consume a press of `sc`. A `=` chord also takes [`Key::Plus`], which is how `+` arrives from
+/// the numpad and from layouts where it has its own key (Shift+`=` arrives as either; extra Shift
+/// is ignored). `native`: the system menu already handles the chord as written, so only that
+/// alias is left to match here.
+pub(crate) fn consume(i: &mut egui::InputState, sc: &KeyboardShortcut, native: bool) -> bool {
+    (!native && i.consume_shortcut(sc)) || (sc.logical_key == Key::Equals && i.consume_key(sc.modifiers, Key::Plus))
 }
 
 /// Keys that paste with Cmd, or alone. (Shift+Insert is left out: Ctrl+Insert copies.)
@@ -155,7 +164,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // Editing keys with modifiers, clipboard and Cmd+A.
         crate::panels::character::route_type_input(app, ctx);
         // Enter was already delivered above as ToolKey::Enter (newline).
-        let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| i.consume_shortcut(sc)));
+        let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| consume(i, sc, false)));
         if let Some((_, id, p)) = fire {
             crate::menus::invoke(app, id, p);
         }
@@ -220,10 +229,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if plain && (sc.logical_key.name().len() == 1 || matches!(sc.logical_key, Key::Slash | Key::Comma | Key::Period)) {
             continue;
         }
-        if app.native_shortcuts.contains(id) {
-            continue;
-        }
-        if ctx.input_mut(|i| i.consume_shortcut(&sc)) {
+        let native = app.native_shortcuts.contains(id);
+        if ctx.input_mut(|i| consume(i, &sc, native)) {
             fire = Some((id, p));
             break;
         }
@@ -323,6 +330,33 @@ mod tests {
         assert!(matches!(fill(&app), vectorcraft_color::Paint::Gradient(_)), "`.` applies the last gradient");
         frame(&mut app, vec![egui::Event::Text(",".into())]);
         assert_eq!(fill(&app).color().unwrap().to_hex(), "#336699", "`,` applies the last colour");
+    }
+
+    #[test]
+    fn plus_typed_any_way_zooms_in() {
+        assert_eq!(parse("Cmd++"), parse("Cmd+="), "`+` and `=` are one chord key");
+        assert_eq!(crate::shortcut_editor::chord_from_event(Key::Plus, Modifiers::COMMAND).as_deref(), Some("Cmd+="), "a recorded `+` too");
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let zoom = |app: &mut VectorcraftApp| app.view_mut().unwrap().zoom;
+        let press = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+        // `=`, Shift+`=` (reported as `=` or as `+`), and the numpad `+` / a layout's own `+` key.
+        for (key, m) in [(Key::Equals, Modifiers::COMMAND), (Key::Equals, cmd_shift), (Key::Plus, cmd_shift), (Key::Plus, Modifiers::COMMAND)] {
+            let before = zoom(&mut app);
+            frame(&mut app, vec![press(key, m)]);
+            assert!(zoom(&mut app) > before, "{key:?} with {m:?} zooms in");
+        }
+        let before = zoom(&mut app);
+        frame(&mut app, vec![press(Key::Minus, Modifiers::COMMAND)]);
+        assert!(zoom(&mut app) < before, "Cmd+- zooms out");
+        // The system menu handles `Cmd+=` itself; the `+` key is still matched here.
+        app.native_shortcuts.insert("view.zoomIn".into());
+        let before = zoom(&mut app);
+        frame(&mut app, vec![press(Key::Equals, Modifiers::COMMAND)]);
+        assert_eq!(zoom(&mut app), before, "left to the system menu");
+        frame(&mut app, vec![press(Key::Plus, Modifiers::COMMAND)]);
+        assert!(zoom(&mut app) > before);
     }
 
     #[test]
