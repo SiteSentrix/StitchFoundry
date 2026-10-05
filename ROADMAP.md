@@ -33,7 +33,7 @@ since 2026-10-01.
 
 | Dimension | Estimate | Evidence and what's missing |
 |---|---|---|
-| **Breadth:** menus, tools and panels exist | ~90% | 18 menu items still stubbed; every tool implemented except Touch Type, vertical type ×3 and Print Tiling; 51 panel modules |
+| **Breadth:** menus, tools and panels exist | ~90% | 18 menu items still stubbed; every tool implemented except Touch Type and vertical type ×3; 51 panel modules |
 | **Depth:** each feature behaves like Illustrator | ~68–74% | Strong: paint, appearance and colour (M3), Pathfinder and booleans, selection, drawing, files (M4). Weak: advanced type (~35%), brushes and symbols (in progress), raster effects (~20%) |
 | **Large missing subsystems** | 0–20% | 3D & Materials (0%), Photoshop-style raster effects and the Effect Gallery (~1 of ~56 filters), SVG Filters, vertical/CJK type, Variables (data merge), scripting |
 | **Interaction fidelity:** modifiers, cursors, small behaviours | ~30–40% | The dedicated pass hasn't started, and there has been no side-by-side session with Illustrator yet. A power user notices this first |
@@ -64,7 +64,7 @@ Ordered by how much each gap blocks someone from switching. Sizes are one-agent 
 5. **Brushes, symbols and libraries:** brush options depth; original brush, symbol and graphic-style libraries
    generated in code (never Adobe's); dynamic symbols; Start Global Edit. 14–22 h.
 6. **Automation:** Variables (data merge), a scripting surface over the command registry, batch. 8–12 h.
-7. **Views and windows:** multiple windows and arrange, Consolidate All Windows, the Print Tiling tool, video
+7. **Views and windows:** multiple windows and arrange, Consolidate All Windows, video
    rulers. 15–25 h.
 8. **Hardening at scale:** a corpus of real-world SVG/PDF/EPS files, idle-machine perf budgets, Windows, Linux and
    browser QA, accessibility, packaging. 50–80 h.
@@ -128,7 +128,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - `.vectorcraft` (lossless JSON, compressed, atomic saves, save down to v1), Save As with a format chooser, Save a Copy, Revert, templates, Data Recovery after a crash, background save and export.
   - SVG/SVGZ in and out with SVG Options, Preserve Editing, symbols, filters, rich text and physical units; PDF and PDF-compatible `.ai` in and out (layers, masks, editable text, spot colours, presets, security, marks and bleed, ICC output intents, raster effects, subset fonts).
   - EPS and DXF in and out, EMF/WMF in and out; PNG (with PNG-8), JPEG, WebP, GIF, TIFF, BMP, Targa and layered PSD export.
-  - Place and the Links panel, Package, File Info, Print with print presets and PostScript output, slices and Save for Web, Export for Screens and Asset Export, CSS Properties, PNG/PDF/SVG/text clipboard flavours.
+  - Place and the Links panel, Package, File Info, Print with print presets, PostScript output and print tiling, slices and Save for Web, Export for Screens and Asset Export, CSS Properties, PNG/PDF/SVG/text clipboard flavours.
 - **Performance:** 20k shapes + 1k texts render in 27 ms per full-retina frame (7.8 ms zoomed), 7× faster than the first version. The UI thread never blocks. The web build is 7.1 MB gzipped.
 - **Tests and robustness:** ~2,840 automated tests: model-based property tests, a junk-parameter sweep over every command, import fuzzing (SVG, PDF, libraries), golden renders, and MCP end-to-end tests over stdio. Shipped code never panics (workspace lints and a rollback safety net; see `docs/development.md`).
 
@@ -147,7 +147,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
 | M8 | Transform & distort (Puppet Warp, Liquify tools, Envelopes, Blends, Perspective Grid) | 🟡 live Blends, Envelopes (warp/mesh/top object), Width tool, Liquify tools, Puppet Warp and Perspective Grid landed; fidelity pass pending | 8–12 |
 | M9 | Live effects (+ 3D & Materials) | 🟡 2D effects done incl. Effect → Pathfinder; SVG Filters, Document Raster Effects Settings, 3D pending | 86–135 |
 | M10 | Brushes, symbols, patterns, Repeat | 🟡 pattern swatches (5 tile types, Pattern Options, editing mode, SVG `<pattern>`/PDF export) and live Repeat (radial/grid/mirror) done; brushes/symbols in progress | 23–37 |
-| M11 | Artboards & views (artboard panel/tool done, Trim View, middle-button pan; print tiling, multiple windows, presentation polish) | 🟡 | 15–25 |
+| M11 | Artboards & views (artboard panel/tool, Trim View, middle-button pan and print tiling done; multiple windows, presentation polish) | 🟡 | 15–25 |
 | M12 | Advanced color & art (CMYK/ICC, separations, Gradient Mesh, Live Paint, Image Trace, Graphs) | 🟡 Gradient Mesh, Live Paint, Image Trace (12 presets, 18 ms/1k² image), Recolor Artwork, colour management (ICC, soft proofing, separations preview), Graphs (all 9 tools, Graph Data/Type, regenerate in place) done; graph Design/Column/Marker designs pending | 6–10 |
 | M13 | Automation (Actions ✅ record/playback, persisted; variables, scripting, batch) | 🟡 | 18–27 |
 | M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, shortcut editor, workspaces, a custom title bar on Windows/Linux and content-sized dialogs and menus done; accessibility, Windows/Linux packaging pending | 18–28 |
@@ -183,7 +183,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Symbols, blends, envelopes, Repeat, perspective | 5 | 75% | symbol libraries (original), dynamic symbols, perspective edge cases | 8–12 |
 | Image Trace, graphs, image tools | 3 | 70% | graph Design/Column/Marker, Create Object Mosaic, Crop Image polish | 6–10 |
 | Layers, artboards, document setup | 5 | 80% | Layers panel options depth, artboard presets/rearrange polish (Document Setup and New Document are done) | 5–8 |
-| View & navigation | 3 | 70% | New View/Edit Views, multiple windows/arrange, print tiling, Snap to Pixel/Glyph | 10–15 |
+| View & navigation | 3 | 70% | New View/Edit Views, multiple windows/arrange, Snap to Pixel/Glyph (print tiling is done) | 9–14 |
 | Guides, grids, smart guides, snapping, rulers | 3 | 75% | global/video rulers, smart-guide preference depth | 4–8 |
 | File formats | 6 | 85% | DWG (no open spec: DXF instead), PSD placement as layers, the remaining fidelity polish; EPS, DXF, EMF/WMF, TIFF, BMP, Targa, PSD export, SVGZ, PDF security, PDF/X and presets are done | 6–10 |
 | Export for Screens, Asset Export, slices, Save for Web | 3 | 85% | polish only (all four are done) | 2–4 |
@@ -201,7 +201,7 @@ With 4–6 agents working on disjoint crates (as the layering allows) the wall-c
 **~85–150 h** to full parity.
 
 _Inventories (2026-10-05):_ 18 menu items still stubbed (`todo(…)` in `crates/ui-egui/src/menus.rs`); every tool
-implemented except five (Touch Type, vertical type ×3, Print Tiling); 51 panel modules; Illustrator-style live
+implemented except four (Touch Type, vertical type ×3); 51 panel modules; Illustrator-style live
 effects ~44/54, Photoshop-style raster effects ~1/56, 3D 0/5; ~2,840 tests; ~221k lines of Rust.
 
 _Where we already beat Illustrator:_ exact curve booleans, off-thread multithreaded rendering, undo that never runs out,

@@ -226,7 +226,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.options",
         "Tool Options…",
         "",
-        "{tool: id} what double-clicking a tool button opens: gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions)",
+        "{tool: id} what double-clicking a tool button opens: gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true})",
     ),
     (
         "ui.colorGuideOptions",
@@ -1027,6 +1027,7 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "view.grid" => if v.grid { "Hide Grid" } else { "Show Grid" }.into(),
         "view.guides.lock" => if app.session.guides_locked() { "Unlock Guides" } else { "Lock Guides" }.into(),
         "view.slices.hide" => if app.session.slices_hidden() { "Show Slices" } else { "Hide Slices" }.into(),
+        "view.printTiling" => if app.session.active().is_some_and(|d| d.print_tiling) { "Hide Print Tiling" } else { "Show Print Tiling" }.into(),
         id if id.starts_with("file.openRecent") => recent_slot(app, id)
             .map(|p| std::path::Path::new(p).file_name().map_or(p.clone(), |f| f.to_string_lossy().to_string()))
             .unwrap_or_else(|| "—".into()),
@@ -1698,7 +1699,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Hide Edges", "view.edges"),
                 c("Hide Artboards", "view.artboards"),
-                todo("Show Print Tiling"),
+                c("Show Print Tiling", "view.printTiling"),
                 c("Hide Slices", "view.slices.hide"),
                 c("Lock Slices", "view.slices.lock"),
                 Sep,

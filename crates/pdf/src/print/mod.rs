@@ -4,8 +4,9 @@
 //! - General: copies (collated or not), reverse order, the artboards (all, a range or ignored:
 //!   all the art as one page), blank artboards skipped, the paper and its orientation (or turned
 //!   to each artboard's), transverse, which layers print (template layers never do), the
-//!   placement on the imageable area, and the scale: none, fit, custom, or tiles of the paper or
-//!   of its imageable area, overlapping, a range of them.
+//!   placement on the imageable area (or where the Print Tiling tool put the pages,
+//!   [`TileOrigin`]), and the scale: none, fit, custom, or tiles of the paper or of its imageable
+//!   area, overlapping, a range of them.
 //! - Marks and bleed as PDF export draws them ([`crate::MarkSettings`], [`crate::BleedSettings`]),
 //!   around the artboard on the paper, at the paper's scale.
 //! - Output: composite, or separations, one page per ink that prints ([`print_inks`]) in the
@@ -16,11 +17,13 @@
 //!
 //! Halftone screens and flatness are left to the output device (warnings say so). [`preview`]
 //! lists the pages, tiles and inks without writing the file; [`plan`] lays the job out for other
-//! writers (PostScript), which can write screens and flatness themselves.
+//! writers (PostScript), which can write screens and flatness themselves; [`tiling`] turns the
+//! layout into the pages in document space (View → Show Print Tiling).
 
 mod layout;
 mod plates;
 mod settings;
+mod tiling;
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -33,6 +36,7 @@ use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 pub use layout::{MAX_TILES, TileGrid};
 pub use plates::print_inks;
 pub use settings::*;
+pub use tiling::{TilingPage, tiling};
 
 use crate::export::{Exporter, Sheet, Writer};
 use crate::marks::PageBoxes;
@@ -145,12 +149,25 @@ pub fn keep_layers(nodes: &mut Vec<Arc<Node>>, which: PrintLayers) {
     });
 }
 
+/// `doc` as `set` prints it: live effects applied (raster effects are rendered by the app first),
+/// only the layers that print.
+fn printed_doc<'a>(doc: &'a Document, set: &PrintSettings) -> Cow<'a, Document> {
+    let mut doc = vectorcraft_effects::bake_document(doc).map_or(Cow::Borrowed(doc), Cow::Owned);
+    keep_layers(&mut doc.to_mut().layers, set.print_layers);
+    doc
+}
+
+/// What of `doc` prints on pages of its own: each artboard printed (its rect), or all the art
+/// (`None`) with artboards ignored.
+pub fn print_regions(doc: &Document, set: &PrintSettings) -> Result<Vec<(Option<usize>, kurbo::Rect)>, PdfError> {
+    set.check()?;
+    layout::regions(&printed_doc(doc, set), set)
+}
+
 impl<'a> Job<'a> {
     fn new(doc: &'a Document, set: &PrintSettings, postscript: bool) -> Result<Self, PdfError> {
         set.check()?;
-        // Live effects print as their result (raster effects are rendered by the app first).
-        let mut doc = vectorcraft_effects::bake_document(doc).map_or(Cow::Borrowed(doc), Cow::Owned);
-        keep_layers(&mut doc.to_mut().layers, set.print_layers);
+        let doc = printed_doc(doc, set);
         let mut warnings = vec![];
         let (layouts, tiles) = layout::layout(&doc, set, &mut warnings)?;
         let separations = set.output.mode == OutputMode::Separations;

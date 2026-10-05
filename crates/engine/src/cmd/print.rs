@@ -22,7 +22,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Setup",
             [],
             None,
-            "{settings?: {copies: 1 (1–999), collate: true, reverse, artboards: all|range|ignore (all the art as one page), range: \"1-3, 5\" (1-based, with artboards: range), skipBlank (leave out artboards with no art that prints), media: letter|legal|tabloid|a3|a4|a5|b4|b5|custom, width, height (custom paper, 72–14400 pt), orientation: portrait|landscape|portraitFlipped|landscapeFlipped, autoRotate: true (turn the paper to each artboard; orientation ignored), transverse (the page a quarter turn on the paper), printLayers: visiblePrintable|visible|all (template layers never print), placement: {origin: topLeft|top|topRight|left|center|right|bottomLeft|bottom|bottomRight (the point of the printed area, the artboard with its bleed and marks, on the same point of the imageable area), x, y (pt, right and down)}, scaling: none|fit|custom|tileFull|tileImageable, scale: {width: 100, height: 100} (% with custom and tiling), overlap: 0 (pt between tiles), tileRange: \"\" (1-based tiles across then down; empty: all), margin: 0 (pt the device can't print around the paper: the imageable area is inside it), marks: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6} (as document.exportPdf, at the paper's scale; page information adds the tile and the ink), bleed: {useDocument: true (the document's bleed, document.setup), top, bottom, left, right} (pt), output: {mode: composite|separations (one grey page per ink that prints), emulsion: up|down (down mirrors), image: positive|negative, spotsToProcess, inks: [{name: \"Cyan\"|…|a spot swatch, print: true, frequency (lpi, default 60), angle (default C 15, M 75, Y 0, K 45, spots 45)}]}, graphics: {autoFlatness: true, flatness: 1 (0.2–100), fonts: none|subset|complete}, color: {intent: perceptual|relativeColorimetric|saturation|absoluteColorimetric, preserveNumbers: true (CMYK colours keep their values in separations)}}} store the print settings with the document, over the ones it has (null keeps a value), as one undo step; no settings → {settings} (the current ones, defaults if never set up)",
+            "{settings?: {copies: 1 (1–999), collate: true, reverse, artboards: all|range|ignore (all the art as one page), range: \"1-3, 5\" (1-based, with artboards: range), skipBlank (leave out artboards with no art that prints), media: letter|legal|tabloid|a3|a4|a5|b4|b5|custom, width, height (custom paper, 72–14400 pt), orientation: portrait|landscape|portraitFlipped|landscapeFlipped, autoRotate: true (turn the paper to each artboard; orientation ignored), transverse (the page a quarter turn on the paper), printLayers: visiblePrintable|visible|all (template layers never print), placement: {origin: topLeft|top|topRight|left|center|right|bottomLeft|bottom|bottomRight (the point of the printed area, the artboard with its bleed and marks, on the same point of the imageable area), x, y (pt, right and down)}, scaling: none|fit|custom|tileFull|tileImageable, scale: {width: 100, height: 100} (% with custom and tiling), overlap: 0 (pt between tiles), tileRange: \"\" (1-based tiles across then down; empty: all), margin: 0 (pt the device can't print around the paper: the imageable area is inside it), marks: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6} (as document.exportPdf, at the paper's scale; page information adds the tile and the ink), bleed: {useDocument: true (the document's bleed, document.setup), top, bottom, left, right} (pt), output: {mode: composite|separations (one grey page per ink that prints), emulsion: up|down (down mirrors), image: positive|negative, spotsToProcess, inks: [{name: \"Cyan\"|…|a spot swatch, print: true, frequency (lpi, default 60), angle (default C 15, M 75, Y 0, K 45, spots 45)}]}, graphics: {autoFlatness: true, flatness: 1 (0.2–100), fonts: none|subset|complete}, color: {intent: perceptual|relativeColorimetric|saturation|absoluteColorimetric, preserveNumbers: true (CMYK colours keep their values in separations)}, tileOrigin: {placed: false, x, y} (where the Print Tiling tool put the pages: print.tiling.set)}} store the print settings with the document, over the ones it has (null keeps a value), as one undo step; no settings → {settings} (the current ones, defaults if never set up)",
             has_doc,
             setup
         ),
@@ -53,7 +53,7 @@ fn saved(doc: &Document) -> Value {
 }
 
 /// The settings of `doc` with `p.settings` over them, checked.
-fn settings(cmd: &str, doc: &Document, p: &Value) -> Result<PrintSettings> {
+pub(crate) fn settings(cmd: &str, doc: &Document, p: &Value) -> Result<PrintSettings> {
     settings_over(cmd, saved(doc), p)
 }
 
@@ -69,7 +69,7 @@ pub(crate) fn settings_over(cmd: &str, mut v: Value, p: &Value) -> Result<PrintS
     Ok(set)
 }
 
-fn to_json(set: &PrintSettings) -> Result<Value> {
+pub(crate) fn to_json(set: &PrintSettings) -> Result<Value> {
     serde_json::to_value(set).map_err(|e| EngineError::Other(e.to_string()))
 }
 

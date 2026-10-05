@@ -129,6 +129,8 @@ pub struct DocState {
     pub recovered: bool,
     /// The document's Data Recovery copy, once one was written ([`cmd::recovery`]).
     pub recovery: Option<cmd::recovery::RecoveryCopy>,
+    /// View → Show Print Tiling, per document (view state: not saved, not undoable).
+    pub print_tiling: bool,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -160,6 +162,7 @@ impl DocState {
             view,
             recovered: false,
             recovery: None,
+            print_tiling: false,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -1220,6 +1223,8 @@ mod tests_printpresets;
 mod tests_printpreview;
 #[cfg(test)]
 mod tests_printps;
+#[cfg(test)]
+mod tests_printtiling;
 #[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]

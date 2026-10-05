@@ -214,6 +214,8 @@ pub struct PrintSettings {
     pub output: PrintOutput,
     pub graphics: PrintGraphics,
     pub color: PrintColor,
+    /// Where the Print Tiling tool put the pages.
+    pub tile_origin: TileOrigin,
 }
 
 impl Default for PrintSettings {
@@ -244,6 +246,7 @@ impl Default for PrintSettings {
             output: PrintOutput::default(),
             graphics: PrintGraphics::default(),
             color: PrintColor::default(),
+            tile_origin: TileOrigin::default(),
         }
     }
 }
@@ -367,6 +370,20 @@ impl Default for PrintColor {
     }
 }
 
+/// Where the Print Tiling tool put the pages (View → Show Print Tiling).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TileOrigin {
+    /// The tool placed the pages: the top-left corner of the first page's imageable area is at
+    /// (`x`, `y`) from the top-left corner of the art that prints (the artboard, or all the art
+    /// with artboards ignored), in document points. It replaces the placement, and tiles start
+    /// there (and go on to the left and up as far as the art does). Off: the placement places the
+    /// art and tiles start at the top-left corner of the art with its bleed and marks.
+    pub placed: bool,
+    pub x: f64,
+    pub y: f64,
+}
+
 /// Most copies of a job.
 pub const MAX_COPIES: u32 = 999;
 
@@ -385,6 +402,8 @@ impl PrintSettings {
         within("scale.height", self.scale.height, 1.0, 1000.0, "%")?;
         within("overlap", self.overlap, 0.0, 720.0, " pt")?;
         within("margin", self.margin, 0.0, 144.0, " pt")?;
+        within("tileOrigin.x", self.tile_origin.x, -14_400.0, 14_400.0, " pt")?;
+        within("tileOrigin.y", self.tile_origin.y, -14_400.0, 14_400.0, " pt")?;
         self.marks.check()?;
         self.bleed.check()?;
         within("graphics.flatness", self.graphics.flatness, 0.2, 100.0, "")?;

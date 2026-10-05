@@ -1584,3 +1584,25 @@ claims the standard.
 ```json
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"PDF/X-1a:2001","output":{"outputIntent":"VectorCraft Generic CMYK (SWOP-like)","outputCondition":"Coated","trapped":false}}}}
 ```
+
+## Print tiling
+
+View → Show Print Tiling (`view.printTiling {on?}`, per document, not undoable) draws the pages of the document's print
+settings on the canvas: each page's paper edge, its imageable area dashed, numbered (tiles across then down; tiles
+outside `tileRange` dimmer). The Print Tiling tool (`printTiling`) shows them too. `print.tiling {settings?}` answers
+what is drawn, from the layout `print.preview` and both writers (PDF and PostScript) use, so the canvas and the
+printed job agree: `{tileOrigin, pages: [{artboard, number, printed, page, imageable}]}` (`[x0, y0, x1, y1]` in document space; every tile when tiling, else
+each page once, not once per ink).
+
+Dragging with the tool puts the top-left corner of the first page's imageable area where the pointer is (snapping to
+the artboard's edges): `print.tiling.set {origin: [x, y], artboard?}` saves it with the print settings as
+`tileOrigin: {placed: true, x, y}`, measured from the artboard's top-left corner (one undo step). It replaces the
+placement, and tiles start there (going on left and up as far as the art does). A double click on the canvas, or on
+the tool's button, runs `print.tiling.set {reset: true}`: the placement places the pages again. In the Print dialog
+the placement then shows as placed by the tool, with a Reset button; dragging the preview moves the origin.
+
+```json
+{"name":"run_command","arguments":{"command":"view.printTiling","params":{"on":true}}}
+{"name":"run_command","arguments":{"command":"print.tiling.set","params":{"origin":[-36,-36]}}}
+{"name":"run_command","arguments":{"command":"print.tiling","params":{"settings":{"scaling":"tileImageable","scale":{"width":300,"height":300}}}}}
+```
