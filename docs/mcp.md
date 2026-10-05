@@ -907,3 +907,17 @@ all of it as Dublin Core.
 ```json
 {"name":"run_command","arguments":{"command":"file.info","params":{"author":"Ada","keywords":"poster, fair","rating":4,"copyrightStatus":"copyrighted","copyrightNotice":"© 2026 Ada"}}}
 ```
+
+## Document Raster Effects Settings
+
+`document.rasterEffectsSettings` holds how raster effects (shadows, glows, blurs, feathers) become images when PDF
+export or Expand Appearance renders them: `resolution` (ppi, also New Document's `rasterEffectsPpi`), `colorModel`
+(the document's `rgb`/`cmyk`, `grayscale` or `bitmap`), `background` (`white` makes the images opaque), `antiAlias`
+(off: hard edges), `clippingMask` (the white stays under the art only), `addAround` (points of room around the art)
+and `preserveSpotColors` (stored). They are also the defaults of `object.rasterize`, whose params override them (its
+`clippingMask` puts the image in a clip group with the art's outline). No params reports them; any of them changes them
+in one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
+```

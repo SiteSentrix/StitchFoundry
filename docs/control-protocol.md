@@ -246,3 +246,10 @@ File Info: File → File Info… (`file.info` from the menu or Cmd+Alt+Shift+I; 
 `modified` are shown read-only) plus `__keyword`, keywords typed but not added yet (comma-separated; OK adds them).
 `ui.dialog.confirm` runs `file.info` with them as one undo step; a bad value answers with an error and the dialog
 stays open.
+
+Document Raster Effects Settings: Effect → Document Raster Effects Settings… (`ui.rasterEffectsSettingsDialog` for
+agents) opens the `rasterEffectsSettings` dialog. Its fields are what `document.rasterEffectsSettings` reports
+(`resolution`, `colorModel`, `background`, `antiAlias`, `clippingMask`, `addAround` in pt, `preserveSpotColors`);
+`ui.dialog.confirm` runs it with them as one undo step; a bad value keeps the dialog open. Object → Rasterize… opens a
+`command` dialog for `object.rasterize` whose fields (`ppi`, `colorModel`, `background`, `antiAlias`, `clippingMask`,
+`addAround`) start from these settings.

@@ -15,6 +15,7 @@ pub mod node;
 pub mod overprint;
 pub mod pattern;
 mod pixels;
+pub mod rastersettings;
 mod reach;
 pub mod selection;
 pub mod setup;
@@ -52,6 +53,7 @@ pub use node::Scaling;
 pub use node::{ImageMap, ObjectAttributes};
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
+pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
 pub use selection::{AnchorRef, Selection};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use style_libs::StyleLibrary;
@@ -481,6 +483,10 @@ pub struct Document {
     /// File → File Info (the title is [`Document::title`]).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub metadata: DocMetadata,
+    /// Effect → Document Raster Effects Settings besides the resolution
+    /// ([`Document::raster_effects_ppi`]).
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub raster_effects: RasterEffectsSettings,
 }
 
 fn ppi72() -> f64 {
@@ -539,6 +545,7 @@ impl Document {
             setup: DocSetup::default(),
             paste_remembers_layers: false,
             metadata: DocMetadata::default(),
+            raster_effects: RasterEffectsSettings::default(),
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));

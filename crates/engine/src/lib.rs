@@ -997,6 +997,8 @@ mod tests_previewbounds;
 #[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]
+mod tests_rastersettings;
+#[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
 mod tests_registration;

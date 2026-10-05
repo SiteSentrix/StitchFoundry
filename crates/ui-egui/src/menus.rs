@@ -388,6 +388,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open File Info (dialog `fileInfo`: the file.info fields, plus __keyword, keywords typed but not added yet); OK runs file.info. The File Info… menu item opens it too",
     ),
+    (
+        "ui.rasterEffectsSettingsDialog",
+        "Document Raster Effects Settings Dialog",
+        "",
+        "{} open Document Raster Effects Settings (dialog `rasterEffectsSettings`: the document.rasterEffectsSettings fields); OK runs it. The menu item opens it too",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -760,6 +766,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "file.exportAs" => io::export(app, s("format").as_deref(), s("path"), p),
         "ui.fileInfoDialog" => crate::dialogs::file_info::open(app),
+        "ui.rasterEffectsSettingsDialog" => crate::dialogs::raster_effects::open(app),
         _ => return None,
     };
     Some(r)
@@ -937,7 +944,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         }
         "effect.dialog" | "ui.recolorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
-        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" => app.session.active().is_some(),
+        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
@@ -1141,7 +1148,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Expand…", "ui.expandDialog"),
                 c("Expand Appearance", "effect.expandAppearance"),
                 c("Crop Image", "object.cropImage"),
-                cp("Rasterize…", "object.rasterize", json!({"ppi": 72, "background": "transparent", "antiAlias": "art"})),
+                c("Rasterize…", "object.rasterize"),
                 cp("Create Gradient Mesh…", "object.mesh.create", json!({"rows": 4, "cols": 4, "appearance": "flat", "highlight": 100})),
                 cp(
                     "Create Object Mosaic…",
@@ -1737,20 +1744,22 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
-    // Document Raster Effects Settings: a dialog with the current resolution.
-    if id == "document.rasterEffectsSettings" && p.as_object().is_none_or(|o| o.is_empty()) {
-        match app.session.execute(id, &json!({})) {
-            Ok(v) => {
-                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Document Raster Effects Settings", "params": v}));
-            }
-            Err(e) => app.status(e.to_string()),
+    // Document Raster Effects Settings and File Info: their dialogs.
+    if matches!(id, "document.rasterEffectsSettings" | "file.info") && p.as_object().is_none_or(|o| o.is_empty()) {
+        let r = if id == "file.info" { crate::dialogs::file_info::open(app) } else { crate::dialogs::raster_effects::open(app) };
+        if let Err(e) = r {
+            app.status(e);
         }
         return;
     }
-    // File Info: its dialog.
-    if id == "file.info" && p.as_object().is_none_or(|o| o.is_empty()) {
-        if let Err(e) = crate::dialogs::file_info::open(app) {
-            app.status(e);
+    // Rasterize…: its options, starting from the document's raster effects settings.
+    if id == "object.rasterize" && p.as_object().is_none_or(|o| o.is_empty()) {
+        match app.session.execute("document.rasterEffectsSettings", &json!({})) {
+            Ok(v) => {
+                let params = json!({"ppi": v["resolution"], "colorModel": v["colorModel"], "background": v["background"], "antiAlias": if v["antiAlias"] == true { "art" } else { "none" }, "clippingMask": v["clippingMask"], "addAround": v["addAround"]});
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Rasterize", "params": params}));
+            }
+            Err(e) => app.status(e.to_string()),
         }
         return;
     }
