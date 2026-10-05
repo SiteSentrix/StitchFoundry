@@ -103,8 +103,20 @@ pub fn templates_folder(prefs: &Prefs) -> Option<String> {
     if !prefs.templates_folder.is_empty() {
         return Some(prefs.templates_folder.clone());
     }
-    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok().filter(|h| !h.is_empty())?;
-    Some(std::path::Path::new(&home).join("Documents").join("VectorCraft Templates").to_string_lossy().to_string())
+    Some(std::path::Path::new(&home_folder()?).join("Documents").join("VectorCraft Templates").to_string_lossy().to_string())
+}
+
+/// The user's home folder (`HOME`, else `USERPROFILE` on Windows; none on the web).
+fn home_folder() -> Option<String> {
+    std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok().filter(|h| !h.is_empty())
+}
+
+/// Where exports go by default (Export for Screens): the user's Desktop when there is one, else
+/// their home folder (none on the web, which downloads).
+pub fn export_folder() -> Option<String> {
+    let home = home_folder()?;
+    let desktop = std::path::Path::new(&home).join("Desktop");
+    Some(if desktop.is_dir() { desktop.to_string_lossy().into_owned() } else { home })
 }
 
 /// The folder of a path (`None` for a bare file name).

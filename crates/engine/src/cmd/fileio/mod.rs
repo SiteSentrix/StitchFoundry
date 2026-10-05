@@ -4,7 +4,9 @@
 //! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, raster images).
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
-//! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
+//! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForOffice`.
+//! - `screens`: Export for Screens (`document.exportForScreens`, `document.exportSettings`); `zip`
+//!   packs its files as one download.
 //! - `save`: `document.save`, Save As / a Copy / as Template, New from Template, Revert and the
 //!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
@@ -26,8 +28,10 @@ mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
 mod save;
+mod screens;
 mod svg;
 mod text;
+mod zip;
 
 use serde_json::{Value, json};
 
@@ -42,8 +46,10 @@ pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_byt
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
 pub use save::{
-    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, templates_folder,
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, export_folder, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates,
+    templates_folder,
 };
+pub use screens::{PRESETS as SCREEN_PRESETS, ScreenSize, preset_rows as screen_preset_rows};
 pub use svg::options_map as svg_options;
 /// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
 /// file it replaces), for the apps' own writers too.
@@ -96,9 +102,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export for Screens",
             ["File", "Export"],
             None,
-            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|gif|png8|svg|svgz|pdf, scale?: 1 (raster only), ppi?: (raster: wins over scale, scale = ppi / 72), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes), …the format's options (antiAlias, background…)}], prefix?, antiAlias?: none|art|type (raster rows without their own)} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
+            "{folder?, zip?: false (one store-only .zip of every file: no folder → {name, dataBase64, bytes, files: [name…]}; with a folder it is written there → {path, bytes, files}), artboards?: [index…] | range?: \"1-3\" (default all), fullDocument?: false (one file per format instead: a PDF of every artboard, other formats the bounds of all visible art, named after the document), includeBleed?: false (artboards grown by the document's bleed), subfolders?: false (each row's files in a sub-folder: its folder, else its size for raster (1x, 2x, 100w…) or its format (SVG, PDF)), preset?: mobile (PNG 1x, 2x, 3x) | density (PNG 0.75x–4x in ldpi…xxxhdpi sub-folders) instead of formats (turns subfolders on), formats?: [{format: png|png8|jpg|webp|gif|svg|svgz|pdf, scale?: 1 | \"2x\" | \"100w\" | \"100h\" | \"72ppi\", width?: px | height?: px | ppi? (raster only; width, then height, then ppi win over scale), suffix?: (raster default: @2x, @100w, @100h, none at 1x; vector formats drop size suffixes), folder?: (its sub-folder), quality?: (jpg 0–100), …the format's options (antiAlias, background, preset (pdf)…)}], settings?: {png|png8|jpg|webp|gif|svg|pdf: {…options for every row of that format}} (rows' own options win), prefix?, antiAlias?: none|art|type (raster rows without their own), openLocation?: (remembered; the app shows the files after exporting)} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]} (names include sub-folders: 2x/Icon@2x.png). The params are remembered in the document (document.exportSettings; not an undo step)",
             has_doc,
-            export::export_for_screens
+            screens::export_for_screens
         ),
         cmd!(query "command.batch", "Batch", [], None, "{label?, commands: [{command, params}]} run several commands as ONE undo step; stops at the first error and rolls back", has_doc, batch::batch),
         cmd!(
@@ -127,6 +133,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path?, ppi?: 150 (72, 150, 300… pixels per inch), transparent?: false (else on white), artboard?: 0} the artboard as a PNG for office documents and slides → {path, bytes, width, height} (pixels); no path → {dataBase64, bytes, width, height}",
             has_doc,
             export::export_for_office
+        ),
+        cmd!(
+            query "document.exportSettings",
+            "Export for Screens Settings",
+            [],
+            None,
+            "{} → {settings}: the document.exportForScreens params the document last exported with ({} when never; saved with the document, the dialog reopens on them)",
+            has_doc,
+            screens::export_settings
         ),
     ]
     .into_iter()
@@ -675,6 +690,8 @@ mod tests_jpeg;
 #[cfg(test)]
 mod tests_palette;
 
+#[cfg(test)]
+mod tests_screens;
 #[cfg(test)]
 mod tests_text;
 

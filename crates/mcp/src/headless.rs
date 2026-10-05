@@ -32,7 +32,11 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
         "{path?, format?, options?, svg?: {…SVG options}} = document.save: .vectorcraft, .ai (a PDF that reopens editable), .pdf, .svg or .svgz (default: the document's own path and format)",
     ),
     ("file.export", "Export…", "{path?, format?, artboard?, range?, scale?, …} = document.export (no path → dataBase64)"),
-    ("file.exportForScreens", "Export for Screens…", "{folder?, artboards? | range?, formats?, prefix?} = document.exportForScreens"),
+    (
+        "file.exportForScreens",
+        "Export for Screens…",
+        "{folder?, zip?, artboards? | range? | fullDocument?, includeBleed?, subfolders?, preset?, formats?, settings?, prefix?} = document.exportForScreens (no folder → the files, or one zip, as dataBase64)",
+    ),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),
 ];
 

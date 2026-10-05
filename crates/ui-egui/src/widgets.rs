@@ -723,17 +723,7 @@ fn spin_generic(
             out = Some(v.max(min));
         }
         if !presets.is_empty() {
-            let (dr, dresp) = ui.allocate_exact_size(vec2(20.0, h), Sense::click());
-            ui.painter().rect_filled(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, t.input);
-            ui.painter().rect_stroke(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
-            let c = if !enabled {
-                t.text_disabled
-            } else if dresp.hovered() {
-                t.text_strong
-            } else {
-                t.icon
-            };
-            icons::paint(ui, "chevron-down", Rect::from_center_size(dr.center(), Vec2::splat(12.0)), c);
+            let dresp = chevron_cell(ui, h);
             egui::Popup::menu(&dresp).show(|ui| {
                 ui.set_min_width(width - 10.0);
                 for p in presets {
@@ -1262,4 +1252,41 @@ pub fn region_texture(
     let img = renderer.render_region(doc, region, scale, true);
     let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
     ctx.load_texture(name, color, egui::TextureOptions::LINEAR)
+}
+
+/// The chevron cell on the right of a field that opens its preset list (rounded on the right).
+fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
+    let t = Tokens::get(ui.ctx());
+    let (dr, dresp) = ui.allocate_exact_size(vec2(20.0, h), Sense::click());
+    ui.painter().rect_filled(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, t.input);
+    ui.painter().rect_stroke(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
+    let c = if !ui.is_enabled() {
+        t.text_disabled
+    } else if dresp.hovered() {
+        t.text_strong
+    } else {
+        t.icon
+    };
+    icons::paint(ui, "chevron-down", Rect::from_center_size(dr.center(), Vec2::splat(12.0)), c);
+    dresp
+}
+
+/// A [`text_field`] with a preset list on its right (Export for Screens' sizes: `2x`, `100w`…).
+/// Returns the new text when a change is committed (Enter or focus loss) or a preset is picked.
+pub fn text_presets(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: &str, presets: &[&str], width: f32) -> Option<String> {
+    let mut out = None;
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        out = text_field(ui, &id, Some(value), width - 20.0, 1);
+        let resp = chevron_cell(ui, 26.0);
+        egui::Popup::menu(&resp).show(|ui| {
+            ui.set_min_width(width - 10.0);
+            for p in presets {
+                if ui.selectable_label(*p == value, *p).clicked() {
+                    out = Some((*p).to_string());
+                }
+            }
+        });
+    });
+    out
 }

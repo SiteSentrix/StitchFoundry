@@ -102,7 +102,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
     ("file.export.png", "Export As PNG…", "", "{path?, …document.export options}; no path: pick the file, then PNG Options"),
-    ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{} opens the dialog; with params = document.exportForScreens"),
+    (
+        "file.exportForScreens",
+        "Export for Screens…",
+        "Cmd+Alt+E",
+        "{} opens the dialog (on the document's last settings); with params = document.exportForScreens (no folder on the web: downloads the files or the zip; openLocation: shows the first file in the file manager)",
+    ),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
@@ -520,15 +525,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "file.export.svg" => io::export(app, Some("svg"), s("path"), p),
         "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
-            let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-            app.ui.dialog = Some(crate::state::Dialog::new(
-                "exportForScreens",
-                json!({"boards": vec![true; n], "formats": [{"format": "png", "scale": 1, "suffix": ""}, {"format": "png", "scale": 2, "suffix": "@2x"}], "folder": format!("{home}/Desktop/VectorCraft Export"), "prefix": ""}),
-            ));
+            crate::dialogs::open_export_for_screens(app);
             Ok(Value::Null)
         }
-        "file.exportForScreens" => app.run("document.exportForScreens", p.clone()),
+        "file.exportForScreens" => io::export_for_screens(app, p.clone()),
         "file.export.png" if s("path").is_none() => io::target_path(app, None, "png").and_then(|path| {
             let f = vectorcraft_engine::cmd::fileio::format("png").ok_or("no PNG encoder")?;
             let mut params = if p.is_object() { p.clone() } else { json!({}) };
