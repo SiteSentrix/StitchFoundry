@@ -24,16 +24,31 @@
 //!
 //! ## Import approximations
 //!
-//! * One CSS pixel (user unit) is one point, as on export; a root `width`/`height` in absolute units
-//!   (`in`, `cm`, `mm`, `pt`, `pc`) keeps its physical size (72 pt per inch), so a 210 mm SVG opens on
-//!   a 210 mm artboard.
+//! * One CSS pixel (user unit) is one point, as on export, and absolute lengths (`in`, `cm`, `mm`,
+//!   `pt`, `pc`) keep their physical size (72 pt per inch): `font-size="12pt"` is 12 pt. A root
+//!   `width`/`height` in absolute units keeps its physical size, so a 210 mm SVG opens on a 210 mm
+//!   artboard, its user units being CSS pixels of it (96 per inch). The document's units follow the
+//!   unit of the root `width` (pixels when it has none).
 //! * `<mask>` imports as a luminance opacity mask; a mask we exported keeps its options and art
 //!   (its `data-vectorcraft-mask="noclip invert"` lists the options that differ from clipping and
 //!   not inverted). Filters are ignored (reported as warnings); nested clip paths use the outer
 //!   clip only.
-//! * usvg only keeps `<text>` when fonts are loaded; we don't load a font database (too expensive and
-//!   unavailable on wasm), so `<text>` elements are read directly from the XML as live point-type
-//!   [`TextObject`]s (type on a path for a `<textPath>`) and placed on top of their layer.
+//! * `<pattern>` becomes a pattern swatch (its content clipped to the tile) painted with the
+//!   pattern's placement.
+//! * Text lines after the first start at the first line's x; text in a clip path is ignored;
+//!   absolute positions inside type on a path are ignored; vertical text sets every glyph sideways.
+//!
+//! ## Import text
+//!
+//! usvg only keeps `<text>` when fonts are loaded; we don't load a font database (too expensive and
+//! unavailable on wasm), so `<text>` elements are read from the XML as live [`TextObject`]s. Each
+//! one is swapped for a placeholder before usvg runs, so the text keeps its z-order, parent group,
+//! clip, mask, opacity, link, `<use>` instances and gradient or pattern paints. The style cascade
+//! supports type, `#id`, `.class` (several), attribute, descendant and child selectors.
+//! `<textPath>` becomes type on a path (`startOffset`, `side`), vertical `writing-mode` type on a
+//! vertical path; per-character `x`/`y`/`dx`/`dy`/`rotate`, `baseline-shift`, numeric weights,
+//! letter and word spacing become character attributes (line breaks, kerning, baseline shift,
+//! rotation and style names).
 #![forbid(unsafe_code)]
 
 mod export;

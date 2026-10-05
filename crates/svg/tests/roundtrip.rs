@@ -608,7 +608,9 @@ fn import_clip_mask_and_warnings() {
     assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(25.0, 25.0, 75.0, 75.0), 0.01));
     assert!(a.iter().any(|n| n.mask.is_some()), "<mask> imports as an opacity mask");
     assert!(!w.iter().any(|w| w.contains("mask")), "{w:?}");
-    assert!(w.iter().any(|w| w.contains("pattern")), "{w:?}");
+    // <pattern> becomes a pattern swatch.
+    assert_eq!(d.patterns.len(), 1, "{w:?}");
+    assert!(a.iter().any(|n| matches!(n.appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "p")));
 }
 
 #[test]
@@ -700,7 +702,12 @@ fn import_tspan_on_the_same_baseline_stays_on_the_line() {
     let a = art(&d);
     let NodeKind::Text(t) = &a[0].kind else { panic!() };
     assert_eq!(t.plain_text(), "Hello world\nnext");
-    assert_eq!(t.runs.len(), 3);
+    // The styled runs stay (a kerned space may split the first one: "world" keeps its x).
+    let red: Vec<&str> = t.runs.iter().filter(|r| r.style.fill.color().is_some_and(|c| c.to_hex() == "#ff0000")).map(|r| r.text.trim()).collect();
+    assert_eq!(red, ["world"], "{:?}", t.runs);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let w = lay.glyphs.iter().find(|g| t.plain_text()[g.byte..].starts_with('w')).unwrap();
+    assert!(((t.xf * w.origin).x - 65.6).abs() < 0.05, "{:?}", t.xf * w.origin);
 }
 
 #[test]

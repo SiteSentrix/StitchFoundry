@@ -7,24 +7,33 @@ use std::sync::Arc;
 use usvg::roxmltree;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, CharStyle, Dash, Document, FillLayer, ImageBlob, ImageObject, Justify, LayerColor, LineCap, LineJoin, Node, NodeKind,
-    StrokeLayer, TextKind, TextObject, TextRun,
+    Appearance, AppearanceItem, Dash, Document, FillLayer, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, Node, NodeKind, PatternDef,
+    StrokeLayer, Unit,
 };
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Vec2};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2, shapes};
 
 use crate::SvgError;
+use css::XNode;
+use text::TextSlots;
+
+mod css;
+mod text;
 
 pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     let (svg, links) = link_ids(svg);
     let svg = svg.as_ref();
-    let opt = usvg::Options::default();
-    let tree = usvg::Tree::from_str(svg, &opt).map_err(|e| SvgError::Parse(e.to_string()))?;
+    let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() })
+        .map_err(|e| SvgError::Parse(e.to_string()))?;
+    let units = RootUnits::of(xml.root_element());
+    let mut warnings = Vec::new();
+    let (src, slots) = text::prepare(svg, &xml, units.dpi, &mut warnings);
+    let opt = usvg::Options { dpi: units.dpi as f32, font_size: DEFAULT_FONT_SIZE as f32, ..usvg::Options::default() };
+    let tree = usvg::Tree::from_str(&src, &opt).map_err(|e| SvgError::Parse(e.to_string()))?;
     let size = tree.size();
-    // Document points from CSS pixels: 1 px = 1 pt (as we export), except that a root size in
-    // absolute units is that physical size (usvg resolves it to 96 px per inch, i.e. 4/3 px per pt).
-    let (kx, ky) = physical_scale(svg);
-    let doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
-    let mut im = Importer { doc, warnings: Vec::new(), mask_flags: mask_flags(svg), links };
+    let (kx, ky) = units.k;
+    let mut doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
+    doc.units = units.unit;
+    let mut im = Importer { doc, warnings, mask_flags: mask_flags(&xml), links, slots, patterns: HashMap::new() };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
@@ -32,22 +41,35 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     if let [usvg::Node::Group(g)] = top.children()
         && g.id().is_empty()
         && is_plain(g)
+        && im.text_slot(g).is_none()
     {
         base *= aff(g.transform());
         top = g;
     }
 
-    // Top-level `<g id>` elements become layers (Illustrator does the same); otherwise all art goes
-    // into "Layer 1".
-    let layer_mode = !top.children().is_empty()
-        && top.children().iter().all(|c| matches!(c, usvg::Node::Group(g) if !g.id().is_empty() && !im.links.contains_key(g.id()) && is_plain(g)));
+    // Top-level `<g id>` elements become layers (as in the reference app); otherwise all art goes
+    // into "Layer 1". Top-level text joins the layer below it (the first layer if none is).
+    let is_layer = |im: &Importer, c: &usvg::Node| matches!(c, usvg::Node::Group(g) if !g.id().is_empty() && !im.links.contains_key(g.id()) && is_plain(g) && im.text_slot(g).is_none());
+    let is_text = |im: &Importer, c: &usvg::Node| matches!(c, usvg::Node::Group(g) if im.text_slot(g).is_some());
+    let layer_mode = top.children().iter().any(|c| is_layer(&im, c)) && top.children().iter().all(|c| is_layer(&im, c) || is_text(&im, c));
     if layer_mode {
         im.doc.layers.clear();
-        for (i, c) in top.children().iter().enumerate() {
+        let mut loose = vec![];
+        for c in top.children() {
             let usvg::Node::Group(g) = c else { continue };
-            let children = im.children(g, base * aff(g.transform()));
+            if !is_layer(&im, c) {
+                let n = im.node(c, base).map(Arc::new);
+                match im.doc.layers.last_mut().and_then(|l| Arc::make_mut(l).children_mut()) {
+                    Some(ch) => ch.extend(n),
+                    None => loose.extend(n),
+                }
+                continue;
+            }
+            let mut children = std::mem::take(&mut loose);
+            children.extend(im.children(g, base * aff(g.transform())));
             let id = im.doc.alloc_id();
-            let mut l = Node::layer(id, g.id(), LayerColor::Preset((i % vectorcraft_doc::LAYER_COLORS.len()) as u8));
+            let preset = (im.doc.layers.len() % vectorcraft_doc::LAYER_COLORS.len()) as u8;
+            let mut l = Node::layer(id, g.id(), LayerColor::Preset(preset));
             if let Some(ch) = l.children_mut() {
                 *ch = children;
             }
@@ -61,28 +83,51 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
             *ch = children;
         }
     }
-
-    text_fallback(&mut im, svg, size.width() as f64, size.height() as f64, (kx, ky), layer_mode);
     Ok((im.doc, im.warnings))
 }
 
-/// Points per CSS pixel along x and y for the root `<svg>`'s `width` / `height`: 0.75 (72 / 96) for
-/// absolute units (in, cm, mm, pt, pc), so that `width="210mm"` is 595.3 pt wide; 1 otherwise
-/// (unitless, px, %, em, or absent).
-fn physical_scale(svg: &str) -> (f64, f64) {
-    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
-        return (1.0, 1.0);
-    };
-    let root = xml.root_element();
-    let k = |name: &str| {
-        use svgtypes::LengthUnit as U;
-        match root.attribute(name).and_then(|v| svgtypes::Length::from_str(v.trim()).ok()).map(|l| l.unit) {
-            Some(U::In | U::Cm | U::Mm | U::Pt | U::Pc) => 0.75,
-            _ => 1.0,
-        }
-    };
-    (k("width"), k("height"))
+/// SVG's initial `font-size` (`medium`) in user units.
+pub(super) const DEFAULT_FONT_SIZE: f64 = 12.0;
+
+/// How lengths become points, from the root `<svg>`'s `width` / `height`.
+///
+/// A pixel (and a unitless user unit) is a point, as we export, and absolute lengths keep their
+/// physical size at 72 pt per inch: `font-size="12pt"` is 12 pt, `1in` is 72 pt. A root size in
+/// absolute units (`width="210mm"`) is that physical size, and its user units are CSS pixels of it
+/// (96 per inch, 0.75 pt each), so a drawing without a `viewBox` keeps its proportions.
+struct RootUnits {
+    /// Pixels per inch usvg (and the text pass) convert absolute lengths at.
+    dpi: f64,
+    /// Points per user unit of the root along x and y.
+    k: (f64, f64),
+    /// Document units: those of the root `width` (pixels when it has none).
+    unit: Unit,
 }
+
+impl RootUnits {
+    fn of(root: XNode) -> Self {
+        let unit = |name: &str| root.attribute(name).and_then(|v| svgtypes::Length::from_str(v.trim()).ok()).map(|l| l.unit);
+        use svgtypes::LengthUnit as U;
+        let physical = |u: Option<U>| matches!(u, Some(U::In | U::Cm | U::Mm | U::Pt | U::Pc));
+        let (w, h) = (unit("width"), unit("height"));
+        let k = |u| if physical(u) { PT_PER_IN / CSS_PX_PER_IN } else { 1.0 };
+        let dpi = if physical(w) || physical(h) { CSS_PX_PER_IN } else { PT_PER_IN };
+        let unit = match w {
+            Some(U::Mm) => Unit::Millimeters,
+            Some(U::Cm) => Unit::Centimeters,
+            Some(U::In) => Unit::Inches,
+            Some(U::Pt) => Unit::Points,
+            Some(U::Pc) => Unit::Picas,
+            _ => Unit::Pixels,
+        };
+        Self { dpi, k: (k(w), k(h)), unit }
+    }
+}
+
+/// Points per inch.
+pub(super) const PT_PER_IN: f64 = 72.0;
+/// CSS pixels per inch.
+const CSS_PX_PER_IN: f64 = 96.0;
 
 struct Importer {
     doc: Document,
@@ -91,18 +136,19 @@ struct Importer {
     mask_flags: HashMap<String, (bool, bool)>,
     /// The URL of each `<a href>`'s group, by its id ([`link_ids`]).
     links: HashMap<String, String>,
+    /// Texts read from the XML, by placeholder ([`text`]).
+    slots: TextSlots,
+    /// Pattern swatch made for each usvg pattern.
+    patterns: HashMap<usize, String>,
 }
 
 /// The options [`crate::export::MASK_FLAGS`] records on exported `<mask>` elements, by mask id:
 /// (clip, invert).
-fn mask_flags(svg: &str) -> HashMap<String, (bool, bool)> {
+fn mask_flags(xml: &roxmltree::Document) -> HashMap<String, (bool, bool)> {
     let attr = crate::export::MASK_FLAGS;
-    if !svg.contains(attr) {
+    if !xml.input_text().contains(attr) {
         return HashMap::new();
     }
-    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
-        return HashMap::new();
-    };
     let flags = |n: roxmltree::Node| {
         let has = |f: &str| n.attribute(attr).is_some_and(|v| v.split_whitespace().any(|x| x == f));
         Some((n.attribute("id")?.to_string(), (!has("noclip"), has("invert"))))
@@ -114,7 +160,7 @@ fn mask_flags(svg: &str) -> HashMap<String, (bool, bool)> {
 const LINK_ID: &str = "vectorcraft-link-";
 
 /// The URL an `<a>` element links to.
-fn href<'a>(a: XNode<'a, '_>) -> Option<&'a str> {
+pub(super) fn href<'a>(a: XNode<'a, '_>) -> Option<&'a str> {
     a.attribute("href").or_else(|| a.attribute(("http://www.w3.org/1999/xlink", "href"))).filter(|h| !h.is_empty())
 }
 
@@ -266,16 +312,67 @@ impl Importer {
         Some(n)
     }
 
+    /// The text a placeholder group stands for (see [`text`]) and the index of its main path.
+    fn text_slot(&self, g: &usvg::Group) -> Option<(usize, usize)> {
+        g.children().iter().enumerate().find_map(|(k, c)| match c {
+            usvg::Node::Path(p) => self.slots.find(p).map(|i| (i, k)),
+            _ => None,
+        })
+    }
+
+    /// A text placeholder group → its text object (nothing when the text is hidden).
+    fn text(&mut self, g: &usvg::Group, ts: Affine) -> Option<Vec<Arc<Node>>> {
+        let (i, main) = self.text_slot(g)?;
+        let kids = g.children();
+        if !matches!(kids.get(main), Some(usvg::Node::Path(p)) if p.is_visible()) {
+            return Some(vec![]);
+        }
+        let text::PendingText { name, mut obj, servers, paints, .. } = self.slots.texts.get(i)?.clone();
+        // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
+        // space; runs paint in text space.
+        let to_text = obj.xf.inverse();
+        let resolved: Vec<Paint> = (0..paints)
+            .map(|k| match kids.get(main + 1 + k) {
+                Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| self.paint(f.paint(), to_text)),
+                _ => Paint::None,
+            })
+            .collect();
+        let server = |k: usize| resolved.get(k).cloned().unwrap_or(Paint::None);
+        for (run, (fill, stroke)) in obj.runs.iter_mut().zip(servers) {
+            if let Some(k) = fill {
+                run.style.fill = server(k);
+            }
+            if let Some(k) = stroke {
+                run.style.stroke = server(k);
+            }
+        }
+        obj.xf = ts * obj.xf;
+        Some(vec![Arc::new(self.named(&name, NodeKind::Text(Box::new(obj))))])
+    }
+
     fn group_node(&mut self, g: &usvg::Group, acc: Affine) -> Option<Node> {
         let ts = acc * aff(g.transform());
+        // A text placeholder becomes its text, named after the element (the group stays unnamed).
+        let text = self.text(g, ts);
+        if text.as_ref().is_some_and(Vec::is_empty) {
+            return None;
+        }
+        let is_text = text.is_some();
         // The made-up ids of links aren't names.
-        let id = if g.id().starts_with(LINK_ID) { "" } else { g.id() };
-        let label = if id.is_empty() { "a group".to_string() } else { format!("'{id}'") };
+        let id = if is_text || g.id().starts_with(LINK_ID) { "" } else { g.id() };
+        let label = match (&text, id) {
+            (Some(t), _) => t.first().and_then(|n| n.name.as_deref()).map_or_else(|| "a text".to_string(), |n| format!("text '{n}'")),
+            (None, "") => "a group".to_string(),
+            (None, id) => format!("'{id}'"),
+        };
         let mask = g.mask().and_then(|m| self.opacity_mask(m, ts, &label));
         if !g.filters().is_empty() {
             self.warn(format!("filter on {label} ignored"));
         }
-        let mut children = self.children(g, ts);
+        let mut children = match text {
+            Some(t) => t,
+            None => self.children(g, ts),
+        };
         let mut n = if let Some(cp) = g.clip_path() {
             if cp.clip_path().is_some() {
                 self.warn(format!("nested clip path on {label} approximated by its outer clip"));
@@ -289,9 +386,8 @@ impl Importer {
                 return None;
             }
             // An id-less wrapper around a single object (usvg adds these for opacity/transform on
-            // shapes): fold its opacity and blend into the object.
-            if id.is_empty()
-                && mask.is_none()
+            // shapes): fold its opacity and blend into the object. A text takes its own mask too.
+            if (is_text || id.is_empty() && mask.is_none())
                 && children.len() == 1
                 && (g.blend_mode() == usvg::BlendMode::Normal || children[0].blend == BlendMode::Normal)
                 && let Some(only) = children.pop()
@@ -302,6 +398,9 @@ impl Importer {
                     c.blend = blend(g.blend_mode());
                 }
                 c.isolate |= g.isolate();
+                if mask.is_some() {
+                    c.mask = mask;
+                }
                 return Some(c);
             }
             self.named(id, NodeKind::Group { children, clip: false })
@@ -430,11 +529,41 @@ impl Importer {
                 geom.transform(m * aff(rg.transform()), GradientKind::Radial);
                 gp(GradientKind::Radial, stops(rg), geom)
             }
-            usvg::Paint::Pattern(pt) => {
-                self.warn(format!("pattern '{}' not supported; painted as none", pt.id()));
-                Paint::None
-            }
+            usvg::Paint::Pattern(pt) => self.pattern(pt, m),
         }
+    }
+
+    /// `<pattern>` → a pattern swatch painted with the pattern's tile placement. The swatch art is
+    /// the pattern content clipped to the tile, as SVG draws it.
+    fn pattern(&mut self, pt: &Arc<usvg::Pattern>, m: Affine) -> Paint {
+        let r = pt.rect();
+        let xf = m * aff(pt.transform()) * Affine::translate((r.x() as f64, r.y() as f64));
+        let key = Arc::as_ptr(pt) as usize;
+        if let Some(name) = self.patterns.get(&key) {
+            return Paint::Pattern { pattern: name.clone(), xf };
+        }
+        let tile = Rect::new(0.0, 0.0, r.width() as f64, r.height() as f64);
+        let content = self.children(pt.root(), aff(pt.root().transform()));
+        if content.is_empty() {
+            return Paint::None;
+        }
+        let clip =
+            self.named("", NodeKind::Path { path: shapes::rectangle(tile), rule: FillRule::NonZero, live: None, clipping: true, guide: false });
+        let mut children = vec![Arc::new(clip)];
+        children.extend(content);
+        let art = self.named("", NodeKind::Group { children, clip: true });
+        let base = if pt.id().is_empty() { "Pattern" } else { pt.id() };
+        let mut name = base.to_string();
+        let mut k = 2;
+        while self.doc.pattern(&name).is_some() {
+            name = format!("{base} {k}");
+            k += 1;
+        }
+        let mut def = PatternDef::new(&name, vec![Arc::new(art)]);
+        def.tile = tile;
+        self.doc.patterns.push(def);
+        self.patterns.insert(key, name.clone());
+        Paint::Pattern { pattern: name, xf }
     }
 
     fn appearance(&mut self, p: &usvg::Path, m: Affine) -> (Appearance, FillRule) {
@@ -533,371 +662,5 @@ impl Importer {
         self.doc.images.entry(key.clone()).or_insert_with(|| ImageBlob { mime: mime.into(), bytes: Arc::new(bytes.to_vec()) });
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);
         Some(self.named(i.id(), NodeKind::Image(ImageObject { key, width: pw, height: ph, xf, link: None })))
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// <text> fallback: read text elements straight from the XML as live point type.
-
-type XNode<'a, 'i> = roxmltree::Node<'a, 'i>;
-
-struct TextCtx {
-    /// `.class` → declarations from `<style>` elements.
-    classes: HashMap<String, Vec<(String, String)>>,
-}
-
-fn parse_decls(s: &str) -> Vec<(String, String)> {
-    s.split(';')
-        .filter_map(|d| {
-            let (k, v) = d.split_once(':')?;
-            Some((k.trim().to_string(), v.trim().trim_end_matches("!important").trim().to_string()))
-        })
-        .collect()
-}
-
-impl TextCtx {
-    fn new(doc: &roxmltree::Document) -> Self {
-        let mut classes: HashMap<String, Vec<(String, String)>> = HashMap::new();
-        for st in doc.descendants().filter(|n| n.has_tag_name("style") || n.tag_name().name() == "style") {
-            let css: String = st.children().filter_map(|c| c.text()).collect();
-            for rule in css.split('}') {
-                let Some((sel, body)) = rule.split_once('{') else { continue };
-                let decls = parse_decls(body);
-                for s in sel.split(',') {
-                    if let Some(c) = s.trim().strip_prefix('.')
-                        && c.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-                    {
-                        classes.entry(c.to_string()).or_default().extend(decls.clone());
-                    }
-                }
-            }
-        }
-        Self { classes }
-    }
-
-    /// A property on this element only: style attribute > class rule > presentation attribute.
-    fn own(&self, n: XNode, name: &str) -> Option<String> {
-        if let Some(st) = n.attribute("style")
-            && let Some((_, v)) = parse_decls(st).into_iter().rev().find(|(k, _)| k == name)
-        {
-            return Some(v);
-        }
-        if let Some(cls) = n.attribute("class") {
-            for c in cls.split_whitespace().rev() {
-                if let Some((_, v)) = self.classes.get(c).and_then(|d| d.iter().rev().find(|(k, _)| k == name)) {
-                    return Some(v.clone());
-                }
-            }
-        }
-        n.attribute(name).map(str::to_string)
-    }
-
-    /// An inherited property.
-    fn prop(&self, n: XNode, name: &str) -> Option<String> {
-        n.ancestors().filter(|a| a.is_element()).find_map(|a| self.own(a, name).filter(|v| v != "inherit"))
-    }
-}
-
-fn first_number(s: Option<&str>) -> f64 {
-    s.and_then(|s| s.split(|c: char| c.is_whitespace() || c == ',').find(|t| !t.is_empty()).map(str::to_string))
-        .and_then(|t| svgtypes::Length::from_str(&t).ok())
-        .map(|l| l.number)
-        .unwrap_or(0.0)
-}
-
-fn parse_transform(s: Option<&str>) -> Affine {
-    s.and_then(|s| svgtypes::Transform::from_str(s).ok()).map(|t| Affine::new([t.a, t.b, t.c, t.d, t.e, t.f])).unwrap_or(Affine::IDENTITY)
-}
-
-fn parse_color_paint(v: &str) -> Paint {
-    let v = v.trim();
-    if v == "none" {
-        return Paint::None;
-    }
-    if let Ok(c) = svgtypes::Color::from_str(v) {
-        return Paint::solid(Color::rgb8(c.red, c.green, c.blue));
-    }
-    // url(#…) and other paints: fall back to black (or the fallback colour after the url).
-    if let Some(rest) = v.strip_prefix("url(").and_then(|r| r.split_once(')')).map(|(_, r)| r.trim())
-        && let Ok(c) = svgtypes::Color::from_str(rest)
-    {
-        return Paint::solid(Color::rgb8(c.red, c.green, c.blue));
-    }
-    Paint::solid(Color::BLACK)
-}
-
-fn char_style(ctx: &TextCtx, n: XNode) -> CharStyle {
-    let mut st = CharStyle::default();
-    if let Some(f) = ctx.prop(n, "font-family") {
-        let fam = f.split(',').next().unwrap_or("").trim().trim_matches(|c| c == '\'' || c == '"').to_string();
-        if !fam.is_empty() {
-            st.font_family = fam;
-        }
-    }
-    if let Some(s) = ctx.prop(n, "font-size")
-        && let Ok(l) = svgtypes::Length::from_str(s.trim())
-        && l.number > 0.0
-    {
-        st.size = match l.unit {
-            svgtypes::LengthUnit::Em => l.number * 12.0,
-            svgtypes::LengthUnit::Percent => l.number / 100.0 * 12.0,
-            _ => l.number,
-        };
-    }
-    let bold = ctx.prop(n, "font-weight").is_some_and(|w| w == "bold" || w == "bolder" || w.parse::<u32>().is_ok_and(|v| v >= 600));
-    let italic = ctx.prop(n, "font-style").is_some_and(|s| s == "italic" || s == "oblique");
-    st.font_style = match (bold, italic) {
-        (true, true) => "Bold Italic",
-        (true, false) => "Bold",
-        (false, true) => "Italic",
-        _ => "Regular",
-    }
-    .into();
-    if let Some(f) = ctx.prop(n, "fill") {
-        st.fill = parse_color_paint(&f);
-    }
-    if let Some(s) = ctx.prop(n, "stroke") {
-        st.stroke = parse_color_paint(&s);
-        st.stroke_width = ctx.prop(n, "stroke-width").map(|w| first_number(Some(&w))).unwrap_or(1.0);
-        st.stroke_cap = match ctx.prop(n, "stroke-linecap").as_deref() {
-            Some("round") => LineCap::Round,
-            Some("square") => LineCap::Square,
-            _ => LineCap::Butt,
-        };
-        st.stroke_join = match ctx.prop(n, "stroke-linejoin").as_deref() {
-            Some("round") => LineJoin::Round,
-            Some("bevel") => LineJoin::Bevel,
-            _ => LineJoin::Miter,
-        };
-        st.stroke_miter_limit = ctx.prop(n, "stroke-miterlimit").map_or(4.0, |m| first_number(Some(&m)).max(1.0));
-        let pattern: Vec<f64> =
-            ctx.prop(n, "stroke-dasharray").map_or(vec![], |d| d.split([' ', ',']).filter_map(|v| v.trim().parse().ok()).collect());
-        let offset = ctx.prop(n, "stroke-dashoffset").map_or(0.0, |o| first_number(Some(&o)));
-        st.stroke_dash = Some(Dash { pattern, offset, align_corners: false }).filter(Dash::is_dashed);
-    }
-    if let Some(ls) = ctx.prop(n, "letter-spacing") {
-        let v = first_number(Some(&ls));
-        if v != 0.0 {
-            st.tracking = v / st.size * 1000.0;
-        }
-    }
-    if let Some(d) = ctx.prop(n, "text-decoration") {
-        st.underline = d.contains("underline");
-        st.strikethrough = d.contains("line-through");
-    }
-    st
-}
-
-fn view_box_transform(root: XNode, w: f64, h: f64) -> Affine {
-    let Some(vb) = root.attribute("viewBox").and_then(|v| svgtypes::ViewBox::from_str(v).ok()) else { return Affine::IDENTITY };
-    if vb.w <= 0.0 || vb.h <= 0.0 {
-        return Affine::IDENTITY;
-    }
-    let ar = root.attribute("preserveAspectRatio").and_then(|v| svgtypes::AspectRatio::from_str(v).ok()).unwrap_or_default();
-    let (sx, sy) = (w / vb.w, h / vb.h);
-    use svgtypes::Align as A;
-    if ar.align == A::None {
-        return Affine::scale_non_uniform(sx, sy) * Affine::translate((-vb.x, -vb.y));
-    }
-    let s = if ar.slice { sx.max(sy) } else { sx.min(sy) };
-    let (fx, fy) = match ar.align {
-        A::XMinYMin => (0.0, 0.0),
-        A::XMidYMin => (0.5, 0.0),
-        A::XMaxYMin => (1.0, 0.0),
-        A::XMinYMid => (0.0, 0.5),
-        A::XMinYMax => (0.0, 1.0),
-        A::XMidYMax => (0.5, 1.0),
-        A::XMaxYMid => (1.0, 0.5),
-        A::XMaxYMax => (1.0, 1.0),
-        A::XMidYMid | A::None => (0.5, 0.5),
-    };
-    Affine::translate(((w - vb.w * s) * fx, (h - vb.h * s) * fy)) * Affine::scale(s) * Affine::translate((-vb.x, -vb.y))
-}
-
-/// Most line breaks one absolutely positioned `<tspan>` adds before itself.
-const MAX_TSPAN_LINE_GAP: f64 = 10_000.0;
-
-struct RunBuilder {
-    runs: Vec<TextRun>,
-    last_y: f64,
-    preserve: bool,
-}
-
-impl RunBuilder {
-    fn push(&mut self, text: &str, style: CharStyle) {
-        if text.is_empty() {
-            return;
-        }
-        if let Some(l) = self.runs.last_mut()
-            && l.style == style
-        {
-            l.text.push_str(text);
-            return;
-        }
-        self.runs.push(TextRun { text: text.into(), style });
-    }
-    fn newline(&mut self, n: usize) {
-        if let Some(l) = self.runs.last_mut() {
-            for _ in 0..n {
-                l.text.push('\n');
-            }
-        }
-    }
-}
-
-fn collect_runs(ctx: &TextCtx, el: XNode, rb: &mut RunBuilder) {
-    for c in el.children() {
-        if c.is_text() {
-            let raw = c.text().unwrap_or("");
-            let t = if rb.preserve {
-                raw.replace(['\n', '\r', '\t'], " ")
-            } else {
-                let s: String = raw.chars().filter(|c| *c != '\n' && *c != '\r').map(|c| if c == '\t' { ' ' } else { c }).collect();
-                let mut out = String::new();
-                for ch in s.chars() {
-                    if ch == ' '
-                        && (out.ends_with(' ') || (out.is_empty() && rb.runs.last().is_none_or(|r| r.text.ends_with(' ') || r.text.ends_with('\n'))))
-                    {
-                        continue;
-                    }
-                    out.push(ch);
-                }
-                out
-            };
-            rb.push(&t, char_style(ctx, el));
-        } else if c.is_element() && matches!(c.tag_name().name(), "tspan" | "textPath" | "a") {
-            if ctx.own(c, "display").as_deref() == Some("none") {
-                continue;
-            }
-            if !rb.runs.is_empty() {
-                let lead = char_style(ctx, c).effective_leading().max(1e-6);
-                if let Some(y) = c.attribute("y") {
-                    let y = first_number(Some(y));
-                    // One line break per line of baseline gap: none for a tspan on the same baseline
-                    // (a styled or kerned run of the same line), at least one for a tspan placed
-                    // higher up, and capped so that a far-off (or non-finite) y can't ask for billions.
-                    let gap = ((y - rb.last_y) / lead).round();
-                    let n = if !gap.is_finite() {
-                        1
-                    } else if (y - rb.last_y).abs() < lead * 0.5 {
-                        0
-                    } else {
-                        gap.clamp(1.0, MAX_TSPAN_LINE_GAP) as usize
-                    };
-                    rb.newline(n);
-                    rb.last_y = y;
-                } else if c.attribute("dy").is_some_and(|dy| first_number(Some(dy)) > 1e-9) {
-                    rb.last_y += first_number(c.attribute("dy"));
-                    rb.newline(1);
-                }
-            }
-            collect_runs(ctx, c, rb);
-        }
-    }
-}
-
-fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, (kx, ky): (f64, f64), layer_mode: bool) {
-    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else { return };
-    let ctx = TextCtx::new(&xml);
-    let root = xml.root_element();
-    let vb = Affine::scale_non_uniform(kx, ky) * view_box_transform(root, w, h);
-    const SKIP: [&str; 8] = ["defs", "clipPath", "mask", "pattern", "symbol", "marker", "title", "desc"];
-    for t in root.descendants().filter(|n| n.is_element() && n.tag_name().name() == "text") {
-        if t.ancestors().skip(1).any(|a| a.is_element() && SKIP.contains(&a.tag_name().name())) {
-            continue;
-        }
-        if t.ancestors().filter(|a| a.is_element()).any(|a| ctx.own(a, "display").as_deref() == Some("none")) {
-            continue;
-        }
-        if ctx.prop(t, "visibility").is_some_and(|v| v == "hidden" || v == "collapse") {
-            continue;
-        }
-        // Transform: viewBox, then each ancestor's transform from the root down.
-        let mut acc = vb;
-        let chain: Vec<XNode> = t.ancestors().filter(|a| a.is_element()).collect();
-        for a in chain.iter().rev() {
-            if *a != root {
-                acc *= parse_transform(a.attribute("transform"));
-            }
-        }
-        let y0 = first_number(t.attribute("y"));
-        let xf = acc * Affine::translate((first_number(t.attribute("x")), y0));
-        let preserve = t.ancestors().filter(|a| a.is_element()).find_map(|a| a.attribute((roxmltree::NS_XML_URI, "space"))) == Some("preserve");
-        // tspan y values are absolute in the text's user space, like the text's own y.
-        let mut rb = RunBuilder { runs: Vec::new(), last_y: y0, preserve };
-        collect_runs(&ctx, t, &mut rb);
-        if !preserve {
-            if let Some(f) = rb.runs.first_mut() {
-                f.text = f.text.trim_start().to_string();
-            }
-            if let Some(l) = rb.runs.last_mut() {
-                l.text = l.text.trim_end().to_string();
-            }
-            rb.runs.retain(|r| !r.text.is_empty());
-        }
-        if rb.runs.is_empty() {
-            continue;
-        }
-        // Type on a path: a <textPath> naming a <path> (in the text's user space) by href.
-        let on_path = t.children().find(|c| c.is_element() && c.tag_name().name() == "textPath").and_then(|tp| {
-            let href = tp.attribute("href").or_else(|| tp.attribute(("http://www.w3.org/1999/xlink", "href")))?;
-            let id = href.strip_prefix('#')?;
-            let el = xml.descendants().find(|n| n.is_element() && n.tag_name().name() == "path" && n.attribute("id") == Some(id))?;
-            let mut bp = BezPath::from_svg(el.attribute("d")?).ok()?;
-            bp.apply_affine(acc * parse_transform(el.attribute("transform")));
-            let start = match tp.attribute("startOffset").map(str::trim) {
-                Some(o) if o.ends_with('%') => first_number(o.strip_suffix('%')) / 100.0,
-                Some(o) => {
-                    let len: f64 = bp.segments().map(|s| kurbo::ParamCurveArclen::arclen(&s, 1e-3)).sum();
-                    if len > 0.0 { first_number(Some(o)) / len } else { 0.0 }
-                }
-                None => 0.0,
-            };
-            Some((PathData::from_bezpath(&bp), start.clamp(0.0, 1.0)))
-        });
-        let justify = match ctx.prop(t, "text-anchor").as_deref() {
-            Some("middle") => Justify::Center,
-            Some("end") => Justify::Right,
-            _ => Justify::Left,
-        };
-        let (kind, xf) = match on_path {
-            Some((path, start)) => (TextKind::OnPath { path, start }, Affine::IDENTITY),
-            None => (TextKind::Point, xf),
-        };
-        let mut obj = TextObject {
-            kind,
-            xf,
-            runs: rb.runs,
-            para: Default::default(),
-            area: Default::default(),
-            path_effect: Default::default(),
-            wrap: Vec::new(),
-            cached_bounds: None,
-        };
-        obj.para.justify = justify;
-        let mut node = im.named(t.attribute("id").unwrap_or(""), NodeKind::Text(Box::new(obj)));
-        if let Some(url) = chain.iter().filter(|a| a.tag_name().name() == "a").find_map(|a| href(*a)) {
-            link(&mut node, url);
-        }
-        if let Some(o) = ctx.own(t, "opacity").and_then(|o| o.trim().parse::<f32>().ok()) {
-            node.opacity = o.clamp(0.0, 1.0);
-        }
-        // Place on the layer made from the top-level <g> containing the text, if any.
-        let top_id = if layer_mode { chain.iter().rev().nth(1).filter(|g| g.tag_name().name() == "g").and_then(|g| g.attribute("id")) } else { None };
-        let li = top_id.and_then(|id| im.doc.layers.iter().position(|l| l.name.as_deref() == Some(id)));
-        let li = match (li, top_id) {
-            (Some(i), _) => i,
-            (None, Some(id)) => {
-                im.doc.add_layer(Some(id));
-                im.doc.layers.len() - 1
-            }
-            (None, None) => im.doc.layers.len().saturating_sub(1),
-        };
-        if im.doc.layers.is_empty() {
-            im.doc.add_layer(Some("Layer 1"));
-        }
-        if let Some(ch) = Arc::make_mut(&mut im.doc.layers[li]).children_mut() {
-            ch.push(Arc::new(node));
-        }
     }
 }

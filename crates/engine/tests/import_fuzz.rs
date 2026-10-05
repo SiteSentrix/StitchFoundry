@@ -117,6 +117,14 @@ fn arb_svg_attr() -> impl Strategy<Value = String> {
         "mask-type",
         "data-vectorcraft-mask",
         "href",
+        "baseline-shift",
+        "word-spacing",
+        "kerning",
+        "writing-mode",
+        "font-weight",
+        "text-anchor",
+        "side",
+        "path",
     ]);
     let value = prop_oneof![
         arb_num(),
@@ -200,6 +208,19 @@ proptest! {
         body in prop::collection::vec(arb_svg_element(2), 0..6),
     ) {
         let svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"{}>{}</svg>", root.concat(), body.concat());
+        survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
+    }
+
+    #[test]
+    fn svg_hostile_css_never_panics(
+        sheet in r#"[a-z#.>*\[\]=:;{}@ !"'/,-]{0,160}"#,
+        decls in r#"[a-z0-9.%: ;!-]{0,60}"#,
+        body in prop::collection::vec(arb_svg_element(1), 0..3),
+    ) {
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><style>{sheet}</style><g class=\"a b\"><text id=\"t\" class=\"a\" x=\"1 2 3\" y=\"9\" rotate=\"5\" style=\"{decls}\">ab<tspan dy=\"3\">c</tspan></text></g>{}</svg>",
+            body.concat()
+        );
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
     }
 
