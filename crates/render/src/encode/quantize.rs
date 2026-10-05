@@ -202,7 +202,7 @@ pub fn quantize(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions) -> Ind
 }
 
 /// Lightness as a grey value (Rec. 601 luma).
-fn luma([r, g, b]: [u8; 3]) -> u8 {
+pub(super) fn luma([r, g, b]: [u8; 3]) -> u8 {
     ((r as u32 * 299 + g as u32 * 587 + b as u32 * 114 + 500) / 1000) as u8
 }
 

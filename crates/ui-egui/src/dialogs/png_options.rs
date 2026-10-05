@@ -1,8 +1,9 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
 //! map), WebP Options, and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
-//! transparency and matte). Fields are `document.export` params (format, path, artboard
-//! choice…); `__`-prefixed ones are the dialog's.
+//! transparency and matte), and TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]). Fields
+//! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
+//! dialog's.
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -11,7 +12,7 @@ use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, ColorModel, Method};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 
-use super::{DialogSpec, form};
+use super::{DialogSpec, form, tiff_bmp_tga};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
@@ -68,13 +69,13 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
     let mut o = Map::new();
     o.insert("background".into(), json!(if white { "white" } else { "transparent" }));
     o.insert("antiAlias".into(), json!(AntiAlias::default().id()));
+    // A CMYK document exports CMYK JPEGs and TIFFs by default.
+    let cmyk = app.session.active().is_some_and(|st| st.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
     match f.id {
         "png" => {
             o.insert("interlaced".into(), json!(false));
         }
         "jpg" => {
-            // A CMYK document exports CMYK by default.
-            let cmyk = app.session.active().is_some_and(|st| st.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
             let model = if cmyk { ColorModel::Cmyk } else { ColorModel::Rgb };
             let defaults = jpeg::JpegOptions::default();
             o.extend([
@@ -98,7 +99,7 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
                 ("interlaced".into(), json!(false)),
             ]);
         }
-        _ => {}
+        id => tiff_bmp_tga::defaults(id, cmyk, &mut o),
     }
     o
 }
@@ -170,10 +171,11 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
     label(ui, "Background Color:");
     let bg = d.str("background");
     let choice = BACKGROUNDS.iter().position(|v| bg.eq_ignore_ascii_case(v)).unwrap_or(3);
-    // JPEG has no transparency: its list starts at White.
-    let first = usize::from(id == "jpg");
+    // JPEG has no transparency, nor have some TIFF, BMP and Targa options: their list starts at
+    // White, which is what transparent becomes.
+    let first = usize::from(!tiff_bmp_tga::keeps_alpha(id, d));
     ui.horizontal(|ui| {
-        if let Some(i) = widgets::dropdown(ui, "ro-bg", BACKGROUND_LABELS[choice], &BACKGROUND_LABELS[first..], 150.0) {
+        if let Some(i) = widgets::dropdown(ui, "ro-bg", BACKGROUND_LABELS[choice.max(first)], &BACKGROUND_LABELS[first..], 150.0) {
             let value = BACKGROUNDS.get(i + first).copied().unwrap_or("#808080");
             d.fields.insert("background".into(), json!(value));
         }
@@ -203,7 +205,7 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
             label(ui, "Lossless (lossy WebP isn't available yet)");
             ui.end_row();
         }
-        _ => {}
+        id => tiff_bmp_tga::rows(ui, d, id, &label),
     }
 }
 

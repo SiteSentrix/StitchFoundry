@@ -58,6 +58,7 @@ pub mod swatch_conflict;
 pub mod swatch_options;
 mod text_export;
 pub mod text_import;
+mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
 mod transform;
@@ -227,6 +228,7 @@ registry! {
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
+    RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -347,3 +349,6 @@ mod tests_eps;
 
 #[cfg(test)]
 mod tests_metafile;
+
+#[cfg(test)]
+mod tests_tiff_bmp_tga;

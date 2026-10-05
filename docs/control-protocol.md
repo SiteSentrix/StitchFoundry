@@ -365,3 +365,12 @@ artboards' files.
 EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or `"wmf"`); they have no options
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
 Place read `.emf` and `.wmf`; a paste of `image/emf` from a system clipboard service runs `clipboard.importEmf`.
+
+TIFF, BMP and Targa Options: Export As… with the TIFF, BMP or Targa format (`file.exportAs {format: "tiff"}`, then
+the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster rows of PNG Options (`ppi`,
+`background`, `antiAlias`), then TIFF's `colorModel` (`rgb`, `cmyk`, `gray`; a CMYK document starts on `cmyk`),
+`byteOrder` (`little`, `big`), `lzw` and `embedIcc`; BMP's `colorModel` (`rgb`, `gray`), `fileFormat` (`windows`,
+`os2`), `depth` (1, 4, 8, 16, 24, 32), `reduction` and `dither` (4 and 8 bits), `rle` and `flipRows`; Targa's `depth`
+(16, 24, 32). The BMP dialog keeps its choices writable together (OS/2 falls back to 24 bits and turns RLE and flipped
+rows off; RLE turns flipped rows off). `ui.dialog.set` the fields and `ui.dialog.confirm` writes the file(s) with
+`document.export`.

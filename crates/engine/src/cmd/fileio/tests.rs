@@ -156,7 +156,26 @@ fn formats_query_lists_readers_writers_and_options() {
     let ids = |k: &str| r[k].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect::<Vec<_>>();
     assert_eq!(
         ids("writable"),
-        ["vectorcraft", "svg", "svgz", "pdf", "png", "jpg", "gif", "webp", "template", "png8", "txt", "dxf", "eps", "emf", "wmf"]
+        [
+            "vectorcraft",
+            "svg",
+            "svgz",
+            "pdf",
+            "png",
+            "jpg",
+            "gif",
+            "webp",
+            "tiff",
+            "bmp",
+            "template",
+            "png8",
+            "txt",
+            "dxf",
+            "eps",
+            "emf",
+            "wmf",
+            "tga"
+        ]
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
@@ -212,7 +231,7 @@ fn export_without_path_returns_bytes_and_never_retargets() {
     let r = s.execute("document.export", &json!({"format": "jpg"})).unwrap();
     assert_eq!(&b64(&r)[..2], [0xFF, 0xD8]);
     assert!(r.get("path").is_none());
-    assert!(s.execute("document.export", &json!({"path": dir.join("x.bmp").to_string_lossy()})).is_err(), "BMP is read-only");
+    assert!(s.execute("document.export", &json!({"path": dir.join("x.dwg").to_string_lossy()})).is_err(), "DWG can't be written");
     // A never-saved document hands its native bytes back.
     let mut s = session(10.0, 10.0, 1);
     let r = s.execute("document.save", &json!({})).unwrap();

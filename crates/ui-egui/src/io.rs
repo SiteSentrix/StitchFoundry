@@ -644,7 +644,7 @@ mod tests {
         assert!(vectorcraft_format::sniff(&w[1].1));
         assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/tmp/doc.vectorcraft"));
         drop(w);
-        assert!(export(&mut app, None, Some("/tmp/x.bmp".into()), &Value::Null).is_err(), "BMP is read-only");
+        assert!(export(&mut app, None, Some("/tmp/x.dwg".into()), &Value::Null).is_err(), "DWG can't be written");
     }
 
     #[test]

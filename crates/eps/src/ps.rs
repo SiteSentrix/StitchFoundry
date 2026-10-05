@@ -223,34 +223,8 @@ fn value85(digits: &[u8]) -> Option<u32> {
     digits.iter().try_fold(0u32, |acc, d| acc.checked_mul(85)?.checked_add(u32::from(d.checked_sub(b'!')?)))
 }
 
-/// `data` run-length encoded (PackBits: what TIFF's compression 32773 and PostScript's
-/// `RunLengthDecode` read), without an end marker.
-pub(crate) fn packbits(data: &[u8], out: &mut Vec<u8>) {
-    let mut i = 0;
-    while i < data.len() {
-        let Some(&b) = data.get(i) else { break };
-        let run = data.get(i..).map_or(1, |rest| rest.iter().take(128).take_while(|x| **x == b).count());
-        if run >= 3 {
-            out.push((257 - run) as u8);
-            out.push(b);
-            i += run;
-            continue;
-        }
-        // Literal bytes up to the next run of three.
-        let mut j = i;
-        while j < data.len() && j - i < 128 {
-            let three = data.get(j..j + 3).is_some_and(|w| w[0] == w[1] && w[1] == w[2]);
-            if three {
-                break;
-            }
-            j += 1;
-        }
-        let j = j.max(i + 1).min(data.len());
-        out.push((j - i - 1) as u8);
-        out.extend(data.get(i..j).unwrap_or_default());
-        i = j;
-    }
-}
+/// Run-length encoding (PackBits: what PostScript's `RunLengthDecode` reads), shared with TIFF.
+pub(crate) use vectorcraft_render::encode::tiff::packbits;
 
 /// `data` compressed for `FlateDecode` (zlib).
 pub(crate) fn deflate(data: &[u8]) -> Vec<u8> {
