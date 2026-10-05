@@ -263,6 +263,9 @@ pub struct UiState {
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default)]
     pub svg_options: Value,
+    /// File → Place: Link is on (the Place dialog remembers it).
+    #[serde(default = "yes")]
+    pub place_link: bool,
 }
 
 impl UiState {
@@ -319,6 +322,7 @@ impl Default for UiState {
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
             svg_options: Value::Null,
+            place_link: true,
         }
     }
 }

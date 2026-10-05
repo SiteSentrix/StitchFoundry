@@ -984,6 +984,8 @@ mod tests_pathops;
 #[cfg(test)]
 mod tests_pattern;
 #[cfg(test)]
+mod tests_place;
+#[cfg(test)]
 mod tests_prefs;
 #[cfg(test)]
 mod tests_previewbounds;

@@ -16,13 +16,15 @@ mod encode;
 mod export;
 mod load;
 pub mod pdf;
+pub mod ppi;
 mod save;
 mod svg;
 
 use serde_json::{Value, json};
 
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
-pub use load::{Loaded, RasterImage, detect, load, open_bytes, raster_image};
+pub(crate) use load::source;
+pub use load::{Loaded, RasterImage, detect, file_name, load, open_bytes, raster_image};
 pub use save::{save_encoding, save_format};
 pub use svg::options_map as svg_options;
 
@@ -240,10 +242,14 @@ pub const OPEN_EXTS: &[&str] =
 /// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
 /// libraries (which open in the library panel) and flattener presets (imported).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once(("All readable files", OPEN_EXTS))
-        .chain(FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions)))
+    place_filters()
         .chain(std::iter::once(("Swatch libraries", super::swatchlib::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", super::flatten::PRESET_EXTS)))
+}
+
+/// File → Place dialog filters: "All readable files", then one per readable format.
+pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    std::iter::once(("All readable files", OPEN_EXTS)).chain(FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`).

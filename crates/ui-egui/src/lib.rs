@@ -20,6 +20,7 @@ pub mod io;
 pub mod menus;
 pub mod palette;
 pub mod panels;
+pub mod place;
 pub mod prefs_dialog;
 pub mod render_worker;
 pub mod shortcut_editor;
@@ -40,6 +41,8 @@ mod tests_labels;
 mod tests_overprint;
 #[cfg(test)]
 mod tests_paintchips;
+#[cfg(test)]
+mod tests_place;
 #[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
@@ -85,6 +88,13 @@ pub struct Services {
     pub clipboard_read: Option<Box<dyn FnMut() -> Option<String>>>,
     /// Open a URL in the system browser (desktop). Without it, egui opens it (a new tab on the web).
     pub open_url: Option<OpenUrlFn>,
+    /// Show an open dialog for several files (File → Place…); returns their paths (none: cancelled).
+    pub pick_open_multi: Option<Box<dyn FnMut() -> Vec<String>>>,
+    /// Web: start an async pick of files to place (they arrive via `place_inbox`).
+    pub place_async: Option<Box<dyn FnMut()>>,
+    /// Files that arrived asynchronously to be placed (web: picked for Place, or dropped on the
+    /// canvas).
+    pub place_inbox: Option<place::PlaceInbox>,
 }
 
 /// Cached canvas raster.
@@ -160,6 +170,8 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
+    pub place: place::PlaceState,
 }
 
 impl VectorcraftApp {
@@ -199,6 +211,7 @@ impl VectorcraftApp {
             canvas_rect: None,
             hover_doc: None,
             custom_titlebar: false,
+            place: Default::default(),
         }
     }
 
@@ -412,6 +425,7 @@ impl VectorcraftApp {
                 self.status(format!("Couldn't open {name}: {e}"));
             }
         }
+        place::drain(self);
     }
 }
 
@@ -480,21 +494,31 @@ impl VectorcraftApp {
         if self.fonts_ready {
             shortcuts::handle(self, ctx);
         }
-        // Native only: the web host reads dropped files asynchronously and feeds `Services::inbox`.
+        // Native only: the web host reads dropped files asynchronously and feeds the inboxes.
         #[cfg(not(target_arch = "wasm32"))]
-        for f in ctx.input(|i| i.raw.dropped_files.clone()) {
-            let path = f.path().to_path_buf();
-            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
-            match f.bytes() {
-                Ok(b) => {
-                    let p = Some(path.to_string_lossy().to_string()).filter(|s| !s.is_empty());
-                    if let Err(e) = io::open_bytes(self, &name, &b, p) {
-                        self.status(format!("Couldn't open {name}: {e}"));
-                    }
-                }
+        self.take_dropped_files(ctx);
+    }
+
+    /// Files dropped on the window: placed where they were dropped on the canvas, else opened.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn take_dropped_files(&mut self, ctx: &egui::Context) {
+        let (dropped, pos, shift) = ctx.input(|i| (i.raw.dropped_files.clone(), i.pointer.latest_pos(), i.modifiers.shift));
+        if dropped.is_empty() {
+            return;
+        }
+        let target = self.drop_target(pos, shift);
+        let mut files = vec![];
+        for f in dropped {
+            let path = Some(f.path().to_string_lossy().to_string()).filter(|s| !s.is_empty());
+            let name = path.as_deref().map_or_else(|| "dropped".into(), vectorcraft_engine::cmd::fileio::file_name);
+            // A file placed by its path is read by the engine.
+            let bytes = if path.is_some() && target != place::DropTarget::Open { Ok(vec![]) } else { f.bytes() };
+            match bytes {
+                Ok(b) => files.push((name, path, b)),
                 Err(e) => self.status(format!("Couldn't read {name}: {e}")),
             }
         }
+        place::drop_files(self, files, target);
     }
 
     /// Inject synthetic events (one press/release step per frame).

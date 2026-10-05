@@ -1,5 +1,5 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG and PDF input,
-//! and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
+//! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
 //! (`.vcflattener`) libraries, must load as an error or as a document that then renders and
 //! exports, without a panic.
 //!
@@ -401,5 +401,50 @@ proptest! {
     fn mutated_flattener_presets_never_panic(cut in 0usize..5_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
         let text = saved("flattener.presets.export", json!({"names": ["high", "medium", "low"]}));
         flattener_presets("mutated flattener presets", &mutate_text(&text, cut, &edits))?;
+    }
+}
+
+/// A small image of each raster format Place reads, with resolution metadata where it has some.
+fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
+    let img = image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10]));
+    let mut out = vec![];
+    for (name, f) in [
+        ("a.png", image::ImageFormat::Png),
+        ("a.jpg", image::ImageFormat::Jpeg),
+        ("a.tif", image::ImageFormat::Tiff),
+        ("a.bmp", image::ImageFormat::Bmp),
+    ] {
+        let mut b = vec![];
+        img.write_to(&mut std::io::Cursor::new(&mut b), f).unwrap();
+        out.push((name, b));
+    }
+    out[0].1 = vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&out[0].1, (300.0, 150.0));
+    out
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated image headers (resolution metadata, chunk and segment lengths) never crash reading
+    /// their resolution or placing them.
+    #[test]
+    fn mutated_images_place_without_panics(which in 0usize..4, cut in 0usize..400, edits in prop::collection::vec((0usize..120, any::<u8>()), 0..12)) {
+        let (name, mut bytes) = raster_samples().swap_remove(which);
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at) {
+                *x = b;
+            }
+        }
+        bytes.truncate(cut.max(8));
+        let r = catch_quiet(|| {
+            let _ = vectorcraft_engine::cmd::fileio::ppi::resolution(&bytes);
+            let _ = vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&bytes, (72.0, 72.0));
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
+            let _ = s.execute("file.place.info", &p);
+            let _ = s.execute("file.place", &p);
+        });
+        prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
     }
 }

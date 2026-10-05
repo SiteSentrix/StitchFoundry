@@ -38,6 +38,7 @@ mod panelcmds;
 mod path;
 mod pathops;
 mod patterncmds;
+mod place;
 pub mod prefscmds;
 pub mod rasterfx;
 mod recolor;
@@ -215,6 +216,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(fileio::pdf::specs());
         v.extend(docsetup::specs());
         v.extend(newdoc::specs());
+        v.extend(place::specs());
         v
     })
 }

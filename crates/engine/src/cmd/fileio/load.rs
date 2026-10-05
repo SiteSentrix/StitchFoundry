@@ -26,6 +26,8 @@ pub struct RasterImage {
     pub blob: ImageBlob,
     pub width: u32,
     pub height: u32,
+    /// The resolution the file declares (see [`super::ppi::resolution`]).
+    pub ppi: Option<(f64, f64)>,
 }
 
 fn err(e: impl std::fmt::Display) -> EngineError {
@@ -33,7 +35,7 @@ fn err(e: impl std::fmt::Display) -> EngineError {
 }
 
 /// The last component of a path or file name.
-fn file_name(name: &str) -> String {
+pub fn file_name(name: &str) -> String {
     std::path::Path::new(name).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string())
 }
 
@@ -116,18 +118,29 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
     Ok(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings }))
 }
 
-pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
+/// A file named by a command's params: `{path}` (read from disk) or `{name, dataBase64}`.
+pub(crate) struct Source<'a> {
+    /// The path, or the given name (default "Untitled"): for the extension and the title.
+    pub name: &'a str,
+    pub bytes: Vec<u8>,
+    pub path: Option<&'a str>,
+}
+
+/// The file `p` names for command `cmd` (see [`Source`]).
+pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
     match (str_param(p, "path"), str_param(p, "dataBase64")) {
-        (Some(path), _) => {
-            let bytes = read_file(path)?;
-            open_bytes(s, path, &bytes, Some(path.to_string()))
-        }
+        (Some(path), _) => Ok(Source { name: path, bytes: read_file(path)?, path: Some(path) }),
         (None, Some(b64)) => {
-            let bytes = vectorcraft_format::base64_decode(b64).ok_or_else(|| bad("document.open", "bad base64"))?;
-            open_bytes(s, str_param(p, "name").unwrap_or("Untitled"), &bytes, None)
+            let bytes = vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad base64"))?;
+            Ok(Source { name: str_param(p, "name").unwrap_or("Untitled"), bytes, path: None })
         }
-        _ => Err(bad("document.open", "give path, or name and dataBase64")),
+        _ => Err(bad(cmd, "give path, or name and dataBase64")),
     }
+}
+
+pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
+    let src = source(p, "document.open")?;
+    open_bytes(s, src.name, &src.bytes, src.path.map(str::to_string))
 }
 
 /// Decode an image's header (and, for formats stored as PNG, its pixels).
@@ -135,6 +148,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
+    let ppi = super::ppi::resolution(bytes);
     let (bytes, mime, (width, height)) = if matches!(f.id, "png" | "jpg" | "gif" | "webp") {
         (bytes.to_vec(), f.mime, reader.into_dimensions().map_err(err)?)
     } else {
@@ -142,18 +156,23 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         let size = img.dimensions();
         let mut png = Vec::new();
         img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).map_err(err)?;
+        // The stored PNG keeps the file's resolution.
+        let png = match ppi {
+            Some(r) => super::ppi::with_png_resolution(&png, r),
+            None => png,
+        };
         (png, "image/png", size)
     };
     if width == 0 || height == 0 {
         return Err(err("the image is empty"));
     }
     let blob = ImageBlob { mime: mime.into(), bytes: Arc::new(bytes) };
-    Ok(RasterImage { key: blob.content_key(), blob, width, height })
+    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi })
 }
 
 /// An image as a document of its pixel size (1 px = 1 pt), the image named after the file.
 fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height } = raster_image(bytes)?;
+    let RasterImage { key, blob, width, height, .. } = raster_image(bytes)?;
     let mut d = Document::new(width as f64, height as f64);
     let layer = d.layers[0].id;
     let id = d.alloc_id();
