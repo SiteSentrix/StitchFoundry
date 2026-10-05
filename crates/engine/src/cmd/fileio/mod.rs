@@ -293,17 +293,30 @@ pub const FORMATS: &[Format] = &[
 pub const OPEN_EXTS: &[&str] =
     &["vectorcraft", "drawcraft", "svg", "svgz", "pdf", "ai", "ait", "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp"];
 
+/// Text files: File → Place sets them as area type (Text Import Options).
+pub const TEXT_EXTS: &[&str] = &["txt"];
+
+/// Every extension File → Place reads: [`OPEN_EXTS`] and [`TEXT_EXTS`].
+pub const PLACE_EXTS: &[&str] =
+    &["vectorcraft", "drawcraft", "svg", "svgz", "pdf", "ai", "ait", "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp", "txt"];
+
+/// One dialog filter per readable format.
+fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions))
+}
+
 /// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
 /// libraries (which open in the library panel) and flattener presets (imported).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    place_filters()
+    std::iter::once(("All readable files", OPEN_EXTS))
+        .chain(format_filters())
         .chain(std::iter::once(("Swatch libraries", super::swatchlib::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", super::flatten::PRESET_EXTS)))
 }
 
-/// File → Place dialog filters: "All readable files", then one per readable format.
+/// File → Place dialog filters: "All placeable files", then one per readable format, then text.
 pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once(("All readable files", OPEN_EXTS)).chain(FORMATS.iter().filter(|f| f.read).map(|f| (f.label, f.extensions)))
+    std::iter::once(("All placeable files", PLACE_EXTS)).chain(format_filters()).chain(std::iter::once(("Text", TEXT_EXTS)))
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`).

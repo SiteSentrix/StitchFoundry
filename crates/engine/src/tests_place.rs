@@ -301,7 +301,7 @@ fn bad_place_params_are_errors() {
     for p in [
         json!({}),
         json!({"name": "x.png", "dataBase64": "%%%"}),
-        json!({"name": "notes.txt", "dataBase64": vectorcraft_format::base64_encode(b"hello")}),
+        json!({"name": "notes.xyz", "dataBase64": vectorcraft_format::base64_encode(b"hello")}),
         json!({"name": "x.png", "dataBase64": ok, "rect": [0, 0, 0, 10]}),
         json!({"name": "x.png", "dataBase64": ok, "at": [1e12, 0]}),
         json!({"name": "x.png", "dataBase64": ok, "page": 0}),

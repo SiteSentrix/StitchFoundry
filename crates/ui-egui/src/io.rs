@@ -319,7 +319,7 @@ mod tests {
         place_bytes(&mut app, "tiny.webp", &webp).unwrap();
         let placed = app.session.doc().unwrap().selection.objects[0];
         assert_eq!(image_size(&app, placed), (3, 2));
-        assert!(place_bytes(&mut app, "x.txt", b"hello").is_err());
+        assert!(place_bytes(&mut app, "x.xyz", b"hello").is_err());
     }
 
     #[test]

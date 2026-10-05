@@ -262,3 +262,8 @@ folder; `ui.dialog.set {field: "discard", value: true}` then confirm ignores it 
 `applyToAll` the rest too. The next missing file is asked about after each answer; `ui.dialog.cancel` stops asking.
 Then, with the preference `updateLinks: "askWhenModified"`, modified linked files are offered for update in a
 `confirm` dialog whose `ui.dialog.confirm` runs `links.update`.
+
+Text Import Options: placing a `.txt` file through the app (`file.place` with a file and no `text` options, the Place
+dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,
+`removeLineReturns`, `removeParagraphReturns`, `replaceSpaces`, `spaces`). `ui.dialog.confirm` places the file as area
+type with those options (`file.place {text: {…}}`).

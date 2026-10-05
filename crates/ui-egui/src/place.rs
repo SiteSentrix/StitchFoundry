@@ -67,9 +67,13 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 // ---------- File → Place… ----------
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
-/// in the view unless `at`, `rect` or `replace` say otherwise; with `paths`, the Place dialog for
-/// them; with neither, pick the files first.
+/// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options
+/// asks for them first); with `paths`, the Place dialog for them; with neither, pick the files
+/// first.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    if p.get("text").is_none() && crate::dialogs::text_import::is_text(p) {
+        return Ok(crate::dialogs::text_import::open(app, p));
+    }
     if p.get("path").is_none() && p.get("dataBase64").is_none() {
         let files: Vec<Value> = match p.get("paths").and_then(Value::as_array) {
             Some(a) => a.iter().filter_map(Value::as_str).map(|path| json!({ "path": path })).collect(),

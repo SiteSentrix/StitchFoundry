@@ -1031,6 +1031,8 @@ mod tests_targeting;
 #[cfg(test)]
 mod tests_textedit;
 #[cfg(test)]
+mod tests_textimport;
+#[cfg(test)]
 mod tests_tileedge;
 #[cfg(test)]
 mod tests_tints;
