@@ -142,7 +142,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "object.envelope.editContents",
             "Edit Contents",
             ["Object", "Envelope Distort"],
-            Some("Cmd+Shift+V"),
+            None,
             "{editing?: bool} toggle Edit Contents / Edit Envelope → {editing}",
             has_envelope,
             env_edit_contents

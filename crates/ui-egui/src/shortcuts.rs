@@ -81,6 +81,15 @@ pub(crate) fn consume(i: &mut egui::InputState, sc: &KeyboardShortcut, native: b
 /// Keys that paste with Cmd, or alone. (Shift+Insert is left out: Ctrl+Insert copies.)
 const PASTE_KEYS: [Key; 2] = [Key::V, Key::Paste];
 
+/// The paste command whose V chord `held` holds (Paste in Place for Cmd+Shift+V by default), else
+/// Paste: egui reports every Cmd+V chord as a paste, never as its key.
+pub(crate) fn paste_command(held: Modifiers) -> &'static str {
+    all_shortcuts()
+        .into_iter()
+        .find(|(sc, id, _)| sc.logical_key == Key::V && id.starts_with("edit.paste") && held.matches_logically(sc.modifiers))
+        .map_or("edit.paste", |(_, id, _)| id)
+}
+
 /// Keyboard pastes of something other than text. egui swallows a paste chord's key press and
 /// sends a Paste event only when the clipboard holds text, so a paste key released without its
 /// press (or a Paste event) reported was a paste of a bitmap or a PDF.
@@ -93,21 +102,26 @@ pub(crate) struct PasteChord {
 }
 
 impl PasteChord {
-    /// Follow one frame's `events` → whether they hold a paste egui sent no event for.
-    fn textless_paste(&mut self, events: &[egui::Event]) -> bool {
-        let mut fire = false;
+    /// Follow one frame's `events` → the modifiers of a paste egui sent no event for (the chord's,
+    /// as its key is released).
+    pub(crate) fn textless_paste(&mut self, events: &[egui::Event]) -> Option<Modifiers> {
+        let mut fire = None;
         for e in events {
             match e {
                 egui::Event::Paste(_) => self.pasted = true,
                 // A release that comes while the window is away is never seen.
                 egui::Event::WindowFocused(false) => *self = Self::default(),
                 egui::Event::Key { key, pressed: true, .. } if PASTE_KEYS.contains(key) && !self.pressed.contains(key) => self.pressed.push(*key),
-                egui::Event::Key { key, pressed: false, .. } if PASTE_KEYS.contains(key) => match self.pressed.iter().position(|k| k == key) {
-                    Some(i) => {
-                        self.pressed.swap_remove(i);
+                egui::Event::Key { key, pressed: false, modifiers, .. } if PASTE_KEYS.contains(key) => {
+                    match self.pressed.iter().position(|k| k == key) {
+                        Some(i) => {
+                            self.pressed.swap_remove(i);
+                        }
+                        // Unless a Paste event came (the guard takes it either way).
+                        None if !std::mem::take(&mut self.pasted) => fire = Some(*modifiers),
+                        None => {}
                     }
-                    None => fire |= !std::mem::take(&mut self.pasted),
-                },
+                }
                 _ => {}
             }
         }
@@ -170,14 +184,16 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         return;
     }
-    // Clipboard keys arrive as events, not key presses (except where the native menu has them).
+    // Clipboard keys arrive as events, not key presses (except where the native menu has them);
+    // the chord held says which paste.
     let mut clip = vec![];
     ctx.input_mut(|i| {
+        let held = i.modifiers;
         i.events.retain(|e| {
             let (id, text) = match e {
                 egui::Event::Copy => ("edit.copy", None),
                 egui::Event::Cut => ("edit.cut", None),
-                egui::Event::Paste(t) => ("edit.paste", Some(t.clone())),
+                egui::Event::Paste(t) => (paste_command(held), Some(t.clone())),
                 _ => return true,
             };
             if app.native_shortcuts.contains(id) {
@@ -188,8 +204,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         })
     });
     // Only the system clipboard service reads what isn't text (the native menu has its own Paste).
-    if textless_paste && app.services.system_clipboard.is_some() && !app.native_shortcuts.contains("edit.paste") {
-        clip.push(("edit.paste", None));
+    if let Some(id) = textless_paste.map(paste_command)
+        && app.services.system_clipboard.is_some()
+        && !app.native_shortcuts.contains(id)
+    {
+        clip.push((id, None));
     }
     for (id, text) in clip {
         app.clipboard_in = text;
