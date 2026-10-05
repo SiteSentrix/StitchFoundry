@@ -57,6 +57,8 @@ const WEIGHT_LABELS: [&str; 3] = ["0.125 pt", "0.25 pt", "0.5 pt"];
 const DOCUMENT_PROFILE: &str = "Document profile";
 /// The Output Intent Profile entry for no output intent (stored as "").
 const NO_PROFILE: &str = "None";
+/// That entry with a PDF/X standard, whose files always have an output intent.
+const PDFX_INTENT: &str = "CMYK profile in effect";
 
 pub(super) const LABEL_WIDTH: f32 = 150.0;
 /// Width of the section list (its frame adds 6 px a side).
@@ -308,18 +310,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         preset_rows(app, ui, d);
     }
     row_with(ui, "Standard:", TOP_LABEL_WIDTH, |ui| {
-        let picked = pick::<Standard>(ui, d, "standard", 170.0, Standard::supported);
+        let picked = pick::<Standard>(ui, d, "standard", 170.0, |_| true);
         let standard = choice::<Standard>(d, "standard").unwrap_or_default();
-        if picked && choice::<Compatibility>(d, "compatibility").is_some_and(|c| !standard.allows(c)) {
-            // The standard's own version (PDF/A-2b is a PDF 1.7 standard).
-            set(d, "compatibility", json!(Compatibility::Pdf17.id()));
-        }
-        if picked && standard != Standard::None {
-            // Files of a standard don't carry the editing data, nor passwords.
-            set(d, "preserveEditing", json!(false));
-            for p in [OPEN_PASSWORD, PERMISSIONS_PASSWORD] {
-                set(d, p, json!(""));
-            }
+        if picked {
+            standard_chosen(d, standard);
         }
         ui.add_space(16.0);
         ui.label(egui::RichText::new("Compatibility:").color(t.text));
@@ -375,6 +369,23 @@ pub(super) fn section_list(ui: &mut egui::Ui, d: &mut Dialog, sections: &[&str],
     }
 }
 
+/// What choosing `standard` changes: the compatibility, to the latest version it allows, and off
+/// what files of a standard can't have (editing data, passwords; layers in PDF/X-1a and PDF/X-3).
+fn standard_chosen(d: &mut Dialog, standard: Standard) {
+    if choice::<Compatibility>(d, "compatibility").is_some_and(|c| !standard.allows(c)) {
+        set(d, "compatibility", json!(standard.version().id()));
+    }
+    if standard != Standard::None {
+        set(d, "preserveEditing", json!(false));
+        for p in [OPEN_PASSWORD, PERMISSIONS_PASSWORD] {
+            set(d, p, json!(""));
+        }
+    }
+    if !standard.allows_layers() {
+        set(d, "createLayers", json!(false));
+    }
+}
+
 /// The Preset row (the presets, built-in and saved, and Save Preset…) and, while Save Preset…
 /// asks for a name, the row taking it.
 fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
@@ -424,12 +435,12 @@ fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
 /// General: the options, then the artboards (Save PDF) or the description (preset editor).
 fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
     heading(ui, "Options");
-    let plain = choice::<Standard>(d, "standard").unwrap_or_default() == Standard::None;
-    flag(ui, d, "preserveEditing", "Preserve editing capabilities", plain);
+    let standard = choice::<Standard>(d, "standard").unwrap_or_default();
+    flag(ui, d, "preserveEditing", "Preserve editing capabilities", standard == Standard::None);
     flag(ui, d, "thumbnails", "Embed page thumbnails", true);
     flag(ui, d, "fastWebView", "Optimize for fast web view", true);
     flag(ui, d, "viewAfterSaving", "View PDF after saving", true);
-    flag(ui, d, "createLayers", "Create PDF layers from top-level layers", true);
+    flag(ui, d, "createLayers", "Create PDF layers from top-level layers", standard.allows_layers());
     flag(ui, d, "includeNonPrinting", "Include non-printing layers", true);
     if editor {
         heading(ui, "Description");
@@ -556,19 +567,28 @@ fn profile_pick(ui: &mut egui::Ui, d: &mut Dialog, path: &str, names: &[&str], e
 fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     let profiles = vectorcraft_color::cms::profiles();
     let names = |blank: &'static str| -> Vec<&str> { std::iter::once(blank).chain(profiles.iter().map(|p| p.name.as_str())).collect() };
+    let standard = choice::<Standard>(d, "standard").unwrap_or_default();
     heading(ui, "Color");
     row(ui, "Color conversion:", |ui| {
         pick::<ColorConversion>(ui, d, "output.conversion", 300.0, |_| true);
     });
-    let converting = get(d, "output.conversion") != ColorConversion::None.id();
+    // PDF/X-1a converts to CMYK even without a conversion.
+    let converting = get(d, "output.conversion") != ColorConversion::None.id() || standard.cmyk_only();
     row(ui, "Destination:", |ui| profile_pick(ui, d, "output.destination", &names(DOCUMENT_PROFILE), converting));
     row(ui, "Profile inclusion:", |ui| {
-        pick::<ProfileInclusion>(ui, d, "output.profiles", 300.0, |_| true);
+        // A standard decides whether colours are tagged.
+        ui.add_enabled_ui(standard == Standard::None, |ui| pick::<ProfileInclusion>(ui, d, "output.profiles", 300.0, |_| true));
     });
+    if standard.cmyk_only() {
+        note(ui, "PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.");
+    } else if standard != Standard::None {
+        note(ui, "Files of this standard tag their colours with ICC profiles.");
+    }
     heading(ui, "Output Intent");
-    // PDF/A files carry their own output intent.
-    let own = choice::<Standard>(d, "standard") != Some(Standard::PdfA2b);
-    row(ui, "Output intent profile:", |ui| profile_pick(ui, d, "output.outputIntent", &names(NO_PROFILE), own));
+    // PDF/A files carry their own output intent; PDF/X files always have one.
+    let own = standard != Standard::PdfA2b;
+    let blank = if standard.is_pdfx() { PDFX_INTENT } else { NO_PROFILE };
+    row(ui, "Output intent profile:", |ui| profile_pick(ui, d, "output.outputIntent", &names(blank), own));
     for (p, label) in [
         ("output.outputCondition", "Output condition:"),
         ("output.outputConditionId", "Condition identifier:"),
@@ -931,5 +951,28 @@ mod tests {
         apply_preset(&mut app, &mut d, pdf::DEFAULT_PRESET);
         assert_eq!(get(&d, OPEN_PASSWORD), &Value::Null, "presets carry no passwords");
         assert_eq!(get(&d, "security.copy"), true);
+    }
+
+    #[test]
+    fn choosing_a_pdfx_standard_sets_its_version_and_writes_the_standard() {
+        let (mut app, written, _) = app();
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "createLayers": true})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        set(d, "standard", json!(Standard::PdfX1a.id()));
+        standard_chosen(d, Standard::PdfX1a);
+        assert_eq!((get(d, "compatibility"), get(d, "createLayers"), get(d, "preserveEditing")), (&json!("1.4"), &json!(false), &json!(false)));
+        for s in SECTIONS {
+            set_field(&mut app, "__section", json!(s));
+            frame(&mut app);
+        }
+        super::super::confirm(&mut app).unwrap();
+        let pdf = String::from_utf8_lossy(&written.borrow()[0].1).into_owned();
+        assert!(pdf.starts_with("%PDF-1.3") && pdf.contains("/GTS_PDFXConformance(PDF/X-1a:2001)") && pdf.contains("/S/GTS_PDFX"));
+        // PDF/X-4 keeps layers and is PDF 1.6.
+        app.run("ui.savePdfDialog", json!({"compatibility": "2.0", "createLayers": true})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        set(d, "standard", json!(Standard::PdfX4.id()));
+        standard_chosen(d, Standard::PdfX4);
+        assert_eq!((get(d, "compatibility"), get(d, "createLayers")), (&json!("1.6"), &json!(true)));
     }
 }

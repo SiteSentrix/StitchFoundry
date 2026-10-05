@@ -21,7 +21,7 @@ pub(crate) struct Xref {
 const MAX_DIGITS: usize = 10;
 
 /// The unsigned number `pdf` holds at `at` (after white space), and where it ends.
-fn number(pdf: &[u8], mut at: usize) -> Option<(usize, usize)> {
+pub(crate) fn number(pdf: &[u8], mut at: usize) -> Option<(usize, usize)> {
     while pdf.get(at).is_some_and(u8::is_ascii_whitespace) {
         at += 1;
     }

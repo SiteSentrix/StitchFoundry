@@ -79,17 +79,17 @@ pub fn builtin_presets() -> Vec<PdfPreset> {
         ),
         preset(
             "PDF/X-1a:2001",
-            "Print exchange with CMYK and spot colours only (PDF/X output is not supported yet).",
+            "Print exchange with CMYK and spot colours only: transparency flattened, fonts embedded.",
             pdf_x(Standard::PdfX1a, Compatibility::Pdf14),
         ),
         preset(
             "PDF/X-3:2002",
-            "Print exchange allowing colour-managed colours (PDF/X output is not supported yet).",
+            "Print exchange allowing colour-managed colours: transparency flattened, fonts embedded.",
             pdf_x(Standard::PdfX3, Compatibility::Pdf14),
         ),
         preset(
             "PDF/X-4:2010",
-            "Print exchange keeping live transparency and layers (PDF/X output is not supported yet).",
+            "Print exchange keeping live transparency and layers, colour-managed colours and embedded fonts.",
             pdf_x(Standard::PdfX4, Compatibility::Pdf16),
         ),
     ]

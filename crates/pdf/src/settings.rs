@@ -69,15 +69,26 @@ choice! {
 }
 
 impl Standard {
-    /// The writer can produce this standard (PDF/X is not supported yet).
-    pub fn supported(self) -> bool {
-        matches!(self, Self::None | Self::PdfA2b)
+    /// A file of this standard can declare PDF version `c`: PDF/A-2 is based on PDF 1.7 (so it
+    /// can't be PDF 2.0), PDF/X-4 on PDF 1.6, and PDF/X-1a and PDF/X-3 on PDF 1.3, which the
+    /// writer writes as 1.4 (the file says 1.3, see [`crate::pdfx`]).
+    pub fn allows(self, c: Compatibility) -> bool {
+        use Compatibility::*;
+        match self {
+            Self::None => true,
+            Self::PdfA2b => c != Pdf20,
+            Self::PdfX1a | Self::PdfX3 => c == Pdf14,
+            Self::PdfX4 => matches!(c, Pdf14 | Pdf15 | Pdf16),
+        }
     }
 
-    /// A file of this standard can declare PDF version `c` (PDF/A-2 is based on PDF 1.7, so it
-    /// can't be PDF 2.0).
-    pub fn allows(self, c: Compatibility) -> bool {
-        !(self == Self::PdfA2b && c == Compatibility::Pdf20)
+    /// The latest PDF version a file of this standard can declare (what choosing it sets).
+    pub fn version(self) -> Compatibility {
+        match self {
+            Self::None | Self::PdfA2b => Compatibility::Pdf17,
+            Self::PdfX1a | Self::PdfX3 => Compatibility::Pdf14,
+            Self::PdfX4 => Compatibility::Pdf16,
+        }
     }
 }
 
@@ -392,26 +403,27 @@ pub(crate) fn within(name: &str, v: f64, lo: f64, hi: f64, unit: &str) -> Result
 }
 
 impl PdfSettings {
-    /// Refuse settings the writer can't honour: an unsupported standard, or what
-    /// [`Self::check_values`] refuses.
+    /// Refuse settings the writer can't honour: what [`Self::check_values`] refuses, a destination
+    /// profile that isn't there, or a PDF/X output intent it can't write ([`crate::pdfx`]).
     pub fn check(&self) -> Result<(), PdfError> {
-        if !self.standard.supported() {
-            return Err(PdfError::Unsupported(format!("{} output is not supported yet", self.standard.label())));
-        }
         crate::output::check(self)?;
+        crate::pdfx::check(self)?;
         self.check_values()
     }
 
-    /// The part of [`Self::check`] a preset must pass (it may name a standard the writer can't
-    /// produce yet): a standard with a PDF version it doesn't allow, PDF/A with editing data, or
-    /// an out-of-range value.
+    /// The part of [`Self::check`] a preset must pass (without the colour settings' profiles): a
+    /// standard with a PDF version it doesn't allow, a standard with editing data, PDF/X-1a or
+    /// PDF/X-3 with PDF layers, or an out-of-range value.
     pub fn check_values(&self) -> Result<(), PdfError> {
         self.security.check(self.standard, self.compatibility)?;
         if !self.standard.allows(self.compatibility) {
             return Err(PdfError::BadSetting(format!("{} files can't be {}", self.standard.label(), self.compatibility.label())));
         }
-        if self.preserve_editing && self.standard == Standard::PdfA2b {
+        if self.preserve_editing && self.standard != Standard::None {
             return Err(PdfError::BadSetting(format!("{} files can't carry editing data: turn off preserveEditing", self.standard.label())));
+        }
+        if self.create_layers && !self.standard.allows_layers() {
+            return Err(PdfError::BadSetting(format!("{} files can't have PDF layers: turn off createLayers", self.standard.label())));
         }
         let c = &self.compression;
         for (name, img) in

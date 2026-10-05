@@ -55,8 +55,9 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         return Err(PdfError::BadArtboard(*bad));
     }
 
-    let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
+    let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.title.clone()));
     let created_at = opts.created.or_else(vectorcraft_doc::metadata::now_unix);
+    crate::pdfx::require_date(set.standard, created_at)?;
     let mut w = Writer::new(doc, set, &title, created_at, doc.color_mode == vectorcraft_doc::ColorMode::Cmyk)?;
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
     let mut warnings = set.warnings();
@@ -284,17 +285,19 @@ impl Writer {
         }
     }
 
-    /// The finished file (with the output intent and Trapped entries) and the warnings of its
-    /// drawing.
+    /// The finished file (with the output intent and Trapped entries, and checked against its
+    /// standard) and the warnings of its drawing. PDF/X-1a spot colours keep their CMYK
+    /// alternates.
     pub(crate) fn finish(mut self) -> Result<(Vec<u8>, Vec<String>), PdfError> {
         let mut bytes = self.pdf.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
         if self.cmyk {
             cmyk_blending(&mut bytes, self.out.tagged);
         }
-        let bytes = if self.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) };
+        let lab = !self.lab_spots.is_empty() && !self.out.standard.cmyk_only();
+        let bytes = if lab { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) } else { bytes };
         let (bytes, more) = self.out.write_catalog(bytes)?;
         self.warnings.extend(more);
-        Ok((bytes, self.warnings))
+        Ok((crate::pdfx::finish(bytes, self.out.standard)?, self.warnings))
     }
 }
 

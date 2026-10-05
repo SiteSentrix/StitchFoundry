@@ -53,7 +53,9 @@ fn passwords_are_never_serialized() {
 fn checks_refuse_what_the_writer_cant_honour() {
     assert_eq!(PdfSettings::default().check(), Ok(()));
     let refused = |v: serde_json::Value| settings(v).check().unwrap_err();
-    assert!(matches!(refused(json!({"standard": "pdfX4"})), PdfError::Unsupported(_)));
+    // PDF/X-4 is a PDF 1.6 standard: the default 1.7 is refused.
+    assert!(matches!(refused(json!({"standard": "pdfX4"})), PdfError::BadSetting(m) if m.contains("PDF 1.7")));
+    assert_eq!(settings(json!({"standard": "pdfX4", "compatibility": "1.6"})).check(), Ok(()));
     // Passwords are written (the file is encrypted); a password with a standard is not.
     assert_eq!(settings(json!({"security": {"openPassword": "x"}})).check(), Ok(()));
     assert_eq!(settings(json!({"security": {"permissionsPassword": "x"}})).check(), Ok(()));
@@ -67,6 +69,7 @@ fn checks_refuse_what_the_writer_cant_honour() {
     assert_eq!(settings(json!({"standard": "pdfA2b", "compatibility": "1.4"})).check(), Ok(()));
     assert!(Compatibility::ALL.iter().all(|c| Standard::None.allows(*c)));
     assert!(export(&doc(), &PdfOptions { settings: settings(json!({"standard": "pdfX1a"})), ..Default::default() }).is_err());
+    assert!(export(&doc(), &PdfOptions { settings: settings(json!({"standard": "pdfX1a", "compatibility": "1.4"})), ..Default::default() }).is_ok());
 }
 
 #[test]

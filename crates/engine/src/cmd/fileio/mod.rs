@@ -902,6 +902,8 @@ mod tests_pdfoutput;
 mod tests_tiffbmp;
 
 #[cfg(test)]
+mod tests_pdfx;
+#[cfg(test)]
 mod tests_psd;
 
 #[cfg(test)]

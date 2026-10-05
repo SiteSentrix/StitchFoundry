@@ -522,8 +522,11 @@ fn compatibility_levels() {
     }
     let a = export(&d, &with(|s| s.standard = Standard::PdfA2b)).unwrap();
     assert!(String::from_utf8_lossy(&a).contains("pdfaid"), "PDF/A identification in XMP");
-    for x in [Standard::PdfX1a, Standard::PdfX3, Standard::PdfX4] {
-        assert!(matches!(export(&d, &with(|s| s.standard = x)), Err(PdfError::Unsupported(_))), "{x:?}");
+    // PDF/X files are PDF 1.3 (PDF/X-1a, PDF/X-3) or at most 1.6 (PDF/X-4): not the default 1.7.
+    for (x, header) in [(Standard::PdfX1a, "%PDF-1.3"), (Standard::PdfX3, "%PDF-1.3"), (Standard::PdfX4, "%PDF-1.6")] {
+        assert!(matches!(export(&d, &with(|s| s.standard = x)), Err(PdfError::BadSetting(_))), "{x:?}");
+        let b = export(&d, &with(|s| (s.standard, s.compatibility) = (x, x.version()))).unwrap();
+        assert!(b.starts_with(header.as_bytes()), "{x:?}");
     }
     // PDF/A-2b is a PDF 1.7 standard.
     let e = export(&d, &with(|s| (s.standard, s.compatibility) = (Standard::PdfA2b, Compatibility::Pdf20)));

@@ -20,6 +20,7 @@
 //! Window → Flattener Preview: the same plan, worked out without rendering, reports what flattening
 //! the document would touch ([`FlattenReport`], `flattener.preview`).
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -129,6 +130,12 @@ pub struct FlattenOptions {
     /// Areas showing a single paint keep it (spot and process colours, swatches) with its
     /// overprint; off, the flattened objects lose their overprints.
     pub preserve_overprints: bool,
+    /// Flattening for files without any transparency (PDF/X-1a, PDF/X-3): images with
+    /// see-through pixels (these keys, [`see_through_images`]) count as transparency, and
+    /// rasterized areas clipped to their regions are opaque. `None` for ordinary flattening. Not a
+    /// preset option.
+    #[serde(skip)]
+    pub no_transparency: Option<BTreeSet<String>>,
 }
 
 impl Default for FlattenOptions {
@@ -175,6 +182,7 @@ impl FlattenOptions {
             anti_alias,
             preserve_alpha: false,
             preserve_overprints: true,
+            no_transparency: None,
         }
     }
 
@@ -220,6 +228,11 @@ impl FlattenOptions {
             return Err("resolutions must be between 1 and 2400 ppi".into());
         }
         Ok(o)
+    }
+
+    /// `n` shows an image whose see-through pixels count as transparency.
+    fn draws_see_through_image(&self, n: &Node) -> bool {
+        self.no_transparency.as_ref().is_some_and(|keys| draws_image(n, keys))
     }
 
     /// Whether a group that splits into `regions` atomic regions is rasterized whole.
@@ -792,7 +805,7 @@ fn plan(src: &Document, roots: &[NodeId], o: &FlattenOptions, render: bool) -> R
     let mut sc = Scratch { brushes: vectorcraft_brush::library(&baked), doc: baked.clone() };
     let plain: Vec<Node> = art.iter().map(|n| sc.plain(n)).collect();
     let reaches: Vec<Option<Rect>> = plain.iter().map(reach).collect();
-    let see_through: Vec<bool> = plain.iter().map(Node::shows_transparency).collect();
+    let see_through: Vec<bool> = plain.iter().map(|n| n.shows_transparency() || o.draws_see_through_image(n)).collect();
     let cmyk = src.color_mode == ColorMode::Cmyk;
     let mut out = Plan { flat: vec![], kept: vec![], transparent: roots.iter().zip(&see_through).filter(|(_, t)| **t).map(|(id, _)| *id).collect() };
     for g in overlapping(&reaches) {
@@ -927,7 +940,13 @@ fn render_raster(doc: &Document, art: &[Node], rect: Rect, ppi: f64, clip: Optio
     );
     let mut r = vectorcraft_render::Renderer::new();
     let mut img = r.render_region(&isolated_doc(doc, art.to_vec()), region, scale, !o.preserve_alpha);
-    if !o.preserve_alpha || !o.anti_alias {
+    if o.no_transparency.is_some() && clip.is_some() && !o.preserve_alpha {
+        // Without transparency the clip alone shapes the image: it is opaque, over white (its
+        // edge pixels too).
+        for p in img.pixels.as_chunks_mut::<4>().0 {
+            p[3] = 255;
+        }
+    } else if !o.preserve_alpha || !o.anti_alias {
         // The art's coverage: drawn opaque, so only its own edges (and soft effects) are partial.
         let cover: Vec<Node> = art
             .iter()
@@ -988,7 +1007,7 @@ fn opaque(n: &mut Node) {
 /// clipping path stays). `None` when that changes nothing.
 pub(crate) fn flatten_document(doc: &Document, o: &FlattenOptions) -> Result<Option<Document>> {
     let outlining = o.text_to_outlines || o.strokes_to_outlines || !o.preserve_overprints;
-    if !outlining && !doc.layers.iter().any(|l| l.shows_transparency()) {
+    if !outlining && !doc.layers.iter().any(|l| l.shows_transparency() || o.draws_see_through_image(l)) {
         return Ok(None);
     }
     let mut roots = vec![];
@@ -1195,6 +1214,25 @@ fn carry(from: &Node, mut to: Node) -> Node {
     to.mask = from.mask.clone();
     to.appearance.effects = from.appearance.effects.clone();
     to
+}
+
+/// The keys of `doc`'s images that have see-through pixels (an alpha channel that isn't opaque
+/// everywhere).
+pub(crate) fn see_through_images(doc: &Document) -> BTreeSet<String> {
+    let see_through = |b: &ImageBlob| {
+        b.mime != "image/jpeg" && image::load_from_memory(&b.bytes).is_ok_and(|i| i.color().has_alpha() && i.to_rgba8().pixels().any(|p| p[3] < 255))
+    };
+    doc.images.iter().filter(|(_, b)| see_through(b)).map(|(k, _)| k.clone()).collect()
+}
+
+/// `n` shows an image of `keys` (itself or inside).
+fn draws_image(n: &Node, keys: &BTreeSet<String>) -> bool {
+    !keys.is_empty()
+        && n.visible
+        && match &n.kind {
+            NodeKind::Image(im) => keys.contains(&im.key),
+            _ => n.children().is_some_and(|ch| ch.iter().any(|c| draws_image(c, keys))),
+        }
 }
 
 fn visible_fx(fx: &[Effect]) -> bool {

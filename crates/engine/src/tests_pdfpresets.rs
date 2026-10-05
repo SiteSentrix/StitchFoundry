@@ -37,7 +37,7 @@ fn built_in_presets_are_listed_and_read_only() {
     for n in ["High Quality Print", "Press Quality", "Smallest File Size", "PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4:2010"] {
         assert_eq!(row(n)["builtIn"], true);
     }
-    assert_eq!(row("PDF/X-4:2010")["supported"], false, "PDF/X is not written yet");
+    assert!(rows.iter().all(|r| r["supported"] == true), "every built-in standard is written");
     assert_eq!(row(DEFAULT_PRESET)["settings"]["preserveEditing"], true);
     // Read-only: neither changed nor deleted, in any case.
     assert!(is_bad_params(s.execute("pdf.preset.save", &json!({"name": "press quality", "compatibility": "1.4"}))));
@@ -47,7 +47,8 @@ fn built_in_presets_are_listed_and_read_only() {
     // Built-in presets apply as named.
     let v = s.execute("document.pdfSettings", &json!({"preset": "Smallest File Size"})).unwrap();
     assert_eq!((&v["settings"]["fastWebView"], &v["changed"]), (&json!(true), &json!([])), "{v}");
-    assert!(is_bad_params(s.execute("document.exportPdf", &json!({"preset": "PDF/X-4:2010"}))), "PDF/X is refused on export");
+    let pdf = s.execute("document.exportPdf", &json!({"preset": "PDF/X-4:2010"})).unwrap();
+    assert!(pdf["dataBase64"].is_string(), "PDF/X is written");
 }
 
 #[test]

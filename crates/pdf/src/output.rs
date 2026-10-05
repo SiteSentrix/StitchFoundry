@@ -12,11 +12,14 @@
 //!   document that was assigned profiles, colours are written in ICC-based colour spaces: CMYK
 //!   with the CMYK profile in effect (the destination when converting to CMYK, else the
 //!   document's), RGB with sRGB (colours of another RGB space as their sRGB equivalents) and grey
-//!   with the sRGB tone curve. Otherwise they are device colours. PDF/A always tags them.
+//!   with the sRGB tone curve. Otherwise they are device colours. PDF/A, PDF/X-3 and PDF/X-4
+//!   always tag them; PDF/X-1a never does, and always converts to a CMYK destination (see
+//!   [`crate::pdfx`]).
 //! - Output intent: the profile `outputIntent` names, embedded as the `/GTS_PDFX` output intent
 //!   of the catalog with the condition, identifier and registry; Trapped goes in the document
 //!   information (`/False` when an output intent is written untrapped). PDF/A files carry their
-//!   own output intent: neither is written there.
+//!   own output intent: neither is written there. PDF/X files always have one: blank, the CMYK
+//!   profile in effect.
 
 use std::sync::{Arc, OnceLock};
 
@@ -58,6 +61,8 @@ pub(crate) struct ColorOut {
     intent: Intent,
     /// The output intent and Trapped entries to write.
     catalog: Option<Catalog>,
+    /// The standard the file conforms to.
+    pub standard: Standard,
 }
 
 /// An output intent dictionary's entries.
@@ -85,20 +90,34 @@ impl Default for ColorOut {
         let source = cms::active();
         let cmyk_profile = source.settings().cmyk.clone();
         let intent = source.settings().intent;
-        Self { source, dest: None, tagged: false, cmyk_profile, srgb_note: None, pixels: OnceLock::new(), intent, catalog: None }
+        Self {
+            source,
+            dest: None,
+            tagged: false,
+            cmyk_profile,
+            srgb_note: None,
+            pixels: OnceLock::new(),
+            intent,
+            catalog: None,
+            standard: Standard::None,
+        }
     }
 }
 
 /// The profile of `set`'s destination and its colour model; `None` without conversion. A blank
-/// destination is the profile of a document in colour mode `mode`.
+/// destination is the profile of a document in colour mode `mode`. PDF/X-1a files always convert,
+/// to a CMYK destination: blank, their output intent's profile ([`crate::pdfx::cmyk_destination`]).
 fn destination(set: &PdfSettings, mode: ColorMode, source: &Cms) -> Result<Option<(String, Model)>, PdfError> {
     let o = &set.output;
-    if o.conversion == ColorConversion::None {
+    let cmyk_only = set.standard.cmyk_only();
+    if o.conversion == ColorConversion::None && !cmyk_only {
         return Ok(None);
     }
     let name = o.destination.trim();
+    let fallback = if cmyk_only { crate::pdfx::cmyk_destination(set, source) } else { String::new() };
     let name = match (name.is_empty(), mode) {
         (false, _) => name,
+        (true, _) if cmyk_only => fallback.as_str(),
         (true, ColorMode::Cmyk) => source.settings().cmyk.as_str(),
         (true, ColorMode::Rgb) => source.settings().rgb.as_str(),
     };
@@ -109,6 +128,9 @@ fn destination(set: &PdfSettings, mode: ColorMode, source: &Cms) -> Result<Optio
         ProfileKind::Cmyk => Model::Cmyk,
         ProfileKind::Gray => return Err(unknown()),
     };
+    if cmyk_only && model != Model::Cmyk {
+        return Err(PdfError::BadSetting(format!("output.destination: {} files are CMYK, and “{name}” is an RGB profile", set.standard.label())));
+    }
     Ok(Some((info.name, model)))
 }
 
@@ -136,7 +158,8 @@ pub(crate) fn warnings(set: &PdfSettings) -> Vec<String> {
     if !name.is_empty() && cms::profile(name).is_none() {
         out.push(format!("no profile is called “{name}”: the output intent names it without embedding it"));
     }
-    if !asks && (!o.output_condition.trim().is_empty() || !o.registry.trim().is_empty()) {
+    // PDF/X files always have an output intent.
+    if !asks && !set.standard.is_pdfx() && (!o.output_condition.trim().is_empty() || !o.registry.trim().is_empty()) {
         out.push("an output intent needs a profile or a condition identifier: the output condition and registry are left out".into());
     }
     out
@@ -155,18 +178,20 @@ impl ColorOut {
                 _ => std::mem::replace(&mut settings.rgb, name.clone()),
             };
             let cms = Cms::new(&settings).map_err(|e| PdfError::BadSetting(format!("output.destination: {e}")))?;
-            let keep = set.output.conversion == ColorConversion::PreserveNumbers || cms::canonical_name(&own) == name;
+            // PDF/X-1a converts without being asked: as Preserve Numbers does.
+            let keep = set.output.conversion != ColorConversion::Destination || cms::canonical_name(&own) == name;
             if model == Model::Cmyk {
                 out.cmyk_profile = name.clone();
             }
             out.dest = Some(Dest { srgb: name == cms::SRGB, cms, model, keep });
         }
-        out.tagged = set.standard == Standard::PdfA2b
-            || match set.output.profiles {
-                ProfileInclusion::None => false,
-                ProfileInclusion::All | ProfileInclusion::Destination => true,
-                ProfileInclusion::TaggedSource => !doc.color_profiles.is_empty(),
-            };
+        out.tagged = matches!(set.standard, Standard::PdfA2b | Standard::PdfX3 | Standard::PdfX4)
+            || (!set.standard.cmyk_only()
+                && match set.output.profiles {
+                    ProfileInclusion::None => false,
+                    ProfileInclusion::All | ProfileInclusion::Destination => true,
+                    ProfileInclusion::TaggedSource => !doc.color_profiles.is_empty(),
+                });
         let rgb = match &out.dest {
             Some(d) if d.model == Model::Rgb => (d.srgb, d.cms.settings().rgb.clone()),
             _ => (source.rgb_is_srgb(), st.rgb.clone()),
@@ -174,7 +199,8 @@ impl ColorOut {
         if out.tagged && !rgb.0 {
             out.srgb_note = Some(format!("RGB colours are tagged with the sRGB profile: those of {} are written as their sRGB equivalents", rgb.1));
         }
-        out.catalog = catalog(set);
+        out.catalog = catalog(set, &out.cmyk_profile);
+        out.standard = set.standard;
         Ok(out)
     }
 
@@ -250,16 +276,17 @@ impl ColorOut {
             .as_ref()
     }
 
-    /// `pdf` with the output intent and Trapped entries → (the file, warnings).
+    /// `pdf` with the output intent and Trapped entries, and a PDF/X file's identification
+    /// ([`crate::pdfx`]) → (the file, warnings).
     pub(crate) fn write_catalog(&self, pdf: Vec<u8>) -> Result<(Vec<u8>, Vec<String>), PdfError> {
         let Some(cat) = &self.catalog else { return Ok((pdf, vec![])) };
         let xref = Xref::read(&pdf).ok_or_else(|| PdfError::Write("the written PDF has no cross-reference table".into()))?;
         let mut patch = Patch::new(&xref);
         let mut warnings = vec![];
+        let root = xref.trailer_ref(&pdf, b"/Root").and_then(|n| xref.dict(&pdf, n));
+        let Some(root) = root else { return Err(PdfError::Write("the written PDF has no catalog".into())) };
         if let Some(OutputIntent { id, condition, registry, info, profile }) = &cat.intent {
-            let root = xref.trailer_ref(&pdf, b"/Root").and_then(|n| xref.dict(&pdf, n));
-            let Some((root, root_end)) = root else { return Err(PdfError::Write("the written PDF has no catalog".into())) };
-            if crate::lab_spot::find(pdf.get(root..root_end).unwrap_or_default(), b"/OutputIntents", 0).is_some() {
+            if crate::lab_spot::find(pdf.get(root.0..root.1).unwrap_or_default(), b"/OutputIntents", 0).is_some() {
                 warnings.push("the file has an output intent already: the one asked for is left out".into());
             } else {
                 let mut dict = format!("<</Type/OutputIntent/S/GTS_PDFX/OutputConditionIdentifier{}", text_string(id));
@@ -278,22 +305,26 @@ impl ColorOut {
                 }
                 dict.push_str(">>");
                 let oi = patch.add_object(dict.into_bytes());
-                patch.replace(root, root, format!("/OutputIntents[{oi} 0 R]").into_bytes());
+                patch.replace(root.0, root.0, format!("/OutputIntents[{oi} 0 R]").into_bytes());
             }
         }
-        if let Some(trapped) = cat.trapped {
-            let entry = if trapped { "/Trapped/True" } else { "/Trapped/False" };
-            match xref.trailer_ref(&pdf, b"/Info").and_then(|n| xref.dict(&pdf, n)) {
-                Some((info, end)) if crate::lab_spot::find(pdf.get(info..end).unwrap_or_default(), b"/Trapped", 0).is_none() => {
-                    patch.replace(info, info, entry.as_bytes().to_vec());
-                }
-                Some(_) => {}
-                None => {
-                    let n = patch.add_object(format!("<<{entry}>>").into_bytes());
-                    patch.trailer_entry(format!("/Info {n} 0 R").as_bytes());
-                }
+        let info = xref.trailer_ref(&pdf, b"/Info").and_then(|n| xref.dict(&pdf, n));
+        let mut entries = String::new();
+        if let Some(trapped) = cat.trapped
+            && info.is_none_or(|(s, e)| crate::lab_spot::find(pdf.get(s..e).unwrap_or_default(), b"/Trapped", 0).is_none())
+        {
+            entries.push_str(if trapped { "/Trapped/True" } else { "/Trapped/False" });
+        }
+        entries.push_str(&crate::pdfx::info_entries(self.standard));
+        match info {
+            _ if entries.is_empty() => {}
+            Some((at, _)) => patch.replace(at, at, entries.into_bytes()),
+            None => {
+                let n = patch.add_object(format!("<<{entries}>>").into_bytes());
+                patch.trailer_entry(format!("/Info {n} 0 R").as_bytes());
             }
         }
+        crate::pdfx::xmp(&pdf, &xref, root, &mut patch, self.standard, cat.trapped == Some(true))?;
         Ok((patch.apply(&pdf, &xref)?, warnings))
     }
 }
@@ -323,13 +354,17 @@ impl Dest {
     }
 }
 
-/// The catalog entries `set` asks for (none in PDF/A files, see [`warnings`]).
-fn catalog(set: &PdfSettings) -> Option<Catalog> {
+/// The catalog entries `set` asks for (none in PDF/A files, see [`warnings`]); a PDF/X file's
+/// output intent profile is `cmyk_profile` (the CMYK profile in effect) unless `set` names one.
+fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
     let o = &set.output;
     if set.standard == Standard::PdfA2b {
         return None;
     }
-    let (name, id) = (o.output_intent.trim(), o.output_condition_id.trim());
+    let (mut name, id) = (o.output_intent.trim(), o.output_condition_id.trim());
+    if name.is_empty() && set.standard.is_pdfx() {
+        name = cmyk_profile;
+    }
     let intent = (!name.is_empty() || !id.is_empty()).then(|| {
         let profile = cms::profile(name).and_then(|p| match p.kind {
             ProfileKind::Rgb => Some((p.name, 3)),
