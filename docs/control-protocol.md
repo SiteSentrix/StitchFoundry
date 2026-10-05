@@ -365,3 +365,8 @@ artboards' files.
 EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or `"wmf"`); they have no options
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
 Place read `.emf` and `.wmf`; a paste of `image/emf` from a system clipboard service runs `clipboard.importEmf`.
+
+TIFF Options: Export As… with the TIFF format (`file.exportAs {format: "tiff"}`, then the save dialog) opens
+`tiffOptions`: the raster rows of PNG Options (`ppi`, `background`, `antiAlias`), then `colorModel` (`rgb`, `cmyk`,
+`gray`; a CMYK document starts on `cmyk`), `byteOrder` (`little`, `big`), `lzw` and `embedIcc`. `ui.dialog.set` the
+fields and `ui.dialog.confirm` writes the file(s) with `document.export`.

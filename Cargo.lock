@@ -4307,6 +4307,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-geom",
+ "vectorcraft-render",
  "vectorcraft-testkit",
  "vectorcraft-text",
 ]
@@ -4419,6 +4420,7 @@ dependencies = [
  "log",
  "proptest",
  "serde_json",
+ "tiff",
  "vectorcraft-brush",
  "vectorcraft-color",
  "vectorcraft-doc",
@@ -4428,6 +4430,7 @@ dependencies = [
  "vectorcraft-text",
  "vello_common 0.2.0",
  "vello_cpu 0.2.0",
+ "weezl",
 ]
 
 [[package]]

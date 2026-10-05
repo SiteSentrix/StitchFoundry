@@ -11,6 +11,7 @@ use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
+use vectorcraft_render::encode::tiff::{ByteOrder, TiffOptions};
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::super::*;
@@ -162,6 +163,8 @@ struct RasterOptions {
     transparency: Option<bool>,
     matte: Option<Value>,
     lossless: Option<bool>,
+    lzw: Option<bool>,
+    byte_order: Option<String>,
 }
 
 impl RasterOptions {
@@ -172,6 +175,8 @@ impl RasterOptions {
             return Err(bad(C, format!("ppi must be a positive number, not {ppi}")));
         }
         let ppi = self.ppi.unwrap_or(72.0 * self.scale.unwrap_or(1.0));
+        let color_model = parse(self.color_model.as_deref(), jpeg::ColorModel::from_id, "colorModel", "rgb, cmyk or gray")?;
+        let embed_icc = self.embed_icc.unwrap_or(true);
         Ok(RasterExportOptions {
             ppi: (ppi / 72.0).clamp(0.01, 64.0) * 72.0,
             background: match &self.background {
@@ -182,10 +187,10 @@ impl RasterOptions {
             interlaced: self.interlaced.unwrap_or(false),
             quality: self.quality.unwrap_or(90).min(100),
             jpeg: JpegOptions {
-                color_model: parse(self.color_model.as_deref(), jpeg::ColorModel::from_id, "colorModel", "rgb, cmyk or gray")?,
+                color_model,
                 method: parse(self.method.as_deref(), jpeg::Method::from_id, "method", "baseline, optimized or progressive")?,
                 scans: self.scans.unwrap_or(3).clamp(*jpeg::SCANS.start(), *jpeg::SCANS.end()),
-                embed_icc: self.embed_icc.unwrap_or(true),
+                embed_icc,
             },
             palette: PaletteOptions {
                 colors: self.colors.unwrap_or(256).clamp(2, 256),
@@ -202,6 +207,12 @@ impl RasterOptions {
                     Some(v) => background(v).map_err(|e| bad(C, format!("matte: {e}")))?,
                     None => Some([255; 3]),
                 },
+            },
+            tiff: TiffOptions {
+                color_model,
+                lzw: self.lzw.unwrap_or(true),
+                byte_order: parse(self.byte_order.as_deref(), ByteOrder::from_id, "byteOrder", "little or big")?,
+                embed_icc,
             },
         })
     }
@@ -331,7 +342,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });
         }
-        "png" | "jpg" | "webp" | "gif" | "png8" => {
+        "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" => {
             let o: RasterOptions = options(f, p)?;
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
@@ -343,6 +354,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
                 "jpg" => RasterFormat::Jpeg,
                 "gif" => RasterFormat::Gif,
                 "png8" => RasterFormat::Png8,
+                "tiff" => RasterFormat::Tiff,
                 _ => RasterFormat::WebP,
             };
             // Use Artboards: one file per chosen artboard (default all); else the one chosen.

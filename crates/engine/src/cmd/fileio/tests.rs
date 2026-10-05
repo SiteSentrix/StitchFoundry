@@ -156,7 +156,7 @@ fn formats_query_lists_readers_writers_and_options() {
     let ids = |k: &str| r[k].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect::<Vec<_>>();
     assert_eq!(
         ids("writable"),
-        ["vectorcraft", "svg", "svgz", "pdf", "png", "jpg", "gif", "webp", "template", "png8", "txt", "dxf", "eps", "emf", "wmf"]
+        ["vectorcraft", "svg", "svgz", "pdf", "png", "jpg", "gif", "webp", "tiff", "template", "png8", "txt", "dxf", "eps", "emf", "wmf"]
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();

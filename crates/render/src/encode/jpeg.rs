@@ -56,7 +56,7 @@ impl ColorModel {
     }
 
     /// The profile that describes these pixels.
-    fn profile(self) -> String {
+    pub(crate) fn profile(self) -> String {
         match self {
             ColorModel::Rgb => cms::SRGB.into(),
             ColorModel::Cmyk => cms::active_settings().cmyk,
@@ -169,13 +169,17 @@ pub(crate) fn screen_pixels(img: &Rendered, gray: bool) -> Vec<u8> {
     if !gray {
         return rgb.flatten().collect();
     }
+    rgb.map(to_gray()).collect()
+}
+
+/// A colour's grey: its relative luminance (sRGB primaries) encoded with sRGB's curve, so a grey
+/// keeps its value.
+pub(crate) fn to_gray() -> impl Fn([u8; 3]) -> u8 {
     let linear: [f32; 256] = std::array::from_fn(|v| lab::srgb_to_linear(v as f32 / 255.0));
-    // Relative luminance (sRGB primaries), encoded with sRGB's curve: a grey keeps its value.
-    rgb.map(|[r, g, b]| {
+    move |[r, g, b]| {
         let y = 0.2126 * linear[r as usize] + 0.7152 * linear[g as usize] + 0.0722 * linear[b as usize];
         (lab::linear_to_srgb(y).clamp(0.0, 1.0) * 255.0).round() as u8
-    })
-    .collect()
+    }
 }
 
 /// `img` flattened on white with each colour separated into the working CMYK space (ink amounts).
