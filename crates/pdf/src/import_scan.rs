@@ -1,10 +1,14 @@
-//! What the interpreter doesn't tell the import, read from the file itself: the isolate and
-//! knockout flags of transparency groups, and the names of the fonts.
+//! What the interpreter doesn't tell the import, read from the file itself: the optional content
+//! groups (layers) with their states, which group each marked-content sequence belongs to, the
+//! isolate and knockout flags of transparency groups, and the names of the fonts.
 //!
-//! hayro-interpret reports a transparency group without its flags. So each page's content is
+//! hayro-interpret reports a marked-content sequence by its tag alone and a transparency group
+//! without its flags, and skips the content of groups that are off. So each page's content is
 //! walked here in the interpreter's order (page content, then form XObjects as they are drawn,
-//! skipping what it skips, such as optional content that is off): the k-th form transparency
-//! group it reports is the k-th group found here.
+//! skipping what it skips): the k-th `BDC`/`BMC` it reports is the k-th one found here (its tag
+//! checks that), and the k-th form transparency group is the k-th group found here. To import
+//! content that is off as hidden layers, [`all_on`] gives the file an update that turns every
+//! group on.
 
 use std::collections::{HashMap, HashSet};
 
@@ -12,7 +16,7 @@ use hayro_interpret::CacheKey;
 use hayro_syntax::Pdf;
 use hayro_syntax::content::TypedIter;
 use hayro_syntax::content::ops::TypedInstruction;
-use hayro_syntax::object::{Array, Dict, Name, Object, ObjectIdentifier, dict_or_stream};
+use hayro_syntax::object::{Array, Dict, FromBytes, Name, Object, ObjectIdentifier, dict_or_stream};
 use hayro_syntax::page::{Page, Resources};
 
 /// The interpreter's limit on nested form XObjects.
@@ -22,9 +26,22 @@ const MAX_OPS: usize = 2_000_000;
 /// The most groups read.
 const MAX_GROUPS: usize = 10_000;
 
+/// An optional content group: a layer.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Ocg {
+    pub name: String,
+    /// On in the file's default configuration (shown by viewers).
+    pub on: bool,
+    /// Printed (its print usage isn't off).
+    pub print: bool,
+    pub locked: bool,
+}
+
 /// The file's optional content groups.
 #[derive(Default)]
 pub(crate) struct Ocgs {
+    pub list: Vec<Ocg>,
+    index: HashMap<ObjectIdentifier, usize>,
     /// The groups that are off (as the interpreter decides it).
     off: HashSet<ObjectIdentifier>,
 }
@@ -43,34 +60,101 @@ impl Ocgs {
                 .map(|a| a.raw_iter().filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).take(MAX_GROUPS).collect())
                 .unwrap_or_default()
         };
+        let all = refs(&props, b"OCGs");
         if config.get::<Name<'_>>(b"BaseState").is_some_and(|n| n.as_ref() == b"OFF") {
-            o.off.extend(refs(&props, b"OCGs"));
+            o.off.extend(all.iter().copied());
         }
         for id in refs(&config, b"ON") {
             o.off.remove(&id);
         }
         o.off.extend(refs(&config, b"OFF"));
+        let locked: HashSet<_> = refs(&config, b"Locked").into_iter().collect();
+        for id in all {
+            if let Some(d) = xref.get::<Dict<'_>>(id) {
+                o.add(id, &d, locked.contains(&id));
+            }
+        }
         o
     }
+
+    /// Note group `id` (its dictionary `d`) → its index.
+    fn add(&mut self, id: ObjectIdentifier, d: &Dict<'_>, locked: bool) -> usize {
+        if let Some(i) = self.index.get(&id) {
+            return *i;
+        }
+        let name = d.get::<hayro_syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
+        let print = d
+            .get::<Dict<'_>>(b"Usage")
+            .and_then(|u| u.get::<Dict<'_>>(b"Print"))
+            .and_then(|p| p.get::<Name<'_>>(b"PrintState"))
+            .is_none_or(|s| s.as_ref() != b"OFF");
+        let on = !self.off.contains(&id);
+        self.list.push(Ocg { name: if name.is_empty() { format!("Layer {}", self.list.len() + 1) } else { name }, on, print, locked });
+        self.index.insert(id, self.list.len() - 1);
+        self.list.len() - 1
+    }
+
+    /// Is any group off?
+    pub fn any_off(&self) -> bool {
+        self.list.iter().any(|g| !g.on)
+    }
+
+    /// The group content marked with `/OC` (`d`: the group or membership dictionary, `id` its
+    /// object) belongs to: a membership dictionary's first group.
+    fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &hayro_syntax::xref::XRef) -> Option<usize> {
+        if d.get::<Name<'_>>(b"Type").is_some_and(|t| t.as_ref() == b"OCMD") {
+            let first = d.get::<Array<'_>>(b"OCGs").and_then(|a| a.raw_iter().find_map(|i| i.as_obj_ref())).or_else(|| d.get_ref(b"OCGs"))?;
+            let id = ObjectIdentifier::from(first);
+            return self.note(id, &xref.get::<Dict<'_>>(id)?);
+        }
+        self.note(id, d)
+    }
+
+    /// The index of group `id` (dictionary `d`), noted if new (up to [`MAX_GROUPS`]).
+    fn note(&mut self, id: ObjectIdentifier, d: &Dict<'_>) -> Option<usize> {
+        match self.index.get(&id) {
+            Some(i) => Some(*i),
+            None => (self.list.len() < MAX_GROUPS).then(|| self.add(id, d, false)),
+        }
+    }
+}
+
+/// A PDF text string: UTF-16 (with its byte order mark), UTF-8 (with one) or PDFDocEncoding
+/// (read as Latin-1, which it matches for letters).
+pub(crate) fn text_string(b: &[u8]) -> String {
+    if let Some(rest) = b.strip_prefix(&[0xFE, 0xFF]) {
+        let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes(*c)).collect();
+        return String::from_utf16_lossy(&units);
+    }
+    if let Some(rest) = b.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        return String::from_utf8_lossy(rest).into_owned();
+    }
+    b.iter().map(|&c| c as char).collect()
 }
 
 /// One page as the interpreter walks it.
 #[derive(Default)]
 pub(crate) struct Scan {
+    /// Each marked-content sequence: its tag and the group (index into [`Ocgs::list`]) it marks.
+    pub tags: Vec<(Vec<u8>, Option<usize>)>,
     /// Each form transparency group: isolated, knockout.
     pub groups: Vec<(bool, bool)>,
 }
 
-struct Walker<'w> {
-    /// The groups that are off for the interpreter.
-    off: &'w HashSet<ObjectIdentifier>,
+struct Walker<'w, 'p> {
+    ocgs: &'w mut Ocgs,
+    /// The groups that are off for the interpreter (none once [`all_on`] turned them on).
+    off: HashSet<ObjectIdentifier>,
+    xref: &'p hayro_syntax::xref::XRef,
     fonts: &'w mut HashMap<u128, String>,
     visible: Vec<bool>,
     ops: usize,
     out: Scan,
+    /// A form XObject hidden by its own optional content was met.
+    hidden_form: bool,
 }
 
-impl Walker<'_> {
+impl Walker<'_, '_> {
     fn is_visible(&self) -> bool {
         self.visible.last().copied().unwrap_or(true)
     }
@@ -130,12 +214,23 @@ impl Walker<'_> {
                         o => dict_or_stream(o)
                             .and_then(|(props, _)| props.get_ref(b"OC").map(|r| (props.get::<Dict<'_>>(b"OC").unwrap_or_default(), r))),
                     };
-                    match oc {
-                        Some((d, r)) => self.begin_oc(&d, Some(ObjectIdentifier::from(r))),
-                        None => self.begin(true),
-                    }
+                    let group = match oc {
+                        Some((d, r)) => {
+                            let id = ObjectIdentifier::from(r);
+                            self.begin_oc(&d, Some(id));
+                            self.ocgs.group_of(&d, id, self.xref)
+                        }
+                        None => {
+                            self.begin(true);
+                            None
+                        }
+                    };
+                    self.out.tags.push((bdc.0.to_vec(), group));
                 }
-                TypedInstruction::BeginMarkedContent(_) => self.begin(true),
+                TypedInstruction::BeginMarkedContent(bmc) => {
+                    self.begin(true);
+                    self.out.tags.push((bmc.0.to_vec(), None));
+                }
                 TypedInstruction::EndMarkedContent(_) => {
                     self.visible.pop();
                 }
@@ -152,6 +247,7 @@ impl Walker<'_> {
                     let oc = d.get::<Dict<'_>>(b"OC");
                     if let Some(oc) = &oc {
                         self.begin_oc(oc, d.get_ref(b"OC").map(ObjectIdentifier::from));
+                        self.hidden_form |= !self.is_visible();
                     }
                     if self.is_visible() {
                         if let Some(g) = d.get::<Dict<'_>>(b"Group")
@@ -172,10 +268,64 @@ impl Walker<'_> {
     }
 }
 
-/// Walk `page` as the interpreter will. Fonts found are noted in `fonts` (their cache key → base
-/// font name).
-pub(crate) fn scan_page(page: &Page<'_>, ocgs: &Ocgs, fonts: &mut HashMap<u128, String>) -> Scan {
-    let mut w = Walker { off: &ocgs.off, fonts, visible: vec![], ops: 0, out: Scan::default() };
+/// Walk `page` as the interpreter will: `all_on` when [`all_on`] turned every group on. Fonts
+/// found are noted in `fonts` (their cache key → base font name).
+pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &mut HashMap<u128, String>) -> Scan {
+    walk_page(page, ocgs, all_on, fonts).out
+}
+
+fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &'w mut HashMap<u128, String>) -> Walker<'w, 'p> {
+    let off = if all_on { HashSet::new() } else { ocgs.off.clone() };
+    let mut w = Walker { ocgs, off, xref: page.xref(), fonts, visible: vec![], ops: 0, out: Scan::default(), hidden_form: false };
     w.walk(page.typed_operations(), page.resources(), 0);
-    w.out
+    w
+}
+
+/// Does `page` draw a form XObject that is off by its own optional content (not a marked-content
+/// sequence)? Its art couldn't be told apart by group once every group is on.
+pub(crate) fn hides_forms(page: &Page<'_>, ocgs: &mut Ocgs) -> bool {
+    walk_page(page, ocgs, false, &mut HashMap::new()).hidden_form
+}
+
+/// `bytes` with an update appended that drops the catalog's `/OCProperties`, so every group
+/// draws; `None` when the file's structure can't take one.
+pub(crate) fn all_on(bytes: &[u8], pdf: &Pdf) -> Option<Vec<u8>> {
+    let root = pdf.xref().root_id();
+    let catalog = pdf.xref().get::<Dict<'_>>(root)?;
+    let body = catalog.data().strip_suffix(b">>")?;
+    let prev = last_xref(bytes)?;
+    let trailer = trailer_at(bytes, prev)?;
+    let inner = trailer.strip_prefix(b"<<")?.strip_suffix(b">>")?;
+    let mut out = bytes.to_vec();
+    if !out.ends_with(b"\n") {
+        out.push(b'\n');
+    }
+    let at = out.len();
+    out.extend(format!("{} {} obj\n", root.obj_number, root.gen_number).bytes());
+    out.extend_from_slice(body);
+    // A later key wins: the groups' configuration is gone, so the interpreter draws them all.
+    out.extend_from_slice(b" /OCProperties null >>\nendobj\n");
+    let xref = out.len();
+    out.extend(format!("xref\n{} 1\n{at:010} {:05} n \ntrailer\n<<", root.obj_number, root.gen_number).bytes());
+    out.extend_from_slice(inner);
+    out.extend(format!(" /Prev {prev} >>\nstartxref\n{xref}\n%%EOF\n").bytes());
+    Some(out)
+}
+
+/// The offset the file's last `startxref` points to.
+fn last_xref(bytes: &[u8]) -> Option<usize> {
+    let at = bytes.windows(9).rposition(|w| w == b"startxref")?;
+    let rest = bytes.get(at + 9..)?;
+    let digits: String = rest.iter().skip_while(|c| c.is_ascii_whitespace()).take_while(|c| c.is_ascii_digit()).map(|&c| c as char).collect();
+    digits.parse().ok().filter(|&p: &usize| p < bytes.len())
+}
+
+/// The trailer dictionary of the cross-reference section at `at` (a table's `trailer`, or a
+/// cross-reference stream's dictionary), as written.
+fn trailer_at(bytes: &[u8], at: usize) -> Option<&[u8]> {
+    let rest = bytes.get(at..)?;
+    let from = if rest.trim_ascii_start().starts_with(b"xref") { rest.windows(7).position(|w| w == b"trailer")? } else { 0 };
+    let open = from + rest.get(from..)?.windows(2).position(|w| w == b"<<")?;
+    let d = Dict::from_bytes(rest.get(open..)?)?;
+    Some(d.data())
 }

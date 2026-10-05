@@ -21,7 +21,7 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec};
-use crate::import_scan::{Ocgs, Scan, scan_page};
+use crate::import_scan::{Ocgs, Scan, all_on, hides_forms, scan_page};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
 use crate::import_text::{Families, Look, Placement, TextLine};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
@@ -38,12 +38,35 @@ pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
     import_with_report(bytes, &ImportOptions::default()).map(|r| r.document)
 }
 
+/// A layer of the imported document, in paint order.
+enum Slot {
+    /// A page's art outside optional content groups.
+    Page(Box<Node>),
+    /// An optional content group (index into [`Ocgs::list`]).
+    Group(usize),
+}
+
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
-    let pdf = crate::pages::open(bytes, opts.password.as_deref())?;
+    let original = crate::pages::open(bytes, opts.password.as_deref())?;
+    let picked = crate::pages::picked(opts, original.pages().len())?;
+    let mut ocgs = Ocgs::read(&original);
+    let route = opts.layers && !ocgs.list.is_empty();
+    // Content that is off imports as hidden layers: an update of the file turns every group on
+    // (unless a form is hidden by its own group: its art couldn't be told apart).
+    let hide = route && ocgs.any_off();
+    let turned_on = (hide && !picked.iter().filter_map(|&n| original.pages().get(n)).any(|p| hides_forms(p, &mut ocgs)))
+        .then(|| all_on(bytes, &original))
+        .flatten()
+        .and_then(|b| crate::pages::open(&b, opts.password.as_deref()).ok())
+        .filter(|p| Ocgs::read(p).list.is_empty());
+    let mut notes = vec![];
+    if hide && turned_on.is_none() {
+        notes.push("the art of hidden layers couldn't be read and was left out".to_string());
+    }
+    let all_on = turned_on.is_some();
+    let pdf = turned_on.unwrap_or(original);
     let pages = pdf.pages();
-    let picked = crate::pages::picked(opts, pages.len())?;
-    let ocgs = Ocgs::read(&pdf);
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink2 = sink.clone();
@@ -68,12 +91,15 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     doc.artboards.clear();
     doc.layers.clear();
     let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
-    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken.clone()), opts.text_as);
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken.clone()), opts.text_as, route);
     b.taken = taken;
+    b.warnings = notes;
     let cache = InterpreterCache::new();
     let mut x = 0.0;
     // Every page only a placeholder (text) over private data: the file's art isn't in its PDF part.
     let mut placeholder = true;
+    let mut slots: Vec<Slot> = vec![];
+    let mut group_art: HashMap<usize, Vec<Arc<Node>>> = HashMap::new();
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
         // The chosen box sits at (x, 0); the page draws round it.
@@ -82,10 +108,11 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         let xf = Affine::translate((x - frame.x0, -frame.y0)) * init;
         let mut ctx = Context::new(xf, ab, &cache, pdf.xref(), settings.clone());
         b.page = ab;
-        let scan = scan_page(page, &ocgs, &mut b.fonts);
+        let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts);
         b.begin_page(scan);
         interpret_page(page, &mut ctx, &mut b);
-        let children = b.end_page();
+        let parts = b.end_page();
+        let children: Vec<Arc<Node>> = parts.iter().flat_map(|(_, v)| v.iter().cloned()).collect();
         placeholder &= crate::pages::has_private_data(page) && only_text(&children);
         let mut right = ab.x1;
         if opts.crop == CropTo::Bounding
@@ -102,14 +129,47 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             show_center_mark: false,
             show_cross_hairs: false,
         });
-        let mut layer = Node::layer(b.id(), &format!("Page {}", number + 1), LayerColor::Preset((i % 27) as u8));
-        if let NodeKind::Layer { children: c, .. } = &mut layer.kind {
-            *c = children;
+        let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>| {
+            let mut layer = Node::layer(b.id(), &format!("Page {}", number + 1), LayerColor::Preset((i % 27) as u8));
+            if let NodeKind::Layer { children: c, .. } = &mut layer.kind {
+                *c = art;
+            }
+            Slot::Page(Box::new(layer))
+        };
+        if parts.is_empty() {
+            slots.push(page_layer(&mut b, vec![]));
         }
-        doc.layers.push(Arc::new(layer));
+        for (key, art) in parts {
+            match key {
+                None => slots.push(page_layer(&mut b, art)),
+                Some(g) => {
+                    let into = group_art.entry(g).or_insert_with(|| {
+                        slots.push(Slot::Group(g));
+                        vec![]
+                    });
+                    into.extend(art);
+                }
+            }
+        }
     }
     if placeholder {
         return Err(PdfError::PlaceholderOnly);
+    }
+    for (n, slot) in slots.into_iter().enumerate() {
+        let layer = match slot {
+            Slot::Page(l) => *l,
+            Slot::Group(g) => {
+                let Some(ocg) = ocgs.list.get(g) else { continue };
+                let mut l = Node::layer(b.id(), &ocg.name, LayerColor::Preset((n % 27) as u8));
+                (l.visible, l.locked) = (ocg.on, ocg.locked);
+                if let NodeKind::Layer { children, printable, .. } = &mut l.kind {
+                    *children = group_art.remove(&g).unwrap_or_default();
+                    *printable = ocg.print;
+                }
+                l
+            }
+        };
+        doc.layers.push(Arc::new(layer));
     }
     for (k, blob) in b.images.drain() {
         doc.images.insert(k, blob);
@@ -193,11 +253,13 @@ enum FrameKind {
 struct Frame {
     kind: FrameKind,
     children: Vec<Arc<Node>>,
+    /// The first optional content group entered inside (where the frame's art goes).
+    group: Option<usize>,
 }
 
 impl Frame {
     fn new(kind: FrameKind) -> Self {
-        Self { kind, children: vec![] }
+        Self { kind, children: vec![], group: None }
     }
 }
 
@@ -217,6 +279,7 @@ type PatternReadings = (u32, Vec<(Vec<Paint>, String)>);
 /// Builder state a nested interpretation (soft mask, pattern cell) starts afresh and gives back.
 struct Saved {
     stack: Vec<Frame>,
+    root_groups: Vec<Option<usize>>,
     blend: BlendMode,
     mask: Option<Arc<MaskSpec>>,
     page: Rect,
@@ -227,6 +290,8 @@ struct Builder<'p> {
     colors: Colors<'p>,
     next: u64,
     stack: Vec<Frame>,
+    /// The optional content group of each child of the root frame.
+    root_groups: Vec<Option<usize>>,
     blend: BlendMode,
     page: Rect,
     glyphs: Option<GlyphRun>,
@@ -249,9 +314,15 @@ struct Builder<'p> {
     pattern_keys: HashMap<(u128, bool), PatternReadings>,
     /// Swatch names in use.
     taken: Vec<String>,
-    /// The page as walked by [`scan_page`], and how far the interpreter is through its groups.
+    /// The page as walked by [`scan_page`], and how far the interpreter is through it.
     scan: Scan,
+    tag_at: usize,
     group_at: usize,
+    aligned: bool,
+    /// Whether optional content groups become layers.
+    route: bool,
+    /// The marked-content sequences open: the group each marks.
+    marked: Vec<Option<usize>>,
     /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
     pending: bool,
     nested: u32,
@@ -329,11 +400,12 @@ fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
 }
 
 impl<'p> Builder<'p> {
-    fn new(next: u64, colors: Colors<'p>, text_as: TextAs) -> Self {
+    fn new(next: u64, colors: Colors<'p>, text_as: TextAs, route: bool) -> Self {
         Self {
             colors,
             next,
             stack: vec![],
+            root_groups: vec![],
             blend: BlendMode::Normal,
             page: Rect::ZERO,
             glyphs: None,
@@ -353,7 +425,11 @@ impl<'p> Builder<'p> {
             pattern_keys: HashMap::new(),
             taken: vec![],
             scan: Scan::default(),
+            tag_at: 0,
             group_at: 0,
+            aligned: true,
+            route,
+            marked: vec![],
             pending: false,
             nested: 0,
         }
@@ -390,18 +466,29 @@ impl<'p> Builder<'p> {
 
     fn begin_page(&mut self, scan: Scan) {
         self.stack = vec![Frame::new(FrameKind::Root)];
+        self.root_groups.clear();
         self.blend = BlendMode::Normal;
         self.glyphs = None;
         self.text = None;
         self.mask = None;
         self.masked.clear();
+        self.marked.clear();
         self.pending = false;
-        (self.scan, self.group_at) = (scan, 0);
+        (self.scan, self.tag_at, self.group_at, self.aligned) = (scan, 0, 0, true);
     }
 
-    /// The page's art.
-    fn end_page(&mut self) -> Vec<Arc<Node>> {
-        self.close_frames()
+    /// The page's art, split by optional content group (in the order they first paint).
+    fn end_page(&mut self) -> Vec<(Option<usize>, Vec<Arc<Node>>)> {
+        let children = self.close_frames();
+        let groups = std::mem::take(&mut self.root_groups);
+        let mut parts: Vec<(Option<usize>, Vec<Arc<Node>>)> = vec![];
+        for (n, g) in children.into_iter().zip(groups.into_iter().chain(std::iter::repeat(None))) {
+            match parts.iter_mut().find(|(k, _)| *k == g) {
+                Some((_, v)) => v.push(n),
+                None => parts.push((g, vec![n])),
+            }
+        }
+        parts
     }
 
     /// Finish the open runs and frames → the root frame's children.
@@ -413,10 +500,22 @@ impl<'p> Builder<'p> {
         self.stack.pop().map(|f| f.children).unwrap_or_default()
     }
 
-    /// Add `n` to the open frame.
-    fn emit(&mut self, n: Arc<Node>) {
-        if let Some(f) = self.stack.last_mut() {
-            f.children.push(n);
+    /// The group art drawn now belongs to (the innermost marked as one).
+    fn current_group(&self) -> Option<usize> {
+        self.marked.iter().rev().find_map(|g| *g)
+    }
+
+    /// Add `n` to the open frame; `group`: the optional content group it was drawn in, if it
+    /// knows one (else the current one).
+    fn emit(&mut self, n: Arc<Node>, group: Option<usize>) {
+        let root = self.stack.len() == 1;
+        let current = self.current_group();
+        let Some(f) = self.stack.last_mut() else { return };
+        f.children.push(n);
+        if root {
+            self.root_groups.push(group.or(current));
+        } else if f.group.is_none() {
+            f.group = group;
         }
     }
 
@@ -427,7 +526,7 @@ impl<'p> Builder<'p> {
         if self.mask.is_some() {
             self.masked.push(Arc::new(n));
         } else {
-            self.emit(Arc::new(n));
+            self.emit(Arc::new(n), None);
         }
     }
 
@@ -445,7 +544,7 @@ impl<'p> Builder<'p> {
         }
         let art = std::mem::take(&mut self.masked);
         let Some(spec) = self.mask.clone() else {
-            art.into_iter().for_each(|n| self.emit(n));
+            art.into_iter().for_each(|n| self.emit(n, None));
             return;
         };
         match spec.as_ref() {
@@ -453,7 +552,7 @@ impl<'p> Builder<'p> {
             MaskSpec::Opacity(a) => {
                 for mut n in art {
                     Arc::make_mut(&mut n).opacity *= a;
-                    self.emit(n);
+                    self.emit(n, None);
                 }
             }
             MaskSpec::Mask(m) => {
@@ -473,7 +572,7 @@ impl<'p> Builder<'p> {
                         g
                     }
                 };
-                self.emit(Arc::new(node));
+                self.emit(Arc::new(node), None);
             }
         }
     }
@@ -490,10 +589,11 @@ impl<'p> Builder<'p> {
             return;
         }
         let Some(f) = self.stack.pop() else { return };
+        let group = f.group;
         let node = match f.kind {
             FrameKind::Root => None,
             FrameKind::Skip => {
-                f.children.into_iter().for_each(|c| self.emit(c));
+                f.children.into_iter().for_each(|c| self.emit(c, group));
                 None
             }
             FrameKind::Clip(clip) => {
@@ -502,7 +602,7 @@ impl<'p> Builder<'p> {
                     None
                 } else if noop.is_some_and(|r| bounds(&f.children).is_some_and(|b| contains(r, b))) {
                     // A rectangle around all of its art (a form's box) clips nothing.
-                    f.children.into_iter().for_each(|c| self.emit(c));
+                    f.children.into_iter().for_each(|c| self.emit(c, group));
                     None
                 } else {
                     let mut ch = vec![Arc::new(*clip)];
@@ -525,7 +625,7 @@ impl<'p> Builder<'p> {
                 if children.is_empty() {
                     None
                 } else if plain {
-                    children.into_iter().for_each(|c| self.emit(c));
+                    children.into_iter().for_each(|c| self.emit(c, group));
                     None
                 } else if let [only] = children.as_slice()
                     && !only.is_container()
@@ -556,7 +656,7 @@ impl<'p> Builder<'p> {
             }
         };
         if let Some(n) = node {
-            self.emit(Arc::new(n));
+            self.emit(Arc::new(n), group);
         }
     }
 
@@ -623,6 +723,7 @@ impl<'p> Builder<'p> {
         self.flush();
         let saved = Saved {
             stack: std::mem::replace(&mut self.stack, vec![Frame::new(FrameKind::Root)]),
+            root_groups: std::mem::take(&mut self.root_groups),
             blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
             mask: self.mask.take(),
             page: std::mem::replace(&mut self.page, page),
@@ -632,7 +733,8 @@ impl<'p> Builder<'p> {
         read(self);
         let art = self.close_frames();
         self.nested -= 1;
-        (self.stack, self.blend, self.mask, self.page, self.pending) = (saved.stack, saved.blend, saved.mask, saved.page, saved.pending);
+        (self.stack, self.root_groups, self.blend, self.mask, self.page, self.pending) =
+            (saved.stack, saved.root_groups, saved.blend, saved.mask, saved.page, saved.pending);
         Some(art)
     }
 
@@ -1079,5 +1181,40 @@ impl<'a> Device<'a> for Builder<'_> {
         self.flush();
         self.pending = false;
         self.pop_frame();
+    }
+
+    fn begin_marked_content(&mut self, tag: &[u8], _mcid: Option<i32>) {
+        if self.nested > 0 {
+            return;
+        }
+        self.flush();
+        let at = self.tag_at;
+        self.tag_at += 1;
+        let group = match self.scan.tags.get(at) {
+            Some((t, g)) if self.aligned && t.as_slice() == tag => *g,
+            _ => {
+                if self.route && self.aligned {
+                    self.aligned = false;
+                    self.warn("some art couldn't be told apart by layer and went to its page's layer");
+                }
+                None
+            }
+        }
+        .filter(|_| self.route);
+        if let Some(g) = group
+            && self.stack.len() > 1
+            && let Some(f) = self.stack.last_mut()
+        {
+            f.group.get_or_insert(g);
+        }
+        self.marked.push(group);
+    }
+
+    fn end_marked_content(&mut self) {
+        if self.nested > 0 {
+            return;
+        }
+        self.flush();
+        self.marked.pop();
     }
 }

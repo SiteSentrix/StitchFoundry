@@ -1,8 +1,9 @@
-//! `document.open` PDF option `textAs`.
+//! `document.open` PDF options `textAs` and `layers`.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::NodeKind;
 use vectorcraft_pdf::TextAs;
-use vectorcraft_testkit::pdf::{PdfPage, pdf};
+use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf, pdf_with_catalog};
 
 use super::*;
 
@@ -38,9 +39,31 @@ fn text_opens_as_type_or_outlines() {
 }
 
 #[test]
-fn load_options_read_text() {
-    let o = LoadOptions::from_params("x", &json!({"textAs": "Outlines"})).unwrap();
-    assert_eq!(o.text_as, TextAs::Outlines);
-    assert!(!o.is_partial());
-    assert_eq!(LoadOptions::default().text_as, TextAs::Text);
+fn layers_option_keeps_or_flattens_optional_content() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let catalog = format!("/OCProperties << /OCGs [{a} 0 R {b} 0 R] /D << /OFF [{b} 0 R] >> >> ");
+    let page = PdfPage {
+        resources: format!("/Properties << /A {a} 0 R /B {b} 0 R >>"),
+        ..PdfPage::new(100.0, 100.0, "/OC /A BDC 0 g 0 0 10 10 re f EMC /OC /B BDC 0 g 20 20 10 10 re f EMC")
+    };
+    let bytes = pdf_with_catalog(&[page], &["<< /Type /OCG /Name (Ink) >>", "<< /Type /OCG /Name (Notes) >>"], &catalog, None);
+    let mut s = Session::new();
+    open(&mut s, &bytes, json!({})).unwrap();
+    let layers: Vec<(String, bool)> = s.active().unwrap().doc.layers.iter().map(|l| (l.name.clone().unwrap_or_default(), l.visible)).collect();
+    assert_eq!(layers, [("Ink".to_string(), true), ("Notes".to_string(), false)]);
+    open(&mut s, &bytes, json!({"layers": false})).unwrap();
+    let doc = &s.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 1);
+    assert_eq!(doc.layers[0].children().unwrap().len(), 1, "the hidden art is left out");
+    assert!(matches!(doc.layers[0].kind, NodeKind::Layer { .. }));
+    assert!(open(&mut s, &bytes, json!({"layers": "no"})).unwrap_err().to_string().contains("layers must be true or false"));
+}
+
+#[test]
+fn load_options_read_text_and_layers() {
+    let o = LoadOptions::from_params("x", &json!({"textAs": "Outlines", "layers": false})).unwrap();
+    assert_eq!((o.text_as, o.layers), (TextAs::Outlines, false));
+    assert!(o.is_partial(), "without its hidden layers, Save doesn't write the file back");
+    let d = LoadOptions::default();
+    assert_eq!((d.text_as, d.layers, d.is_partial()), (TextAs::Text, true, false));
 }

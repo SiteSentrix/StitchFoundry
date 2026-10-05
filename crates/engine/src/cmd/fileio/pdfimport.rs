@@ -9,9 +9,9 @@ use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError, TextAs};
 use super::super::*;
 use super::{err, source};
 
-/// The `document.open` options besides the file. The PDF ones (pages, box, password, text) are
-/// ignored by other formats.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// The `document.open` options besides the file. The PDF ones (pages, box, password, text,
+/// layers) are ignored by other formats.
+#[derive(Clone, Debug, PartialEq)]
 pub struct LoadOptions {
     /// 1-based pages to import, such as `"2-3, 5"`; `None` = every page.
     pub pages: Option<String>,
@@ -24,12 +24,21 @@ pub struct LoadOptions {
     pub color_mode: Option<ColorMode>,
     /// What a PDF's text becomes.
     pub text_as: TextAs,
+    /// A PDF's optional content groups become layers (else one layer per page, without the art
+    /// that is off).
+    pub layers: bool,
+}
+
+impl Default for LoadOptions {
+    fn default() -> Self {
+        Self { pages: None, crop: CropTo::default(), password: None, color_mode: None, text_as: TextAs::default(), layers: true }
+    }
 }
 
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
-    /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) and
-    /// `textAs` (`text` | `outlines`).
+    /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`),
+    /// `textAs` (`text` | `outlines`) and `layers` (true | false).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
             None => None,
@@ -47,13 +56,18 @@ impl LoadOptions {
             Some(m) => return Err(bad(cmd, format!("colorMode must be rgb or cmyk, not `{m}`"))),
         };
         let text_as = choice(cmd, "textAs", str_param(p, "textAs"))?;
-        Ok(Self { pages, crop, password, color_mode, text_as })
+        let layers = match p.get("layers").filter(|v| !v.is_null()) {
+            None => true,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "layers must be true or false"))?,
+        };
+        Ok(Self { pages, crop, password, color_mode, text_as, layers })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
-    /// box, a password)? Writing it back would lose the rest, so Save doesn't (it asks for a name).
+    /// box, a password, without its hidden layers)? Writing it back would lose the rest, so Save
+    /// doesn't (it asks for a name).
     pub fn is_partial(&self) -> bool {
-        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some()
+        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers
     }
 
     /// The PDF import options: `pages` resolved against the file's page count.
@@ -65,7 +79,14 @@ impl LoadOptions {
                 Some(parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?)
             }
         };
-        Ok(ImportOptions { pages, crop: self.crop, password: self.password.clone(), text_as: self.text_as, ..Default::default() })
+        Ok(ImportOptions {
+            pages,
+            crop: self.crop,
+            password: self.password.clone(),
+            text_as: self.text_as,
+            layers: self.layers,
+            ..Default::default()
+        })
     }
 }
 
@@ -86,10 +107,17 @@ pub(super) fn import(bytes: &[u8], o: &LoadOptions) -> Result<(Document, Vec<Str
     Ok((r.document, r.warnings))
 }
 
-/// Page `page` (0-based) of a PDF as a document of one artboard (its `o.crop` box), its text as
-/// outlines (it looks as printed), and the import notes.
+/// Page `page` (0-based) of a PDF as a document of one artboard (its `o.crop` box) and one
+/// layer of what it shows (text as outlines: it looks as printed), and the import notes.
 pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
-    let opts = ImportOptions { pages: Some(vec![page]), crop: o.crop, password: o.password.clone(), text_as: TextAs::Outlines, ..Default::default() };
+    let opts = ImportOptions {
+        pages: Some(vec![page]),
+        crop: o.crop,
+        password: o.password.clone(),
+        text_as: TextAs::Outlines,
+        layers: false,
+        ..Default::default()
+    };
     vectorcraft_pdf::import_with_report(bytes, &opts).map(|r| (r.document, r.warnings)).map_err(err)
 }
 

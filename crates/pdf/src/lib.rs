@@ -11,7 +11,9 @@
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
 //!   Editing the native document rides along as an embedded file ([`editing()`]).
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
-//!   [`Document`]: one artboard and one layer per page, paths with fill/stroke, clip groups, transparency groups (with isolation and knockout), soft
+//!   [`Document`]: one artboard per page, and a layer per page or per optional content group
+//!   (with its visibility, print state and lock; art that is off comes in as a hidden layer),
+//!   paths with fill/stroke, clip groups, transparency groups (with isolation and knockout), soft
 //!   masks → opacity masks, axial/radial shadings → gradients (stop opacity and unextended ends
 //!   kept), mesh shadings → gradient meshes, tiling patterns → pattern swatches, images (JPEG
 //!   passthrough, others re-encoded as PNG) and text as point type (or glyph outlines, see
@@ -84,11 +86,14 @@ pub struct ImportOptions {
     pub password: Option<String>,
     /// What text becomes.
     pub text_as: TextAs,
+    /// Optional content groups become layers (else each page is one layer, without the art
+    /// that is off).
+    pub layers: bool,
 }
 
 impl Default for ImportOptions {
     fn default() -> Self {
-        Self { max_pages: None, artboard_gap: 36.0, pages: None, crop: CropTo::default(), password: None, text_as: TextAs::default() }
+        Self { max_pages: None, artboard_gap: 36.0, pages: None, crop: CropTo::default(), password: None, text_as: TextAs::default(), layers: true }
     }
 }
 
@@ -187,6 +192,8 @@ mod tests_fx;
 mod tests_import_color;
 #[cfg(test)]
 mod tests_import_fidelity;
+#[cfg(test)]
+mod tests_import_layers;
 #[cfg(test)]
 mod tests_import_options;
 #[cfg(test)]
