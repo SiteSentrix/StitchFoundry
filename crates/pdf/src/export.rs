@@ -1,5 +1,6 @@
 //! Document → PDF (krilla). Mirrors the tree walk of `vectorcraft-render`.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -13,11 +14,14 @@ use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
 use krilla::surface::Surface;
+use krilla::text::{GlyphId, KrillaGlyph};
 use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
 use vectorcraft_doc::{AppearanceItem, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, TextObject};
 use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
+use vectorcraft_text::TextLayout;
+use vectorcraft_text::embed::Embedding;
 
 use crate::lab_spot::{find, rfind};
 use crate::marks::PageBoxes;
@@ -423,6 +427,11 @@ pub(crate) struct Exporter<'a> {
     pub out: Arc<ColorOut>,
     /// Colours are converted to the destination (printer's marks aren't).
     convert: bool,
+    /// Text as glyph outlines; else the characters' fills are real text in embedded fonts.
+    outline_text: bool,
+    /// The fonts real text is written in, by face id, with their units per em; `None` for faces
+    /// that can't be embedded.
+    fonts: HashMap<u32, Option<(krilla::text::Font, f64)>>,
 }
 
 impl<'a> Exporter<'a> {
@@ -443,6 +452,8 @@ impl<'a> Exporter<'a> {
             transparent: None,
             out: Arc::default(),
             convert: true,
+            outline_text: set.advanced.outline_text,
+            fonts: HashMap::new(),
         }
     }
 
@@ -451,6 +462,18 @@ impl<'a> Exporter<'a> {
         let doc = self.doc;
         *self.transparent.get_or_insert_with(|| doc.layers.iter().any(|l| l.shows_transparency()))
     }
+}
+
+/// Glyphs written together as real text: the same font at the same size along one baseline.
+struct GlyphLine {
+    face: u32,
+    font: krilla::text::Font,
+    size: f64,
+    /// The glyph space (krilla's, y down, at `size`) → text space, at the line's start.
+    frame: Affine,
+    /// Glyph id, pen position and advance along the line (in glyph space), and the characters it
+    /// stands for (bytes of the plain text).
+    glyphs: Vec<(u32, f64, f64, std::ops::Range<usize>)>,
 }
 
 /// Most pixels along a side of a freeform gradient's image (its colour field is smooth).
@@ -645,6 +668,12 @@ impl Exporter<'_> {
 
     /// Convert a paint. `bounds` resolves unset gradient geometry (like the renderer).
     fn paint(&mut self, p: &Paint, bounds: Rect) -> Option<krilla::paint::Paint> {
+        self.paint_in(p, bounds, Affine::IDENTITY)
+    }
+
+    /// [`Self::paint`] drawn in another space: `space` maps the paint's space (where `bounds`
+    /// is) to the one drawn in.
+    fn paint_in(&mut self, p: &Paint, bounds: Rect, space: Affine) -> Option<krilla::paint::Paint> {
         match p {
             Paint::None => None,
             Paint::Solid { color: c, swatch, tint } => Some(self.solid(c, swatch.as_deref(), *tint).into()),
@@ -690,7 +719,7 @@ impl Exporter<'_> {
                                 y1: s.y as f32,
                                 x2: e.x as f32,
                                 y2: e.y as f32,
-                                transform: Transform::identity(),
+                                transform: xf(space),
                                 spread_method: SpreadMethod::Pad,
                                 stops,
                                 anti_alias: false,
@@ -712,7 +741,7 @@ impl Exporter<'_> {
                                 cx,
                                 cy,
                                 cr: r,
-                                transform: xf(t),
+                                transform: xf(space * t),
                                 spread_method: SpreadMethod::Pad,
                                 stops,
                                 anti_alias: false,
@@ -1194,21 +1223,31 @@ impl Exporter<'_> {
             self.text_items(s, below, bp, path, page, tb);
         }
         s.push_transform(&xf(t.xf));
+        // Real text: the characters' fills as text in embedded fonts.
+        let plain = (!self.outline_text).then(|| t.plain_text());
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
             for g in layout.glyphs.iter().filter(|g| g.run == i) {
                 bp.extend(g.outline.iter());
             }
-            let Some(path) = to_path(&bp) else { continue };
+            let fill = &run.style.fill;
+            // The outlines left to fill as paths: all of them, or those real text leaves.
+            let outlines = match plain.as_deref().filter(|_| !fill.is_none() && !self.area_paint(fill)) {
+                Some(text) => Cow::Owned(self.glyph_text(s, &layout, i, text, fill)),
+                None => Cow::Borrowed(&bp),
+            };
             let opaque = (1.0, BlendMode::Normal);
-            if !self.area(s, &path, krilla::paint::FillRule::NonZero, &run.style.fill, opaque, layout.bounds, bp.bounding_box())
-                && let Some(paint) = self.paint(&run.style.fill, layout.bounds)
+            if let Some(path) = to_path(&outlines)
+                && !self.area(s, &path, krilla::paint::FillRule::NonZero, fill, opaque, layout.bounds, outlines.bounding_box())
+                && let Some(paint) = self.paint(fill, layout.bounds)
             {
                 s.set_stroke(None);
                 s.set_fill(Some(Fill { paint, opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
                 s.draw_path(&path);
             }
-            if run.style.has_stroke() {
+            if run.style.has_stroke()
+                && let Some(path) = to_path(&bp)
+            {
                 // Character strokes are drawn in text space, with their cap, join and dashes.
                 self.stroke(s, &bp, &path, FillRule::NonZero, &run.style.stroke_layer(), page, layout.bounds);
             }
@@ -1242,6 +1281,118 @@ impl Exporter<'_> {
         }
         s.set_fill(None);
         s.set_stroke(None);
+    }
+
+    /// Fill the glyphs of run `run` of `layout` with `fill` as text in their fonts, embedded (in
+    /// text space; `text` is the plain text, whose characters the glyphs stand for, which makes
+    /// the text selectable and searchable) → the outlines of the glyphs left to draw as paths:
+    /// those of fonts that can't be embedded, and missing glyphs. Glyphs sharing a font, a frame
+    /// (size, scale, rotation) and a baseline are written together.
+    fn glyph_text(&mut self, s: &mut Surface, layout: &TextLayout, run: usize, text: &str, fill: &Paint) -> BezPath {
+        let mut rest = BezPath::new();
+        let mut line: Option<GlyphLine> = None;
+        for g in layout.glyphs.iter().filter(|g| g.run == run) {
+            let range = g.byte..g.byte + g.len;
+            let ch = text.get(range.clone()).and_then(|t| t.chars().next());
+            // Spaces are written too (text extraction needs them); control characters and soft
+            // hyphens draw nothing.
+            let blank = g.outline.elements().is_empty();
+            if blank && !ch.is_some_and(|c| c.is_whitespace() && !c.is_control()) {
+                continue;
+            }
+            // The glyph at the font size of its vertical scale: `frame` maps that size's glyph
+            // space (y down, krilla's) to text space.
+            let [a, b, c, d, ..] = g.xf.as_coeffs();
+            let (sx, sy) = (a.hypot(b), c.hypot(d));
+            let font = if g.gid != 0 && ch.is_some() { self.font(g.font_id) } else { None };
+            let det = g.xf.determinant();
+            let Some((font, upem)) = font.filter(|(_, upem)| det.is_finite() && det.abs() > 1e-9 && (1e-3..=1e5).contains(&(upem * sy))) else {
+                rest.extend(g.outline.iter());
+                continue;
+            };
+            let size = upem * sy;
+            let frame = g.xf * Affine::scale(1.0 / sy);
+            // Its pen position along the frame's baseline, when it continues the line.
+            let x = line.as_ref().filter(|l| l.face == g.font_id && (l.size - size).abs() < 1e-6).and_then(|l| {
+                let [a, b, c, d, e, f] = (l.frame.inverse() * frame).as_coeffs();
+                let same = (a - 1.0).abs() < 1e-6 && b.abs() < 1e-6 && c.abs() < 1e-6 && (d - 1.0).abs() < 1e-6 && f.abs() < 1e-4;
+                same.then_some(e)
+            });
+            let x = match x {
+                Some(x) => x,
+                None => {
+                    if let Some(l) = line.take() {
+                        self.draw_glyph_line(s, l, text, fill, layout.bounds);
+                    }
+                    line = Some(GlyphLine { face: g.font_id, font, size, frame, glyphs: vec![] });
+                    0.0
+                }
+            };
+            // The glyph's advance in frame units (the last one's ends the line).
+            let advance = g.advance * sy / sx;
+            if let Some(l) = line.as_mut() {
+                l.glyphs.push((g.gid, x, advance, range));
+            }
+        }
+        if let Some(l) = line {
+            self.draw_glyph_line(s, l, text, fill, layout.bounds);
+        }
+        rest
+    }
+
+    /// Draw glyphs `line` (of `text`), filled with `fill` (whose space is text space, where
+    /// `bounds` is).
+    fn draw_glyph_line(&mut self, s: &mut Surface, line: GlyphLine, text: &str, fill: &Paint, bounds: Rect) {
+        let Some(paint) = self.paint_in(fill, bounds, line.frame.inverse()) else { return };
+        let size = line.size;
+        let glyphs: Vec<KrillaGlyph> = line
+            .glyphs
+            .iter()
+            .enumerate()
+            .map(|(i, (gid, x, advance, range))| {
+                let next = line.glyphs.get(i + 1).map_or(x + advance, |n| n.1);
+                KrillaGlyph::new(GlyphId::new(*gid), ((next - x) / size) as f32, 0.0, 0.0, 0.0, range.clone(), None)
+            })
+            .collect();
+        s.push_transform(&xf(line.frame));
+        s.set_stroke(None);
+        s.set_fill(Some(Fill { paint, opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+        s.draw_glyphs(krilla::geom::Point::from_xy(0.0, 0.0), &glyphs, line.font, text, size as f32, false);
+        s.pop();
+    }
+
+    /// The font of face `id` for real text and its units per em; `None` (with a warning) when its
+    /// licence doesn't allow embedding it as a subset, or it can't be read.
+    fn font(&mut self, id: u32) -> Option<(krilla::text::Font, f64)> {
+        if let Some(f) = self.fonts.get(&id) {
+            return f.clone();
+        }
+        let Some(face) = vectorcraft_text::FontDb::global().face_by_id(id) else {
+            self.fonts.insert(id, None);
+            return None;
+        };
+        let name = format!("{} {}", face.family, face.style);
+        let font = match face.embedding() {
+            Embedding::Subset => {
+                let font = krilla::text::Font::new(face.file_data().to_vec().into(), face.face_index()).map(|f| (f, face.units_per_em()));
+                if font.is_none() {
+                    self.warn(format!("the font “{name}” can't be embedded: its text is exported as outlines"));
+                }
+                font
+            }
+            Embedding::Whole => {
+                self.warn(format!(
+                    "the font “{name}” may only be embedded whole, and fonts are embedded as subsets: its text is exported as outlines"
+                ));
+                None
+            }
+            Embedding::Forbidden => {
+                self.warn(format!("the licence of the font “{name}” doesn't allow embedding: its text is exported as outlines"));
+                None
+            }
+        };
+        self.fonts.insert(id, font.clone());
+        font
     }
 
     /// Image `key` placed `size` points wide and high, resampled and compressed as the Compression

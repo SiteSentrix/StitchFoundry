@@ -36,19 +36,32 @@ impl Ctx<'_> {
 
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
         let src = self.db.outline(&g.face, g.gid);
+        let local = Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
+        let m = pre * local;
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
             BezPath::new()
         } else {
-            let local = Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
-            let m = pre * local;
             let mut p = BezPath::with_capacity(src.elements().len());
             for el in src.elements() {
                 p.push(m * *el);
             }
             p
         };
-        self.out.glyphs.push(PositionedGlyph { outline, run: g.run, byte: g.byte, origin, advance, len: g.len, angle, line, font_id: g.face.id() });
+        let font_id = g.face.id();
+        self.out.glyphs.push(PositionedGlyph {
+            outline,
+            run: g.run,
+            byte: g.byte,
+            origin,
+            advance,
+            len: g.len,
+            angle,
+            line,
+            font_id,
+            gid: g.gid,
+            xf: m,
+        });
     }
 }
 

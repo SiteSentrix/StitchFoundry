@@ -342,7 +342,8 @@ pub struct OutputSettings {
 pub struct AdvancedSettings {
     /// Embed whole fonts when more than this share (%) of their characters is used.
     pub font_subset_percent: f64,
-    /// Text as glyph outlines (the only text the writer produces today).
+    /// Text as glyph outlines; off, text is real (selectable, searchable) text in embedded subset
+    /// fonts.
     pub outline_text: bool,
     pub overprint: Overprint,
 }
@@ -438,7 +439,10 @@ impl PdfSettings {
             (self.thumbnails, "page thumbnails are not embedded yet"),
             (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers, "PDF layers are not written yet: every layer is plain page content"),
-            (!self.advanced.outline_text, "text is exported as outlines: real, selectable text is not written yet"),
+            (
+                !self.advanced.outline_text && self.advanced.font_subset_percent < 100.0,
+                "fonts are embedded as subsets of the characters used: a subset threshold below 100% is not applied",
+            ),
             (
                 !s.protected()
                     && (s.printing != d.security.printing

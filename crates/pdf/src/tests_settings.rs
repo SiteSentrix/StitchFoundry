@@ -76,7 +76,7 @@ fn options_not_applied_yet_come_back_as_warnings() {
         (json!({"thumbnails": true}), "thumbnails"),
         (json!({"fastWebView": true}), "fast web view"),
         (json!({"createLayers": true}), "layers"),
-        (json!({"advanced": {"outlineText": false}}), "outlines"),
+        (json!({"advanced": {"outlineText": false, "fontSubsetPercent": 35}}), "subset"),
         (json!({"output": {"outputIntent": "No Such Press"}}), "without embedding"),
         (json!({"output": {"registry": "http://example.com"}}), "condition identifier"),
         (json!({"standard": "pdfA2b", "output": {"trapped": true}}), "PDF/A"),
@@ -86,13 +86,15 @@ fn options_not_applied_yet_come_back_as_warnings() {
         assert!(w.len() == 1 && w[0].contains(word), "{v}: {w:?}");
     }
     // Bleed and marks, the default view/overprint choices and applied options (image compression
-    // too: a codec the writer lacks is reported when an image needs it; colour output)
+    // too: a codec the writer lacks is reported when an image needs it; colour output; real text)
     // warn about nothing.
     for v in [
         json!({"output": {"conversion": "destination", "destination": vectorcraft_color::cms::GENERIC_CMYK, "profiles": "all"}}),
         json!({"output": {"conversion": "preserveNumbers", "profiles": "taggedSource"}}),
         json!({"output": {"outputIntent": vectorcraft_color::cms::GENERIC_CMYK, "outputCondition": "Press", "registry": "r", "trapped": true}}),
         json!({"output": {"outputConditionId": "CGATS TR 001"}}),
+        json!({"advanced": {"outlineText": false}}),
+        json!({"advanced": {"fontSubsetPercent": 35}}),
         json!({"bleed": {"useDocument": true, "top": 9}}),
         json!({"bleed": {"top": 9}, "marks": {"trim": true, "registration": true, "colorBars": true, "pageInfo": true}}),
         json!({"includeNonPrinting": true}),

@@ -1,5 +1,5 @@
-//! `document.exportPdf` output options reach the writer: colours converted and tagged with
-//! profiles, and the output intent written.
+//! `document.exportPdf` output and advanced options reach the writer: colours converted and tagged
+//! with profiles, the output intent written, and type as real text.
 
 use serde_json::{Value, json};
 
@@ -12,7 +12,7 @@ fn pdf(s: &mut Session, p: Value) -> (String, Value) {
 }
 
 #[test]
-fn export_pdf_converts_colours_and_writes_the_output_intent() {
+fn export_pdf_converts_colours_writes_the_output_intent_and_real_text() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
@@ -23,11 +23,13 @@ fn export_pdf_converts_colours_and_writes_the_output_intent() {
         "preset": "VectorCraft Default",
         "compression": {"compressText": false},
         "output": {"conversion": "destination", "destination": generic, "profiles": "destination", "outputIntent": generic, "outputConditionId": "Generic press", "trapped": true},
+        "advanced": {"outlineText": false},
     });
     let (text, warnings) = pdf(&mut s, p.clone());
     assert_eq!(warnings, json!([]), "everything asked for is applied");
     assert!(text.contains("/ICCBased") && text.contains("/N 4"), "CMYK colours tagged with the destination");
     assert!(text.contains("/S/GTS_PDFX") && text.contains("/Trapped/True"));
+    assert!(text.contains("/ToUnicode") && (text.contains("/FontFile2") || text.contains("/FontFile3")), "real text");
     // The Summary has nothing to report either.
     let mut q = p;
     q["includeDocument"] = json!(true);
