@@ -440,7 +440,9 @@ fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
     flag(ui, d, "thumbnails", "Embed page thumbnails", true);
     flag(ui, d, "fastWebView", "Optimize for fast web view", true);
     flag(ui, d, "viewAfterSaving", "View PDF after saving", true);
-    flag(ui, d, "createLayers", "Create PDF layers from top-level layers", standard.allows_layers());
+    // PDF layers need PDF 1.5, and PDF/X-1a and PDF/X-3 have none.
+    let layers = standard.allows_layers() && choice::<Compatibility>(d, "compatibility").unwrap_or_default().has_layers();
+    flag(ui, d, "createLayers", "Create PDF layers from top-level layers", layers);
     flag(ui, d, "includeNonPrinting", "Include non-printing layers", true);
     if editor {
         heading(ui, "Description");
@@ -974,5 +976,24 @@ mod tests {
         set(d, "standard", json!(Standard::PdfX4.id()));
         standard_chosen(d, Standard::PdfX4);
         assert_eq!((get(d, "compatibility"), get(d, "createLayers")), (&json!("1.6"), &json!(true)));
+    }
+
+    #[test]
+    fn create_layers_writes_pdf_layers() {
+        let (mut app, written, _) = app();
+        app.run("layer.new", json!({"name": "Notes"})).unwrap();
+        app.run("shape.ellipse", json!({"x": 60, "y": 40, "width": 20, "height": 20})).unwrap();
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/layers.pdf", "createLayers": true})).unwrap();
+        // The option is drawn greyed at PDF 1.4 (no PDF layers there), then live again.
+        for c in ["1.4", "1.7"] {
+            set_field(&mut app, "compatibility", json!(c));
+            frame(&mut app);
+        }
+        let r = super::super::confirm(&mut app).unwrap();
+        assert_eq!(r["warnings"], json!([]));
+        let back = vectorcraft_pdf::import(&written.borrow()[0].1).unwrap();
+        let names: Vec<_> = back.layers.iter().filter_map(|l| l.name.clone()).collect();
+        // The empty pages of the other artboards come in as page layers.
+        assert_eq!(names[..2], ["Layer 1", "Notes"]);
     }
 }

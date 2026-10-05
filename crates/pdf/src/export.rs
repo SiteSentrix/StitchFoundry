@@ -23,6 +23,7 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 use vectorcraft_text::TextLayout;
 use vectorcraft_text::embed::Embedding;
 
+use crate::forms::Mark;
 use crate::lab_spot::{find, rfind};
 use crate::marks::PageBoxes;
 use crate::output::ColorOut;
@@ -71,6 +72,11 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     let mut ex = Exporter::new(doc, set);
     ex.non_printing = set.include_non_printing || set.create_layers;
     ex.out = w.out.clone();
+    // A knockout page group draws the layers' objects one by one, not layer by layer.
+    ex.layers = set.writes_layers() && !doc.page_knockout;
+    if set.writes_layers() && doc.page_knockout {
+        warnings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
+    }
     // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed, and by the
     // printer's marks around that.
     let bleed = set.bleed_of(doc);
@@ -97,8 +103,10 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         };
         w.page(&mut ex, &sheet).map_err(|_| PdfError::BadArtboard(i))?;
     }
+    let layers = ex.layers;
     w.absorb(ex);
     let (bytes, more) = w.finish()?;
+    let bytes = crate::forms::finish(bytes, doc, set, layers)?;
     let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
     let bytes = crate::encrypt::protect(bytes, set)?;
     warnings.extend(more);
@@ -435,6 +443,11 @@ pub(crate) struct Exporter<'a> {
     /// The fonts real text is written in, by face id, with their units per em; `None` for faces
     /// that can't be embedded.
     fonts: HashMap<u32, Option<(krilla::text::Font, f64)>>,
+    /// Top-level layers are drawn as forms marked for their optional content groups
+    /// ([`crate::forms`]).
+    pub layers: bool,
+    /// A top-level layer's form is being drawn.
+    in_layer: bool,
 }
 
 impl<'a> Exporter<'a> {
@@ -457,6 +470,8 @@ impl<'a> Exporter<'a> {
             convert: true,
             outline_text: set.advanced.outline_text,
             fonts: HashMap::new(),
+            layers: false,
+            in_layer: false,
         }
     }
 
@@ -849,6 +864,18 @@ impl Exporter<'_> {
     }
 
     fn node(&mut self, s: &mut Surface, n: &Node, page: Rect, force: bool) {
+        if self.layers
+            && !self.in_layer
+            && let NodeKind::Layer { template: false, printable, .. } = n.kind
+            && (printable || self.non_printing)
+            && let Some(i) = self.doc.layers.iter().position(|l| std::ptr::eq(&**l, n))
+        {
+            // A PDF layer: hidden layers are written too (their group is off).
+            self.in_layer = true;
+            crate::forms::form(s, Mark::Layer(i), |s| self.node(s, n, page, true));
+            self.in_layer = false;
+            return;
+        }
         if !force && !n.visible {
             return;
         }

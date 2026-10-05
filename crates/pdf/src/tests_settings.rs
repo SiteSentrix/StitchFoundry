@@ -78,7 +78,7 @@ fn options_not_applied_yet_come_back_as_warnings() {
     for (v, word) in [
         (json!({"thumbnails": true}), "thumbnails"),
         (json!({"fastWebView": true}), "fast web view"),
-        (json!({"createLayers": true}), "layers"),
+        (json!({"createLayers": true, "compatibility": "1.4"}), "PDF 1.5"),
         (json!({"advanced": {"outlineText": false, "fontSubsetPercent": 35}}), "subset"),
         (json!({"output": {"outputIntent": "No Such Press"}}), "without embedding"),
         (json!({"output": {"registry": "http://example.com"}}), "condition identifier"),
@@ -101,6 +101,7 @@ fn options_not_applied_yet_come_back_as_warnings() {
         json!({"bleed": {"useDocument": true, "top": 9}}),
         json!({"bleed": {"top": 9}, "marks": {"trim": true, "registration": true, "colorBars": true, "pageInfo": true}}),
         json!({"includeNonPrinting": true}),
+        json!({"createLayers": true}),
         json!({"viewAfterSaving": true}),
         json!({"compression": {"compressText": false}}),
         json!({"compression": {"color": {"compression": "jpeg"}, "mono": {"compression": "ccittG4"}}}),

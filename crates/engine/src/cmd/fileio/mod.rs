@@ -908,3 +908,6 @@ mod tests_psd;
 
 #[cfg(test)]
 mod tests_epsimport;
+
+#[cfg(test)]
+mod tests_pdflayers;

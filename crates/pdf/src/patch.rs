@@ -48,8 +48,13 @@ impl Xref {
         Some(Self { at, entries, count, trailer: (start, end) })
     }
 
+    /// Number of entries (objects `0..count`).
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
     /// Where in-use object `n` starts.
-    fn offset(&self, pdf: &[u8], n: u32) -> Option<usize> {
+    pub fn offset(&self, pdf: &[u8], n: u32) -> Option<usize> {
         let e = self.entries + 20 * usize::try_from(n).ok().filter(|n| *n < self.count)?;
         let entry = pdf.get(e..e + 20)?;
         (entry.get(17) == Some(&b'n')).then_some(())?;
