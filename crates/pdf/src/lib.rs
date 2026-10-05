@@ -11,7 +11,7 @@
 //!   given an output intent as the Output settings say. Hidden objects,
 //!   guides and template layers are skipped, and so are non-printing layers unless asked for.
 //!   Top-level layers can be PDF layers (optional content groups with their visibility, print
-//!   state and lock).
+//!   state and lock), and overprinting fills and strokes overprint (Advanced).
 //!   Each page is its artboard (the trim box) grown by the bleed (the bleed box) and by the
 //!   printer's marks around it (the media box), drawn in Registration. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,

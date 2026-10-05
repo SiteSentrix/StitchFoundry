@@ -1,8 +1,9 @@
-//! What the PDF writer has no operators for — optional content (PDF layers) — drawn as form
-//! XObjects of their own (without a transparency group, so they draw as if in place), each
-//! starting with a mark: an empty clip whose first point says what the form is. Marked forms also
-//! stay apart (the writer shares identical forms). [`finish`] completes them in the written file:
-//! a layer's form is drawn as the layer's optional content (`/OC … BDC`).
+//! What the PDF writer has no operators for — optional content (PDF layers) and overprint — drawn
+//! as form XObjects of their own (without a transparency group, so they draw as if in place),
+//! each starting with a mark: an empty clip whose first point says what the form is. Marked
+//! forms also stay apart (the writer shares identical forms). [`finish`] completes them in the
+//! written file: a layer's form is drawn as the layer's optional content (`/OC … BDC`), and an
+//! overprinting form sets a graphics state that overprints first.
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -22,16 +23,21 @@ use crate::{PdfError, PdfSettings, Standard};
 pub(crate) enum Mark {
     /// The art of top-level layer `i` (`Document::layers`).
     Layer(usize),
+    /// A fill or stroke that overprints.
+    Overprint,
 }
 
 /// The x coordinate of a layer mark's first point (its y is the layer index).
 const LAYER_X: i32 = -32000;
+/// The x coordinate of an overprint mark's first point.
+const OVERPRINT_X: i32 = -32001;
 
 impl Mark {
     fn at(self) -> (f32, f32) {
         match self {
             // Exact in `f32` up to 2^24 layers.
             Self::Layer(i) => (LAYER_X as f32, i as f32),
+            Self::Overprint => (OVERPRINT_X as f32, 0.0),
         }
     }
 }
@@ -59,13 +65,15 @@ pub(crate) fn form(s: &mut Surface, mark: Mark, draw: impl FnOnce(&mut Surface))
 
 // ---------- finishing the written file ----------
 
+/// The resource name of the overprinting graphics state.
+const OVERPRINT_GS: &str = "VCop";
 /// The prefix of the resource names of the layers' optional content groups (then the index).
 const LAYER_OC: &str = "VCoc";
 /// The most bytes of a form's content read to find its mark.
 const HEAD: u64 = 64;
 
 fn bad(why: &str) -> PdfError {
-    PdfError::Write(format!("can't write PDF layers: {why}"))
+    PdfError::Write(format!("can't write PDF layers or overprint: {why}"))
 }
 
 /// An object of the written file with a dictionary, and its stream's [`StreamSpans`].
@@ -113,6 +121,7 @@ impl Object<'_> {
         let (Some(b"q"), Some(x), Some(y), Some(b"m")) = (word(), word().and_then(int), word().and_then(int), word()) else { return None };
         match x {
             _ if x == i64::from(LAYER_X) => usize::try_from(y).ok().map(Mark::Layer),
+            _ if x == i64::from(OVERPRINT_X) && y == 0 => Some(Mark::Overprint),
             _ => None,
         }
     }
@@ -141,7 +150,8 @@ fn resources<'o>(objects: &'o HashMap<u32, Object<'_>>, o: &'o Object<'_>) -> Op
     }
 }
 
-/// Add `entries` (`/VCoc0 12 0 R`) to the `category` (`Properties`) of resource dictionary `res`.
+/// Add `entries` (`/VCoc0 12 0 R`) to the `category` (`Properties`, `ExtGState`) of resource
+/// dictionary `res`.
 fn add_resources(patch: &mut Patch, res: &Obj<'_>, category: &str, entries: &str) -> Result<(), PdfError> {
     match (res.get(category.as_bytes()), res) {
         (Some(Obj::Dict { start, .. }), _) => patch.replace(start + 2, start + 2, entries.as_bytes().to_vec()),
@@ -191,16 +201,34 @@ fn mark_layers(content: &[u8], forms: &HashMap<&[u8], usize>) -> Option<(Vec<u8>
 /// Finish the marked forms of `pdf` (as [`crate::export`] writes `doc` with `set`): with
 /// `layers`, each top-level layer (but template layers) becomes an optional content group —
 /// named as the layer, off when it is hidden, not printed (`/PrintState /OFF`) when its Print
-/// option is off, locked when it is locked — and the uses of its forms its optional content.
-pub(crate) fn finish(pdf: Vec<u8>, doc: &Document, set: &PdfSettings, layers: bool) -> Result<Vec<u8>, PdfError> {
-    if !layers {
+/// option is off, locked when it is locked — and the uses of its forms its optional content;
+/// with `overprint`, the overprinting forms get a graphics state that overprints (`/OP`, `/op`,
+/// `/OPM 1`; `/OPM 0` in PDF/A, which allows no other with ICC-based CMYK colours).
+pub(crate) fn finish(pdf: Vec<u8>, doc: &Document, set: &PdfSettings, layers: bool, overprint: bool) -> Result<Vec<u8>, PdfError> {
+    if !layers && !overprint {
         return Ok(pdf);
     }
     let xref = Xref::read(&pdf).ok_or_else(|| bad("the written PDF has no cross-reference table"))?;
     let objects = objects(&pdf, &xref);
     let marks: HashMap<u32, Mark> = objects.iter().filter_map(|(n, o)| Some((*n, o.mark(&pdf)?))).collect();
     let mut patch = Patch::new(&xref);
-    write_layers(&pdf, &xref, &objects, &marks, &mut patch, doc, set)?;
+    if overprint {
+        let opm = u8::from(set.standard != Standard::PdfA2b);
+        let gs = patch.add_object(format!("<</Type/ExtGState/OP true/op true/OPM {opm}>>").into_bytes());
+        for (n, _) in marks.iter().filter(|(_, m)| **m == Mark::Overprint) {
+            let Some(o) = objects.get(n) else { continue };
+            let (Some(content), Some(res)) = (o.data(&pdf, u64::MAX), resources(&objects, o)) else {
+                return Err(bad("an overprinting form can't be read"));
+            };
+            let mut new = format!("/{OVERPRINT_GS} gs\n").into_bytes();
+            new.extend_from_slice(&content);
+            o.rewrite(&mut patch, &new)?;
+            add_resources(&mut patch, res, "ExtGState", &format!("/{OVERPRINT_GS} {gs} 0 R"))?;
+        }
+    }
+    if layers {
+        write_layers(&pdf, &xref, &objects, &marks, &mut patch, doc, set)?;
+    }
     let pdf = patch.apply(&pdf, &xref)?;
     // The file still is what its standard says.
     crate::pdfx::verify(&pdf, set.standard)?;

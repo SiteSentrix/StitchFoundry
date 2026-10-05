@@ -1,11 +1,12 @@
-//! Save PDF › Create PDF layers: an optional content group per top-level layer, with its
-//! visibility, print state and lock.
+//! Save PDF › Create PDF layers (an optional content group per top-level layer, with its
+//! visibility, print state and lock) and Advanced › Overprint (a graphics state that overprints
+//! for the overprinting fills and strokes).
 
 use hayro_syntax::object::{Array, Dict, Name, ObjectIdentifier};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, LayerColor, Node, NodeKind};
-use vectorcraft_geom::{Rect, shapes};
+use vectorcraft_doc::{Appearance, CharStyle, Document, LayerColor, Node, NodeKind, TextObject};
+use vectorcraft_geom::{Point, Rect, shapes};
 
 use crate::*;
 
@@ -214,4 +215,79 @@ fn layered_art_imports_as_it_was_drawn() {
     let plain = leaves(&import(&export(&d, json!({"includeNonPrinting": true})).bytes).unwrap());
     assert_eq!(plain.len(), 3);
     assert_eq!(leaves(&import(&export(&d, json!({"createLayers": true})).bytes).unwrap()), plain, "the marks draw nothing");
+}
+
+/// A rectangle whose fill overprints, one whose stroke does, a plain one and type whose
+/// characters' fill overprints, filled with `fill` (the overprinting rectangle).
+fn overprinting(fill: Color) -> Document {
+    let mut d = Document::new(300.0, 100.0);
+    let l = d.layers[0].id;
+    let mut a = rect(&mut d, 10.0, fill);
+    if let Some(f) = a.appearance.fill_mut() {
+        f.overprint = true;
+    }
+    let mut b =
+        Node::path(d.alloc_id(), shapes::rectangle(Rect::new(50.0, 10.0, 80.0, 40.0)), Appearance::basic(Paint::None, Paint::solid(BLUE), 2.0));
+    if let Some(s) = b.appearance.stroke_mut() {
+        s.overprint = true;
+    }
+    let c = rect(&mut d, 90.0, GREEN);
+    let style = CharStyle { size: 24.0, fill: Paint::solid(Color::BLACK), overprint_fill: true, ..Default::default() };
+    let t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(130.0, 40.0), "Ink", style))));
+    for (i, n) in [a, b, c, t].into_iter().enumerate() {
+        d.insert(Some(l), i, n).unwrap();
+    }
+    d
+}
+
+/// The uncompressed export of `d` with `v`: the overprinting graphics states it defines, and the
+/// forms that set one.
+fn overprints(d: &Document, v: Value) -> (usize, usize) {
+    let mut v = v;
+    v["compression"] = json!({"compressText": false});
+    let r = export(d, v);
+    assert!(r.warnings.iter().all(|w| !w.contains("overprint")), "{:?}", r.warnings);
+    let text = String::from_utf8_lossy(&r.bytes).into_owned();
+    (text.matches("/Type/ExtGState/OP true/op true/OPM 1").count(), text.matches("stream\n/VCop gs\n").count())
+}
+
+#[test]
+fn overprint_preserve_writes_an_overprinting_graphics_state() {
+    let d = overprinting(RED);
+    assert_eq!(overprints(&d, json!({})), (1, 3), "the fill, the stroke and the characters' fill");
+    assert_eq!(overprints(&d, json!({"advanced": {"overprint": "discard"}})), (0, 0));
+    assert_eq!(overprints(&overprinting(RED), json!({"createLayers": true})), (1, 3), "with PDF layers too");
+    // Nothing overprints: no graphics state.
+    assert_eq!(overprints(&layered(), json!({})), (0, 0));
+}
+
+#[test]
+fn white_overprint_is_discarded_as_the_document_setup_says() {
+    let mut d = overprinting(Color::WHITE);
+    assert!(d.setup.discard_white_overprint);
+    assert_eq!(overprints(&d, json!({})).1, 2, "the white fill knocks out");
+    d.setup.discard_white_overprint = false;
+    assert_eq!(overprints(&d, json!({})).1, 3);
+}
+
+#[test]
+fn pdf_a_overprint_mode_is_0() {
+    let r = export(&overprinting(RED), json!({"standard": "pdfA2b", "compression": {"compressText": false}}));
+    let text = String::from_utf8_lossy(&r.bytes);
+    assert!(text.contains("/OP true/op true/OPM 0") && !text.contains("/OPM 1"));
+}
+
+#[test]
+fn overprinting_art_imports_as_it_was_drawn() {
+    let d = overprinting(RED);
+    let plain = leaves(&import(&export(&d, json!({"advanced": {"overprint": "discard"}})).bytes).unwrap());
+    for v in [json!({}), json!({"createLayers": true})] {
+        assert_eq!(leaves(&import(&export(&d, v.clone()).bytes).unwrap()), plain, "{v}: the marks draw nothing");
+    }
+}
+
+#[test]
+fn pdf_x1a_keeps_overprint() {
+    let r = export(&overprinting(RED), json!({"standard": "pdfX1a", "compatibility": "1.4", "compression": {"compressText": false}}));
+    assert!(r.bytes.starts_with(b"%PDF-1.3") && String::from_utf8_lossy(&r.bytes).contains("/OP true/op true/OPM 1"));
 }

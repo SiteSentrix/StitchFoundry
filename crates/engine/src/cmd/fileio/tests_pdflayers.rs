@@ -1,4 +1,5 @@
-//! `document.exportPdf {createLayers}` writes PDF layers that reopen as layers.
+//! `document.exportPdf {createLayers}` writes PDF layers that reopen as layers, and
+//! `advanced.overprint` keeps overprinting in the file or drops it.
 
 use serde_json::{Value, json};
 
@@ -42,4 +43,19 @@ fn export_pdf_create_layers_writes_layers_that_reopen_as_layers() {
     // At PDF 1.4 there are no PDF layers.
     let v = s.execute("document.exportPdf", &json!({"createLayers": true, "compatibility": "1.4"})).unwrap();
     assert!(warnings(&v).iter().any(|w| w.contains("PDF 1.5")), "{:?}", warnings(&v));
+}
+
+#[test]
+fn export_pdf_overprint_is_preserved_or_discarded() {
+    let mut s = session();
+    s.execute("select.all", &json!({})).unwrap();
+    // The rectangles' strokes are black (their white fills would knock out: discardWhiteOverprint).
+    s.execute("object.setOverprint", &json!({"stroke": true})).unwrap();
+    let overprints = |s: &mut Session, p: Value| {
+        let v = s.execute("document.exportPdf", &p).unwrap();
+        assert!(warnings(&v).iter().all(|w| !w.contains("overprint")), "{:?}", warnings(&v));
+        String::from_utf8_lossy(&b64(&v)).matches("/OP true/op true/OPM 1").count()
+    };
+    assert_eq!(overprints(&mut s, json!({"compression": {"compressText": false}})), 1);
+    assert_eq!(overprints(&mut s, json!({"advanced": {"overprint": "discard"}})), 0);
 }
