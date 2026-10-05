@@ -324,6 +324,9 @@ pub struct Renderer {
     ink_images: ink::InkImages,
     /// Gradients along or across strokes, keyed like `strokes` (see [`Self::fill_path_gradient`]).
     stroke_slices: PtrMap<(usize, i32), SliceEntry>,
+    /// The keys and sizes of the recoloured images colour adjustments made in `images`, oldest
+    /// first (see [`Self::adjusted_image`]).
+    adjusted: std::collections::VecDeque<(String, usize)>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -398,6 +401,7 @@ impl Renderer {
             clip_paints: PtrMap::default(),
             ink_images: Default::default(),
             stroke_slices: PtrMap::default(),
+            adjusted: Default::default(),
         }
     }
 
@@ -1278,6 +1282,38 @@ impl Renderer {
         }
     }
 
+    /// Cache the pixels of image blob `key` recoloured by `map` as `derived` (the key the adjusted
+    /// art's image takes). The latest ones are kept up to a memory budget: dropping one drops the
+    /// cached art too, so it is made again.
+    fn adjusted_image(&mut self, doc: &Document, key: &str, derived: String, map: &vectorcraft_effects::ColorMap) {
+        const BUDGET: usize = 256 << 20;
+        if self.images.contains_key(&derived) {
+            return;
+        }
+        let Some(src) = self.image_pixmap(doc, key, key, false) else { return };
+        let mut pm = (*src).clone();
+        let mut memo: HashMap<[u8; 4], [u8; 3]> = HashMap::new();
+        for px in pm.data_mut().iter_mut().filter(|p| p.a > 0) {
+            let a = px.a as u32;
+            let [r, g, b] = *memo.entry([px.r, px.g, px.b, px.a]).or_insert_with(|| {
+                // Premultiplied to straight, adjusted, then premultiplied again.
+                let straight = [px.r, px.g, px.b].map(|v| ((v as u32 * 255 + a / 2) / a).min(255) as u8);
+                map.apply_rgb8(straight).map(|v| ((v as u32 * a + 127) / 255) as u8)
+            });
+            (px.r, px.g, px.b) = (r, g, b);
+        }
+        let bytes = pm.data().len() * 4;
+        self.images.insert(derived.clone(), Arc::new(pm));
+        self.adjusted.push_back((derived, bytes));
+        let mut total: usize = self.adjusted.iter().map(|(_, b)| b).sum();
+        while total > BUDGET && self.adjusted.len() > 1 {
+            let Some((old, b)) = self.adjusted.pop_front() else { break };
+            self.images.remove(&old);
+            self.fx_arts.clear();
+            total -= b;
+        }
+    }
+
     /// The decoded pixels of image blob `key` (cached as `cache_key`), or a greyscale copy of them.
     fn image_pixmap(&mut self, doc: &Document, key: &str, cache_key: &str, grey: bool) -> Option<Arc<Pixmap>> {
         let colour = match self.images.get(cache_key) {
@@ -1479,6 +1515,8 @@ fn now() -> u64 {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_adjust;
 #[cfg(test)]
 mod tests_blend;
 #[cfg(test)]

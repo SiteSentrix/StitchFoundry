@@ -2254,8 +2254,19 @@ fn effect_menu() -> Vec<Item> {
         Item::Header("Vector Effects"),
     ];
     // Submenus (and Crop Marks, an item of its own) in the reference app's order.
-    let order =
-        ["3D and Materials", "Convert to Shape", "Crop Marks", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];
+    let order = [
+        "3D and Materials",
+        "Color Adjustments",
+        "Convert to Shape",
+        "Crop Marks",
+        "Distort & Transform",
+        "Path",
+        "Pathfinder",
+        "Stylize",
+        "SVG Filters",
+        "Warp",
+        "Blur",
+    ];
     let top_level = |e: &vectorcraft_effects::EffectInfo| e.menu == ["Effect"] && order.contains(&e.label);
     for sub_name in order {
         if let Some(e) = cat.iter().find(|e| top_level(e) && e.label == sub_name) {

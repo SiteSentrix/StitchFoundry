@@ -287,12 +287,24 @@ pub(super) fn slider(
     suffix: &str,
     track: &dyn Fn(f32) -> egui::Color32,
 ) {
+    slider_w(ui, d, (key, label, SLIDER_LABEL), range, suffix, track);
+}
+
+/// [`slider`] with its label column `label_w` wide: (`key`, `label`, `label_w`).
+pub(super) fn slider_w(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    (key, label, label_w): (&str, &str, f32),
+    range: std::ops::RangeInclusive<f64>,
+    suffix: &str,
+    track: &dyn Fn(f32) -> egui::Color32,
+) {
     let t = Tokens::get(ui.ctx());
     let (min, max) = (*range.start(), *range.end());
     let v = d.f64(key, 0.0).clamp(min, max);
     let mut new = None;
     ui.horizontal(|ui| {
-        ui.add_sized([SLIDER_LABEL, 22.0], egui::Label::new(egui::RichText::new(label).color(t.text)));
+        ui.add_sized([label_w, 22.0], egui::Label::new(egui::RichText::new(label).color(t.text)));
         if let (Some(x), _) = crate::widgets::color_slider(ui, ("dlg-slider", key), ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track) {
             new = Some((min + x as f64 * (max - min)).round());
         }

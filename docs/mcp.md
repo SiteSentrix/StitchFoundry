@@ -1693,3 +1693,14 @@ id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearanc
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
 ```
+
+## Colour adjustments
+
+Effect → Color Adjustments holds live effects that recolour what an object paints
+with (fills and strokes, gradient stops, type, gradient meshes, embedded images; on a group or layer every member),
+each colour keeping its colour model: `adjust.brightnessContrast`, `adjust.curves` (`points` as `"x,y x,y …"` or
+`[[x, y], …]`, 0–255), `adjust.levels`, `adjust.hueSaturation`, `adjust.shiftToColor` and `adjust.temperatureTint`
+(`effect.list` documents their parameters). Apply them with `effect.apply` like any effect, or with `item` to recolour
+one fill or stroke; they stay editable (`effect.setParams`), export with the adjusted colours (an adjusted image as a
+recoloured copy) and become permanent with `effect.expandAppearance`. Patterns and the shadows and glows of raster
+effects keep their colours.

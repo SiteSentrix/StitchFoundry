@@ -1100,6 +1100,8 @@ impl Session {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_adjust;
+#[cfg(test)]
 mod tests_appearance;
 #[cfg(test)]
 mod tests_assets;

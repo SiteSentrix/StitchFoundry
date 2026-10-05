@@ -6,6 +6,8 @@
 //! outlines, [`reshape`]) — is evaluated exactly like the renderer does, and so are the own fills,
 //! strokes and geometry effects of groups and layers ([`evaluate_container`]). Raster effects
 //! (shadows, glows, blur) stay on the objects for the exporter to translate (e.g. SVG filters).
+//! Colour adjustments recolour the objects ([`adjust_in_document`]; recoloured embedded images
+//! become images of their own).
 //!
 //! Object → Expand Appearance goes further ([`expand_leaf`]): every fill and stroke becomes an
 //! object of its own, strokes turned into filled art by the caller (their outlines or brush art).
@@ -17,8 +19,8 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use crate::group::{has_own_paint, paints};
 use crate::{
-    GeomContext, apply_geometry_with, crop_marks_art, evaluate_container, has_crop_marks, has_geometry, has_pathfinder, is_geometry, needs_outline,
-    reshape,
+    GeomContext, adjust_in_document, apply_geometry_with, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
+    has_pathfinder, is_geometry, needs_outline, reshape,
 };
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -37,7 +39,8 @@ fn clear_item_effects(item: &mut AppearanceItem) {
 
 /// Does anything in `n`'s subtree need baking?
 pub fn needs_bake(n: &Node) -> bool {
-    has_crop_marks(n)
+    has_adjustment(n)
+        || has_crop_marks(n)
         || has_pathfinder(n)
         || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
@@ -77,6 +80,12 @@ fn path_kind(d: &mut Document, path: PathData, rule: FillRule) -> NodeKind {
 fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if !needs_bake(n) {
         return None;
+    }
+    // Colour adjustments: the object recoloured (inside it too), then baked as it is.
+    if has_adjustment(n)
+        && let Some(m) = adjust_in_document(d, n)
+    {
+        return Some(bake_node(d, &m).unwrap_or(m));
     }
     // Crop marks: the object and its marks.
     if let Some(m) = crop_marks_art(n) {

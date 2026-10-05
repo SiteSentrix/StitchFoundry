@@ -436,3 +436,8 @@ as one undo step (`ui.key` Escape cancels). They run `path.mirrorCut`, `path.lin
 agent can call directly. Mirror & Cut's tool options (`tool.setOption`, shown in the Control bar) are `axis`
 (`free` | `vertical` | `horizontal`; a constrained axis follows the pointer and a click places it) and `keep`
 (`left` | `right` | `top` | `bottom`); Alt on release keeps the other side.
+
+Colour adjustment effects (Effect → Color Adjustments) open the `effect` dialog like the other effects
+(`effect.dialog {effect: "adjust.hueSaturation"}`): its fields are the effect's parameters (sliders for the amounts,
+`channel` for Curves and Levels, `points` for Curves, `color` for Shift to Color) and they preview live; set them with
+`ui.dialog.set` and `ui.dialog.confirm` to apply (Curves also has a graph: drag its points).
