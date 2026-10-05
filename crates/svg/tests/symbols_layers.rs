@@ -52,12 +52,16 @@ fn three_instances_give_one_symbol_and_three_uses() {
     // The art is written once.
     assert_eq!(svg.matches("<path").count(), 1, "{svg}");
     assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 24.0, 0.002);
-    // Read back: the three squares are where the instances are.
+    // Read back (since SVG import keeps symbols: as the symbol and three instances): the three
+    // squares are where the instances are.
     let back = import(&svg).unwrap();
+    assert_eq!(back.symbols.len(), 1);
+    assert_eq!(back.symbols[0].name, "My Mark", "the name comes back");
+    let art = back.symbols[0].art.path_data().unwrap().bounds().unwrap();
     let mut boxes = vec![];
     back.walk(|n| {
-        if let Some(p) = n.path_data() {
-            boxes.push(p.bounds().unwrap());
+        if let NodeKind::SymbolInstance { xf, .. } = &n.kind {
+            boxes.push(xf.transform_rect_bbox(art));
         }
     });
     assert_eq!(boxes.len(), 3, "{boxes:?}");

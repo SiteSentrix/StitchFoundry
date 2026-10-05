@@ -125,6 +125,24 @@ fn arb_svg_attr() -> impl Strategy<Value = String> {
         "text-anchor",
         "side",
         "path",
+        // Filters, spreads, hidden objects and linked images.
+        "spreadMethod",
+        "display",
+        "filter",
+        "clip-path",
+        "stdDeviation",
+        "flood-color",
+        "flood-opacity",
+        "in",
+        "in2",
+        "result",
+        "operator",
+        "values",
+        "tableValues",
+        "type",
+        "preserveAspectRatio",
+        "overflow",
+        "data-vc-blend",
     ]);
     let value = prop_oneof![
         arb_num(),
@@ -138,6 +156,23 @@ fn arb_svg_attr() -> impl Strategy<Value = String> {
         prop::collection::vec(arb_num(), 0..4).prop_map(|v| format!("lab({})", v.join(" "))),
         prop::sample::select(vec!["noclip invert", "invert", "noclip", "alpha", "luminance", "url(#e)", "#e", "#zz", "none", "currentColor"])
             .prop_map(str::to_string),
+        prop::sample::select(vec![
+            "reflect",
+            "repeat",
+            "SourceAlpha",
+            "SourceGraphic",
+            "e",
+            "over",
+            "in",
+            "table",
+            "1 0",
+            "multiply",
+            "img/x%2.png",
+            "file:///C:/nope.png",
+            "https://x/y.png",
+            "data:image/svg+xml;base64,PHN2Zy8+",
+        ])
+        .prop_map(str::to_string),
     ];
     (names, value).prop_map(|(n, v)| format!(" {n}=\"{v}\""))
 }
@@ -168,6 +203,17 @@ fn arb_svg_element(depth: u32) -> BoxedStrategy<String> {
         "svg",
         "marker",
         "a",
+        "filter",
+        "feGaussianBlur",
+        "feOffset",
+        "feFlood",
+        "feComposite",
+        "feMerge",
+        "feMergeNode",
+        "feColorMatrix",
+        "feDropShadow",
+        "feComponentTransfer",
+        "feFuncA",
     ]);
     let attrs = || prop::collection::vec(arb_svg_attr(), 0..6).prop_map(|v| v.concat());
     let leaf = (tag.clone(), attrs(), "[a-z ]{0,6}").prop_map(|(t, a, txt)| format!("<{t} id=\"e\"{a} href=\"#e\">{txt}</{t}>"));

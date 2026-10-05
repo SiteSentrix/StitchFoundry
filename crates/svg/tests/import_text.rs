@@ -123,7 +123,17 @@ fn hidden_text_is_skipped_and_use_instances_are_kept() {
         r##"<text y="10" display="none">gone</text><g visibility="hidden"><text y="20">hidden</text></g>
         <defs><text id="t" y="30">Used</text></defs><use href="#t" x="10"/><use xlink:href="#t" x="50"/>"##,
     );
-    let t = texts(&d);
+    // An undisplayed text comes back as a hidden object (since SVG import keeps hidden objects).
+    let hidden: Vec<&Node> = art(&d).into_iter().filter(|n| !n.visible).collect();
+    assert!(matches!(hidden.as_slice(), [n] if matches!(&n.kind, NodeKind::Text(t) if t.plain_text() == "gone")), "{hidden:?}");
+    let t: Vec<&TextObject> = art(&d)
+        .into_iter()
+        .filter(|n| n.visible)
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(&**t),
+            _ => None,
+        })
+        .collect();
     assert_eq!(t.len(), 2);
     assert!(t.iter().all(|t| t.plain_text() == "Used"));
     assert!(t[0].xf.translation().to_point().distance(Point::new(10.0, 30.0)) < 1e-9);

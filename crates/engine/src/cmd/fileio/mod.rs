@@ -35,6 +35,7 @@ pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, enc
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub use export::export_source;
 use load::err;
+pub(crate) use load::import_svg;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
 pub use pdfimport::{LoadOptions, page_document};
@@ -51,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Open Document",
             [],
             None,
-            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK) → {index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks: [{name, path, ids}]}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). A PDF/.ai/.ait or SVG saved with Preserve Editing restores the native document it carries (restored: true; a PDF only when no pages are picked), unless the file was changed elsewhere since or the data can't be read: then its artwork is imported and the first warning says why. Templates (native templates, .ait) open as a new untitled document; a restored .ai keeps its path (Save writes .ai again). Linked images are read from their files (looked for at their path, then relative to the document): missing ones show their saved preview (links.relink), modified ones are read again only with Preferences › Update Links: Automatically (else links.update)",
+            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK) → {index, title, format, warnings, restored, missingLinks, modifiedLinks, updatedLinks: [{name, path, ids}]}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). A PDF/.ai/.ait or SVG saved with Preserve Editing restores the native document it carries (restored: true; a PDF only when no pages are picked), unless the file was changed elsewhere since or the data can't be read: then its artwork is imported and the first warning says why. Templates (native templates, .ait) open as a new untitled document; a restored .ai keeps its path (Save writes .ai again). Linked images are read from their files (looked for at their path, then relative to the document): missing ones show their saved preview (links.relink), modified ones are read again only with Preferences › Update Links: Automatically (else links.update). An SVG's <image> files (relative links from the SVG's folder) stay linked, SVG files become art, missing ones a placeholder in their box (a warning and missingLinks)",
             always,
             load::open
         ),
@@ -656,3 +657,5 @@ mod tests_text;
 
 #[cfg(test)]
 mod tests_dxf;
+#[cfg(test)]
+mod tests_svgimport;
