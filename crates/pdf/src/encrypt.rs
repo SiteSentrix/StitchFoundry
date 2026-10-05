@@ -232,12 +232,11 @@ impl Aes {
             prev = self.block(std::array::from_fn(|i| chunk[i] ^ prev[i]));
             out.extend_from_slice(&prev);
         };
-        let mut chunks = data.chunks_exact(16);
-        for c in &mut chunks {
-            put(std::array::from_fn(|i| c.get(i).copied().unwrap_or_default()), &mut out);
+        let (chunks, rest) = data.as_chunks::<16>();
+        for c in chunks {
+            put(*c, &mut out);
         }
         if pad {
-            let rest = chunks.remainder();
             let n = (16 - rest.len()) as u8;
             put(std::array::from_fn(|i| rest.get(i).copied().unwrap_or(n)), &mut out);
         }

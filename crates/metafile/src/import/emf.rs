@@ -314,7 +314,7 @@ fn record(p: &mut Player, kind: u32, rec: &[u8]) -> Option<()> {
             let off = r.u32()?;
             let s = if kind == 84 {
                 let raw = slice(rec, off, u32::try_from(n.checked_mul(2)?).ok()?)?;
-                String::from_utf16_lossy(&raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>())
+                String::from_utf16_lossy(&raw.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect::<Vec<_>>())
             } else {
                 slice(rec, off, u32::try_from(n).ok()?)?.iter().map(|b| char::from(*b)).collect()
             };

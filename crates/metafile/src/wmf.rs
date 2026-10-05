@@ -68,7 +68,7 @@ pub(crate) fn units_per_inch(w: f64, h: f64) -> u16 {
 
 /// The XOR of the first ten 16-bit words of a placeable header.
 pub(crate) fn checksum(header: &[u8]) -> u16 {
-    header.chunks_exact(2).take(10).fold(0, |acc, w| acc ^ u16::from_le_bytes([w[0], w[1]]))
+    header.as_chunks::<2>().0.iter().take(10).fold(0, |acc, w| acc ^ u16::from_le_bytes(*w))
 }
 
 /// `bp` flattened to within `tol`: each subpath's points and whether it closes.
