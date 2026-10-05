@@ -43,10 +43,12 @@ pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub use export::export_source;
 use load::err;
 pub(crate) use load::import_svg;
+pub(crate) use load::native_file;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
+pub(crate) use save::job_for;
 pub use save::{
     SAVE_FORMATS, SaveJob, SaveMode, SavePlan, export_folder, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates,
     templates_folder,
@@ -359,7 +361,17 @@ pub const FORMATS: &[Format] = &[
         options: svg::OPTIONS,
     },
     Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: pdf::OPTIONS },
-    reader("ai", "PDF-compatible .ai", &["ai"], "application/pdf", false),
+    Format {
+        id: "ai",
+        label: "PDF-compatible .ai",
+        extensions: &["ai"],
+        mime: "application/pdf",
+        read: true,
+        // Saved (Save As), not exported.
+        write: false,
+        raster: false,
+        options: native::AI_OPTIONS,
+    },
     reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),
     Format {
         id: "png",
@@ -648,7 +660,7 @@ fn write_encoded(path: Option<&str>, name: &str, doc: &vectorcraft_doc::Document
 }
 
 /// `a` with the fields of `b`.
-fn merge(mut a: Value, b: Value) -> Value {
+pub(crate) fn merge(mut a: Value, b: Value) -> Value {
     if let (Some(a), Value::Object(b)) = (a.as_object_mut(), b) {
         a.extend(b);
     }

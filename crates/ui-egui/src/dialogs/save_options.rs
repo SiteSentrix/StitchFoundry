@@ -5,11 +5,14 @@
 //!
 //! Fields: `__action` (the save command it finishes), `__pick` (file name and format
 //! editable), `path`, `format`, and one field per option (agents set them with `ui.dialog.set`).
+//! Native and `.ai` files show their save options (VectorCraft Options after Save As): each
+//! artboard to a separate file, with `all` (true: every artboard) or `range`, Include Linked Files,
+//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression.
 
 use std::sync::OnceLock;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::fileio::{self, Format, FormatOption, SAVE_FORMATS, SaveMode};
+use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format, FormatOption, SAVE_FORMATS, SaveMode};
 
 use super::{DialogResult, DialogSpec, form};
 use crate::state::Dialog;
@@ -52,12 +55,58 @@ fn own_dialog(f: &Format) -> bool {
     matches!(f.id, "svg" | "svgz" | "pdf")
 }
 
+/// Does `f` save each artboard to a separate file on request (native and `.ai` files)? Its
+/// `range` then shows under that checkbox.
+fn separates(f: &Format) -> bool {
+    f.options.iter().any(|o| o.name == "separateArtboards")
+}
+
 /// The options the dialog shows: arrays and objects are for agents, and a page range replaces the
 /// single artboard choice; none for a format with its own dialog.
 fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
+    let separate = separates(f);
     let options = if own_dialog(f) { &[][..] } else { f.options };
-    options.iter().filter(move |o| !(matches!(o.ty, "array" | "object") || (range && o.name == "artboard")))
+    options.iter().filter(move |o| !(matches!(o.ty, "array" | "object") || (range && o.name == "artboard") || (separate && o.name == "range")))
+}
+
+/// An option's label: the save options as the reference app's options dialog names them, the
+/// others from their names.
+fn label(o: &FormatOption) -> String {
+    match o.name {
+        "separateArtboards" => "Save each artboard to a separate file".into(),
+        "includeLinked" => "Include Linked Files".into(),
+        "embedProfiles" => "Embed ICC Profiles".into(),
+        "pdfCompatible" => "Create PDF-Compatible File".into(),
+        "compress" => "Use Compression".into(),
+        _ => form::humanize(o.name),
+    }
+}
+
+/// Every artboard (the All choice under Save each artboard to a separate file): `all` when set,
+/// else no range given.
+fn all_artboards(d: &Dialog) -> bool {
+    d.fields.get("all").and_then(Value::as_bool).unwrap_or_else(|| d.str("range").trim().is_empty())
+}
+
+/// All or Range, under Save each artboard to a separate file (enabled while it is on).
+fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.label("");
+    ui.add_enabled_ui(d.bool("separateArtboards"), |ui| {
+        ui.horizontal(|ui| {
+            ui.add_space(22.0);
+            let mut all = all_artboards(d);
+            if ui.radio_value(&mut all, true, "All").changed() | ui.radio_value(&mut all, false, "Range:").changed() {
+                d.fields.insert("all".into(), json!(all));
+            }
+            let mut range = d.str("range");
+            let field = egui::TextEdit::singleline(&mut range).desired_width(90.0).hint_text("1-3, 5");
+            if ui.add_enabled(!all, field).changed() {
+                d.fields.insert("range".into(), json!(range));
+            }
+        });
+    });
+    ui.end_row();
 }
 
 /// The Save As format menu (labels in [`SAVE_FORMATS`] order).
@@ -92,7 +141,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// One option: a checkbox, an artboard menu, a number or a text field.
 fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &FormatOption) {
     let t = Tokens::get(ui.ctx());
-    let label = form::humanize(o.name);
+    let label = label(o);
     let value = d.fields.get(o.name).cloned().unwrap_or(Value::Null);
     if o.ty == "boolean" {
         ui.label("");
@@ -101,6 +150,9 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
             d.fields.insert(o.name.into(), json!(on));
         }
         ui.end_row();
+        if o.name == "separateArtboards" {
+            artboard_range(ui, d);
+        }
         return;
     }
     if o.ty == "string" {
@@ -154,11 +206,20 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         return Err("name the file".into());
     }
     let path = if d.bool("__pick") { with_extension(path.trim(), f) } else { path };
-    let options: Map<String, Value> = f
+    let mut options: Map<String, Value> = f
         .options
         .iter()
         .filter_map(|o| d.fields.get(o.name).filter(|v| !v.is_null() && v.as_str() != Some("")).map(|v| (o.name.to_string(), v.clone())))
         .collect();
+    if separates(f) {
+        if !d.bool("separateArtboards") || all_artboards(d) {
+            options.remove("range");
+        } else {
+            // A bad range keeps the dialog open.
+            let n = app.session.active().map_or(0, |s| s.doc.artboards.len());
+            ArtboardPick { range: Some(d.str("range")), ..Default::default() }.resolve(n)?;
+        }
+    }
     app.ui.dialog = None;
     match SaveMode::of(&d.str("__action")) {
         Some(mode) if own_dialog(f) => io::ask_format_options(app, mode, f, &path),

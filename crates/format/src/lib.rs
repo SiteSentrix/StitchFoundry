@@ -5,15 +5,20 @@
 //! ```json
 //! { "format": "vectorcraft", "version": 3, "generator": "VectorCraft 0.1.0",
 //!   "preview": { "mime": "image/png", "data": "<base64>" },
+//!   "profiles": { "<profile name>": { "mime": "application/vnd.iccprofile", "data": "<base64>" } },
+//!   "pdf": { "mime": "application/pdf", "data": "<base64>" },
 //!   "document": { …vectorcraft_doc::Document… },
 //!   "images": { "<key>": { "mime": "image/png", "data": "<base64>" } } }
 //! ```
 //! It is lossless for everything in the document model; foreign data lives in `document.unknown`
 //! and document keys a newer version added are kept (`Document::extra`). Only the images the
 //! document uses are written. `preview` (optional) is a PNG of the first artboard, at most
-//! [`PREVIEW_MAX`] pixels on its longer side, for file browsers. An image only linked images show
-//! is saved as its low-resolution preview (`"proxy": true`); the engine reads the linked file again
-//! when the document opens.
+//! [`PREVIEW_MAX`] pixels on its longer side, for file browsers. `profiles` (optional, Embed ICC
+//! Profiles) holds the ICC files of colour profiles the document is tagged with, for machines that
+//! don't have them ([`load_file`] returns them). `pdf` (optional, Create PDF-Compatible File) is a
+//! PDF of every artboard for apps that read PDF ([`pdf_content`]). An image only linked images
+//! show is saved as its low-resolution preview (`"proxy": true`), unless saved with Include Linked
+//! Files; the engine reads the linked file again when the document opens.
 //!
 //! Versions: v1 wrote anchors as `{p: {x, y}, in: {x, y}, out: {x, y}, kind}`; v2 as
 //! `{p: [x, y], in?, out?, kind?}` with default-valued fields left out; v3 keeps the assigned colour
@@ -95,6 +100,8 @@ struct File {
     document: Document,
     #[serde(default)]
     images: BTreeMap<String, Image>,
+    #[serde(default)]
+    profiles: BTreeMap<String, Image>,
 }
 
 /// How [`save_with`] writes a document.
@@ -108,13 +115,22 @@ pub struct SaveOptions {
     pub version: u32,
     /// A PNG preview to embed (at most [`PREVIEW_MAX`] pixels on its longer side).
     pub preview: Option<Vec<u8>>,
+    /// Include Linked Files: linked images keep the file's own bytes, not just their preview.
+    pub include_linked: bool,
+    /// Embed ICC Profiles: ICC files by profile name.
+    pub profiles: BTreeMap<String, Vec<u8>>,
+    /// Create PDF-Compatible File: a PDF of the document to carry.
+    pub pdf: Option<Vec<u8>>,
 }
 
 impl Default for SaveOptions {
     fn default() -> Self {
-        Self { pretty: false, compress: false, version: VERSION, preview: None }
+        Self { pretty: false, compress: false, version: VERSION, preview: None, include_linked: false, profiles: BTreeMap::new(), pdf: None }
     }
 }
+
+/// The MIME type of embedded ICC profiles.
+pub const ICC_MIME: &str = "application/vnd.iccprofile";
 
 impl SaveOptions {
     /// Can a file be written this way (a version [`save_with`] writes, compressed only for readers
@@ -177,21 +193,33 @@ pub fn save_with(doc: &Document, o: &SaveOptions) -> Result<Vec<u8>, FormatError
         .iter()
         .filter(|(k, _)| used.contains(k.as_str()))
         .map(|(k, b)| {
-            let image = match b.proxy.as_ref().filter(|_| linked.contains(k)) {
+            // Include Linked Files keeps the file's bytes whenever they are loaded.
+            let preview_only = linked.contains(k) && (!o.include_linked || b.is_proxy());
+            let image = match b.proxy.as_ref().filter(|_| preview_only) {
                 Some(p) => Image { mime: vectorcraft_doc::links::PROXY_MIME.into(), data: base64_encode(p), proxy: true },
                 None => Image { mime: b.mime.clone(), data: base64_encode(&b.bytes), proxy: false },
             };
             (k.as_str(), image)
         })
         .collect();
-    let size = body.len() + images.values().map(|i| i.data.len()).sum::<usize>() + 256;
+    let blob = |mime: &str, bytes: &[u8]| Image { mime: mime.into(), data: base64_encode(bytes), proxy: false };
+    let profiles: BTreeMap<&str, Image> = o.profiles.iter().map(|(name, icc)| (name.as_str(), blob(ICC_MIME, icc))).collect();
+    let pdf = o.pdf.as_deref().map(|p| blob("application/pdf", p));
+    let carried = profiles.values().chain(&pdf).map(|i| i.data.len()).sum::<usize>();
+    let size = body.len() + images.values().map(|i| i.data.len()).sum::<usize>() + carried + 256;
     let mut w = Envelope { out: Vec::with_capacity(size), pretty };
     // Older apps only know the name from before the rename.
     w.field("format", &if o.version < VERSION { LEGACY_EXTENSION } else { EXTENSION })?;
     w.field("version", &o.version)?;
     w.field("generator", &format!("VectorCraft {}", env!("CARGO_PKG_VERSION")))?;
     if let Some(png) = &o.preview {
-        w.field("preview", &Image { mime: "image/png".into(), data: base64_encode(png), proxy: false })?;
+        w.field("preview", &blob("image/png", png))?;
+    }
+    if !profiles.is_empty() {
+        w.field("profiles", &profiles)?;
+    }
+    if let Some(pdf) = &pdf {
+        w.field("pdf", pdf)?;
     }
     w.raw("document", &body);
     w.field("images", &images)?;
@@ -295,6 +323,15 @@ pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
     load_info(bytes).map(|(doc, _)| doc)
 }
 
+/// A native file read: its document, what it says about itself and the colour profiles it carries.
+#[derive(Debug)]
+pub struct NativeFile {
+    pub doc: Document,
+    pub info: FileInfo,
+    /// ICC files by profile name (saved with Embed ICC Profiles; undecodable ones are left out).
+    pub profiles: BTreeMap<String, Vec<u8>>,
+}
+
 /// What a native file says about itself besides its document.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileInfo {
@@ -313,6 +350,11 @@ impl FileInfo {
 
 /// [`load`], also telling the file's version and name.
 pub fn load_info(bytes: &[u8]) -> Result<(Document, FileInfo), FormatError> {
+    load_file(bytes).map(|f| (f.doc, f.info))
+}
+
+/// [`load`], with everything else the file carries.
+pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     let text = unpack(bytes)?;
     let f: File = serde_json::from_slice(&text).map_err(|e| FormatError::NotVectorcraft(e.to_string()))?;
     if f.format != EXTENSION && f.format != LEGACY_EXTENSION {
@@ -338,18 +380,30 @@ pub fn load_info(bytes: &[u8]) -> Result<(Document, FileInfo), FormatError> {
     // Saved before v3: the assigned profiles move out of `unknown`.
     doc.migrate_color_profiles();
     doc.fix_next_id();
-    Ok((doc, FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }))
+    let profiles = f.profiles.into_iter().filter_map(|(name, icc)| Some((name, base64_decode(&icc.data)?))).collect();
+    Ok(NativeFile { doc, info: FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }, profiles })
+}
+
+/// The members of a native file besides its document (which is skipped, not decoded).
+#[derive(Deserialize)]
+struct Head {
+    preview: Option<Image>,
+    pdf: Option<Image>,
+}
+
+fn head(bytes: &[u8]) -> Option<Head> {
+    serde_json::from_slice(&unpack(bytes).ok()?).ok()
 }
 
 /// The preview PNG embedded in a native file (`None`: it has none, or isn't a native file).
 pub fn preview(bytes: &[u8]) -> Option<Vec<u8>> {
-    #[derive(Deserialize)]
-    struct Head {
-        preview: Option<Image>,
-    }
-    let text = unpack(bytes).ok()?;
-    let head: Head = serde_json::from_slice(&text).ok()?;
-    base64_decode(&head.preview?.data)
+    base64_decode(&head(bytes)?.preview?.data)
+}
+
+/// The PDF a native file saved with Create PDF-Compatible File carries (`None`: it has none, or
+/// isn't a native file).
+pub fn pdf_content(bytes: &[u8]) -> Option<Vec<u8>> {
+    base64_decode(&head(bytes)?.pdf?.data)
 }
 
 /// Does this look like a `.vectorcraft` file (compressed or not)?

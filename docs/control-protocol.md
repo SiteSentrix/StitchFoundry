@@ -339,3 +339,16 @@ EPS Options: Export As… with the EPS format (`file.exportAs {format: "eps"}`, 
 `cmykPostScript`, `compatibleGradients`, `level` (`2`, `3`), plus `path` and the artboard choice (`useArtboards`,
 `range`). `ui.dialog.confirm` checks them (a bad value or an unknown preset keeps the dialog open), remembers them for
 the next EPS Options and writes the file(s), asking for a path when there is none.
+
+Data Recovery: at launch, copies left behind by a crash open the `recovery` dialog (never copies another running
+instance keeps, so instances started side by side for screenshots don't get it). Fields: `copies` (`[{file, title,
+saved}]`, from `file.recovery.list`) and `discard`. `ui.dialog.confirm` restores them all (`file.recovery.restore`
+each, opening "<name> [Recovered]" documents), `discard: true` then confirm deletes them, `ui.dialog.cancel` keeps them
+for the next launch. While copies are written in the background `ui.inspect` lists them under `background`
+("Saving recovery data for <name>").
+
+Native save options: File → Save As to a native or `.ai` file opens the `saveOptions` dialog after the save panel
+(heading "VectorCraft Options" or "PDF-compatible .ai Options"). Fields: `separateArtboards`, `all` (true: every
+artboard; false: `range`, such as "1-3, 5"), `includeLinked`, `embedProfiles`, `pdfCompatible`, `compress`, and for
+native files `version` and `preview`. A bad range keeps the dialog open; `ui.dialog.confirm` writes the file and the
+artboards' files.

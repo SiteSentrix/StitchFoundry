@@ -32,6 +32,8 @@ pub fn close_all(app: &mut VectorcraftApp, then: &str) -> Result<Value, String> 
         return ask(app, i, then);
     }
     if then == "quit" {
+        // Nothing unsaved is left: no recovery copies either.
+        vectorcraft_engine::cmd::recovery::forget_all(&mut app.session);
         // The host closes the window.
         app.ui.status = "quit".into();
         return Ok(Value::Null);

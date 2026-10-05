@@ -5,7 +5,7 @@
 use proptest::prelude::*;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeId, NodeKind};
-use vectorcraft_format::{SaveOptions, base64_decode, base64_encode, load, preview, save, save_with, sniff};
+use vectorcraft_format::{SaveOptions, base64_decode, base64_encode, load, load_file, pdf_content, preview, save, save_with, sniff};
 use vectorcraft_geom::Affine;
 use vectorcraft_testkit::fixtures;
 use vectorcraft_testkit::invariants::{check_document, check_native_roundtrip, check_native_roundtrip_exact, doc_json, json_approx_eq};
@@ -111,6 +111,26 @@ proptest! {
         let _ = preview(&bytes);
         if let Ok(d) = load(&bytes) {
             check_document(&d).map_err(TestCaseError::fail)?;
+        }
+    }
+
+    /// Mutating a file carrying ICC profiles and a PDF (save options) never panics the readers.
+    #[test]
+    fn load_mutated_file_with_profiles_never_panics(cut in 0usize..3000, flips in prop::collection::vec((0usize..3000, any::<u8>()), 0..8)) {
+        let o = SaveOptions {
+            profiles: [("Studio RGB".to_string(), vec![1, 2, 3]), ("Press".to_string(), vec![])].into(),
+            pdf: Some(b"%PDF-1.7".to_vec()),
+            ..SaveOptions::default()
+        };
+        let mut bytes = save_with(&Document::new(100.0, 100.0), &o).unwrap();
+        for (i, b) in flips {
+            let n = bytes.len();
+            bytes[i % n] = b;
+        }
+        bytes.truncate(cut.min(bytes.len()));
+        let _ = pdf_content(&bytes);
+        if let Ok(f) = load_file(&bytes) {
+            check_document(&f.doc).map_err(TestCaseError::fail)?;
         }
     }
 }

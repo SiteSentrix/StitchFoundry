@@ -194,8 +194,8 @@ fn plan(app: &VectorcraftApp, mode: SaveMode, p: &Value) -> Result<SavePlan, Str
 /// When no path is known, desktop asks with a save panel (one file type per save format) and the
 /// web opens the Save As dialog (file name and format). With `ask_options` and no options in `p`,
 /// a format picked that way that has options asks for them before anything is written (SVG
-/// Options, the Save PDF dialog, or the save options dialog), and so does Save As or Save a Copy
-/// to a given SVG path. → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
+/// Options, the Save PDF dialog, or the save options dialog: native and `.ai` files on Save As
+/// only), and so does Save As or Save a Copy to a given SVG path. → `{path, format, warnings…}` once written, or `{pending: <dialog kind>,
 /// path?}` while a dialog is open.
 pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool) -> Result<Value, String> {
     remember_view(app);
@@ -222,12 +222,23 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         o.insert("path".into(), json!(with_save_extension(&picked, first.format)));
     }
     let chosen = plan(app, mode, &q)?;
-    // Native saves don't stop to ask: Use Compression decides, and options can be passed.
-    if ask && !chosen.format.options.is_empty() && !matches!(chosen.format.id, "vectorcraft" | "template") {
+    if ask && asks_options(mode, chosen.format) {
         let path = chosen.path.clone().unwrap_or_default();
         return ask_format_options(app, mode, chosen.format, &path);
     }
     write_plan(app, chosen)
+}
+
+/// Does a save (`mode`) to a picked file of format `f` ask for its options first? Native and `.ai`
+/// files only on Save As (the options dialog after the save panel); Save, a Copy and templates
+/// reuse the remembered options or Use Compression.
+fn asks_options(mode: SaveMode, f: &Format) -> bool {
+    !f.options.is_empty()
+        && match f.id {
+            "vectorcraft" | "ai" => mode == SaveMode::SaveAs,
+            "template" => false,
+            _ => true,
+        }
 }
 
 /// Does `p` give format options (`options`, `svg: {…}` or SVG options at its top level)?
@@ -312,9 +323,7 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         let r = r?;
         // The document may have closed meanwhile: the file is written all the same.
-        if let Some(st) = app.session.document_mut(uid) {
-            done.finish(st);
-        }
+        done.complete(&mut app.session, uid);
         let path = r["path"].as_str().unwrap_or_default().to_string();
         if retargets {
             note_recent(app, &path);

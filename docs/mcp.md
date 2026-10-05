@@ -1265,3 +1265,52 @@ as they do for art larger than the imageable area and for overprints in composit
 {"name":"run_command","arguments":{"command":"print.preview","params":{"settings":{"output":{"mode":"separations"}}}}}
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.pdf","settings":{"copies":2}}}}
 ```
+
+## Data Recovery
+
+Modified documents get recovery copies (`file.recovery.save`; the app runs it every `autosaveInterval` minutes while
+`autosaveRecovery` is on, skipping documents of more than 20,000 objects while `recoveryOffForComplex` is on). A copy
+goes when its document is saved, reverted or closed, so copies still there after the app quits were left by a crash.
+The copies live in the `recoveryFolder` preference's folder (default: `Data Recovery` beside the app's preferences;
+none when the app runs with `VECTORCRAFT_NO_PREFS`) or, on the web, in browser storage.
+
+Each running app (each browser tab) keeps its copies in an area of its own (`<area>/<name>`): a sub-folder whose
+`.lock` file it keeps locked while it runs, or on the web an area with a heartbeat it refreshes every minute. Only
+areas nobody holds are offered: their lock is free, or their heartbeat is older than three intervals (at least three
+minutes). Several apps running at once (agents' instances included) never see each other's copies as crash leftovers,
+and an area being restored or discarded is held, so two apps launched together never both take it.
+
+`file.recovery.list` → `{copies: [{file, title, path, format, saved, open, running}], location}` (`open`: the copy of a
+document open here; `running`: kept by another VectorCraft that is running). `file.recovery.restore {file?}` opens
+copies left behind (default: all) as `"<name> [Recovered]"`: modified, and Save asks where to save them (suggesting
+their original file); the copy moves into this app's area. `file.recovery.discard {file?}` deletes them. Without a
+folder or browser storage the commands are disabled and say how to set one.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"recoveryFolder","value":"/tmp/vc-recovery"}}}
+{"name":"run_command","arguments":{"command":"file.recovery.save","params":{}}}
+{"name":"run_command","arguments":{"command":"file.recovery.restore","params":{"file":"1759650000-1/Poster-1"}}}
+```
+
+## Native save options
+
+`document.save` / `file.saveAs` / `file.saveCopy` to a native (`.vectorcraft`, `.vctemplate`) or `.ai` file take, flat
+or in `options` (`file.formatOptions {format}` lists them with their values):
+
+- `separateArtboards: true` also writes each artboard of `range` (`"1-3, 5"`, default `"all"`) to
+  `<name>-<artboard>.<ext>` beside the file: that artboard and the art touching it. The result's `files` lists every
+  file written, the master file first (without a path: `files: [{name, dataBase64}]`). 3 artboards give 4 files.
+- `includeLinked: true` keeps linked images' own pixels in the file (they stay linked), not just the previews.
+- `embedProfiles` (default true) carries the ICC profiles the document is tagged with that were loaded from files;
+  opening the file installs them where they are missing (a warning names one that can't be used).
+- `pdfCompatible`: native files (default false) also carry a PDF of every artboard (`pdf` in the file); `.ai` files
+  (default true) with false write blank pages around the native document (smaller; other apps show empty pages).
+- `.ai` only: `compress` (default true) is the PDF option `compression.compressText`.
+
+File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel; Save, Save a Copy
+and Save as Template reuse the options as last saved (or Use Compression).
+
+```json
+{"name":"run_command","arguments":{"command":"file.saveAs","params":{"path":"/tmp/set.vectorcraft","separateArtboards":true,"range":"2-3","includeLinked":true}}}
+{"name":"run_command","arguments":{"command":"file.saveAs","params":{"path":"/tmp/set.ai","pdfCompatible":false}}}
+```

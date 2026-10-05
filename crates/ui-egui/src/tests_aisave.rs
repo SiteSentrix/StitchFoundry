@@ -1,5 +1,6 @@
-//! Save As .ai in the app: a PDF-compatible file written without an options dialog, which reopens
-//! as the document and saves as .ai again; Save a Copy as .ai leaves the document's path alone.
+//! Save As .ai in the app: the options dialog, then a PDF-compatible file, which reopens as the
+//! document and saves as .ai again (without asking); Save a Copy as .ai leaves the document's path
+//! alone.
 
 use serde_json::{Value, json};
 
@@ -8,8 +9,13 @@ use crate::tests_svg::app;
 #[test]
 fn save_as_ai_writes_a_pdf_that_reopens_editable() {
     let (mut app, written) = app("/tmp/art.ai");
+    // Save As asks for the .ai options first (M4.38), then writes.
     let r = app.run("file.saveAs", Value::Null).unwrap();
-    assert_eq!(r["path"], "/tmp/art.ai", "no options dialog: {r}");
+    assert_eq!(r["pending"], "saveOptions", "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("format").as_str(), d.str("path").as_str(), d.bool("pdfCompatible")), ("ai", "/tmp/art.ai", true));
+    let r = crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(r["path"], "/tmp/art.ai", "{r}");
     assert!(app.ui.dialog.is_none());
     let ai = written.borrow()[0].1.clone();
     assert!(ai.starts_with(b"%PDF"));

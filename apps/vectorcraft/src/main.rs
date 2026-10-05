@@ -252,6 +252,12 @@ fn main() -> eframe::Result {
             app.session.swatch_libraries.set_user_dir(swatches);
             let styles = prefs_path().and_then(|p| Some(p.parent()?.join("Graphic Styles").to_string_lossy().to_string()));
             app.session.style_libraries.set_user_dir(styles);
+            // Data Recovery copies live next to the preferences too (none for runs without
+            // preferences, such as agents' test runs, unless the recoveryFolder preference is set).
+            if std::env::var_os("VECTORCRAFT_NO_PREFS").is_none() {
+                let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
+                app.session.recovery.set_default_folder(recovery);
+            }
             app.integrated_titlebar = cfg!(target_os = "macos");
             app.custom_titlebar = CUSTOM_TITLEBAR;
             if let Some(port) = control_port {
