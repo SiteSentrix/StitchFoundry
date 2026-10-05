@@ -1,4 +1,5 @@
-//! File → Print: the Print dialog. The printer (and Setup…) on top, then the sections General,
+//! File → Print: the Print dialog. The print preset (and Save Preset…) and the printer (and
+//! Setup…) on top, then the sections General,
 //! Marks and Bleed, Output, Graphics, Color Management, Advanced and Summary, with a preview of the
 //! printed page under the section list: the arrows step through the pages, dragging the art moves
 //! its placement on the paper.
@@ -9,6 +10,11 @@
 //! keeps the settings with the document (`print.setup`) and prints them (`file.print`); Done
 //! (`discard: true`, then confirm) only keeps them. The preview, the inks and the Summary come
 //! from `print.preview`: the dialog lays nothing out itself.
+//!
+//! `preset` names the print preset whose settings were loaded last: setting it (the list, or
+//! `ui.dialog.set`) loads that preset's settings. Save Preset… names the settings as a preset
+//! (`print.presets.save`). The same dialog edits a preset (kind `printPreset`, from Edit → Print
+//! Presets): a `name` instead of the preset and printer, and OK saves the preset.
 
 use std::sync::{Arc, LazyLock};
 
@@ -24,11 +30,30 @@ use super::{DialogSpec, form};
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
+use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
 
 pub(super) const KIND: &str = "print";
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| "Print".into(), body, confirm, ok: Some("Print"), discard: Some("Done"), ..DialogSpec::FORM };
+
+/// The dialog kind of the preset editor (New / Edit in Edit → Print Presets).
+pub(super) const PRESET_KIND: &str = "printPreset";
+
+pub(super) const PRESET_SPEC: DialogSpec = DialogSpec {
+    heading: |d| if d.str(EDITING).is_empty() { "New Print Preset" } else { "Edit Print Preset" }.into(),
+    body,
+    confirm: confirm_preset,
+    ok: Some("Save Preset"),
+    ..DialogSpec::FORM
+};
+
+/// The preset editor's field holding the name of the saved preset it edits (empty: a new one).
+const EDITING: &str = "__editing";
+/// The field holding the name typed for Save Preset… (present while that row shows).
+const SAVE_AS: &str = "__savePresetAs";
+/// The preset whose settings were loaded last (`preset` loads its settings when it differs).
+const LOADED: &str = "__loaded";
 
 pub(super) const SECTIONS: [&str; 7] = ["General", "Marks and Bleed", "Output", "Graphics", "Color Management", "Advanced", "Summary"];
 
@@ -37,11 +62,11 @@ static DEFAULTS: LazyLock<Value> = LazyLock::new(|| serde_json::to_value(PrintSe
 
 /// The defaults of the settings a dialog of `kind` edits, when it is a Print dialog.
 pub(super) fn defaults(kind: &str) -> Option<&'static Value> {
-    (kind == KIND).then(|| &*DEFAULTS)
+    (kind == KIND || kind == PRESET_KIND).then(|| &*DEFAULTS)
 }
 
 /// The fields that aren't print settings.
-const NOT_SETTINGS: [&str; 3] = ["printer", "toFile", "discard"];
+const NOT_SETTINGS: [&str; 5] = ["printer", "toFile", "discard", "preset", "name"];
 
 /// The Printer list's entries besides the system's printers.
 const DEFAULT_PRINTER: &str = "Default Printer";
@@ -55,9 +80,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     // The settings saved with the document, every field filled in (defaults if never set up).
     let saved: PrintSettings = st.doc.print_setup.clone().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
-    let Value::Object(mut fields) = serde_json::to_value(saved).map_err(|e| e.to_string())? else {
-        return Err("print settings are not an object".into());
-    };
+    let mut fields = fields_of(&saved)?;
     let printers = crate::print::printers(app);
     let list = printers["printers"].as_array().map(Vec::as_slice).unwrap_or_default();
     let default = list.iter().find(|p| p["default"] == true).or(list.first()).and_then(|p| p["name"].as_str()).unwrap_or_default();
@@ -66,8 +89,80 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields.insert("__printers".into(), printers);
     fields.insert("__section".into(), json!(SECTIONS[0]));
     fields.insert("__sheet".into(), json!(0));
+    // The saved preset these settings are, if any (else [Default], shown as [Custom] if they differ).
+    let preset = app.session.prefs.print_presets.iter().find(|p| p.settings == saved).map_or(DEFAULT_PRESET, |p| p.name.as_str());
+    fields.insert("preset".into(), json!(preset));
+    fields.insert(LOADED.into(), json!(preset));
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(Value::Null)
+}
+
+/// The settings as dialog fields.
+fn fields_of(set: &PrintSettings) -> Result<serde_json::Map<String, Value>, String> {
+    match serde_json::to_value(set).map_err(|e| e.to_string())? {
+        Value::Object(fields) => Ok(fields),
+        _ => Err("print settings are not an object".into()),
+    }
+}
+
+/// Load the settings of the preset `preset` names once it changed (the list, or `ui.dialog.set`).
+fn sync_preset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    let name = d.str("preset");
+    if d.kind != KIND || name == d.str(LOADED) {
+        return Ok(());
+    }
+    d.fields.insert(LOADED.into(), json!(name));
+    let set = app.session.print_preset_settings(&name).ok_or_else(|| format!("no print preset named `{name}`"))?;
+    d.fields.extend(fields_of(&set)?);
+    Ok(())
+}
+
+/// Save Preset…: save the settings under the typed name and pick that preset.
+fn save_preset(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String> {
+    let r = app.run("print.presets.save", json!({ "name": d.str(SAVE_AS), "preset": DEFAULT_PRESET, "settings": settings(d) }))?;
+    d.fields.remove(SAVE_AS);
+    d.fields.insert("preset".into(), r["name"].clone());
+    d.fields.insert(LOADED.into(), r["name"].clone());
+    Ok(r)
+}
+
+/// Open the preset editor on the saved preset `name`, or on a new preset starting from `preset`
+/// (default: [Default]).
+pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
+    let s = |k: &str| params.get(k).and_then(Value::as_str);
+    let (base, name, editing) = match s("name") {
+        Some(name) => {
+            let p = app.session.prefs.print_presets.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim()));
+            let p = p.ok_or_else(|| format!("no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)"))?;
+            (p.name.clone(), p.name.clone(), p.name.clone())
+        }
+        None => (s("preset").unwrap_or(DEFAULT_PRESET).to_string(), app.session.new_print_preset_name(), String::new()),
+    };
+    let set = app.session.print_preset_settings(&base).ok_or_else(|| format!("no print preset named `{base}`"))?;
+    let mut fields = fields_of(&set)?;
+    fields.insert("name".into(), json!(name));
+    fields.insert(EDITING.into(), json!(editing));
+    fields.insert("__section".into(), json!(SECTIONS[0]));
+    fields.insert("__sheet".into(), json!(0));
+    app.ui.dialog = Some(Dialog { kind: PRESET_KIND.into(), fields });
+    Ok(Value::Null)
+}
+
+/// Save Preset (the preset editor's OK): `print.presets.save`, then back to Edit → Print Presets on
+/// it. A new preset may not take the name of another one.
+fn confirm_preset(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let (name, editing) = (d.str("name"), d.str(EDITING));
+    let p = if editing.is_empty() {
+        if app.session.print_preset_settings(&name).is_some() {
+            return Err(format!("a preset named `{}` exists", name.trim()));
+        }
+        json!({ "name": name, "preset": DEFAULT_PRESET, "settings": settings(d) })
+    } else {
+        json!({ "name": editing, "newName": name, "settings": settings(d) })
+    };
+    let r = app.run("print.presets.save", p)?;
+    super::print_presets::open(app, r["name"].as_str());
+    Ok(r)
 }
 
 /// The print settings the dialog stands for (`print.setup`'s `settings`).
@@ -82,18 +177,27 @@ pub(super) fn settings(d: &Dialog) -> Value {
 }
 
 /// Print, or Done (`discard`): keep the settings with the document (one undo step when they
-/// changed), then print them; settings that can't print keep the dialog open, unchanged.
+/// changed), then print them; settings that can't print keep the dialog open, unchanged. While
+/// Save Preset… asks for a name, it saves the preset instead.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut d = d.clone();
     // Done's flag holds for this press only: the dialog may stay open.
-    if let Some(open) = app.ui.dialog.as_mut() {
-        open.fields.remove("discard");
+    let done = d.fields.remove("discard").is_some_and(|v| v == true);
+    let synced = sync_preset(app, &mut d);
+    app.ui.dialog = Some(d.clone());
+    synced?;
+    // While Save Preset… asks for a name, OK (and Enter) saves the preset instead.
+    if d.fields.contains_key(SAVE_AS) {
+        let r = save_preset(app, &mut d);
+        app.ui.dialog = Some(d);
+        return r;
     }
-    let settings = settings(d);
+    let settings = settings(&d);
     let p = json!({ "settings": settings });
     // Laid out first, so a bad range or overlap is refused before anything is kept.
     app.session.execute("print.preview", &p).map_err(|e| e.to_string())?;
     app.run("print.setup", p)?;
-    if d.bool("discard") {
+    if done {
         app.ui.dialog = None;
         return Ok(json!({ "settings": settings }));
     }
@@ -106,7 +210,17 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
-    printer_row(app, ui, d);
+    if let Err(e) = sync_preset(app, d) {
+        app.status(e);
+    }
+    if d.kind == PRESET_KIND {
+        row_with(ui, "Preset name:", TOP_LABEL_WIDTH, |ui| {
+            form::text_edit(ui, d, "name", 288.0);
+        });
+    } else {
+        preset_rows(app, ui, d);
+        printer_row(app, ui, d);
+    }
     ui.add_space(10.0);
     let section = current_section(d, &SECTIONS);
     let preview = preview_of(app, ui.ctx(), &settings(d));
@@ -126,12 +240,55 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 "Graphics" => graphics(ui, d),
                 "Color Management" => color(ui, d),
                 "Advanced" => advanced(app, ui, d),
-                "Summary" => summary(ui, d, &preview),
+                "Summary" => summary(ui, d, &preview, app.session.active().is_some()),
                 _ => general(app, ui, d),
             });
         });
     });
     false
+}
+
+/// The Print Preset row ([Default], the saved presets; [Custom] once the settings differ from the
+/// preset's) with Save Preset…, and while Save Preset… asks for a name, the row taking it.
+fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    const CUSTOM: &str = "[Custom]";
+    let name = d.str("preset");
+    let current = serde_json::from_value::<PrintSettings>(settings(d)).ok();
+    let same = current.is_some() && current == app.session.print_preset_settings(&name);
+    let names: Vec<&str> = std::iter::once(DEFAULT_PRESET).chain(app.session.prefs.print_presets.iter().map(|p| p.name.as_str())).collect();
+    let mut picked = None;
+    let asking = d.fields.contains_key(SAVE_AS);
+    let mut ask = false;
+    row_with(ui, "Print Preset:", TOP_LABEL_WIDTH, |ui| {
+        picked =
+            widgets::dropdown(ui, "print-preset", if same { &name } else { CUSTOM }, &names, 300.0).and_then(|i| names.get(i)).map(|n| n.to_string());
+        let save = ui.add_enabled_ui(!asking, |ui| widgets::flat_button(ui, "Save Preset…", 96.0)).inner;
+        ask = save.on_hover_text("Save these settings as a print preset").clicked();
+    });
+    if let Some(n) = picked {
+        // Picking the preset shown again brings its settings back.
+        d.fields.insert(LOADED.into(), json!(""));
+        d.fields.insert("preset".into(), json!(n));
+        if let Err(e) = sync_preset(app, d) {
+            app.status(e);
+        }
+    }
+    if ask {
+        d.fields.insert(SAVE_AS.into(), json!(app.session.new_print_preset_name()));
+    }
+    if d.fields.contains_key(SAVE_AS) {
+        row_with(ui, "Save as preset:", TOP_LABEL_WIDTH, |ui| {
+            form::text_edit(ui, d, SAVE_AS, 200.0);
+            if widgets::flat_button(ui, "Save", 52.0).clicked()
+                && let Err(e) = save_preset(app, d)
+            {
+                app.status(e);
+            }
+            if widgets::flat_button(ui, "Cancel", 60.0).clicked() {
+                d.fields.remove(SAVE_AS);
+            }
+        });
+    }
 }
 
 /// What the Printer list offers.
@@ -233,7 +390,11 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
     ui.painter().rect_filled(rect, 3.0, t.pasteboard);
     let sheet = pv.as_ref().ok().and_then(|v| current_sheet(d, v));
     let Some((index, count, sheet)) = sheet else {
-        let text = pv.as_ref().err().map_or("Nothing to print", |_| "Can't print these settings: see the Summary");
+        let text = match pv {
+            _ if app.session.active().is_none() => "Open a document to preview its pages",
+            Ok(_) => "Nothing to print",
+            Err(_) => "Can't print these settings: see the Summary",
+        };
         let font = egui::FontId::proportional(11.0);
         let galley = ui.painter().layout(text.into(), font, t.text_dim, rect.width() - 16.0);
         ui.painter().galley(rect.center() - galley.size() / 2.0, galley, t.text_dim);
@@ -568,7 +729,7 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 
 /// The section an option is set in, and whether its first key is the section's own object
 /// (`output.mode` → Output › Mode).
-fn section_of(option: &str) -> (usize, bool) {
+pub(super) fn section_of(option: &str) -> (usize, bool) {
     match option.split('.').next().unwrap_or_default() {
         "marks" | "bleed" => (1, false),
         "output" => (2, true),
@@ -580,7 +741,7 @@ fn section_of(option: &str) -> (usize, bool) {
 }
 
 /// `output.mode` → "Output › Mode", `placement.x` → "General › Placement › X".
-fn option_label(option: &str) -> String {
+pub(super) fn option_label(option: &str) -> String {
     let (section, own) = section_of(option);
     let keys = option.split('.').skip(usize::from(own)).map(|k| form::humanize(k).trim_end_matches(':').to_string());
     std::iter::once(SECTIONS.get(section).copied().unwrap_or_default().to_string()).chain(keys).collect::<Vec<_>>().join(" › ")
@@ -615,19 +776,21 @@ pub(super) fn labelled(changed: &mut [Value]) {
     }
 }
 
-fn summary(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
+fn summary(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>, has_doc: bool) {
     let t = Tokens::get(ui.ctx());
-    let v = match pv {
-        Ok(v) => v,
+    match pv {
+        Ok(v) => {
+            heading(ui, "Pages");
+            let per_copy = v["sheets"].as_array().map_or(0, Vec::len);
+            ui.label(egui::RichText::new(format!("{} in all, {per_copy} per copy", v["pages"])).color(t.text));
+        }
+        // A preset edited without a document has no pages to count.
+        Err(_) if !has_doc => {}
         Err(e) => {
             heading(ui, "Error");
             ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
-            return;
         }
-    };
-    heading(ui, "Pages");
-    let per_copy = v["sheets"].as_array().map_or(0, Vec::len);
-    ui.label(egui::RichText::new(format!("{} in all, {per_copy} per copy", v["pages"])).color(t.text));
+    }
     heading(ui, "Options");
     let mut changed = vec![];
     vectorcraft_engine::cmd::fileio::pdf::changed("", &settings(d), &DEFAULTS, &mut changed);
@@ -637,6 +800,8 @@ fn summary(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
         note(ui, "Every option is at its default.");
     }
     super::save_pdf::option_rows(ui, &changed, option_label);
-    heading(ui, "Warnings");
-    super::save_pdf::warning_rows(ui, v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default());
+    if let Ok(v) = pv {
+        heading(ui, "Warnings");
+        super::save_pdf::warning_rows(ui, v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default());
+    }
 }

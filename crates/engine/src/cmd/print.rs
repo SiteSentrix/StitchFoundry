@@ -51,7 +51,11 @@ fn saved(doc: &Document) -> Value {
 
 /// The settings of `doc` with `p.settings` over them, checked.
 fn settings(cmd: &str, doc: &Document, p: &Value) -> Result<PrintSettings> {
-    let mut v = saved(doc);
+    settings_over(cmd, saved(doc), p)
+}
+
+/// The settings `v` (JSON) with `p.settings` over them, checked.
+pub(crate) fn settings_over(cmd: &str, mut v: Value, p: &Value) -> Result<PrintSettings> {
     match p.get("settings") {
         None | Some(Value::Null) => {}
         Some(over @ Value::Object(_)) => merge(&mut v, over),

@@ -1105,3 +1105,40 @@ proptest! {
         paste_from_elsewhere("clipboard.importEmf", json!({"dataBase64": mutated_b64(metafile_samples()[which].clone(), cut, &edits)}))?;
     }
 }
+
+// ---------- print presets files ----------
+
+/// Import print presets from `data`, then lay out (and print, when short) the rich document with
+/// each one imported.
+fn print_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "print.presets.import", data, |s, r| {
+        let list = s.execute("print.presets.list", &json!({})).unwrap_or_default();
+        for name in r["imported"].as_array().into_iter().flatten() {
+            let Some(p) = list["presets"].as_array().into_iter().flatten().find(|p| &p["name"] == name) else { continue };
+            let settings = json!({ "settings": p["settings"] });
+            let pages = s.execute("print.preview", &settings).ok().and_then(|v| v["pages"].as_u64());
+            let _ = s.execute("print.setup", &settings);
+            if pages.is_some_and(|n| n <= 8) {
+                let _ = s.execute("file.print", &settings);
+            }
+        }
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn print_presets_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "{\"format\": \"vcprintpresets\", ", "{\"format\": \"vcprintpresets\", \"presets\": [{\"name\": \"x\", \"settings\": "])) {
+        print_presets("print presets garbage", &format!("{head}{s}"))?;
+    }
+
+    #[test]
+    fn mutated_print_presets_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        let mut s = rich_session();
+        s.execute("print.presets.save", &json!({"name": "Tiles", "settings": {"scaling": "tileFull", "scale": {"width": 300, "height": 300}, "marks": {"trim": true}}})).unwrap();
+        s.execute("print.presets.save", &json!({"name": "Seps", "settings": {"output": {"mode": "separations", "inks": [{"name": "Cyan", "print": false}]}}})).unwrap();
+        let text = s.execute("print.presets.export", &json!({"names": ["Tiles", "Seps", "[Default]"]})).unwrap()["data"].as_str().unwrap().to_string();
+        print_presets("mutated print presets", &mutate_text(&text, cut, &edits))?;
+    }
+}

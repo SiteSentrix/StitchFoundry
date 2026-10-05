@@ -405,3 +405,14 @@ PDF. With `discard: true` it is Done: it only keeps the settings. Settings that 
 range of no tiles) answer with an error and keep the dialog open. `file.print {settings?, printer?, toFile?, path?}`
 prints without the dialog; `print.printers` lists the printers and `print.printerSetup {printer?}` opens their system
 settings (Setup…).
+
+Print presets: in the `print` dialog, `preset` names the print preset whose settings were loaded last; setting it
+(`ui.dialog.set {field: "preset", value: "Posters"}`) loads that preset's settings, and the list reads `[Custom]` once
+they differ. Save Preset… shows a name field (`__savePresetAs`): while it shows, `ui.dialog.confirm` saves the dialog's
+settings as that preset (`print.presets.save`) and selects it instead of printing. `ui.printPresetsDialog {selected?}`
+opens Edit → Print Presets (dialog `printPresets`, field `selected`); `[Default]` is protected. New… and Edit… open the
+preset editor, which `ui.printPresetDialog {name? (a saved preset to edit) | preset? (the preset a new one starts
+from)}` opens too: dialog `printPreset`, the Print dialog's settings fields plus `name`; `ui.dialog.confirm` runs
+`print.presets.save` and returns to Print Presets (a new preset can't take a name in use). Delete, Import… and
+Export… are `print.presets.delete`, `print.presets.import` and `print.presets.export`; `ui.dialog.confirm` closes.
+Opening a `.vcprintpresets` file with `app.open` imports its presets.

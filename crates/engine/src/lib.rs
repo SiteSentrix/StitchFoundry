@@ -465,6 +465,10 @@ pub struct Prefs {
     /// Save for Web: the settings the dialog opens on (`webExport.settings`); none until set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub web_export_settings: Option<cmd::webexport::WebSettings>,
+    /// Edit → Print Presets: the user's presets ([Default] isn't stored). A local library, not a
+    /// Preferences dialog field: resetting the preferences keeps it; `print.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub print_presets: Vec<cmd::printpresets::PrintPreset>,
 }
 
 impl Default for Prefs {
@@ -596,6 +600,7 @@ impl Default for Prefs {
             use_compression: false,
             web_export_presets: vec![],
             web_export_settings: None,
+            print_presets: vec![],
         }
     }
 }
@@ -1209,6 +1214,8 @@ mod tests_prefs;
 mod tests_previewbounds;
 #[cfg(test)]
 mod tests_print;
+#[cfg(test)]
+mod tests_printpresets;
 #[cfg(test)]
 mod tests_printpreview;
 #[cfg(test)]

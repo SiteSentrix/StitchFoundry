@@ -1506,3 +1506,18 @@ default printer) or, with `toFile`, a `path` or no printing available, saves the
 {"name":"run_command","arguments":{"command":"print.preview","params":{"settings":{"copies":2,"output":{"mode":"separations"}}}}}
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.pdf"}}}
 ```
+
+## Print presets
+
+`print.presets.list` lists `[Default]` (the default print settings, `builtIn: true`, protected) and the saved presets,
+each with its `settings` and how they differ from `[Default]` (`changed`). `print.presets.save {name?, newName?,
+preset?, settings?}` creates or changes a saved preset (starting from its own settings, or from `preset`, with
+`settings` over them) and `print.presets.delete {name}` deletes one; `[Default]` can be neither changed nor deleted.
+`print.presets.export {names?, path?}` writes them as a `.vcprintpresets` JSON file (without `path` it returns `data`),
+and `print.presets.import {path? | data? | dataBase64?, replace?}` adds a file's presets (a name in use gets a number
+unless `replace`). Saved presets live with the preferences. To print with a preset, pass its `settings` to
+`print.setup`, `print.preview` or `file.print`.
+
+```json
+{"name":"run_command","arguments":{"command":"print.presets.save","params":{"name":"Posters","settings":{"scaling":"tileImageable","overlap":18,"marks":{"trim":true}}}}}
+```

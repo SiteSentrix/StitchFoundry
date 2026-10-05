@@ -507,7 +507,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.print",
         "Print…",
         "Cmd+P",
-        "{} open the Print dialog (dialog `print`: the print.setup settings, printer, toFile; Print keeps the settings with the document and prints, Done (discard: true) only keeps them); with params {settings? (over the document's), printer? (print.printers name; \"\" the default), toFile?, path?} print without it: the print-ready PDF (engine file.print) goes to the printer → {pages, printer, printed: true, warnings}; with toFile, a path or no printing here (no print service) it is saved as a PDF at path (else a picked file, the web downloads it) → {path, pages, printed: false, warnings}",
+        "{} open the Print dialog (dialog `print`: the print.setup settings, preset (setting it loads that print preset; Save Preset… saves them as one), printer, toFile; Print keeps the settings with the document and prints, Done (discard: true) only keeps them); with params {settings? (over the document's), printer? (print.printers name; \"\" the default), toFile?, path?} print without it: the print-ready PDF (engine file.print) goes to the printer → {pages, printer, printed: true, warnings}; with toFile, a path or no printing here (no print service) it is saved as a PDF at path (else a picked file, the web downloads it) → {path, pages, printed: false, warnings}",
     ),
     (
         "print.printers",
@@ -516,6 +516,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} → {printers: [{name, default}] (the system's printers), service (printing is available; else Print saves a PDF), setup (print.printerSetup can open the printer settings)}",
     ),
     ("print.printerSetup", "Printer Setup…", "", "{printer?} open the system's settings of the printer (the Print dialog's Setup…; desktop)"),
+    (
+        "ui.printPresetsDialog",
+        "Print Presets…",
+        "",
+        "{selected?: preset name} open Edit → Print Presets (dialog `printPresets`, field `selected`): [Default] (protected) and the saved presets, with how the selected one differs from [Default]. New… and Edit… open the preset editor (ui.printPresetDialog); Delete, Import… and Export… run print.presets.delete / import / export",
+    ),
+    (
+        "ui.printPresetDialog",
+        "Print Preset",
+        "",
+        "{name?: a saved preset to edit | preset?: the preset a new one starts from (default [Default])} open the preset editor (dialog `printPreset`: the Print dialog's settings fields plus `name`); OK runs print.presets.save and returns to Print Presets",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -922,6 +934,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 None => Err("printing isn't available here".into()),
             }
         }
+        "ui.printPresetsDialog" => {
+            crate::dialogs::print_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
+        "ui.printPresetDialog" => crate::dialogs::print::open_preset(app, p),
         _ => return None,
     };
     Some(r)
@@ -1293,7 +1310,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Edit Original", "links.editOriginal"),
                 Sep,
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
-                todo("Print Presets…"),
+                c("Print Presets…", "ui.printPresetsDialog"),
                 c("PDF Presets…", "ui.pdfPresetsDialog"),
                 cp("Perspective Grid Presets…", "perspective.grid.preset", json!({"kind": 2})),
                 Sep,
