@@ -41,7 +41,9 @@ pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
-pub use save::{SAVE_FORMATS, SaveMode, SavePlan, save_filters, save_format, save_plan, save_with, stamp_save_dates, templates_folder};
+pub use save::{
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, templates_folder,
+};
 pub use svg::options_map as svg_options;
 /// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
 /// file it replaces), for the apps' own writers too.

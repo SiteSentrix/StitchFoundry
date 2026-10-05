@@ -383,7 +383,13 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                             egui::RichText::new(format!("X: {}  Y: {}", u.readout(p.x), u.readout(p.y))).font(theme::mono(10.5)).color(t.text_dim),
                         );
                     }
-                    if !app.ui.status.is_empty() {
+                    // Background saves and exports in progress, else the last message.
+                    if let Some(job) = app.background.jobs.first() {
+                        let more = app.background.jobs.len() - 1;
+                        let text = if more > 0 { format!("{}… (+{more})", job.label) } else { format!("{}…", job.label) };
+                        ui.label(egui::RichText::new(text).size(11.0).color(t.text));
+                        ui.add(egui::Spinner::new().size(12.0).color(t.accent));
+                    } else if !app.ui.status.is_empty() {
                         ui.label(egui::RichText::new(&app.ui.status).size(11.0).color(t.text));
                     }
                 });

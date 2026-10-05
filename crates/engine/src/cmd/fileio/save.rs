@@ -6,7 +6,7 @@
 //! the caller's writer (the file system here; a save panel or a browser download in the apps) and
 //! makes the file the document's own (path, format, options, saved state) for Save and Save As.
 
-use std::borrow::Cow;
+use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
@@ -206,13 +206,13 @@ fn is_svg(f: &Format) -> bool {
 }
 
 /// The document as written: native files carry the view to reopen at.
-fn doc_to_save<'a>(st: &'a DocState, f: &Format) -> Cow<'a, Document> {
+fn doc_to_save(st: &DocState, f: &Format) -> Arc<Document> {
     if is_native(f) && st.doc.last_view != st.view {
         let mut d = (*st.doc).clone();
         d.last_view = st.view.clone();
-        Cow::Owned(d)
+        Arc::new(d)
     } else {
-        Cow::Borrowed(&st.doc)
+        st.doc.clone()
     }
 }
 
@@ -226,12 +226,23 @@ fn fidelity_warning(f: &Format) -> Option<String> {
     })
 }
 
-/// Encode `plan` and write it with `write` (the file, then the images an SVG links to, beside it).
-/// Without a path → `{dataBase64, bytes, format, name, folder?, warnings, linked?: [{name,
-/// dataBase64}]}` and the document is unchanged; with one → `{path, format, bytes, warnings,
-/// linked?: [path…]}`, and Save or Save As (except to a template) make the file the document's
-/// own: path, title, format, options, saved state.
-pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+/// A save of the active document, snapshotted and ready to encode and write anywhere (Background
+/// Save does both on a worker thread): [`save_job`], then [`SaveJob::write`], then
+/// [`SaveJob::finish`]. Cheap to clone (the documents are shared).
+#[derive(Clone)]
+pub struct SaveJob {
+    plan: SavePlan,
+    /// The document as written (with the view to reopen at, links relative to the file).
+    doc: Arc<Document>,
+    /// The encoder's params.
+    params: Value,
+    /// The document when the job was made: what counts as saved once the file is written.
+    snapshot: Arc<Document>,
+}
+
+/// Snapshot the active document for `plan` (stamping File Info's dates when the file becomes the
+/// document's own). Bad options fail here, before anything is encoded.
+pub fn save_job(s: &mut Session, plan: SavePlan) -> Result<SaveJob> {
     let cmd = plan.mode.command();
     let retargets = plan.retargets();
     // The web build, without a clock, leaves the dates unless given one.
@@ -241,10 +252,11 @@ pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[
     {
         stamp_save_dates(s.doc_mut()?, at);
     }
-    let own = doc_to_save(s.doc()?, plan.format);
+    let st = s.doc()?;
+    let own = doc_to_save(st, plan.format);
     // A native file records its links' paths relative to where it is written.
     let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(&own, p));
-    let doc: &Document = relative.as_ref().unwrap_or(&own);
+    let doc = relative.map_or(own, Arc::new);
     let mut params = plan.options.clone();
     if is_svg(plan.format) {
         // A save keeps hidden layers (not displayed) unless told otherwise; exports leave them out.
@@ -254,51 +266,80 @@ pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[
     if matches!(plan.format.id, "vectorcraft" | "template") {
         // Not remembered with the options: the preference decides each time it isn't given.
         params = with_compression_pref(&s.prefs, &params);
+        super::native::save_options(cmd, plan.format, &doc, &params)?;
     }
-    let params = super::pdf::expand_preset(s, cmd, &params)?;
-    let mut enc = if plan.format.id == "ai" {
+    let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
+    if let (Some(o), "ai") = (params.as_object_mut(), plan.format.id) {
         // A PDF of every artboard with the PDF options, always carrying the native document.
-        let mut q = params.into_owned();
-        if let Some(o) = q.as_object_mut() {
-            o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
+        o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
+    }
+    Ok(SaveJob { plan, doc, params, snapshot: s.doc()?.doc.clone() })
+}
+
+impl SaveJob {
+    pub fn plan(&self) -> &SavePlan {
+        &self.plan
+    }
+
+    /// Encode the file and write it with `write` (the file, then the images an SVG links to,
+    /// beside it). Without a path → `{dataBase64, bytes, format, name, folder?, warnings, linked?:
+    /// [{name, dataBase64}]}`; with one → `{path, format, bytes, warnings, linked?: [path…]}`.
+    pub fn write(&self, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+        let (cmd, plan, doc) = (self.plan.mode.command(), &self.plan, &*self.doc);
+        let mut enc = if plan.format.id == "ai" {
+            let (bytes, warnings) = super::pdf::encode(cmd, &doc.without_edit_modes(), &self.params)?;
+            Encoded { warnings, ..Encoded::one(bytes) }
+        } else {
+            encode_all(doc, plan.format.id, &self.params)?
+        };
+        if enc.files.len() != 1 {
+            return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
         }
-        let (bytes, warnings) = super::pdf::encode(cmd, &doc.without_edit_modes(), &q)?;
-        Encoded { warnings, ..Encoded::one(bytes) }
-    } else {
-        encode_all(doc, plan.format.id, &params)?
-    };
-    if enc.files.len() != 1 {
-        return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
-    }
-    // What the format loses first, then the encoder's own notes (PDF options not applied yet…).
-    let mut warnings = std::mem::take(&mut enc.warnings);
-    warnings.splice(0..0, fidelity_warning(plan.format));
-    let extra = json!({ "format": plan.format.id, "warnings": warnings });
-    let Some(path) = plan.path else {
-        let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
-        out["name"] = json!(plan.name);
-        if let Some(folder) = plan.folder {
-            out["folder"] = json!(folder);
+        // What the format loses first, then the encoder's own notes (PDF options not applied yet…).
+        let mut warnings = std::mem::take(&mut enc.warnings);
+        warnings.splice(0..0, fidelity_warning(plan.format));
+        let extra = json!({ "format": plan.format.id, "warnings": warnings });
+        let Some(path) = &plan.path else {
+            let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
+            out["name"] = json!(plan.name);
+            if let Some(folder) = &plan.folder {
+                out["folder"] = json!(folder);
+            }
+            return Ok(out);
+        };
+        let files = enc.named(doc, path);
+        for (p, bytes) in &files {
+            write(p, bytes)?;
         }
-        return Ok(out);
-    };
-    let files = enc.named(doc, &path);
-    for (p, bytes) in &files {
-        write(p, bytes)?;
+        let bytes = files.first().map_or(0, |f| f.1.len());
+        let mut out = super::merge(json!({ "path": path, "bytes": bytes }), extra);
+        if let Some(linked) = files.get(1..).filter(|l| !l.is_empty()) {
+            out["linked"] = linked.iter().map(|(p, _)| json!(p)).collect();
+        }
+        Ok(out)
     }
-    let bytes = files.first().map_or(0, |f| f.1.len());
-    let mut out = super::merge(json!({ "path": path, "bytes": bytes }), extra);
-    if let Some(linked) = files.get(1..).filter(|l| !l.is_empty()) {
-        out["linked"] = linked.iter().map(|(p, _)| json!(p)).collect();
+
+    /// Once written: Save and Save As (except to a template) make the file `st`'s own: path,
+    /// title, format, options, and the snapshot as the saved state (edits made since the job was
+    /// made keep the document modified).
+    pub fn finish(self, st: &mut DocState) {
+        let retargets = self.plan.retargets();
+        if let (true, Some(path)) = (retargets, self.plan.path) {
+            st.path = Some(path);
+            st.format = self.plan.format.id;
+            st.save_options = self.plan.options;
+            st.converted = false;
+            st.mark_saved_as(&self.snapshot);
+        }
     }
-    if retargets {
-        let st = s.doc_mut()?;
-        st.path = Some(path.clone());
-        st.format = plan.format.id;
-        st.save_options = plan.options;
-        st.converted = false;
-        st.mark_saved();
-    }
+}
+
+/// Encode `plan` and write it with `write`, then make the file the document's own (see
+/// [`SaveJob`]). Without a path the document is unchanged.
+pub fn save_with(s: &mut Session, plan: SavePlan, write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    let job = save_job(s, plan)?;
+    let out = job.write(write)?;
+    job.finish(s.doc_mut()?);
     Ok(out)
 }
 

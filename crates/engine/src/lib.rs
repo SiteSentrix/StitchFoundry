@@ -163,6 +163,11 @@ impl DocState {
     pub fn mark_saved(&mut self) {
         self.saved_doc = self.doc.clone();
     }
+    /// Record `snapshot` (the document as a background save took it) as saved: edits made since
+    /// keep the document modified.
+    pub fn mark_saved_as(&mut self, snapshot: &Arc<Document>) {
+        self.saved_doc = snapshot.clone();
+    }
     pub fn title(&self) -> String {
         let name = self
             .path
@@ -624,6 +629,10 @@ impl Session {
 
     pub fn documents(&self) -> &[DocState] {
         &self.docs
+    }
+    /// The open document with [`DocState::uid`] `uid` (it may have closed since it was looked up).
+    pub fn document_mut(&mut self, uid: u64) -> Option<&mut DocState> {
+        self.docs.iter_mut().find(|d| d.uid == uid)
     }
     pub fn active_index(&self) -> Option<usize> {
         self.active

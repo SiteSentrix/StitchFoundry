@@ -117,6 +117,18 @@ impl Default for SaveOptions {
 }
 
 impl SaveOptions {
+    /// Can a file be written this way (a version [`save_with`] writes, compressed only for readers
+    /// that open compressed files)?
+    pub fn check(&self) -> Result<(), FormatError> {
+        if !(MIN_VERSION..=VERSION).contains(&self.version) {
+            return Err(FormatError::BadVersion(self.version));
+        }
+        if self.compress && self.version < COMPRESSED_SINCE {
+            return Err(FormatError::CompressedTooOld(self.version));
+        }
+        Ok(())
+    }
+
     /// The defaults for saving `doc` to disk: pretty when small (see [`PRETTY_MAX_OBJECTS`]).
     pub fn for_doc(doc: &Document) -> Self {
         let objects: usize = doc.layers.iter().map(|l| l.count()).sum();
@@ -142,12 +154,7 @@ pub fn save_file(doc: &Document) -> Vec<u8> {
 /// Serialize a document as `o` says: the version, compression, layout and preview. Editing-mode
 /// working copies and images nothing uses are left out.
 pub fn save_with(doc: &Document, o: &SaveOptions) -> Result<Vec<u8>, FormatError> {
-    if !(MIN_VERSION..=VERSION).contains(&o.version) {
-        return Err(FormatError::BadVersion(o.version));
-    }
-    if o.compress && o.version < COMPRESSED_SINCE {
-        return Err(FormatError::CompressedTooOld(o.version));
-    }
+    o.check()?;
     let pretty = o.pretty && !o.compress;
     let mut d = doc.without_edit_modes().into_owned();
     let linked = d.linked_only_images();

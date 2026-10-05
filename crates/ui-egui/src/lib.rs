@@ -5,6 +5,7 @@
 //! shortcuts, the ⌘K palette and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
+pub mod background;
 mod brand;
 pub mod canvas;
 pub mod chrome;
@@ -36,6 +37,8 @@ pub mod workspaces;
 
 #[cfg(test)]
 mod tests_aisave;
+#[cfg(test)]
+mod tests_background;
 #[cfg(test)]
 mod tests_clipboard;
 #[cfg(test)]
@@ -135,6 +138,9 @@ pub struct Services {
     pub system_clipboard: Option<Box<dyn SystemClipboard>>,
     /// File → Show in Folder: select a file in the system file manager (desktop).
     pub reveal: Option<RevealFn>,
+    /// Write a file from any thread (desktop): lets Background Save and Export write off the UI
+    /// thread ([`background`]). Without it they run at once.
+    pub write_shared: Option<background::SharedWriteFn>,
 }
 
 /// Cached canvas raster.
@@ -220,6 +226,8 @@ pub struct VectorcraftApp {
     system_paste_at: f64,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
+    /// Saves and exports running in the background (Preferences → File Handling).
+    pub background: background::Background,
 }
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
@@ -266,6 +274,7 @@ impl VectorcraftApp {
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
             paste_chord: Default::default(),
+            background: Default::default(),
         }
     }
 
@@ -530,11 +539,20 @@ impl VectorcraftApp {
             self.system_paste_at = now;
             self.system_paste = self.session.clipboard.is_empty() && self.session.active().is_some() && self.system_clipboard_pasteable();
         }
-        // The window's close button (or the system quitting the app) asks about unsaved documents.
-        if ctx.input(|i| i.viewport().close_requested()) && unsaved::any_dirty(self) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            if let Err(e) = unsaved::close_all(self, "quit") {
-                self.status(e);
+        background::poll(self);
+        if !self.background.jobs.is_empty() {
+            // Keep the status bar's progress moving and pick the result up when it arrives.
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        // The window's close button (or the system quitting the app) asks about unsaved documents,
+        // once the saves running in the background are done.
+        if ctx.input(|i| i.viewport().close_requested()) {
+            background::wait_all(self);
+            if unsaved::any_dirty(self) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                if let Err(e) = unsaved::close_all(self, "quit") {
+                    self.status(e);
+                }
             }
         }
         shortcut_editor::sync(&self.ui);

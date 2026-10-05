@@ -39,13 +39,21 @@ struct NativeOptions {
     preview: bool,
 }
 
-/// The `.vectorcraft` file of `doc` with the options in `p`.
-pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<u8>> {
+/// The options in `p` for saving `doc`, checked (the preview is left to [`encode`]) → them and
+/// whether to embed a preview.
+pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<(SaveOptions, bool)> {
     let o: NativeOptions = super::encode::options(f, p)?;
     let mut so = SaveOptions::for_doc(doc);
     so.compress = o.compress.unwrap_or(false);
     so.version = o.version.unwrap_or(vectorcraft_format::VERSION);
-    if o.preview {
+    so.check().map_err(|e| bad(cmd, e.to_string()))?;
+    Ok((so, o.preview))
+}
+
+/// The `.vectorcraft` file of `doc` with the options in `p`.
+pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<u8>> {
+    let (mut so, preview) = save_options(cmd, f, doc, p)?;
+    if preview {
         so.preview = preview_png(doc)?;
     }
     vectorcraft_format::save_with(doc, &so).map_err(|e| bad(cmd, e.to_string()))
