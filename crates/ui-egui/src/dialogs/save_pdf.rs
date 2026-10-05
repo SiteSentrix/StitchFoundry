@@ -757,9 +757,9 @@ mod tests {
     fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
         let (mut app, written, opened) = app();
         app.run("ui.savePdfDialog", json!({"path": "/tmp/w.pdf"})).unwrap();
-        set_field(&mut app, "marks.trim", json!(true));
+        set_field(&mut app, "thumbnails", json!(true));
         super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.status.contains("1 note(s)") && app.ui.status.contains("marks"), "{}", app.ui.status);
+        assert!(app.ui.status.contains("1 note(s)") && app.ui.status.contains("thumbnails"), "{}", app.ui.status);
         assert!(opened.borrow().is_empty(), "not opened unless asked");
         app.run("ui.savePdfDialog", json!({"path": "/tmp/bad.pdf"})).unwrap();
         set_field(&mut app, "__allArtboards", json!(false));
@@ -804,7 +804,7 @@ mod tests {
     }
 
     #[test]
-    fn bleed_and_non_printing_layers_reach_the_pdf() {
+    fn marks_and_bleeds_reach_the_pdf() {
         let (mut app, written, _) = app();
         app.run("document.setup", json!({"bleed": 9})).unwrap();
         let notes = app.run("layer.new", json!({})).unwrap()["id"].clone();
@@ -813,16 +813,17 @@ mod tests {
         app.run("ui.savePdfDialog", json!({"path": "/tmp/marks.pdf"})).unwrap();
         set_field(&mut app, "__section", json!("Marks and Bleeds"));
         set_field(&mut app, "bleed.useDocument", json!(true));
+        set_field(&mut app, "marks.trim", json!(true));
         frame(&mut app);
         set_field(&mut app, "__section", json!("General"));
         set_field(&mut app, "includeNonPrinting", json!(true));
         frame(&mut app);
         let r = super::super::confirm(&mut app).unwrap();
-        assert_eq!(r["warnings"], json!([]), "the bleed is applied");
+        assert_eq!(r["warnings"], json!([]), "marks and bleed are applied");
         let bytes = &written.borrow()[0].1;
         let page = &vectorcraft_pdf::info(bytes, None).unwrap().pages[0];
         let trim = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Trim).unwrap().1;
-        assert_eq!((trim.width(), trim.x0), (120.0, 9.0), "the trim box is the artboard, inside the bleed");
+        assert_eq!((trim.width(), trim.x0), (120.0, 9.0 + 18.0 + 0.25), "the trim box is the artboard, inside the bleed and marks");
         let mut ellipse = false;
         vectorcraft_pdf::import(bytes).unwrap().walk(|n| {
             let b = n.path_data().and_then(|p| p.bounds()).unwrap_or_default();

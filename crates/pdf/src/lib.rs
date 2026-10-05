@@ -8,8 +8,8 @@
 //!   freeform gradients as images (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths. Hidden objects,
 //!   guides and template layers are skipped, and so are non-printing layers unless asked for.
-//!   Each page is its artboard (the trim box) grown by the bleed (the bleed box and media box).
-//!   [`PdfSettings`] is the Save PDF
+//!   Each page is its artboard (the trim box) grown by the bleed (the bleed box) and by the
+//!   printer's marks around it (the media box), drawn in Registration. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
 //!   Editing the native document rides along as an embedded file ([`editing()`]).

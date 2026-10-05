@@ -74,7 +74,6 @@ fn options_not_applied_yet_come_back_as_warnings() {
         (json!({"thumbnails": true}), "thumbnails"),
         (json!({"fastWebView": true}), "fast web view"),
         (json!({"createLayers": true}), "layers"),
-        (json!({"marks": {"registration": true}}), "marks"),
         (json!({"output": {"conversion": "destination"}}), "conversion"),
         (json!({"output": {"profiles": "all"}}), "ICC"),
         (json!({"output": {"trapped": true}}), "trapped"),
@@ -84,11 +83,11 @@ fn options_not_applied_yet_come_back_as_warnings() {
         let w = settings(v.clone()).warnings();
         assert!(w.len() == 1 && w[0].contains(word), "{v}: {w:?}");
     }
-    // Bleed, the default view/overprint choices and applied options (image compression
+    // Bleed and marks, the default view/overprint choices and applied options (image compression
     // too: a codec the writer lacks is reported when an image needs it) warn about nothing.
     for v in [
         json!({"bleed": {"useDocument": true, "top": 9}}),
-        json!({"bleed": {"top": 9}}),
+        json!({"bleed": {"top": 9}, "marks": {"trim": true, "registration": true, "colorBars": true, "pageInfo": true}}),
         json!({"includeNonPrinting": true}),
         json!({"viewAfterSaving": true}),
         json!({"compression": {"compressText": false}}),
@@ -99,6 +98,6 @@ fn options_not_applied_yet_come_back_as_warnings() {
     let r =
         export_with_report(&doc(), &PdfOptions { settings: settings(json!({"thumbnails": true, "marks": {"trim": true}})), ..Default::default() })
             .unwrap();
-    assert_eq!(r.warnings.len(), 2, "{:?}", r.warnings);
+    assert_eq!(r.warnings.len(), 1, "{:?}", r.warnings);
     assert!(r.bytes.starts_with(b"%PDF-1.7"));
 }

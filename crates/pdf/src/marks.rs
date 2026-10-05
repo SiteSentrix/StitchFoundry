@@ -1,11 +1,32 @@
-//! Marks and Bleeds: the boxes of each exported page.
+//! Marks and Bleeds: the boxes of each exported page and its printer's marks. The marks' geometry
+//! is the shared [`PrinterMarks`] (print draws the same marks); here it gets the page's bleed,
+//! spot inks and page information.
 
-use vectorcraft_doc::Document;
-use vectorcraft_doc::marks::outset;
+use vectorcraft_color::Paint;
+use vectorcraft_doc::marks::{MarkStyle, PrinterMarks, outset};
 use vectorcraft_doc::setup::MAX_BLEED;
+use vectorcraft_doc::{Document, Node, NodeId};
 use vectorcraft_geom::Rect;
 
-use crate::PdfSettings;
+use crate::{MarkKind, MarkSettings, PdfSettings};
+
+impl MarkSettings {
+    /// These settings as the shared mark geometry.
+    pub fn printer_marks(&self) -> PrinterMarks {
+        PrinterMarks {
+            trim: self.trim,
+            registration: self.registration,
+            color_bars: self.color_bars,
+            page_info: self.page_info,
+            style: match self.kind {
+                MarkKind::Roman => MarkStyle::Roman,
+                MarkKind::Japanese => MarkStyle::Japanese,
+            },
+            weight: self.weight,
+            offset: self.offset,
+        }
+    }
+}
 
 impl PdfSettings {
     /// The bleed of `doc`'s pages, `[top, bottom, left, right]` in points: the document's (Document
@@ -23,13 +44,45 @@ pub(crate) struct PageBoxes {
     pub trim: Rect,
     /// The trim box grown by the bleed: the art it holds is kept.
     pub bleed: Rect,
-    /// The sheet: the bleed box.
+    /// The sheet: the bleed box, grown to hold the printer's marks.
     pub media: Rect,
 }
 
 impl PageBoxes {
-    pub fn new(trim: Rect, bleed: [f64; 4]) -> Self {
-        let r = outset(trim, bleed);
-        Self { trim, bleed: r, media: r }
+    pub fn new(trim: Rect, bleed: [f64; 4], marks: &PrinterMarks) -> Self {
+        let reach = marks.reach(bleed);
+        let most: [f64; 4] = std::array::from_fn(|i| bleed[i].max(reach[i]));
+        Self { trim, bleed: outset(trim, bleed), media: outset(trim, most) }
     }
+}
+
+/// The page information printed under the marks: the file's title, the artboard (its name and
+/// number) and the date and time of the export (UTC).
+pub(crate) fn page_info(doc: &Document, title: &str, artboard: usize, created: Option<i64>) -> String {
+    let title = if title.trim().is_empty() { "Untitled" } else { title.trim() };
+    let name = doc.artboards.get(artboard).map_or("", |a| a.name.as_str());
+    let mut info = format!("{title}  ·  {name} ({} of {})", artboard + 1, doc.artboards.len());
+    if let Some(t) = created {
+        let [y, mo, d, h, mi, _] = vectorcraft_doc::metadata::civil(t);
+        info.push_str(&format!("  ·  {y:04}-{mo:02}-{d:02} {h:02}:{mi:02} UTC"));
+    }
+    info
+}
+
+/// The marks of a page as art (`None` without marks): its spot inks get colour bar patches.
+pub(crate) fn art(doc: &Document, marks: &PrinterMarks, boxes: &PageBoxes, bleed: [f64; 4], info: &str) -> Option<Node> {
+    if !marks.any() {
+        return None;
+    }
+    let spots: Vec<Paint> = doc
+        .spot_names()
+        .into_iter()
+        .filter_map(|name| doc.global_color(&name).map(|color| Paint::Solid { color, swatch: Some(name), tint: 1.0 }))
+        .collect();
+    // The marks are drawn straight from this art, so their ids don't matter.
+    let mut next = 0;
+    Some(marks.art(boxes.trim, bleed, &spots, info, &mut || {
+        next += 1;
+        NodeId(next)
+    }))
 }

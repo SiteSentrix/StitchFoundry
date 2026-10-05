@@ -1,5 +1,5 @@
 //! `document.exportPdf` Marks and Bleeds: the document's bleed or custom values set the page
-//! boxes, non-printing layers are left out unless asked.
+//! boxes, printer's marks print in Registration, non-printing layers are left out unless asked.
 
 use serde_json::{Value, json};
 use vectorcraft_pdf::CropTo;
@@ -38,6 +38,20 @@ fn the_document_bleed_or_custom_values_grow_each_page() {
     assert_eq!(boxes(&export(&mut s, json!({"preset": "Press Quality"})).0).0.width(), 118.0);
     assert_eq!(boxes(&export(&mut s, json!({})).0).0.width(), 100.0);
     assert_eq!(boxes(&export(&mut s, json!({"bleed": {"left": 4.5}})).0).0.width(), 104.5);
+}
+
+#[test]
+fn printer_marks_print_in_registration_with_no_warning() {
+    let mut s = session();
+    let marks = json!({"trim": true, "registration": true, "colorBars": true, "pageInfo": true, "kind": "japanese"});
+    let (bytes, warnings) = export(&mut s, json!({"marks": marks, "bleed": {"useDocument": true}}));
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(String::from_utf8_lossy(&bytes).contains("/Separation/All"));
+    let (media, bleed, _) = boxes(&bytes);
+    // Japanese marks start at the 9 pt bleed and reach 18 pt (+ their weight) beyond it.
+    assert_eq!((bleed.width(), media.width()), (118.0, 100.0 + 2.0 * (9.0 + 18.0 + 0.25)), "the sheet holds the marks: {media:?}");
+    let v = s.execute("document.pdfSettings", &json!({"marks": marks, "bleed": {"top": 9}, "includeDocument": true})).unwrap();
+    assert_eq!(v["warnings"], json!([]));
 }
 
 #[test]

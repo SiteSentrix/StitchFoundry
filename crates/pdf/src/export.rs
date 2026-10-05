@@ -68,7 +68,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
     let mut meta = Metadata::new().creator("VectorCraft".into()).producer("VectorCraft".into());
     if !title.is_empty() {
-        meta = meta.title(title);
+        meta = meta.title(title.clone());
     }
     // File Info.
     let info = &doc.metadata;
@@ -82,7 +82,8 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     if !info.keywords.is_empty() {
         meta = meta.keywords(info.keywords.clone());
     }
-    let created = opts.created.or_else(vectorcraft_doc::metadata::now_unix).map(date_time);
+    let created_at = opts.created.or_else(vectorcraft_doc::metadata::now_unix);
+    let created = created_at.map(date_time);
     if let Some(t) = created {
         meta = meta.creation_date(t);
     }
@@ -113,10 +114,12 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     let cmyk = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
     let page_group = doc.page_isolate || doc.page_knockout;
     let cmyk_page_group = cmyk && !page_group && doc.layers.iter().any(|l| l.shows_transparency());
-    // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed.
+    // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed, and by the
+    // printer's marks around that.
     let bleed = set.bleed_of(doc);
+    let marks = set.marks.printer_marks();
     for i in indices {
-        let boxes = PageBoxes::new(doc.artboards[i].rect, bleed);
+        let boxes = PageBoxes::new(doc.artboards[i].rect, bleed, &marks);
         let (m, r) = (boxes.media, boxes.bleed);
         let size = Size::from_wh(m.width().max(1.0) as f32, m.height().max(1.0) as f32).ok_or(PdfError::BadArtboard(i))?;
         // The boxes in page space (y-down from the media box's top-left corner, like ours).
@@ -124,6 +127,11 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         let mut page = pdf.start_page_with(PageSettings::new(size).with_trim_box(at(boxes.trim)).with_bleed_box(at(boxes.bleed)));
         let mut s = page.surface();
         s.push_transform(&xf(Affine::translate((-m.x0, -m.y0))));
+        // Art reaches as far as the bleed: the marks lie outside it.
+        let clip = (m != r).then(|| to_path(&r.to_path(0.1))).flatten();
+        if let Some(clip) = &clip {
+            s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
+        }
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
         // writer has no page group attributes).
         if page_group {
@@ -135,6 +143,15 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         ex.children(&mut s, &doc.layers, r);
         if page_group || cmyk_page_group {
             s.pop();
+        }
+        if clip.is_some() {
+            s.pop();
+        }
+        let info = if marks.page_info { crate::marks::page_info(doc, &title, i, created_at) } else { String::new() };
+        if let Some(art) = crate::marks::art(doc, &marks, &boxes, bleed, &info) {
+            let knockout = std::mem::replace(&mut ex.knockout, false);
+            ex.node(&mut s, &art, m, true);
+            ex.knockout = knockout;
         }
         s.pop();
         s.finish();

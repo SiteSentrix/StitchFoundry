@@ -443,7 +443,6 @@ impl PdfSettings {
             (self.thumbnails, "page thumbnails are not embedded yet"),
             (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers, "PDF layers are not written yet: every layer is plain page content"),
-            (self.marks.any(), "printer's marks are not drawn yet"),
             (o.conversion != ColorConversion::None, "colour conversion is not applied yet: colours are written as they are"),
             (o.profiles != ProfileInclusion::None, "ICC profiles are not embedded yet"),
             (
