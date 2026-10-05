@@ -21,7 +21,7 @@ fn select(s: &mut Session, ids: &[u64]) {
 }
 
 /// A roughened square, three instances of a symbol and a square filled with a pattern.
-fn rich() -> Session {
+pub(super) fn rich() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
     let rough = rect(&mut s, 10.0, 10.0);
@@ -46,7 +46,7 @@ fn open(s: &mut Session, name: &str, text: &str) -> Value {
 }
 
 /// `d` without what opening a file sets anew.
-fn comparable(d: &Document) -> Document {
+pub(super) fn comparable(d: &Document) -> Document {
     let mut d = d.clone();
     d.title.clear();
     d

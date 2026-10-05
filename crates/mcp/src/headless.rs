@@ -26,8 +26,12 @@ impl Default for Headless {
 /// `run_command` behaves the same in both modes.
 const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     ("file.open", "Open…", "{path} open any readable file (see document.formats) as a new document; templates open untitled"),
-    ("file.save", "Save", "{path?} save as .vectorcraft (default: the document's path)"),
-    ("file.saveAs", "Save As…", "{path}"),
+    (
+        "file.save",
+        "Save",
+        "{path?, format?} = document.save: .vectorcraft, .ai (a PDF that reopens editable), .svg or .svgz (default: the document's path)",
+    ),
+    ("file.saveAs", "Save As…", "{path, format?, …the format's options} = document.save"),
     ("file.export", "Export…", "{path?, format?, artboard?, range?, scale?, …} = document.export (no path → dataBase64)"),
     ("file.exportForScreens", "Export for Screens…", "{folder?, artboards? | range?, formats?, prefix?} = document.exportForScreens"),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),

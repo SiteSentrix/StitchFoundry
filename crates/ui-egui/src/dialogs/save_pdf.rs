@@ -46,10 +46,10 @@ const TOP_LABEL_WIDTH: f32 = LIST_WIDTH + 26.0;
 /// Open the dialog with `params` (`document.exportPdf` options and `path?`) applied over their
 /// preset.
 pub fn open(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
-    let mut fields = settings_fields(params)?;
+    let mut fields = settings_fields(app, params)?;
     let s = |k: &str| params.get(k).and_then(Value::as_str);
     fields.insert("preset".into(), json!(s("preset").unwrap_or(pdf::DEFAULT_PRESET)));
-    fields.insert("__presets".into(), json!(pdf::presets()));
+    fields.insert("__presets".into(), json!(pdf::presets(&app.session)));
     fields.insert("__section".into(), json!(SECTIONS[0]));
     fields.insert("__allArtboards".into(), json!(s("range").is_none()));
     fields.insert("range".into(), json!(s("range").unwrap_or("")));
@@ -60,9 +60,10 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The settings `params` ask for (their preset with their options applied) as dialog fields.
-fn settings_fields(params: &Value) -> Result<Map<String, Value>, String> {
-    let settings = pdf::settings("ui.savePdfDialog", params).map_err(|e| e.to_string())?;
+/// The settings `params` ask for (their preset, built-in or saved, with their options applied) as
+/// dialog fields. A standard the writer can't produce yet still shows (Save PDF then says so).
+fn settings_fields(app: &VectorcraftApp, params: &Value) -> Result<Map<String, Value>, String> {
+    let settings = pdf::resolve("ui.savePdfDialog", params, &app.session.prefs.pdf_presets).map_err(|e| e.to_string())?;
     match serde_json::to_value(settings).map_err(|e| e.to_string())? {
         Value::Object(fields) => Ok(fields),
         _ => Err("PDF settings are not an object".into()),
@@ -219,6 +220,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             // The standard's own version (PDF/A-2b is a PDF 1.7 standard).
             set(d, "compatibility", json!(Compatibility::Pdf17.id()));
         }
+        if picked && standard != Standard::None {
+            // Files of a standard don't carry the editing data.
+            set(d, "preserveEditing", json!(false));
+        }
         ui.add_space(16.0);
         ui.label(egui::RichText::new("Compatibility:").color(t.text));
         pick::<Compatibility>(ui, d, "compatibility", 110.0, |c| standard.allows(c));
@@ -261,7 +266,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// Replace the settings with preset `name`'s (the artboard choice and path stay).
 fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
-    match settings_fields(&json!({ "preset": name })) {
+    match settings_fields(app, &json!({ "preset": name })) {
         Ok(settings) => {
             d.fields.extend(settings);
             d.fields.insert("preset".into(), json!(name));
@@ -272,7 +277,8 @@ fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
 
 fn general(ui: &mut egui::Ui, d: &mut Dialog) {
     heading(ui, "Options");
-    flag(ui, d, "preserveEditing", "Preserve editing capabilities", true);
+    let plain = choice::<Standard>(d, "standard").unwrap_or_default() == Standard::None;
+    flag(ui, d, "preserveEditing", "Preserve editing capabilities", plain);
     flag(ui, d, "thumbnails", "Embed page thumbnails", true);
     flag(ui, d, "fastWebView", "Optimize for fast web view", true);
     flag(ui, d, "viewAfterSaving", "View PDF after saving", true);

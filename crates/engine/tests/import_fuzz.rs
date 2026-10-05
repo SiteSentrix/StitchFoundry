@@ -533,3 +533,33 @@ proptest! {
         survive("mutated saved svg", || vectorcraft_engine::cmd::fileio::load("saved.svg", svg.as_bytes()).ok().map(|l| l.doc))?;
     }
 }
+
+// ---------- PDF saved with editing data ----------
+
+/// The rich document saved as a PDF-compatible .ai (the native document embedded, uncompressed).
+fn saved_ai() -> Vec<u8> {
+    static AI: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    AI.get_or_init(|| {
+        let r = rich_session().execute("document.save", &json!({"format": "ai", "compression": {"compressText": false}})).unwrap();
+        vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+    })
+    .clone()
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn ai_mutated_save_never_panics(
+        cut in 0usize..200_000,
+        flips in prop::collection::vec((0usize..200_000, prop::sample::select(vec![b'0', b'9', b'-', b'.', b' ', b'[', b']', b'<', b'>', b'/', b'(', b'{', b'"', 0u8, 0xff])), 0..10),
+    ) {
+        let mut b = saved_ai();
+        for (i, c) in flips {
+            let n = b.len();
+            b[i % n] = c;
+        }
+        b.truncate(cut.min(b.len()).max(9));
+        survive("mutated ai", || vectorcraft_engine::cmd::fileio::load("saved.ai", &b).ok().map(|l| l.doc))?;
+    }
+}

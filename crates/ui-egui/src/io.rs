@@ -103,14 +103,17 @@ fn format_param(p: &Value) -> Option<&str> {
     p.get("format").and_then(Value::as_str)
 }
 
-/// File → Save / Save As: native, or SVG for an .svg path (with the SVG options in `params`, else
-/// the ones the document was last saved with).
+/// File → Save / Save As: native, SVG for an .svg path (with the SVG options in `params`, else
+/// the ones the document was last saved with), or a PDF-compatible .ai file (with the PDF options
+/// in `params`) that reopens editable.
 pub fn save(app: &mut VectorcraftApp, path: Option<String>, save_as: bool, params: &Value) -> Result<String, String> {
     let st = app.session.active().ok_or("no document")?;
     let existing = if save_as { None } else { st.path.clone() };
     let path = target_path(app, path.or(existing), vectorcraft_format::EXTENSION)?;
     let f = fileio::save_format(format_param(params), Some(&path))?;
     fileio::stamp_save_dates(app.session.active_mut().ok_or("no document")?);
+    let params = fileio::pdf::expand_preset(&app.session, "file.save", params).map_err(|e| e.to_string())?;
+    let params = &*params;
     let st = app.session.active().ok_or("no document")?;
     let (enc, opts) = fileio::save_encoding(st, f, params, Some(&path)).map_err(|e| e.to_string())?;
     let doc = st.doc.clone();
@@ -131,7 +134,7 @@ pub fn save_as(app: &mut VectorcraftApp, copy: bool, p: &Value) -> Result<Value,
     let path = target_path(app, p.get("path").and_then(Value::as_str).map(str::to_string), vectorcraft_format::EXTENSION)?;
     let f = fileio::save_format(format_param(p), Some(&path))?;
     let given = p.get("svg").is_some_and(|v| !v.is_null()) || !fileio::svg_options(p)?.is_empty();
-    if f.id != "vectorcraft" && !given {
+    if matches!(f.id, "svg" | "svgz") && !given {
         let mode = if copy { svg_options::Mode::SaveCopy } else { svg_options::Mode::Save };
         svg_options::open(app, mode, Some(&path));
         return Ok(json!({ "dialog": svg_options::KIND, "path": path }));
@@ -139,9 +142,19 @@ pub fn save_as(app: &mut VectorcraftApp, copy: bool, p: &Value) -> Result<Value,
     if !copy {
         return save(app, Some(path), true, p).map(|p| json!({ "path": p }));
     }
-    let doc = app.session.active().ok_or("no document")?.doc.clone();
-    let copy = vectorcraft_engine::cmd::links::with_relative_paths(&doc, &path);
-    let enc = fileio::encode_all(copy.as_ref().unwrap_or(&doc), f.id, p).map_err(|e| e.to_string())?;
+    let st = app.session.active().ok_or("no document")?;
+    let doc = st.doc.clone();
+    // A .ai copy is written as Save writes it (PDF plus the native document).
+    let enc = match f.id {
+        "ai" => fileio::pdf::expand_preset(&app.session, "file.saveCopy", p)
+            .and_then(|p| fileio::save_encoding(st, f, &p, Some(&path)))
+            .map(|(enc, _)| enc),
+        _ => {
+            let copy = vectorcraft_engine::cmd::links::with_relative_paths(&doc, &path);
+            fileio::encode_all(copy.as_ref().unwrap_or(&doc), f.id, p)
+        }
+    }
+    .map_err(|e| e.to_string())?;
     write_encoded(app, &doc, &path, &enc)?;
     app.status(format!("Saved a copy as {path}"));
     Ok(json!({ "path": path }))

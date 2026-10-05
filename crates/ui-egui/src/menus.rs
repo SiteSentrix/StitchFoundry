@@ -48,14 +48,24 @@ use Item::Sep;
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.open", "Open…", "Cmd+O", "{path?}"),
-    ("file.save", "Save", "Cmd+S", "{path?, svg?: {…SVG options}} (a document saved as .svg saves as SVG again, with the same options)"),
+    (
+        "file.save",
+        "Save",
+        "Cmd+S",
+        "{path?, svg?: {…SVG options}, …PDF options for .ai} (a document saved as .svg saves as SVG again, with the same options; one saved or opened as .ai saves as .ai again)",
+    ),
     (
         "file.saveAs",
         "Save As…",
         "Cmd+Shift+S",
-        "{path?, svg?: {…SVG options}} .vectorcraft, or .svg/.svgz (such a path without svg options opens SVG Options)",
+        "{path?, svg?: {…SVG options}, …document.exportPdf options for .ai} .vectorcraft, .ai (PDF-compatible: a PDF carrying the native document, which reopens editable) or .svg/.svgz (such a path without svg options opens SVG Options)",
     ),
-    ("file.saveCopy", "Save a Copy…", "Cmd+Alt+S", "{path?, svg?: {…SVG options}} like Save As, but the document keeps its path"),
+    (
+        "file.saveCopy",
+        "Save a Copy…",
+        "Cmd+Alt+S",
+        "{path?, svg?: {…SVG options}, …PDF options for .ai} like Save As, but the document keeps its path",
+    ),
     ("file.newFromTemplate", "New from Template…", "Cmd+Shift+N", "{path?} open a template as a new untitled document"),
     ("file.revert", "Revert", "F12", "{}"),
     (

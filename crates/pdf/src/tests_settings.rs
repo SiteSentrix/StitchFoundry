@@ -71,7 +71,6 @@ fn checks_refuse_what_the_writer_cant_honour() {
 fn options_not_applied_yet_come_back_as_warnings() {
     assert!(PdfSettings::default().warnings().is_empty());
     for (v, word) in [
-        (json!({"preserveEditing": true}), "Preserve editing"),
         (json!({"thumbnails": true}), "thumbnails"),
         (json!({"fastWebView": true}), "fast web view"),
         (json!({"createLayers": true}), "layers"),
