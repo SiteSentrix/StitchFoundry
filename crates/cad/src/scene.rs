@@ -13,15 +13,11 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
 use crate::aci::nearest_aci;
 use crate::writer::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, fixed};
-use crate::{ColorDepth, DxfImage, DxfOptions, DxfOutput, Preserve, RasterFormat};
+use crate::{CAP_HEIGHT, ColorDepth, DxfImage, DxfOptions, DxfOutput, MAX_NEST, Preserve, RasterFormat};
 
 /// Curves are flattened to within this distance (points) where DXF needs straight segments
 /// (hatch boundaries, R12 polylines).
 const FLATNESS: f64 = 0.05;
-/// How deep symbols and brush art may nest in one another (deeper art is left out).
-const MAX_NEST: u32 = 8;
-/// Cap height as a fraction of the type size: the height of CAD text is that of its capitals.
-const CAP_HEIGHT: f64 = 0.7;
 /// Longest text value older DXF versions read.
 const MAX_TEXT: usize = 250;
 /// The lineweights DXF knows (hundredths of a millimetre).
@@ -227,15 +223,7 @@ impl<'a> Scene<'a> {
         let r = self.o.region;
         let limits = [0.0, 0.0, r.width() * self.k, r.height() * self.k];
         let one = (self.o.scale - 1.0).abs() < 1e-12;
-        let insunits = match self.o.unit {
-            Unit::Inches if one => 1,
-            Unit::Feet | Unit::FeetInches if one => 2,
-            Unit::Millimeters if one => 4,
-            Unit::Centimeters if one => 5,
-            Unit::Meters if one => 6,
-            Unit::Yards if one => 10,
-            _ => 0,
-        };
+        let insunits = if one { crate::insunits_code(self.o.unit).unwrap_or(0) } else { 0 };
         let drawing = Drawing {
             version: self.o.version,
             layers: self.layers,

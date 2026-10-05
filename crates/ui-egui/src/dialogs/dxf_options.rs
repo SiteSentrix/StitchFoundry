@@ -108,8 +108,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// Scale: 1 [unit] = [scale] Units.
-fn scale_row(ui: &mut egui::Ui, d: &mut Dialog) {
+/// Scale: 1 [unit] = [scale] Units (the `unit` and `scale` fields; DXF import reads them too).
+pub(super) fn scale_row(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = crate::theme::Tokens::get(ui.ctx());
     let units: Vec<&str> = Unit::ALL.iter().filter(|u| **u != Unit::FeetInches).map(|u| u.label()).collect();
     let unit = Unit::named(&d.str("unit")).unwrap_or(Unit::Millimeters);

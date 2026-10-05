@@ -59,6 +59,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
         // .ai and .ait files are PDF inside; the extension keeps the template meaning.
         return by_name.filter(|f| matches!(f.id, "ai" | "ait")).or_else(|| format("pdf"));
     }
+    if vectorcraft_cad::is_dxf(bytes) {
+        return format("dxf");
+    }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
@@ -116,7 +119,7 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
     load_with(name, bytes, &LoadOptions::default())
 }
 
-/// [`load`] with `document.open` options (the PDF pages, box and password).
+/// [`load`] with `document.open` options (the PDF pages, box and password; the DXF options).
 pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
     // PostScript (.ai saved in an older format or without PDF compatibility, .eps) says so, by
     // any name.
@@ -151,6 +154,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 .flatten()
                 .map(|e| (e.intact, move || Some(e.data)));
             restore_or_import(editing, || super::pdfimport::import(bytes, opts))?
+        }
+        "dxf" => {
+            let (doc, warnings) = super::dxfimport::import(bytes, &opts.dxf)?;
+            (doc, warnings, false)
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),

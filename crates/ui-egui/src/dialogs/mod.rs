@@ -15,6 +15,7 @@ mod color_picker;
 mod command;
 pub mod confirm;
 mod document_setup;
+pub mod dxf_import;
 pub mod dxf_options;
 mod effect;
 pub mod eps_options;
@@ -225,6 +226,7 @@ registry! {
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
+    DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

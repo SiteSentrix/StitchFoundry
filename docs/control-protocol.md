@@ -307,6 +307,15 @@ Export Selected Art Only with nothing selected, keeps the dialog open), remember
 writes the file (asking for a path when there is none). Export As also lists DWG, greyed out: setting its `format` to
 `dwg` shows, and on confirm answers, the hint to export DXF instead.
 
+DXF Import Options: opening a DXF drawing through the app (`app.open`, `file.open`, a drop) or placing one
+(`file.place` with a `.dxf` file and no `dxf` options, which answers `{"dialog": "dxfImport"}`) opens the `dxfImport`
+dialog (`mode`: `open` or `place`; `layouts`, `units` and `version` describe the drawing). Its fields are the
+`document.open` `dxf` options: `layout` (one of `layouts`), `fit`, `unit` (a unit name such as `Millimeters`) and
+`scale` (1 unit = `scale` drawing units; ignored with `fit`), `scaleLineweights`, `center`, `mergeLayers`.
+`ui.dialog.confirm` opens or places the drawing (placing keeps the other `file.place` params in `__place`) and
+remembers `fit`, `scaleLineweights`, `center` and `mergeLayers` for the next drawing; an error (an unknown layout,
+art too large at that scale) keeps the dialog open.
+
 Placement Options: the Links panel's flyout (or `ui.placementOptionsDialog {ids?}` for agents) opens the
 `placementOptions` dialog for the selected images (fields `ids`, `preserve`: `transforms`/`bounds`/`fileDimensions`/
 `fit`/`fill`, `align`: `topLeft` … `bottomRight`, `clip`). `ui.dialog.confirm` runs `links.placementOptions` with them as

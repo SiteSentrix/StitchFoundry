@@ -292,6 +292,10 @@ pub struct UiState {
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
     #[serde(default)]
     pub eps_options: Value,
+    /// The DXF Import Options chosen last (fit, scaleLineweights, center, mergeLayers; null:
+    /// never used).
+    #[serde(default)]
+    pub dxf_import: Value,
 }
 
 impl UiState {
@@ -352,6 +356,7 @@ impl Default for UiState {
             dialog_file: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
+            dxf_import: Value::Null,
         }
     }
 }
