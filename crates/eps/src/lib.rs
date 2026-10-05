@@ -18,13 +18,24 @@
 //! native document, both in comments that PostScript interpreters skip ([`native`],
 //! [`thumbnail`] read them back).
 //!
+//! [`import`] reads EPS and PostScript files back: the native document when the file carries one
+//! is [`native`]'s job; other files are run through a small PostScript interpreter, or come in as
+//! their TIFF preview.
+//!
 //! - `ps`: numbers, strings, paths and the data encodings (ASCII85, run-length, Flate).
 //! - `scene`: the document walk that writes the page.
 //! - `tiff`: the TIFF preview.
+//! - `import`: the PostScript interpreter.
+//! - `print`: print jobs as PostScript files ([`print()`]), their pages drawn by `scene`.
 
+mod import;
+mod print;
 mod ps;
 mod scene;
 mod tiff;
+
+pub use import::{Imported, family_style, import};
+pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;
 use vectorcraft_geom::{Point, Rect};
@@ -236,6 +247,25 @@ const THUMBNAIL: &str = "thumbnail";
 /// Largest native document [`native`] inflates (bytes).
 const MAX_NATIVE: u64 = 1 << 30;
 
+/// The DSC comments every file of ours has after its version line: creator, title, date,
+/// language level, data, and the spot colours `custom` with their CMYK equivalents.
+pub(crate) fn comments(s: &mut String, title: &str, created: Option<i64>, level: Level, custom: &[(String, [f32; 4])]) {
+    use std::fmt::Write;
+    let _ = writeln!(s, "%%Creator: VectorCraft {}", env!("CARGO_PKG_VERSION"));
+    let _ = writeln!(s, "%%Title: {}", ps::string(title));
+    if let Some(t) = created {
+        let [y, mo, d, h, mi, se] = vectorcraft_doc::metadata::civil(t);
+        let _ = writeln!(s, "%%CreationDate: ({y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{se:02} UTC)");
+    }
+    let _ = writeln!(s, "%%LanguageLevel: {}", level.id());
+    s.push_str("%%DocumentData: Clean7Bit\n");
+    for (i, (name, cmyk)) in custom.iter().enumerate() {
+        let _ = writeln!(s, "{}{}", if i == 0 { "%%DocumentCustomColors: " } else { "%%+ " }, ps::string(name));
+        let [c, m, y, k] = cmyk.map(|v| ps::num(f64::from(v)));
+        let _ = writeln!(s, "%%CMYKCustomColor: {c} {m} {y} {k} {}", ps::string(name));
+    }
+}
+
 /// The PostScript program: header comments, thumbnail, prolog, setup, the page and the trailer
 /// with the native document.
 fn document(o: &EpsOptions, setup: &str, body: &str, custom: &[(String, [f32; 4])], thumb: Option<&[u8]>) -> String {
@@ -244,21 +274,9 @@ fn document(o: &EpsOptions, setup: &str, body: &str, custom: &[(String, [f32; 4]
     let bb = bounding_box(o.region, o.origin);
     let hi = hires_box(o.region, o.origin);
     s.push_str("%!PS-Adobe-3.0 EPSF-3.0\n"); // brand-ok: the DSC version line every EPS file starts with
-    let _ = writeln!(s, "%%Creator: VectorCraft {}", env!("CARGO_PKG_VERSION"));
-    let _ = writeln!(s, "%%Title: {}", ps::string(&o.title));
-    if let Some(t) = o.created {
-        let [y, mo, d, h, mi, se] = vectorcraft_doc::metadata::civil(t);
-        let _ = writeln!(s, "%%CreationDate: ({y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{se:02} UTC)");
-    }
+    comments(&mut s, &o.title, o.created, o.level, custom);
     let _ = writeln!(s, "%%BoundingBox: {} {} {} {}", bb[0], bb[1], bb[2], bb[3]);
     let _ = writeln!(s, "%%HiResBoundingBox: {} {} {} {}", ps::num(hi[0]), ps::num(hi[1]), ps::num(hi[2]), ps::num(hi[3]));
-    let _ = writeln!(s, "%%LanguageLevel: {}", o.level.id());
-    s.push_str("%%DocumentData: Clean7Bit\n");
-    for (i, (name, cmyk)) in custom.iter().enumerate() {
-        let _ = writeln!(s, "{}{}", if i == 0 { "%%DocumentCustomColors: " } else { "%%+ " }, ps::string(name));
-        let [c, m, y, k] = cmyk.map(|v| ps::num(f64::from(v)));
-        let _ = writeln!(s, "%%CMYKCustomColor: {c} {m} {y} {k} {}", ps::string(name));
-    }
     s.push_str("%%Pages: 1\n%%EndComments\n");
     if let Some(png) = thumb {
         data_section(&mut s, THUMBNAIL, png);
@@ -363,6 +381,12 @@ pub fn sections(bytes: &[u8]) -> Option<(&[u8], Option<&[u8]>)> {
 pub fn native(bytes: &[u8]) -> Option<Vec<u8>> {
     let (ps, _) = sections(bytes)?;
     ps::inflate(&read_data(ps, NATIVE)?, MAX_NATIVE)
+}
+
+/// Does the EPS file carry a native document (readable or not)?
+pub fn has_native(bytes: &[u8]) -> bool {
+    let marker = format!("{BEGIN_DATA}{NATIVE}");
+    sections(bytes).is_some_and(|(ps, _)| ps.windows(marker.len()).any(|w| w == marker.as_bytes()))
 }
 
 /// The PNG thumbnail an EPS file written by [`export`] carries, if any.

@@ -1219,6 +1219,8 @@ mod tests_printpresets;
 #[cfg(test)]
 mod tests_printpreview;
 #[cfg(test)]
+mod tests_printps;
+#[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]
 mod tests_rastersettings;

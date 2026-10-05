@@ -174,7 +174,8 @@ fn bad_eps_options_are_refused_and_formats_list_eps() {
     assert!(s.execute("document.exportForScreens", &json!({"formats": [{"format": "eps"}]})).is_err());
     let r = s.execute("document.formats", &json!({})).unwrap();
     let eps = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "eps").unwrap().clone();
-    assert_eq!((eps["read"].as_bool(), eps["write"].as_bool(), eps["mime"].as_str()), (Some(false), Some(true), Some("application/postscript")));
+    // Readable too since EPS import (tests_epsimport.rs).
+    assert_eq!((eps["read"].as_bool(), eps["write"].as_bool(), eps["mime"].as_str()), (Some(true), Some(true), Some("application/postscript")));
     for o in [
         "level",
         "previewFormat",

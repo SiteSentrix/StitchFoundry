@@ -13,6 +13,7 @@ mod wmf;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::clipnest::{Clip, Drawn, nest};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, CharStyle, Dash, Document, FillLayer, ImageBlob, ImageObject, Justify, LayerColor, LineCap, LineJoin, Node, NodeKind,
     StrokeLayer, TextObject,
@@ -114,15 +115,6 @@ pub(crate) enum Obj {
     Font(FontObj),
     /// Palettes, regions, colour spaces: they take a slot but don't change the drawing.
     Other,
-}
-
-/// A clip: a region in document space and its rule. Clips nest; each has an id so what one clips
-/// can be grouped.
-#[derive(Debug)]
-struct Clip {
-    id: u32,
-    path: BezPath,
-    rule: FillRule,
 }
 
 /// The state records change, saved and restored as a whole.
@@ -860,7 +852,7 @@ impl Player {
         if out.is_empty() && self.emf_plus {
             self.warnings.push("the picture is drawn with EMF+ records, which aren't read yet: nothing was imported".into());
         }
-        let children = nest(&mut self.doc, out, 0);
+        let children = nest(&mut self.doc, out);
         let mut layer = Node::layer(self.doc.alloc_id(), "Layer 1", LayerColor::Preset(0));
         if let Some(c) = layer.children_mut() {
             *c = children;
@@ -887,45 +879,6 @@ fn crop(img: Rgba, src: Rect) -> Rgba {
         }
     }
     Rgba { width: x1 - x0, height: y1 - y0, pixels }
-}
-
-type Drawn = Vec<(Vec<Arc<Clip>>, Node)>;
-
-/// The nodes of `items`, those under clips `depth` and deeper grouped into clipping groups, in
-/// order.
-fn nest(doc: &mut Document, items: Drawn, depth: usize) -> Vec<Arc<Node>> {
-    let mut out: Vec<Arc<Node>> = vec![];
-    let mut group: Drawn = vec![];
-    let mut clip: Option<Arc<Clip>> = None;
-    for (chain, node) in items {
-        let here = chain.get(depth).cloned();
-        if here.as_ref().map(|c| c.id) != clip.as_ref().map(|c| c.id) {
-            if let Some(c) = clip.take() {
-                out.push(clip_group(doc, &c, std::mem::take(&mut group), depth));
-            }
-            clip = here.clone();
-        }
-        match here {
-            Some(_) => group.push((chain, node)),
-            None => out.push(Arc::new(node)),
-        }
-    }
-    if let Some(c) = clip {
-        out.push(clip_group(doc, &c, group, depth));
-    }
-    out
-}
-
-/// A clipping group of `items`, clipped by `c` (their clip at `depth`).
-fn clip_group(doc: &mut Document, c: &Clip, items: Drawn, depth: usize) -> Arc<Node> {
-    let mut path = Node::path(doc.alloc_id(), PathData::from_bezpath(&c.path), Appearance::default());
-    if let NodeKind::Path { clipping, rule, .. } = &mut path.kind {
-        *clipping = true;
-        *rule = c.rule;
-    }
-    let mut children = vec![Arc::new(path)];
-    children.extend(nest(doc, items, depth + 1));
-    Arc::new(Node::new(doc.alloc_id(), NodeKind::Group { children, clip: true }))
 }
 
 /// Read a metafile.
