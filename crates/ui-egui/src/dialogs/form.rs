@@ -270,3 +270,61 @@ pub(super) fn commit_preview(app: &mut crate::VectorcraftApp, cmd: &str, params:
     }
     r
 }
+
+/// The `[top, bottom, left, right]` bleed in `d.fields["bleed"]` (points).
+pub(super) fn bleed_values(d: &Dialog) -> [f64; 4] {
+    let mut out = [0.0; 4];
+    if let Some(a) = d.fields.get("bleed").and_then(Value::as_array) {
+        for (o, v) in out.iter_mut().zip(a) {
+            *o = v.as_f64().unwrap_or(0.0);
+        }
+    }
+    out
+}
+
+/// Bleed fields (Document Setup, New Document): Top, Bottom, Left and Right shown in `unit`, each
+/// `width` wide with a caption above, and a link toggle (`bleedLinked`, on by default) that keeps
+/// them equal. Values are clamped to 0–72 pt.
+pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit, width: f32) {
+    let t = Tokens::get(ui.ctx());
+    let mut b = bleed_values(d);
+    let linked = d.fields.get("bleedLinked").and_then(Value::as_bool).unwrap_or(true);
+    let mut changed = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        for (i, side) in ["Top", "Bottom", "Left", "Right"].into_iter().enumerate() {
+            ui.vertical(|ui| {
+                ui.label(egui::RichText::new(side).size(11.0).color(t.text_dim));
+                if let Some(v) = crate::widgets::num_field(ui, ("bleed", i), Some(b[i]), unit, width) {
+                    changed = Some((i, v.clamp(0.0, vectorcraft_doc::setup::MAX_BLEED)));
+                }
+            });
+        }
+        ui.vertical(|ui| {
+            ui.add_space(15.0);
+            let tip = if linked { "Make the bleed values differ" } else { "Make all bleed settings the same" };
+            if crate::widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 24.0).clicked() {
+                d.fields.insert("bleedLinked".into(), json!(!linked));
+                if !linked {
+                    // Linking makes every side the top's.
+                    changed = Some((0, b[0]));
+                }
+            }
+        });
+    });
+    if let Some((i, v)) = changed {
+        // Linked (also just now): every side takes the value.
+        if d.fields.get("bleedLinked").and_then(Value::as_bool).unwrap_or(true) {
+            b = [v; 4];
+        } else {
+            b[i] = v;
+        }
+        d.fields.insert("bleed".into(), json!(b));
+    }
+}
+
+/// A small grey caption above a field (New Document's details column).
+pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new(text).size(11.0).color(t.text_dim));
+}

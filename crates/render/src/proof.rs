@@ -162,21 +162,35 @@ pub(crate) fn overprints(opts: &RenderOptions) -> bool {
 }
 
 /// Draw the overprinting fills and strokes of `a`'s subtree with Multiply (those with a blend
-/// mode of their own keep it), copying only the nodes on the way to them.
-fn multiply_overprints(a: &mut Arc<Node>) {
+/// mode of their own keep it), copying only the nodes on the way to them. With `discard_white`
+/// (Document Setup → Discard White Overprint) white fills and strokes knock out instead.
+fn multiply_overprints(a: &mut Arc<Node>, discard_white: bool) {
     if !a.has_overprint() {
         return;
     }
     let n = Arc::make_mut(a);
+    let multiplies =
+        |overprint: bool, blend: BlendMode, paint: &Paint| overprint && blend == BlendMode::Normal && !(discard_white && is_white(paint));
     for it in &mut n.appearance.items {
         match it {
-            AppearanceItem::Fill(l) if l.overprint && l.blend == BlendMode::Normal => l.blend = BlendMode::Multiply,
-            AppearanceItem::Stroke(l) if l.overprint && l.blend == BlendMode::Normal => l.blend = BlendMode::Multiply,
+            AppearanceItem::Fill(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
+            AppearanceItem::Stroke(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
             _ => {}
         }
     }
     for c in n.children_mut().into_iter().flatten() {
-        multiply_overprints(c);
+        multiply_overprints(c, discard_white);
+    }
+}
+
+/// A solid paint of paper white (no ink in any colour model).
+fn is_white(p: &Paint) -> bool {
+    let Paint::Solid { color, .. } = p else { return false };
+    match *color {
+        Color::Rgb { r, g, b } => r.min(g).min(b) >= 1.0,
+        Color::Cmyk { c, m, y, k } => c.max(m).max(y).max(k) <= 0.0,
+        Color::Gray { k } => k <= 0.0,
+        Color::Lab { l, a, b } => l >= 100.0 && a == 0.0 && b == 0.0,
     }
 }
 
@@ -223,11 +237,12 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions) -> Cow<'a, Do
     }
     let mut d = doc.clone();
     if overprint {
+        let discard_white = doc.setup.discard_white_overprint;
         for l in &mut d.layers {
-            multiply_overprints(l);
+            multiply_overprints(l, discard_white);
         }
         for s in &mut d.symbols {
-            multiply_overprints(&mut s.art);
+            multiply_overprints(&mut s.art, discard_white);
         }
     }
     if let Some((proof, visible)) = seps {

@@ -6,20 +6,21 @@ use vectorcraft_engine::Session;
 
 use crate::{VectorcraftApp, canvas, menus};
 
-/// Whether one headless canvas frame paints the grid's grey squares.
+/// Whether one headless canvas frame paints the grid (one mesh textured with its tile).
 fn draws_grid(app: &mut VectorcraftApp) -> bool {
-    fn grey(s: &egui::Shape) -> bool {
-        match s {
-            egui::Shape::Rect(r) => r.fill == egui::Color32::from_gray(204),
-            egui::Shape::Vec(v) => v.iter().any(grey),
-            _ => false,
-        }
-    }
     let ctx = egui::Context::default();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
     out.textures_delta.clear();
-    out.shapes.iter().any(|c| grey(&c.shape))
+    let Some(tile) = ctx.tex_manager().read().allocated().find(|(_, m)| m.name == canvas::TRANSPARENCY_GRID).map(|(id, _)| *id) else { return false };
+    fn uses(s: &egui::Shape, tile: egui::TextureId) -> bool {
+        match s {
+            egui::Shape::Mesh(m) => m.texture_id == tile,
+            egui::Shape::Vec(v) => v.iter().any(|s| uses(s, tile)),
+            _ => false,
+        }
+    }
+    out.shapes.iter().any(|c| uses(&c.shape, tile))
 }
 
 #[test]

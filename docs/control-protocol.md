@@ -204,3 +204,20 @@ length preferences in `preferences`) show in the General unit (the active docume
 document). Through `ui.dialog.set` a number is in points and a string may carry its unit (`"10 mm"`; a bare number in a
 string is points). The `preferences` dialog's `unitsGeneral` starts as the active document's units, and OK sets them.
 `newDocument` has `units` (a unit label; print presets start in `unitsGeneral`, screen presets in Pixels).
+
+Document Setup: File → Document Setup… (`file.documentSetup`, Cmd+Alt+P) opens the `documentSetup` dialog. Its fields
+are what `document.setup` reports (`units`, `bleed` [top, bottom, left, right] in pt, `outlineImages`,
+`highlightSubstitutedFonts`, `highlightSubstitutedGlyphs`, `gridSize`, `gridColors`, `simulatePaper`, `flattenerPreset`,
+`discardWhiteOverprint`, `language`, `quotes`, `typographersQuotes`, `superscript`, `subscript`, `smallCapsSize`,
+`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency` or `Type`) and `bleedLinked`.
+`ui.dialog.confirm` runs `document.setup` with them as one undo step; a bad value answers with an error and the dialog
+stays open.
+
+New Document: File → New… (`file.newDialog`, Cmd+N) opens the `newDocument` dialog. Its fields are `file.new`'s params
+(`preset`, `name`, `width` and `height` in pt, `units`, `artboards`, `artboardLayout`, `bleed`, `backgroundContents`,
+`colorMode`, `rasterEffectsPpi`, `previewMode`) plus `category` (the tab: Recent, Saved, Mobile, Web, Print, Film &
+Video, Art & Illustration, Branding, Social), `advanced` (Advanced Options open), `bleedLinked` and `presetName`
+(Save Preset's name). Setting `preset` to a name from `file.newPresets` fills the other fields from that preset;
+changing a field afterwards makes the settings custom (`preset` becomes ""). More Settings is the `newDocumentMore`
+dialog over the same fields (its Profile is `category`). `ui.dialog.confirm` runs `file.new` with the fields (with
+`previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open.

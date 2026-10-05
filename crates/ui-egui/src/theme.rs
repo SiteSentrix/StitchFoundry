@@ -83,6 +83,8 @@ pub struct Tokens {
     pub caption_close_text: Color32,
     /// What preview images mark (Flattener Preview highlights).
     pub highlight: Color32,
+    /// The bleed outline around artboards (Document Setup → Bleed).
+    pub bleed: Color32,
 }
 
 impl Tokens {
@@ -124,6 +126,7 @@ impl Tokens {
             caption_close: hex(0xc42b1c),
             caption_close_text: Color32::WHITE,
             highlight: hex(0xff3030),
+            bleed: hex(0xf03030),
         };
         match b {
             Brightness::Dark => base,

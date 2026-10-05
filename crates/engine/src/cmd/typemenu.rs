@@ -3,7 +3,7 @@
 //! commands of the Edit menu (Find and Replace, Find Next, Paste without Formatting).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, TextKind, TextRun};
+use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, Quotes, TextKind, TextRun};
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smart Punctuation…",
             ["Type"],
             None,
-            "{quotes?: true (\"\" '' → curly), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), scope?: \"selection\"|\"document\"} → {changed}",
+            "{quotes?: true (straight quotes become the Document Setup quotes), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), scope?: \"selection\"|\"document\"} → {changed}",
             has_doc,
             smart_punctuation
         ),
@@ -217,11 +217,8 @@ struct PunctState {
     prev: Option<char>,
 }
 
-fn opens(prev: Option<char>) -> bool {
-    prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–' | '“' | '‘'))
-}
-
-pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: bool, dashes: bool, ellipsis: bool) -> String {
+/// Dashes (`--` en, `---` em), ellipses and, with `quotes`, typographer's quotes.
+pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quotes>, dashes: bool, ellipsis: bool) -> String {
     let mut s = text.to_string();
     if dashes {
         s = s.replace("---", "—").replace("--", "–");
@@ -229,38 +226,20 @@ pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: bool, dashes:
     if ellipsis {
         s = s.replace("...", "…");
     }
-    if !quotes {
-        *prev = s.chars().last().or(*prev);
-        return s;
+    match quotes {
+        Some(q) => q.apply(&s, prev),
+        None => {
+            *prev = s.chars().last().or(*prev);
+            s
+        }
     }
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        let r = match c {
-            '"' => {
-                if opens(*prev) {
-                    '“'
-                } else {
-                    '”'
-                }
-            }
-            '\'' => {
-                if opens(*prev) {
-                    '‘'
-                } else {
-                    '’'
-                }
-            }
-            c => c,
-        };
-        out.push(r);
-        *prev = Some(r);
-    }
-    out
 }
 
 fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
-    let (q, d, e) = (bool_or(p, "quotes", true), bool_or(p, "dashes", true), bool_or(p, "ellipsis", true));
+    let (d, e) = (bool_or(p, "dashes", true), bool_or(p, "ellipsis", true));
     let st = s.doc()?;
+    // Quotes in the document's style (Document Setup → Type).
+    let q = bool_or(p, "quotes", true).then_some(st.doc.setup.quotes);
     let ids = if str_param(p, "scope") == Some("document") || st.selection.is_empty() {
         let mut v = vec![];
         st.doc.walk(|n| {
@@ -272,7 +251,7 @@ fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         text_ids(&st.doc, &st.selection.objects)
     };
-    let n = edit_runs::<PunctState>(s, "Smart Punctuation", &ids, |text, st| smarten(text, &mut st.prev, q, d, e))?;
+    let n = edit_runs::<PunctState>(s, "Smart Punctuation", &ids, |text, st| smarten(text, &mut st.prev, q.as_ref(), d, e))?;
     Ok(json!({ "changed": n }))
 }
 

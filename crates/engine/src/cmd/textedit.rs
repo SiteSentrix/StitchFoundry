@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, features?: [\"dlig\", \"-liga\", …]} style a character range (runs are split at the range ends) → {id, runs}",
+            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …]} style a character range (runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -140,6 +140,8 @@ pub(crate) struct CharChange {
     strikethrough: Option<bool>,
     all_caps: Option<bool>,
     features: Option<Vec<String>>,
+    position: Option<vectorcraft_doc::CharPosition>,
+    small_caps: Option<Option<f64>>,
 }
 
 /// `features: ["dlig", "-liga", …]` → the canonical tag list (differences from the defaults).
@@ -169,8 +171,10 @@ fn auto_or_num(p: &Value, k: &str, cmd: &str) -> Result<Option<Option<f64>>> {
 }
 
 impl CharChange {
-    pub(crate) fn parse(p: &Value, cmd: &str) -> Result<Self> {
+    /// `setup` gives the superscript, subscript and small caps proportions.
+    pub(crate) fn parse(p: &Value, cmd: &str, setup: &vectorcraft_doc::DocSetup) -> Result<Self> {
         let num = |k: &str| p.get(k).and_then(Value::as_f64);
+        let (position, small_caps) = super::docsetup::script_params(p, setup, cmd)?;
         let flag = |k: &str| p.get(k).and_then(Value::as_bool);
         let mut stroke_opts = match p.get("strokeOptions") {
             None | Some(Value::Null) => StrokeChange::default(),
@@ -198,6 +202,8 @@ impl CharChange {
             strikethrough: flag("strikethrough"),
             all_caps: flag("allCaps"),
             features: features_param(p, cmd)?,
+            position,
+            small_caps,
         };
         if c.size.is_some_and(|v| v <= 0.0) {
             return Err(bad(cmd, "size must be positive"));
@@ -223,6 +229,8 @@ impl CharChange {
             && self.strikethrough.is_none()
             && self.all_caps.is_none()
             && self.features.is_none()
+            && self.position.is_none()
+            && self.small_caps.is_none()
     }
 
     pub(crate) fn apply(&self, st: &mut CharStyle) {
@@ -287,13 +295,19 @@ impl CharChange {
         if let Some(v) = &self.features {
             st.features = v.clone();
         }
+        if let Some(v) = self.position {
+            st.position = v;
+        }
+        if let Some(v) = self.small_caps {
+            st.small_caps = v;
+        }
     }
 }
 
 fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setRangeStyle";
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
-    let change = CharChange::parse(p, C)?;
+    let change = CharChange::parse(p, C, &s.doc()?.doc.setup)?;
     if change.is_empty() {
         return Err(bad(C, "nothing to change"));
     }

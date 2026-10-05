@@ -47,8 +47,9 @@ pub mod width_point;
 use serde_json::{Value, json};
 
 pub use color_picker::open as open_color_picker;
+pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
-pub use new_document::open as open_new_document;
+pub use new_document::{open as open_new_document, preset_card};
 pub use save_pdf::open as open_save_pdf;
 pub use tools::open_tool_dialog;
 
@@ -137,7 +138,7 @@ macro_rules! registry {
 }
 
 registry! {
-    NewDocument: ["newDocument"] => new_document::SPEC,
+    NewDocument: [new_document::KIND] => new_document::SPEC,
     Shape: ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] => shapes::SPEC,
     Transform: ["move", "rotate", "scale", "reflect", "shear"] => transform::SPEC,
     PathOp: ["average", "offsetPath", "simplify", "splitIntoGrid"] => path_ops::SPEC,
@@ -176,6 +177,7 @@ registry! {
     WidthPoint: [width_point::KIND] => width_point::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
+    NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

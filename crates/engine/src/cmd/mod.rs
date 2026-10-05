@@ -12,6 +12,7 @@ mod create;
 pub(crate) mod distortcmds;
 mod docinfo;
 mod docmenu;
+pub(crate) mod docsetup;
 mod draw2;
 mod edit;
 mod effectcmd;
@@ -28,6 +29,7 @@ mod live;
 pub(crate) mod maskedit;
 pub(crate) mod menucmds;
 pub(crate) mod newart;
+pub mod newdoc;
 mod object;
 mod opacitymask;
 mod overprint;
@@ -211,6 +213,8 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(newart::specs());
         v.extend(colortheme::specs());
         v.extend(fileio::pdf::specs());
+        v.extend(docsetup::specs());
+        v.extend(newdoc::specs());
         v
     })
 }

@@ -76,6 +76,62 @@ pub struct CharStyle {
     pub stroke_miter_limit: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stroke_dash: Option<Dash>,
+    /// Superscript or subscript (Character panel).
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub position: CharPosition,
+    /// Small Caps (Character panel): lowercase letters drawn as capitals at this percentage of the
+    /// size (Document Setup → Type → Small Caps); None = off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub small_caps: Option<f64>,
+}
+
+/// Superscript or subscript proportions in percent of the font size (Document Setup → Type).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ScriptMetrics {
+    /// Glyph size.
+    pub size: f64,
+    /// Baseline offset: up for superscript, down for subscript.
+    pub position: f64,
+}
+
+impl ScriptMetrics {
+    pub const DEFAULT: Self = Self { size: 58.3, position: 33.3 };
+}
+
+impl Default for ScriptMetrics {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// Character position (Character panel Superscript / Subscript). The proportions are the
+/// document's when the position is applied, and follow later Document Setup changes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum CharPosition {
+    #[default]
+    Normal,
+    Superscript(ScriptMetrics),
+    Subscript(ScriptMetrics),
+}
+
+impl CharPosition {
+    /// Glyph scale and baseline shift (points, positive = up) for text of `size` points.
+    pub fn scale_shift(self, size: f64) -> (f64, f64) {
+        match self {
+            CharPosition::Normal => (1.0, 0.0),
+            CharPosition::Superscript(m) => (m.size / 100.0, m.position / 100.0 * size),
+            CharPosition::Subscript(m) => (m.size / 100.0, -m.position / 100.0 * size),
+        }
+    }
+    /// `normal`, `superscript` or `subscript`.
+    pub fn id(self) -> &'static str {
+        match self {
+            CharPosition::Normal => "normal",
+            CharPosition::Superscript(_) => "superscript",
+            CharPosition::Subscript(_) => "subscript",
+        }
+    }
 }
 
 fn ten() -> f64 {
@@ -118,6 +174,8 @@ impl Default for CharStyle {
             stroke_join: LineJoin::Miter,
             stroke_miter_limit: 10.0,
             stroke_dash: None,
+            position: CharPosition::Normal,
+            small_caps: None,
         }
     }
 }

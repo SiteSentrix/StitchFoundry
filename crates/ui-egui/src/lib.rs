@@ -33,6 +33,8 @@ pub mod widgets;
 pub mod workspaces;
 
 #[cfg(test)]
+mod tests_docsetup;
+#[cfg(test)]
 mod tests_labels;
 #[cfg(test)]
 mod tests_overprint;
@@ -252,9 +254,13 @@ impl VectorcraftApp {
         self.sync_views();
         match &r {
             Err(e) => self.ui.status = e.clone(),
-            Ok(_) => {
+            Ok(v) => {
                 if id == "file.new" {
                     self.ui.status.clear();
+                    // New Document's Pixel preview mode (Overprint Preview is the engine's).
+                    if v["previewMode"] == "pixel" {
+                        self.ui.view.pixel_preview = true;
+                    }
                 }
                 if id == "text.setStyle"
                     && let Some(font) = params.get("font").and_then(Value::as_str)

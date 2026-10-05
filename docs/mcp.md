@@ -779,3 +779,30 @@ a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `C
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
 ```
+
+## Document Setup
+
+`document.setup` with no params reports the document setup: units, the bleed ([top, bottom, left, right] in pt, drawn
+as a red outline around each artboard), the transparency grid (size and two colours; the first is also the simulated
+paper colour), the flattener preset and Discard White Overprint (Overprint Preview keeps white overprints visible while
+it is on), the type options (language and its quotes, Use Typographer's Quotes for typed quotes, superscript, subscript
+and small caps proportions, SVG text export) and the background contents (white: raster exports are white behind the
+art). Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
+
+```json
+{"name":"run_command","arguments":{"command":"document.setup","params":{"gridColors":"Blue","gridSize":"large","language":"German","bleed":9}}}
+```
+
+## New Document
+
+`file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
+(points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
+spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` and `previewMode`.
+`file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
+kept in the preferences by `file.newPresets.save` and removed by `file.newPresets.delete`). A listed preset can be
+passed straight back to `file.new`. Print presets and sizes without `units` start in `unitsGeneral`; screen presets
+(mobile, web, video, social) in Pixels.
+
+```json
+{"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
+```

@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool}",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool}",
             has_doc,
             set_format
         ),
@@ -93,6 +93,8 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "underline",
         "strikethrough",
         "allCaps",
+        "smallCaps",
+        "position",
         "leftIndent",
         "rightIndent",
         "firstLineIndent",
@@ -103,6 +105,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         return Err(bad(C, "nothing to change"));
     }
+    let (position, small_caps) = super::docsetup::script_params(p, &s.doc()?.doc.setup, C)?;
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -131,6 +134,12 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 if let Some(v) = flag("allCaps") {
                     st.all_caps = v;
+                }
+                if let Some(v) = position {
+                    st.position = v;
+                }
+                if let Some(v) = small_caps {
+                    st.small_caps = v;
                 }
             }
             let para = &mut t.para;

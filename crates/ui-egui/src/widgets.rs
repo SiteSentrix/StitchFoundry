@@ -1197,3 +1197,53 @@ pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: O
     });
     out
 }
+
+/// A row of text tabs, the current one underlined in the accent colour (New Document's
+/// categories, Document Setup's sections). Returns the clicked tab's index.
+pub fn tab_bar(ui: &mut Ui, tabs: &[&str], current: usize) -> Option<usize> {
+    let t = Tokens::get(ui.ctx());
+    let mut clicked = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 18.0;
+        for (i, tab) in tabs.iter().enumerate() {
+            let sel = i == current;
+            let font = if sel { theme::semibold(13.0) } else { egui::FontId::proportional(13.0) };
+            let galley = ui.painter().layout_no_wrap(tab.to_string(), font, t.text);
+            let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x, 30.0), Sense::click());
+            let color = if sel || resp.hovered() { t.text_strong } else { t.text_dim };
+            ui.painter().galley(pos2(rect.left(), rect.center().y - galley.size().y / 2.0 - 2.0), galley, color);
+            if sel {
+                ui.painter().rect_filled(
+                    Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom()),
+                    CornerRadius::same(1),
+                    t.accent,
+                );
+            }
+            if resp.clicked() {
+                clicked = Some(i);
+            }
+        }
+    });
+    clicked
+}
+
+/// A page-orientation toggle drawn in code: a portrait or landscape sheet with a folded corner,
+/// accent-filled when `selected`. Returns clicked.
+pub fn orientation_button(ui: &mut Ui, landscape: bool, selected: bool, tip: &str) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::click());
+    if resp.hovered() && !selected {
+        ui.painter().rect_filled(rect, CornerRadius::same(3), t.hover);
+    }
+    let size = if landscape { vec2(16.0, 12.0) } else { vec2(12.0, 16.0) };
+    let page = Rect::from_center_size(rect.center(), size);
+    let color = if selected { t.accent } else { t.icon };
+    let fold = 4.0;
+    let outline =
+        vec![page.left_top(), page.right_top() - vec2(fold, 0.0), page.right_top() + vec2(0.0, fold), page.right_bottom(), page.left_bottom()];
+    let fill = if selected { t.accent } else { Color32::TRANSPARENT };
+    ui.painter().add(egui::Shape::convex_polygon(outline.clone(), fill, Stroke::new(1.2, color)));
+    let corner = [page.right_top() - vec2(fold, 0.0), page.right_top() + vec2(-fold, fold), page.right_top() + vec2(0.0, fold)];
+    ui.painter().add(egui::Shape::line(corner.to_vec(), Stroke::new(1.2, if selected { t.panel } else { color })));
+    resp.on_hover_text(tip).clicked()
+}

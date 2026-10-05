@@ -31,7 +31,7 @@ pub const OPTIONS: &[FormatOption] = &[
         name: "outlineText",
         ty: "boolean",
         default: "false",
-        description: "Fonts: text as glyph outlines (viewable without the fonts) instead of <text>",
+        description: "Fonts: text as glyph outlines (viewable without the fonts) instead of <text>; default: Document Setup → Type → Export (Preserve Text Appearance: true)",
     },
     FormatOption {
         name: "images",
@@ -99,6 +99,10 @@ pub fn options_map(p: &Value) -> Result<Map<String, Value>, String> {
 /// The writer options and the artboards (`None`: the art bounds) an SVG export of `doc` covers.
 fn plan(doc: &Document, p: &Value) -> Result<(ExportOptions, Vec<Option<usize>>), String> {
     let mut m = options_map(p)?;
+    // Fonts: unless chosen, Document Setup → Type → Export decides (appearance = outlines).
+    if !m.contains_key("outlineText") && doc.setup.export_text == vectorcraft_doc::ExportText::Appearance {
+        m.insert("outlineText".into(), Value::Bool(true));
+    }
     let picks: Map<String, Value> = ARTBOARD_PARAMS.iter().chain(["useArtboards"].iter()).filter_map(|k| m.remove_entry(*k)).collect();
     let boards = Boards::deserialize(Value::Object(picks)).map_err(|e| format!("SVG options: {e}"))?;
     let opts = ExportOptions::deserialize(Value::Object(m)).map_err(|e| format!("SVG options: {e}"))?;
