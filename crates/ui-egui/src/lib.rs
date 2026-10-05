@@ -50,6 +50,8 @@ mod tests_cut;
 #[cfg(test)]
 mod tests_docsetup;
 #[cfg(test)]
+mod tests_fonts;
+#[cfg(test)]
 mod tests_home;
 #[cfg(test)]
 mod tests_labels;

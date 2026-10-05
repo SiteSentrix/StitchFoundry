@@ -274,6 +274,9 @@ type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
 /// Reusable renderer (keeps the render context, decoded images and glyph caches between frames).
 pub struct Renderer {
     texts: PtrMap<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
+    /// again when fonts are added or rescanned.
+    text_fonts: u64,
     /// Clip regions per clipping path (see [`Self::clip_of`]).
     clips: PtrMap<usize, ClipEntry>,
     /// Context reused when rendering single-threaded (`threads == 0`).
@@ -376,6 +379,7 @@ impl Renderer {
     pub fn new() -> Self {
         Self {
             texts: PtrMap::default(),
+            text_fonts: 0,
             clips: PtrMap::default(),
             ctx_st: None,
             threads: default_threads(),
@@ -1142,6 +1146,11 @@ impl Renderer {
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
     fn text_geom_of(&mut self, a: &Arc<Node>, t: &TextObject) -> Arc<TextGeom> {
+        let fonts = vectorcraft_text::FontDb::global().generation();
+        if fonts != self.text_fonts {
+            self.texts.clear();
+            self.text_fonts = fonts;
+        }
         let key = Arc::as_ptr(a) as usize;
         if let Some((node, g)) = self.texts.get(&key)
             && Arc::ptr_eq(node, a)
@@ -1527,6 +1536,8 @@ mod tests_clip;
 mod tests_cmykblend;
 #[cfg(test)]
 mod tests_container;
+#[cfg(test)]
+mod tests_fontchange;
 #[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]

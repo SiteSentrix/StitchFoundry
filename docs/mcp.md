@@ -1713,3 +1713,19 @@ tone (mono, or CMYK screens multiplied over each other), clipped to the art's ou
 ```json
 {"name":"run_command","arguments":{"command":"object.vectorHalftone","params":{"shape":"circle","frequency":25,"angle":45,"mode":"cmyk"}}}
 ```
+
+## Fonts
+
+Type can use the bundled fonts, fonts added to the session and the fonts installed on the system (none on the web).
+The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
+by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
+lists every family available, the installed ones included; with `family` it gives that family's styles (upright
+by weight, then italics) and fails when the family isn't available. `text.rescanFonts` (Character panel menu ›
+Refresh Font List) scans the font folders again, for fonts installed or removed since the app started: type set in a
+font that became available redraws in it, without editing the document.
+
+```json
+{"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
+{"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
+{"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
+```
