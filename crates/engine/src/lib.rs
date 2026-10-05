@@ -207,6 +207,27 @@ pub const MAX_COORD: f64 = 4.0e6;
 /// ([`Session::journal_for_action`]).
 const REPLAY_ONLY: [(&str, &str); 3] = [("file.new", "created"), ("document.save", "modified"), ("file.saveAs", "modified")];
 
+/// `p`, the params of command `id`, without its [`REPLAY_ONLY`] values (a batch: its steps').
+fn strip_replay_only(id: &str, p: &mut Value) {
+    let strip = |id: &str, p: &mut Value| {
+        if let Value::Object(m) = p {
+            m.retain(|k, _| !REPLAY_ONLY.iter().any(|&(c, key)| c == id && key == k));
+        }
+    };
+    strip(id, p);
+    // Batches don't nest: one level of steps.
+    if id == "command.batch"
+        && let Some(Value::Array(steps)) = p.get_mut("commands")
+    {
+        for step in steps {
+            let id = step.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+            if let Some(p) = step.get_mut("params") {
+                strip(&id, p);
+            }
+        }
+    }
+}
+
 /// Cheap sanity check after an edit: artboards and the objects just touched (the selection) must
 /// have finite, in-range geometry, so saved files always reload and renderers never see NaN/∞.
 fn doc_sane(d: &Document, sel: &Selection) -> bool {
@@ -587,6 +608,9 @@ pub struct Session {
     /// Parameters the running top-level command resolved from the preferences or the clock, added
     /// to its journal entry so a replay does the same ([`Session::note_journal`]).
     journal_note: serde_json::Map<String, Value>,
+    /// The depth of the command whose values [`Session::note_journal`] keeps: 1 (the top-level
+    /// command), or a step's while a batch runs it ([`Session::execute_step`]).
+    note_depth: u32,
 }
 
 impl Default for Session {
@@ -624,6 +648,7 @@ impl Session {
             style_libraries: Default::default(),
             recent_urls: vec![],
             journal_note: Default::default(),
+            note_depth: 1,
         }
     }
 
@@ -752,6 +777,7 @@ impl Session {
         // be recorded twice and replay differently).
         if self.depth == 0 {
             self.journal_note.clear();
+            self.note_depth = 1;
         }
         let r = if self.depth == 0 { self.run_guarded(id, |s| (spec.run)(s, params)) } else { self.run_nested(|s| (spec.run)(s, params)) };
         let r = r?;
@@ -766,11 +792,24 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview) unless its params give `key`: a value it resolved from the preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key`: a value it resolved from the
+    /// preferences or the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
-        if self.depth == 1 {
+        if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
         }
+    }
+
+    /// Run `id` as a step of the running command, which journals its steps (`command.batch`):
+    /// → the step's result and its params with what it noted ([`Session::note_journal`]), for the
+    /// step in the running command's journal entry.
+    pub(crate) fn execute_step(&mut self, id: &str, params: &Value) -> Result<(Value, Value)> {
+        let outer = (std::mem::take(&mut self.journal_note), self.note_depth);
+        self.note_depth = self.depth + 1;
+        let r = self.execute(id, params);
+        let noted = self.noted(params);
+        (self.journal_note, self.note_depth) = outer;
+        Ok((r?, noted))
     }
 
     /// The journal from entry `start` on, as an action records it: without the params that only
@@ -781,11 +820,7 @@ impl Session {
             .skip(start)
             .cloned()
             .map(|(id, mut p)| {
-                if let Value::Object(m) = &mut p {
-                    for (_, key) in REPLAY_ONLY.iter().filter(|(c, _)| *c == id) {
-                        m.remove(*key);
-                    }
-                }
+                strip_replay_only(&id, &mut p);
                 (id, p)
             })
             .collect()

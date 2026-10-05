@@ -979,7 +979,8 @@ creation date) as text chunks, and SVG export writes the description as `<desc>`
 all of it as Dublin Core. `file.new {created}` and a save to a file (`document.save` or `file.saveAs` with
 `{path, modified}`) use the given date (Unix seconds, or `null` for none) instead of now. Their journal entries always
 record the date they used, so replaying the journal makes the same document whenever it runs (an action recorded in
-the Actions panel leaves the date out: playing it later dates the document then).
+the Actions panel leaves the date out: playing it later dates the document then). As a step of `command.batch`, a
+command records the date it used (and any value it takes from the preferences) in its step of the batch's journal entry.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.info","params":{"author":"Ada","keywords":"poster, fair","rating":4,"copyrightStatus":"copyrighted","copyrightNotice":"© 2026 Ada"}}}

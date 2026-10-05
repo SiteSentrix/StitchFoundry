@@ -97,3 +97,59 @@ fn a_save_records_its_date_and_replays_it() {
     assert_eq!(r.doc().unwrap().doc.metadata, s.doc().unwrap().doc.metadata);
     assert!(s.journal_for_action(0).iter().all(|(_, p)| p.get("modified").is_none() && p.get("created").is_none()));
 }
+
+/// The document `s` ends on after replaying the journal of `s` in a new session.
+fn replayed(s: &Session) -> Session {
+    let mut r = Session::new();
+    for (id, p) in &s.journal {
+        r.execute(id, p).unwrap();
+    }
+    r
+}
+
+#[test]
+fn a_save_in_a_batch_records_its_date_and_replays_it() {
+    let path = vectorcraft_testkit::temp_dir("journal-batch").join("a.vectorcraft").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": 1_000_000_000})).unwrap();
+    let rect = json!({"x": 10, "y": 10, "width": 50, "height": 40});
+    let steps = json!([{"command": "shape.rectangle", "params": rect}, {"command": "document.save", "params": {"path": path}}]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    let modified = s.doc().unwrap().doc.metadata.modified;
+    assert!(modified.is_some(), "the save in the batch dates the document");
+    // The step's entry records the date it used; steps that take nothing from elsewhere stay as given.
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(id, "command.batch");
+    assert_eq!(p["commands"][0], steps[0]);
+    assert_eq!(p["commands"][1]["params"], json!({"path": path, "modified": modified}));
+    // As if the original run happened at another time: the replay lands on the recorded date.
+    s.journal.last_mut().unwrap().1["commands"][1]["params"]["modified"] = json!(1_234_567_890);
+    let r = replayed(&s);
+    assert_eq!(r.doc().unwrap().doc.metadata.modified, Some(1_234_567_890));
+    assert_eq!(r.doc().unwrap().doc.metadata.created, Some(1_000_000_000));
+    assert_eq!(r.doc().unwrap().doc.node_count(), s.doc().unwrap().doc.node_count());
+    // An action leaves the step's date out, so playing it later dates the document then.
+    let action = s.journal_for_action(0);
+    assert_eq!(action[1].1["commands"][1]["params"], json!({ "path": path }));
+    assert_eq!(action[1].1["commands"][0], steps[0]);
+}
+
+#[test]
+fn a_batch_step_records_what_it_took_from_the_preferences() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.prefs.scale_strokes = true;
+    let steps = json!([
+        {"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 50, "height": 40}},
+        {"command": "stroke.set", "params": {"weight": 2}},
+        {"command": "object.scale", "params": {"sx": 300}},
+    ]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    let p = &s.journal.last().unwrap().1;
+    assert_eq!(p["commands"][2]["params"], json!({"sx": 300, "strokes": true, "corners": false}));
+    // Replayed with other preferences, the scale still scales the stroke.
+    let r = replayed(&s);
+    assert!(!r.prefs.scale_strokes);
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc(&r), doc(&s));
+}
