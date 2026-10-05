@@ -552,9 +552,9 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
     });
 }
 
-/// A dropdown of the colour profiles (`names`, the first one standing for "" at `path`), showing
-/// the profile at `path` (a name that isn't one of them too).
-fn profile_pick(ui: &mut egui::Ui, d: &mut Dialog, path: &str, names: &[&str], enabled: bool) {
+/// A dropdown of names such as colour profiles or flattener presets (`names`, the first one
+/// standing for "" at `path`), showing the name at `path` (one that isn't among them too).
+pub(super) fn profile_pick(ui: &mut egui::Ui, d: &mut Dialog, path: &str, names: &[&str], enabled: bool) {
     let blank = names.first().copied().unwrap_or_default();
     let current = get(d, path).as_str().filter(|s| !s.is_empty()).unwrap_or(blank).to_string();
     ui.add_enabled_ui(enabled, |ui| {

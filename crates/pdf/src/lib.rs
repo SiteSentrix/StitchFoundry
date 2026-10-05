@@ -227,6 +227,8 @@ mod tests_presets;
 #[cfg(test)]
 mod tests_print;
 #[cfg(test)]
+mod tests_printadvanced;
+#[cfg(test)]
 mod tests_realtext;
 #[cfg(test)]
 mod tests_settings;

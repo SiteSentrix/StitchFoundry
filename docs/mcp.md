@@ -1606,3 +1606,21 @@ the placement then shows as placed by the tool, with a Reset button; dragging th
 {"name":"run_command","arguments":{"command":"print.tiling.set","params":{"origin":[-36,-36]}}}
 {"name":"run_command","arguments":{"command":"print.tiling","params":{"settings":{"scaling":"tileImageable","scale":{"width":300,"height":300}}}}}
 ```
+
+## Print advanced options
+
+The Print dialog's Advanced section and the printer profile are print settings too (`print.setup`, `print.preview`,
+`file.print`): `advanced: {printAsBitmap, overprints: preserve|discard|simulate, flattenerPreset}` and `color:
+{profile}`. In composite output, `discard` makes overprinting fills and strokes knock out and `simulate` prints them
+as Overprint Preview shows them (multiplied); either way the file has no overprint left. Separations always keep
+overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
+`flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
+PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
+`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution.
+`color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
+colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
+CMYK one. Settings saved before these options load with their defaults.
+
+```json
+{"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/proof.pdf","settings":{"advanced":{"overprints":"simulate","flattenerPreset":"High Resolution"},"color":{"profile":"VectorCraft Generic CMYK (SWOP-like)","intent":"perceptual"}}}}}
+```

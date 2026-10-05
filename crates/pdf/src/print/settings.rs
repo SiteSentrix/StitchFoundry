@@ -3,7 +3,7 @@
 //! separation ([`PrintInk`]).
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_color::cms::Intent;
+use vectorcraft_color::cms::{self, Intent, ProfileKind};
 
 use crate::settings::{choice, within};
 use crate::{BleedSettings, MarkSettings, PdfError};
@@ -216,6 +216,8 @@ pub struct PrintSettings {
     pub color: PrintColor,
     /// Where the Print Tiling tool put the pages.
     pub tile_origin: TileOrigin,
+    // Advanced.
+    pub advanced: PrintAdvanced,
 }
 
 impl Default for PrintSettings {
@@ -247,6 +249,7 @@ impl Default for PrintSettings {
             graphics: PrintGraphics::default(),
             color: PrintColor::default(),
             tile_origin: TileOrigin::default(),
+            advanced: PrintAdvanced::default(),
         }
     }
 }
@@ -362,12 +365,41 @@ pub struct PrintColor {
     pub intent: Intent,
     /// CMYK colours print with their own values; off, they go through the colour settings too.
     pub preserve_numbers: bool,
+    /// The printer profile (an RGB or CMYK profile by name): composite output converts colours to
+    /// it with the intent (CMYK colours keep their numbers with `preserve_numbers`), and
+    /// separations separate with it when it is a CMYK one. Empty: colours print as they are.
+    pub profile: String,
 }
 
 impl Default for PrintColor {
     fn default() -> Self {
-        Self { intent: Intent::RelativeColorimetric, preserve_numbers: true }
+        Self { intent: Intent::RelativeColorimetric, preserve_numbers: true, profile: String::new() }
     }
+}
+
+choice! {
+    /// What composite output does with overprinting fills and strokes (separations always
+    /// honour them).
+    PrintOverprints {
+        Preserve = "preserve", "Preserve";
+        /// They knock out.
+        Discard = "discard", "Discard";
+        /// Composited as Overprint Preview shows them.
+        Simulate = "simulate", "Simulate";
+    } default Preserve
+}
+
+/// The Advanced section (with [`PrintSettings::margin`]).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PrintAdvanced {
+    /// Composite pages print as one image each of the art, at the document's raster effects
+    /// resolution (the app renders them before printing).
+    pub print_as_bitmap: bool,
+    pub overprints: PrintOverprints,
+    /// The transparency flattener preset transparency is flattened with (a built-in or saved
+    /// one, by name; the app flattens before printing). Empty: transparency prints live.
+    pub flattener_preset: String,
 }
 
 /// Where the Print Tiling tool put the pages (View → Show Print Tiling).
@@ -407,6 +439,10 @@ impl PrintSettings {
         self.marks.check()?;
         self.bleed.check()?;
         within("graphics.flatness", self.graphics.flatness, 0.2, 100.0, "")?;
+        let profile = self.color.profile.trim();
+        if !profile.is_empty() && cms::profile(profile).is_none_or(|p| p.kind == ProfileKind::Gray) {
+            return Err(PdfError::BadSetting(format!("color.profile: no RGB or CMYK profile is called “{profile}”")));
+        }
         for ink in &self.output.inks {
             if let Some(f) = ink.frequency {
                 within(&format!("output.inks[{}].frequency", ink.name), f, 1.0, 1000.0, " lpi")?;

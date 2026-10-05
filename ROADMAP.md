@@ -187,7 +187,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Guides, grids, smart guides, snapping, rulers | 3 | 75% | global/video rulers, smart-guide preference depth | 4–8 |
 | File formats | 6 | 85% | DWG (no open spec: DXF instead), PSD placement as layers, the remaining fidelity polish; EPS, DXF, EMF/WMF, TIFF, BMP, Targa, PSD export, SVGZ, PDF security, PDF/X and presets are done | 6–10 |
 | Export for Screens, Asset Export, slices, Save for Web | 3 | 85% | polish only (all four are done) | 2–4 |
-| Print, colour management, separations, flattener | 3 | 70% | Print Tiling tool and Show Print Tiling, flattener presets in print/PDF, print preview fidelity (Print dialog, presets, PostScript, marks and separations are done) | 5–8 |
+| Print, colour management, separations, flattener | 3 | 78% | flattener presets in PDF export, print preview fidelity, `/OP` in composite print (Print dialog, presets, PostScript, marks, separations, Print Tiling, print overprint/flattener/bitmap options and printer profile are done) | 2–4 |
 | Automation | 3 | 60% | Variables (data merge), scripting surface, batch | 8–12 |
 | UI chrome (panels, contextual Properties, workspaces, prefs) | 6 | 78% | Variables, SVG Interactivity, Properties per context, Consolidate All Windows (Links, Asset Export, CSS Properties, Attributes are done) | 15–25 |
 | Libraries, Links, Package | 2 | 50% | a local Libraries panel (no cloud by design); Links and Package are done | 5–8 |

@@ -47,6 +47,7 @@ pub mod pdfcmds;
 mod place;
 pub mod prefscmds;
 pub mod print;
+pub(crate) mod printadvanced;
 pub mod printpresets;
 pub mod printtiling;
 pub mod rasterfx;

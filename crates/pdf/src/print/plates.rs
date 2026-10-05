@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use vectorcraft_color::Color;
-use vectorcraft_color::cms::{Cms, Model};
+use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_doc::inks::{Link, inks, plates, visit_node_colors};
 use vectorcraft_doc::overprint::multiply_overprints;
@@ -42,6 +42,19 @@ pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<St
     (list, warnings)
 }
 
+/// The colour settings separations convert with: the active ones, with the printer profile as
+/// their CMYK profile when it is a CMYK one.
+fn separation_cms(set: &PrintSettings) -> Arc<Cms> {
+    let active = cms::active();
+    match cms::profile(set.color.profile.trim()) {
+        Some(p) if p.kind == ProfileKind::Cmyk && cms::canonical_name(&active.settings().cmyk) != p.name => {
+            let settings = cms::ColorSettings { cmyk: p.name, ..active.settings().clone() };
+            Cms::new(&settings).map_or(active, Arc::new)
+        }
+        _ => active,
+    }
+}
+
 /// Separates colours into inks as the job's colour options say.
 pub(crate) struct Separator<'a> {
     pub doc: &'a Document,
@@ -51,7 +64,7 @@ pub(crate) struct Separator<'a> {
 
 impl<'a> Separator<'a> {
     pub fn new(doc: &'a Document, set: &'a PrintSettings) -> Self {
-        Self { doc, cms: vectorcraft_color::cms::active(), set }
+        Self { doc, cms: separation_cms(set), set }
     }
 
     /// How much of ink `plate` colour `c` (with swatch link `link`) prints, 0..1.
