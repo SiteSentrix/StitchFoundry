@@ -429,3 +429,10 @@ macOS, Ctrl elsewhere), and the app holds them for the frames the input spans, a
 press, its `text` and its release; a click's press and release; a drag from the press through every move to the
 release. Every handler sees them (Shift+arrow nudges by the big increment, Alt+arrow nudges a copy, Shift-clicking a
 Layers selection square adds to the selection); the keyboard's own modifiers apply again afterwards.
+
+Cutting tools: Mirror & Cut (`mirrorCut`), Line Cut (`lineCut`) and Rectangle Cut (`rectCut`) cut the selected paths
+and compound paths. `ui.tool.select` one, then drag with `ui.pointer`: the cut previews live and the release keeps it
+as one undo step (`ui.key` Escape cancels). They run `path.mirrorCut`, `path.lineCut` and `path.rectCut`, which an
+agent can call directly. Mirror & Cut's tool options (`tool.setOption`, shown in the Control bar) are `axis`
+(`free` | `vertical` | `horizontal`; a constrained axis follows the pointer and a click places it) and `keep`
+(`left` | `right` | `top` | `bottom`); Alt on release keeps the other side.
