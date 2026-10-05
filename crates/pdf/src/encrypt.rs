@@ -3,10 +3,12 @@
 //!
 //! The export writes a plain file; [`protect`] then encrypts every string and stream in it (the
 //! XMP metadata stays readable with Plaintext Metadata) and adds the encryption dictionary. The
-//! algorithm follows the compatibility ([`Encryption`]): 128-bit RC4 for PDF 1.4 (revision 3) and
-//! 1.5 (revision 4), 128-bit AES for 1.6 (revision 4) and 256-bit AES for 1.7 and 2.0
-//! (revision 6). The random file key, salts and initialisation vectors come from a SHA-256 stream
-//! seeded with the process's random hash keys, the time and the file itself.
+//! algorithm follows the compatibility ([`Encryption`]): 40-bit RC4 for PDF 1.3 (revision 2),
+//! 128-bit RC4 for PDF 1.4 (revision 3) and 1.5 (revision 4), 128-bit AES for 1.6 (revision 4) and
+//! 256-bit AES for 1.7 and 2.0 (revision 6). The random file key, salts and initialisation vectors
+//! come from a SHA-256 stream seeded with the process's random hash keys, the time and the file
+//! itself. A linearised file is encrypted between its two steps ([`protect_keeping`]): what
+//! encrypted it then encrypts the hint stream written last ([`Cipher`]).
 //!
 //! Reading: [`user_password`] turns the permissions (owner) password of a file encrypted with RC4
 //! or 128-bit AES into its open (user) password, so either password opens it.
@@ -22,6 +24,7 @@ use crate::{Changes, Compatibility, PdfError, PdfSettings, Printing, SecuritySet
 choice! {
     /// The encryption algorithm, which follows the PDF version (Compatibility).
     Encryption {
+        Rc440 = "rc440", "40-bit RC4";
         Rc4 = "rc4", "128-bit RC4";
         Aes128 = "aes128", "128-bit AES";
         Aes256 = "aes256", "256-bit AES";
@@ -32,6 +35,7 @@ impl Encryption {
     /// The algorithm a file of PDF version `c` is encrypted with.
     pub fn for_compatibility(c: Compatibility) -> Self {
         match c {
+            Compatibility::Pdf13 => Self::Rc440,
             Compatibility::Pdf14 | Compatibility::Pdf15 => Self::Rc4,
             Compatibility::Pdf16 => Self::Aes128,
             Compatibility::Pdf17 | Compatibility::Pdf20 => Self::Aes256,
@@ -43,6 +47,7 @@ impl Encryption {
 /// encrypted), 4 (crypt filters: RC4 or AES-128) or 6 (AES-256).
 fn revision(c: Compatibility) -> u8 {
     match c {
+        Compatibility::Pdf13 => 2,
         Compatibility::Pdf14 => 3,
         Compatibility::Pdf15 | Compatibility::Pdf16 => 4,
         Compatibility::Pdf17 | Compatibility::Pdf20 => 6,
@@ -138,7 +143,7 @@ impl PdfSettings {
 pub(crate) fn warnings(set: &PdfSettings) -> Vec<String> {
     let s = &set.security;
     let mut out = vec![];
-    if s.protected() && s.plaintext_metadata && revision(set.compatibility) == 3 {
+    if s.protected() && s.plaintext_metadata && revision(set.compatibility) <= 3 {
         out.push(format!("{} encryption covers the metadata too: plaintext metadata needs PDF 1.5 or later", set.compatibility.label()));
     }
     out
@@ -335,7 +340,7 @@ impl Handler {
         // Without a permissions password the open password grants every permission anyway.
         let owner = if sec.permissions_password.is_empty() { user } else { sec.permissions_password.as_bytes() };
         let p = sec.permission_bits();
-        let encrypt_metadata = r == 3 || !sec.plaintext_metadata;
+        let encrypt_metadata = r <= 3 || !sec.plaintext_metadata;
         let meta = if encrypt_metadata { "" } else { "/EncryptMetadata false" };
         if r == 6 {
             let key: [u8; 32] = rng.bytes();
@@ -361,47 +366,59 @@ impl Handler {
             );
             return Ok(Self { key: key.to_vec(), cipher, encrypt_metadata, dict });
         }
-        // O (algorithm 3), the file key (algorithm 2) and U (algorithm 5), for a 16-byte key.
-        let owner_key = owner_key(owner, r, 16);
+        // O (algorithm 3), the file key (algorithm 2) and U (algorithms 4 and 5): a 5-byte key and
+        // single RC4 passes for revision 2, a 16-byte key for revisions 3 and 4.
+        let n = if r == 2 { 5 } else { 16 };
+        let owner_key = owner_key(owner, r, n);
         let mut o = rc4(&owner_key, &padded(user));
-        for i in 1..=19 {
+        for i in (1..=19).filter(|_| r >= 3) {
             o = rc4(&xored(&owner_key, i), &o);
         }
         let no_meta: &[u8] = if encrypt_metadata { &[] } else { &[0xFF; 4] };
         let mut key = md5(&[&padded(user), &o, &p.to_le_bytes(), id, no_meta]);
-        for _ in 0..50 {
+        for _ in (0..50).filter(|_| r >= 3) {
             key = md5(&[&key]);
         }
-        let mut u = rc4(&key, &md5(&[&PAD, id]));
-        for i in 1..=19 {
-            u = rc4(&xored(&key, i), &u);
-        }
-        u.extend_from_slice(&rng.bytes::<16>());
-        let dict = if r == 3 {
-            format!("<</Filter/Standard/V 2/R 3/Length 128/P {p}/O{}/U{}>>", hex(&o), hex(&u))
+        let key = key.get(..n).unwrap_or(&key).to_vec();
+        let u = if r == 2 {
+            rc4(&key, &PAD)
         } else {
-            let cfm = if cipher == Encryption::Aes128 { "AESV2" } else { "V2" };
-            format!(
-                "<</Filter/Standard/V 4/R 4/Length 128/CF<</StdCF<</AuthEvent/DocOpen/CFM/{cfm}/Length 16>>>>/StmF/StdCF/StrF/StdCF/P {p}/O{}/U{}{meta}>>",
-                hex(&o),
-                hex(&u)
-            )
+            let mut u = rc4(&key, &md5(&[&PAD, id]));
+            for i in 1..=19 {
+                u = rc4(&xored(&key, i), &u);
+            }
+            u.extend_from_slice(&rng.bytes::<16>());
+            u
         };
-        Ok(Self { key: key.to_vec(), cipher, encrypt_metadata, dict })
+        let dict = match r {
+            2 => format!("<</Filter/Standard/V 1/R 2/Length 40/P {p}/O{}/U{}>>", hex(&o), hex(&u)),
+            3 => format!("<</Filter/Standard/V 2/R 3/Length 128/P {p}/O{}/U{}>>", hex(&o), hex(&u)),
+            _ => {
+                let cfm = if cipher == Encryption::Aes128 { "AESV2" } else { "V2" };
+                format!(
+                    "<</Filter/Standard/V 4/R 4/Length 128/CF<</StdCF<</AuthEvent/DocOpen/CFM/{cfm}/Length 16>>>>/StmF/StdCF/StrF/StdCF/P {p}/O{}/U{}{meta}>>",
+                    hex(&o),
+                    hex(&u)
+                )
+            }
+        };
+        Ok(Self { key, cipher, encrypt_metadata, dict })
     }
 
     /// `data` of object `num generation` encrypted.
     fn encrypt(&self, num: u32, generation: u16, data: &[u8], rng: &mut Entropy) -> Result<Vec<u8>, PdfError> {
+        // The object's key: the file key's length plus 5 bytes, at most 16 (algorithm 1).
         let object_key = || {
             let salt: &[u8] = if self.cipher == Encryption::Aes128 { b"sAlT" } else { &[] };
-            md5(&[&self.key, &num.to_le_bytes()[..3], &generation.to_le_bytes(), salt])
+            let h = md5(&[&self.key, &num.to_le_bytes()[..3], &generation.to_le_bytes(), salt]);
+            h.get(..(self.key.len() + 5).min(16)).unwrap_or(&h).to_vec()
         };
         let aes = |key: &[u8], rng: &mut Entropy| -> Result<Vec<u8>, PdfError> {
             let iv: [u8; 16] = rng.bytes();
             Ok([&iv[..], &Aes::new(key)?.cbc(iv, data, true)].concat())
         };
         match self.cipher {
-            Encryption::Rc4 => Ok(rc4(&object_key(), data)),
+            Encryption::Rc440 | Encryption::Rc4 => Ok(rc4(&object_key(), data)),
             Encryption::Aes128 => aes(&object_key(), rng),
             Encryption::Aes256 => aes(&self.key, rng),
         }
@@ -488,7 +505,7 @@ impl<'a> Obj<'a> {
         }
     }
 
-    fn int(&self, key: &[u8]) -> Option<i64> {
+    pub(crate) fn int(&self, key: &[u8]) -> Option<i64> {
         match self.get(key)? {
             Self::Int { value, .. } => Some(*value),
             _ => None,
@@ -861,12 +878,32 @@ pub(crate) fn stream_spans(pdf: &[u8], lx: &mut Lexer<'_>, dict: &Obj<'_>) -> Re
     Ok(Some(((*start, *end), (data, data_end))))
 }
 
+/// What encrypts the streams of a file [`protect_keeping`] encrypted, for those written after it
+/// (the hint stream of a linearised file).
+pub(crate) struct Cipher {
+    h: Handler,
+    rng: Entropy,
+}
+
+impl Cipher {
+    /// `data`, the stream of object `num` (generation 0), encrypted.
+    pub(crate) fn stream(&mut self, num: u32, data: &[u8]) -> Result<Vec<u8>, PdfError> {
+        self.h.encrypt(num, 0, data, &mut self.rng)
+    }
+}
+
 /// Encrypt `pdf` (as the export writes it: one cross-reference table) as `set`'s Security
 /// section says; without a password it comes back as it is.
 pub(crate) fn protect(pdf: Vec<u8>, set: &PdfSettings) -> Result<Vec<u8>, PdfError> {
+    protect_keeping(pdf, set).map(|(pdf, _)| pdf)
+}
+
+/// [`protect`], keeping what encrypted the file (`None` when it isn't encrypted). The objects keep
+/// their order and numbers; the encryption dictionary comes after them, numbered last.
+pub(crate) fn protect_keeping(pdf: Vec<u8>, set: &PdfSettings) -> Result<(Vec<u8>, Option<Cipher>), PdfError> {
     let sec = &set.security;
     if !sec.protected() {
-        return Ok(pdf);
+        return Ok((pdf, None));
     }
     let xref = xref_offset(&pdf).ok_or_else(|| failed("no cross-reference table"))?;
     let (mut objects, trailer) = xref_table(&pdf, xref)?;
@@ -944,7 +981,7 @@ pub(crate) fn protect(pdf: Vec<u8>, set: &PdfSettings) -> Result<Vec<u8>, PdfErr
         out.extend_from_slice(format!("/ID[{}{}]", hex(&id), hex(&id)).as_bytes());
     }
     out.extend_from_slice(format!("/Encrypt {size} 0 R>>\nstartxref\n{table}\n%%EOF").as_bytes());
-    Ok(out)
+    Ok((out, Some(Cipher { h, rng })))
 }
 
 // ---------- reading ----------

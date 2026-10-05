@@ -204,6 +204,16 @@ impl FlattenOptions {
         Self::from_params_with(p, &[])
     }
 
+    /// The options an export flattens with: preset `name` (built-in or one of `saved`; default
+    /// medium) with the export's `flattener` `options` over it.
+    pub fn for_export(name: Option<&str>, options: Option<&Value>, saved: &[FlattenerPreset]) -> std::result::Result<Self, String> {
+        let mut q = json!({ "options": options.cloned().unwrap_or(Value::Null) });
+        if let Some(name) = name {
+            q["preset"] = json!(name);
+        }
+        Self::from_params_with(&q, saved)
+    }
+
     /// The options `p` asks for: `preset` (built-in or one of `saved`; default medium) adjusted by
     /// the option keys given at the top level or in `options`.
     pub fn from_params_with(p: &Value, saved: &[FlattenerPreset]) -> std::result::Result<Self, String> {

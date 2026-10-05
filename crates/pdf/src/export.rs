@@ -42,19 +42,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     // Live geometry effects export as their result; raster effects are reported below.
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
-    if doc.artboards.is_empty() {
-        return Err(PdfError::NoArtboards);
-    }
-    let indices: Vec<usize> = match &opts.artboards {
-        Some(v) => v.clone(),
-        None => (0..doc.artboards.len()).collect(),
-    };
-    if indices.is_empty() {
-        return Err(PdfError::NoArtboards);
-    }
-    if let Some(bad) = indices.iter().find(|i| **i >= doc.artboards.len()) {
-        return Err(PdfError::BadArtboard(*bad));
-    }
+    let pages = pages(doc, opts)?;
 
     let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.title.clone()));
     let created_at = opts.created.or_else(vectorcraft_doc::metadata::now_unix);
@@ -78,12 +66,9 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         warnings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
     }
     ex.overprint = set.advanced.overprint == crate::Overprint::Preserve;
-    // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed, and by the
-    // printer's marks around that.
     let bleed = set.bleed_of(doc);
     let marks = set.marks.printer_marks();
-    for i in indices {
-        let boxes = PageBoxes::new(doc.artboards[i].rect, bleed, &marks);
+    for (i, boxes) in pages {
         let (m, r) = (boxes.media, boxes.bleed);
         let info = if marks.page_info { crate::marks::page_info(doc, &title, i, created_at) } else { String::new() };
         let art = crate::marks::art(doc, &marks, &boxes, bleed, &info);
@@ -108,11 +93,31 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     w.absorb(ex);
     let (bytes, more) = w.finish()?;
     let bytes = crate::forms::finish(bytes, doc, set, layers, overprinted)?;
-    let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
-    let bytes = crate::encrypt::protect(bytes, set)?;
     warnings.extend(more);
+    let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
+}
+
+/// The artboards `opts` exports, in page order, with the boxes of their pages: Marks and Bleeds
+/// make each page its artboard (the trim box) grown by the bleed, and by the printer's marks
+/// around that.
+fn pages(doc: &Document, opts: &PdfOptions) -> Result<Vec<(usize, PageBoxes)>, PdfError> {
+    let indices: Vec<usize> = match &opts.artboards {
+        Some(v) => v.clone(),
+        None => (0..doc.artboards.len()).collect(),
+    };
+    if doc.artboards.is_empty() || indices.is_empty() {
+        return Err(PdfError::NoArtboards);
+    }
+    let (bleed, marks) = (opts.settings.bleed_of(doc), opts.settings.marks.printer_marks());
+    indices.into_iter().map(|i| Ok((i, PageBoxes::new(doc.artboards.get(i).ok_or(PdfError::BadArtboard(i))?.rect, bleed, &marks)))).collect()
+}
+
+/// What each page of `doc` exported with `opts` shows, in document space (its media box: the
+/// artboard with the bleed and the printer's marks), in page order.
+pub fn page_areas(doc: &Document, opts: &PdfOptions) -> Result<Vec<Rect>, PdfError> {
+    Ok(pages(doc, opts)?.into_iter().map(|(_, b)| b.media).collect())
 }
 
 /// A PDF being written, shared by export and print: the file's configuration and metadata, then
@@ -127,6 +132,8 @@ pub(crate) struct Writer {
     /// Spot colours written with a Lab alternate, gathered from the exporters ([`Self::absorb`]).
     lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
     warnings: Vec<String>,
+    /// A PDF 1.3 file ([`crate::PdfSettings::pdf13`]): flat, without page groups.
+    pdf13: bool,
 }
 
 /// One page as [`Writer::page`] draws it: the art placed in a drawing space ([`Self::place`]),
@@ -166,7 +173,8 @@ impl Writer {
             warnings.push(format!("the CMYK profile {} can't be embedded: CMYK colours are written untagged", out.cmyk_profile()));
         }
         let version = match set.compatibility {
-            Compatibility::Pdf14 => PdfVersion::Pdf14,
+            // PDF 1.3 files are written with the PDF 1.4 settings: flat, they use nothing newer.
+            Compatibility::Pdf13 | Compatibility::Pdf14 => PdfVersion::Pdf14,
             Compatibility::Pdf15 => PdfVersion::Pdf15,
             Compatibility::Pdf16 => PdfVersion::Pdf16,
             Compatibility::Pdf17 => PdfVersion::Pdf17,
@@ -207,7 +215,7 @@ impl Writer {
             meta = meta.creation_date(t);
         }
         pdf.set_metadata(meta);
-        Ok(Self { pdf, cmyk: out.blends_cmyk(cmyk), out: Arc::new(out), lab_spots: vec![], warnings })
+        Ok(Self { pdf, cmyk: out.blends_cmyk(cmyk), out: Arc::new(out), lab_spots: vec![], warnings, pdf13: set.pdf13() })
     }
 
     /// Draw one page: the art of `ex`'s document placed as `sheet` says, then its marks.
@@ -236,10 +244,11 @@ impl Writer {
             s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
         }
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
-        // writer has no page group attributes). In CMYK, transparency at the top of a page is put
-        // in a non-isolated group of its own, whose blending space `cmyk_blending` rewrites.
+        // writer has no page group attributes; a flat PDF 1.3 file has none). In CMYK, transparency
+        // at the top of a page is put in a non-isolated group of its own, whose blending space
+        // `cmyk_blending` rewrites.
         let doc = ex.doc;
-        let page_group = doc.page_isolate || doc.page_knockout;
+        let page_group = !self.pdf13 && (doc.page_isolate || doc.page_knockout);
         let cmyk_page_group = self.cmyk && !page_group && ex.shows_transparency();
         if page_group {
             s.push_isolated();
@@ -306,7 +315,7 @@ impl Writer {
         let bytes = if lab { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) } else { bytes };
         let (bytes, more) = self.out.write_catalog(bytes)?;
         self.warnings.extend(more);
-        Ok((crate::pdfx::finish(bytes, self.out.standard)?, self.warnings))
+        Ok((crate::pdfx::finish(bytes, self.out.standard, self.pdf13)?, self.warnings))
     }
 }
 

@@ -216,10 +216,10 @@ PDF files take the Save PDF dialog's options: `preset`, `standard`, `compatibili
 `compression`, `marks`, `bleed`, `output`, `advanced` and `security` sections (`list_commands` with filter `exportPdf`
 documents every field). `document.exportPdf` and `export` (format `pdf`, the options in `options`) return `warnings`:
 options accepted but not applied yet, and features approximated or left out. A standard with a PDF version it doesn't
-allow is refused (PDF/A-2b at 2.0, PDF/X-4 above 1.6, PDF/X-1a and PDF/X-3 at anything but 1.4); choosing a standard
-without giving `compatibility` sets the latest it allows.
-A `security` password encrypts the file (RC4 128-bit at PDF 1.4–1.5, AES-128 at 1.6, AES-256 at 1.7 and 2.0) with its
-permissions; either password opens it (`document.open {password}`), and a password with PDF/A or PDF/X is refused.
+allow is refused (PDF/A-2b at 1.3 or 2.0, PDF/X-4 above 1.6, PDF/X-1a and PDF/X-3 above 1.4); choosing a
+standard without giving `compatibility` sets its version (PDF 1.3 for PDF/X-1a and PDF/X-3).
+A `security` password encrypts the file (RC4 40-bit at PDF 1.3, RC4 128-bit at 1.4–1.5, AES-128 at 1.6, AES-256 at
+1.7 and 2.0) with its permissions; either password opens it (`document.open {password}`), and a password with PDF/A or PDF/X is refused.
 Pattern fills and strokes are written as their tiles clipped to the area they paint (a stroke's outline, with its
 dashes, caps, profile, arrowheads and alignment), and freeform gradients as an image of their colour field at the
 document's raster effects resolution, clipped the same way.
@@ -231,6 +231,14 @@ Images follow the `compression` settings of their kind (`color`, `gray`, or `mon
 with `zip`, `jpeg` (at `quality`; images with transparency stay lossless) or `auto` (JPEGs stay JPEG, the others
 lossless). `none`, `jpeg2000`, CCITT and `runLength` are written as ZIP, with a warning when an image needs them.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
+`thumbnails: true` embeds each page drawn small (106 px on its long side, without the layers the page leaves out) as
+its `/Thumb` image. `fastWebView: true` writes a linearised file (the linearization dictionary first, then the first
+page with hint tables saying where every other page's objects are), which stays linearised when a password encrypts it.
+`compatibility: "1.3"` writes a PDF 1.3 file, which has no transparency: a copy of the document is flattened first
+with `flattenerPreset` (empty: High Resolution; `high`, `medium`, `low` or a saved preset, `flattener.presets.list`)
+and `flattener` options over it (as `object.flattenTransparency` takes them); images with see-through pixels count as
+transparency and rasterized areas are clipped to their regions. A file that would still have transparency fails the
+export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)
@@ -1582,10 +1590,10 @@ layers are refused.
 - **pdfX4** (PDF/X-4:2010, PDF 1.6 at most): transparency and layers are kept, colours are tagged, and the XMP metadata
   names the standard.
 
-Flattening uses the High Resolution flattener preset on a copy (the document is untouched; a warning says so), and
-images with see-through pixels count as transparency. The written file is checked against its standard: what it still
-breaks (transparency, RGB in PDF/X-1a, a font not embedded) fails the export instead of writing a file that only
-claims the standard.
+Flattening uses `flattenerPreset` (default High Resolution, see PDF 1.3 above) on a copy (the document is untouched; a
+warning says so), and images with see-through pixels count as transparency. The written file is checked against
+its standard: what it still breaks (transparency, RGB in PDF/X-1a, a font not embedded) fails the export instead of
+writing a file that only claims the standard.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"PDF/X-1a:2001","output":{"outputIntent":"VectorCraft Generic CMYK (SWOP-like)","outputCondition":"Coated","trapped":false}}}}

@@ -60,7 +60,9 @@ fn export_pdf_writes_the_compatibility_header_and_the_range() {
 fn bad_options_are_refused() {
     let mut s = session(2);
     for p in [
-        json!({"compatibility": "1.3"}),
+        json!({"compatibility": "1.2"}),
+        json!({"compatibility": "1.3", "standard": "pdfA2b"}),
+        json!({"compatibility": "1.3", "flattenerPreset": "Nope"}),
         json!({"compatibility": 1.5}),
         json!({"range": "1-3"}),
         json!({"range": "0"}),
@@ -105,9 +107,11 @@ fn pdf_a_refuses_pdf_2() {
 #[test]
 fn options_not_applied_yet_and_document_features_warn() {
     let mut s = session(1);
-    let w = warnings(&export(&mut s, json!({"thumbnails": true, "fastWebView": true, "marks": {"trim": true}})));
-    assert_eq!(w.len(), 2, "{w:?}");
-    assert!(w.iter().any(|w| w.contains("thumbnails")) && w.iter().any(|w| w.contains("fast web view")), "printer's marks are drawn: no warning");
+    // Printer's marks are drawn, thumbnails embedded and the file linearised: nothing to report.
+    let v = export(&mut s, json!({"thumbnails": true, "fastWebView": true, "marks": {"trim": true}}));
+    assert_eq!(warnings(&v), Vec::<String>::new());
+    let text = String::from_utf8_lossy(&b64(&v)).into_owned();
+    assert!(text.contains("/Thumb ") && text.contains("/Linearized 1"));
     // A pattern stroke is written as its tiles clipped to the stroke: nothing to report.
     let tile = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [tile]})).unwrap();

@@ -67,26 +67,25 @@ choice! {
         PdfX4 = "pdfX4", "PDF/X-4:2010";
     } default None
 }
-
 impl Standard {
     /// A file of this standard can declare PDF version `c`: PDF/A-2 is based on PDF 1.7 (so it
-    /// can't be PDF 2.0), PDF/X-4 on PDF 1.6, and PDF/X-1a and PDF/X-3 on PDF 1.3, which the
-    /// writer writes as 1.4 (the file says 1.3, see [`crate::pdfx`]).
+    /// can't be PDF 2.0, nor PDF 1.3, which has no transparency), PDF/X-4 on PDF 1.6, and PDF/X-1a
+    /// and PDF/X-3 on PDF 1.3 (PDF 1.4 is accepted too, and written as 1.3).
     pub fn allows(self, c: Compatibility) -> bool {
         use Compatibility::*;
         match self {
             Self::None => true,
-            Self::PdfA2b => c != Pdf20,
-            Self::PdfX1a | Self::PdfX3 => c == Pdf14,
+            Self::PdfA2b => !matches!(c, Pdf13 | Pdf20),
+            Self::PdfX1a | Self::PdfX3 => matches!(c, Pdf13 | Pdf14),
             Self::PdfX4 => matches!(c, Pdf14 | Pdf15 | Pdf16),
         }
     }
 
-    /// The latest PDF version a file of this standard can declare (what choosing it sets).
+    /// The PDF version a file of this standard is (what choosing it sets).
     pub fn version(self) -> Compatibility {
         match self {
             Self::None | Self::PdfA2b => Compatibility::Pdf17,
-            Self::PdfX1a | Self::PdfX3 => Compatibility::Pdf14,
+            Self::PdfX1a | Self::PdfX3 => Compatibility::Pdf13,
             Self::PdfX4 => Compatibility::Pdf16,
         }
     }
@@ -95,6 +94,8 @@ impl Standard {
 choice! {
     /// The PDF version written in the file header.
     Compatibility {
+        /// No transparency: it is flattened (see [`PdfSettings::pdf13`]).
+        Pdf13 = "1.3", "PDF 1.3";
         Pdf14 = "1.4", "PDF 1.4";
         Pdf15 = "1.5", "PDF 1.5";
         Pdf16 = "1.6", "PDF 1.6";
@@ -236,6 +237,10 @@ pub struct PdfSettings {
     pub output: OutputSettings,
     pub advanced: AdvancedSettings,
     pub security: SecuritySettings,
+    /// The transparency flattener preset PDF 1.3 files (PDF/X-1a and PDF/X-3 ones too) are
+    /// flattened with: a built-in or saved preset's name; empty, High Resolution. The app flattens
+    /// the document before writing; the writer doesn't read it.
+    pub flattener_preset: String,
 }
 
 /// Resampling and compression of one kind of image.
@@ -449,6 +454,13 @@ impl PdfSettings {
         self.create_layers && self.compatibility.has_layers()
     }
 
+    /// The file is PDF 1.3 (asked for, or a PDF/X-1a or PDF/X-3 file): it has no transparency (the
+    /// app flattens it, see [`Self::flattener_preset`]), is written with the PDF 1.4 settings, and
+    /// its header and metadata say 1.3.
+    pub fn pdf13(&self) -> bool {
+        self.compatibility == Compatibility::Pdf13 || self.standard.flattens()
+    }
+
     /// Forget the passwords (presets never store them).
     pub fn clear_passwords(&mut self) {
         self.security.open_password.clear();
@@ -460,8 +472,6 @@ impl PdfSettings {
         let d = Self::default();
         let s = &self.security;
         [
-            (self.thumbnails, "page thumbnails are not embedded yet"),
-            (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers && !self.compatibility.has_layers(), "PDF layers need PDF 1.5 or later: every layer is plain page content"),
             (
                 !self.advanced.outline_text && self.advanced.font_subset_percent < 100.0,

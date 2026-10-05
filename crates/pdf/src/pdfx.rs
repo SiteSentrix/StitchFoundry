@@ -12,8 +12,8 @@
 //!   document information, a title and dates, embedded fonts (or text as outlines), no editing
 //!   data and no encryption (both refused by the settings checks).
 //!
-//! PDF 1.3 files are written with the PDF 1.4 settings (nothing above 1.3 is used once the art is
-//! flat) and their header and metadata say 1.3. The written file is checked ([`verify`]): what the
+//! PDF/X-1a and PDF/X-3 files are PDF 1.3 files ([`crate::PdfSettings::pdf13`]): flat, written with
+//! the PDF 1.4 settings, their header and metadata saying 1.3. The written file is checked ([`verify`]): what the
 //! standard forbids that is still there refuses the export, rather than a file claiming a
 //! standard it breaks.
 
@@ -121,7 +121,7 @@ pub(crate) fn info_entries(standard: Standard) -> String {
 
 /// Edit the XMP metadata of a PDF/X file (the catalog's `/Metadata` stream; `root` is the
 /// catalog dictionary's contents) into `patch`: PDF/X-4 adds the standard, Trapped and a version
-/// id; PDF 1.3 files say so. Files without metadata are left as they are.
+/// id (PDF 1.3 files say so in [`finish`]). Files without metadata are left as they are.
 pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Patch, standard: Standard, trapped: bool) -> Result<(), PdfError> {
     if !standard.is_pdfx() {
         return Ok(());
@@ -137,12 +137,6 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
     let data = data + obj.get(data..).map_or(0, |r| r.iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count());
     let xml = data.checked_add(length).and_then(|e| obj.get(data..e)).ok_or_else(bad)?;
     let mut edits: Vec<(usize, usize, Vec<u8>)> = vec![];
-    if standard.flattens()
-        && let Some(v) = find(xml, b"<pdf:PDFVersion>1.4<", 0)
-    {
-        let digit = v + b"<pdf:PDFVersion>1.".len();
-        edits.push((digit, digit + 1, b"3".to_vec()));
-    }
     if let Some((version, _)) = standard.pdfx_ids().filter(|_| standard == Standard::PdfX4) {
         // Into the writer's description, whose namespaces declare the `pdf` and `xmpMM` prefixes.
         let close = crate::lab_spot::rfind(xml, b"</rdf:Description>").ok_or_else(bad)?;
@@ -163,16 +157,28 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
     Ok(())
 }
 
-/// The finished file of `standard`: its header version (PDF 1.3 for PDF/X-1a and PDF/X-3), then
-/// checked ([`verify`]).
-pub(crate) fn finish(mut pdf: Vec<u8>, standard: Standard) -> Result<Vec<u8>, PdfError> {
-    if standard.flattens()
-        && let Some(v) = pdf.get_mut(..8).filter(|h| h.starts_with(b"%PDF-1.4"))
-    {
-        v.copy_from_slice(b"%PDF-1.3");
+/// The finished file of `standard`: a PDF 1.3 file (`pdf13`: PDF/X-1a, PDF/X-3, or asked for) says
+/// so ([`crate::post::declare_pdf13`]) and must be flat, then the file is checked against its
+/// standard ([`verify`]).
+pub(crate) fn finish(mut pdf: Vec<u8>, standard: Standard, pdf13: bool) -> Result<Vec<u8>, PdfError> {
+    if pdf13 {
+        crate::post::declare_pdf13(&mut pdf);
+        if !standard.flattens() {
+            flat(&without_streams(&pdf), "PDF 1.3")?;
+        }
     }
     verify(&pdf, standard)?;
     Ok(pdf)
+}
+
+/// Refuse a file (`objects`, without its stream data) with transparency: `kind` files have none.
+fn flat(objects: &[u8], kind: &str) -> Result<(), PdfError> {
+    match transparency(objects) {
+        Some(what) => Err(PdfError::Unsupported(format!(
+            "{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)"
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// Refuse a written file that breaks `standard`: transparency in PDF/X-1a and PDF/X-3 (soft
@@ -184,12 +190,8 @@ pub(crate) fn verify(pdf: &[u8], standard: Standard) -> Result<(), PdfError> {
     }
     let objects = without_streams(pdf);
     let std = standard.label();
-    if standard.flattens()
-        && let Some(what) = transparency(&objects)
-    {
-        return Err(PdfError::Unsupported(format!(
-            "{std} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)"
-        )));
+    if standard.flattens() {
+        flat(&objects, std)?;
     }
     if standard.cmyk_only()
         && let Some(space) =
