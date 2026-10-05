@@ -1060,6 +1060,8 @@ mod tests_linked_stops;
 #[cfg(test)]
 mod tests_links;
 #[cfg(test)]
+mod tests_linkspanel;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_maskview;
@@ -1079,6 +1081,8 @@ mod tests_opacitymask;
 mod tests_outlinestroke;
 #[cfg(test)]
 mod tests_overprint;
+#[cfg(test)]
+mod tests_package;
 #[cfg(test)]
 mod tests_paintproxy;
 #[cfg(test)]

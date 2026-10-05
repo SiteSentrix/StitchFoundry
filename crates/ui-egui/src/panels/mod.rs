@@ -23,6 +23,7 @@ pub mod image_trace;
 pub mod info;
 pub mod layers;
 pub mod library_panel;
+pub mod links;
 pub mod magic_wand;
 pub mod navigator;
 pub mod opentype;
@@ -94,6 +95,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         flattener_preview::ID => flattener_preview::show(app, ui),
         "attributes" => attributes::show(app, ui),
         "colorThemes" => color_themes::show(app, ui),
+        links::ID => links::show(app, ui),
         _ => {
             dim_label(ui, "This panel is on the roadmap (see the parity plan).");
         }
@@ -136,6 +138,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "attributes" => attributes::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
         "layers" => layers::menu(app, ui),
+        links::ID => links::menu(app, ui),
         _ => {
             ui.add_enabled(false, egui::Button::new("No options").frame(false));
         }
@@ -445,6 +448,8 @@ mod tests_appearance;
 mod tests_effectedit;
 #[cfg(test)]
 mod tests_freeform;
+#[cfg(test)]
+mod tests_links;
 #[cfg(test)]
 mod tests_maskview;
 #[cfg(test)]

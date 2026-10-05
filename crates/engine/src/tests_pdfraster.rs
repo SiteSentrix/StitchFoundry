@@ -101,7 +101,10 @@ fn groups_layers_type_images_and_symbols_keep_their_raster_effects() {
     let mut d = Document::new(200.0, 200.0);
     d.images.insert("pic".into(), ImageBlob::new("image/png", png(40, 30)));
     let xf = Affine::translate((40.0, 50.0)) * Affine::scale(2.5);
-    let im = Node::new(d.alloc_id(), NodeKind::Image(ImageObject { key: "pic".into(), width: 40, height: 30, xf, link: None }));
+    let im = Node::new(
+        d.alloc_id(),
+        NodeKind::Image(ImageObject { key: "pic".into(), width: 40, height: 30, xf, link: None, placement: Default::default() }),
+    );
     add(&mut d, with(im, shadow()));
     assert_written("image", &d);
 

@@ -1,4 +1,5 @@
-//! Document Info panel data and Object → Make Pixel Perfect.
+//! Document Info panel data, its categories and the text report (Document Info › Save…, File →
+//! Package), and Object → Make Pixel Perfect.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?} → {document, objects: {paths, compoundPaths, groups, …}, fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), …}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its licence lets it be embedded)}",
             has_doc,
             info
         ),
@@ -32,6 +33,160 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// Document Info's categories: (id, title), in the order the panel and the report show them.
+pub const CATEGORIES: [(&str, &str); 11] = [
+    ("document", "Document"),
+    ("objects", "Objects"),
+    ("graphicStyles", "Graphic Styles"),
+    ("spotColors", "Spot Colors"),
+    ("patterns", "Pattern Objects"),
+    ("gradients", "Gradient Swatches"),
+    ("symbols", "Symbols"),
+    ("fonts", "Fonts"),
+    ("fontDetails", "Font Details"),
+    ("linkedImages", "Linked Images"),
+    ("embeddedImages", "Embedded Images"),
+];
+
+/// The object counts of `document.info` and their labels.
+const OBJECT_LABELS: [(&str, &str); 16] = [
+    ("paths", "Paths"),
+    ("compoundPaths", "Compound Paths"),
+    ("groups", "Groups"),
+    ("clipGroups", "Clipping Masks"),
+    ("textObjects", "Text Objects"),
+    ("images", "Images"),
+    ("symbolInstances", "Symbol Instances"),
+    ("gradients", "Gradient Objects"),
+    ("patterns", "Pattern Objects"),
+    ("meshes", "Gradient Meshes"),
+    ("blends", "Blends"),
+    ("envelopes", "Envelopes"),
+    ("repeats", "Repeats"),
+    ("opacityMasks", "Opacity Masks"),
+    ("liveEffects", "Objects with Effects"),
+    ("guides", "Guides"),
+];
+
+/// One category of Document Info: its id, title and `(label, value)` rows (a list item has an
+/// empty value).
+pub struct Section {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub rows: Vec<(String, String)>,
+}
+
+/// What a font's `fsType` lets a copy of it do.
+pub fn embedding_label(fs_type: u16) -> &'static str {
+    match fs_type & 0x000f {
+        0x0002 => "embedding not allowed",
+        0x0004 => "embedding for preview and print",
+        0x0008 => "embedding for editing",
+        _ => "embedding allowed",
+    }
+}
+
+/// An image object as Document Info lists it: (name, width, height, linked file).
+type ImageRow = (String, u32, u32, Option<String>);
+
+/// The Document Info categories of `d` (only `category` when given) from `info` (what
+/// `document.info` reports), its fonts `(family, style)`, image objects and used patterns.
+fn sections(d: &Document, info: &Value, fonts: &BTreeSet<(String, String)>, images: &[ImageRow], category: Option<&str>) -> Vec<Section> {
+    let names = |k: &str| -> Vec<(String, String)> {
+        info[k].as_array().into_iter().flatten().filter_map(Value::as_str).map(|n| (n.to_string(), String::new())).collect()
+    };
+    let u = d.units;
+    CATEGORIES
+        .iter()
+        .filter(|(id, _)| category.is_none_or(|c| c == *id))
+        .map(|&(id, title)| {
+            let rows = match id {
+                "document" => {
+                    let mut rows = vec![
+                        ("Name".to_string(), info["document"]["name"].as_str().unwrap_or_default().to_string()),
+                        ("Color Mode".into(), info["document"]["colorMode"].as_str().unwrap_or_default().into()),
+                        ("Units".into(), u.label().into()),
+                        ("Artboards".into(), d.artboards.len().to_string()),
+                    ];
+                    rows.extend(
+                        d.artboards.iter().map(|a| (a.name.clone(), format!("{} × {}", u.format(a.rect.width()), u.format(a.rect.height())))),
+                    );
+                    rows.push(("Raster Effects".into(), format!("{} ppi", d.raster_effects_ppi)));
+                    let counts = [
+                        ("Swatches", "swatches"),
+                        ("Character Styles", "characterStyles"),
+                        ("Paragraph Styles", "paragraphStyles"),
+                        ("Pattern Swatches", "patterns"),
+                    ];
+                    rows.extend(counts.map(|(label, k)| (label.to_string(), info[k].to_string())));
+                    rows
+                }
+                "objects" => {
+                    OBJECT_LABELS.iter().filter_map(|(k, label)| Some((label.to_string(), info["objects"][k].as_u64()?.to_string()))).collect()
+                }
+                "graphicStyles" => names("graphicStyleNames"),
+                "spotColors" => names("spotColors"),
+                "patterns" => names("patternNames"),
+                "gradients" => d.swatches_iter().filter(|s| matches!(s.paint, Paint::Gradient(_))).map(|s| (s.name.clone(), String::new())).collect(),
+                "symbols" => names("symbols"),
+                "fonts" => fonts.iter().map(|(f, s)| (format!("{f} {s}"), String::new())).collect(),
+                "fontDetails" => {
+                    let db = vectorcraft_text::FontDb::global();
+                    fonts
+                        .iter()
+                        .map(|(family, style)| {
+                            let detail = match db.face(family, style) {
+                                Some(f) if f.family.eq_ignore_ascii_case(family) => {
+                                    let file =
+                                        f.path().and_then(|p| p.file_name()).map_or_else(|| "built in".into(), |n| n.to_string_lossy().into_owned());
+                                    format!("{file}; {}", embedding_label(f.fs_type()))
+                                }
+                                Some(f) => format!("missing: shown in {} {}", f.family, f.style),
+                                None => "missing".into(),
+                            };
+                            (format!("{family} {style}"), detail)
+                        })
+                        .collect()
+                }
+                "linkedImages" => {
+                    images.iter().filter_map(|(name, w, h, link)| Some((name.clone(), format!("{w} × {h} px — {}", link.as_ref()?)))).collect()
+                }
+                _ => images.iter().filter(|i| i.3.is_none()).map(|(name, w, h, _)| (name.clone(), format!("{w} × {h} px"))).collect(),
+            };
+            Section { id, title, rows }
+        })
+        .collect()
+}
+
+/// `sections` as the plain-text report of document `name`: a heading, then each category's title
+/// and rows.
+pub fn report_text(name: &str, selection_only: bool, sections: &[Section]) -> String {
+    let mut out = format!("Document Info: {name}\n");
+    if selection_only {
+        out.push_str("(the selection only)\n");
+    }
+    for sec in sections {
+        out.push_str(&format!("\n{}\n", sec.title.to_uppercase()));
+        if sec.rows.is_empty() {
+            out.push_str("None\n");
+        }
+        for (label, value) in &sec.rows {
+            if value.is_empty() {
+                out.push_str(&format!("{label}\n"));
+            } else {
+                out.push_str(&format!("{label}: {value}\n"));
+            }
+        }
+    }
+    out
+}
+
+/// The text report of the active document (`document.info {format: "text"}` as a string).
+pub fn report(s: &mut Session, selection_only: bool) -> Result<String> {
+    let v = info(s, &json!({ "selectionOnly": selection_only, "format": "text" }))?;
+    Ok(v["text"].as_str().unwrap_or_default().to_string())
+}
+
 fn paint_kind(p: &Paint) -> Option<&'static str> {
     match p {
         Paint::Gradient(_) => Some("gradients"),
@@ -41,6 +196,17 @@ fn paint_kind(p: &Paint) -> Option<&'static str> {
 }
 
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "document.info";
+    let category = str_param(p, "category");
+    if let Some(c) = category.filter(|c| !CATEGORIES.iter().any(|(id, _)| id == c)) {
+        let ids: Vec<&str> = CATEGORIES.iter().map(|(id, _)| *id).collect();
+        return Err(bad(C, format!("category `{c}`: one of {}", ids.join(", "))));
+    }
+    let text = match str_param(p, "format") {
+        None | Some("json") => false,
+        Some("text") => true,
+        Some(f) => return Err(bad(C, format!("format `{f}`: text or json"))),
+    };
     let st = s.doc()?;
     let d = &st.doc;
     let selection_only = bool_or(p, "selectionOnly", false);
@@ -49,6 +215,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     let mut fonts = BTreeSet::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
+    let mut image_rows: Vec<ImageRow> = vec![];
+    let mut patterns = BTreeSet::new();
     let mut symbols = BTreeSet::new();
     let mut spot = BTreeSet::new();
     let mut styles: Vec<&str> = if selection_only { vec![] } else { d.graphic_styles.iter().map(|g| g.name.as_str()).collect() };
@@ -63,7 +231,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 NodeKind::Compound { .. } => Some("compoundPaths"),
                 NodeKind::Text(t) => {
                     for run in &t.runs {
-                        fonts.insert(format!("{} {}", run.style.font_family, run.style.font_style));
+                        fonts.insert((run.style.font_family.clone(), run.style.font_style.clone()));
                     }
                     Some("textObjects")
                 }
@@ -72,6 +240,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                         im.key.clone(),
                         json!({ "width": im.width, "height": im.height, "linked": im.link.is_some(), "link": im.link.as_ref().map(|l| &l.path) }),
                     );
+                    let name = im.link.as_ref().map_or_else(|| n.display_name(), |l| l.name().to_string());
+                    image_rows.push((name, im.width, im.height, im.link.as_ref().map(|l| l.path.clone())));
                     Some("images")
                 }
                 NodeKind::SymbolInstance { symbol, .. } => {
@@ -94,6 +264,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(k) = paint_kind(paint) {
                     *counts.entry(k).or_default() += 1;
                 }
+                if let Paint::Pattern { pattern, .. } = paint {
+                    patterns.insert(pattern.clone());
+                }
                 if let Paint::Solid { swatch: Some(name), .. } = paint
                     && d.swatch(name).is_some_and(|s| s.spot)
                 {
@@ -114,10 +287,11 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             }
         });
     }
-    Ok(json!({
+    let font_names: Vec<String> = fonts.iter().map(|(f, s)| format!("{f} {s}")).collect();
+    let mut out = json!({
         "document": document_summary(d),
         "objects": counts,
-        "fonts": fonts,
+        "fonts": font_names,
         "images": images,
         "symbols": symbols,
         "spotColors": spot,
@@ -127,7 +301,16 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "characterStyles": d.char_styles.len(),
         "paragraphStyles": d.para_styles.len(),
         "patterns": d.patterns.len(),
-    }))
+        "patternNames": patterns,
+    });
+    // The document's name: its file's, else its title.
+    out["document"]["name"] = json!(st.title());
+    let sections = sections(d, &out, &fonts, &image_rows, category);
+    if text {
+        return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
+    }
+    out["sections"] = sections.iter().map(|s| json!({ "id": s.id, "title": s.title, "rows": s.rows })).collect();
+    Ok(out)
 }
 
 fn document_summary(d: &Document) -> Value {
@@ -203,6 +386,14 @@ mod tests {
         s.execute("select.set", &json!({"ids": [r]})).unwrap();
         let i = s.execute("document.info", &json!({"selectionOnly": true})).unwrap();
         assert!(i["objects"]["textObjects"].is_null() && i["objects"]["paths"] == 1);
+    }
+
+    #[test]
+    fn embedding_permissions_read_from_fs_type() {
+        assert_eq!(embedding_label(0), "embedding allowed");
+        assert_eq!(embedding_label(0x0002), "embedding not allowed");
+        assert_eq!(embedding_label(0x0004 | 0x0100), "embedding for preview and print");
+        assert_eq!(embedding_label(0x0008), "embedding for editing");
     }
 
     #[test]

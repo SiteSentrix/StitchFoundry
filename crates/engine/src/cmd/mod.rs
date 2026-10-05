@@ -35,6 +35,7 @@ pub mod newdoc;
 mod object;
 mod opacitymask;
 mod overprint;
+mod package;
 mod paint;
 mod panelcmds;
 mod path;
@@ -223,6 +224,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(links::specs());
         v.extend(pdfcmds::specs());
         v.extend(fileio::dxf::specs());
+        v.extend(package::specs());
         v
     })
 }

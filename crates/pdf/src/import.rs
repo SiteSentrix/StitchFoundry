@@ -404,7 +404,7 @@ impl<'p> Builder<'p> {
             (k, w, h)
         };
         let id = self.id();
-        self.push_node(Node::new(id, NodeKind::Image(ImageObject { key: k, width: w, height: h, xf, link: None })));
+        self.push_node(Node::new(id, NodeKind::Image(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default() })));
     }
 }
 

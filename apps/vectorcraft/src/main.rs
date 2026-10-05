@@ -173,8 +173,29 @@ fn services() -> Services {
             let _ = webbrowser::open(url);
         })),
         reveal: Some(Box::new(reveal)),
+        // Links panel: Edit Original; Package: Show Package. Relink to Folder and Package pick folders.
+        open_file: Some(Box::new(open_file)),
+        pick_folder: Some(Box::new(|| rfd::FileDialog::new().pick_folder().map(|p| p.to_string_lossy().to_string()))),
         ..Default::default()
     }
+}
+
+/// Edit Original, Show Package: open `path` (a file or a folder) in the system's default app for it.
+fn open_file(path: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    let mut c = {
+        use std::os::windows::process::CommandExt as _;
+        let mut c = std::process::Command::new("explorer");
+        c.raw_arg(format!("\"{}\"", path.replace('/', "\\")));
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut c = std::process::Command::new("open");
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let mut c = std::process::Command::new("xdg-open");
+    #[cfg(not(windows))]
+    c.arg(path);
+    c.spawn().map(|_| ()).map_err(|e| format!("can't open {path}: {e}"))
 }
 
 /// The window, Dock, taskbar and app-switcher icon (`assets/app-icon/`, see its README). macOS gets

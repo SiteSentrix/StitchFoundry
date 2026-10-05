@@ -451,7 +451,7 @@ mod tests {
         d.images.insert("k".into(), ImageBlob::new("image/png", vec![1, 2, 3, 250]));
         // Only images in use are saved.
         let img = d.alloc_id();
-        let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None };
+        let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default() };
         d.insert(Some(l), 1, Node::new(img, NodeKind::Image(im))).unwrap();
         let bytes = save(&d, true);
         assert!(sniff(&bytes));

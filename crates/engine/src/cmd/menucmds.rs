@@ -398,7 +398,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         let id = d.alloc_id();
         let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-        let mut node = Node::new(id, NodeKind::Image(ImageObject { key, width: w, height: h, xf, link: None }));
+        let mut node = Node::new(id, NodeKind::Image(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default() }));
         if let Some((path, rule)) = clip {
             node = super::rasterfx::clip_group(d, path, rule, node);
         }
@@ -555,6 +555,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
                 height: h,
                 xf: Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale),
                 link: None,
+                placement: Default::default(),
             });
         }
         Ok(())

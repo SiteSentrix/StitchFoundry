@@ -1073,3 +1073,44 @@ opened.
 {"name":"run_command","arguments":{"command":"document.exportDxf","params":{"path":"/tmp/plan.dxf","version":"2013","unit":"mm","scale":10,"preserve":"editability"}}}
 {"name":"export","arguments":{"path":"/tmp/plan.dxf","options":{"useArtboards":true,"colors":256}}}
 ```
+
+## Links panel
+
+`links.list {show?: all|missing|modified|embedded, sort?: name|kind|status}` lists every image in the layers, top
+first, as the Links panel does: `{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth,
+pixelHeight, path?, found?, page?, preview?}`. `links.info {id?}` is the Link Info: `image.info`'s fields plus
+`status`, `format`, the file's `ppi` and the `effectivePpi`, `scale` (% of 100%), `rotation` (degrees,
+counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
+`links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
+file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
+(another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
+`links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeftÃ¢â‚¬Â¦bottomRight,
+clip?}` decides how a relinked or updated file takes an image's place (default `bounds`: stretched into the old
+bounds; `clip` puts it in a clip group of the old bounds when it is larger). The UI commands `links.editOriginal` and
+`links.reveal` open the linked file in its app or show it in its folder (desktop).
+
+```json
+{"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}
+{"name":"run_command","arguments":{"command":"links.placementOptions","params":{"ids":[12],"preserve":"fit","align":"top"}}}
+{"name":"run_command","arguments":{"command":"links.unembed","params":{"id":14,"path":"/tmp/logo.png"}}}
+```
+
+## Package and Document Info
+
+`file.package {folder?, name?, copyLinks?, linksFolder?, relink?, copyFonts?, report?}` copies a saved document (an
+unsaved one is an error) into `folder/name` (default name `<document> Folder`): `<document>.vectorcraft`, its linked
+files in `Links/` (relinked: the packaged document points at the copies; the open one doesn't change), the fonts its
+type uses in `Fonts/` (fonts whose licence doesn't allow embedding are listed in `skippedFonts` instead) and
+`<document> Report.txt`. Every option defaults to true. Without `folder` (the web, or an agent that wants the bytes) the
+result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entries under `<name>/`).
+
+`document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
+document, objects, graphicStyles, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
+embeddedImages); `format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?}`) and
+the package report write.
+
+```json
+{"name":"run_command","arguments":{"command":"file.package","params":{"folder":"/tmp/handoff","copyFonts":false}}}
+{"name":"run_command","arguments":{"command":"document.info","params":{"format":"text","category":"fontDetails"}}}
+```
+

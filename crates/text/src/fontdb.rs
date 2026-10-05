@@ -43,6 +43,9 @@ pub struct FontFace {
     pub italic: bool,
     bytes: FontBytes,
     index: u32,
+    /// The file the face was read from (cataloged system fonts); `None` for the bundled fonts and
+    /// fonts added as bytes.
+    path: Option<std::path::PathBuf>,
     pub(crate) upem: f64,
     /// Ascender in font units (positive = up).
     pub(crate) ascent: f64,
@@ -108,6 +111,23 @@ impl FontFace {
     /// Glyph id for `c` (0 = .notdef).
     pub fn glyph_for(&self, c: char) -> u32 {
         self.skrifa().and_then(|f| f.charmap().map(c)).map(|g| g.to_u32()).unwrap_or(0)
+    }
+    /// The file the face was read from (cataloged system fonts).
+    pub fn path(&self) -> Option<&std::path::Path> {
+        self.path.as_deref()
+    }
+    /// The bytes of the face's font file (a collection holds several faces).
+    pub fn file_data(&self) -> &[u8] {
+        self.data()
+    }
+    /// The embedding permissions of the OS/2 table (`fsType`; 0, installable, when it has none).
+    pub fn fs_type(&self) -> u16 {
+        use skrifa::raw::TableProvider;
+        self.skrifa().and_then(|f| f.os2().ok()).map_or(0, |t| t.fs_type())
+    }
+    /// May the font file be copied along with a document (its licence doesn't restrict embedding)?
+    pub fn embeddable(&self) -> bool {
+        self.fs_type() & 0x000f != 0x0002
     }
 }
 
@@ -192,7 +212,7 @@ fn enumerate_faces(data: &[u8]) -> Vec<(u32, String, String)> {
         .collect()
 }
 
-fn make_face(bytes: FontBytes, index: u32, family: String, style: String) -> Option<FontFace> {
+fn make_face(bytes: FontBytes, index: u32, family: String, style: String, path: Option<std::path::PathBuf>) -> Option<FontFace> {
     let data: &[u8] = match &bytes {
         FontBytes::Static(b) => b,
         FontBytes::Owned(v) => v.as_slice(),
@@ -215,6 +235,7 @@ fn make_face(bytes: FontBytes, index: u32, family: String, style: String) -> Opt
         shaper,
         bytes,
         index,
+        path,
     })
 }
 
@@ -253,7 +274,7 @@ impl FontDb {
         let mut faces = Vec::new();
         for data in BUNDLED {
             for (i, family, style) in enumerate_faces(data) {
-                if let Some(f) = make_face(FontBytes::Static(data), i, family, style) {
+                if let Some(f) = make_face(FontBytes::Static(data), i, family, style, None) {
                     faces.push(Arc::new(f));
                 }
             }
@@ -317,13 +338,18 @@ impl FontDb {
     /// Add a user font (TTF/OTF/TTC bytes). Returns the number of faces added (0 if unparseable or
     /// every face was already present).
     pub fn add_font(&self, bytes: Vec<u8>) -> usize {
+        self.add_font_from(bytes, None)
+    }
+
+    /// [`FontDb::add_font`] for the bytes of the file at `path` (when known).
+    fn add_font_from(&self, bytes: Vec<u8>, path: Option<&std::path::Path>) -> usize {
         let data = Arc::new(bytes);
         let mut added = 0;
         for (i, family, style) in enumerate_faces(&data) {
             if self.read_faces().iter().any(|f| f.family.eq_ignore_ascii_case(&family) && f.style.eq_ignore_ascii_case(&style)) {
                 continue;
             }
-            if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, family, style) {
+            if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, family, style, path.map(std::path::Path::to_path_buf)) {
                 self.faces.write().unwrap_or_else(|e| e.into_inner()).push(Arc::new(f));
                 added += 1;
             }
@@ -393,7 +419,7 @@ impl FontDb {
         let mut any = false;
         for p in paths {
             if let Ok(data) = std::fs::read(&p) {
-                any |= self.add_font(data) > 0;
+                any |= self.add_font_from(data, Some(&p)) > 0;
             }
         }
         any
@@ -501,7 +527,7 @@ impl FontDb {
             let Ok(data) = std::fs::read(&p) else { continue };
             let hit =
                 enumerate_faces(&data).iter().any(|(i, _, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
-            if hit && self.add_font(data) > 0 && covered(self) {
+            if hit && self.add_font_from(data, Some(&p)) > 0 && covered(self) {
                 return true;
             }
         }

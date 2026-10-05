@@ -204,6 +204,9 @@ pub struct ImageObject {
     /// before links had details hold just the path.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::links::de_link")]
     pub link: Option<crate::LinkInfo>,
+    /// Links panel → Placement Options: how a file read again takes this image's place.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub placement: crate::links::PlacementOptions,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
