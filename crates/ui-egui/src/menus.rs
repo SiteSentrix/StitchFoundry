@@ -449,6 +449,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
     ),
+    (
+        "ui.packageDialog",
+        "Package…",
+        "Cmd+Alt+Shift+P",
+        "{} open Package for the saved document (dialog `package`: folder, name, copyLinks, linksFolder, relink, copyFonts, report; a document never saved asks to Save As first); OK saves unsaved changes, runs file.package (the web downloads the zip) and offers file.showPackage",
+    ),
+    ("file.showPackage", "Show Package", "", "{folder} show a package folder (file.package's folder) in the file manager → {folder}"),
+    (
+        "docInfo.save",
+        "Save Document Info…",
+        "",
+        "{path?, selectionOnly?} write Document Info's text report (document.info {format: \"text\"}) to path, else a picked file (the web downloads it) → {path}",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -825,6 +838,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "links.editOriginal" => crate::panels::links::open_file(app, p, false),
         "links.reveal" => crate::panels::links::open_file(app, p, true),
         "ui.placementOptionsDialog" => crate::dialogs::placement_options::open(app, p),
+        "ui.packageDialog" => crate::dialogs::package::open(app),
+        "file.showPackage" => crate::dialogs::package::show_package(app, p),
+        "docInfo.save" => crate::panels::doc_info::save_report(app, p),
         _ => return None,
     };
     Some(r)
@@ -1054,6 +1070,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()),
         "ui.placementOptionsDialog" => selected_image(app, |_| true),
+        "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1119,7 +1136,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 c("Export Selection…", "document.exportSelection"),
                 Sep,
-                todos("Package…", "Cmd+Alt+Shift+P"),
+                c("Package…", "ui.packageDialog"),
                 sub("Scripts", vec![todos("Other Script…", "Cmd+F12")]),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),

@@ -33,6 +33,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 pub mod office_export;
+pub mod package;
 mod path_ops;
 pub mod pdf_presets;
 pub mod place;
@@ -211,6 +212,7 @@ registry! {
     OfficeExport: [office_export::KIND] => office_export::SPEC,
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
+    Package: [package::KIND] => package::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -316,6 +318,8 @@ mod tests;
 mod tests_export;
 #[cfg(test)]
 mod tests_import_pdf;
+#[cfg(test)]
+mod tests_package;
 #[cfg(test)]
 mod tests_raster_formats;
 

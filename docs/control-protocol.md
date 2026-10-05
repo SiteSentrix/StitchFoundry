@@ -312,3 +312,9 @@ Placement Options: the Links panel's flyout (or `ui.placementOptionsDialog {ids?
 one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
 the system and return `{path}`.
+
+Package: File → Package… (`ui.packageDialog`) opens the `package` dialog for a saved document (a document never saved
+gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the location), `name` (the package folder),
+`copyLinks`, `linksFolder`, `relink`, `copyFonts`, `report`. `ui.dialog.confirm` saves unsaved changes, runs
+`file.package` and then opens a `confirm` dialog whose OK runs `file.showPackage {folder}`; the web downloads the zip
+instead. Document Info's flyout picks a category and Save… runs `docInfo.save {path?, selectionOnly?}`.

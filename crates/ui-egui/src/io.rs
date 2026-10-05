@@ -115,6 +115,20 @@ fn is_web(app: &VectorcraftApp) -> bool {
     app.services.download.is_some()
 }
 
+/// Write `bytes` to `path`, else to a file picked with `name` suggested next to the document (the
+/// web downloads them as `name`) → where they went.
+pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: &str, bytes: &[u8]) -> Result<String, String> {
+    let path = match path {
+        Some(p) => p,
+        None => {
+            let (_, folder) = suggested(app, "");
+            pick_path(app, &FilePick { name: name.to_string(), folder, ..Default::default() })?
+        }
+    };
+    write_to(&mut app.services, &path, bytes)?;
+    Ok(path)
+}
+
 /// Where a file goes when no path was given: the suggested name on the web (a download), else the
 /// save panel's choice.
 fn pick_path(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {

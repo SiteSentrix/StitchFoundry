@@ -1,5 +1,7 @@
-//! Document Info panel: the document's setup and what it contains (objects by kind, fonts,
-//! images, symbols, spot colours, graphic styles…), for the whole document or the selection only.
+//! Document Info panel: the document's setup and what it contains (objects by kind, graphic
+//! styles, spot colours, patterns, gradients, symbols, fonts and their files, linked and embedded
+//! images), for the whole document or the selection only. The flyout picks one category (or all)
+//! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -9,97 +11,108 @@ use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 
-const OBJECT_LABELS: [(&str, &str); 16] = [
-    ("paths", "Paths"),
-    ("compoundPaths", "Compound Paths"),
-    ("groups", "Groups"),
-    ("clipGroups", "Clipping Masks"),
-    ("textObjects", "Text Objects"),
-    ("images", "Images"),
-    ("symbolInstances", "Symbol Instances"),
-    ("gradients", "Gradient Objects"),
-    ("patterns", "Pattern Objects"),
-    ("meshes", "Gradient Meshes"),
-    ("blends", "Blends"),
-    ("envelopes", "Envelopes"),
-    ("repeats", "Repeats"),
-    ("opacityMasks", "Opacity Masks"),
-    ("liveEffects", "Objects with Effects"),
-    ("guides", "Guides"),
-];
+/// `document.info` and what it was fetched for: (document uid, revision, selection only).
+#[derive(Clone, Default)]
+struct Cache {
+    key: Option<(u64, u64, bool)>,
+    info: Value,
+}
 
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(label).size(12.0).color(t.text_dim));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new(value).size(12.0).color(t.text));
+            // Long values (paths) are cut to the panel's width; hovering shows them whole.
+            ui.add(egui::Label::new(egui::RichText::new(value).size(12.0).color(t.text)).truncate());
         });
     });
 }
 
+/// `document.info` with its categories, fetched again only when the document or the scope changes.
+fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Value> {
+    let st = app.session.active()?;
+    let key = Some((st.uid, st.revision, sel_only));
+    let mut c: Cache = pstate(ctx, "docinfo-cache");
+    if c.key != key {
+        c.info = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })).ok()?;
+        c.key = key;
+        set_pstate(ctx, "docinfo-cache", c.clone());
+    }
+    Some(c.info)
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel_only: bool = pstate(ui.ctx(), "docinfo-sel");
-    let Ok(i) = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })) else {
+    let category: String = pstate(ui.ctx(), "docinfo-category");
+    let Some(i) = info(app, ui.ctx(), sel_only) else {
         widgets::dim_label(ui, "No document");
         return;
     };
     egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
-        widgets::subheader(ui, "Document");
-        let d = &i["document"];
-        row(ui, "Color Mode", d["colorMode"].as_str().unwrap_or("").into());
-        row(ui, "Units", d["units"].as_str().unwrap_or("").into());
-        row(ui, "Raster Effects", format!("{} ppi", d["rasterEffectsPpi"]));
-        for a in d["artboards"].as_array().into_iter().flatten() {
-            row(
-                ui,
-                a["name"].as_str().unwrap_or("Artboard"),
-                format!("{:.2} × {:.2}", a["width"].as_f64().unwrap_or(0.0), a["height"].as_f64().unwrap_or(0.0)),
-            );
-        }
-        widgets::divider(ui);
-        widgets::subheader(ui, if sel_only { "Objects (selection)" } else { "Objects" });
-        let objs = &i["objects"];
-        let mut any = false;
-        for (k, label) in OBJECT_LABELS {
-            if let Some(n) = objs[k].as_u64() {
-                row(ui, label, n.to_string());
-                any = true;
+        let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
+        let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
+        for (n, s) in shown.enumerate() {
+            if n > 0 {
+                widgets::divider(ui);
             }
-        }
-        if !any {
-            widgets::dim_label(ui, "None");
-        }
-        widgets::divider(ui);
-        for (key, title) in [("fonts", "Fonts"), ("symbols", "Symbols"), ("spotColors", "Spot Colors"), ("graphicStyleNames", "Graphic Styles")] {
-            let list: Vec<&str> = i[key].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-            widgets::subheader(ui, &format!("{title} ({})", list.len()));
-            for f in list {
-                widgets::dim_label(ui, f);
+            let title = s["title"].as_str().unwrap_or_default();
+            let rows = s["rows"].as_array().map_or(&[][..], Vec::as_slice);
+            // Lists show how many they hold; the selection scope shows on the first.
+            let title = match s["id"].as_str() {
+                Some("document" | "objects") => title.to_string(),
+                _ => format!("{title} ({})", rows.len()),
+            };
+            widgets::subheader(ui, &if sel_only && n == 0 && category.is_empty() { format!("{title} (selection)") } else { title });
+            if rows.is_empty() {
+                widgets::dim_label(ui, "None");
             }
-        }
-        let imgs = i["images"].as_object().cloned().unwrap_or_default();
-        widgets::subheader(ui, &format!("Images ({})", imgs.len()));
-        for (_, im) in imgs {
-            let kind = if im["linked"].as_bool() == Some(true) { im["link"].as_str().unwrap_or("Linked").to_string() } else { "Embedded".into() };
-            widgets::dim_label(ui, &format!("{} × {} px — {kind}", im["width"], im["height"]));
-        }
-        widgets::divider(ui);
-        for (key, label) in [
-            ("swatches", "Swatches"),
-            ("characterStyles", "Character Styles"),
-            ("paragraphStyles", "Paragraph Styles"),
-            ("patterns", "Pattern Swatches"),
-        ] {
-            row(ui, label, i[key].to_string());
+            for r in rows {
+                let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
+                if value.is_empty() {
+                    widgets::dim_label(ui, label);
+                } else {
+                    row(ui, label, value.into());
+                }
+            }
         }
     });
 }
 
-pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
+/// `docInfo.save {path?, selectionOnly?}`: write the text report to `path`, else a picked file
+/// (the web downloads it) → `{path}`.
+pub(crate) fn save_report(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let sel_only = p.get("selectionOnly").and_then(Value::as_bool).unwrap_or(false);
+    let r = app.session.execute("document.info", &json!({ "format": "text", "selectionOnly": sel_only })).map_err(|e| e.to_string())?;
+    let text = r["text"].as_str().unwrap_or_default();
+    let title = app.session.active().map(|d| d.title()).unwrap_or_default();
+    let stem = std::path::Path::new(&title).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
+    let path = p.get("path").and_then(Value::as_str).map(str::to_string);
+    let path = crate::io::write_named(app, path, &format!("{stem} Info.txt"), text.as_bytes())?;
+    app.status(format!("Saved {path}"));
+    Ok(json!({ "path": path }))
+}
+
+pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel: bool = pstate(ui.ctx(), "docinfo-sel");
     if menu_item(ui, "Selection Only", true, sel) {
         set_pstate(ui.ctx(), "docinfo-sel", !sel);
+    }
+    ui.separator();
+    let category: String = pstate(ui.ctx(), "docinfo-category");
+    if menu_item(ui, "All Categories", true, category.is_empty()) {
+        set_pstate(ui.ctx(), "docinfo-category", String::new());
+    }
+    let info = info(app, ui.ctx(), sel).unwrap_or_default();
+    for s in info["sections"].as_array().into_iter().flatten() {
+        let (id, title) = (s["id"].as_str().unwrap_or_default(), s["title"].as_str().unwrap_or_default());
+        if menu_item(ui, title, true, category == id) {
+            set_pstate(ui.ctx(), "docinfo-category", id.to_string());
+        }
+    }
+    ui.separator();
+    if menu_item(ui, "Save…", app.session.active().is_some(), false) {
+        crate::menus::invoke(app, "docInfo.save", json!({ "selectionOnly": sel }));
     }
 }
 
@@ -118,5 +131,32 @@ mod tests {
             menu(&mut app, ui);
         });
         out.textures_delta.clear();
+    }
+
+    #[test]
+    fn categories_filter_the_panel_and_save_writes_the_report() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap();
+        let text = crate::tests_labels::painted_text(&mut app, show);
+        assert!(text.contains("Color Mode") && text.contains("Artboard 1"), "{text}");
+        let menu_text = crate::tests_labels::painted_text(&mut app, menu);
+        assert!(menu_text.contains("Font Details") && menu_text.contains("Save…"), "{menu_text}");
+        let filtered = crate::tests_labels::painted_text(&mut app, |app, ui| {
+            set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
+            show(app, ui);
+        });
+        assert!(filtered.contains("Source Sans 3 Regular") && !filtered.contains("Color Mode"), "{filtered}");
+        // Save…: written through the host.
+        let written: std::rc::Rc<std::cell::RefCell<Vec<u8>>> = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |_: &str, b: &[u8]| {
+            w.borrow_mut().extend_from_slice(b);
+            Ok(())
+        }));
+        let r = app.run("docInfo.save", json!({"path": "/tmp/info.txt"})).unwrap();
+        assert_eq!(r["path"], "/tmp/info.txt");
+        let report = String::from_utf8(written.borrow().clone()).unwrap();
+        assert!(report.starts_with("Document Info: ") && report.contains("\nFONT DETAILS\n"), "{report}");
     }
 }

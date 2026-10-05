@@ -1094,3 +1094,23 @@ bounds; `clip` puts it in a clip group of the old bounds when it is larger). The
 {"name":"run_command","arguments":{"command":"links.placementOptions","params":{"ids":[12],"preserve":"fit","align":"top"}}}
 {"name":"run_command","arguments":{"command":"links.unembed","params":{"id":14,"path":"/tmp/logo.png"}}}
 ```
+
+## Package and Document Info
+
+`file.package {folder?, name?, copyLinks?, linksFolder?, relink?, copyFonts?, report?}` copies a saved document (an
+unsaved one is an error) into `folder/name` (default name `<document> Folder`): `<document>.vectorcraft`, its linked
+files in `Links/` (relinked: the packaged document points at the copies; the open one doesn't change), the fonts its
+type uses in `Fonts/` (fonts whose licence doesn't allow embedding are listed in `skippedFonts` instead) and
+`<document> Report.txt`. Every option defaults to true. Without `folder` (the web, or an agent that wants the bytes) the
+result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entries under `<name>/`).
+
+`document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
+document, objects, graphicStyles, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
+embeddedImages); `format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?}`) and
+the package report write.
+
+```json
+{"name":"run_command","arguments":{"command":"file.package","params":{"folder":"/tmp/handoff","copyFonts":false}}}
+{"name":"run_command","arguments":{"command":"document.info","params":{"format":"text","category":"fontDetails"}}}
+```
+

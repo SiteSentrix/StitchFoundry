@@ -254,6 +254,32 @@ fn previewing(d: &Document, key: &str) -> bool {
     d.images.get(key).is_none_or(ImageBlob::is_proxy)
 }
 
+/// A linked file of a document (File → Package): its path, name and bytes.
+pub(crate) struct LinkedFile {
+    pub path: String,
+    pub name: String,
+    /// Read from where the file is found, else the pixels the document holds when they are the
+    /// file's own; `None` when neither.
+    pub bytes: Option<Vec<u8>>,
+}
+
+/// Every file the linked images of `d` (saved at `doc_path`) show, in the layers, symbols and
+/// patterns, once each.
+pub(crate) fn linked_files(d: &Document, doc_path: Option<&str>) -> Vec<LinkedFile> {
+    let mut seen = std::collections::BTreeSet::new();
+    groups(d, None)
+        .into_iter()
+        .filter(|g| seen.insert(g.link.path.clone()))
+        .map(|g| {
+            let own = |b: &&ImageBlob| !b.is_proxy() && fileio::format_for_name(g.link.name()).is_some_and(|f| f.mime == b.mime);
+            let bytes = locate(&g.link, folder(doc_path))
+                .and_then(|mut f| f.read().ok())
+                .or_else(|| d.images.get(&g.key).filter(own).map(|b| b.bytes.to_vec()));
+            LinkedFile { path: g.link.path.clone(), name: g.link.name().to_string(), bytes }
+        })
+        .collect()
+}
+
 // ---------- reading files into the document ----------
 
 /// Keep `full` (a file's pixels) as image `key` of `d`, unless pixels are there already; a
