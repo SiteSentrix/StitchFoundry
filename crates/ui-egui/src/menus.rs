@@ -361,7 +361,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.menuDialog",
         "Menu Dialog",
         "",
-        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates)",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid|object.vectorHalftone} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates)",
     ),
     (
         "ui.widthPointEdit",
@@ -1414,6 +1414,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "object.createObjectMosaic",
                     json!({"columns": 10, "rows": 10, "spacingX": 0, "spacingY": 0, "gray": false, "deleteRaster": false}),
                 ),
+                c("Vector Halftone…", "object.vectorHalftone"),
                 c("Create Trim Marks", "object.createTrimMarks"),
                 c("Flatten Transparency…", "ui.flattenTransparencyDialog"),
                 Sep,
@@ -1985,6 +1986,7 @@ fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
         "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
         "object.path.simplify" => ("simplify", json!({"tolerance": "1 pt"})),
         "object.path.splitIntoGrid" => ("splitIntoGrid", json!({"rows": 2, "columns": 2, "gutter": "12 pt"})),
+        "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
         _ => return None,
     })
 }

@@ -440,4 +440,7 @@ agent can call directly. Mirror & Cut's tool options (`tool.setOption`, shown in
 Colour adjustment effects (Effect → Color Adjustments) open the `effect` dialog like the other effects
 (`effect.dialog {effect: "adjust.hueSaturation"}`): its fields are the effect's parameters (sliders for the amounts,
 `channel` for Curves and Levels, `points` for Curves, `color` for Shift to Color) and they preview live; set them with
-`ui.dialog.set` and `ui.dialog.confirm` to apply (Curves also has a graph: drag its points).
+`ui.dialog.set` and `ui.dialog.confirm` to apply (Curves also has a graph: drag its points). Object → Vector
+Halftone… (`engine.execute {command: "ui.menuDialog", params: {command: "object.vectorHalftone"}}`) opens the
+`vectorHalftone` dialog (fields `shape`, `frequency`, `angle`, `mode`, `color`, `invert`, `clip`, `keepOriginal`,
+`preview`): it previews live and `ui.dialog.confirm` keeps the halftone as one undo step.
