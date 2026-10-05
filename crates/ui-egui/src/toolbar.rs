@@ -106,77 +106,84 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     Stroke::new(0.4, t.text_disabled),
                 );
             }
-            let active = app.session.tool_id();
-            let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
-            let mut i = 0;
-            while i < all.len() {
-                if let Some(cat) = all[i].0 {
-                    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
-                    let label = if cols == 1 && cat.len() > 6 { format!("{}...", &cat[..4]) } else { cat.to_string() };
-                    ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
-                }
-                // One row = `cols` slots (a category label always starts a new row).
-                let mut row = vec![i];
-                while row.len() < cols && i + row.len() < all.len() && all[i + row.len()].0.is_none() {
-                    row.push(i + row.len());
-                }
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    if cols == 1 {
-                        ui.add_space((WIDTH - 36.0) / 2.0);
-                    } else {
-                        ui.add_space(2.0);
+            // The tools and the controls under them scroll in a window too short for them.
+            widgets::strip_scroll(ui, "toolbar", |ui| {
+                let active = app.session.tool_id();
+                let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
+                let mut i = 0;
+                while i < all.len() {
+                    if let Some(cat) = all[i].0 {
+                        let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
+                        let label = if cols == 1 && cat.len() > 6 { format!("{}...", &cat[..4]) } else { cat.to_string() };
+                        ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
                     }
-                    for &k in &row {
-                        let slot = &all[k].1;
-                        let shown_id = if slot.contains(&active) {
-                            active.to_string()
+                    // One row = `cols` slots (a category label always starts a new row).
+                    let mut row = vec![i];
+                    while row.len() < cols && i + row.len() < all.len() && all[i + row.len()].0.is_none() {
+                        row.push(i + row.len());
+                    }
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        if cols == 1 {
+                            ui.add_space((WIDTH - 36.0) / 2.0);
                         } else {
-                            app.ui.slot_tool.get(slot[0]).cloned().unwrap_or_else(|| slot[0].to_string())
-                        };
-                        let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
-                        let is_active = slot.contains(&active);
-                        let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
-                        let well = egui::Rect::from_center_size(rect.center(), vec2(35.5, 27.5));
-                        if is_active {
-                            ui.painter().rect_filled(well, CornerRadius::same(1), t.tool_active);
-                        } else if resp.hovered() {
-                            ui.painter().rect_filled(well, CornerRadius::same(1), t.hover);
+                            ui.add_space(2.0);
                         }
-                        let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
-                        icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
-                        if slot.len() > 1 {
-                            let c = rect.center() + vec2(12.5, 10.0);
-                            ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)], t.icon, Stroke::NONE));
+                        for &k in &row {
+                            let slot = &all[k].1;
+                            let shown_id = if slot.contains(&active) {
+                                active.to_string()
+                            } else {
+                                app.ui.slot_tool.get(slot[0]).cloned().unwrap_or_else(|| slot[0].to_string())
+                            };
+                            let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
+                            let is_active = slot.contains(&active);
+                            let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
+                            let well = egui::Rect::from_center_size(rect.center(), vec2(35.5, 27.5));
+                            if is_active {
+                                ui.painter().rect_filled(well, CornerRadius::same(1), t.tool_active);
+                            } else if resp.hovered() {
+                                ui.painter().rect_filled(well, CornerRadius::same(1), t.hover);
+                            }
+                            let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
+                            icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
+                            if slot.len() > 1 {
+                                let c = rect.center() + vec2(12.5, 10.0);
+                                ui.painter().add(egui::Shape::convex_polygon(
+                                    vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)],
+                                    t.icon,
+                                    Stroke::NONE,
+                                ));
+                            }
+                            let long_press = resp.is_pointer_button_down_on()
+                                && ui.input(|inp| inp.pointer.press_start_time().is_some_and(|s| inp.time - s > 0.35));
+                            let alt = ui.input(|inp| inp.modifiers.alt);
+                            if (resp.secondary_clicked() || long_press) && slot.len() > 1 {
+                                open_flyout = Some((slot.clone(), rect));
+                            } else if resp.clicked() && alt && slot.len() > 1 {
+                                let idx = slot.iter().position(|x| *x == shown.id).unwrap_or(0);
+                                app.select_tool(slot[(idx + 1) % slot.len()]);
+                            } else if resp.double_clicked() {
+                                app.select_tool(shown.id);
+                                app.run("tool.options", json!({ "tool": shown.id })).ok();
+                            } else if resp.clicked() {
+                                app.select_tool(shown.id);
+                            }
+                            resp.on_hover_text(tip(shown));
                         }
-                        let long_press =
-                            resp.is_pointer_button_down_on() && ui.input(|inp| inp.pointer.press_start_time().is_some_and(|s| inp.time - s > 0.35));
-                        let alt = ui.input(|inp| inp.modifiers.alt);
-                        if (resp.secondary_clicked() || long_press) && slot.len() > 1 {
-                            open_flyout = Some((slot.clone(), rect));
-                        } else if resp.clicked() && alt && slot.len() > 1 {
-                            let idx = slot.iter().position(|x| *x == shown.id).unwrap_or(0);
-                            app.select_tool(slot[(idx + 1) % slot.len()]);
-                        } else if resp.double_clicked() {
-                            app.select_tool(shown.id);
-                            app.run("tool.options", json!({ "tool": shown.id })).ok();
-                        } else if resp.clicked() {
-                            app.select_tool(shown.id);
-                        }
-                        resp.on_hover_text(tip(shown));
-                    }
-                });
-                i += row.len();
-            }
-            if let Some((slot, rect)) = open_flyout {
-                app.ui.flyout = Some(0);
-                ui.data_mut(|d| {
-                    d.insert_temp(egui::Id::new("flyout-anchor"), rect);
-                    d.insert_temp(egui::Id::new("flyout-tools"), slot.iter().map(|s| s.to_string()).collect::<Vec<String>>());
-                });
-            }
-            ui.add_space(8.0);
-            bottom_controls(app, ui, &t);
+                    });
+                    i += row.len();
+                }
+                if let Some((slot, rect)) = open_flyout {
+                    app.ui.flyout = Some(0);
+                    ui.data_mut(|d| {
+                        d.insert_temp(egui::Id::new("flyout-anchor"), rect);
+                        d.insert_temp(egui::Id::new("flyout-tools"), slot.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+                    });
+                }
+                ui.add_space(8.0);
+                bottom_controls(app, ui, &t);
+            });
         });
     flyout(app, ui.ctx());
 }
@@ -312,7 +319,7 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use egui::{Event, PointerButton, Pos2};
     use vectorcraft_engine::Session;
 
@@ -320,20 +327,56 @@ mod tests {
 
     /// One headless frame of the toolbar; returns the tool buttons' rects, top to bottom.
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Rect> {
+        frame_in(app, ctx, time, events, 1200.0)
+    }
+
+    /// [`frame`] in a window `height` points tall.
+    fn frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, height: f32) -> Vec<egui::Rect> {
         let input = egui::RawInput {
             time: Some(time),
             events,
-            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 1200.0))),
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, height))),
             ..Default::default()
         };
         let mut out = ctx.run_ui(input, |ui| show(app, ui));
         out.textures_delta.clear();
-        let mut r: Vec<egui::Rect> = ctx.viewport(|vp| {
-            let size = vec2(36.0, PITCH - 1.0);
-            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect()
-        });
+        widget_rects(ctx, vec2(36.0, PITCH - 1.0))
+    }
+
+    /// The rects of the last frame's widgets of `size`, top to bottom.
+    pub(crate) fn widget_rects(ctx: &egui::Context, size: egui::Vec2) -> Vec<egui::Rect> {
+        let mut r: Vec<egui::Rect> =
+            ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect());
         r.sort_by(|a, b| a.top().total_cmp(&b.top()));
         r
+    }
+
+    /// A mouse wheel turn over `at`, scrolling the content up by `dy` points.
+    pub(crate) fn wheel(at: Pos2, dy: f32) -> Vec<Event> {
+        let unit = egui::MouseWheelUnit::Point;
+        vec![Event::PointerMoved(at), Event::MouseWheel { unit, delta: vec2(0.0, -dy), phase: egui::TouchPhase::Move, modifiers: Default::default() }]
+    }
+
+    #[test]
+    fn the_toolbar_scrolls_in_a_short_window() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        // 500 pt: even two columns don't fit, so Edit Toolbar (the last button) starts below the window.
+        let tools = frame_in(&mut app, &ctx, 0.0, vec![], 500.0);
+        let edit_toolbar = || widget_rects(&ctx, vec2(26.0, 26.0)).last().copied().unwrap();
+        assert!(edit_toolbar().bottom() > 500.0);
+        frame_in(&mut app, &ctx, 0.1, wheel(tools[0].center(), 2000.0), 500.0);
+        for k in 2..40 {
+            frame_in(&mut app, &ctx, f64::from(k) * 0.1, vec![], 500.0);
+        }
+        assert!(edit_toolbar().bottom() <= 500.0, "scrolled into view: {:?}", edit_toolbar());
+        // Back up to the top.
+        frame_in(&mut app, &ctx, 4.0, wheel(tools[0].center(), -2000.0), 500.0);
+        for k in 41..80 {
+            frame_in(&mut app, &ctx, f64::from(k) * 0.1, vec![], 500.0);
+        }
+        assert_eq!(frame_in(&mut app, &ctx, 8.0, vec![], 500.0)[0], tools[0]);
     }
 
     /// A double-click at `at`, `time` seconds in (a second apart from the last).
