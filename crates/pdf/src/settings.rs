@@ -12,7 +12,7 @@ pub trait Choice: Copy + 'static {
     const ALL: &'static [Self];
     /// The JSON ids, in display order.
     const IDS: &'static [&'static str];
-    /// The labels shown in the Save PDF dialog, in display order.
+    /// The labels shown in the PDF dialogs, in display order.
     const LABELS: &'static [&'static str];
 }
 
@@ -20,19 +20,19 @@ pub trait Choice: Copy + 'static {
 macro_rules! choice {
     ($(#[$m:meta])* $name:ident { $($(#[$vm:meta])* $v:ident = $id:literal, $label:literal;)+ } default $d:ident) => {
         $(#[$m])*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
         pub enum $name {
             $($(#[$vm])* #[serde(rename = $id)] $v,)+
         }
 
-        impl Choice for $name {
+        impl $crate::Choice for $name {
             const ALL: &'static [Self] = &[$(Self::$v),+];
             const IDS: &'static [&'static str] = &[$($id),+];
             const LABELS: &'static [&'static str] = &[$($label),+];
         }
 
         impl $name {
-            /// The label shown in the Save PDF dialog.
+            /// The label shown in the PDF dialogs.
             pub fn label(self) -> &'static str {
                 match self {
                     $(Self::$v => $label,)+
@@ -54,6 +54,7 @@ macro_rules! choice {
         }
     };
 }
+pub(crate) use choice;
 
 choice! {
     /// The PDF standard the file conforms to.

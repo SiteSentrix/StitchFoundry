@@ -10,17 +10,20 @@ use hayro_interpret::{
     ClipPath, Context, Device, GlyphDrawMode, Image, ImageData, InterpreterCache, InterpreterSettings, InterpreterWarning, LumaData, PathDrawMode,
     SoftMask, StrokeProps, interpret_page,
 };
-use hayro_syntax::Pdf;
 use hayro_syntax::object::Name;
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Artboard, Dash, Document, FillLayer, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind,
-    StrokeLayer,
+    Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, Node, NodeId,
+    NodeKind, StrokeLayer,
 };
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::{ImportOptions, ImportReport, PdfError};
+use crate::import_color::{Colors, Native};
+use crate::{CropTo, ImportOptions, ImportReport, PdfError};
+
+/// The name of the paths text imports as.
+const TEXT_OUTLINES: &str = "<Text Outlines>";
 
 /// Import a PDF (or PDF-compatible `.ai`) with default options.
 pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
@@ -29,12 +32,9 @@ pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
 
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
-    let pdf = Pdf::new(bytes.to_vec()).map_err(|e| PdfError::Parse(format!("{e:?}")))?;
+    let pdf = crate::pages::open(bytes, opts.password.as_deref())?;
     let pages = pdf.pages();
-    let n = opts.max_pages.map_or(pages.len(), |m| m.min(pages.len()));
-    if n == 0 {
-        return Err(PdfError::NoPages);
-    }
+    let picked = crate::pages::picked(opts, pages.len())?;
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink2 = sink.clone();
@@ -58,14 +58,32 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     doc.title = "Imported PDF".into();
     doc.artboards.clear();
     doc.layers.clear();
-    let mut b = Builder::new(doc.peek_next_id());
+    let taken = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken));
     let cache = InterpreterCache::new();
     let mut x = 0.0;
-    for (i, page) in pages.iter().take(n).enumerate() {
-        let (w, h) = page.render_dimensions();
-        let (w, h) = (w as f64, h as f64);
-        let ab = Rect::new(x, 0.0, x + w, h);
-        x += w + opts.artboard_gap;
+    // Every page only a placeholder (text) over private data: the file's art isn't in its PDF part.
+    let mut placeholder = true;
+    for (i, &number) in picked.iter().enumerate() {
+        let Some(page) = pages.get(number) else { continue };
+        // The chosen box sits at (x, 0); the page draws round it.
+        let (init, frame) = crate::pages::frame(page, opts.crop);
+        let mut ab = Rect::new(x, 0.0, x + frame.width(), frame.height());
+        let xf = Affine::translate((x - frame.x0, -frame.y0)) * init;
+        let mut ctx = Context::new(xf, ab, &cache, pdf.xref(), settings.clone());
+        b.page = ab;
+        b.begin_page();
+        interpret_page(page, &mut ctx, &mut b);
+        let children = b.end_page();
+        placeholder &= crate::pages::has_private_data(page) && only_text(&children);
+        let mut right = ab.x1;
+        if opts.crop == CropTo::Bounding
+            && let Some(art) = vectorcraft_doc::live::nodes_bounds(&children)
+        {
+            right = right.max(art.x1);
+            ab = art;
+        }
+        x = right + opts.artboard_gap;
         doc.artboards.push(Artboard {
             id: i as u32 + 1,
             name: format!("Artboard {}", i + 1),
@@ -73,20 +91,26 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             show_center_mark: false,
             show_cross_hairs: false,
         });
-        let init = Affine::translate((ab.x0, ab.y0)) * Affine::new(page.initial_transform(true).as_coeffs());
-        let mut ctx = Context::new(init, ab, &cache, pdf.xref(), settings.clone());
-        b.page = ab;
-        b.begin_page();
-        interpret_page(page, &mut ctx, &mut b);
-        let children = b.end_page();
-        let mut layer = Node::layer(b.id(), &format!("Page {}", i + 1), LayerColor::Preset((i % 27) as u8));
+        let mut layer = Node::layer(b.id(), &format!("Page {}", number + 1), LayerColor::Preset((i % 27) as u8));
         if let NodeKind::Layer { children: c, .. } = &mut layer.kind {
             *c = children;
         }
         doc.layers.push(Arc::new(layer));
     }
+    if placeholder {
+        return Err(PdfError::PlaceholderOnly);
+    }
     for (k, blob) in b.images.drain() {
         doc.images.insert(k, blob);
+    }
+    // A file painted mostly in CMYK opens as a CMYK document (with CMYK default swatches).
+    if b.colors.cmyk_document() {
+        doc.color_mode = ColorMode::Cmyk;
+        (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+    }
+    doc.swatches.extend(b.colors.swatches());
+    if b.colors.mixed {
+        b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
     doc.fix_next_id();
 
@@ -99,6 +123,23 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         }
     }
     Ok(ImportReport { document: doc, warnings })
+}
+
+/// Is this art text and nothing else (in groups and clips), with some text?
+fn only_text(nodes: &[Arc<Node>]) -> bool {
+    fn walk(nodes: &[Arc<Node>], text: &mut bool) -> bool {
+        nodes.iter().all(|n| match &n.kind {
+            NodeKind::Path { clipping: true, .. } => true,
+            NodeKind::Path { .. } if n.name.as_deref() == Some(TEXT_OUTLINES) => {
+                *text = true;
+                true
+            }
+            NodeKind::Group { children, .. } => walk(children, text),
+            _ => false,
+        })
+    }
+    let mut text = false;
+    walk(nodes, &mut text) && text
 }
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
@@ -131,7 +172,8 @@ struct GlyphRun {
     scale: f64,
 }
 
-struct Builder {
+struct Builder<'p> {
+    colors: Colors<'p>,
     next: u64,
     stack: Vec<Frame>,
     blend: BlendMode,
@@ -199,9 +241,10 @@ fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
 }
 
-impl Builder {
-    fn new(next: u64) -> Self {
+impl<'p> Builder<'p> {
+    fn new(next: u64, colors: Colors<'p>) -> Self {
         Self {
+            colors,
             next,
             stack: vec![],
             blend: BlendMode::Normal,
@@ -317,7 +360,7 @@ impl Builder {
         }
         let id = self.id();
         let mut n = Node::path(id, PathData::from_bezpath(&run.path), ap);
-        n.name = Some("<Text Outlines>".into());
+        n.name = Some(TEXT_OUTLINES.into());
         self.push_node(n);
     }
 
@@ -327,10 +370,11 @@ impl Builder {
         match p {
             hayro_interpret::Paint::Color(c) => {
                 let [r, g, b, a] = c.to_rgba().components();
-                (Paint::solid(Color::rgb(round3(r), round3(g), round3(b))), a)
+                let paint = self.colors.solid(c).map_or_else(|| Paint::solid(Color::rgb(round3(r), round3(g), round3(b))), Native::paint);
+                (paint, a)
             }
             hayro_interpret::Paint::Pattern(pat) => match pat.as_ref() {
-                Pattern::Shading(sp) => match shading_gradient(sp) {
+                Pattern::Shading(sp) => match shading_gradient(sp, &mut self.colors) {
                     Some(g) => (Paint::Gradient(Box::new(g)), sp.opacity),
                     None => {
                         self.warn("mesh/function shadings are imported as a flat colour");
@@ -353,7 +397,8 @@ impl Builder {
                 self.warn("an image could not be decoded and was skipped");
                 return;
             };
-            let k = format!("pdf-image-{}", self.image_keys.len() + 1);
+            // Content keys: placing this page into another document merges its images safely.
+            let k = blob.content_key();
             self.images.insert(k.clone(), blob);
             self.image_keys.insert(key, (k.clone(), w, h));
             (k, w, h)
@@ -363,17 +408,19 @@ impl Builder {
     }
 }
 
-/// Axial/radial shading → gradient paint (stops sampled from the shading function).
-fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern) -> Option<GradientPaint> {
+/// Axial/radial shading → gradient paint (stops sampled from the shading function, in the
+/// shading's own colour model).
+fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern, colors: &mut Colors<'_>) -> Option<GradientPaint> {
     let ShadingType::RadialAxial { coords, domain, function, axial, .. } = sp.shading.shading_type.as_ref() else {
         return None;
     };
     let m = sp.matrix;
     let cs = &sp.shading.color_space;
+    let at = |t: f32| function.eval(&smallvec::smallvec![domain[0] + (domain[1] - domain[0]) * t]);
+    let space = colors.shading_space(cs, at(0.0)?.len());
+    // RGB to decide which samples are stops; the stops keep the shading's model.
     let sample = |t: f32| -> Option<(Color, f32)> {
-        let x = domain[0] + (domain[1] - domain[0]) * t;
-        let v = function.eval(&smallvec::smallvec![x])?;
-        let [r, g, b, a] = cs.to_rgba(&v, 1.0, false).components();
+        let [r, g, b, a] = cs.to_rgba(&at(t)?, 1.0, false).components();
         Some((Color::rgb(round3(r), round3(g), round3(b)), a))
     };
     // Sample densely, then drop samples that linear interpolation reproduces.
@@ -395,9 +442,13 @@ fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern) -> Option<Gra
         }
     }
     keep.push(N);
-    let stop_at = |t: f32, offset: f32| -> GradientStop {
-        let (color, _) = sample(t).unwrap_or((Color::BLACK, 1.0));
-        GradientStop::new(offset, color)
+    let mut stop_at = |t: f32, offset: f32| -> GradientStop {
+        let (rgb, _) = sample(t).unwrap_or((Color::BLACK, 1.0));
+        match at(t).and_then(|v| colors.native(space, &v)) {
+            Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
+            Some(Native { color, link: None }) => GradientStop::new(offset, color),
+            None => GradientStop::new(offset, rgb),
+        }
     };
     let c = |x: f32, y: f32| m * Point::new(x as f64, y as f64);
     let (kind, geom, stops) = if *axial {
@@ -438,7 +489,7 @@ fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
     }
 }
 
-impl<'a> Device<'a> for Builder {
+impl<'a> Device<'a> for Builder<'_> {
     fn set_soft_mask(&mut self, mask: Option<SoftMask<'a>>) {
         if mask.is_some() {
             self.warn("soft masks are not imported (content drawn unmasked)");

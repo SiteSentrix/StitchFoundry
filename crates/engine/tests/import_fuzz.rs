@@ -273,6 +273,8 @@ fn arb_pdf_op() -> impl Strategy<Value = String> {
         Just("/Im0".to_string()),
         Just("/GS0".to_string()),
         Just("/DeviceRGB".to_string()),
+        Just("/CS0".to_string()),
+        Just("/DeviceCMYK".to_string()),
         Just("/Pattern".to_string()),
         Just("(Hi)".to_string()),
         Just("<00ff>".to_string()),
@@ -290,6 +292,12 @@ fn arb_resources() -> impl Strategy<Value = String> {
         "<< /Shading << /Sh0 << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [0 0 0 0 0 -5] /Function << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [] /N -1 >> >> >> >>".to_string(),
         "<< /XObject << /Im0 << /Type /XObject /Subtype /Image /Width 4294967295 /Height 0 /BitsPerComponent 8 /ColorSpace /DeviceRGB /Length 3 >> >> >>".to_string(),
         "<< /Pattern << /P0 << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 0 0] /XStep 0 /YStep -0 /Resources << >> >> >> >>".to_string(),
+        // Ink colour spaces with junk names, alternates and tint transforms (spot swatch import).
+        "<< /ColorSpace << /CS0 [/Separation /All /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [1 1 1 1] /N 1 >>] >> >>".to_string(),
+        "<< /ColorSpace << /CS0 [/Separation /#00 /Lab << /FunctionType 2 /Domain [0 1] /C0 [1e308] /C1 [NaN 5] /N -1 >>] >> >>".to_string(),
+        "<< /ColorSpace << /CS0 [/DeviceN [] /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>] >> >>".to_string(),
+        "<< /ColorSpace << /CS0 [/DeviceN [/A /None /Cyan /All] [/ICCBased << /N 4 >>] << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>] >> >>".to_string(),
+        "<< /Shading << /Sh0 << /ShadingType 2 /ColorSpace [/Separation /Ink /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 0 0] /N 1 >>] /Coords [0 0 100 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> >> >> >>".to_string(),
     ])
 }
 
@@ -325,6 +333,58 @@ proptest! {
         }
         b.truncate(cut.min(b.len()).max(9));
         survive("mutated pdf", || vectorcraft_pdf::import(&b).ok())?;
+    }
+}
+
+/// A page box with junk in it: inverted, empty, huge, NaN or outside the media box.
+fn arb_box() -> impl Strategy<Value = Option<[f64; 4]>> {
+    prop_oneof![
+        Just(None),
+        Just(Some([10.0, 10.0, 90.0, 90.0])),
+        Just(Some([90.0, 90.0, 10.0, 10.0])),
+        Just(Some([0.0, 0.0, 0.0, 0.0])),
+        Just(Some([-1e308, -1e308, 1e308, 1e308])),
+        Just(Some([f64::NAN, 0.0, 50.0, f64::INFINITY])),
+        Just(Some([200.0, 200.0, 300.0, 300.0])),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Every page box, rotation, page pick, password and Crop To, through `document.open` and
+    /// `document.pdfInfo` (with a thumbnail).
+    #[test]
+    fn pdf_import_options_never_panic(
+        boxes in prop::collection::vec(arb_box(), 5),
+        rotate in prop::sample::select(vec![0, 90, 180, 270, 45, -90, 1_000_000_000]),
+        encrypt in any::<bool>(),
+        password in prop::sample::select(vec!["", "pw", "wrong", "\u{0}\u{ff}"]),
+        pages in prop::sample::select(vec!["1", "2", "1-2", "2-1", "0", "-", "1-", "all", "1,1,2", "99999999999999999999"]),
+        crop in prop::sample::select(vec!["bounding", "art", "crop", "trim", "bleed", "media", "nope"]),
+    ) {
+        use vectorcraft_testkit::pdf::{PdfPage, pdf};
+        let page = PdfPage {
+            media: boxes[0].unwrap_or([0.0, 0.0, 100.0, 100.0]),
+            crop: boxes[1],
+            bleed: boxes[2],
+            trim: boxes[3],
+            art: boxes[4],
+            rotate,
+            ..PdfPage::new(0.0, 0.0, "0 0 1 rg 20 20 50 50 re f")
+        };
+        let bytes = pdf(&[page.clone(), page], encrypt.then_some("pw"));
+        let b64 = vectorcraft_format::base64_encode(&bytes);
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let p = json!({"name": "x.pdf", "dataBase64": b64, "pages": pages, "cropTo": crop, "password": password, "thumbnail": 1, "thumbnailSize": 64});
+            let _ = s.execute("document.pdfInfo", &p);
+            if s.execute("document.open", &p).is_ok() {
+                let d = (*s.doc().unwrap().doc).clone();
+                survive("pdf options", || Some(d)).unwrap();
+            }
+        });
+        r.map_err(|msg| TestCaseError::fail(format!("{pages} {crop} {rotate}: panicked: {msg}")))?;
     }
 }
 

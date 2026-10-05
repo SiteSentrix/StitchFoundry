@@ -6,7 +6,8 @@
 //!   `link`.
 //! - An SVG becomes one group of its art.
 //! - A PDF/.ai/.ait page or a native document's artboard becomes one group, clipped to the page
-//!   (`crop: "crop"`) or bounded by its art (`crop: "bounding"`).
+//!   (`crop: "crop"`; a PDF page's `art`, `trim`, `bleed` or `media` box too) or bounded by its art
+//!   (`crop: "bounding"`).
 //!
 //! The art lands centred on `at`, fitted into `rect`, or (Replace) where the replaced object was,
 //! with its transform; Template puts it on a new template layer. The images, symbols, patterns and
@@ -21,6 +22,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, Document, ImageObject, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
+use vectorcraft_pdf::CropTo;
 
 use super::fileio::{self, Format, RasterImage};
 use super::*;
@@ -40,7 +42,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name+dataBase64, link?: true (a raster image keeps its file's path; other files are embedded), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside, aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default) | \"bounding\" (the art's bounds)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, PDF/.ai and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
+            "{path | name+dataBase64, link?: true (a raster image keeps its file's path; other files are embedded), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside, aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default) | \"bounding\" (the art's bounds) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, PDF/.ai and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
             has_doc,
             place
         ),
@@ -49,7 +51,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Placed File Info",
             [],
             None,
-            "{path | name+dataBase64, page?, crop?, thumbnail?: px} what file.place would place, without placing it → {name, format, width, height (pt at 100%), pixelWidth?, pixelHeight?, ppi?: [x, y], colorMode?: RGB|Grayscale|CMYK (raster images), warnings, thumbnailBase64?: PNG of at most `thumbnail` (≤ 512) px on its longer side}",
+            "{path | name+dataBase64, page?, crop?, password?, thumbnail?: px} what file.place would place, without placing it → {name, format, width, height (pt at 100%), pixelWidth?, pixelHeight?, ppi?: [x, y], colorMode?: RGB|Grayscale|CMYK (raster images), warnings, thumbnailBase64?: PNG of at most `thumbnail` (≤ 512) px on its longer side}",
             always,
             info
         ),
@@ -116,11 +118,15 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
         None => 1,
         Some(v) => v.as_u64().filter(|n| (1..=100_000).contains(n)).ok_or_else(|| bad(cmd, "page must be a whole number from 1"))? as usize,
     };
-    let crop = match str_param(p, "crop").unwrap_or("crop") {
-        "crop" => true,
-        "bounding" => false,
-        other => return Err(bad(cmd, format!("crop `{other}`: use \"crop\" or \"bounding\""))),
-    };
+    let opts = fileio::LoadOptions::from_params(cmd, p)?;
+    let pdf = matches!(format.id, "pdf" | "ai" | "ait");
+    if !pdf && !matches!(opts.crop, CropTo::Crop | CropTo::Bounding) {
+        return Err(bad(
+            cmd,
+            format!("crop `{}`: only PDF pages have art, trim, bleed and media boxes; use \"crop\" or \"bounding\"", opts.crop.id()),
+        ));
+    }
+    let crop = opts.crop != CropTo::Bounding;
     let path = src.path.map(str::to_string);
     if format.raster {
         let img = fileio::raster_image(&src.bytes)?;
@@ -129,11 +135,11 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
         return Ok(Loaded { name, format, art: Art::Image(img), natural, warnings: vec![], path });
     }
     let (mut doc, warnings) = match format.id {
-        // Only the pages up to the one placed are read.
+        // Only the page placed is read, its artboard the box asked for (Bounding Box: the art's
+        // bounds, below).
         "pdf" | "ai" | "ait" => {
-            let opts = vectorcraft_pdf::ImportOptions { max_pages: Some(page), ..Default::default() };
-            let r = vectorcraft_pdf::import_with_report(&src.bytes, &opts).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
-            (r.document, r.warnings)
+            let o = fileio::LoadOptions { crop: if crop { opts.crop } else { CropTo::Crop }, ..opts };
+            fileio::page_document(&src.bytes, page - 1, &o).map_err(|e| bad(cmd, format!("{name}: {e}")))?
         }
         _ => {
             let l = fileio::load(src.name, &src.bytes)?;
@@ -145,14 +151,16 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
     let (nodes, clip) = if matches!(format.id, "svg" | "svgz") {
         (art_of(layers.iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten())), None)
     } else {
+        // The page placed is a PDF import's only one.
+        let index = if pdf { 0 } else { page - 1 };
         let n = doc.artboards.len();
-        let board = doc.artboards.get(page - 1).map(|a| a.rect).ok_or_else(|| {
+        let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| {
             let what = if format.id == "vectorcraft" { "artboard" } else { "page" };
             bad(cmd, format!("page {page}: `{name}` has {n} {what}(s)"))
         })?;
         // A PDF import has one layer per page; a native document's art is whatever lies on the
         // artboard.
-        let pages: Vec<&Arc<Node>> = if format.id == "vectorcraft" { layers.iter().collect() } else { layers.get(page - 1).into_iter().collect() };
+        let pages: Vec<&Arc<Node>> = if format.id == "vectorcraft" { layers.iter().collect() } else { layers.get(index).into_iter().collect() };
         let on_board = |c: &&Arc<Node>| c.visual_bounds().is_some_and(|b| b.intersect(board).area() > 0.0 || board.contains(b.origin()));
         let nodes = art_of(pages.into_iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten()).filter(on_board));
         (nodes, crop.then_some(board))

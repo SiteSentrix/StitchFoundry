@@ -81,6 +81,10 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         open_dialog(app, files);
         return Ok(Value::Null);
     }
+    // A PDF with several pages or a password asks for the page, box and password first.
+    if crate::dialogs::import_pdf::offer_place(app, p) {
+        return Ok(Value::Null);
+    }
     let mut p = p.clone();
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()

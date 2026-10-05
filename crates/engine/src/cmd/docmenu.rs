@@ -456,6 +456,19 @@ fn color_mode(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.doc.color_mode == mode {
         return ok();
     }
+    s.edit("Document Color Mode", |d, _| {
+        set_color_mode(d, mode, convert);
+        Ok(())
+    })?;
+    ok()
+}
+
+/// Put `d` in colour `mode`; with `convert`, every colour of its art and swatches too.
+pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode, convert: bool) {
+    d.color_mode = mode;
+    if !convert {
+        return;
+    }
     let f = move |c: vectorcraft_color::Color| match mode {
         ColorMode::Cmyk => to_cmyk(c),
         ColorMode::Rgb => {
@@ -463,20 +476,13 @@ fn color_mode(s: &mut Session, p: &Value) -> Result<Value> {
             vectorcraft_color::Color::rgb(r, g, b)
         }
     };
-    s.edit("Document Color Mode", |d, _| {
-        d.color_mode = mode;
-        if convert {
-            let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
-            Recolor::new(Scope { fill: true, stroke: true, images: false, patterns: false }, &f).run(d, &layers);
-            for sw in d.swatches_iter_mut() {
-                if let vectorcraft_color::Paint::Solid { color, .. } = &mut sw.paint {
-                    *color = f(*color);
-                }
-            }
+    let layers: Vec<NodeId> = d.layers.iter().map(|l| l.id).collect();
+    Recolor::new(Scope { fill: true, stroke: true, images: false, patterns: false }, &f).run(d, &layers);
+    for sw in d.swatches_iter_mut() {
+        if let vectorcraft_color::Paint::Solid { color, .. } = &mut sw.paint {
+            *color = f(*color);
         }
-        Ok(())
-    })?;
-    ok()
+    }
 }
 
 fn file_info(s: &mut Session, p: &Value) -> Result<Value> {
