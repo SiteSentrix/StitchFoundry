@@ -8,7 +8,7 @@ use vectorcraft_color::{BlendMode, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
     AppearanceItem, Document, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind, TextObject,
 };
-use vectorcraft_doc::{CharStyle, Justify};
+use vectorcraft_doc::{CharStyle, ImageBlob, Justify};
 use vectorcraft_effects::stroke::{self, Written, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
@@ -712,6 +712,10 @@ impl Writer<'_> {
     /// id. A midpoint other than halfway is written as an extra stop marked `data-vc-midpoint`
     /// (what import turns back into a midpoint).
     fn gradient_def(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        if g.gradient.kind == GradientKind::Freeform {
+            // Object fills and strokes are images (see `raster_paint`); characters' paints aren't.
+            self.warn("freeform gradients on characters are written as linear gradients");
+        }
         let mut geom = g.resolve(bounds);
         geom.transform(self.xf, g.gradient.kind);
         let (s, e) = (geom.start, geom.end);
@@ -813,13 +817,7 @@ impl Writer<'_> {
         if stroke::is_plain(st) {
             return StrokePlan::Written(stroke::for_writer(&BezPath::new(), st));
         }
-        let bp = bp.get_or_insert_with(|| {
-            let mut bp = BezPath::new();
-            for p in paths {
-                bp.extend(p.to_bezpath());
-            }
-            bp
-        });
+        let bp = bp.get_or_insert_with(|| doc_path(paths));
         let doc = self.doc;
         let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
         match st.brush.as_deref().and_then(|name| brushes.iter().find(|b| b.name == name)) {
@@ -894,6 +892,7 @@ impl Writer<'_> {
             && strokes <= 1
             && !items.iter().any(|i| has_raster(i.effects()))
             && items.iter().all(|i| i.blend() == BlendMode::Normal)
+            && !items.iter().any(|i| freeform(i.paint()).is_some())
             && plans.iter().flatten().all(|p| matches!(p, StrokePlan::Written(Written { shape: WrittenShape::Stroke { .. }, side: None })));
         if simple {
             let mut p = Props::new();
@@ -926,12 +925,17 @@ impl Writer<'_> {
             let mut p = Props::new();
             match (it, plan) {
                 (AppearanceItem::Fill(f), _) => {
-                    self.fill_props(f, rule, bounds, &mut p);
-                    if f.blend != BlendMode::Normal {
-                        p.push(("mix-blend-mode", blend_css(f.blend).into()));
+                    let blend = (f.blend != BlendMode::Normal).then(|| ("mix-blend-mode", blend_css(f.blend).to_string()));
+                    if let (Some(g), Some(b)) = (freeform(&f.paint), bounds) {
+                        p.extend((f.opacity < 1.0).then(|| ("opacity", fmt_num(f.opacity as f64, 3))));
+                        p.extend(blend);
+                        self.raster_paint(g, b, &[d.to_string()], rule, &p, "");
+                    } else {
+                        self.fill_props(f, rule, bounds, &mut p);
+                        p.extend(blend);
+                        let a = self.attrs(&p);
+                        self.line(&format!("<path d=\"{d}\"{a}/>"));
                     }
-                    let a = self.attrs(&p);
-                    self.line(&format!("<path d=\"{d}\"{a}/>"));
                 }
                 (AppearanceItem::Stroke(s), Some(StrokePlan::Brush(art))) => {
                     // The brush art takes the stroke's opacity and blend mode as a group.
@@ -953,23 +957,39 @@ impl Writer<'_> {
                 (AppearanceItem::Stroke(s), Some(StrokePlan::Written(w))) => {
                     let side = self.side_attr(w.side, d, rule, w.reach(s, bounds.unwrap_or_default()));
                     let blend = (s.blend != BlendMode::Normal).then(|| ("mix-blend-mode", blend_css(s.blend).to_string()));
-                    match &w.shape {
-                        WrittenShape::Stroke { width } => {
+                    let opacity = (s.opacity < 1.0).then(|| ("opacity", fmt_num(s.opacity as f64, 3)));
+                    match (&w.shape, freeform(&s.paint).zip(paint_bounds(s))) {
+                        (WrittenShape::Stroke { width }, Some((g, b))) => {
+                            // The stroke's outline clips the gradient's image.
+                            let bp = bp.get_or_insert_with(|| doc_path(paths));
+                            let outline = stroke::line_outline(bp, s, *width, OUTLINE_TOLERANCE);
+                            let clip = self.path_d(&PathData::from_bezpath(&outline), self.xf);
+                            p.extend(opacity);
+                            p.extend(blend);
+                            self.raster_paint(g, b, &[clip], FillRule::NonZero, &p, &side);
+                        }
+                        (WrittenShape::Fill(outlines), Some((g, b))) if s.path_gradient().is_none() => {
+                            let clip: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
+                            p.extend(opacity);
+                            p.extend(blend);
+                            self.raster_paint(g, b, &clip, FillRule::NonZero, &p, &side);
+                        }
+                        (WrittenShape::Stroke { width }, _) => {
                             p.push(("fill", "none".into()));
                             self.stroke_props(s, *width, paint_bounds(s), &mut p);
                             p.extend(blend);
                             let a = self.attrs(&p);
                             self.line(&format!("<path d=\"{d}\"{a}{side}/>"));
                         }
-                        WrittenShape::Fill(outlines) if s.path_gradient().is_some() => {
+                        (WrittenShape::Fill(outlines), _) if s.path_gradient().is_some() => {
                             // A gradient along or across the stroke: slices clipped to its outlines.
                             if let Some(ws) = bp.as_ref().and_then(|bp| stroke::written_slices(bp, rule, s, outlines)) {
-                                p.extend((s.opacity < 1.0).then(|| ("opacity", fmt_num(s.opacity as f64, 3))));
+                                p.extend(opacity);
                                 p.extend(blend);
                                 self.sliced(&ws, &p, &side);
                             }
                         }
-                        WrittenShape::Fill(outlines) => {
+                        (WrittenShape::Fill(outlines), _) => {
                             let paint = self.paint(&s.paint, paint_bounds(s));
                             let ds: Vec<String> = outlines.iter().map(|o| self.path_d(&PathData::from_bezpath(o), self.xf)).collect();
                             let opacity = (s.opacity < 1.0).then(|| fmt_num(s.opacity as f64, 3));
@@ -1265,18 +1285,10 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
-                let link = self.opts.images == ImageMode::Link;
-                let href = match (im.link.as_ref().filter(|_| link), self.doc.images.get(&im.key)) {
+                let (doc, link) = (self.doc, self.opts.images == ImageMode::Link);
+                let href = match (im.link.as_ref().filter(|_| link), doc.images.get(&im.key)) {
                     (Some(l), _) => l.path.clone(),
-                    (None, Some(b)) if !b.bytes.is_empty() && link => {
-                        // Named after the bytes: image keys ("raster-1"…) repeat across documents.
-                        let name = format!("{}.{}", b.content_key(), image_ext(&b.mime));
-                        if !self.linked.iter().any(|l| l.name == name) {
-                            self.linked.push(LinkedImage { name: name.clone(), bytes: b.bytes.clone() });
-                        }
-                        name
-                    }
-                    (None, Some(b)) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
+                    (None, Some(b)) if !b.bytes.is_empty() => self.blob_href(b),
                     _ => match &im.link {
                         Some(l) => l.path.clone(),
                         None => return,
@@ -1333,6 +1345,70 @@ impl Writer<'_> {
                 let g = vectorcraft_doc::live::expand_deep(n, None);
                 self.node_body(&g);
             }
+        }
+    }
+
+    /// The `href` of image bytes `b`: a `data:` URI, or with [`ImageMode::Link`] a file written
+    /// next to the SVG, named after the bytes (image keys such as "raster-1" repeat across
+    /// documents).
+    fn blob_href(&mut self, b: &ImageBlob) -> String {
+        if self.opts.images != ImageMode::Link {
+            return format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes));
+        }
+        let name = format!("{}.{}", b.content_key(), image_ext(&b.mime));
+        if !self.linked.iter().any(|l| l.name == name) {
+            self.linked.push(LinkedImage { name: name.clone(), bytes: b.bytes.clone() });
+        }
+        name
+    }
+
+    /// A freeform gradient `g` painted over `bounds` (the space [`Self::xf`] maps into user
+    /// space), which SVG can't express: an `<image>` of the colour field over its painted box,
+    /// sampled as the canvas samples it (at twice the box's size in points) and clipped to
+    /// `clip` (outlines in user space filled by `rule`), in a group with `props` and the `side`
+    /// attribute. Nothing is written for an empty box.
+    fn raster_paint(&mut self, g: &GradientPaint, bounds: Rect, clip: &[String], rule: FillRule, props: &Props, side: &str) {
+        use vectorcraft_color::freeform::{grid_size, painted_box, spread_scale};
+        let Some(b) = painted_box(bounds) else { return };
+        let (cols, rows) = grid_size(b, 2.0 * b.width().max(b.height()));
+        let field = g.freeform_on(b).field(spread_scale(b));
+        let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let rgba: Vec<u8> = field.grid(b, cols, rows).flat_map(|([r, g, bl], a)| [q(r), q(g), q(bl), q(a)]).collect();
+        let mut png = Vec::new();
+        let Some(img) = image::RgbaImage::from_raw(u32::from(cols), u32::from(rows), rgba) else { return };
+        if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+            return;
+        }
+        self.warn("freeform gradients are written as images clipped to their shapes");
+        let href = self.blob_href(&ImageBlob::new("image/png", png));
+        let cid = self.fresh_id("clip-path");
+        let r = if rule == FillRule::EvenOdd { " clip-rule=\"evenodd\"" } else { "" };
+        self.def(1, &format!("<clipPath id=\"{cid}\">"));
+        for d in clip {
+            self.def(2, &format!("<path d=\"{d}\"{r}/>"));
+        }
+        self.def(1, "</clipPath>");
+        let a = self.attrs(props);
+        let nested = !side.is_empty();
+        if nested {
+            self.line(&format!("<g{a}{side}>"));
+            self.depth += 1;
+            self.line(&format!("<g clip-path=\"url(#{cid})\">"));
+        } else {
+            self.line(&format!("<g clip-path=\"url(#{cid})\"{a}>"));
+        }
+        self.depth += 1;
+        let (x, y, w, h) = (self.num(b.x0), self.num(b.y0), self.num(b.width()), self.num(b.height()));
+        let tr = if self.xf == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(self.xf)) };
+        self.line(&format!(
+            "<image x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{tr} preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+            xml_escape(&href)
+        ));
+        self.depth -= 1;
+        self.line("</g>");
+        if nested {
+            self.depth -= 1;
+            self.line("</g>");
         }
     }
 
@@ -1817,6 +1893,26 @@ fn initial_value(k: &str) -> Option<&'static str> {
         "font-kerning" => "auto",
         _ => return None,
     })
+}
+
+/// A shape's paths as one path (document space).
+fn doc_path(paths: &[&PathData]) -> BezPath {
+    let mut bp = BezPath::new();
+    for p in paths {
+        bp.extend(p.to_bezpath());
+    }
+    bp
+}
+
+/// How closely stroke outlines that clip an image follow the stroke (points).
+const OUTLINE_TOLERANCE: f64 = 0.01;
+
+/// The freeform gradient a paint is, if it is one (SVG has no freeform gradients).
+fn freeform(p: &Paint) -> Option<&GradientPaint> {
+    match p {
+        Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => Some(g),
+        _ => None,
+    }
 }
 
 /// Any visible raster effect (shadow, glow, blur, feather) in `effects`?

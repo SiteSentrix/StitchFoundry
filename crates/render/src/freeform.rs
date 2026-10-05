@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use vectorcraft_color::freeform::{painted_box, spread_scale};
+use vectorcraft_color::freeform::{grid_size, painted_box, spread_scale};
 use vectorcraft_color::{Color, Freeform, GradientPaint};
 use vectorcraft_geom::{Affine, Rect};
 use vello_cpu::peniko::{Extend, ImageQuality, ImageSampler};
@@ -19,11 +19,6 @@ use vello_cpu::{Pixmap, RenderContext};
 
 use crate::ink::Ink;
 
-/// Device pixels per grid cell.
-const CELL_PX: f64 = 4.0;
-/// Fewest and most cells along the box's longer side.
-const MIN_CELLS: f64 = 8.0;
-const MAX_CELLS: f64 = 256.0;
 /// Grids kept before the cache starts over.
 const MAX_GRIDS: usize = 128;
 
@@ -69,19 +64,12 @@ pub(crate) fn rasterize(f: &Freeform, b: Rect, cols: u16, rows: u16, ink: Ink) -
     Pixmap::from_parts(data, cols, rows)
 }
 
-/// Cells along a side `len` (document units) long whose box's longer side `side` gets `cells`.
-fn cells_along(len: f64, side: f64, cells: f64) -> u16 {
-    (cells * len / side).ceil().clamp(2.0, MAX_CELLS) as u16
-}
-
 /// Set freeform gradient `g` on box `bounds` (in the paint's space, which the context's current
 /// transform maps to pixels) as the context paint. Returns false for an empty box.
 pub(crate) fn set_freeform_paint(ctx: &mut RenderContext, g: &GradientPaint, bounds: Rect, ink: Ink) -> bool {
     let Some(b) = painted_box(bounds) else { return false };
-    let side = b.width().max(b.height());
-    let device = side * ctx.transform().determinant().abs().sqrt();
-    let cells = 2f64.powf((device / CELL_PX).max(1.0).log2().ceil()).clamp(MIN_CELLS, MAX_CELLS);
-    let (cols, rows) = (cells_along(b.width(), side, cells), cells_along(b.height(), side, cells));
+    let device = b.width().max(b.height()) * ctx.transform().determinant().abs().sqrt();
+    let (cols, rows) = grid_size(b, device);
     let f = g.freeform_on(b);
     let k = key(&f, b, cols, rows, ink);
     let pm = GRIDS.with(|c| c.borrow().get(&k).cloned()).unwrap_or_else(|| {

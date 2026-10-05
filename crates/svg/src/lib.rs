@@ -24,7 +24,11 @@
 //! * **Multiple fills/strokes** (or per-fill/stroke blend modes) are written as a `<g>` holding one
 //!   `<path>` per appearance item, in paint order.
 //! * Live geometry effects are written as their result and raster effects (shadows, glows, blurs)
-//!   as SVG filters. Freeform gradients export as linear gradients.
+//!   as SVG filters.
+//! * **Freeform gradients**, which SVG can't express, fill or stroke objects as an `<image>` of
+//!   their colour field (sampled as the canvas samples it) clipped to the shape or the stroke's
+//!   outline; on characters they are written as linear gradients. Gradients along or across
+//!   strokes are written as slices of linear gradients clipped to the stroke.
 //! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
 //!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
 //!   pattern paints or unlinked masks, which stay on the page) are written as their own art.
