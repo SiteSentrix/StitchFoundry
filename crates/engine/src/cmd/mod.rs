@@ -17,6 +17,7 @@ mod draw2;
 mod edit;
 mod effectcmd;
 pub mod expand;
+pub(crate) mod fileinfo;
 pub mod fileio;
 pub mod flatten;
 mod fonts;

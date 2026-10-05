@@ -50,7 +50,7 @@ fn per_metre(ppm: u32) -> f64 {
 }
 
 /// PNG chunks after the signature: (type, data).
-fn png_chunks(b: &[u8]) -> impl Iterator<Item = (&[u8], &[u8])> {
+pub(super) fn png_chunks(b: &[u8]) -> impl Iterator<Item = (&[u8], &[u8])> {
     let mut at = 8;
     std::iter::from_fn(move || {
         let len = be32(b, at)? as usize;

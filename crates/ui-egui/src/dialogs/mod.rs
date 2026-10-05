@@ -20,6 +20,7 @@ pub mod expand;
 mod export_as;
 mod export_for_screens;
 pub mod eyedropper;
+pub mod file_info;
 pub mod flatten;
 pub mod flattener_presets;
 mod form;
@@ -32,6 +33,7 @@ pub mod new_swatch;
 mod path_ops;
 pub mod place;
 mod png_options;
+pub mod raster_effects;
 pub mod recolor;
 pub mod saturate;
 mod save_changes;
@@ -190,6 +192,8 @@ registry! {
     ExportAs: ["exportAs"] => export_as::SPEC,
     ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
     SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,
+    FileInfo: [file_info::KIND] => file_info::SPEC,
+    RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

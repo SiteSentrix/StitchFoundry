@@ -69,7 +69,19 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     if !title.is_empty() {
         meta = meta.title(title);
     }
-    if let Some(t) = opts.created.or_else(now_unix) {
+    // File Info.
+    let info = &doc.metadata;
+    let given = |s: &str| Some(s.trim()).filter(|s| !s.is_empty()).map(str::to_string);
+    if let Some(a) = given(&info.author) {
+        meta = meta.authors(vec![a]);
+    }
+    if let Some(d) = given(&info.description) {
+        meta = meta.description(d);
+    }
+    if !info.keywords.is_empty() {
+        meta = meta.keywords(info.keywords.clone());
+    }
+    if let Some(t) = opts.created.or_else(vectorcraft_doc::metadata::now_unix) {
         meta = meta.creation_date(date_time(t));
     }
     pdf.set_metadata(meta);
@@ -175,35 +187,15 @@ fn number(digits: &[u8]) -> Option<u32> {
     std::str::from_utf8(digits).ok()?.parse().ok()
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn now_unix() -> Option<i64> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now().duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs() as i64)
-}
-#[cfg(target_arch = "wasm32")]
-fn now_unix() -> Option<i64> {
-    None
-}
-
-/// Unix seconds (UTC) → krilla date (civil-from-days, proleptic Gregorian).
+/// Unix seconds (UTC) → krilla date.
 fn date_time(t: i64) -> krilla::metadata::DateTime {
-    let days = t.div_euclid(86_400);
-    let secs = t.rem_euclid(86_400);
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    krilla::metadata::DateTime::new(year.clamp(0, 9999) as u16)
+    let [year, month, day, hour, minute, second] = vectorcraft_doc::metadata::civil(t);
+    krilla::metadata::DateTime::new(year as u16)
         .month(month as u8)
         .day(day as u8)
-        .hour((secs / 3600) as u8)
-        .minute((secs / 60 % 60) as u8)
-        .second((secs % 60) as u8)
+        .hour(hour as u8)
+        .minute(minute as u8)
+        .second(second as u8)
         .utc_offset_hour(0)
         .utc_offset_minute(0)
 }

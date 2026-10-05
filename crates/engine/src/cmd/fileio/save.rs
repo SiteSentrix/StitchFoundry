@@ -39,10 +39,22 @@ pub fn save_encoding(st: &DocState, f: &Format, p: &Value) -> Result<(Encoded, V
     Ok((enc, opts))
 }
 
+/// File Info's dates for a save to a file: the modified date (and the created date, when it has
+/// none) become now. Not an undo step; the web build, without a clock, leaves them.
+pub fn stamp_save_dates(st: &mut DocState) {
+    let Some(now) = vectorcraft_doc::metadata::now_unix() else { return };
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.metadata.created.get_or_insert(now);
+    d.metadata.modified = Some(now);
+}
+
 pub(super) fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.save";
     let path = str_param(p, "path").map(str::to_string).or_else(|| s.active().and_then(|d| d.path.clone()));
     let f = save_format(str_param(p, "format"), path.as_deref()).map_err(|e| bad(C, e))?;
+    if path.is_some() {
+        stamp_save_dates(s.doc_mut()?);
+    }
     let st = s.doc()?;
     let (enc, opts) = save_encoding(st, f, p)?;
     let Some(path) = path else {

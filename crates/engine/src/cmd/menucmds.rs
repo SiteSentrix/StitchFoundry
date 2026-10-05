@@ -7,8 +7,9 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::marks::{MarkStyle, TrimMarks};
-use vectorcraft_doc::{Appearance, ImageObject, LiveShape, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, ImageObject, LiveShape, Node, NodeId, NodeKind, RasterColorModel, RasterEffectsSettings};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, Vec2};
+use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::edit::{duplicate_in, selected_roots};
@@ -90,7 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?: (document raster effects resolution), background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art (default)|type (text snapped to pixels), padding?: pt} replace the selection with an embedded PNG image → {id, width, height}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded PNG image; each defaults to document.rasterEffectsSettings → {id (the image, or its clip group), width, height}",
             has_selection,
             rasterize
         ),
@@ -318,12 +319,20 @@ pub(crate) fn unique_key(d: &vectorcraft_doc::Document, stem: &str) -> String {
     }
 }
 
-fn render_png(doc: &vectorcraft_doc::Document, region: Rect, scale: f64, opts: &vectorcraft_render::RenderOptions) -> Result<(Vec<u8>, u32, u32)> {
+/// `doc` rendered over `region` with `opts` as a PNG in colour model `color`.
+fn render_png(
+    doc: &vectorcraft_doc::Document,
+    region: Rect,
+    scale: f64,
+    opts: &vectorcraft_render::RenderOptions,
+    color: RasterColorModel,
+) -> Result<(Vec<u8>, u32, u32)> {
     if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > 65535.0 || region.height() * scale > 65535.0 {
         return Err(EngineError::Other("image would be too large; lower the resolution".into()));
     }
     let mut r = vectorcraft_render::Renderer::new();
-    let img = r.render_region_with(doc, region, scale, opts);
+    let mut img = r.render_region_with(doc, region, scale, opts);
+    RasterEffectsSettings { color_model: color, ..Default::default() }.finish_pixels(&mut img.pixels);
     Ok((img.to_png().map_err(EngineError::Other)?, img.width, img.height))
 }
 
@@ -335,13 +344,33 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
     if !(1.0..=2400.0).contains(&ppi) {
         return Err(bad(C, "ppi must be between 1 and 2400"));
     }
-    let pad = f64_or(p, "padding", 0.0).max(0.0);
-    let raster = RasterExportOptions {
-        ppi,
-        background: fileio::background(p.get("background").unwrap_or(&Value::Null)).map_err(|e| bad(C, e))?,
-        anti_alias: str_param(p, "antiAlias").map(fileio::anti_alias).transpose().map_err(|e| bad(C, e))?.unwrap_or_default(),
-        ..Default::default()
-    };
+    // The document's raster effects settings, changed by the params.
+    let mut look = st.doc.raster_effects.clone();
+    let mut background = (look.background == vectorcraft_doc::Background::White).then_some([255; 3]);
+    let mut anti_alias = if look.anti_alias { AntiAlias::Art } else { AntiAlias::None };
+    for (k, v) in p.as_object().into_iter().flatten().filter(|(_, v)| !v.is_null()) {
+        match k.as_str() {
+            "background" => background = fileio::background(v).map_err(|e| bad(C, e))?,
+            "antiAlias" => {
+                anti_alias = match v {
+                    Value::Bool(b) => {
+                        if *b {
+                            AntiAlias::Art
+                        } else {
+                            AntiAlias::None
+                        }
+                    }
+                    v => fileio::anti_alias(v.as_str().unwrap_or_default()).map_err(|e| bad(C, e))?,
+                }
+            }
+            "padding" | "addAround" => look.add_around = super::rasterfx::add_around(v, C, k)?,
+            "colorModel" => look.color_model = super::rasterfx::color_model(v, st.doc.color_mode, C)?,
+            "clippingMask" => look.clipping_mask = v.as_bool().ok_or_else(|| bad(C, "clippingMask must be true or false"))?,
+            _ => {}
+        }
+    }
+    let raster = RasterExportOptions { ppi, background, anti_alias, ..Default::default() };
+    let pad = look.add_around;
     let b = st.doc.bounds_of(&roots, true).ok_or_else(|| bad(C, "selection has no bounds"))?.inflate(pad, pad);
     let scale = ppi / 72.0;
     // Snap to whole pixels.
@@ -354,8 +383,14 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
             n
         })
         .collect();
+    // Create Clipping Mask: the image is clipped to the art's outline.
+    let clip = look
+        .clipping_mask
+        .then(|| vectorcraft_render::effects::clip_outline(&Node::group(NodeId(u64::MAX), nodes.iter().cloned().map(Arc::new).collect())))
+        .flatten()
+        .map(|(bp, rule)| (PathData::from_bezpath(&bp), rule));
     let tmp = isolated_doc(&st.doc, nodes);
-    let (png, w, h) = render_png(&tmp, region, scale, &raster.render_options(RasterFormat::Png))?;
+    let (png, w, h) = render_png(&tmp, region, scale, &raster.render_options(RasterFormat::Png), look.color_model)?;
     let top = *roots.last().ok_or_else(|| bad(C, "nothing selected"))?;
     let id = s.edit("Rasterize", |d, sel| {
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
@@ -363,7 +398,11 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
         let id = d.alloc_id();
         let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-        let node = Node::new(id, NodeKind::Image(ImageObject { key, width: w, height: h, xf, link: None }));
+        let mut node = Node::new(id, NodeKind::Image(ImageObject { key, width: w, height: h, xf, link: None }));
+        if let Some((path, rule)) = clip {
+            node = super::rasterfx::clip_group(d, path, rule, node);
+        }
+        let id = node.id;
         d.insert(par, idx + 1, node)?;
         for r in &roots {
             d.remove(*r)?;
@@ -505,7 +544,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     bare.visible = true;
     let tmp = isolated_doc(&st.doc, vec![bare]);
     let region = Rect::new(r.x0, r.y0, r.x0 + (r.width() * scale).round().max(1.0) / scale, r.y0 + (r.height() * scale).round().max(1.0) / scale);
-    let (png, w, h) = render_png(&tmp, region, scale, &RasterExportOptions::default().render_options(RasterFormat::Png))?;
+    let (png, w, h) = render_png(&tmp, region, scale, &RasterExportOptions::default().render_options(RasterFormat::Png), RasterColorModel::Document)?;
     s.edit("Crop Image", |d, _| {
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });

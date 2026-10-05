@@ -272,7 +272,14 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
                 let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
                 check_format_size(f, region.width() * scale, region.height() * scale)?;
                 vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
-                enc.files.push((Some(b), renderer.export_region(doc, region, format, &settings).map_err(EngineError::Other)?));
+                let bytes = renderer.export_region(doc, region, format, &settings).map_err(EngineError::Other)?;
+                // File Info as PNG text chunks.
+                let bytes = if format == RasterFormat::Png {
+                    vectorcraft_render::encode::png::with_text(bytes, &doc.metadata.png_text(&doc.title))
+                } else {
+                    bytes
+                };
+                enc.files.push((Some(b), bytes));
             }
             if enc.files.is_empty() {
                 return Err(bad(C, "the document has no artboard"));

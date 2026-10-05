@@ -239,3 +239,17 @@ paste at the centre of the view. The Paste menu items are enabled while the syst
 nothing copied in the app (looked at up to four times a second; `ui.menu.list` shows it). The Layers panel menu (≡ on
 the dock's tab strip while Layers shows) lists the layer commands and Paste Remembers Layers
 (`layer.pasteRemembersLayers`, checked when on).
+
+File Info: File → File Info… (`file.info` from the menu or Cmd+Alt+Shift+I; `ui.fileInfoDialog` for agents) opens the
+`fileInfo` dialog. Its fields are what `file.info` reports (`title`, `author`, `authorTitle`, `description`,
+`keywords` (a list: the chips), `rating`, `copyrightStatus`, `copyrightNotice`, `copyrightUrl`; `created` and
+`modified` are shown read-only) plus `__keyword`, keywords typed but not added yet (comma-separated; OK adds them).
+`ui.dialog.confirm` runs `file.info` with them as one undo step; a bad value answers with an error and the dialog
+stays open.
+
+Document Raster Effects Settings: Effect → Document Raster Effects Settings… (`ui.rasterEffectsSettingsDialog` for
+agents) opens the `rasterEffectsSettings` dialog. Its fields are what `document.rasterEffectsSettings` reports
+(`resolution`, `colorModel`, `background`, `antiAlias`, `clippingMask`, `addAround` in pt, `preserveSpotColors`);
+`ui.dialog.confirm` runs it with them as one undo step; a bad value keeps the dialog open. Object → Rasterize… opens a
+`command` dialog for `object.rasterize` whose fields (`ppi`, `colorModel`, `background`, `antiAlias`, `clippingMask`,
+`addAround`) start from these settings.

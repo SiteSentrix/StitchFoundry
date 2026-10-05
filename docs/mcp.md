@@ -892,3 +892,32 @@ pastes objects back into the layers they came from, by name, making missing ones
 {"name":"run_command","arguments":{"command":"edit.paste","params":{"center":[300,200],"swatchConflict":{"Brand":"add"}}}}
 {"name":"run_command","arguments":{"command":"layer.pasteRemembersLayers","params":{"on":true}}}
 ```
+
+## File Info
+
+`file.info` with no params reports the document's File Info: `title`, `author`, `authorTitle`, `description`,
+`keywords`, `rating` (0–5), `copyrightStatus` (`unknown`, `copyrighted`, `publicDomain`), `copyrightNotice`,
+`copyrightUrl`, and the read-only `created` (set by `file.new`) and `modified` (set by every save to a file) dates as
+ISO 8601 UTC. Pass any of the editable keys to change them in one undo step (`null` clears one; `keywords` takes a
+list or a comma-separated string and keeps each word once); bad values are refused. PDF export writes the title,
+author, description and keywords to the document info and XMP, PNG export writes them (with the copyright and
+creation date) as text chunks, and SVG export writes the description as `<desc>` and, with the `metadata` option,
+all of it as Dublin Core.
+
+```json
+{"name":"run_command","arguments":{"command":"file.info","params":{"author":"Ada","keywords":"poster, fair","rating":4,"copyrightStatus":"copyrighted","copyrightNotice":"© 2026 Ada"}}}
+```
+
+## Document Raster Effects Settings
+
+`document.rasterEffectsSettings` holds how raster effects (shadows, glows, blurs, feathers) become images when PDF
+export or Expand Appearance renders them: `resolution` (ppi, also New Document's `rasterEffectsPpi`), `colorModel`
+(the document's `rgb`/`cmyk`, `grayscale` or `bitmap`), `background` (`white` makes the images opaque), `antiAlias`
+(off: hard edges), `clippingMask` (the white stays under the art only), `addAround` (points of room around the art)
+and `preserveSpotColors` (stored). They are also the defaults of `object.rasterize`, whose params override them (its
+`clippingMask` puts the image in a clip group with the art's outline). No params reports them; any of them changes them
+in one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
+```

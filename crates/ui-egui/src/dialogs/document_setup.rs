@@ -18,7 +18,7 @@ pub(super) const KIND: &str = "documentSetup";
 const TABS: [&str; 3] = ["General", "Transparency", "Type"];
 /// Dialog-only fields `document.setup` doesn't take.
 const UI_ONLY: [&str; 2] = ["tab", "bleedLinked"];
-const LABEL: f32 = 130.0;
+pub(super) const LABEL: f32 = 130.0;
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| "Document Setup".into(), body, confirm, min_width: 540.0, max_width: Some(540.0), ..DialogSpec::FORM };
@@ -60,7 +60,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// A dropdown row bound to the string `d.fields[key]`; `options` are (value, label).
-fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]) {
+pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]) {
     let cur = d.str(key);
     let shown = options.iter().find(|(v, _)| v.eq_ignore_ascii_case(&cur)).map_or(cur.as_str(), |(_, l)| l);
     let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
@@ -72,7 +72,7 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[
 }
 
 /// A checkbox bound to `d.fields[key]`.
-fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
+pub(super) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let on = d.bool(key);
     if widgets::check(ui, label, on, true) {
         d.fields.insert(key.into(), json!(!on));

@@ -84,6 +84,44 @@ pub fn encode(rgba: &[u8], width: u32, height: u32, o: &PngOptions) -> Result<Ve
     Ok(out)
 }
 
+/// `png` (a PNG file) with a text chunk per `(keyword, text)` right after its header: `tEXt`, or
+/// uncompressed `iTXt` (UTF-8) for text beyond Latin-1. Keywords are 1–79 printable ASCII
+/// characters (others are skipped). Unchanged when it doesn't start with a PNG header.
+pub fn with_text(png: Vec<u8>, entries: &[(&str, Cow<str>)]) -> Vec<u8> {
+    // The signature and the IHDR chunk (length, type, 13 data bytes, CRC), which comes first.
+    const HEADER: usize = 8 + 12 + 13;
+    if entries.is_empty() || !png.starts_with(SIGNATURE) || png.get(12..16) != Some(b"IHDR".as_slice()) || png.len() < HEADER {
+        return png;
+    }
+    let mut out = Vec::with_capacity(png.len() + entries.iter().map(|(k, v)| k.len() + v.len() + 20).sum::<usize>());
+    out.extend_from_slice(&png[..HEADER]);
+    for (keyword, text) in entries {
+        if keyword.is_empty() || keyword.len() > 79 || !keyword.bytes().all(|b| (32..=126).contains(&b)) {
+            continue;
+        }
+        let mut data = keyword.as_bytes().to_vec();
+        data.push(0);
+        let latin1: Option<Vec<u8>> = text.chars().map(|c| u8::try_from(u32::from(c)).ok()).collect();
+        let ty = match latin1 {
+            Some(bytes) => {
+                data.extend(bytes);
+                b"tEXt"
+            }
+            None => {
+                // Uncompressed, no language tag, no translated keyword.
+                data.extend_from_slice(&[0, 0, 0, 0]);
+                data.extend_from_slice(text.as_bytes());
+                b"iTXt"
+            }
+        };
+        if u32::try_from(data.len()).is_ok() {
+            chunk(&mut out, ty, &data);
+        }
+    }
+    out.extend_from_slice(&png[HEADER..]);
+    out
+}
+
 /// Append one chunk: length, type, data, CRC of type and data.
 fn chunk(out: &mut Vec<u8>, ty: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(data.len() as u32).to_be_bytes());

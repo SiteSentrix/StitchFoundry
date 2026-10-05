@@ -1041,12 +1041,7 @@ fn raster_node(d: &mut Document, r: Raster) -> Node {
     d.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(r.png) });
     let image = Node::new(d.alloc_id(), NodeKind::Image(ImageObject { key, width: r.width, height: r.height, xf: r.xf, link: None }));
     let Some(path) = r.clip else { return image };
-    let mut clip = shape_node(d, path, None);
-    clip.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
-    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
-        *clipping = true;
-    }
-    Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })
+    super::rasterfx::clip_group(d, path, FillRule::NonZero, image)
 }
 
 /// Replace the type under `root` by its outlines: → the id now standing for `root`.

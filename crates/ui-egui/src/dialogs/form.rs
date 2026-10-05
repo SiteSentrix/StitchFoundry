@@ -73,6 +73,26 @@ pub(super) fn text_edit(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32
     r.inner
 }
 
+/// A text box `rows` lines tall and `width` wide bound to `d.fields[key]`. Enter adds a line (it
+/// doesn't press OK while the box has focus).
+pub(super) fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32, rows: usize) -> egui::Response {
+    let t = Tokens::get(ui.ctx());
+    let mut s = d.str(key);
+    let r = egui::Frame::NONE
+        .fill(t.input)
+        .stroke(egui::Stroke::new(1.0, t.input_border))
+        .corner_radius(egui::CornerRadius::same(3))
+        .inner_margin(egui::Margin::symmetric(6, 3))
+        .show(ui, |ui| ui.add(egui::TextEdit::multiline(&mut s).frame(egui::Frame::NONE).desired_width(width).desired_rows(rows)));
+    if r.inner.changed() {
+        d.fields.insert(key.into(), Value::String(s));
+    }
+    if r.inner.has_focus() {
+        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    }
+    r.inner
+}
+
 /// A checkbox bound to `d.fields[key]`.
 pub(super) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let mut b = d.bool(key);

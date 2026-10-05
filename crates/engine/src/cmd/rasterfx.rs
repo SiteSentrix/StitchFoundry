@@ -1,17 +1,21 @@
 //! Effect → Document Raster Effects Settings, and raster effects for PDF export.
 //!
 //! PDF has no live shadows, glows or blurs, so PDF export receives a copy of the document in which
-//! every object with a raster effect is accompanied by an image rendered at the document's raster
-//! effects resolution (like Illustrator). Shadows and outer glows only add the effect: the image
-//! (with the object's own area knocked out) goes under the untouched vector object. Effects that
-//! change the object itself (inner glow, feather, Gaussian blur) replace it with the image.
+//! every object with a raster effect is accompanied by an image rendered with the document's raster
+//! effects settings (resolution, colour model, background, anti-aliasing, room around the art).
+//! Shadows and outer glows only add the effect: the image (with the object's own area knocked out)
+//! goes under the untouched vector object. Effects that change the object itself (inner glow,
+//! feather, Gaussian blur) replace it with the image.
 
 use std::sync::Arc;
 
-use serde_json::{Value, json};
-use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Affine, Rect};
+use serde_json::{Map, Value, json};
+use vectorcraft_color::Paint;
+use vectorcraft_doc::rastersettings::MAX_ADD_AROUND;
+use vectorcraft_doc::{Appearance, ColorMode, Document, ImageBlob, ImageObject, Node, NodeId, NodeKind, RasterColorModel};
+use vectorcraft_geom::{Affine, FillRule, PathData, Rect};
 use vectorcraft_render::effects::{self, RasterFx};
+use vectorcraft_render::{AntiAlias, RenderOptions};
 
 use super::*;
 
@@ -21,32 +25,114 @@ pub fn specs() -> Vec<CommandSpec> {
         "Document Raster Effects Settings…",
         ["Effect"],
         None,
-        "{resolution?: ppi (1–2400) | \"screen\" (72) | \"medium\" (150) | \"high\" (300)} resolution of raster effects in PDF export and Rasterize; no params → {resolution}",
+        "{resolution?: ppi (1–2400) | \"screen\" (72) | \"medium\" (150) | \"high\" (300), colorModel?: \"rgb\"|\"cmyk\" (the document's mode)|\"grayscale\"|\"bitmap\", background?: \"transparent\"|\"white\", antiAlias?: bool (off: hard edges), clippingMask?: bool (white background only under the art; Rasterize clips to the art), addAround?: pt (0–1000, room around the art), preserveSpotColors?: bool (stored)} how raster effects (shadows, glows, blurs, feathers) become images in PDF export and Expand Appearance, and the defaults of object.rasterize; one undo step; always → the settings",
         has_doc,
         settings
     )]
 }
 
-fn settings(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "document.rasterEffectsSettings";
-    let ppi = match p.get("resolution") {
-        None | Some(Value::Null) => return Ok(json!({ "resolution": s.doc()?.doc.raster_effects_ppi })),
-        Some(Value::String(v)) => match v.to_ascii_lowercase().as_str() {
+const C: &str = "document.rasterEffectsSettings";
+
+/// What `document.rasterEffectsSettings` reports (and takes back).
+fn settings_json(d: &Document) -> Value {
+    let r = &d.raster_effects;
+    let model = match (r.color_model, d.color_mode) {
+        (RasterColorModel::Document, ColorMode::Rgb) => "rgb",
+        (RasterColorModel::Document, ColorMode::Cmyk) => "cmyk",
+        (m, _) => m.id(),
+    };
+    json!({
+        "resolution": d.raster_effects_ppi,
+        "colorModel": model,
+        "background": r.background.id(),
+        "antiAlias": r.anti_alias,
+        "clippingMask": r.clipping_mask,
+        "addAround": r.add_around,
+        "preserveSpotColors": r.preserve_spot_colors,
+    })
+}
+
+fn resolution(v: &Value) -> Result<f64> {
+    let ppi = match v {
+        Value::String(v) => match v.to_ascii_lowercase().as_str() {
             "screen" => 72.0,
             "medium" => 150.0,
             "high" => 300.0,
             other => other.trim_end_matches("ppi").trim().parse::<f64>().map_err(|_| bad(C, format!("unknown resolution `{v}`")))?,
         },
-        Some(v) => v.as_f64().ok_or_else(|| bad(C, "resolution must be a number or screen|medium|high"))?,
+        v => v.as_f64().ok_or_else(|| bad(C, "resolution must be a number or screen|medium|high"))?,
     };
     if !(1.0..=2400.0).contains(&ppi) {
         return Err(bad(C, "resolution must be between 1 and 2400 ppi"));
     }
-    s.edit("Document Raster Effects Settings", |d, _| {
-        d.raster_effects_ppi = ppi;
-        Ok(())
-    })?;
-    Ok(json!({ "resolution": ppi }))
+    Ok(ppi)
+}
+
+/// `colorModel` for a document in `mode`: its own mode's name means the document's model.
+pub(crate) fn color_model(v: &Value, mode: ColorMode, cmd: &str) -> Result<RasterColorModel> {
+    let s = v.as_str().unwrap_or_default().to_ascii_lowercase();
+    match (s.as_str(), mode) {
+        ("document", _) | ("rgb", ColorMode::Rgb) | ("cmyk", ColorMode::Cmyk) => Ok(RasterColorModel::Document),
+        ("grayscale" | "gray", _) => Ok(RasterColorModel::Grayscale),
+        ("bitmap", _) => Ok(RasterColorModel::Bitmap),
+        _ => {
+            let own = if mode == ColorMode::Rgb { "rgb" } else { "cmyk" };
+            Err(bad(cmd, format!("colorModel must be {own} (the document's mode), grayscale or bitmap")))
+        }
+    }
+}
+
+/// `addAround`/`padding` in points.
+pub(crate) fn add_around(v: &Value, cmd: &str, key: &str) -> Result<f64> {
+    v.as_f64().filter(|x| (0.0..=MAX_ADD_AROUND).contains(x)).ok_or_else(|| bad(cmd, format!("{key} must be 0–{MAX_ADD_AROUND} pt")))
+}
+
+fn flag(k: &str, v: &Value) -> Result<bool> {
+    v.as_bool().ok_or_else(|| bad(C, format!("{k} must be true or false")))
+}
+
+fn settings(s: &mut Session, p: &Value) -> Result<Value> {
+    let empty = Map::new();
+    let o = match p {
+        Value::Null => &empty,
+        Value::Object(o) => o,
+        _ => return Err(bad(C, "params must be an object")),
+    };
+    let d = &s.doc()?.doc;
+    let (mut ppi, mut r) = (d.raster_effects_ppi, d.raster_effects.clone());
+    // A null value leaves its setting as it is.
+    for (k, v) in o.iter().filter(|(_, v)| !v.is_null()) {
+        match k.as_str() {
+            "resolution" => ppi = resolution(v)?,
+            "colorModel" => r.color_model = color_model(v, d.color_mode, C)?,
+            "background" => r.background = super::docsetup::background_param(v, C)?,
+            "antiAlias" => r.anti_alias = flag(k, v)?,
+            "clippingMask" => r.clipping_mask = flag(k, v)?,
+            "addAround" => r.add_around = add_around(v, C, k)?,
+            "preserveSpotColors" => r.preserve_spot_colors = flag(k, v)?,
+            _ => return Err(bad(C, format!("unknown setting `{k}`"))),
+        }
+    }
+    if ppi != d.raster_effects_ppi || r != d.raster_effects {
+        s.edit("Document Raster Effects Settings", |d, _| {
+            d.raster_effects_ppi = ppi;
+            d.raster_effects = r;
+            Ok(())
+        })?;
+    }
+    Ok(settings_json(&s.doc()?.doc))
+}
+
+/// `art` in a clip group clipped by `path` filled by `rule` (a clipping path that paints nothing).
+pub(crate) fn clip_group(d: &mut Document, path: PathData, rule: FillRule, art: Node) -> Node {
+    let mut clip = super::pathops::shape_node(d, path, None);
+    clip.appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+    match &mut clip.kind {
+        NodeKind::Path { clipping, rule: r, .. } => (*clipping, *r) = (true, rule),
+        NodeKind::Compound { rule: r, .. } => *r = rule,
+        _ => {}
+    }
+    Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(art)], clip: true })
 }
 
 fn raster_fx(n: &Node) -> Vec<RasterFx> {
@@ -61,7 +147,7 @@ fn needs(n: &Node) -> bool {
 }
 
 /// Render `nodes` alone over transparency: (premultiplied pixels, width, height).
-fn render(doc: &Document, nodes: Vec<Node>, region: Rect, scale: f64) -> vectorcraft_render::Rendered {
+fn render(doc: &Document, nodes: Vec<Node>, region: Rect, scale: f64, anti_alias: AntiAlias) -> vectorcraft_render::Rendered {
     let mut tmp = doc.clone();
     let mut layer = Node::layer(NodeId(u64::MAX), "raster", vectorcraft_doc::LayerColor::Preset(0));
     if let Some(ch) = layer.children_mut() {
@@ -70,7 +156,7 @@ fn render(doc: &Document, nodes: Vec<Node>, region: Rect, scale: f64) -> vectorc
     tmp.layers = vec![Arc::new(layer)];
     let mut r = vectorcraft_render::Renderer::new();
     r.threads = 0;
-    r.render_region(&tmp, region, scale, false)
+    r.render_region_with(&tmp, region, scale, &RenderOptions { skip_templates: true, anti_alias, ..Default::default() })
 }
 
 /// Pixels per point of raster effects rendered as images (the document's raster effects
@@ -83,17 +169,22 @@ pub(crate) fn effects_scale(doc: &Document) -> f64 {
 /// with `out`'s resources at `scale` over its visual bounds and the reach of its raster effects
 /// (its own and its fills' and strokes'). With `knockout`, the coverage of that art is knocked out
 /// of the image, which then only holds what the effects add around it (a shadow to go under the
-/// vector object).
+/// vector object). The document's raster effects settings add room around it and finish its pixels.
 pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&Node>, scale: f64) -> Option<Node> {
     let b = whole.visual_bounds()?;
-    let reach = whole.appearance.items.iter().map(|i| effects::outset(i.effects())).fold(effects::outset(&whole.appearance.effects), f64::max) + 2.0;
+    let look = out.raster_effects.clone();
+    let reach = whole.appearance.items.iter().map(|i| effects::outset(i.effects())).fold(effects::outset(&whole.appearance.effects), f64::max)
+        + 2.0
+        + look.add_around;
     let b = b.inflate(reach, reach);
     // Whole pixels, and no larger than 64 Mpx.
     let scale = scale.min((64.0e6 / (b.width() * b.height()).max(1.0)).sqrt());
     let region = Rect::new(b.x0, b.y0, b.x0 + (b.width() * scale).ceil().max(1.0) / scale, b.y0 + (b.height() * scale).ceil().max(1.0) / scale);
-    let mut img = render(out, vec![whole.clone()], region, scale);
+    // Anti-alias off: hard edges (the effects themselves stay smooth).
+    let anti_alias = if look.anti_alias { AntiAlias::Art } else { AntiAlias::None };
+    let mut img = render(out, vec![whole.clone()], region, scale, anti_alias);
     if let Some(bare) = knockout {
-        let obj = render(out, vec![bare.clone()], region, scale);
+        let obj = render(out, vec![bare.clone()], region, scale, anti_alias);
         for (px, o) in img.pixels.as_chunks_mut::<4>().0.iter_mut().zip(obj.pixels.as_chunks::<4>().0) {
             let keep = 1.0 - o[3] as f32 / 255.0;
             for c in px.iter_mut() {
@@ -101,6 +192,8 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
             }
         }
     }
+    // Document Raster Effects Settings: colour model, background.
+    look.finish_pixels(&mut img.pixels);
     // Can't encode: keep the object as it is (vector, effects ignored) rather than fail the export.
     let png = img.to_png().ok()?;
     let id = out.alloc_id();
