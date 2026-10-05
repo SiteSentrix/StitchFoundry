@@ -491,6 +491,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{multiple?: true} collect the selected objects as assets (assets.add: one per object; false: one of them all) and open Export for Screens on its Assets tab with them checked → {assets: [asset id…]}; document.exportSelection exports the selection in one go instead",
     ),
+    (
+        "css.copy",
+        "Copy Selected Style",
+        "",
+        "{scope?: selection|all (default selection), …css.selection options} copy the CSS of the selection (css.selection; all: css.generate) to the clipboard (CSS Properties panel) → {css, rules: n}",
+    ),
+    (
+        "css.exportFile",
+        "Export CSS…",
+        "",
+        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…]}",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -884,6 +896,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::open_export_for_screens_assets(app, Some(&ids));
             json!({ "assets": ids })
         }),
+        "css.copy" => crate::panels::css_properties::copy(app, p),
+        "css.exportFile" => crate::panels::css_properties::export_file(app, p),
         _ => return None,
     };
     Some(r)
@@ -1120,6 +1134,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "css.copy" | "css.exportFile" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1717,6 +1732,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
                 panel("Color Themes", "colorThemes"),
+                panel("CSS Properties", crate::panels::css_properties::ID),
                 panel("Document Info", "docInfo"),
                 panel("Flattener Preview", crate::panels::flattener_preview::ID),
                 panel("Gradient", "gradient"),

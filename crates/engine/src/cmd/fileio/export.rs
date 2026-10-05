@@ -131,7 +131,7 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
 
 /// Objects `ids` of `doc` alone on one layer (in that order, back to front), with one artboard
 /// named `name`: their visual bounds (`None` when they have none).
-pub(super) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Document, vectorcraft_geom::Rect)> {
+pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Document, vectorcraft_geom::Rect)> {
     let nodes: Vec<Arc<Node>> = ids.iter().filter_map(|id| doc.node(*id).cloned().map(Arc::new)).collect();
     let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))?;
     let mut d = single_artboard(doc, bounds, name);

@@ -1434,3 +1434,23 @@ those shared settings (not an undo step). `document.exportForScreens {assets: [i
 {"name":"run_command","arguments":{"command":"assets.settings.set","params":{"formats":[{"format":"png","scale":"1x"},{"format":"png","scale":"2x"},{"format":"svg"}]}}}
 {"name":"run_command","arguments":{"command":"assets.export","params":{"zip":true}}}
 ```
+
+## CSS Properties
+
+`css.selection {ids?, units?, position?, dimensions?, unnamed?, rasterize?}` returns the CSS web pages style the
+selected objects (or `ids`) with, one rule per object, as Window › CSS Properties shows it: a rectangle's or ellipse's
+fill as `background-color` or a `linear-gradient()`/`radial-gradient()`, its stroke as `border`, its corners as
+`border-radius`; type's font, `color`, spacing and alignment; opacity, blend mode, shadows and glows (`box-shadow`,
+`text-shadow`) and blur (`filter`). Layers and plain groups stand for what they hold. Properties SVG export writes too
+(font, spacing, opacity, blend mode, colours, gradient stops) read exactly as in its style sheets. Each rule in `rules`
+says when CSS can't describe the art exactly (`unsupported`: other shapes, images, patterns, live effects…); it is then
+written as its box, or with `rasterize: true` as `background-image: url(<class>.png)`. `units` is `px` (1 px per
+point, as in SVG export), `pt`, `mm`, `cm` or `in`; `unnamed: false` leaves out unnamed objects (counted in
+`skipped`). `css.generate` does the same for the whole document, and `css.export {path?, scope?: selection|all}`
+writes the `.css` file with the PNGs of rasterized art next to it (no path: `data` and `images` as base64). In the app,
+`css.copy` copies the CSS and `css.exportFile` writes it through a save panel (the web downloads it).
+
+```json
+{"name":"run_command","arguments":{"command":"css.selection","params":{"units":"px","position":true}}}
+{"name":"run_command","arguments":{"command":"css.export","params":{"path":"/tmp/site/styles.css","scope":"all","rasterize":true}}}
+```

@@ -10,6 +10,7 @@ mod colorcmds;
 pub mod colormgmt;
 pub mod colortheme;
 mod create;
+mod css;
 pub(crate) mod distortcmds;
 mod docinfo;
 mod docmenu;
@@ -237,6 +238,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(fileio::dxfimport::specs());
         v.extend(webexport::specs());
         v.extend(assets::specs());
+        v.extend(css::specs());
         v
     })
 }

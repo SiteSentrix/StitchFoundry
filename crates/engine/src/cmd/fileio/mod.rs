@@ -45,6 +45,7 @@ pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub use export::export_source;
+pub(crate) use export::isolated;
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::native_file;
@@ -789,7 +790,7 @@ pub(crate) fn merge(mut a: Value, b: Value) -> Value {
 }
 
 /// A file name for bytes handed back without a path: the document's title with `ext`.
-fn default_name(doc: &vectorcraft_doc::Document, ext: &str) -> String {
+pub(crate) fn default_name(doc: &vectorcraft_doc::Document, ext: &str) -> String {
     let stem = std::path::Path::new(&doc.title).file_stem().map(|s| s.to_string_lossy().into_owned()).filter(|s| !s.is_empty());
     format!("{}.{ext}", stem.as_deref().unwrap_or("Untitled"))
 }
