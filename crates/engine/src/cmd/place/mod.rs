@@ -110,7 +110,7 @@ struct Loaded {
 }
 
 /// Points per pixel of a raster image at the resolution it declares (72 ppi when none).
-fn pt_per_px(ppi: Option<(f64, f64)>) -> (f64, f64) {
+pub(crate) fn pt_per_px(ppi: Option<(f64, f64)>) -> (f64, f64) {
     let (x, y) = ppi.unwrap_or((72.0, 72.0));
     (72.0 / x, 72.0 / y)
 }

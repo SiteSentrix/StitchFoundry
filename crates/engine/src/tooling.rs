@@ -88,6 +88,7 @@ impl Session {
             preview_bounds: self.prefs.use_preview_bounds,
             unit,
             stroke_unit,
+            paste_plain_text: self.prefs.paste_text_formatting == "plain",
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {

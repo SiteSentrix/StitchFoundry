@@ -6,6 +6,7 @@
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
 //! See `vectorcraft_ui_egui::control` for the methods.
 
+mod clipboard;
 mod control_server;
 #[cfg(target_os = "macos")]
 mod native_menu;
@@ -123,8 +124,8 @@ fn services() -> Services {
         })),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
-        // Menu-bar Paste never sees egui's Paste event, so read the clipboard directly.
-        clipboard_read: Some(Box::new(|| arboard::Clipboard::new().ok()?.get_text().ok())),
+        // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
+        system_clipboard: Some(clipboard::system_clipboard()),
         // Help → Discord / website / GitHub, the Discord button, About and Home links.
         open_url: Some(Box::new(|url: &str| {
             let _ = webbrowser::open(url);

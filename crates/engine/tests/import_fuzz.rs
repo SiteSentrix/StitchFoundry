@@ -1,7 +1,7 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG and PDF input,
 //! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
 //! (`.vcflattener`) libraries, must load as an error or as a document that then renders and
-//! exports, without a panic.
+//! exports, without a panic; nor may bitmaps, PDF and text pasted from other apps.
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -588,5 +588,60 @@ proptest! {
     fn mutated_pdf_presets_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
         let text = saved("pdf.preset.export", json!({"names": ["VectorCraft Default", "Smallest File Size", "PDF/X-4:2010"]}));
         pdf_presets("mutated pdf presets", &mutate_text(&text, cut, &edits))?;
+    }
+}
+
+// ---------- what Paste takes from other apps ----------
+
+/// Load `p` into the clipboard with `cmd`, then paste it into a new document: neither may panic.
+fn paste_from_elsewhere(cmd: &str, p: Value) -> Result<(), TestCaseError> {
+    let r = catch_quiet(|| {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        if s.execute(cmd, &p).is_ok() {
+            s.execute("edit.paste", &json!({"center": [50, 50]})).unwrap();
+        }
+    });
+    prop_assert!(r.is_ok(), "{cmd}: panicked: {:?}", r.err());
+    Ok(())
+}
+
+/// [`rich_pdf`], made once.
+fn rich_pdf_once() -> Vec<u8> {
+    static PDF: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    PDF.get_or_init(rich_pdf).clone()
+}
+
+/// `bytes` with `edits` (positions wrap around) cut to `cut` bytes, as base64.
+fn mutated_b64(mut bytes: Vec<u8>, cut: usize, edits: &[(usize, u8)]) -> String {
+    let n = bytes.len().max(1);
+    for (at, b) in edits {
+        if let Some(x) = bytes.get_mut(at % n) {
+            *x = *b;
+        }
+    }
+    bytes.truncate(cut.max(8));
+    vectorcraft_format::base64_encode(&bytes)
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn pasted_bitmaps_never_panic(which in 0usize..4, cut in 0usize..400, edits in prop::collection::vec((0usize..120, any::<u8>()), 0..12)) {
+        let (_, image) = raster_samples().swap_remove(which);
+        paste_from_elsewhere("clipboard.importImage", json!({"dataBase64": mutated_b64(image, cut, &edits), "mime": "image/png"}))?;
+    }
+
+    #[test]
+    fn pasted_pdf_never_panics(cut in 0usize..40_000, edits in prop::collection::vec((0usize..40_000, any::<u8>()), 0..12)) {
+        paste_from_elsewhere("clipboard.importPdf", json!({"dataBase64": mutated_b64(rich_pdf_once(), cut, &edits)}))?;
+    }
+
+    // ASCII with control characters and line breaks, a mark and multi-byte characters (characters
+    // no font has would send every layout to the slow font fallback).
+    #[test]
+    fn pasted_text_never_panics(text in r"[\x00-\x7f\u{300}\u{feff}\u{fffd}é€]{0,200}") {
+        paste_from_elsewhere("clipboard.importText", json!({ "text": text }))?;
     }
 }

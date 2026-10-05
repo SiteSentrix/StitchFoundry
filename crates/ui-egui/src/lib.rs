@@ -26,6 +26,7 @@ pub mod render_worker;
 pub mod shortcut_editor;
 pub mod shortcuts;
 pub mod state;
+pub mod sysclip;
 pub mod theme;
 pub mod titlebar;
 pub mod toolbar;
@@ -54,6 +55,8 @@ mod tests_svg;
 #[cfg(test)]
 mod tests_svgsave;
 #[cfg(test)]
+mod tests_sysclip;
+#[cfg(test)]
 mod tests_transparencygrid;
 
 use std::sync::mpsc::{Receiver, Sender};
@@ -64,6 +67,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse};
 pub use state::{UiState, View};
+pub use sysclip::SystemClipboard;
 
 pub type PickSave = Box<dyn FnMut(&str) -> Option<String>>;
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
@@ -101,6 +105,10 @@ pub struct Services {
     /// Files that arrived asynchronously to be placed (web: picked for Place, or dropped on the
     /// canvas).
     pub place_inbox: Option<place::PlaceInbox>,
+    /// The system clipboard with all its formats (desktop): Copy offers text, SVG, PDF and PNG,
+    /// Paste takes SVG, PDF, text and bitmaps from other apps. Without it, SVG text only (through
+    /// egui and `clipboard_read`).
+    pub system_clipboard: Option<Box<dyn SystemClipboard>>,
 }
 
 /// Cached canvas raster.
@@ -178,14 +186,17 @@ pub struct VectorcraftApp {
     pub custom_titlebar: bool,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
-    /// The Paste commands can paste from the system clipboard alone: it holds SVG while the
-    /// internal clipboard is empty. It enables the Paste menu items.
-    pub(crate) system_svg: bool,
-    /// When `system_svg` was last checked (app time, s; at most once per frame).
-    system_svg_at: f64,
+    /// The Paste commands can paste from the system clipboard alone: it holds something to paste
+    /// (SVG without a `system_clipboard`) while the internal clipboard is empty. It enables the
+    /// Paste menu items.
+    pub(crate) system_paste: bool,
+    /// When `system_paste` was last checked (app time, s; at most once per frame).
+    system_paste_at: f64,
+    /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
+    pub(crate) paste_chord: shortcuts::PasteChord,
 }
 
-/// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_svg`].
+/// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
 const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
@@ -226,8 +237,9 @@ impl VectorcraftApp {
             hover_doc: None,
             custom_titlebar: false,
             place: Default::default(),
-            system_svg: false,
-            system_svg_at: f64::NEG_INFINITY,
+            system_paste: false,
+            system_paste_at: f64::NEG_INFINITY,
+            paste_chord: Default::default(),
         }
     }
 
@@ -274,7 +286,10 @@ impl VectorcraftApp {
         }
         let mut params = params;
         if id.starts_with("edit.paste") {
-            self.adopt_system_clipboard();
+            if let Err(e) = self.adopt_system_clipboard() {
+                self.ui.status = e.clone();
+                return Err(e);
+            }
             // Paste (also without formatting) goes to the centre of the view.
             if matches!(id, "edit.paste" | "edit.pasteWithoutFormatting")
                 && ["center", "dx", "dy"].iter().all(|k| params.get(k).is_none())
@@ -288,9 +303,8 @@ impl VectorcraftApp {
             }
         }
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
-        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") && self.session.prefs.copy_as_svg {
-            self.clipboard_out = self.session.clipboard_svg();
-            self.clipboard_published = self.clipboard_out.clone();
+        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") {
+            self.publish_clipboard();
         }
         self.sync_views();
         match &r {
@@ -314,21 +328,6 @@ impl VectorcraftApp {
             }
         }
         r
-    }
-
-    /// Before a paste: SVG that another app put on the system clipboard replaces the internal
-    /// clipboard (centred in the view). Our own published SVG keeps the lossless internal copy.
-    fn adopt_system_clipboard(&mut self) {
-        let text = self.clipboard_in.take().or_else(|| self.services.clipboard_read.as_mut().and_then(|f| f()));
-        let Some(text) = text.filter(|t| vectorcraft_engine::cmd::clipboard::looks_like_svg(t)) else { return };
-        if self.clipboard_published.as_deref() == Some(text.as_str()) {
-            return;
-        }
-        let center = self.view().map(|v| [v.center.x, v.center.y]);
-        match self.session.execute("clipboard.importSvg", &serde_json::json!({ "svg": text, "center": center })) {
-            Ok(_) => self.clipboard_published = Some(text),
-            Err(e) => self.ui.status = format!("Couldn't paste SVG: {e}"),
-        }
     }
 
     /// Open a link in the browser (Help → Discord, website, GitHub…).
@@ -499,16 +498,9 @@ impl VectorcraftApp {
         self.sync_views();
         // Read the system clipboard only when that alone decides whether Paste is enabled, and at
         // most a few times a second (opening it locks it against other apps on some systems).
-        if !(0.0..SYSTEM_CLIPBOARD_POLL).contains(&(now - self.system_svg_at)) {
-            self.system_svg_at = now;
-            self.system_svg = self.session.clipboard.is_empty()
-                && self.session.active().is_some()
-                && self
-                    .services
-                    .clipboard_read
-                    .as_mut()
-                    .and_then(|read| read())
-                    .is_some_and(|t| vectorcraft_engine::cmd::clipboard::looks_like_svg(&t));
+        if !(0.0..SYSTEM_CLIPBOARD_POLL).contains(&(now - self.system_paste_at)) {
+            self.system_paste_at = now;
+            self.system_paste = self.session.clipboard.is_empty() && self.session.active().is_some() && self.system_clipboard_pasteable();
         }
         // The window's close button (or the system quitting the app) asks about unsaved documents.
         if ctx.input(|i| i.viewport().close_requested()) && unsaved::any_dirty(self) {
