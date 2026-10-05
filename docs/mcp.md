@@ -1654,3 +1654,16 @@ square to the page. `object.resetBoundingBox` squares the box again without movi
 ```json
 {"name":"run_command","arguments":{"command":"object.rotate","params":{"angle":45,"absolute":true}}}
 ```
+
+## Empty point type
+
+Point type the Type tool places with a click and leaves empty is discarded when editing ends: Escape, another tool,
+a click elsewhere, switching documents, or a command that takes the text out of the selection (`select.none`, a
+`select.set` of other objects). The steps since the click go with it (`text.discardEmpty {id}`), so the document and
+its undo history are as if the click never happened. Commands on the edited text (the Character panel's
+`text.setRangeStyle {id}`) keep it in editing. Area type dragged as a frame and type in or on a path keep their frame
+(Object → Path → Clean Up removes empty text).
+
+```json
+{"name":"run_command","arguments":{"command":"text.discardEmpty","params":{"id":42}}}
+```

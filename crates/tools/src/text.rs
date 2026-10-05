@@ -2,7 +2,8 @@
 //!
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
 //! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
-//! baseline (`text.createInPath`).
+//! baseline (`text.createInPath`). Point type placed by a click and left empty is discarded when
+//! editing ends (`text.discardEmpty`); frames keep their shape.
 //!
 //! While editing: caret movement by character / word (Cmd or Alt) / line (Up/Down) / line ends
 //! (Home/End; Cmd = whole text), Shift extends the selection, drag selects, double-click selects a
@@ -42,6 +43,8 @@ pub struct TypeTool {
     mode: Mode,
     /// Text object being edited.
     editing: Option<NodeId>,
+    /// The point type a click just placed (edited now): discarded if empty when editing ends.
+    fresh: Option<NodeId>,
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
@@ -114,8 +117,16 @@ impl TypeTool {
         if self.typing.take().is_some() { vec![Action::Commit] } else { vec![] }
     }
 
-    fn finish(&mut self) -> Vec<Action> {
-        let out = self.commit();
+    /// Stop editing. Point type a click placed that is still empty is discarded, with the steps
+    /// since its click (`text.discardEmpty`).
+    fn finish(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let mut out = self.commit();
+        if let Some(id) = self.fresh.take()
+            && self.editing == Some(id)
+            && Self::text(cx, id).is_some_and(|t| matches!(t.kind, TextKind::Point) && edit::runs_len(&t.runs) == 0)
+        {
+            out.push(Action::Exec("text.discardEmpty".into(), json!({"id": id.0})));
+        }
         self.editing = None;
         self.selecting = false;
         self.goal_x = None;
@@ -170,6 +181,7 @@ impl TypeTool {
 
     fn start_editing(&mut self, id: NodeId, caret: usize) {
         self.editing = Some(id);
+        self.fresh = None;
         self.caret = caret;
         self.anchor = caret;
         self.goal_x = None;
@@ -206,7 +218,7 @@ impl TypeTool {
     }
 
     fn on_up(&mut self, cx: &ToolContext, start: Point) -> Vec<Action> {
-        let mut out = self.finish();
+        let mut out = self.finish(cx);
         // Click into existing text: place the caret.
         if let Some(h) = hit_test(cx.doc, start, cx.hit_options())
             && let Some(NodeKind::Text(t)) = cx.doc.node(h.leaf).map(|n| &n.kind)
@@ -390,7 +402,7 @@ impl Tool for TypeTool {
             self.goal_x = None;
         }
         match key {
-            ToolKey::Escape => self.finish(),
+            ToolKey::Escape => self.finish(cx),
             ToolKey::Enter => self.replace(cx, "\n", None),
             ToolKey::Tab => self.replace(cx, "\t", None),
             ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
@@ -454,8 +466,21 @@ impl Tool for TypeTool {
             _ => vec![],
         }
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        self.finish()
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.finish(cx)
+    }
+    /// Editing ends when a command takes the text out of the selection (Deselect, another object
+    /// picked in the Layers panel) or removes it.
+    fn after_command(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let Some(id) = self.editing else { return vec![] };
+        let mut cur = Some(id).filter(|i| cx.doc.node(*i).is_some());
+        while let Some(c) = cur {
+            if cx.selection.contains(c) {
+                return vec![];
+            }
+            cur = cx.doc.parent_of(c);
+        }
+        self.finish(cx)
     }
     /// After `text.create` / `text.createInPath` the engine selects the new object; edit it.
     fn notify(&mut self, cx: &ToolContext, what: &str) {
@@ -463,6 +488,7 @@ impl Tool for TypeTool {
             && let Some(id) = cx.selection.objects.first().copied()
         {
             self.start_editing(id, 0);
+            self.fresh = Self::text(cx, id).filter(|t| matches!(t.kind, TextKind::Point)).map(|_| id);
         }
     }
     /// `{editing, start, end, caret, anchor, typing}` — the Character panel styles `start..end`.
