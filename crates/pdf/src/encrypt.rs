@@ -421,7 +421,7 @@ fn owner_key(owner: &[u8], r: u8, n: usize) -> Vec<u8> {
 
 // ---------- PDF syntax ----------
 
-fn is_white(b: u8) -> bool {
+pub(crate) fn is_white(b: u8) -> bool {
     matches!(b, 0 | 9 | 10 | 12 | 13 | 32)
 }
 
@@ -430,7 +430,7 @@ fn is_regular(b: u8) -> bool {
 }
 
 #[derive(Debug)]
-enum Tok<'a> {
+pub(crate) enum Tok<'a> {
     DictOpen,
     DictClose,
     ArrayOpen,
@@ -442,14 +442,14 @@ enum Tok<'a> {
 }
 
 /// A token with its byte span.
-type Spanned<'a> = (Tok<'a>, usize, usize);
+pub(crate) type Spanned<'a> = (Tok<'a>, usize, usize);
 
 /// Deepest nesting of arrays and dictionaries read.
 const MAX_DEPTH: usize = 64;
 
 /// A parsed object, with what encryption needs: the strings and dictionaries with their spans.
 #[derive(Debug)]
-enum Obj<'a> {
+pub(crate) enum Obj<'a> {
     /// `start` is where `<<` is, `end` just after `>>`.
     Dict {
         entries: Vec<(&'a [u8], Obj<'a>)>,
@@ -474,14 +474,14 @@ enum Obj<'a> {
 }
 
 impl<'a> Obj<'a> {
-    fn get(&self, key: &[u8]) -> Option<&Obj<'a>> {
+    pub(crate) fn get(&self, key: &[u8]) -> Option<&Obj<'a>> {
         match self {
             Self::Dict { entries, .. } => entries.iter().find(|(k, _)| *k == key).map(|(_, v)| v),
             _ => None,
         }
     }
 
-    fn name(&self, key: &[u8]) -> Option<&'a [u8]> {
+    pub(crate) fn name(&self, key: &[u8]) -> Option<&'a [u8]> {
         match self.get(key)? {
             Self::Name(n) => Some(n),
             _ => None,
@@ -524,18 +524,18 @@ impl<'a> Obj<'a> {
     }
 }
 
-fn int(w: &[u8]) -> Option<i64> {
+pub(crate) fn int(w: &[u8]) -> Option<i64> {
     std::str::from_utf8(w).ok()?.parse().ok()
 }
 
 #[derive(Clone)]
-struct Lexer<'a> {
+pub(crate) struct Lexer<'a> {
     buf: &'a [u8],
     pos: usize,
 }
 
 impl<'a> Lexer<'a> {
-    fn at(buf: &'a [u8], pos: usize) -> Self {
+    pub(crate) fn at(buf: &'a [u8], pos: usize) -> Self {
         Self { buf, pos }
     }
 
@@ -557,7 +557,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn next(&mut self) -> Option<Spanned<'a>> {
+    pub(crate) fn next(&mut self) -> Option<Spanned<'a>> {
         self.skip_space();
         let start = self.pos;
         let b = self.peek_byte(0)?;
@@ -689,7 +689,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// One object (a reference `n g R` reads as one).
-    fn object(&mut self, depth: usize) -> Option<Obj<'a>> {
+    pub(crate) fn object(&mut self, depth: usize) -> Option<Obj<'a>> {
         if depth > MAX_DEPTH {
             return None;
         }
@@ -748,7 +748,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// The header `num generation obj` of an indirect object.
-    fn header(&mut self) -> Option<(u32, u16)> {
+    pub(crate) fn header(&mut self) -> Option<(u32, u16)> {
         let (Some((Tok::Word(n), ..)), Some((Tok::Word(g), ..)), Some((Tok::Word(b"obj"), ..))) = (self.next(), self.next(), self.next()) else {
             return None;
         };
@@ -820,14 +820,29 @@ fn object_edits(pdf: &[u8], off: usize, h: &Handler, catalog: bool, rng: &mut En
     {
         edits.push((start + 2, start + 2, AES256_EXTENSION.to_vec()));
     }
-    let Some((Tok::Word(b"stream"), _, keyword_end)) = lx.next() else { return Ok(()) };
+    let Some(((len_start, len_end), (data, data_end))) = stream_spans(pdf, &mut lx, &obj).map_err(failed)? else { return Ok(()) };
     let ty = obj.name(b"Type");
     if matches!(ty, Some(b"XRef" | b"ObjStm")) {
         return Err(failed("cross-reference and object streams aren't supported"));
     }
-    let Some(Obj::Int { value, start: len_start, end: len_end }) = obj.get(b"Length") else {
-        return Err(failed("a stream's length isn't a number"));
-    };
+    if ty == Some(&b"Metadata"[..]) && !h.encrypt_metadata {
+        return Ok(());
+    }
+    let bytes = pdf.get(data..data_end).ok_or_else(|| failed("a stream runs past the end"))?;
+    let enc = h.encrypt(num, generation, bytes, rng)?;
+    edits.push((len_start, len_end, enc.len().to_string().into_bytes()));
+    edits.push((data, data_end, enc));
+    Ok(())
+}
+
+/// The spans of a stream's length value and of its data.
+pub(crate) type StreamSpans = ((usize, usize), (usize, usize));
+
+/// Where the object whose dictionary `dict` the lexer `lx` has just read keeps its stream data:
+/// its [`StreamSpans`]; `None` when it isn't a stream.
+pub(crate) fn stream_spans(pdf: &[u8], lx: &mut Lexer<'_>, dict: &Obj<'_>) -> Result<Option<StreamSpans>, &'static str> {
+    let Some((Tok::Word(b"stream"), _, keyword_end)) = lx.next() else { return Ok(None) };
+    let Some(Obj::Int { value, start, end }) = dict.get(b"Length") else { return Err("a stream's length isn't a number") };
     // The data starts after the end of line that follows `stream`.
     let mut data = keyword_end;
     if pdf.get(data) == Some(&b'\r') {
@@ -836,18 +851,14 @@ fn object_edits(pdf: &[u8], off: usize, h: &Handler, catalog: bool, rng: &mut En
     if pdf.get(data) == Some(&b'\n') {
         data += 1;
     }
-    let data_end = usize::try_from(*value).ok().and_then(|n| data.checked_add(n)).ok_or_else(|| failed("bad stream length"))?;
-    let bytes = pdf.get(data..data_end).ok_or_else(|| failed("a stream runs past the end"))?;
+    let data_end = usize::try_from(*value).ok().and_then(|n| data.checked_add(n)).ok_or("bad stream length")?;
+    if data_end > pdf.len() {
+        return Err("a stream runs past the end");
+    }
     if !matches!(Lexer::at(pdf, data_end).next(), Some((Tok::Word(b"endstream"), ..))) {
-        return Err(failed("a stream's length is wrong"));
+        return Err("a stream's length is wrong");
     }
-    if ty == Some(&b"Metadata"[..]) && !h.encrypt_metadata {
-        return Ok(());
-    }
-    let enc = h.encrypt(num, generation, bytes, rng)?;
-    edits.push((*len_start, *len_end, enc.len().to_string().into_bytes()));
-    edits.push((data, data_end, enc));
-    Ok(())
+    Ok(Some(((*start, *end), (data, data_end))))
 }
 
 /// Encrypt `pdf` (as the export writes it: one cross-reference table) as `set`'s Security

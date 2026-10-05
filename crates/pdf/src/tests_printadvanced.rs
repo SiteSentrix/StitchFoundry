@@ -95,7 +95,8 @@ fn settings_saved_before_the_advanced_options_load_with_their_defaults() {
 fn discarded_and_simulated_overprints_write_no_overprint() {
     let d = overprinted();
     let preserve = job(&d, json!({}));
-    assert!(preserve.warnings.iter().any(|w| w.contains("knockouts")), "{:?}", preserve.warnings);
+    assert!(preserve.warnings.is_empty(), "{:?}", preserve.warnings);
+    assert!(String::from_utf8_lossy(&preserve.bytes).contains("/OP true/op true/OPM 1"), "preserved overprints overprint in the file");
     assert!(overprints(&printed_document(&d, &settings(json!({})))), "preserved");
     for (how, multiplies) in [("discard", false), ("simulate", true)] {
         let set = json!({"advanced": {"overprints": how}});

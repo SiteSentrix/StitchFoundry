@@ -118,7 +118,7 @@ pub fn multiply_overprints(a: &mut Arc<Node>, discard_white: bool) {
 }
 
 /// A solid paint of paper white (no ink in any colour model).
-fn is_white(p: &Paint) -> bool {
+pub fn is_white(p: &Paint) -> bool {
     let Paint::Solid { color, .. } = p else { return false };
     match *color {
         Color::Rgb { r, g, b } => r.min(g).min(b) >= 1.0,

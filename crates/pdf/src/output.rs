@@ -386,7 +386,7 @@ fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
 
 /// `s` as a PDF text string: a literal string when it is printable ASCII, else UTF-16BE (with its
 /// byte order mark) in hex.
-fn text_string(s: &str) -> String {
+pub(crate) fn text_string(s: &str) -> String {
     if s.bytes().all(|b| (b' '..=b'~').contains(&b)) {
         let mut out = String::with_capacity(s.len() + 2);
         out.push('(');
@@ -408,7 +408,7 @@ fn text_string(s: &str) -> String {
     }
 }
 
-fn deflate(data: &[u8]) -> std::io::Result<Vec<u8>> {
+pub(crate) fn deflate(data: &[u8]) -> std::io::Result<Vec<u8>> {
     use std::io::Write;
     let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
     e.write_all(data)?;

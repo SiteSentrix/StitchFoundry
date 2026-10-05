@@ -230,11 +230,6 @@ impl<'a> Job<'a> {
         if !postscript && separations && set.output.inks.iter().any(|i| i.frequency.is_some() || i.angle.is_some()) {
             warnings.push("ink frequencies and angles are not written as halftone screens yet: the output device's screens apply".into());
         }
-        if !separations && doc.layers.iter().any(|l| l.has_overprint()) {
-            warnings.push(
-                "overprinting fills and strokes print as knockouts in composite output (separations honour them; Simulate Overprints prints them as Overprint Preview shows them)".into(),
-            );
-        }
         if separations && set.advanced.print_as_bitmap {
             warnings.push("Print as Bitmap is for composite output: separations print the art as it is".into());
         }
@@ -411,16 +406,20 @@ pub fn print(doc: &Document, opts: &PrintOptions) -> Result<PrintReport, PdfErro
         ex.intent = opts.settings.color.intent;
         // The writer's colour output: the printer profile's conversion.
         ex.out = w.out.clone();
+        // Composite output keeps overprints as the Advanced option says (plates multiply them).
+        ex.overprint = !separations && pdf.advanced.overprint == Overprint::Preserve;
     }
     for &i in &plan.order {
         let Some(s) = plan.sheets.get(i) else { continue };
         let Some(ex) = exporters.get_mut(s.plate.unwrap_or(0)) else { continue };
         w.page(ex, &s.sheet())?;
     }
+    let overprinted = exporters.iter().any(|ex| ex.overprinted);
     for ex in exporters {
         w.absorb(ex);
     }
     let (bytes, more) = w.finish()?;
+    let bytes = crate::forms::finish(bytes, doc, &pdf, false, overprinted)?;
     let mut warnings = plan.warnings;
     for m in more {
         if !warnings.contains(&m) {

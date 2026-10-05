@@ -103,6 +103,13 @@ choice! {
     } default Pdf17
 }
 
+impl Compatibility {
+    /// The version has PDF layers (optional content, PDF 1.5).
+    pub fn has_layers(self) -> bool {
+        matches!(self, Self::Pdf15 | Self::Pdf16 | Self::Pdf17 | Self::Pdf20)
+    }
+}
+
 choice! {
     /// How images above the threshold resolution are resampled.
     Downsample {
@@ -437,6 +444,11 @@ impl PdfSettings {
         within("advanced.fontSubsetPercent", self.advanced.font_subset_percent, 0.0, 100.0, "%")
     }
 
+    /// Top-level layers are written as PDF layers: asked for, at a version that has them.
+    pub fn writes_layers(&self) -> bool {
+        self.create_layers && self.compatibility.has_layers()
+    }
+
     /// Forget the passwords (presets never store them).
     pub fn clear_passwords(&mut self) {
         self.security.open_password.clear();
@@ -450,7 +462,7 @@ impl PdfSettings {
         [
             (self.thumbnails, "page thumbnails are not embedded yet"),
             (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
-            (self.create_layers, "PDF layers are not written yet: every layer is plain page content"),
+            (self.create_layers && !self.compatibility.has_layers(), "PDF layers need PDF 1.5 or later: every layer is plain page content"),
             (
                 !self.advanced.outline_text && self.advanced.font_subset_percent < 100.0,
                 "fonts are embedded as subsets of the characters used: a subset threshold below 100% is not applied",

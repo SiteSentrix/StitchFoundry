@@ -23,6 +23,7 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 use vectorcraft_text::TextLayout;
 use vectorcraft_text::embed::Embedding;
 
+use crate::forms::Mark;
 use crate::lab_spot::{find, rfind};
 use crate::marks::PageBoxes;
 use crate::output::ColorOut;
@@ -71,6 +72,12 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     let mut ex = Exporter::new(doc, set);
     ex.non_printing = set.include_non_printing || set.create_layers;
     ex.out = w.out.clone();
+    // A knockout page group draws the layers' objects one by one, not layer by layer.
+    ex.layers = set.writes_layers() && !doc.page_knockout;
+    if set.writes_layers() && doc.page_knockout {
+        warnings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
+    }
+    ex.overprint = set.advanced.overprint == crate::Overprint::Preserve;
     // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed, and by the
     // printer's marks around that.
     let bleed = set.bleed_of(doc);
@@ -97,8 +104,10 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         };
         w.page(&mut ex, &sheet).map_err(|_| PdfError::BadArtboard(i))?;
     }
+    let (layers, overprinted) = (ex.layers, ex.overprinted);
     w.absorb(ex);
     let (bytes, more) = w.finish()?;
+    let bytes = crate::forms::finish(bytes, doc, set, layers, overprinted)?;
     let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
     let bytes = crate::encrypt::protect(bytes, set)?;
     warnings.extend(more);
@@ -435,6 +444,15 @@ pub(crate) struct Exporter<'a> {
     /// The fonts real text is written in, by face id, with their units per em; `None` for faces
     /// that can't be embedded.
     fonts: HashMap<u32, Option<(krilla::text::Font, f64)>>,
+    /// Top-level layers are drawn as forms marked for their optional content groups
+    /// ([`crate::forms`]).
+    pub layers: bool,
+    /// A top-level layer's form is being drawn.
+    in_layer: bool,
+    /// Overprinting fills and strokes are drawn as forms marked to overprint.
+    pub overprint: bool,
+    /// An overprinting fill or stroke was drawn so.
+    pub overprinted: bool,
 }
 
 impl<'a> Exporter<'a> {
@@ -457,6 +475,10 @@ impl<'a> Exporter<'a> {
             convert: true,
             outline_text: set.advanced.outline_text,
             fonts: HashMap::new(),
+            layers: false,
+            in_layer: false,
+            overprint: false,
+            overprinted: false,
         }
     }
 
@@ -786,10 +808,12 @@ impl Exporter<'_> {
         if !m.clip || m.invert {
             cover(&mut ms, page, if m.clip { 0 } else { 255 }, 1.0);
         }
-        // Mask art is a picture of its own: it takes no part in a knockout group around the object.
+        // Mask art is a picture of its own: it takes no part in a knockout group around the object,
+        // and has no inks to overprint.
         let knockout = std::mem::take(&mut self.knockout);
+        let overprint = std::mem::take(&mut self.overprint);
         self.node(&mut ms, &m.art, page, true);
-        self.knockout = knockout;
+        (self.knockout, self.overprint) = (knockout, overprint);
         if m.invert {
             ms.push_blend_mode(krilla::blend::BlendMode::Difference);
             cover(&mut ms, page, 255, 1.0);
@@ -837,7 +861,9 @@ impl Exporter<'_> {
         let alpha = {
             let mut ab = ms.stream_builder();
             let mut als = ab.surface();
+            let overprint = std::mem::take(&mut self.overprint);
             self.node(&mut als, &shape, page, false);
+            self.overprint = overprint;
             als.finish();
             krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
         };
@@ -849,6 +875,18 @@ impl Exporter<'_> {
     }
 
     fn node(&mut self, s: &mut Surface, n: &Node, page: Rect, force: bool) {
+        if self.layers
+            && !self.in_layer
+            && let NodeKind::Layer { template: false, printable, .. } = n.kind
+            && (printable || self.non_printing)
+            && let Some(i) = self.doc.layers.iter().position(|l| std::ptr::eq(&**l, n))
+        {
+            // A PDF layer: hidden layers are written too (their group is off).
+            self.in_layer = true;
+            crate::forms::form(s, Mark::Layer(i), |s| self.node(s, n, page, true));
+            self.in_layer = false;
+            return;
+        }
         if !force && !n.visible {
             return;
         }
@@ -958,32 +996,47 @@ impl Exporter<'_> {
                         continue;
                     }
                     self.warn_raster(&fl.effects, || "fills".into());
-                    if self.area(s, &path, rule(r), &fl.paint, (fl.opacity, fl.blend), bounds, bounds) {
-                        continue;
-                    }
-                    let Some(paint) = self.paint(&fl.paint, bounds) else { continue };
-                    let bl = fl.blend != BlendMode::Normal;
-                    if bl {
-                        s.push_blend_mode(blend(fl.blend));
-                    }
-                    s.set_stroke(None);
-                    s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: rule(r) }));
-                    s.draw_path(&path);
-                    if bl {
-                        s.pop();
-                    }
+                    self.overprinting(s, fl.overprint, &fl.paint, |ex, s| {
+                        if ex.area(s, &path, rule(r), &fl.paint, (fl.opacity, fl.blend), bounds, bounds) {
+                            return;
+                        }
+                        let Some(paint) = ex.paint(&fl.paint, bounds) else { return };
+                        let bl = fl.blend != BlendMode::Normal;
+                        if bl {
+                            s.push_blend_mode(blend(fl.blend));
+                        }
+                        s.set_stroke(None);
+                        s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: rule(r) }));
+                        s.draw_path(&path);
+                        if bl {
+                            s.pop();
+                        }
+                    });
                 }
                 AppearanceItem::Stroke(st) => {
                     if !st.visible || st.paint.is_none() || st.width <= 0.0 {
                         continue;
                     }
                     self.warn_raster(&st.effects, || "strokes".into());
-                    self.stroke(s, bp, &path, r, st, page, bounds);
+                    self.overprinting(s, st.overprint, &st.paint, |ex, s| ex.stroke(s, bp, &path, r, st, page, bounds));
                 }
             }
         }
         s.set_fill(None);
         s.set_stroke(None);
+    }
+
+    /// Draw a fill or stroke of `paint` with `draw`: as a form marked to overprint when it
+    /// `overprints`, paints and overprints are kept (but not a white one with Discard White
+    /// Overprint).
+    fn overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
+        let white = || self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint);
+        if overprints && self.overprint && !paint.is_none() && !white() {
+            self.overprinted = true;
+            crate::forms::form(s, Mark::Overprint, |s| draw(self, s));
+        } else {
+            draw(self, s);
+        }
     }
 
     /// Is `p` a paint PDF has no paint for, which [`Self::area`] draws as art: a pattern swatch or
@@ -1234,25 +1287,28 @@ impl Exporter<'_> {
                 bp.extend(g.outline.iter());
             }
             let fill = &run.style.fill;
-            // The outlines left to fill as paths: all of them, or those real text leaves.
-            let outlines = match plain.as_deref().filter(|_| !fill.is_none() && !self.area_paint(fill)) {
-                Some(text) => Cow::Owned(self.glyph_text(s, &layout, i, text, fill)),
-                None => Cow::Borrowed(&bp),
-            };
-            let opaque = (1.0, BlendMode::Normal);
-            if let Some(path) = to_path(&outlines)
-                && !self.area(s, &path, krilla::paint::FillRule::NonZero, fill, opaque, layout.bounds, outlines.bounding_box())
-                && let Some(paint) = self.paint(fill, layout.bounds)
-            {
-                s.set_stroke(None);
-                s.set_fill(Some(Fill { paint, opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
-                s.draw_path(&path);
-            }
+            self.overprinting(s, run.style.overprint_fill, fill, |ex, s| {
+                // The outlines left to fill as paths: all of them, or those real text leaves.
+                let outlines = match plain.as_deref().filter(|_| !fill.is_none() && !ex.area_paint(fill)) {
+                    Some(text) => Cow::Owned(ex.glyph_text(s, &layout, i, text, fill)),
+                    None => Cow::Borrowed(&bp),
+                };
+                let opaque = (1.0, BlendMode::Normal);
+                if let Some(path) = to_path(&outlines)
+                    && !ex.area(s, &path, krilla::paint::FillRule::NonZero, fill, opaque, layout.bounds, outlines.bounding_box())
+                    && let Some(paint) = ex.paint(fill, layout.bounds)
+                {
+                    s.set_stroke(None);
+                    s.set_fill(Some(Fill { paint, opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+                    s.draw_path(&path);
+                }
+            });
             if run.style.has_stroke()
                 && let Some(path) = to_path(&bp)
             {
                 // Character strokes are drawn in text space, with their cap, join and dashes.
-                self.stroke(s, &bp, &path, FillRule::NonZero, &run.style.stroke_layer(), page, layout.bounds);
+                let st = run.style.stroke_layer();
+                self.overprinting(s, st.overprint, &st.paint, |ex, s| ex.stroke(s, &bp, &path, FillRule::NonZero, &st, page, layout.bounds));
             }
         }
         s.set_fill(None);
@@ -1269,16 +1325,18 @@ impl Exporter<'_> {
     fn text_items(&mut self, s: &mut Surface, items: &[AppearanceItem], bp: &BezPath, path: &Path, page: Rect, tb: Rect) {
         for item in items {
             match item {
-                AppearanceItem::Fill(fl) if fl.visible => {
-                    if !self.area(s, path, krilla::paint::FillRule::NonZero, &fl.paint, (fl.opacity, fl.blend), tb, bp.bounding_box())
-                        && let Some(paint) = self.paint(&fl.paint, tb)
+                AppearanceItem::Fill(fl) if fl.visible => self.overprinting(s, fl.overprint, &fl.paint, |ex, s| {
+                    if !ex.area(s, path, krilla::paint::FillRule::NonZero, &fl.paint, (fl.opacity, fl.blend), tb, bp.bounding_box())
+                        && let Some(paint) = ex.paint(&fl.paint, tb)
                     {
                         s.set_stroke(None);
                         s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: krilla::paint::FillRule::NonZero }));
                         s.draw_path(path);
                     }
+                }),
+                AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {
+                    self.overprinting(s, st.overprint, &st.paint, |ex, s| ex.stroke(s, bp, path, FillRule::NonZero, st, page, tb))
                 }
-                AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => self.stroke(s, bp, path, FillRule::NonZero, st, page, tb),
                 _ => {}
             }
         }

@@ -156,7 +156,7 @@ fn pdf_settings_summarise_changes_and_warnings() {
     let changed: Vec<&str> = v["changed"].as_array().unwrap().iter().map(|c| c["option"].as_str().unwrap()).collect();
     assert_eq!(changed, ["compatibility", "compression.compressText", "createLayers", "security.copy"], "key order");
     assert_eq!(v["changed"][0]["value"], "1.5");
-    assert_eq!(v["warnings"].as_array().unwrap().len(), 2, "layers and permissions: {}", v["warnings"]);
+    assert_eq!(v["warnings"].as_array().unwrap().len(), 1, "permissions (PDF layers are written at 1.5): {}", v["warnings"]);
     assert!(!v.to_string().contains("Password"), "passwords never come back");
     assert!(s.execute("document.pdfSettings", &json!({"compatibility": "9"})).is_err());
     // With the document: the in-memory export adds the document's own warnings.
