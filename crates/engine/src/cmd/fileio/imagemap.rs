@@ -125,8 +125,8 @@ fn polygon(path: &kurbo::BezPath, tolerance: f64) -> Option<Vec<kurbo::Point>> {
     (pts.len() >= 3).then_some(pts)
 }
 
-/// Escape text for an HTML attribute.
-fn attr(s: &str) -> String {
+/// Escape text for an HTML attribute (or element text).
+pub(crate) fn attr(s: &str) -> String {
     s.chars().filter(|c| !c.is_control()).fold(String::with_capacity(s.len()), |mut o, c| {
         match c {
             '&' => o.push_str("&amp;"),

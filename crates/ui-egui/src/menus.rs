@@ -473,6 +473,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
     ),
+    (
+        "file.saveForWeb",
+        "Save for Web (Legacy)…",
+        "Cmd+Alt+Shift+S",
+        "{} open Save for Web (dialog `saveForWeb`: fields = the webExport.settings settings, `preset` loads a preset, __view: original|optimized|2up|4up, __zoom, __kbps; Save… remembers the settings and writes the files, Done only remembers them); with settings = document.exportForWeb, written to path, else a picked file (the web downloads the files) → {path, files, bytes}",
+    ),
+    (
+        "file.saveForWeb.browser",
+        "Preview in Browser",
+        "",
+        "{…document.exportForWeb settings} write the HTML page and its images to a temporary folder and open the page in the default browser (desktop) → {path}",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -855,6 +867,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::eps_options::open(app, p);
             Ok(Value::Null)
         }
+        // Save for Web: its dialog; with settings, write the files.
+        "file.saveForWeb" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::save_for_web::open(app),
+        "file.saveForWeb" => crate::dialogs::save_for_web::save(app, p.clone()),
+        "file.saveForWeb.browser" => crate::dialogs::save_for_web::browser_preview(app, p),
         _ => return None,
     };
     Some(r)
@@ -1089,6 +1105,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.placementOptionsDialog" => selected_image(app, |_| true),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
+        "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1149,7 +1166,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Export As…", "file.exportAs"),
                         c("Export As SVG…", "file.export.svg"),
                         c("Export As PNG…", "file.export.png"),
-                        todos("Save for Web (Legacy)…", "Cmd+Alt+Shift+S"),
+                        c("Save for Web (Legacy)…", "file.saveForWeb"),
                     ],
                 ),
                 c("Export Selection…", "document.exportSelection"),

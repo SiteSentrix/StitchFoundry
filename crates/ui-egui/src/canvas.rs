@@ -564,7 +564,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
 
 /// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), cached per
 /// look, and its cell size in screen points.
-fn checker_texture(ctx: &egui::Context, setup: &vectorcraft_doc::DocSetup) -> (egui::TextureHandle, f32) {
+pub(crate) fn checker_texture(ctx: &egui::Context, setup: &vectorcraft_doc::DocSetup) -> (egui::TextureHandle, f32) {
     let colors = setup.grid_colors.map(|c| crate::panels::c32(&c));
     let id = egui::Id::new("transparency-grid-tile");
     let cached = ctx.data(|d| d.get_temp::<([Color32; 2], egui::TextureHandle)>(id)).filter(|(c, _)| *c == colors);

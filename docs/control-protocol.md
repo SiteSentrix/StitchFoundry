@@ -374,3 +374,12 @@ the save dialog) opens `tiffOptions`, `bmpOptions` or `tgaOptions`: the raster r
 (16, 24, 32). The BMP dialog keeps its choices writable together (OS/2 falls back to 24 bits and turns RLE and flipped
 rows off; RLE turns flipped rows off). `ui.dialog.set` the fields and `ui.dialog.confirm` writes the file(s) with
 `document.export`.
+
+Save for Web: File → Export → Save for Web (Legacy)… (`file.saveForWeb`, Ctrl/Cmd+Alt+Shift+S) opens the `saveForWeb`
+dialog on the remembered settings (`webExport.settings`). Its fields are the `document.exportForWeb` settings
+(`format`, `colors`, `reduction`, `dither`, `quality`, `colorTable`, `width`, `percent`, `output`…; set `preset` to load
+a preset) plus `__view` (`original`, `optimized`, `2up`, `4up`), `__zoom` (`fit` or a percentage), `__kbps` and
+`__color` (the colour table's selected colour). `ui.dialog.confirm` remembers the settings and saves (a save panel for
+the image, or the page with HTML output; the web downloads the files); with `discard: true` it is Done: it remembers
+the settings and closes. `file.saveForWeb` with settings saves without the dialog, and `file.saveForWeb.browser`
+writes the HTML page to a temporary folder and opens it in the default browser (desktop).

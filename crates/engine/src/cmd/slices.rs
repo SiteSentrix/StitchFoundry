@@ -209,7 +209,7 @@ fn selected(s: &Session) -> Result<Vec<NodeId>> {
     Ok(selected_slices(&st.doc, &st.selection))
 }
 
-fn selected_slices(d: &Document, sel: &vectorcraft_doc::Selection) -> Vec<NodeId> {
+pub(crate) fn selected_slices(d: &Document, sel: &vectorcraft_doc::Selection) -> Vec<NodeId> {
     let objects = sel.objects.iter().filter(|id| d.node(**id).is_some_and(|n| n.slice.is_some()));
     dedup(sel.slices.iter().chain(objects).copied().collect())
 }

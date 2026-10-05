@@ -478,7 +478,7 @@ pub fn export_pdf(app: &mut VectorcraftApp, params: Value) -> Result<Value, Stri
 
 /// `path` as an absolute `file://` URL for the system opener (bytes other than letters, digits and
 /// `/-._~:` percent-encoded).
-fn file_url(path: &str) -> String {
+pub(crate) fn file_url(path: &str) -> String {
     let abs = std::path::absolute(path).map_or_else(|_| path.to_string(), |p| p.to_string_lossy().into_owned());
     let abs = abs.replace('\\', "/");
     let mut url = String::from(if abs.starts_with('/') { "file://" } else { "file:///" });
