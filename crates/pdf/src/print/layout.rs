@@ -102,7 +102,7 @@ fn art_bounds(doc: &Document) -> Option<Rect> {
 }
 
 /// The regions that print: `(artboard, rect)`.
-fn regions(doc: &Document, set: &PrintSettings) -> Result<Vec<(Option<usize>, Rect)>, PdfError> {
+pub(crate) fn regions(doc: &Document, set: &PrintSettings) -> Result<Vec<(Option<usize>, Rect)>, PdfError> {
     let count = doc.artboards.len();
     let picked: Vec<usize> = match set.artboards {
         PrintArtboards::Ignore => {
@@ -128,6 +128,22 @@ fn scaled(sides: [f64; 4], (sx, sy): (f64, f64)) -> [f64; 4] {
     [sides[0] * sy, sides[1] * sy, sides[2] * sx, sides[3] * sx]
 }
 
+/// The tiles along one axis of a printed area `extent` long, `tile` long each and `step` apart:
+/// the first (tile `k` starts at `start + k × step`) and how many. Tiles showing no more of the area
+/// than the `overlap` are left out. Without a `start`, the first tile starts at the area's edge.
+fn span(start: Option<f64>, extent: f64, tile: f64, step: f64, overlap: f64) -> (f64, f64) {
+    // Tiles that end (or start) exactly on an edge show none of the area beyond it.
+    const EPS: f64 = 1e-6;
+    match start {
+        None => (0.0, ((extent - overlap) / step).ceil().max(1.0)),
+        Some(g) => {
+            let first = ((overlap - tile - g) / step + EPS).floor() + 1.0;
+            let last = ((extent - overlap - g) / step - EPS).ceil() - 1.0;
+            (first, (last - first + 1.0).max(1.0))
+        }
+    }
+}
+
 /// The page turns of a `w` × `h` paper (flipped, emulsion down, transverse) as one transform from
 /// the paper onto the page, and the page's size.
 fn turns(set: &PrintSettings, (w, h): (f64, f64), flipped: bool) -> (Affine, (f64, f64)) {
@@ -151,6 +167,7 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
     let marks = set.marks.printer_marks();
     let bleed = set.bleed.of(doc);
     let (pw, ph) = set.paper();
+    let origin = set.tile_origin.placed.then_some((set.tile_origin.x, set.tile_origin.y));
     let (mut pages, mut grids) = (vec![], vec![]);
     for (artboard, r) in regions(doc, set)? {
         let what = artboard.map_or_else(|| "The art".to_string(), |i| format!("Artboard {}", i + 1));
@@ -225,9 +242,17 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             page_bleed,
         };
         if !set.scaling.tiles() {
-            let (fx, fy) = set.placement.origin.factors();
-            let x = imageable.x0 + (imageable.width() - extent.0) * fx + set.placement.x;
-            let y = imageable.y0 + (imageable.height() - extent.1) * fy + set.placement.y;
+            // The printed area's top-left corner: where the tile origin puts it, else the placement.
+            let (x, y) = match origin {
+                Some((ox, oy)) => (imageable.x0 - ox * scale.0 - most[2], imageable.y0 - oy * scale.1 - most[0]),
+                None => {
+                    let (fx, fy) = set.placement.origin.factors();
+                    (
+                        imageable.x0 + (imageable.width() - extent.0) * fx + set.placement.x,
+                        imageable.y0 + (imageable.height() - extent.1) * fy + set.placement.y,
+                    )
+                }
+            };
             let trim = Rect::new(x + most[2], y + most[0], x + most[2] + size.0, y + most[0] + size.1);
             if !imageable.inflate(0.01, 0.01).contains_rect(Rect::new(x, y, x + extent.0, y + extent.1)) {
                 warnings.push(format!("{what} with its bleed and marks is larger than the imageable area: part of it doesn't print"));
@@ -242,7 +267,13 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             return Err(PdfError::BadSetting(format!("overlap: {o} pt is half a tile or more")));
         }
         let step = (tile.0 - o, tile.1 - o);
-        let (cols, rows) = (((extent.0 - o) / step.0).ceil().max(1.0), ((extent.1 - o) / step.1).ceil().max(1.0));
+        // The tile origin's page starts the grid: its imageable area's corner is the origin's point
+        // (a full page's imageable area is inside the margin).
+        let inside = if set.scaling == PrintScaling::TileFull { m } else { 0.0 };
+        let start = origin.map(|(ox, oy)| (most[2] + ox * scale.0 - inside, most[0] + oy * scale.1 - inside));
+        let (first_x, cols) = span(start.map(|s| s.0), extent.0, tile.0, step.0, o);
+        let (first_y, rows) = span(start.map(|s| s.1), extent.1, tile.1, step.1, o);
+        let grid = (start.map_or(0.0, |s| s.0) + first_x * step.0, start.map_or(0.0, |s| s.1) + first_y * step.1);
         if cols * rows > MAX_TILES as f64 {
             return Err(PdfError::BadSetting(format!("{what} would print on more than {MAX_TILES} tiles: scale it down")));
         }
@@ -259,7 +290,8 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
         let at = if set.scaling == PrintScaling::TileFull { (0.0, 0.0) } else { (imageable.x0, imageable.y0) };
         let window = |t: usize| {
             let (c, rw) = ((t % cols) as f64, (t / cols) as f64);
-            Rect::new(c * step.0, rw * step.1, c * step.0 + tile.0, rw * step.1 + tile.1)
+            let (x, y) = (grid.0 + c * step.0, grid.1 + rw * step.1);
+            Rect::new(x, y, x + tile.0, y + tile.1)
         };
         for &t in &pick {
             let w = window(t);

@@ -22,7 +22,8 @@ use serde_json::{Value, json};
 use vectorcraft_color::cms::Intent;
 use vectorcraft_geom::Rect as DRect;
 use vectorcraft_pdf::{
-    Choice, Emulsion, FontDownload, Media, Orientation, Origin, OutputMode, PrintArtboards, PrintImage, PrintLayers, PrintScaling, PrintSettings,
+    Choice, Emulsion, FontDownload, Media, Orientation, Origin, OutputMode, PrintArtboards, PrintImage, PrintLayers, PrintOverprints, PrintScaling,
+    PrintSettings,
 };
 
 use super::save_pdf::{TOP_LABEL_WIDTH, choice, current_section, flag, get, heading, length, note, number, pick, row, row_with, set, text};
@@ -64,6 +65,9 @@ static DEFAULTS: LazyLock<Value> = LazyLock::new(|| serde_json::to_value(PrintSe
 pub(super) fn defaults(kind: &str) -> Option<&'static Value> {
     (kind == KIND || kind == PRESET_KIND).then(|| &*DEFAULTS)
 }
+
+/// Set when the Print Tiling tool placed the pages (`tileOrigin`): the placement is ignored.
+const PLACED: &str = "tileOrigin.placed";
 
 /// The fields that aren't print settings.
 const NOT_SETTINGS: [&str; 5] = ["printer", "toFile", "discard", "preset", "name"];
@@ -507,8 +511,17 @@ pub(super) fn move_placement(d: &mut Dialog, sheet: &Value, (dx, dy): (f64, f64)
     }
     // The transform's linear part is the page's turn times the scale, and the turn's inverse is
     // its transpose: the columns over the scale.
-    let x = get(d, "placement.x").as_f64().unwrap_or(0.0) + (a * dx + b * dy) / sx;
-    let y = get(d, "placement.y").as_f64().unwrap_or(0.0) + (c * dx + e * dy) / sy;
+    let (px, py) = ((a * dx + b * dy) / sx, (c * dx + e * dy) / sy);
+    if get(d, PLACED).as_bool() == Some(true) {
+        // Pages the Print Tiling tool placed: their corner moves the other way over the art.
+        let x = get(d, "tileOrigin.x").as_f64().unwrap_or(0.0) - px / sx;
+        let y = get(d, "tileOrigin.y").as_f64().unwrap_or(0.0) - py / sy;
+        set(d, "tileOrigin.x", json!(round2(x)));
+        set(d, "tileOrigin.y", json!(round2(y)));
+        return;
+    }
+    let x = get(d, "placement.x").as_f64().unwrap_or(0.0) + px;
+    let y = get(d, "placement.y").as_f64().unwrap_or(0.0) + py;
     set(d, "placement.x", json!(round2(x)));
     set(d, "placement.y", json!(round2(y)));
 }
@@ -606,8 +619,9 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     let scaling = choice::<PrintScaling>(d, "scaling").unwrap_or(PrintScaling::None);
     let tiles = scaling.tiles();
+    let placed = get(d, PLACED).as_bool() == Some(true);
     row(ui, "Placement:", |ui| {
-        ui.add_enabled_ui(!tiles, |ui| {
+        ui.add_enabled_ui(!tiles && !placed, |ui| {
             let origin = choice::<Origin>(d, "placement.origin").unwrap_or_default();
             let current = Origin::ALL.iter().position(|o| *o == origin).unwrap_or(4);
             if let Some(o) = widgets::reference_point(ui, current).and_then(|i| Origin::ALL.get(i)) {
@@ -619,6 +633,14 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             length(ui, d, "placement.y", unit, true);
         });
     });
+    if placed {
+        row(ui, "", |ui| {
+            note(ui, "The Print Tiling tool placed the pages.");
+            if widgets::flat_button(ui, "Reset", 56.0).on_hover_text("Place the pages with the placement again").clicked() {
+                set(d, PLACED, json!(false));
+            }
+        });
+    }
     row(ui, "Scaling:", |ui| {
         pick::<PrintScaling>(ui, d, "scaling", 180.0, |_| true);
     });
@@ -709,6 +731,10 @@ fn graphics(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 fn color(ui: &mut egui::Ui, d: &mut Dialog) {
+    let profiles = vectorcraft_color::cms::profiles();
+    let names: Vec<&str> = std::iter::once(SAME_AS_SOURCE).chain(profiles.iter().map(|p| p.name.as_str())).collect();
+    row(ui, "Printer profile:", |ui| super::save_pdf::profile_pick(ui, d, "color.profile", &names, true));
+    note(ui, "Composite colours are converted to it; separations separate with it when it is a CMYK profile.");
     row(ui, "Rendering intent:", |ui| {
         let current = serde_json::from_value::<Intent>(get(d, "color.intent").clone()).unwrap_or_default();
         let labels: Vec<&str> = Intent::ALL.iter().map(Intent::label).collect();
@@ -725,7 +751,26 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     heading(ui, "Printer");
     row(ui, "Unprintable margin:", |ui| length(ui, d, "margin", app.session.general_unit(), true));
     note(ui, "The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.");
+    let composite = choice::<OutputMode>(d, "output.mode") != Some(OutputMode::Separations);
+    flag(ui, d, "advanced.printAsBitmap", "Print as Bitmap", composite);
+    note(ui, "Each page prints as one image, at the document's raster effects resolution.");
+    heading(ui, "Overprint and Transparency Flattener Options");
+    row(ui, "Overprints:", |ui| {
+        ui.add_enabled_ui(composite, |ui| pick::<PrintOverprints>(ui, d, "advanced.overprints", 160.0, |_| true));
+    });
+    let presets = app.session.flattener_presets();
+    let names: Vec<&str> = std::iter::once(KEEP_TRANSPARENCY).chain(presets.iter().map(|p| p.name.as_str())).collect();
+    row(ui, "Preset:", |ui| super::save_pdf::profile_pick(ui, d, "advanced.flattenerPreset", &names, true));
+    note(
+        ui,
+        "Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).",
+    );
 }
+
+/// The Printer Profile entry for no conversion.
+const SAME_AS_SOURCE: &str = "Same As Source";
+/// The flattener Preset entry for transparency printed as it is.
+const KEEP_TRANSPARENCY: &str = "None (keep transparency)";
 
 /// The section an option is set in, and whether its first key is the section's own object
 /// (`output.mode` → Output › Mode).
@@ -736,6 +781,7 @@ pub(super) fn section_of(option: &str) -> (usize, bool) {
         "graphics" => (3, true),
         "color" => (4, true),
         "margin" => (5, false),
+        "advanced" => (5, true),
         _ => (0, false),
     }
 }
@@ -767,6 +813,7 @@ pub(super) fn labelled(changed: &mut [Value]) {
             "output.emulsion" => label::<Emulsion>(id),
             "output.image" => label::<PrintImage>(id),
             "graphics.fonts" => label::<FontDownload>(id),
+            "advanced.overprints" => label::<PrintOverprints>(id),
             "color.intent" => serde_json::from_value::<Intent>(c["value"].clone()).ok().map(|i| i.label()),
             _ => None,
         };

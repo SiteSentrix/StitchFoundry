@@ -289,6 +289,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !app.session.slices_hidden() {
         slice_overlay(app, &painter, &xf);
     }
+    if app.session.active().is_some_and(|d| d.print_tiling) || app.session.tool_id() == "printTiling" {
+        print_tiling_overlay(app, &painter, &xf);
+    }
 
     // Selection visuals and tool overlays.
     if app.ui.view.edges {
@@ -954,6 +957,40 @@ fn slice_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         }
     }
 }
+
+/// The print tiling (View → Show Print Tiling, or the Print Tiling tool): each page of the
+/// document's print settings as `print.preview` lays it out, its paper edge and its imageable
+/// area dashed, numbered at its top left; tiles outside the tile range dimmer. Cached per revision.
+fn print_tiling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let Some(st) = app.session.active() else { return };
+    let key = (st.uid, st.revision);
+    let pages = match &app.canvas.print_tiling {
+        Some((k, pages)) if *k == key => pages.clone(),
+        _ => {
+            // Settings that can't print have no pages to show.
+            let pages = std::sync::Arc::new(vectorcraft_engine::cmd::printtiling::pages(&st.doc).unwrap_or_default());
+            app.canvas.print_tiling = Some((key, pages.clone()));
+            pages
+        }
+    };
+    let font = egui::FontId::proportional(10.0);
+    let ring = |r: [f64; 4]| {
+        let q = xf.quad(Rect::new(r[0], r[1], r[2], r[3]));
+        q.iter().chain(q.first()).copied().collect::<Vec<Pos2>>()
+    };
+    for page in pages.iter() {
+        let color = if page.printed { PRINT_TILING } else { PRINT_TILING.gamma_multiply(0.45) };
+        p.add(Shape::line(ring(page.page), Stroke::new(0.75, color)));
+        let inner = ring(page.imageable);
+        p.extend(Shape::dashed_line(&inner, Stroke::new(1.0, color), 4.0, 3.0));
+        if let Some(corner) = inner.iter().copied().reduce(|a, b| pos2(a.x.min(b.x), a.y.min(b.y))) {
+            p.text(corner + vec2(3.0, 2.0), egui::Align2::LEFT_TOP, page.number.to_string(), font.clone(), color);
+        }
+    }
+}
+
+/// The print tiling's lines: a neutral grey that reads on the paper and on the pasteboard.
+const PRINT_TILING: Color32 = Color32::from_gray(96);
 
 fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(st) = app.session.active() else { return };

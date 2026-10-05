@@ -4,39 +4,49 @@
 //! - General: copies (collated or not), reverse order, the artboards (all, a range or ignored:
 //!   all the art as one page), blank artboards skipped, the paper and its orientation (or turned
 //!   to each artboard's), transverse, which layers print (template layers never do), the
-//!   placement on the imageable area, and the scale: none, fit, custom, or tiles of the paper or
-//!   of its imageable area, overlapping, a range of them.
+//!   placement on the imageable area (or where the Print Tiling tool put the pages,
+//!   [`TileOrigin`]), and the scale: none, fit, custom, or tiles of the paper or of its imageable
+//!   area, overlapping, a range of them.
 //! - Marks and bleed as PDF export draws them ([`crate::MarkSettings`], [`crate::BleedSettings`]),
 //!   around the artboard on the paper, at the paper's scale.
 //! - Output: composite, or separations, one page per ink that prints ([`print_inks`]) in the
 //!   grey of its coverage (overprints honoured, spot colours as process if asked), emulsion down
 //!   (mirrored), negative (inverted).
-//! - Colour management: the rendering intent colours are separated with, and whether CMYK
-//!   colours keep their numbers.
+//! - Colour management: the printer profile composite colours are converted to (and
+//!   separations separate with), the rendering intent, and whether CMYK colours keep their
+//!   numbers.
+//! - Advanced: overprints in composite output preserved, discarded or simulated (as Overprint
+//!   Preview shows them). Print as Bitmap and the flattener preset need the renderer and the
+//!   flattener: the app applies them to the document before printing it.
 //!
 //! Halftone screens and flatness are left to the output device (warnings say so). [`preview`]
 //! lists the pages, tiles and inks without writing the file; [`plan`] lays the job out for other
-//! writers (PostScript), which can write screens and flatness themselves.
+//! writers (PostScript), which can write screens and flatness themselves; [`tiling`] turns the
+//! layout into the pages in document space (View → Show Print Tiling).
 
 mod layout;
 mod plates;
 mod settings;
+mod tiling;
 
 use std::borrow::Cow;
 use std::sync::Arc;
 
 use kurbo::{Affine, Rect};
 use serde::Serialize;
+use vectorcraft_color::cms::{self, ProfileKind};
 use vectorcraft_doc::marks::PrinterMarks;
+use vectorcraft_doc::overprint::{clear_overprints, multiply_overprints};
 use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 
 pub use layout::{MAX_TILES, TileGrid};
 pub use plates::print_inks;
 pub use settings::*;
+pub use tiling::{TilingPage, tiling};
 
 use crate::export::{Exporter, Sheet, Writer};
 use crate::marks::PageBoxes;
-use crate::{CompressionSettings, PdfError, PdfSettings};
+use crate::{AdvancedSettings, ColorConversion, CompressionSettings, OutputSettings, Overprint, PdfError, PdfSettings};
 use layout::Layout;
 use plates::Separator;
 
@@ -145,12 +155,61 @@ pub fn keep_layers(nodes: &mut Vec<Arc<Node>>, which: PrintLayers) {
     });
 }
 
+/// `doc` as `set` prints it: live effects applied (raster effects are rendered by the app first),
+/// only the layers that print, overprints in composite output as [`PrintAdvanced::overprints`]
+/// says.
+pub fn printed_document<'a>(doc: &'a Document, set: &PrintSettings) -> Cow<'a, Document> {
+    let mut doc = vectorcraft_effects::bake_document(doc).map_or(Cow::Borrowed(doc), Cow::Owned);
+    let d = doc.to_mut();
+    keep_layers(&mut d.layers, set.print_layers);
+    composite_overprints(d, set);
+    doc
+}
+
+/// Overprinting fills and strokes in composite output: discarded (they knock out) or simulated
+/// (drawn with Multiply, as Overprint Preview shows them), after which nothing overprints any
+/// more; or preserved. Separations always honour them.
+fn composite_overprints(doc: &mut Document, set: &PrintSettings) {
+    let how = set.advanced.overprints;
+    if set.output.mode == OutputMode::Separations || how == PrintOverprints::Preserve {
+        return;
+    }
+    let discard_white = doc.setup.discard_white_overprint;
+    let symbols = doc.symbols.iter_mut().map(|s| &mut s.art);
+    let nodes = doc.layers.iter_mut().chain(symbols).chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
+    for n in nodes {
+        if how == PrintOverprints::Simulate {
+            multiply_overprints(n, discard_white);
+        }
+        clear_overprints(n);
+    }
+}
+
+/// How composite output writes colours: converted to the printer profile (CMYK colours keep
+/// their numbers with Preserve CMYK Numbers), overprints kept unless discarded or simulated.
+fn composite_pdf(set: &PrintSettings) -> (OutputSettings, AdvancedSettings) {
+    let profile = set.color.profile.trim();
+    let output = if profile.is_empty() {
+        OutputSettings::default()
+    } else {
+        let conversion = if set.color.preserve_numbers { ColorConversion::PreserveNumbers } else { ColorConversion::Destination };
+        OutputSettings { conversion, destination: profile.to_string(), ..Default::default() }
+    };
+    let overprint = if set.advanced.overprints == PrintOverprints::Preserve { Overprint::Preserve } else { Overprint::Discard };
+    (output, AdvancedSettings { overprint, ..Default::default() })
+}
+
+/// What of `doc` prints on pages of its own: each artboard printed (its rect), or all the art
+/// (`None`) with artboards ignored.
+pub fn print_regions(doc: &Document, set: &PrintSettings) -> Result<Vec<(Option<usize>, kurbo::Rect)>, PdfError> {
+    set.check()?;
+    layout::regions(&printed_document(doc, set), set)
+}
+
 impl<'a> Job<'a> {
     fn new(doc: &'a Document, set: &PrintSettings, postscript: bool) -> Result<Self, PdfError> {
         set.check()?;
-        // Live effects print as their result (raster effects are rendered by the app first).
-        let mut doc = vectorcraft_effects::bake_document(doc).map_or(Cow::Borrowed(doc), Cow::Owned);
-        keep_layers(&mut doc.to_mut().layers, set.print_layers);
+        let doc = printed_document(doc, set);
         let mut warnings = vec![];
         let (layouts, tiles) = layout::layout(&doc, set, &mut warnings)?;
         let separations = set.output.mode == OutputMode::Separations;
@@ -172,7 +231,15 @@ impl<'a> Job<'a> {
             warnings.push("ink frequencies and angles are not written as halftone screens yet: the output device's screens apply".into());
         }
         if !separations && doc.layers.iter().any(|l| l.has_overprint()) {
-            warnings.push("overprinting fills and strokes print as knockouts in composite output (separations honour them)".into());
+            warnings.push(
+                "overprinting fills and strokes print as knockouts in composite output (separations honour them; Simulate Overprints prints them as Overprint Preview shows them)".into(),
+            );
+        }
+        if separations && set.advanced.print_as_bitmap {
+            warnings.push("Print as Bitmap is for composite output: separations print the art as it is".into());
+        }
+        if separations && cms::profile(set.color.profile.trim()).is_some_and(|p| p.kind != ProfileKind::Cmyk) {
+            warnings.push("separations separate with a CMYK profile: the RGB printer profile is left out".into());
         }
         if !postscript && !set.graphics.auto_flatness {
             warnings.push("a fixed flatness is not written yet: the output device flattens curves".into());
@@ -330,8 +397,11 @@ pub fn plan<'a>(doc: &'a Document, opts: &PrintOptions) -> Result<PrintPlan<'a>,
 pub fn print(doc: &Document, opts: &PrintOptions) -> Result<PrintReport, PdfError> {
     let plan = plan(doc, opts)?;
     let doc = &*plan.doc;
-    let pdf = PdfSettings { compression: CompressionSettings { compress_text: !opts.uncompressed, ..Default::default() }, ..Default::default() };
     let separations = opts.settings.output.mode == OutputMode::Separations;
+    // Plates are greys already: only composite colours go to the printer profile.
+    let (output, advanced) = if separations { Default::default() } else { composite_pdf(&opts.settings) };
+    let compression = CompressionSettings { compress_text: !opts.uncompressed, ..Default::default() };
+    let pdf = PdfSettings { compression, output, advanced, ..Default::default() };
     let mut w = Writer::new(doc, &pdf, &plan.title, plan.created, !separations && doc.color_mode == ColorMode::Cmyk)?;
     // One exporter per ink (one for composite), each drawing its own document.
     let mut exporters: Vec<Exporter> =
@@ -339,6 +409,8 @@ pub fn print(doc: &Document, opts: &PrintOptions) -> Result<PrintReport, PdfErro
     for ex in &mut exporters {
         ex.non_printing = true;
         ex.intent = opts.settings.color.intent;
+        // The writer's colour output: the printer profile's conversion.
+        ex.out = w.out.clone();
     }
     for &i in &plan.order {
         let Some(s) = plan.sheets.get(i) else { continue };

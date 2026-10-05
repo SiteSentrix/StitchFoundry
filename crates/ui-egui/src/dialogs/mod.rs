@@ -378,3 +378,6 @@ mod tests_print;
 
 #[cfg(test)]
 mod tests_print_presets;
+
+#[cfg(test)]
+mod tests_print_advanced;

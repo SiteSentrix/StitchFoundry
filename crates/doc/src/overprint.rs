@@ -149,6 +149,33 @@ impl Document {
     }
 }
 
+/// Whether any fill or stroke of `n`'s subtree overprints, characters' too.
+fn overprints_anywhere(n: &Node) -> bool {
+    n.appearance.items.iter().any(|i| i.overprint())
+        || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
+        || n.children().is_some_and(|c| c.iter().any(|c| overprints_anywhere(c)))
+}
+
+/// Stop every fill and stroke of `a`'s subtree overprinting (characters' too), copying only the
+/// nodes on the way to them.
+pub fn clear_overprints(a: &mut Arc<Node>) {
+    if !overprints_anywhere(a) {
+        return;
+    }
+    let n = Arc::make_mut(a);
+    for it in &mut n.appearance.items {
+        *it.overprint_mut() = false;
+    }
+    if let NodeKind::Text(t) = &mut n.kind {
+        for r in &mut t.runs {
+            (r.style.overprint_fill, r.style.overprint_stroke) = (false, false);
+        }
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        clear_overprints(c);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

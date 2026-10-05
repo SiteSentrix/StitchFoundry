@@ -1584,3 +1584,43 @@ claims the standard.
 ```json
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"PDF/X-1a:2001","output":{"outputIntent":"VectorCraft Generic CMYK (SWOP-like)","outputCondition":"Coated","trapped":false}}}}
 ```
+
+## Print tiling
+
+View → Show Print Tiling (`view.printTiling {on?}`, per document, not undoable) draws the pages of the document's print
+settings on the canvas: each page's paper edge, its imageable area dashed, numbered (tiles across then down; tiles
+outside `tileRange` dimmer). The Print Tiling tool (`printTiling`) shows them too. `print.tiling {settings?}` answers
+what is drawn, from the layout `print.preview` and both writers (PDF and PostScript) use, so the canvas and the
+printed job agree: `{tileOrigin, pages: [{artboard, number, printed, page, imageable}]}` (`[x0, y0, x1, y1]` in document space; every tile when tiling, else
+each page once, not once per ink).
+
+Dragging with the tool puts the top-left corner of the first page's imageable area where the pointer is (snapping to
+the artboard's edges): `print.tiling.set {origin: [x, y], artboard?}` saves it with the print settings as
+`tileOrigin: {placed: true, x, y}`, measured from the artboard's top-left corner (one undo step). It replaces the
+placement, and tiles start there (going on left and up as far as the art does). A double click on the canvas, or on
+the tool's button, runs `print.tiling.set {reset: true}`: the placement places the pages again. In the Print dialog
+the placement then shows as placed by the tool, with a Reset button; dragging the preview moves the origin.
+
+```json
+{"name":"run_command","arguments":{"command":"view.printTiling","params":{"on":true}}}
+{"name":"run_command","arguments":{"command":"print.tiling.set","params":{"origin":[-36,-36]}}}
+{"name":"run_command","arguments":{"command":"print.tiling","params":{"settings":{"scaling":"tileImageable","scale":{"width":300,"height":300}}}}}
+```
+
+## Print advanced options
+
+The Print dialog's Advanced section and the printer profile are print settings too (`print.setup`, `print.preview`,
+`file.print`): `advanced: {printAsBitmap, overprints: preserve|discard|simulate, flattenerPreset}` and `color:
+{profile}`. In composite output, `discard` makes overprinting fills and strokes knock out and `simulate` prints them
+as Overprint Preview shows them (multiplied); either way the file has no overprint left. Separations always keep
+overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
+`flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
+PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
+`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution.
+`color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
+colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
+CMYK one. Settings saved before these options load with their defaults.
+
+```json
+{"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/proof.pdf","settings":{"advanced":{"overprints":"simulate","flattenerPreset":"High Resolution"},"color":{"profile":"VectorCraft Generic CMYK (SWOP-like)","intent":"perceptual"}}}}}
+```

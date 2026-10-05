@@ -60,6 +60,8 @@ mod tests_place;
 #[cfg(test)]
 mod tests_printps;
 #[cfg(test)]
+mod tests_printtiling;
+#[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
 mod tests_recovery;
@@ -178,10 +180,15 @@ pub struct CanvasCache {
     pub worker_started: bool,
     /// The slices as laid out for (document uid, revision): the canvas draws them every frame.
     pub slices: Option<SliceCache>,
+    /// The print tiling's pages for (document uid, revision) (View → Show Print Tiling).
+    pub print_tiling: Option<PrintTilingCache>,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
 pub type SliceCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_doc::SliceArea>>);
+
+/// [`CanvasCache::print_tiling`]: the print tiling of (document uid, revision).
+pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::TilingPage>>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CacheKey {
@@ -284,6 +291,7 @@ impl VectorcraftApp {
                 worker: None,
                 worker_started: false,
                 slices: None,
+                print_tiling: None,
             },
             perf: Perf::default(),
             integrated_titlebar: false,

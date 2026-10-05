@@ -20,6 +20,7 @@ pub mod meshblend;
 pub mod params;
 pub mod pen;
 pub mod place;
+pub mod printtiling;
 pub mod select;
 pub mod shape;
 pub mod slice;
@@ -357,6 +358,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| distort::create(other))
             .or_else(|| extra::create(other))
             .or_else(|| slice::create(other))
+            .or_else(|| printtiling::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }
