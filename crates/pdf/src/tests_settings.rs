@@ -74,7 +74,6 @@ fn options_not_applied_yet_come_back_as_warnings() {
         (json!({"thumbnails": true}), "thumbnails"),
         (json!({"fastWebView": true}), "fast web view"),
         (json!({"createLayers": true}), "layers"),
-        (json!({"compression": {"color": {"compression": "jpeg"}}}), "image"),
         (json!({"marks": {"registration": true}}), "marks"),
         (json!({"bleed": {"top": 9}}), "bleed"),
         (json!({"output": {"conversion": "destination"}}), "conversion"),
@@ -86,8 +85,14 @@ fn options_not_applied_yet_come_back_as_warnings() {
         let w = settings(v.clone()).warnings();
         assert!(w.len() == 1 && w[0].contains(word), "{v}: {w:?}");
     }
-    // A document bleed, the default view/overprint choices and applied options warn about nothing.
-    for v in [json!({"bleed": {"useDocument": true, "top": 9}}), json!({"viewAfterSaving": true}), json!({"compression": {"compressText": false}})] {
+    // A document bleed, the default view/overprint choices and applied options (image compression
+    // too: a codec the writer lacks is reported when an image needs it) warn about nothing.
+    for v in [
+        json!({"bleed": {"useDocument": true, "top": 9}}),
+        json!({"viewAfterSaving": true}),
+        json!({"compression": {"compressText": false}}),
+        json!({"compression": {"color": {"compression": "jpeg"}, "mono": {"compression": "ccittG4"}}}),
+    ] {
         assert!(settings(v.clone()).warnings().is_empty(), "{v}");
     }
     let r =

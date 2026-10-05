@@ -196,6 +196,10 @@ options accepted but not applied yet, and features approximated or left out. PDF
 Pattern fills and strokes are written as their tiles clipped to the area they paint (a stroke's outline, with its
 dashes, caps, profile, arrowheads and alignment), and freeform gradients as an image of their colour field at the
 document's raster effects resolution, clipped the same way.
+Images follow the `compression` settings of their kind (`color`, `gray`, or `mono` for black-and-white images): above
+`abovePpi` as placed they are resampled (`downsample`: `average`, `subsample` or `bicubic`) to `ppi`, and compressed
+with `zip`, `jpeg` (at `quality`; images with transparency stay lossless) or `auto` (JPEGs stay JPEG, the others
+lossless). `none`, `jpeg2000`, CCITT and `runLength` are written as ZIP, with a warning when an image needs them.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),

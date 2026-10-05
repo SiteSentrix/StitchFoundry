@@ -5,8 +5,8 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform gradients as images (clipped to what they paint), embedded images and text as
-//!   outlined glyph paths. Hidden objects, guides and template layers are skipped. [`PdfSettings`] is the Save PDF
+//!   freeform gradients as images (clipped to what they paint), embedded images (resampled and
+//!   compressed as the Compression settings say) and text as outlined glyph paths. Hidden objects, guides and template layers are skipped. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
 //!   Editing the native document rides along as an embedded file ([`editing()`]).
@@ -155,6 +155,8 @@ mod tests_blend;
 mod tests_charstroke;
 #[cfg(test)]
 mod tests_cmykblend;
+#[cfg(test)]
+mod tests_compression;
 #[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
