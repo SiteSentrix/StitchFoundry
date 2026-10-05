@@ -109,6 +109,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // The tools and the controls under them scroll in a window too short for them.
             widgets::strip_scroll(ui, "toolbar", |ui| {
                 let active = app.session.tool_id();
+                // The tool button whose long press opened its flyout, until the next press.
+                let held_id = egui::Id::new("toolbar-held");
+                if ui.input(|inp| inp.pointer.any_pressed()) {
+                    ui.data_mut(|d| d.remove::<egui::Id>(held_id));
+                }
+                let held: Option<egui::Id> = ui.data(|d| d.get_temp(held_id));
                 let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
                 let mut i = 0;
                 while i < all.len() {
@@ -160,6 +166,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                             let alt = ui.input(|inp| inp.modifiers.alt);
                             if (resp.secondary_clicked() || long_press) && slot.len() > 1 {
                                 open_flyout = Some((slot.clone(), rect));
+                                if long_press {
+                                    ui.data_mut(|d| d.insert_temp(held_id, resp.id));
+                                }
+                            } else if resp.clicked() && held == Some(resp.id) {
+                                // Releasing the long press that opened the flyout leaves it open.
                             } else if resp.clicked() && alt && slot.len() > 1 {
                                 let idx = slot.iter().position(|x| *x == shown.id).unwrap_or(0);
                                 app.select_tool(slot[(idx + 1) % slot.len()]);
@@ -312,7 +323,9 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     );
     if let Some(id) = chosen {
         app.select_tool(id);
-    } else if resp.response.clicked_elsewhere() {
+    } else if resp.response.clicked_elsewhere() && !ctx.input(|i| i.pointer.interact_pos().is_some_and(|p| anchor.contains(p))) {
+        // A click on the flyout's own tool button (the right-click that opened it, or the end of a
+        // long press) leaves it to that button.
         app.ui.flyout = None;
     }
     let _ = theme::semibold;
@@ -408,5 +421,43 @@ pub(crate) mod tests {
         let o = app.session.prefs.eyedropper;
         assert!(o.pick_up.appearance.transparency && !o.apply.appearance.transparency && o.apply.appearance.fill.color);
         assert!(app.run("tool.options", json!({"tool": "zoom"})).is_err());
+    }
+
+    #[test]
+    fn right_clicking_a_tool_group_opens_its_flyout() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        let buttons = frame(&mut app, &ctx, 0.0, vec![]);
+        // Selection, Direct Selection, Lasso, then the Shapes group (Rectangle and its sub-tools).
+        let at = buttons[3].center();
+        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), b(true)]);
+        frame(&mut app, &ctx, 1.05, vec![b(false)]);
+        frame(&mut app, &ctx, 1.1, vec![]);
+        assert!(app.ui.flyout.is_some(), "the right-click opens the flyout and the same click doesn't close it");
+        let menu = ctx.memory(|m| m.area_rect(egui::Id::new("tool-flyout"))).expect("the flyout is shown");
+        assert_eq!(app.session.tool_id(), "selection", "a right-click only opens the flyout");
+        // Its second row is Rounded Rectangle (30 pt rows).
+        let row = egui::pos2(menu.left() + 60.0, menu.top() + 45.0);
+        let p = |pressed| Event::PointerButton { pos: row, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 2.0, vec![Event::PointerMoved(row), p(true)]);
+        frame(&mut app, &ctx, 2.05, vec![p(false)]);
+        assert_eq!((app.session.tool_id(), app.ui.flyout), ("roundedRectangle", None));
+        // A long press opens it too, and releasing the press (a click, being short of 0.8 s) leaves
+        // it open without choosing the button's tool.
+        let p = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 3.0, vec![Event::PointerMoved(at), p(true)]);
+        frame(&mut app, &ctx, 3.5, vec![]);
+        assert!(app.ui.flyout.is_some(), "a long press opens the flyout");
+        frame(&mut app, &ctx, 3.6, vec![p(false)]);
+        frame(&mut app, &ctx, 3.7, vec![]);
+        assert!(app.ui.flyout.is_some(), "releasing the long press leaves the flyout open");
+        // A click anywhere else closes it.
+        let away = egui::pos2(300.0, 1000.0);
+        let c = |pressed| Event::PointerButton { pos: away, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 4.0, vec![Event::PointerMoved(away), c(true)]);
+        frame(&mut app, &ctx, 4.05, vec![c(false)]);
+        assert_eq!((app.session.tool_id(), app.ui.flyout), ("roundedRectangle", None));
     }
 }
