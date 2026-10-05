@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod brush_fx;
+pub mod encode;
 mod freeform;
 mod fx;
 mod group;
@@ -48,16 +49,14 @@ pub fn raster_size(region: Rect, scale: f64) -> Result<(u32, u32), String> {
     if !(scale.is_finite() && scale > 0.0) {
         return Err(format!("invalid scale {scale}"));
     }
-    let w = (region.width() * scale).round().max(1.0);
-    let h = (region.height() * scale).round().max(1.0);
-    let max = f64::from(MAX_RASTER_SIDE);
-    if !(w <= max && h <= max && w * h <= MAX_RASTER_PIXELS as f64) {
+    let (w, h) = region_pixels(region, scale);
+    if !(w <= MAX_RASTER_SIDE && h <= MAX_RASTER_SIDE && u64::from(w) * u64::from(h) <= MAX_RASTER_PIXELS) {
         return Err(format!(
-            "the image would be {w:.0} × {h:.0} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {} megapixels: lower the scale or resolution",
+            "the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {} megapixels: lower the scale or resolution",
             MAX_RASTER_PIXELS / 1_000_000
         ));
     }
-    Ok((w as u32, h as u32))
+    Ok((w, h))
 }
 
 /// Rendering options.
@@ -89,6 +88,54 @@ pub struct RenderOptions {
     pub mask_view: Option<NodeId>,
     /// Screen view: highlight substituted fonts and glyphs as Document Setup asks.
     pub highlight_substitutions: bool,
+    /// Edge smoothing (raster export option).
+    pub anti_alias: AntiAlias,
+}
+
+/// How edges are rasterized (raster export option).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AntiAlias {
+    /// Hard edges: a pixel is painted when a path, text or image covers at least half of it.
+    /// Raster effects (blur, shadows, glows) and pattern tiles stay smooth.
+    None,
+    /// Smooth edges everywhere.
+    #[default]
+    Art,
+    /// Smooth edges with type snapped to the pixel grid (see `TextLayout::snap_to_pixels`):
+    /// crisper small text.
+    Type,
+}
+
+impl AntiAlias {
+    pub const ALL: [Self; 3] = [Self::None, Self::Art, Self::Type];
+
+    /// The id used in command params (`none`, `art`, `type`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Art => "art",
+            Self::Type => "type",
+        }
+    }
+
+    /// The mode an id names (any case).
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|a| a.id().eq_ignore_ascii_case(id))
+    }
+
+    /// The name shown in options dialogs.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Art => "Art Optimized",
+            Self::Type => "Type Optimized",
+        }
+    }
+
+    /// vello's aliasing threshold: paint a pixel only above half coverage when edges are hard.
+    fn threshold(self) -> Option<u8> {
+        (self == Self::None).then_some(127)
+    }
 }
 
 impl Default for RenderOptions {
@@ -106,6 +153,7 @@ impl Default for RenderOptions {
             tile_edge: vectorcraft_doc::LAYER_COLORS[0].1,
             mask_view: None,
             highlight_substitutions: false,
+            anti_alias: AntiAlias::Art,
         }
     }
 }
@@ -131,7 +179,8 @@ impl Rendered {
         }
         out
     }
-    /// Encode as PNG.
+    /// Encode as PNG without metadata (thumbnails, screenshots, embedded rasters; exports use
+    /// [`encode`]).
     pub fn to_png(&self) -> Result<Vec<u8>, String> {
         let mut buf = Vec::new();
         let img = image::RgbaImage::from_raw(self.width, self.height, self.to_straight())
@@ -141,30 +190,11 @@ impl Rendered {
     }
     /// Encode as JPEG (flattened on white) at `quality` 1..=100.
     pub fn to_jpeg(&self, quality: u8) -> Result<Vec<u8>, String> {
-        let rgba = self.to_straight();
-        let rgb: Vec<u8> = rgba
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .flat_map(|p| {
-                let a = p[3] as u32;
-                let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
-                [mix(p[0]), mix(p[1]), mix(p[2])]
-            })
-            .collect();
-        let mut buf = Vec::new();
-        let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality.clamp(1, 100));
-        image::ImageEncoder::write_image(enc, &rgb, self.width, self.height, image::ExtendedColorType::Rgb8)
-            .map_err(|e| format!("JPEG encoding failed: {e}"))?;
-        Ok(buf)
+        encode::jpeg(self, quality, None)
     }
     /// Encode as lossless WebP.
     pub fn to_webp(&self) -> Result<Vec<u8>, String> {
-        let mut buf = Vec::new();
-        let enc = image::codecs::webp::WebPEncoder::new_lossless(&mut buf);
-        image::ImageEncoder::write_image(enc, &self.to_straight(), self.width, self.height, image::ExtendedColorType::Rgba8)
-            .map_err(|e| format!("WebP encoding failed: {e}"))?;
-        Ok(buf)
+        encode::webp(self)
     }
     /// Straight-alpha RGBA at (x, y).
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
@@ -318,6 +348,21 @@ struct Frame<'a> {
     ink: Ink,
 }
 
+impl Frame<'_> {
+    /// Text space → device pixels when type is snapped to the pixel grid (Type anti-aliasing).
+    fn text_snap(&self, t: &TextObject) -> Option<Affine> {
+        (self.opts.anti_alias == AntiAlias::Type).then(|| self.view * t.xf)
+    }
+
+    /// A render context for drawing this frame's art offscreen (on the calling thread), with its
+    /// edge smoothing: hard edges must not depend on where the art is drawn.
+    fn offscreen_context(&self, w: u16, h: u16) -> RenderContext {
+        let mut ctx = single_threaded_context(w, h);
+        ctx.set_aliasing_threshold(self.opts.anti_alias.threshold());
+        ctx
+    }
+}
+
 impl Renderer {
     pub fn new() -> Self {
         Self {
@@ -412,6 +457,8 @@ impl Renderer {
             }
             _ => RenderContext::new_with(w, h, vello_cpu::RenderSettings { num_threads: threads, ..Default::default() }),
         };
+        // `reset` keeps the threshold of the previous render: set it every time.
+        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         if let Some(bg) = opts.background {
             ctx.set_transform(Affine::IDENTITY);
             ctx.set_paint(f.ink.fixed(bg));
@@ -478,11 +525,15 @@ impl Renderer {
     /// Render one artboard (or any document rect) at `scale` pixels per point, transparent or on white,
     /// as exported: template layers are left out.
     pub fn render_region(&mut self, doc: &Document, region: Rect, scale: f64, white: bool) -> Rendered {
-        let w = (region.width() * scale).round().max(1.0) as u32;
-        let h = (region.height() * scale).round().max(1.0) as u32;
-        let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
         let opts = RenderOptions { background: white.then_some([255, 255, 255, 255]), skip_templates: true, ..Default::default() };
-        self.render(doc, w, h, view, &opts)
+        self.render_region_with(doc, region, scale, &opts)
+    }
+
+    /// Render a document rect at `scale` pixels per point with `opts`.
+    pub fn render_region_with(&mut self, doc: &Document, region: Rect, scale: f64, opts: &RenderOptions) -> Rendered {
+        let (w, h) = region_pixels(region, scale);
+        let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+        self.render(doc, w, h, view, opts)
     }
 
     /// Render a single node (thumbnails, previews) fitted into `size`×`size` pixels.
@@ -633,7 +684,7 @@ impl Renderer {
     /// The coverage of opacity mask `m` per output pixel (row-major): its art rendered offscreen,
     /// as luminance ([`mask_value`]).
     fn mask_values(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> Vec<u8> {
-        let mut mctx = single_threaded_context(w, h);
+        let mut mctx = f.offscreen_context(w, h);
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
         // and its luminance is that of its screen colours.
         let outer =
@@ -682,7 +733,10 @@ impl Renderer {
             && a.blend == vectorcraft_color::BlendMode::Normal
             && !fx::has_fx(a)
         {
-            let g = self.text_geom_of(a, t);
+            let g = match f.text_snap(t) {
+                Some(xf) => Arc::new(text_geom_snapped(t, Some(xf))),
+                None => self.text_geom_of(a, t),
+            };
             self.draw_text_geom(ctx, f, a, t, &g);
             self.stats.drawn += 1;
             return;
@@ -1054,7 +1108,7 @@ impl Renderer {
     }
 
     fn draw_text(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject) {
-        let g = text_geom(t);
+        let g = text_geom_snapped(t, f.text_snap(t));
         self.draw_text_geom(ctx, f, n, t, &g);
     }
 
@@ -1306,8 +1360,16 @@ struct TextGeom {
 }
 
 fn text_geom(t: &TextObject) -> TextGeom {
+    text_geom_snapped(t, None)
+}
+
+/// Glyph geometry of `t`; `snap` (text space → device pixels) puts the glyphs on whole pixels.
+fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
     let db = vectorcraft_text::FontDb::global();
-    let layout = vectorcraft_text::layout(db, t);
+    let mut layout = vectorcraft_text::layout(db, t);
+    if let Some(xf) = snap {
+        layout.snap_to_pixels(xf);
+    }
     let mut runs = vec![BezPath::new(); t.runs.len()];
     let mut all = BezPath::new();
     // Per run: is its family missing, and the face its glyphs should come from.
@@ -1337,6 +1399,10 @@ fn text_geom(t: &TextObject) -> TextGeom {
 
 /// Document Setup's highlight behind substituted fonts and glyphs (screen only).
 const SUBSTITUTED: peniko::Color = peniko::Color::from_rgba8(255, 120, 190, 110);
+/// The pixel size of `region` rendered at `scale` pixels per point (at least 1×1).
+pub fn region_pixels(region: Rect, scale: f64) -> (u32, u32) {
+    ((region.width() * scale).round().max(1.0) as u32, (region.height() * scale).round().max(1.0) as u32)
+}
 
 fn rects_overlap(a: Rect, b: Rect) -> bool {
     a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1

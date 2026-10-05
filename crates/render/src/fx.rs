@@ -306,7 +306,7 @@ impl Renderer {
                 }
                 let (w, h) = (w as u16, h as u16);
                 // Silhouette (the object's painted alpha), offset by the shadow distance.
-                let mut off = crate::single_threaded_context(w, h);
+                let mut off = f.offscreen_context(w, h);
                 let crop = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
                 off.flush();
@@ -580,7 +580,7 @@ impl Renderer {
             return;
         }
         let (w, h) = (w as u16, h as u16);
-        let mut off = crate::single_threaded_context(w, h);
+        let mut off = f.offscreen_context(w, h);
         let shifted = Frame { mt: false, view: Affine::translate((-x0, -y0)) * f.view, ..*f };
         self.inside_layer(|r| draw(r, &mut off, &shifted, None));
         off.flush();

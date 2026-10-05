@@ -21,6 +21,7 @@ pub(super) const OPTIONS: &[FormatOption] = &[
     super::ARTBOARD,
     super::ARTBOARDS,
     super::RANGE,
+    super::USE_ARTBOARDS,
     FormatOption { name: "preset", ty: "string", default: "\"VectorCraft Default\"", description: "the PDF preset the other options apply over" },
     FormatOption { name: "standard", ty: "string", default: "\"none\"", description: "none | pdfA2b (PDF/X is not supported yet)" },
     FormatOption { name: "compatibility", ty: "string", default: "\"1.7\"", description: "PDF version: 1.4 | 1.5 | 1.6 | 1.7 | 2.0" },

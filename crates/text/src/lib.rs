@@ -20,7 +20,7 @@ pub mod thread;
 
 pub use features::OtFeatures;
 pub use fontdb::{FALLBACK_FAMILY, FontDb, FontFace};
-use kurbo::{BezPath, Point, Rect, Vec2};
+use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
 pub use vectorcraft_doc::TextObject;
 
@@ -143,6 +143,29 @@ impl TextLayout {
     /// Index of the line containing byte offset `byte`.
     pub fn line_of(&self, byte: usize) -> usize {
         self.lines.iter().rposition(|l| l.start <= byte).unwrap_or(0)
+    }
+    /// Snap type to the pixel grid (type-optimized anti-aliasing): move each glyph so its pen
+    /// position on the baseline lands on a whole device pixel, given `to_device` (text space →
+    /// device pixels). Whole baselines and glyph starts keep small type crisp and evenly spaced.
+    /// Only text that is neither rotated nor skewed nor on a path is snapped; returns whether
+    /// the layout changed.
+    pub fn snap_to_pixels(&mut self, to_device: Affine) -> bool {
+        let [a, b, c, d, _, _] = to_device.as_coeffs();
+        if self.on_path || b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-12 || d.abs() < 1e-12 {
+            return false;
+        }
+        let mut moved = false;
+        for g in self.glyphs.iter_mut().filter(|g| g.angle == 0.0) {
+            let p = to_device * g.origin;
+            let shift = Vec2::new((p.x.round() - p.x) / a, (p.y.round() - p.y) / d);
+            if shift == Vec2::ZERO {
+                continue;
+            }
+            g.origin += shift;
+            g.outline.apply_affine(Affine::translate(shift));
+            moved = true;
+        }
+        moved
     }
 }
 
@@ -331,5 +354,7 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
 mod tests;
 #[cfg(test)]
 mod tests_scripts;
+#[cfg(test)]
+mod tests_snap;
 #[cfg(test)]
 mod tests_typo;
