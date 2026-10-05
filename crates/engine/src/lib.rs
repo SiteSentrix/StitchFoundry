@@ -1205,6 +1205,8 @@ mod tests_registration;
 #[cfg(test)]
 mod tests_save;
 #[cfg(test)]
+mod tests_saveoptions;
+#[cfg(test)]
 mod tests_scalestrokes;
 #[cfg(test)]
 mod tests_slices;

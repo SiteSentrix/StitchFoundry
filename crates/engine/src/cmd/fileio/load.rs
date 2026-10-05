@@ -90,8 +90,8 @@ fn restore_or_import(
     let mut fallback = None;
     if let Some((intact, bytes)) = editing {
         let native = if intact { bytes() } else { None };
-        match native.and_then(|b| vectorcraft_format::load(&b).ok()) {
-            Some(doc) => return Ok((doc, vec![], true)),
+        match native.and_then(|b| native_file(&b).ok()) {
+            Some((doc, _, warnings)) => return Ok((doc, warnings, true)),
             None => fallback = Some(if intact { EDITING_DAMAGED } else { EDITING_STALE }),
         }
     }
@@ -100,6 +100,14 @@ fn restore_or_import(
         warnings.insert(0, why.to_string());
     }
     Ok((doc, warnings, false))
+}
+
+/// A native file's document and details, the colour profiles it carries installed where missing
+/// (with a warning for each that can't be used).
+pub(crate) fn native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
+    let f = vectorcraft_format::load_file(bytes).map_err(err)?;
+    let warnings = super::native::install_profiles(f.profiles);
+    Ok((f.doc, f.info, warnings))
 }
 
 /// Read a file of any readable format (`name`: its file name or path, for the extension and title;
@@ -123,9 +131,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     let mut converted = false;
     let (mut doc, warnings, restored) = match format.id {
         "vectorcraft" | "template" => {
-            let (d, info) = vectorcraft_format::load_info(bytes).map_err(err)?;
+            let (d, info, warnings) = native_file(bytes)?;
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
-            (d, vec![], false)
+            (d, warnings, false)
         }
         "svg" | "svgz" => {
             let text = vectorcraft_svg::text_of(bytes).map_err(err)?;

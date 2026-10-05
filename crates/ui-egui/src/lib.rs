@@ -47,6 +47,8 @@ mod tests_docsetup;
 #[cfg(test)]
 mod tests_labels;
 #[cfg(test)]
+mod tests_nativeoptions;
+#[cfg(test)]
 mod tests_overprint;
 #[cfg(test)]
 mod tests_paintchips;

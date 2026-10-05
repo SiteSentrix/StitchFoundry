@@ -85,8 +85,9 @@ impl Encoded {
     }
 
     /// Every file to write for the destination `path` (a path or a file name): the file itself
-    /// when there is one, else `{stem}-{artboard name}.{ext}` beside it, then the linked images
-    /// beside it under their own names, then the image maps as `{image stem}.html` or `.map`.
+    /// when there is one, else `{stem}-{artboard name}.{ext}` beside it (see `joiner`; a file of no artboard
+    /// among several, as Save's master file, is the file itself), then the linked images beside it
+    /// under their own names, then the image maps as `{image stem}.html` or `.map`.
     pub fn named<'a>(&'a self, doc: &Document, path: &str) -> Vec<(String, Cow<'a, [u8]>)> {
         // Siblings keep the path's own separators (this runs on every platform and on the web).
         let dir = &path[..path.rfind(['/', '\\']).map_or(0, |i| i + 1)];
@@ -94,15 +95,19 @@ impl Encoded {
         let mut out: Vec<(String, Cow<[u8]>)> = match self.files.as_slice() {
             [(_, bytes)] => vec![(path.to_string(), Cow::Borrowed(bytes.as_slice()))],
             files => {
-                let boards: Vec<usize> = files.iter().map(|(b, _)| b.unwrap_or(0)).collect();
+                let boards: Vec<usize> = files.iter().filter_map(|(b, _)| *b).collect();
                 let file = std::path::Path::new(&path[dir.len()..]);
                 let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
                 let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-                super::artboard_file_names(doc, &boards)
-                    .into_iter()
-                    .zip(files)
-                    .map(|(board, (_, bytes))| {
-                        (sibling(&format!("{stem}{}{board}{ext}", self.joiner.unwrap_or("-"))), Cow::Borrowed(bytes.as_slice()))
+                let mut names = super::artboard_file_names(doc, &boards).into_iter();
+                files
+                    .iter()
+                    .map(|(b, bytes)| {
+                        let name = match b {
+                            None => path.to_string(),
+                            Some(_) => sibling(&format!("{stem}{}{}{ext}", self.joiner.unwrap_or("-"), names.next().unwrap_or_default())),
+                        };
+                        (name, Cow::Borrowed(bytes.as_slice()))
                     })
                     .collect()
             }

@@ -1291,3 +1291,26 @@ folder or browser storage the commands are disabled and say how to set one.
 {"name":"run_command","arguments":{"command":"file.recovery.save","params":{}}}
 {"name":"run_command","arguments":{"command":"file.recovery.restore","params":{"file":"1759650000-1/Poster-1"}}}
 ```
+
+## Native save options
+
+`document.save` / `file.saveAs` / `file.saveCopy` to a native (`.vectorcraft`, `.vctemplate`) or `.ai` file take, flat
+or in `options` (`file.formatOptions {format}` lists them with their values):
+
+- `separateArtboards: true` also writes each artboard of `range` (`"1-3, 5"`, default `"all"`) to
+  `<name>-<artboard>.<ext>` beside the file: that artboard and the art touching it. The result's `files` lists every
+  file written, the master file first (without a path: `files: [{name, dataBase64}]`). 3 artboards give 4 files.
+- `includeLinked: true` keeps linked images' own pixels in the file (they stay linked), not just the previews.
+- `embedProfiles` (default true) carries the ICC profiles the document is tagged with that were loaded from files;
+  opening the file installs them where they are missing (a warning names one that can't be used).
+- `pdfCompatible`: native files (default false) also carry a PDF of every artboard (`pdf` in the file); `.ai` files
+  (default true) with false write blank pages around the native document (smaller; other apps show empty pages).
+- `.ai` only: `compress` (default true) is the PDF option `compression.compressText`.
+
+File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel; Save, Save a Copy
+and Save as Template reuse the options as last saved (or Use Compression).
+
+```json
+{"name":"run_command","arguments":{"command":"file.saveAs","params":{"path":"/tmp/set.vectorcraft","separateArtboards":true,"range":"2-3","includeLinked":true}}}
+{"name":"run_command","arguments":{"command":"file.saveAs","params":{"path":"/tmp/set.ai","pdfCompatible":false}}}
+```

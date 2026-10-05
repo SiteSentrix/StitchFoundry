@@ -43,6 +43,7 @@ pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub use export::export_source;
 use load::err;
 pub(crate) use load::import_svg;
+pub(crate) use load::native_file;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
 pub use native::with_compression_pref;
@@ -360,7 +361,17 @@ pub const FORMATS: &[Format] = &[
         options: svg::OPTIONS,
     },
     Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: pdf::OPTIONS },
-    reader("ai", "PDF-compatible .ai", &["ai"], "application/pdf", false),
+    Format {
+        id: "ai",
+        label: "PDF-compatible .ai",
+        extensions: &["ai"],
+        mime: "application/pdf",
+        read: true,
+        // Saved (Save As), not exported.
+        write: false,
+        raster: false,
+        options: native::AI_OPTIONS,
+    },
     reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),
     Format {
         id: "png",
