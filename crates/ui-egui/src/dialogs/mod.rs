@@ -28,6 +28,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 mod path_ops;
+pub mod place;
 pub mod recolor;
 pub mod saturate;
 mod save_changes;
@@ -178,6 +179,7 @@ registry! {
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
+    Place: [place::KIND] => place::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

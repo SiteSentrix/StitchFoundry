@@ -806,3 +806,18 @@ passed straight back to `file.new`. Print presets and sizes without `units` star
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
 ```
+
+## Place
+
+`file.place` puts another file's art into the active document as one undo step without touching the clipboard:
+a raster image at 100% of its physical size (the resolution its file declares, else 72 ppi; linked to its `path`
+unless `link: false`), an SVG as one group, a PDF/.ai page or a native document's artboard (`page`, `crop`) as one
+clipped group, with the images, symbols, patterns and swatches it uses. `at` centres it, `rect` fits it, `replace`
+swaps the selected object (keeping its place and transform), `template` puts it on a new template layer.
+`file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
+effective ppi.
+
+```json
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
+{"name":"run_command","arguments":{"command":"file.place","params":{"name":"logo.svg","dataBase64":"PHN2Zy…","rect":[0,0,100,100]}}}
+```

@@ -122,11 +122,18 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let anchor_mode = !st.selection.anchors.is_empty();
                 let label = match &first {
                     Some(_) if sel.len() == 1 && anchor_mode => "Anchor Point",
-                    Some(n) if sel.len() == 1 && matches!(n.kind, NodeKind::Image(_)) => "Embedded",
+                    Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if sel.len() == 1 => {
+                        if im.link.is_some() {
+                            "Linked File"
+                        } else {
+                            "Embedded"
+                        }
+                    }
                     _ => crate::panels::appearance::object_label(app),
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 ui.add_space(6.0);
+                crate::place::control_bar_details(app, ui);
                 let shown_stroke = crate::panels::current_stroke(app);
                 let mixed = crate::panels::stroke_mixed(app, ui.ctx());
                 let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);

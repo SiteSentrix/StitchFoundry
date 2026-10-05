@@ -20,6 +20,7 @@ pub mod io;
 pub mod menus;
 pub mod palette;
 pub mod panels;
+pub mod place;
 pub mod prefs_dialog;
 pub mod render_worker;
 pub mod shortcut_editor;
@@ -40,6 +41,8 @@ mod tests_labels;
 mod tests_overprint;
 #[cfg(test)]
 mod tests_paintchips;
+#[cfg(test)]
+mod tests_place;
 #[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
@@ -85,6 +88,10 @@ pub struct Services {
     pub clipboard_read: Option<Box<dyn FnMut() -> Option<String>>>,
     /// Open a URL in the system browser (desktop). Without it, egui opens it (a new tab on the web).
     pub open_url: Option<OpenUrlFn>,
+    /// Web: start an async pick of a file to place (it arrives via `place_inbox`).
+    pub place_async: Option<Box<dyn FnMut()>>,
+    /// Files that arrived asynchronously to be placed (web: picked for Place).
+    pub place_inbox: Option<place::PlaceInbox>,
 }
 
 /// Cached canvas raster.
@@ -160,6 +167,8 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// File → Place: picked files, the Control bar's image details.
+    pub place: place::PlaceState,
 }
 
 impl VectorcraftApp {
@@ -199,6 +208,7 @@ impl VectorcraftApp {
             canvas_rect: None,
             hover_doc: None,
             custom_titlebar: false,
+            place: Default::default(),
         }
     }
 
@@ -412,6 +422,7 @@ impl VectorcraftApp {
                 self.status(format!("Couldn't open {name}: {e}"));
             }
         }
+        place::drain(self);
     }
 }
 

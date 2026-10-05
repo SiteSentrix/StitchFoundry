@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_ui_egui::place::{PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
 
@@ -38,7 +39,7 @@ pub fn start() {
                         log::info!("vectorcraft-web: wgpu backend {:?}", rs.adapter.get_info().backend);
                     }
                     let inbox: Inbox = Arc::default();
-                    let app = VectorcraftApp::new(Session::new(), services(inbox.clone(), cc.egui_ctx.clone()));
+                    let app = VectorcraftApp::new(Session::new(), services(inbox.clone(), Arc::default(), cc.egui_ctx.clone()));
                     Ok(Box::new(WebShell { app, inbox }))
                 }),
             )
@@ -92,9 +93,26 @@ impl eframe::App for WebShell {
     }
 }
 
-fn services(inbox: Inbox, ctx: egui::Context) -> Services {
+fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context) -> Services {
     let open_inbox = inbox.clone();
+    let picked = place_inbox.clone();
+    let place_ctx = ctx.clone();
     Services {
+        // File → Place…: the picked file goes to the Place dialog.
+        place_async: Some(Box::new(move || {
+            let inbox = picked.clone();
+            let ctx = place_ctx.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let dialog = fileio::place_filters().fold(rfd::AsyncFileDialog::new().set_title("Place"), |d, (name, exts)| d.add_filter(name, exts));
+                let Some(file) = dialog.pick_file().await else {
+                    return;
+                };
+                let bytes = file.read().await;
+                inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name: file.file_name(), bytes });
+                ctx.request_repaint();
+            });
+        })),
+        place_inbox: Some(place_inbox),
         open_async: Some(Box::new(move || {
             let inbox = open_inbox.clone();
             let ctx = ctx.clone();

@@ -2,9 +2,7 @@
 //! decodes and encodes every format.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{ImageObject, Node, NodeKind};
 use vectorcraft_engine::cmd::fileio;
-use vectorcraft_geom::Affine;
 
 use crate::VectorcraftApp;
 use crate::dialogs::svg_options;
@@ -56,8 +54,7 @@ pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
 
 fn write_out(app: &mut VectorcraftApp, path: &str, bytes: &[u8]) -> Result<(), String> {
     if let Some(dl) = app.services.download.as_mut() {
-        let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(path.to_string());
-        dl(&name, bytes);
+        dl(&fileio::file_name(path), bytes);
         return Ok(());
     }
     let w = app.services.write.as_mut().ok_or("no file writer")?;
@@ -237,39 +234,9 @@ fn file_url(path: &str) -> String {
     url
 }
 
-/// File → Place… (embed an image or SVG into the active document).
+/// Place a file's bytes (no path, so embedded) centred in the view: `file.place`.
 pub fn place_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result<(), String> {
-    let f = fileio::detect(name, bytes).ok_or_else(|| format!("can't place `{name}`: not a format VectorCraft reads"))?;
-    if !f.raster {
-        if !matches!(f.id, "svg" | "svgz") {
-            return Err(format!("Place doesn't take {} files yet", f.label));
-        }
-        let src = fileio::load(name, bytes).map_err(|e| e.to_string())?.doc;
-        let nodes: Vec<Node> = src.layers.iter().flat_map(|l| l.children().cloned().unwrap_or_default()).map(|n| (*n).clone()).collect();
-        app.session.clipboard = nodes;
-        // Straight to the engine: `app.run` would let the system clipboard replace these nodes.
-        app.session.execute("edit.pasteInPlace", &json!({})).map_err(|e| e.to_string())?;
-        app.sync_views();
-        return Ok(());
-    }
-    let fileio::RasterImage { key, blob, width: w, height: h } = fileio::raster_image(bytes).map_err(|e| e.to_string())?;
-    let st = app.session.active().ok_or("no document")?;
-    let ab = st.doc.artboards.first().map(|a| a.rect).unwrap_or_default();
-    let s = (ab.width() / w as f64).min(ab.height() / h as f64).min(1.0);
-    let xf = Affine::translate((ab.center().x - w as f64 * s / 2.0, ab.center().y - h as f64 * s / 2.0)) * Affine::scale(s);
-    let parent = st.insertion_parent();
-    let name = name.to_string();
-    app.session
-        .edit("Place", |d, sel| {
-            d.images.insert(key.clone(), blob);
-            let id = d.alloc_id();
-            let mut n = Node::new(id, NodeKind::Image(ImageObject { key, width: w, height: h, xf, link: None }));
-            n.name = Some(name);
-            d.insert(parent, usize::MAX, n)?;
-            sel.set([id]);
-            Ok(())
-        })
-        .map_err(|e| e.to_string())
+    crate::place::run(app, &serde_json::json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).map(|_| ())
 }
 
 #[cfg(test)]
@@ -282,6 +249,7 @@ mod tests {
 
     use super::*;
     use crate::Services;
+    use vectorcraft_doc::NodeKind;
 
     type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 

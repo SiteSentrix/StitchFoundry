@@ -58,7 +58,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.saveCopy", "Save a Copy…", "Cmd+Alt+S", "{path?, svg?: {…SVG options}} like Save As, but the document keeps its path"),
     ("file.newFromTemplate", "New from Template…", "Cmd+Shift+N", "{path?} open a template as a new untitled document"),
     ("file.revert", "Revert", "F12", "{}"),
-    ("file.place", "Place…", "Cmd+Shift+P", "{path?}"),
+    (
+        "file.place",
+        "Place…",
+        "Cmd+Shift+P",
+        "{path?} no file: pick one, then the Place dialog (Link, Template, Replace); path (or name+dataBase64, …file.place params): file.place, centred in the view",
+    ),
     ("file.openRecent1", "Open Recent File 1", "", "{}"),
     ("file.openRecent2", "Open Recent File 2", "", "{}"),
     ("file.openRecent3", "Open Recent File 3", "", "{}"),
@@ -434,20 +439,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "file.recentFiles" => Ok(json!(app.ui.recent_files)),
-        "file.place" => {
-            let path = match s("path") {
-                Some(p) => Some(p),
-                None => app.services.pick_open.as_mut().and_then(|f| f()),
-            };
-            match path {
-                Some(path) => {
-                    let bytes = app.services.read.as_ref().ok_or("no reader".to_string()).and_then(|r| r(&path));
-                    let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                    bytes.and_then(|b| io::place_bytes(app, &name, &b)).map(|_| Value::Null)
-                }
-                None => Err("cancelled".into()),
-            }
-        }
+        "file.place" => crate::place::run(app, p),
         "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::svg_options::open(app, crate::dialogs::svg_options::Mode::Export, None);
             Ok(Value::Null)
