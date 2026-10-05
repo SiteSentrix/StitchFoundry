@@ -4176,6 +4176,7 @@ dependencies = [
  "vectorcraft-cad",
  "vectorcraft-color",
  "vectorcraft-doc",
+ "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
  "vectorcraft-pathops",
@@ -4186,6 +4187,22 @@ dependencies = [
  "vectorcraft-text",
  "vectorcraft-tools",
  "vectorcraft-trace",
+]
+
+[[package]]
+name = "vectorcraft-eps"
+version = "0.2.0"
+dependencies = [
+ "flate2",
+ "image",
+ "kurbo 0.13.1",
+ "vectorcraft-brush",
+ "vectorcraft-color",
+ "vectorcraft-doc",
+ "vectorcraft-effects",
+ "vectorcraft-geom",
+ "vectorcraft-testkit",
+ "vectorcraft-text",
 ]
 
 [[package]]
@@ -4387,6 +4404,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-engine",
+ "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
  "vectorcraft-pdf",

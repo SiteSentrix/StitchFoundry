@@ -331,3 +331,11 @@ The Slice tools: `ui.pointer` drags with the `slice` tool make a user slice (Shi
 undo step). With `sliceSelection` a click selects a slice (Shift toggles), a drag moves the selected slices, a drag on
 a selected user slice's handle resizes it, a double click opens `sliceOptions` and `ui.key` Delete deletes the
 selected slices. Hidden or locked slices (`view.slices.hide`, `view.slices.lock`) can't be picked.
+
+EPS Options: Export As… with the EPS format (`file.exportAs {format: "eps"}`, then the save dialog), or
+`ui.epsOptionsDialog {path?, …document.exportEps options}` for agents, opens the `epsOptions` dialog. Its fields are
+`document.export` params: `previewFormat` (`none`, `tiffBw`, `tiffColor`), `transparentPreview`, `overprints`
+(`preserve`, `discard`), `flattenerPreset` (a built-in or saved preset's name), `includeLinkedFiles`, `thumbnails`,
+`cmykPostScript`, `compatibleGradients`, `level` (`2`, `3`), plus `path` and the artboard choice (`useArtboards`,
+`range`). `ui.dialog.confirm` checks them (a bad value or an unknown preset keeps the dialog open), remembers them for
+the next EPS Options and writes the file(s), asking for a path when there is none.

@@ -983,6 +983,28 @@ fn opaque(n: &mut Node) {
     }
 }
 
+/// `doc` with everything it draws flattened with `o`, as formats without transparency (EPS)
+/// write it: every visible object of the visible layers, locked ones too (a clipping layer's
+/// clipping path stays). `None` when that changes nothing.
+pub(crate) fn flatten_document(doc: &Document, o: &FlattenOptions) -> Result<Option<Document>> {
+    let outlining = o.text_to_outlines || o.strokes_to_outlines || !o.preserve_overprints;
+    if !outlining && !doc.layers.iter().any(|l| l.shows_transparency()) {
+        return Ok(None);
+    }
+    let mut roots = vec![];
+    for l in doc.layers.iter().filter(|l| l.visible && !matches!(l.kind, NodeKind::Layer { template: true, .. })) {
+        let children = l.children().map_or(&[][..], Vec::as_slice);
+        roots.extend(children.iter().skip(usize::from(l.clips())).filter(|c| c.visible).map(|c| c.id));
+    }
+    let plan = plan(doc, &roots, o, true)?;
+    if plan.flat.is_empty() && !plan.kept.iter().any(|id| doc.node(*id).is_some_and(|n| kept_work(n, o))) {
+        return Ok(None);
+    }
+    let mut d = doc.clone();
+    apply(&mut d, &mut vectorcraft_doc::Selection::default(), plan, o)?;
+    Ok(Some(d))
+}
+
 // ---------- apply ----------
 
 fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: &FlattenOptions) -> Result<(Vec<NodeId>, usize, usize)> {

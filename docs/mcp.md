@@ -1199,3 +1199,28 @@ format its options. The document remembers the last params: `document.exportSett
 {"name":"run_command","arguments":{"command":"document.exportForScreens","params":{"range":"1-2","formats":[{"format":"png","scale":"512w"},{"format":"jpg","quality":80,"scale":"2x"},{"format":"svg"}],"settings":{"png":{"background":"white"}}}}}
 {"name":"run_command","arguments":{"command":"document.exportSettings","params":{}}}
 ```
+
+## EPS export
+
+`document.exportEps` (also `document.export` / `export` with format `eps`) writes Encapsulated PostScript: a DSC header
+(`%!PS-Adobe-3.0 EPSF-3.0`, `%%BoundingBox`, `%%HiResBoundingBox`, `%%LanguageLevel`, spot colours as
+`%%DocumentCustomColors`), then the page. Without `useArtboards` the file covers the visible art, its bounding box y up
+from the first artboard's bottom-left corner; `useArtboards: true` (or `range`, `artboards`, `artboard`) writes one file
+per artboard, `{stem}_{artboard}.eps`, each bounded by its artboard. `level: 3` (default) writes gradients as smooth
+shadings and masks transparent image pixels out; `level: 2` writes gradients as bands of colour (as does
+`compatibleGradients`) and transparent pixels white. Type is always glyph outlines, so no fonts are needed (`embedFonts`
+is accepted); spot colours are Separation colour spaces, and overprinting fills and strokes overprint unless
+`overprints: "discard"`. RGB documents are written in CMYK unless `cmykPostScript: false`.
+
+PostScript has no transparency: it is flattened first with `flattenerPreset` (`high`, `medium` (default), `low` or a
+saved preset, see `flattener.presets.list`) and `flattener: {…}` options over it (those of
+`object.flattenTransparency`); a warning says so. `previewFormat` adds a TIFF preview behind a binary header (`tiffColor`
+(default), transparent unless `transparentPreview: false`, or 1-bit `tiffBw`; `none` writes plain PostScript),
+`thumbnails` a PNG thumbnail in comments, and the native document always rides along in the trailer's comments (with
+linked images whole when `includeLinkedFiles`), so a later EPS import can reopen the file as it was. Export for
+Screens doesn't write EPS.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportEps","params":{"path":"/tmp/logo.eps","level":2,"previewFormat":"tiffBw","flattenerPreset":"high"}}}
+{"name":"export","arguments":{"path":"/tmp/art.eps","options":{"useArtboards":true,"cmykPostScript":false}}}
+```

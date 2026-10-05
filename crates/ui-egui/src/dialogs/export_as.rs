@@ -1,15 +1,15 @@
 //! File → Export → Export As…: the format and Use Artboards (All or a range: one file per
 //! artboard, or one page each in a PDF); without artboards the export covers the visible art. OK
 //! picks the file, then the format's options dialog follows (PNG/JPEG/WebP/PNG-8/GIF Options, SVG
-//! Options, Text Export Options, DXF Options, and Save PDF for artboards as pages), else the file
-//! is written. DWG is listed, greyed out, with what to use instead.
+//! Options, Text Export Options, DXF Options, EPS Options, and Save PDF for artboards as pages),
+//! else the file is written. DWG is listed, greyed out, with what to use instead.
 
 use std::sync::LazyLock;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format};
 
-use super::{DialogSpec, dxf_options, form, png_options, save_pdf, svg_options, text_export};
+use super::{DialogSpec, dxf_options, eps_options, form, png_options, save_pdf, svg_options, text_export};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
@@ -147,6 +147,10 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             }
             if f.id == "dxf" {
                 dxf_options::open(app, &params);
+                return Ok(Value::Null);
+            }
+            if f.id == "eps" {
+                eps_options::open(app, &params);
                 return Ok(Value::Null);
             }
             io::export(app, Some(f.id), Some(path), &params)

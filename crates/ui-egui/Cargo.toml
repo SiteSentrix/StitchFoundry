@@ -20,6 +20,7 @@ vectorcraft-svg = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-pdf = { workspace = true }
 vectorcraft-cad = { workspace = true }
+vectorcraft-eps = { workspace = true }
 vectorcraft-format = { workspace = true }
 egui = { workspace = true }
 egui_extras = { workspace = true }

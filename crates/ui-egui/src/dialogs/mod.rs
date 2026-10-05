@@ -17,6 +17,7 @@ pub mod confirm;
 mod document_setup;
 pub mod dxf_options;
 mod effect;
+pub mod eps_options;
 pub mod expand;
 mod export_as;
 mod export_for_screens;
@@ -221,6 +222,7 @@ registry! {
     Package: [package::KIND] => package::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
+    EpsOptions: [eps_options::KIND] => eps_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -335,3 +337,6 @@ mod tests_raster_formats;
 mod tests_dxf;
 #[cfg(test)]
 mod tests_screens;
+
+#[cfg(test)]
+mod tests_eps;

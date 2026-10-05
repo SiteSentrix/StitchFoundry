@@ -467,6 +467,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{path?, selectionOnly?} write Document Info's text report (document.info {format: \"text\"}) to path, else a picked file (the web downloads it) → {path}",
     ),
+    (
+        "ui.epsOptionsDialog",
+        "EPS Options Dialog",
+        "",
+        "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -844,6 +850,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         // Slice Options… and Divide Slices…: their dialogs, on the selected slices.
         "object.slice.options" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::slices::open_options(app),
         "object.slice.divide" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::slices::open_divide(app),
+        "ui.epsOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
+        "ui.epsOptionsDialog" => {
+            crate::dialogs::eps_options::open(app, p);
+            Ok(Value::Null)
+        }
         _ => return None,
     };
     Some(r)
@@ -1077,6 +1088,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()),
         "ui.placementOptionsDialog" => selected_image(app, |_| true),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
+        "ui.epsOptionsDialog" => app.session.active().is_some(),
         _ => true,
     }
 }

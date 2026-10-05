@@ -74,6 +74,9 @@ pub struct Encoded {
     pub maps: Vec<imagemap::Map>,
     /// The encoder's warnings (features approximated or left out, options not applied yet).
     pub warnings: Vec<String>,
+    /// What joins the file's stem and the artboard name when there is a file per artboard
+    /// (default `-`; EPS uses `_`, as the reference app names them).
+    pub joiner: Option<&'static str>,
 }
 
 impl Encoded {
@@ -98,7 +101,9 @@ impl Encoded {
                 super::artboard_file_names(doc, &boards)
                     .into_iter()
                     .zip(files)
-                    .map(|(board, (_, bytes))| (sibling(&format!("{stem}-{board}{ext}")), Cow::Borrowed(bytes.as_slice())))
+                    .map(|(board, (_, bytes))| {
+                        (sibling(&format!("{stem}{}{board}{ext}", self.joiner.unwrap_or("-"))), Cow::Borrowed(bytes.as_slice()))
+                    })
                     .collect()
             }
         };
@@ -313,6 +318,8 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
         "txt" => super::text::encode(doc, p)?,
         "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
         "dxf" => return super::dxf::encode(doc, p, use_artboards),
+        // EPS reads its own `useArtboards` (the art's bounds unless asked).
+        "eps" => return super::eps::encode(doc, p),
         "pdf" => {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });

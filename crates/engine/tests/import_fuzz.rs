@@ -827,3 +827,31 @@ proptest! {
         survive("mutated native file", || vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes).ok().map(|l| l.doc))?;
     }
 }
+
+/// The rich document as EPS (with a preview, a thumbnail and the document it carries), and the
+/// document read back from it.
+fn eps_sample() -> Vec<u8> {
+    let mut s = rich_session();
+    let r = s.execute("document.export", &json!({"format": "eps", "useArtboards": false})).unwrap();
+    vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Damaged EPS files: their sections, embedded document and thumbnail read as nothing, or as
+    /// a document that renders and exports.
+    #[test]
+    fn eps_mutated_files_never_panic(cut in 0usize..400_000, edits in prop::collection::vec((0usize..400_000, any::<u8>()), 0..12)) {
+        static SAMPLE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+        let mut bytes = SAMPLE.get_or_init(eps_sample).clone();
+        for &(at, b) in &edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        bytes.truncate(cut.max(4));
+        let _ = vectorcraft_eps::sections(&bytes);
+        let _ = vectorcraft_eps::thumbnail(&bytes);
+        survive("mutated EPS file", || vectorcraft_eps::native(&bytes).and_then(|n| vectorcraft_format::load(&n).ok()))?;
+    }
+}
