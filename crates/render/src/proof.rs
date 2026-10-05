@@ -18,191 +18,26 @@
 //! [`crate::RenderOptions`] with [`active_proof`] and [`overprint_preview_on`].
 
 use std::borrow::Cow;
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 
+use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms, PROCESS_PLATES};
 pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
-use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind};
+use vectorcraft_doc::Document;
+pub use vectorcraft_doc::inks::{Inks, Link, Plate, inks, map_document_colors, map_node_colors, plates, spot_color};
+use vectorcraft_doc::overprint::multiply_overprints;
 
 use crate::RenderOptions;
-
-/// Ink coverage of one paint colour.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Inks {
-    /// Process inks C, M, Y, K (0..1).
-    pub cmyk: [f32; 4],
-    /// Spot ink (swatch name, tint 0..1).
-    pub spot: Option<(String, f32)>,
-    /// Registration: the tint (every process ink's) prints on every spot plate too.
-    pub registration: bool,
-}
-
-impl Inks {
-    /// The tint this colour prints on spot plate `name`.
-    pub fn spot_tint(&self, name: &str) -> f32 {
-        match &self.spot {
-            _ if self.registration => self.cmyk[0],
-            Some((n, t)) if n == name => *t,
-            _ => 0.0,
-        }
-    }
-}
-
-/// A printing plate.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Plate {
-    pub name: String,
-    pub spot: bool,
-    /// Display colour of the ink (for the panel swatch).
-    pub rgb: [f32; 3],
-}
-
-/// The plates of `doc`: the four process plates plus one per spot swatch.
-pub fn plates(doc: &Document) -> Vec<Plate> {
-    let c = cms::active();
-    let mut v: Vec<Plate> = PROCESS_PLATES
-        .iter()
-        .enumerate()
-        .map(|(i, n)| {
-            let mut ink = [0.0; 4];
-            ink[i] = 1.0;
-            Plate { name: (*n).into(), spot: false, rgb: c.cmyk_to_srgb(ink, false) }
-        })
-        .collect();
-    for sw in doc.swatches_iter() {
-        if let (true, Paint::Solid { color, .. }) = (sw.spot, &sw.paint)
-            && !v.iter().any(|p| p.name == sw.name)
-        {
-            v.push(Plate { name: sw.name.clone(), spot: true, rgb: c.display_rgb(&doc.linked_color(*color, true)) });
-        }
-    }
-    v
-}
-
-/// The ink colour of spot swatch `name` as it shows ([`Document::linked_color`]).
-fn spot_color(doc: &Document, name: &str) -> Option<Color> {
-    let s = doc.swatch(name).filter(|s| s.spot)?;
-    s.paint.color().map(|c| doc.linked_color(c, true))
-}
-
-/// A colour's swatch link and tint (`(swatch name, tint 0..1)`), as the colour visitors pass it.
-pub type Link<'a> = Option<(&'a str, f32)>;
-
-/// Separate one colour into inks. A colour linked to a spot swatch prints on that plate only, at
-/// its tint; one linked to the Registration swatch prints its tint on every plate.
-pub fn inks(doc: &Document, c: &Cms, color: &Color, link: Link, intent: Intent) -> Inks {
-    if let Some((REGISTRATION, tint)) = link {
-        return Inks { cmyk: [tint.clamp(0.0, 1.0); 4], spot: None, registration: true };
-    }
-    if let Some((name, tint)) = link
-        && doc.swatch(name).is_some_and(|s| s.spot && s.paint.color().is_some())
-    {
-        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint.clamp(0.0, 1.0))), registration: false };
-    }
-    Inks { cmyk: c.to_cmyk(color, intent), spot: None, registration: false }
-}
-
-fn map_paint(p: &mut Paint, f: &mut dyn FnMut(&Color, Link) -> Color) {
-    match p {
-        Paint::Solid { color, swatch, tint } => *color = f(color, swatch.as_deref().map(|s| (s, *tint))),
-        Paint::Gradient(g) => {
-            for s in &mut g.gradient.stops {
-                s.color = f(&s.color, s.swatch.as_deref().map(|n| (n, s.tint)));
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Apply `f` to every colour of a node tree (fills, strokes, gradient stops, text runs, mesh
-/// points) given its swatch link and tint, keeping the links.
-pub fn map_node_colors(n: &mut Node, f: &mut dyn FnMut(&Color, Link) -> Color) {
-    for it in &mut n.appearance.items {
-        match it {
-            AppearanceItem::Fill(l) => map_paint(&mut l.paint, f),
-            AppearanceItem::Stroke(l) => map_paint(&mut l.paint, f),
-        }
-    }
-    match &mut n.kind {
-        NodeKind::Text(t) => {
-            for r in &mut t.runs {
-                map_paint(&mut r.style.fill, f);
-                map_paint(&mut r.style.stroke, f);
-            }
-        }
-        NodeKind::Mesh(m) => {
-            for p in &mut m.points {
-                p.color = f(&p.color, None);
-            }
-        }
-        _ => {}
-    }
-    if let Some(ch) = n.children_mut() {
-        for c in ch.iter_mut() {
-            map_node_colors(Arc::make_mut(c), f);
-        }
-    }
-}
-
-/// Apply `f` to every colour in the document's art and symbol definitions.
-pub fn map_document_colors(doc: &mut Document, f: &mut dyn FnMut(&Color, Link) -> Color) {
-    for l in &mut doc.layers {
-        map_node_colors(Arc::make_mut(l), f);
-    }
-    for s in &mut doc.symbols {
-        map_node_colors(Arc::make_mut(&mut s.art), f);
-    }
-}
 
 /// Whether overprinting shows: Overprint Preview, or Separations Preview (which implies it).
 pub(crate) fn overprints(opts: &RenderOptions) -> bool {
     opts.overprint_preview || opts.proof.as_ref().is_some_and(|p| p.separations.is_some())
 }
 
-/// Draw the overprinting fills and strokes of `a`'s subtree with Multiply (those with a blend
-/// mode of their own keep it), copying only the nodes on the way to them. With `discard_white`
-/// (Document Setup → Discard White Overprint) white fills and strokes knock out instead.
-fn multiply_overprints(a: &mut Arc<Node>, discard_white: bool) {
-    if !a.has_overprint() {
-        return;
-    }
-    let n = Arc::make_mut(a);
-    let multiplies =
-        |overprint: bool, blend: BlendMode, paint: &Paint| overprint && blend == BlendMode::Normal && !(discard_white && is_white(paint));
-    for it in &mut n.appearance.items {
-        match it {
-            AppearanceItem::Fill(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
-            AppearanceItem::Stroke(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
-            _ => {}
-        }
-    }
-    for c in n.children_mut().into_iter().flatten() {
-        multiply_overprints(c, discard_white);
-    }
-}
-
-/// A solid paint of paper white (no ink in any colour model).
-fn is_white(p: &Paint) -> bool {
-    let Paint::Solid { color, .. } = p else { return false };
-    match *color {
-        Color::Rgb { r, g, b } => r.min(g).min(b) >= 1.0,
-        Color::Cmyk { c, m, y, k } => c.max(m).max(y).max(k) <= 0.0,
-        Color::Gray { k } => k <= 0.0,
-        Color::Lab { l, a, b } => l >= 100.0 && a == 0.0 && b == 0.0,
-    }
-}
-
 fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], color: &Color, link: Link) -> Color {
     let ink = inks(doc, c, color, link, proof.intent);
     let rgb = if visible.len() == 1 {
-        let name = &visible[0];
-        let v = match PROCESS_PLATES.iter().position(|p| p == name) {
-            Some(i) => ink.cmyk[i],
-            None => ink.spot_tint(name),
-        };
-        [1.0 - v; 3]
+        [1.0 - ink.on_plate(&visible[0]); 3]
     } else {
         let mut cmyk = ink.cmyk;
         for (i, p) in PROCESS_PLATES.iter().enumerate() {

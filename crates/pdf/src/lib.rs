@@ -26,6 +26,8 @@
 //!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
 //!   The native document a PDF carries comes back too ([`ImportReport::native`], [`editing()`]).
 //! - Presets: named settings, the built-in ones generated in code ([`builtin_presets`]).
+//! - [`print()`] lays a document out on paper as File → Print does ([`PrintSettings`]) and writes
+//!   the job as a print-ready PDF: composite or one page per ink.
 #![forbid(unsafe_code)]
 
 mod editing;
@@ -41,6 +43,7 @@ mod lab_spot;
 mod marks;
 mod pages;
 mod presets;
+mod print;
 mod settings;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing};
@@ -48,6 +51,7 @@ pub use export::{export, export_with_report};
 pub use import::{import, import_with_report};
 pub use pages::{PageInfo, PdfInfo, info, is_postscript};
 pub use presets::*;
+pub use print::*;
 pub use settings::*;
 
 use vectorcraft_doc::Document;
@@ -204,6 +208,8 @@ mod tests_import_options;
 mod tests_marks;
 #[cfg(test)]
 mod tests_presets;
+#[cfg(test)]
+mod tests_print;
 #[cfg(test)]
 mod tests_settings;
 #[cfg(test)]

@@ -1228,3 +1228,38 @@ Screens doesn't write EPS.
 {"name":"run_command","arguments":{"command":"document.exportEps","params":{"path":"/tmp/logo.eps","level":2,"previewFormat":"tiffBw","flattenerPreset":"high"}}}
 {"name":"export","arguments":{"path":"/tmp/art.eps","options":{"useArtboards":true,"cmykPostScript":false}}}
 ```
+
+## Print
+
+File → Print writes the job as a print-ready PDF (there is no printer driver): each page is a sheet of the chosen
+paper. `file.print {settings?, path?}` → `{pages, path | dataBase64, bytes, warnings}`; `print.preview {settings?}`
+answers what it would print without writing it: `{pages (copies included), sheets: [{artboard, tile?, ink?, width,
+height, orientation, scale}] (one copy, in order), tiles: [{artboard, columns, rows, printed, tiles}] (document
+space), inks: [{name, spot, print, frequency, angle}], warnings, settings}`. `print.setup {settings?}` saves the
+settings with the document (one undo step, kept in the native file as `print_setup`); both other commands start from
+the saved settings, with `settings` over them (`null` keeps a value). `list_commands` with filter `print.setup`
+documents every field:
+
+- General: `copies` (1–999), `collate`, `reverse`; `artboards: all|range|ignore` with `range: "1-3, 5"` (ignore: all
+  the art as one page), `skipBlank`; `media: letter|legal|tabloid|a3|a4|a5|b4|b5|custom` (`width`, `height` in pt),
+  `orientation`, `autoRotate` (on by default: the paper turns to each artboard), `transverse`; `printLayers:
+  visiblePrintable|visible|all` (template layers never print); `placement: {origin, x, y}` places the printed area
+  (artboard, bleed and marks) on the imageable area (the paper inside `margin`); `scaling: none|fit|custom|tileFull|
+  tileImageable` with `scale: {width, height}` (%), `overlap` and `tileRange` (tiles numbered across then down).
+- `marks` and `bleed` as `document.exportPdf` takes them (the bleed is the document's unless `useDocument: false`),
+  drawn around the artboard at the paper's scale; the page information adds the tile and the ink with its screen.
+- `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, inks: [{name,
+  print, frequency, angle}]}`: separations print one page per ink in the grey of its coverage (images too;
+  overprinting fills and strokes don't knock out), Registration on every plate; emulsion down mirrors the page and a
+  negative inverts it.
+- `graphics: {autoFlatness, flatness, fonts}` and `color: {intent, preserveNumbers}` (the intent colours separate
+  with; without preserveNumbers CMYK colours are separated again).
+
+Halftone screens and a fixed flatness are not written to the PDF (the output device's apply): the warnings say so,
+as they do for art larger than the imageable area and for overprints in composite output.
+
+```json
+{"name":"run_command","arguments":{"command":"print.setup","params":{"settings":{"media":"a4","scaling":"fit","marks":{"trim":true}}}}}
+{"name":"run_command","arguments":{"command":"print.preview","params":{"settings":{"output":{"mode":"separations"}}}}}
+{"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.pdf","settings":{"copies":2}}}}
+```

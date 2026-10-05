@@ -49,71 +49,20 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         return Err(PdfError::BadArtboard(*bad));
     }
 
-    let version = match set.compatibility {
-        Compatibility::Pdf14 => PdfVersion::Pdf14,
-        Compatibility::Pdf15 => PdfVersion::Pdf15,
-        Compatibility::Pdf16 => PdfVersion::Pdf16,
-        Compatibility::Pdf17 => PdfVersion::Pdf17,
-        Compatibility::Pdf20 => PdfVersion::Pdf20,
-    };
-    let mut cb = ConfigurationBuilder::new().with_version(version);
-    // `check` has refused the standards (and standard/version pairs) the writer can't produce.
-    if set.standard == Standard::PdfA2b {
-        cb = cb.with_archival_validator(Archival::A2_B);
-    }
-    let configuration = cb.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
-    let settings = krilla::SerializeSettings { compress_content_streams: set.compression.compress_text, configuration, ..Default::default() };
-
-    let mut pdf = krilla::Document::new_with(settings);
     let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
-    let mut meta = Metadata::new().creator("VectorCraft".into()).producer("VectorCraft".into());
-    if !title.is_empty() {
-        meta = meta.title(title.clone());
-    }
-    // File Info.
-    let info = &doc.metadata;
-    let given = |s: &str| Some(s.trim()).filter(|s| !s.is_empty()).map(str::to_string);
-    if let Some(a) = given(&info.author) {
-        meta = meta.authors(vec![a]);
-    }
-    if let Some(d) = given(&info.description) {
-        meta = meta.description(d);
-    }
-    if !info.keywords.is_empty() {
-        meta = meta.keywords(info.keywords.clone());
-    }
     let created_at = opts.created.or_else(vectorcraft_doc::metadata::now_unix);
-    let created = created_at.map(date_time);
-    if let Some(t) = created {
-        meta = meta.creation_date(t);
-    }
-    pdf.set_metadata(meta);
+    let mut w = Writer::new(doc, set, &title, created_at, doc.color_mode == vectorcraft_doc::ColorMode::Cmyk)?;
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
     let mut warnings = set.warnings();
     let native = opts.native.as_deref().filter(|_| set.preserve_editing);
     if let Some(native) = native {
-        pdf.embed_file(crate::editing::embedded_file(native, set.compression.compress_text, created));
+        w.pdf.embed_file(crate::editing::embedded_file(native, set.compression.compress_text, created_at.map(date_time)));
     } else if set.preserve_editing {
         warnings.push("Preserve editing needs the native document, which wasn't given: the PDF reopens as plain artwork".into());
     }
 
-    let mut ex = Exporter {
-        doc,
-        warnings: vec![],
-        images: HashMap::new(),
-        brushes: None,
-        knockout: doc.page_knockout,
-        lab_spots: vec![],
-        interpolate: set.standard != Standard::PdfA2b,
-        compression: &set.compression,
-        non_printing: set.include_non_printing || set.create_layers,
-    };
-    // CMYK documents blend in CMYK, as on screen: their groups' blending space is rewritten (see
-    // `cmyk_blending`), and transparency at the top of a page is put in a non-isolated group of
-    // its own (the PDF writer has no page group attributes).
-    let cmyk = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
-    let page_group = doc.page_isolate || doc.page_knockout;
-    let cmyk_page_group = cmyk && !page_group && doc.layers.iter().any(|l| l.shows_transparency());
+    let mut ex = Exporter::new(doc, set);
+    ex.non_printing = set.include_non_printing || set.create_layers;
     // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed, and by the
     // printer's marks around that.
     let bleed = set.bleed_of(doc);
@@ -121,19 +70,142 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     for i in indices {
         let boxes = PageBoxes::new(doc.artboards[i].rect, bleed, &marks);
         let (m, r) = (boxes.media, boxes.bleed);
-        let size = Size::from_wh(m.width().max(1.0) as f32, m.height().max(1.0) as f32).ok_or(PdfError::BadArtboard(i))?;
-        // The boxes in page space (y-down from the media box's top-left corner, like ours).
-        let at = |b: Rect| krilla::geom::Rect::from_ltrb((b.x0 - m.x0) as f32, (b.y0 - m.y0) as f32, (b.x1 - m.x0) as f32, (b.y1 - m.y0) as f32);
-        let mut page = pdf.start_page_with(PageSettings::new(size).with_trim_box(at(boxes.trim)).with_bleed_box(at(boxes.bleed)));
+        let info = if marks.page_info { crate::marks::page_info(doc, &title, i, created_at) } else { String::new() };
+        let art = crate::marks::art(doc, &marks, &boxes, bleed, &info);
+        // The page is the media box, y down from its top-left corner (like ours).
+        let view = Affine::translate((-m.x0, -m.y0));
+        let sheet = Sheet {
+            size: (m.width(), m.height()),
+            trim: view.transform_rect_bbox(boxes.trim),
+            bleed: view.transform_rect_bbox(r),
+            view,
+            window: None,
+            place: Affine::IDENTITY,
+            area: r,
+            // Art reaches as far as the bleed: the marks lie outside it.
+            clip: m != r,
+            marks: art.as_ref(),
+            negative: false,
+        };
+        w.page(&mut ex, &sheet).map_err(|_| PdfError::BadArtboard(i))?;
+    }
+    w.absorb(ex);
+    let (bytes, more) = w.finish()?;
+    let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
+    warnings.extend(more);
+    warnings.dedup();
+    Ok(ExportReport { bytes, warnings })
+}
+
+/// A PDF being written, shared by export and print: the file's configuration and metadata, then
+/// its pages ([`Self::page`]), each drawn by an [`Exporter`].
+pub(crate) struct Writer {
+    pub pdf: krilla::Document,
+    /// Groups blend in CMYK (a CMYK document's composite, see `cmyk_blending`).
+    cmyk: bool,
+    /// Spot colours written with a Lab alternate, gathered from the exporters ([`Self::absorb`]).
+    lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
+    warnings: Vec<String>,
+}
+
+/// One page as [`Writer::page`] draws it: the art placed in a drawing space ([`Self::place`]),
+/// which [`Self::view`] maps onto the page.
+pub(crate) struct Sheet<'a> {
+    /// The page's size in points.
+    pub size: (f64, f64),
+    /// The TrimBox and BleedBox, in page space (y down from the top-left corner).
+    pub trim: Rect,
+    pub bleed: Rect,
+    /// Drawing space → page space.
+    pub view: Affine,
+    /// The part of the drawing space that shows (a tile): art and marks are clipped to it.
+    pub window: Option<Rect>,
+    /// Document space → drawing space.
+    pub place: Affine,
+    /// The art drawn, in document space (the bleed box): what lies outside it is left out.
+    pub area: Rect,
+    /// Clip the art to [`Self::area`].
+    pub clip: bool,
+    /// Printer's marks, in drawing space.
+    pub marks: Option<&'a Node>,
+    /// Invert the page: paper black, ink clear (a film negative).
+    pub negative: bool,
+}
+
+impl Writer {
+    /// A PDF with `set`'s version, standard and compression, and `doc`'s metadata under `title`,
+    /// created at `created` (Unix seconds). With `cmyk`, transparency blends in CMYK.
+    pub(crate) fn new(doc: &Document, set: &crate::PdfSettings, title: &str, created: Option<i64>, cmyk: bool) -> Result<Self, PdfError> {
+        let version = match set.compatibility {
+            Compatibility::Pdf14 => PdfVersion::Pdf14,
+            Compatibility::Pdf15 => PdfVersion::Pdf15,
+            Compatibility::Pdf16 => PdfVersion::Pdf16,
+            Compatibility::Pdf17 => PdfVersion::Pdf17,
+            Compatibility::Pdf20 => PdfVersion::Pdf20,
+        };
+        let mut cb = ConfigurationBuilder::new().with_version(version);
+        // `check` has refused the standards (and standard/version pairs) the writer can't produce.
+        if set.standard == Standard::PdfA2b {
+            cb = cb.with_archival_validator(Archival::A2_B);
+        }
+        let configuration = cb.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
+        let settings = krilla::SerializeSettings { compress_content_streams: set.compression.compress_text, configuration, ..Default::default() };
+
+        let mut pdf = krilla::Document::new_with(settings);
+        let mut meta = Metadata::new().creator("VectorCraft".into()).producer("VectorCraft".into());
+        if !title.is_empty() {
+            meta = meta.title(title.to_string());
+        }
+        // File Info.
+        let info = &doc.metadata;
+        let given = |s: &str| Some(s.trim()).filter(|s| !s.is_empty()).map(str::to_string);
+        if let Some(a) = given(&info.author) {
+            meta = meta.authors(vec![a]);
+        }
+        if let Some(d) = given(&info.description) {
+            meta = meta.description(d);
+        }
+        if !info.keywords.is_empty() {
+            meta = meta.keywords(info.keywords.clone());
+        }
+        if let Some(t) = created.map(date_time) {
+            meta = meta.creation_date(t);
+        }
+        pdf.set_metadata(meta);
+        Ok(Self { pdf, cmyk, lab_spots: vec![], warnings: vec![] })
+    }
+
+    /// Draw one page: the art of `ex`'s document placed as `sheet` says, then its marks.
+    pub(crate) fn page(&mut self, ex: &mut Exporter, sheet: &Sheet) -> Result<(), PdfError> {
+        let (w, h) = sheet.size;
+        let size = Size::from_wh(w.max(1.0) as f32, h.max(1.0) as f32).ok_or_else(|| PdfError::BadSetting(format!("page size {w} × {h}")))?;
+        let at = |b: Rect| krilla::geom::Rect::from_ltrb(b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32);
+        let mut page = self.pdf.start_page_with(PageSettings::new(size).with_trim_box(at(sheet.trim)).with_bleed_box(at(sheet.bleed)));
         let mut s = page.surface();
-        s.push_transform(&xf(Affine::translate((-m.x0, -m.y0))));
-        // Art reaches as far as the bleed: the marks lie outside it.
-        let clip = (m != r).then(|| to_path(&r.to_path(0.1))).flatten();
+        let paper = Rect::new(0.0, 0.0, w, h);
+        if sheet.negative {
+            cover(&mut s, paper, 255, 1.0);
+        }
+        s.push_transform(&xf(sheet.view));
+        let window = sheet.window.and_then(|r| to_path(&r.to_path(0.1)));
+        if let Some(clip) = &window {
+            s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
+        }
+        let placed = sheet.place != Affine::IDENTITY;
+        if placed {
+            s.push_transform(&xf(sheet.place));
+        }
+        let r = sheet.area;
+        let clip = sheet.clip.then(|| to_path(&r.to_path(0.1))).flatten();
         if let Some(clip) = &clip {
             s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
         }
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
-        // writer has no page group attributes).
+        // writer has no page group attributes). In CMYK, transparency at the top of a page is put
+        // in a non-isolated group of its own, whose blending space `cmyk_blending` rewrites.
+        let doc = ex.doc;
+        let page_group = doc.page_isolate || doc.page_knockout;
+        let cmyk_page_group = self.cmyk && !page_group && ex.shows_transparency();
         if page_group {
             s.push_isolated();
         } else if cmyk_page_group {
@@ -147,25 +219,53 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         if clip.is_some() {
             s.pop();
         }
-        let info = if marks.page_info { crate::marks::page_info(doc, &title, i, created_at) } else { String::new() };
-        if let Some(art) = crate::marks::art(doc, &marks, &boxes, bleed, &info) {
+        if placed {
+            s.pop();
+        }
+        if let Some(art) = sheet.marks {
+            // The drawing space the page shows (the marks' area).
+            let shown = sheet.view.inverse().transform_rect_bbox(paper);
             let knockout = std::mem::replace(&mut ex.knockout, false);
-            ex.node(&mut s, &art, m, true);
+            ex.node(&mut s, art, sheet.window.map_or(shown, |r| r.intersect(shown)), true);
             ex.knockout = knockout;
         }
+        if window.is_some() {
+            s.pop();
+        }
         s.pop();
+        if sheet.negative {
+            s.push_blend_mode(krilla::blend::BlendMode::Difference);
+            cover(&mut s, paper, 255, 1.0);
+            s.pop();
+        }
         s.finish();
         page.finish();
+        Ok(())
     }
-    let mut bytes = pdf.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
-    if cmyk {
-        cmyk_blending(&mut bytes);
+
+    /// Take an exporter's warnings and Lab spot colours once its pages are drawn.
+    pub(crate) fn absorb(&mut self, ex: Exporter) {
+        for w in ex.warnings {
+            if !self.warnings.contains(&w) {
+                self.warnings.push(w);
+            }
+        }
+        for spot in ex.lab_spots {
+            if !self.lab_spots.iter().any(|(n, _)| *n == spot.0) {
+                self.lab_spots.push(spot);
+            }
+        }
     }
-    let bytes = if ex.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &ex.lab_spots) };
-    let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
-    warnings.extend(ex.warnings);
-    warnings.dedup();
-    Ok(ExportReport { bytes, warnings })
+
+    /// The finished file and the warnings of its drawing.
+    pub(crate) fn finish(self) -> Result<(Vec<u8>, Vec<String>), PdfError> {
+        let mut bytes = self.pdf.finish().map_err(|e| PdfError::Write(format!("{e:?}")))?;
+        if self.cmyk {
+            cmyk_blending(&mut bytes);
+        }
+        let bytes = if self.lab_spots.is_empty() { bytes } else { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) };
+        Ok((bytes, self.warnings))
+    }
 }
 
 /// Make the transparency groups of `pdf` blend in DeviceCMYK. The PDF writer gives every group
@@ -240,7 +340,7 @@ fn date_time(t: i64) -> krilla::metadata::DateTime {
         .utc_offset_minute(0)
 }
 
-struct Exporter<'a> {
+pub(crate) struct Exporter<'a> {
     doc: &'a Document,
     warnings: Vec<String>,
     images: HashMap<String, Option<Image>>,
@@ -255,7 +355,37 @@ struct Exporter<'a> {
     /// How images are resampled and compressed.
     compression: &'a crate::CompressionSettings,
     /// Layers whose Print option is off are written too.
-    non_printing: bool,
+    pub non_printing: bool,
+    /// How colours are separated into CMYK (the colour settings' intent unless print sets one).
+    pub intent: vectorcraft_color::cms::Intent,
+    /// Whether a layer shows transparency (found out on the first page that asks).
+    transparent: Option<bool>,
+}
+
+impl<'a> Exporter<'a> {
+    /// An exporter of `doc` writing images as `set` says; layers whose Print option is off are
+    /// left out.
+    pub(crate) fn new(doc: &'a Document, set: &'a crate::PdfSettings) -> Self {
+        Self {
+            doc,
+            warnings: vec![],
+            images: HashMap::new(),
+            brushes: None,
+            knockout: doc.page_knockout,
+            lab_spots: vec![],
+            interpolate: set.standard != Standard::PdfA2b,
+            compression: &set.compression,
+            non_printing: false,
+            intent: vectorcraft_color::cms::active().settings().intent,
+            transparent: None,
+        }
+    }
+
+    /// Whether a layer shows transparency, which CMYK pages put in a group of its own.
+    fn shows_transparency(&mut self) -> bool {
+        let doc = self.doc;
+        *self.transparent.get_or_insert_with(|| doc.layers.iter().any(|l| l.shows_transparency()))
+    }
 }
 
 /// Most pixels along a side of a freeform gradient's image (its colour field is smooth).
@@ -358,8 +488,7 @@ impl Exporter<'_> {
     /// through the active colour settings, so the file carries press values.
     fn col(&mut self, c: &Color) -> krilla::color::Color {
         if self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && matches!(c, Color::Rgb { .. } | Color::Lab { .. }) {
-            let cms = vectorcraft_color::cms::active();
-            let [cc, m, y, k] = cms.to_cmyk(c, cms.settings().intent);
+            let [cc, m, y, k] = vectorcraft_color::cms::active().to_cmyk(c, self.intent);
             return cmyk::Color::new(q(cc), q(m), q(y), q(k)).into();
         }
         color(c)
@@ -377,8 +506,7 @@ impl Exporter<'_> {
         {
             self.lab_spots.push((name.to_string(), vectorcraft_color::cms::Lab::new(l, a, b)));
         }
-        let cms = vectorcraft_color::cms::active();
-        let full = cms.to_cmyk(&color, cms.settings().intent);
+        let full = vectorcraft_color::cms::active().to_cmyk(&color, self.intent);
         let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
         Some(SeparationSpace::new(SeparationColorant::Custom(sw.name.clone()), alt))
     }
