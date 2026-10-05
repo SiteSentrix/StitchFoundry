@@ -841,6 +841,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.packageDialog" => crate::dialogs::package::open(app),
         "file.showPackage" => crate::dialogs::package::show_package(app, p),
         "docInfo.save" => crate::panels::doc_info::save_report(app, p),
+        // Slice Options… and Divide Slices…: their dialogs, on the selected slices.
+        "object.slice.options" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::slices::open_options(app),
+        "object.slice.divide" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::slices::open_divide(app),
         _ => return None,
     };
     Some(r)
@@ -883,6 +886,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         }
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
+        "view.slices.lock" => app.session.slices_locked(),
+        "object.slice.clipToArtboard" => app.session.active().is_some_and(|d| d.doc.slices_clip_to_artboard),
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
@@ -926,6 +931,7 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "view.guides" => if v.guides { "Hide Guides" } else { "Show Guides" }.into(),
         "view.grid" => if v.grid { "Hide Grid" } else { "Show Grid" }.into(),
         "view.guides.lock" => if app.session.guides_locked() { "Unlock Guides" } else { "Lock Guides" }.into(),
+        "view.slices.hide" => if app.session.slices_hidden() { "Show Slices" } else { "Hide Slices" }.into(),
         id if id.starts_with("file.openRecent") => recent_slot(app, id)
             .map(|p| std::path::Path::new(p).file_name().map_or(p.clone(), |f| f.to_string_lossy().to_string()))
             .unwrap_or_else(|| "—".into()),
@@ -1285,7 +1291,23 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Make Pixel Perfect", "object.makePixelPerfect"),
                 Sep,
-                sub("Slice", vec![todo("Make"), todo("Release"), todo("Create from Guides"), todo("Create from Selection")]),
+                sub(
+                    "Slice",
+                    vec![
+                        c("Make", "object.slice.make"),
+                        c("Release", "object.slice.release"),
+                        c("Create from Guides", "object.slice.fromGuides"),
+                        c("Create from Selection", "object.slice.fromSelection"),
+                        Sep,
+                        c("Duplicate Slice", "object.slice.duplicate"),
+                        c("Combine Slices", "object.slice.combine"),
+                        c("Divide Slices…", "object.slice.divide"),
+                        Sep,
+                        c("Delete All", "object.slice.deleteAll"),
+                        c("Slice Options…", "object.slice.options"),
+                        c("Clip to Artboard", "object.slice.clipToArtboard"),
+                    ],
+                ),
                 Sep,
                 sub(
                     "Path",
@@ -1512,6 +1534,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Brush Strokes", "select.object.brushStrokes"),
                         c("Bristle Brush Strokes", "select.object.bristleBrushStrokes"),
                         c("Clipping Masks", "select.object.clippingMasks"),
+                        c("Slices", "select.object.slices"),
                         c("Stray Points", "select.object.strayPoints"),
                         c("Open Paths", "select.object.openPaths"),
                         Sep,
@@ -1569,6 +1592,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Hide Edges", "view.edges"),
                 c("Hide Artboards", "view.artboards"),
                 todo("Show Print Tiling"),
+                c("Hide Slices", "view.slices.hide"),
+                c("Lock Slices", "view.slices.lock"),
                 Sep,
                 sub("Rulers", vec![c("Show Rulers", "view.rulers"), todos("Change to Global Rulers", "Cmd+Alt+R"), todo("Show Video Rulers")]),
                 c("Hide Bounding Box", "view.boundingBox"),

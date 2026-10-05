@@ -22,6 +22,7 @@ pub mod pen;
 pub mod place;
 pub mod select;
 pub mod shape;
+pub mod slice;
 pub mod symbolism;
 pub mod text;
 pub mod xform;
@@ -209,6 +210,10 @@ pub struct ToolContext<'a> {
     /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
     /// the style at the caret, even the text the Type tool copied with its formatting.
     pub paste_plain_text: bool,
+    /// View → Hide Slices: the Slice Selection tool can't pick hidden slices.
+    pub slices_hidden: bool,
+    /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
+    pub slices_locked: bool,
 }
 
 impl ToolContext<'_> {
@@ -286,6 +291,10 @@ pub enum Cursor {
     AddStop,
     /// A gradient stop dragged off the bar: releasing deletes it.
     RemoveStop,
+    /// The Slice tool: a crosshair with a blade.
+    Slice,
+    /// The Slice Selection tool: the arrow with a slice badge.
+    SliceSelect,
 }
 
 /// A tool state machine.
@@ -347,6 +356,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| meshblend::create(other))
             .or_else(|| distort::create(other))
             .or_else(|| extra::create(other))
+            .or_else(|| slice::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }
@@ -409,6 +419,8 @@ pub(crate) mod testutil {
             unit: Unit::Points,
             stroke_unit: Unit::Points,
             paste_plain_text: false,
+            slices_hidden: false,
+            slices_locked: false,
         }
     }
 }

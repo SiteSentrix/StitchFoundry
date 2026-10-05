@@ -21,6 +21,7 @@ pub mod rastersettings;
 mod reach;
 pub mod selection;
 pub mod setup;
+pub mod slices;
 pub mod style_libs;
 pub mod swatches;
 pub mod text;
@@ -60,6 +61,7 @@ pub use profiles::ColorProfiles;
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
 pub use selection::{AnchorRef, Selection};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
+pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::{
     AreaOptions, CharPosition, CharStyle, FirstBaseline, Justify, ParaStyle, PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind, TextObject,
@@ -507,6 +509,13 @@ pub struct Document {
     /// lose them. Separate from [`Document::unknown`], which holds foreign data by design.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+    /// User slices (Slice tool, Object → Slice); object slices are [`Node::slice`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub slices: Vec<Slice>,
+    /// Object → Slice → Clip to Artboard: slices are clipped to the artboards and auto slices fill
+    /// them (on, the default); off, auto slices cover the art and the slices.
+    #[serde(default = "yes", skip_serializing_if = "skip::is_true")]
+    pub slices_clip_to_artboard: bool,
 }
 
 fn ppi72() -> f64 {
@@ -569,6 +578,8 @@ impl Document {
             last_view: None,
             color_profiles: ColorProfiles::default(),
             extra: Default::default(),
+            slices: vec![],
+            slices_clip_to_artboard: true,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
@@ -590,6 +601,7 @@ impl Document {
         for l in &self.layers {
             l.walk(&mut |n| max = max.max(n.id.0));
         }
+        max = self.slices.iter().fold(max, |m, s| m.max(s.id.0));
         self.next_id = self.next_id.max(max + 1);
     }
 
@@ -1018,5 +1030,7 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod tests_slices;
 #[cfg(test)]
 mod tests_units;

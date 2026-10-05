@@ -56,6 +56,13 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             }
             return;
         }
+        // Double-clicking a slice with the Slice Selection tool: Slice Options.
+        super::slices::OPTIONS => {
+            if let Err(e) = super::slices::open_options(app) {
+                app.status(e);
+            }
+            return;
+        }
         _ => return,
     };
     app.ui.dialog = Some(d);

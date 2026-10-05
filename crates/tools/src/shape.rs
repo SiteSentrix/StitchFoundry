@@ -80,12 +80,7 @@ impl ShapeTool {
                 ("shape.line".into(), json!({ "x1": a.x, "y1": a.y, "x2": b.x, "y2": b.y }))
             }
             _ => {
-                let mut d = p - start;
-                if m.shift {
-                    let s = d.x.abs().max(d.y.abs());
-                    d = vectorcraft_geom::Vec2::new(s * d.x.signum(), s * d.y.signum());
-                }
-                let r = if m.alt { Rect::from_points(start - d, start + d) } else { Rect::from_points(start, start + d) };
+                let r = drag_rect(start, p, m);
                 let cmd = if self.id == "ellipse" { "shape.ellipse" } else { "shape.rectangle" };
                 let mut v = json!({ "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height() });
                 if self.id == "roundedRectangle" {
@@ -95,6 +90,17 @@ impl ShapeTool {
             }
         }
     }
+}
+
+/// The rectangle a drag from `start` to `p` draws: Shift makes it a square, Alt draws it from its
+/// centre.
+pub(crate) fn drag_rect(start: Point, p: Point, m: Mods) -> Rect {
+    let mut d = p - start;
+    if m.shift {
+        let s = d.x.abs().max(d.y.abs());
+        d = vectorcraft_geom::Vec2::new(s * d.x.signum(), s * d.y.signum());
+    }
+    if m.alt { Rect::from_points(start - d, start + d) } else { Rect::from_points(start, start + d) }
 }
 
 impl Tool for ShapeTool {

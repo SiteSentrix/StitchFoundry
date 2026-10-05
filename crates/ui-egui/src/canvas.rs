@@ -286,6 +286,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
 
+    if !app.session.slices_hidden() {
+        slice_overlay(app, &painter, &xf);
+    }
+
     // Selection visuals and tool overlays.
     if app.ui.view.edges {
         hover_highlight(app, &painter, &xf);
@@ -365,6 +369,8 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::NotAllowed => C::NotAllowed,
         Cursor::AddStop => C::Copy,
         Cursor::RemoveStop => C::NotAllowed,
+        Cursor::Slice => C::Crosshair,
+        Cursor::SliceSelect => C::Default,
     }
 }
 
@@ -898,6 +904,53 @@ fn thread_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
                 p.rect_stroke(egui::Rect::from_center_size(port, egui::vec2(7.0, 7.0)), 0.0, Stroke::new(1.0, color), egui::StrokeKind::Inside);
                 p.line_segment([port - egui::vec2(2.0, 0.0), port + egui::vec2(2.0, 0.0)], Stroke::new(1.0, color));
             }
+        }
+    }
+}
+
+/// The slices (unless View → Hide Slices): user and object slices outlined in the Slices
+/// preferences' line colour, auto slices dashed and dimmer, each numbered at its top left (Show
+/// Slice Numbers); selected slices have a bolder outline. The layout is cached per revision.
+fn slice_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    let Some(st) = app.session.active() else { return };
+    let key = (st.uid, st.revision);
+    let slices = match &app.canvas.slices {
+        Some((k, s)) if *k == key => s.clone(),
+        _ => {
+            let s = std::sync::Arc::new(st.doc.slice_layout());
+            app.canvas.slices = Some((key, s.clone()));
+            s
+        }
+    };
+    if slices.is_empty() {
+        return;
+    }
+    let prefs = &app.session.prefs;
+    let line = vectorcraft_color::Color::from_hex(&prefs.slice_line_color).map_or(Color32::from_rgb(0xff, 0x3f, 0x3f), |c| {
+        let [r, g, b, _] = c.to_rgba8(1.0);
+        Color32::from_rgb(r, g, b)
+    });
+    let dim = line.gamma_multiply(0.55);
+    let selected = &st.selection.slices;
+    let objects = &st.selection.objects;
+    for a in slices.iter() {
+        let auto = a.source == vectorcraft_doc::SliceSource::Auto;
+        let on = a.id.is_some_and(|id| selected.contains(&id) || objects.contains(&id));
+        let q = xf.quad(a.rect);
+        let ring: Vec<Pos2> = q.iter().chain(q.first()).copied().collect();
+        if auto {
+            p.extend(Shape::dashed_line(&ring, Stroke::new(1.0, dim), 3.0, 3.0));
+        } else {
+            p.add(Shape::line(ring, Stroke::new(if on { 2.0 } else { 1.0 }, line)));
+        }
+        if prefs.show_slice_numbers
+            && let Some(tl) = q.first()
+        {
+            let font = egui::FontId::proportional(9.0);
+            let galley = p.layout_no_wrap(format!("{:02}", a.number), font, Color32::WHITE);
+            let badge = egui::Rect::from_min_size(*tl + vec2(1.0, 1.0), galley.size() + vec2(6.0, 2.0));
+            p.rect_filled(badge, CornerRadius::ZERO, if auto { dim } else { line });
+            p.galley(badge.min + vec2(3.0, 1.0), galley, Color32::WHITE);
         }
     }
 }
