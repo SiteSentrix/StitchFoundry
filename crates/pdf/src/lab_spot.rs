@@ -9,6 +9,8 @@
 use vectorcraft_color::cms::Lab;
 use vectorcraft_color::cms::lab::D50;
 
+use crate::patch::{Patch, Xref};
+
 /// `name` as the PDF writer writes a name object (`/` then the bytes, irregular ones as `#XX`).
 fn pdf_name(name: &str) -> Vec<u8> {
     let mut out = vec![b'/'];
@@ -53,8 +55,9 @@ pub(crate) fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
 /// written by the export: uncompressed objects, a cross-reference table) to Lab alternates.
 /// Spaces written another way are left as they are.
 pub(crate) fn lab_alternates(pdf: Vec<u8>, spots: &[(String, Lab)]) -> Vec<u8> {
-    // (start, end, replacement) of each rewritten array, in file order.
-    let mut edits: Vec<(usize, usize, Vec<u8>)> = vec![];
+    let Some(xref) = Xref::read(&pdf) else { return pdf };
+    let mut patch = Patch::new(&xref);
+    let mut any = false;
     for (name, lab) in spots {
         let mut head = b"[/Separation".to_vec();
         head.extend(pdf_name(name));
@@ -62,52 +65,18 @@ pub(crate) fn lab_alternates(pdf: Vec<u8>, spots: &[(String, Lab)]) -> Vec<u8> {
         let mut from = 0;
         while let Some(start) = find(&pdf, &head, from) {
             let Some(end) = find(&pdf, b">>]", start).map(|e| e + 3) else { break };
-            edits.push((start, end, lab_separation(name, *lab)));
+            patch.replace(start, end, lab_separation(name, *lab));
+            any = true;
             from = end;
         }
     }
-    let Some(xref) = xref_offset(&pdf) else { return pdf };
-    if edits.is_empty() || edits.iter().any(|e| e.1 > xref) {
+    if !any {
         return pdf;
     }
-    edits.sort_by_key(|e| e.0);
-    // Where a byte offset of the old file lands in the new one.
-    let moved = |off: usize| -> usize {
-        edits.iter().filter(|e| e.1 <= off).fold(off as isize, |o, e| o + e.2.len() as isize - (e.1 - e.0) as isize) as usize
-    };
-    let mut out = Vec::with_capacity(pdf.len() + 256 * edits.len());
-    let mut at = 0;
-    for (start, end, new) in &edits {
-        out.extend_from_slice(&pdf[at..*start]);
-        out.extend_from_slice(new);
-        at = *end;
+    match patch.apply(&pdf, &xref) {
+        Ok(out) => out,
+        Err(_) => pdf,
     }
-    out.extend_from_slice(&pdf[at..xref]);
-    // The cross-reference table: `xref\n0 N\n` then N 20-byte entries; in-use ones hold offsets.
-    let tail = &pdf[xref..];
-    let Some(entries) = find(tail, b"\n", 5).map(|i| i + 1) else { return pdf };
-    let Some(count) = std::str::from_utf8(&tail[5..entries - 1]).ok().and_then(|s| s.split_whitespace().nth(1)?.parse::<usize>().ok()) else {
-        return pdf;
-    };
-    let table_end = entries + 20 * count;
-    if tail.len() < table_end {
-        return pdf;
-    }
-    out.extend_from_slice(&tail[..entries]);
-    for e in tail[entries..table_end].chunks(20) {
-        match std::str::from_utf8(&e[..10]).ok().and_then(|s| s.parse::<usize>().ok()) {
-            Some(off) if e[17] == b'n' => {
-                out.extend(format!("{:010}", moved(off)).bytes());
-                out.extend_from_slice(&e[10..]);
-            }
-            _ => out.extend_from_slice(e),
-        }
-    }
-    let rest = &tail[table_end..];
-    let Some(sx) = rfind(rest, b"startxref\n") else { return pdf };
-    out.extend_from_slice(&rest[..sx]);
-    out.extend(format!("startxref\n{}\n%%EOF", moved(xref)).bytes());
-    out
 }
 
 pub(crate) fn rfind(hay: &[u8], needle: &[u8]) -> Option<usize> {

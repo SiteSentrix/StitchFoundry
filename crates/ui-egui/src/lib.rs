@@ -53,6 +53,8 @@ mod tests_overprint;
 #[cfg(test)]
 mod tests_paintchips;
 #[cfg(test)]
+mod tests_pdfoutput;
+#[cfg(test)]
 mod tests_place;
 #[cfg(test)]
 mod tests_recolor;

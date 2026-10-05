@@ -4397,6 +4397,7 @@ name = "vectorcraft-pdf"
 version = "0.2.0"
 dependencies = [
  "aes",
+ "flate2",
  "hayro-interpret",
  "hayro-syntax",
  "image",

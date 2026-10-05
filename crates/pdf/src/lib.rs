@@ -6,7 +6,9 @@
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
 //!   freeform gradients as images (clipped to what they paint), embedded images (resampled and
-//!   compressed as the Compression settings say) and text as outlined glyph paths. Hidden objects,
+//!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
+//!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
+//!   given an output intent as the Output settings say. Hidden objects,
 //!   guides and template layers are skipped, and so are non-printing layers unless asked for.
 //!   Each page is its artboard (the trim box) grown by the bleed (the bleed box) and by the
 //!   printer's marks around it (the media box), drawn in Registration. [`PdfSettings`] is the Save PDF
@@ -45,7 +47,9 @@ mod import_shading;
 mod import_text;
 mod lab_spot;
 mod marks;
+mod output;
 mod pages;
+mod patch;
 mod presets;
 mod print;
 mod settings;
@@ -214,9 +218,13 @@ mod tests_import_options;
 #[cfg(test)]
 mod tests_marks;
 #[cfg(test)]
+mod tests_output;
+#[cfg(test)]
 mod tests_presets;
 #[cfg(test)]
 mod tests_print;
+#[cfg(test)]
+mod tests_realtext;
 #[cfg(test)]
 mod tests_settings;
 #[cfg(test)]

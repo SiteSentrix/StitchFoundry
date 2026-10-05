@@ -799,6 +799,22 @@ the colour bars are process, spot and black-tint patches. Layers whose Print opt
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"Press Quality","marks":{"trim":true,"registration":true,"colorBars":true,"pageInfo":true}}}}
 ```
 
+The Output and Advanced sections convert colours and write real text. `output: {conversion, destination}` converts
+every colour into the destination profile's model (`destination`; CMYK of another profile too) or only the colours of
+the other model (`preserveNumbers`: colours already in it keep their numbers); grey stays grey, images are converted
+too and printer's marks are not. The destination is any profile `edit.colorSettings` lists (default: the document's
+for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
+`edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
+the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve. `outputIntent` embeds a profile as the file's
+`/GTS_PDFX` output intent with `outputCondition`, `outputConditionId` and `registry`, and `trapped` sets `/Trapped`
+(PDF/A files keep their own output intent). `advanced: {outlineText: false}` writes type as selectable, searchable
+text in embedded subset fonts with a ToUnicode map; fonts whose licence forbids embedding stay outlines, with a
+warning.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","output":{"conversion":"preserveNumbers","destination":"VectorCraft Generic CMYK (SWOP-like)","profiles":"destination","outputIntent":"VectorCraft Generic CMYK (SWOP-like)","trapped":true},"advanced":{"outlineText":false}}}}
+```
+
 ## Scale Strokes & Effects
 
 `object.scale`, `object.transform` and `object.transformEach` take `strokes?: bool` (Scale Strokes & Effects) and

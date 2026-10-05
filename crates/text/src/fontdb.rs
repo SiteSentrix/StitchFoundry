@@ -133,6 +133,10 @@ impl FontFace {
     pub fn embeddable(&self) -> bool {
         self.fs_type() & 0x000f != 0x0002
     }
+    /// The face's index in its font file ([`Self::file_data`]; collections hold several).
+    pub fn face_index(&self) -> u32 {
+        self.index
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

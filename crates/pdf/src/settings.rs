@@ -342,7 +342,8 @@ pub struct OutputSettings {
 pub struct AdvancedSettings {
     /// Embed whole fonts when more than this share (%) of their characters is used.
     pub font_subset_percent: f64,
-    /// Text as glyph outlines (the only text the writer produces today).
+    /// Text as glyph outlines; off, text is real (selectable, searchable) text in embedded subset
+    /// fonts.
     pub outline_text: bool,
     pub overprint: Overprint,
 }
@@ -397,6 +398,7 @@ impl PdfSettings {
         if !self.standard.supported() {
             return Err(PdfError::Unsupported(format!("{} output is not supported yet", self.standard.label())));
         }
+        crate::output::check(self)?;
         self.check_values()
     }
 
@@ -432,23 +434,15 @@ impl PdfSettings {
     /// Options that are accepted but not applied by the writer yet, one warning each.
     pub fn warnings(&self) -> Vec<String> {
         let d = Self::default();
-        let o = &self.output;
         let s = &self.security;
         [
             (self.thumbnails, "page thumbnails are not embedded yet"),
             (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers, "PDF layers are not written yet: every layer is plain page content"),
-            (o.conversion != ColorConversion::None, "colour conversion is not applied yet: colours are written as they are"),
-            (o.profiles != ProfileInclusion::None, "ICC profiles are not embedded yet"),
             (
-                !o.output_intent.is_empty()
-                    || !o.output_condition.is_empty()
-                    || !o.output_condition_id.is_empty()
-                    || !o.registry.is_empty()
-                    || o.trapped,
-                "output intent and trapped entries are not written yet",
+                !self.advanced.outline_text && self.advanced.font_subset_percent < 100.0,
+                "fonts are embedded as subsets of the characters used: a subset threshold below 100% is not applied",
             ),
-            (!self.advanced.outline_text, "text is exported as outlines: real, selectable text is not written yet"),
             (
                 !s.protected()
                     && (s.printing != d.security.printing
@@ -463,6 +457,7 @@ impl PdfSettings {
         .filter(|(on, _)| *on)
         .map(|(_, w)| w.to_string())
         .chain(crate::encrypt::warnings(self))
+        .chain(crate::output::warnings(self))
         .collect()
     }
 }

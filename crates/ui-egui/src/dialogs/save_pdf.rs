@@ -55,6 +55,8 @@ const WEIGHT_LABELS: [&str; 3] = ["0.125 pt", "0.25 pt", "0.5 pt"];
 
 /// The Destination entry for the document's own profile (stored as "").
 const DOCUMENT_PROFILE: &str = "Document profile";
+/// The Output Intent Profile entry for no output intent (stored as "").
+const NO_PROFILE: &str = "None";
 
 const LABEL_WIDTH: f32 = 150.0;
 /// Width of the section list (its frame adds 6 px a side).
@@ -523,38 +525,44 @@ fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// A dropdown of the colour profiles (`names`, the first one standing for "" at `path`), showing
+/// the profile at `path` (a name that isn't one of them too).
+fn profile_pick(ui: &mut egui::Ui, d: &mut Dialog, path: &str, names: &[&str], enabled: bool) {
+    let blank = names.first().copied().unwrap_or_default();
+    let current = get(d, path).as_str().filter(|s| !s.is_empty()).unwrap_or(blank).to_string();
+    ui.add_enabled_ui(enabled, |ui| {
+        if let Some(i) = widgets::dropdown(ui, path, &current, names, 300.0) {
+            set(d, path, json!(if i == 0 { "" } else { names.get(i).copied().unwrap_or_default() }));
+        }
+    });
+}
+
 fn output(ui: &mut egui::Ui, d: &mut Dialog) {
+    let profiles = vectorcraft_color::cms::profiles();
+    let names = |blank: &'static str| -> Vec<&str> { std::iter::once(blank).chain(profiles.iter().map(|p| p.name.as_str())).collect() };
     heading(ui, "Color");
     row(ui, "Color conversion:", |ui| {
         pick::<ColorConversion>(ui, d, "output.conversion", 300.0, |_| true);
     });
     let converting = get(d, "output.conversion") != ColorConversion::None.id();
-    row(ui, "Destination:", |ui| {
-        let profiles = vectorcraft_color::cms::profiles();
-        let names: Vec<&str> = std::iter::once(DOCUMENT_PROFILE).chain(profiles.iter().map(|p| p.name.as_str())).collect();
-        let current = get(d, "output.destination").as_str().filter(|s| !s.is_empty()).unwrap_or(DOCUMENT_PROFILE).to_string();
-        ui.add_enabled_ui(converting, |ui| {
-            if let Some(i) = widgets::dropdown(ui, "output.destination", &current, &names, 300.0) {
-                set(d, "output.destination", json!(if i == 0 { "" } else { names.get(i).copied().unwrap_or_default() }));
-            }
-        });
-    });
+    row(ui, "Destination:", |ui| profile_pick(ui, d, "output.destination", &names(DOCUMENT_PROFILE), converting));
     row(ui, "Profile inclusion:", |ui| {
         pick::<ProfileInclusion>(ui, d, "output.profiles", 300.0, |_| true);
     });
-    heading(ui, "PDF/X");
-    let pdfx = matches!(choice::<Standard>(d, "standard"), Some(Standard::PdfX1a | Standard::PdfX3 | Standard::PdfX4));
+    heading(ui, "Output Intent");
+    // PDF/A files carry their own output intent.
+    let own = choice::<Standard>(d, "standard") != Some(Standard::PdfA2b);
+    row(ui, "Output intent profile:", |ui| profile_pick(ui, d, "output.outputIntent", &names(NO_PROFILE), own));
     for (p, label) in [
-        ("output.outputIntent", "Output intent profile:"),
         ("output.outputCondition", "Output condition:"),
         ("output.outputConditionId", "Condition identifier:"),
         ("output.registry", "Registry name:"),
     ] {
-        row(ui, label, |ui| text(ui, d, p, pdfx));
+        row(ui, label, |ui| text(ui, d, p, own));
     }
-    flag(ui, d, "output.trapped", "Mark as trapped", pdfx);
-    if !pdfx {
-        note(ui, "These apply with a PDF/X standard.");
+    flag(ui, d, "output.trapped", "Mark as trapped", own);
+    if !own {
+        note(ui, "PDF/A files carry their own output intent.");
     }
 }
 

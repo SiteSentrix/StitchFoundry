@@ -91,6 +91,11 @@ pub struct PositionedGlyph {
     pub line: usize,
     /// [`FontFace::id`] of the face that supplied the glyph.
     pub font_id: u32,
+    /// The glyph's id in that face.
+    pub gid: u32,
+    /// Font units (y down, as [`FontDb::outline`] gives them) → text space: where the glyph is
+    /// drawn, also for glyphs without an outline (spaces).
+    pub xf: Affine,
 }
 
 /// One line of laid-out text.
@@ -164,6 +169,7 @@ impl TextLayout {
             }
             g.origin += shift;
             g.outline.apply_affine(Affine::translate(shift));
+            g.xf = Affine::translate(shift) * g.xf;
             moved = true;
         }
         moved
