@@ -303,6 +303,24 @@ pub struct UiState {
     /// becoming active, leaves it.
     #[serde(skip)]
     pub home: Option<(Option<u64>, usize)>,
+    /// The desktop window's size, position and maximized state, saved when the app quits and
+    /// restored at the next launch (the desktop host reads and writes it; none on the web).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<WindowGeometry>,
+}
+
+/// The desktop window's geometry, kept across launches.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WindowGeometry {
+    /// Top-left corner of the window frame, in physical pixels on the desktop (none where the
+    /// system doesn't tell windows where they are).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pos: Option<[i32; 2]>,
+    /// Size of the window's contents in logical pixels (points at 100% UI scaling).
+    pub size: [f32; 2],
+    /// The window was maximized; `pos` and `size` are where un-maximizing puts it.
+    #[serde(default)]
+    pub maximized: bool,
 }
 
 impl UiState {
@@ -365,6 +383,7 @@ impl Default for UiState {
             eps_options: Value::Null,
             dxf_import: Value::Null,
             home: None,
+            window: None,
         }
     }
 }

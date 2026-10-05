@@ -11,6 +11,7 @@ mod control_server;
 #[cfg(target_os = "macos")]
 mod native_menu;
 mod printing;
+mod window;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
@@ -30,6 +31,7 @@ impl eframe::App for App {
             }
         }
         self.0.logic(ctx);
+        window::track(ctx, &mut self.0.ui.window);
         if self.0.ui.status == "quit" {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -71,21 +73,32 @@ fn prefs_path_for(name: &str, lower: &str) -> Option<std::path::PathBuf> {
     base.map(|b| b.join("ui.json"))
 }
 
-fn load_prefs(app: &mut VectorcraftApp) {
-    if std::env::var_os("VECTORCRAFT_NO_PREFS").is_some() {
+/// Runs without preferences (`VECTORCRAFT_NO_PREFS`, agents' test runs) neither read nor write them.
+fn prefs_enabled() -> bool {
+    std::env::var_os("VECTORCRAFT_NO_PREFS").is_none()
+}
+
+/// The saved UI preferences, read before the window opens (they hold its size and position).
+fn read_prefs() -> Option<vectorcraft_ui_egui::UiState> {
+    if !prefs_enabled() {
+        return None;
+    }
+    let bytes = prefs_path().and_then(|p| std::fs::read(p).ok()).or_else(|| legacy_prefs_path().and_then(|p| std::fs::read(p).ok()))?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+fn load_prefs(app: &mut VectorcraftApp, saved: Option<vectorcraft_ui_egui::UiState>) {
+    if !prefs_enabled() {
         return;
     }
-    let bytes = prefs_path().and_then(|p| std::fs::read(p).ok()).or_else(|| legacy_prefs_path().and_then(|p| std::fs::read(p).ok()));
-    if let Some(bytes) = bytes
-        && let Ok(ui) = serde_json::from_slice::<vectorcraft_ui_egui::UiState>(&bytes)
-    {
+    if let Some(ui) = saved {
         app.ui = ui.sanitized();
     }
     vectorcraft_ui_egui::prefs_dialog::restore(app);
 }
 
 fn save_prefs(app: &VectorcraftApp) {
-    if std::env::var_os("VECTORCRAFT_NO_PREFS").is_some() {
+    if !prefs_enabled() {
         return;
     }
     if let Some(p) = prefs_path() {
@@ -230,11 +243,13 @@ fn main() -> eframe::Result {
             _ => files.push(a),
         }
     }
+    let saved = read_prefs();
+    let saved_window = saved.as_ref().and_then(|ui| ui.window);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("VectorCraft")
-            .with_inner_size([1440.0, 900.0])
-            .with_min_inner_size([800.0, 500.0])
+            .with_inner_size(window::DEFAULT_SIZE)
+            .with_min_inner_size(window::MIN_SIZE)
             .with_drag_and_drop(true)
             .with_decorations(!CUSTOM_TITLEBAR)
             .with_fullsize_content_view(true)
@@ -249,7 +264,11 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             let mut app = VectorcraftApp::new(Session::new(), services());
-            load_prefs(&mut app);
+            load_prefs(&mut app, saved);
+            // Fit the window to its monitor, or put it back where it was (still hidden).
+            if let Some(w) = cc.winit_window() {
+                app.ui.window = Some(window::restore(w, saved_window));
+            }
             // User Defined swatch and graphic style libraries live next to the preferences.
             let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
             app.session.swatch_libraries.set_user_dir(swatches);

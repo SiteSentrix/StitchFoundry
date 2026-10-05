@@ -4225,6 +4225,7 @@ dependencies = [
  "vectorcraft-engine",
  "vectorcraft-ui-egui",
  "webbrowser",
+ "winit",
  "winresource",
 ]
 
