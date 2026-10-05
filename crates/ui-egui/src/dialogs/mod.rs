@@ -91,6 +91,10 @@ use crate::{VectorcraftApp, widgets};
 
 type DialogResult = Result<Value, String>;
 
+/// The shared dialog frame's inner margin, and the least room it leaves at the window's edges.
+const MARGIN: i8 = 22;
+const EDGE_GAP: f32 = 8.0;
+
 /// How a dialog draws and applies itself. Specs start from [`DialogSpec::FORM`] and override what
 /// differs.
 pub(crate) struct DialogSpec {
@@ -298,12 +302,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .resizable(false)
         .title_bar(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0])
-        .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(22)))
+        .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(MARGIN)))
         .show(ctx, |ui| {
-            ui.set_min_width(spec.min_width);
-            if let Some(w) = spec.max_width {
-                ui.set_max_width(w);
-            }
+            // Never wider than the window (a large UI scale in a small window): the text wraps.
+            let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
+            ui.set_min_width(spec.min_width.min(room));
+            ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
             ui.label(egui::RichText::new(heading.as_str()).font(theme::semibold(16.0)).color(t.text));
             ui.add_space(12.0);
             cancel = (spec.body)(app, ui, &mut d);
@@ -383,3 +387,6 @@ mod tests_print_presets;
 
 #[cfg(test)]
 mod tests_print_advanced;
+
+#[cfg(test)]
+mod tests_scale;
