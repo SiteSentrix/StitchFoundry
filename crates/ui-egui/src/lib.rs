@@ -23,6 +23,7 @@ pub mod palette;
 pub mod panels;
 pub mod place;
 pub mod prefs_dialog;
+pub mod print;
 pub mod recovery;
 pub mod render_worker;
 pub mod shortcut_editor;
@@ -160,6 +161,9 @@ pub struct Services {
     /// Where Data Recovery keeps its copies when not in a folder (the web's browser storage;
     /// tests): installed into the session ([`vectorcraft_engine::cmd::recovery`]).
     pub recovery_store: Option<std::sync::Arc<dyn vectorcraft_engine::cmd::recovery::RecoveryStore>>,
+    /// File → Print: the system's printers and print queue (desktop), the browser's print dialog
+    /// (web). Without it Print saves the job as a PDF.
+    pub print: Option<Box<dyn print::PrintService>>,
 }
 
 /// Cached canvas raster.

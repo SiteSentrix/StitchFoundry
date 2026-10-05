@@ -11,7 +11,7 @@ use vectorcraft_engine::cmd::fileio::pdf;
 use vectorcraft_engine::cmd::pdfcmds::PRESET_FORMAT;
 
 use super::DialogSpec;
-use super::save_pdf::{open_preset, option_label, section_of};
+use super::save_pdf::{open_preset, option_label, option_rows, section_of};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -122,14 +122,7 @@ fn details(ui: &mut egui::Ui, t: &Tokens, preset: &vectorcraft_pdf::PdfPreset, b
         if changed.is_empty() {
             dim(ui, "None.");
         }
-        for c in &changed {
-            let value = match &c["value"] {
-                Value::Bool(b) => if *b { "On" } else { "Off" }.to_string(),
-                Value::String(s) => s.clone(),
-                other => other.to_string(),
-            };
-            ui.label(egui::RichText::new(format!("{}: {value}", option_label(c["option"].as_str().unwrap_or_default()))).color(t.text));
-        }
+        option_rows(ui, &changed, option_label);
     });
     ui.add_space(6.0);
     if let Err(e) = preset.settings.check() {

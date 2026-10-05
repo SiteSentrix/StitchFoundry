@@ -613,13 +613,14 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
 }
 
 /// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
-/// libraries (which open in the library panel), flattener presets and PDF presets (imported).
+/// libraries (which open in the library panel), flattener, PDF and print presets (imported).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("All readable files", OPEN_EXTS))
         .chain(format_filters())
         .chain(std::iter::once(("Swatch libraries", super::swatchlib::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", super::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", super::pdfcmds::PRESET_EXTS)))
+        .chain(std::iter::once(("Print presets", super::printpresets::PRESET_EXTS)))
 }
 
 /// File → Place dialog filters: "All placeable files", then one per readable format, then text.

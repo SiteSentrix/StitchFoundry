@@ -79,6 +79,14 @@ pub struct PageSummary {
     pub orientation: Orientation,
     /// Horizontal and vertical scale in percent.
     pub scale: [f64; 2],
+    /// Document space → the page (pt, y down from its top-left corner): where the art lands,
+    /// turned and mirrored as it prints.
+    pub transform: [f64; 6],
+    /// The part of the document this page prints (`[x0, y0, x1, y1]`, document space): the
+    /// artboard with its bleed, or what of it a tile shows.
+    pub area: [f64; 4],
+    /// The artboard (trim box) on the page, `[x0, y0, x1, y1]`.
+    pub trim: [f64; 4],
 }
 
 /// What a job prints, without printing it.
@@ -112,8 +120,8 @@ struct Job<'a> {
 }
 
 /// Keep the layers of `nodes` that print as `which` says, shown (hidden ones print with All),
-/// down through sublayers.
-fn keep_layers(nodes: &mut Vec<Arc<Node>>, which: PrintLayers) {
+/// down through sublayers (also what the Print dialog's preview shows).
+pub fn keep_layers(nodes: &mut Vec<Arc<Node>>, which: PrintLayers) {
     nodes.retain_mut(|n| {
         let NodeKind::Layer { printable, .. } = n.kind else { return true };
         let keep = match which {
@@ -203,6 +211,9 @@ pub fn preview(doc: &Document, set: &PrintSettings) -> Result<PrintPreview, PdfE
                 height: l.size.1,
                 orientation: l.orientation,
                 scale: [l.scale.0 * 100.0, l.scale.1 * 100.0],
+                transform: (l.view * l.place).as_coeffs(),
+                area: [l.area.x0, l.area.y0, l.area.x1, l.area.y1],
+                trim: [l.page_trim.x0, l.page_trim.y0, l.page_trim.x1, l.page_trim.y1],
             })
         })
         .collect();

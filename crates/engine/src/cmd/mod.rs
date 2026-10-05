@@ -47,6 +47,7 @@ pub mod pdfcmds;
 mod place;
 pub mod prefscmds;
 pub mod print;
+pub mod printpresets;
 pub mod rasterfx;
 mod recolor;
 pub mod recovery;
@@ -239,6 +240,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(webexport::specs());
         v.extend(assets::specs());
         v.extend(css::specs());
+        v.extend(printpresets::specs());
         v
     })
 }

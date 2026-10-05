@@ -41,6 +41,8 @@ pub mod pdf_presets;
 pub mod place;
 pub mod placement_options;
 mod png_options;
+pub mod print;
+pub mod print_presets;
 mod psd_options;
 pub mod raster_effects;
 pub mod recolor;
@@ -236,6 +238,9 @@ registry! {
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
     PsdOptions: ["psdOptions"] => png_options::SPEC,
+    Print: [print::KIND] => print::SPEC,
+    PrintPreset: [print::PRESET_KIND] => print::PRESET_SPEC,
+    PrintPresets: [print_presets::KIND] => print_presets::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -367,3 +372,9 @@ mod tests_save_for_web;
 
 #[cfg(test)]
 mod tests_psd;
+
+#[cfg(test)]
+mod tests_print;
+
+#[cfg(test)]
+mod tests_print_presets;

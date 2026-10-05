@@ -10,6 +10,7 @@ mod clipboard;
 mod control_server;
 #[cfg(target_os = "macos")]
 mod native_menu;
+mod printing;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
@@ -176,6 +177,8 @@ fn services() -> Services {
         // Links panel: Edit Original; Package: Show Package. Relink to Folder and Package pick folders.
         open_file: Some(Box::new(open_file)),
         pick_folder: Some(Box::new(|| rfd::FileDialog::new().pick_folder().map(|p| p.to_string_lossy().to_string()))),
+        // File → Print: the system's printers and print queue.
+        print: Some(Box::new(printing::SystemPrint)),
         ..Default::default()
     }
 }
