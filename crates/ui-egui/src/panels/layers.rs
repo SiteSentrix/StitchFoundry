@@ -25,6 +25,18 @@ fn expanded_id() -> egui::Id {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
+    // A rename belongs to the document it started in (node ids are per document): drop it when
+    // another document shows, so it can't rename that document's node with the same id.
+    let shown_doc = egui::Id::new("layers-doc");
+    let before = ui.data(|d| d.get_temp::<u64>(shown_doc));
+    if before != Some(st.uid) {
+        ui.data_mut(|d| {
+            if before.is_some() {
+                d.remove::<(u64, String)>(egui::Id::new("layers-rename"));
+            }
+            d.insert_temp(shown_doc, st.uid);
+        });
+    }
     let doc = st.doc.clone();
     let sel: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
     let target = st.selection.target;
@@ -618,6 +630,26 @@ mod tests {
         frame(&mut app, &ctx, vec![key(egui::Key::Escape)], false);
         frame(&mut app, &ctx, vec![], false);
         assert_eq!(name(&app), "Sky", "Escape cancels");
+    }
+
+    #[test]
+    fn an_open_rename_does_not_follow_into_another_document() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let layer = app.session.doc().unwrap().doc.layers[0].id;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![], false);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("layers-rename"), (layer.0, "Renamed in the first".to_string())));
+        frame(&mut app, &ctx, vec![], false);
+        // A second document, whose first layer has the same node id, comes to the front.
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].id, layer);
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, &ctx, vec![], false);
+        frame(&mut app, &ctx, vec![enter], false);
+        frame(&mut app, &ctx, vec![], false);
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].display_name(), "Layer 1");
+        assert!(ctx.data(|d| d.get_temp::<(u64, String)>(egui::Id::new("layers-rename"))).is_none());
     }
 
     #[test]
