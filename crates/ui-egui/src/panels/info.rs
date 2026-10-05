@@ -46,7 +46,7 @@ fn paint_block(ui: &mut Ui, p: &Paint) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let units = app.session.active().map(|d| d.doc.units).unwrap_or_default();
+    let units = app.session.general_unit();
     let p = app.hover_doc.unwrap_or_default();
     let bounds = app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false));
     let mono = |ui: &mut Ui, s: String| {
@@ -80,7 +80,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::divider(ui);
         let st = tx.first_style();
         mono(ui, format!("{} {}", st.font_family, st.font_style));
-        mono(ui, format!("Size: {}  Tracking: {:.0}", units.format(st.size), st.tracking));
+        mono(ui, format!("Size: {}  Tracking: {:.0}", app.session.type_unit().format(st.size), st.tracking));
     }
 }
 

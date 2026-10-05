@@ -752,3 +752,22 @@ report warn about it).
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stroke":true,"strokeMode":"along"}}}
 ```
+
+## Units
+
+Commands take and return lengths in points (the distances of `object.path.offsetPath`, `object.path.simplify`,
+`object.path.splitIntoGrid` and `text.setStyle` `size`/`leading` also take a string with a unit, `"5 mm"`). The units
+only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
+three: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
+(weights, dashes) and Type (font size, leading, baseline shift). General is the active document's units
+(`document.inspect` → `units`): `document.setUnits {units}` (Document Setup) sets it for that document, and
+`prefs.set {key: "unitsGeneral", value}` sets it for the active document too (one undo step) and is the units
+`file.new` starts in when it gets no `units`. Stroke and Type are the preferences `unitsStroke` and `unitsType`.
+`prefs.list` marks the length preferences (`keyboardIncrement`, `cornerRadius`, `pasteOffset`, `gridlineEvery`,
+`typeSizeIncrement`, `baselineShiftIncrement`) with `measure: "general"|"type"`; they are kept in points and also take
+a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `Centimeters`, `Pixels`, `Feet & Inches`,
+`Meters`, `Yards`, `Feet` (the preferences use `points`, `picas`, … `feetInches`, `meters`, `yards`, `feet`).
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
+```

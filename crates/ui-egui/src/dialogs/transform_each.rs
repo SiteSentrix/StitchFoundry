@@ -37,23 +37,20 @@ fn params(d: &Dialog) -> Value {
     })
 }
 
-/// A labelled number row of the field grid: `key` shown with `suffix` (document units for "pt").
+/// A labelled number row of the field grid: `key` shown with `suffix` (a distance in `units` for
+/// "pt").
 fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, suffix: &str, units: vectorcraft_doc::Unit) {
     widgets::dim_label(ui, label);
-    let v = d.f64(key, 0.0);
-    let new = if suffix == "pt" {
-        widgets::num_field(ui, ("te", key), Some(v), units, 90.0)
-    } else {
-        widgets::plain_field(ui, ("te", key), v, suffix, 2, 90.0)
-    };
-    if let Some(n) = new {
+    if suffix == "pt" {
+        form::length(ui, d, key, units, 90.0);
+    } else if let Some(n) = widgets::plain_field(ui, ("te", key), d.f64(key, 0.0), suffix, 2, 90.0) {
         d.fields.insert(key.into(), json!(n));
     }
     ui.end_row();
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let units = app.session.active().map_or(vectorcraft_doc::Unit::Points, |s| s.doc.units);
+    let units = app.session.general_unit();
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             egui::Grid::new("te-grid").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {

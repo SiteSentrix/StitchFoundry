@@ -5,7 +5,7 @@
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Vec2};
 
-use super::{CYAN, fmt_pt};
+use super::CYAN;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
 #[derive(Default)]
@@ -62,7 +62,7 @@ impl Tool for MeasureTool {
             Overlay::Line { a, b, color: CYAN, dashed: false },
             Overlay::Measure {
                 p: b + Vec2::new(cx.tol(12.0), cx.tol(12.0)),
-                text: format!("D: {}\nAngle: {ang:.1}°\ndX: {}\ndY: {}", fmt_pt(dist), fmt_pt(dx), fmt_pt(dy)),
+                text: format!("D: {}\nAngle: {ang:.1}°\n{}", cx.len(dist), cx.offset_label(dx, dy)),
             },
         ]
     }

@@ -13,19 +13,31 @@ fn options(app: &mut VectorcraftApp) -> Value {
     app.session.execute("magicWand.options", &json!({})).unwrap_or_default()
 }
 
+/// A tolerance: a plain number with a suffix, or a stroke weight (in the Stroke unit).
+#[derive(Clone, Copy)]
+enum Tol {
+    Plain(&'static str),
+    Weight,
+}
+
 /// One row: checkbox + tolerance field.
-fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str, tol: Option<(&str, &str, f64)>) {
+fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str, tol: Option<(&str, Tol, f64)>) {
     let on = o[flag].as_bool().unwrap_or(false);
     ui.horizontal(|ui| {
         ui.set_min_height(26.0);
         if widgets::check(ui, label, on, true) {
             app.run("magicWand.set", json!({ flag: !on })).ok();
         }
-        if let Some((key, unit, max)) = tol {
+        if let Some((key, kind, max)) = tol {
+            let stroke_unit = app.session.stroke_unit();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_enabled_ui(on, |ui| {
                     let v = o[key].as_f64().unwrap_or(0.0);
-                    if let Some(n) = widgets::spin_plain(ui, ("wand", key), v, unit, 0, 64.0, 1.0, 0.0, &[]) {
+                    let n = match kind {
+                        Tol::Plain(suffix) => widgets::spin_plain(ui, ("wand", key), v, suffix, 0, 64.0, 1.0, 0.0, &[]),
+                        Tol::Weight => widgets::spin_field(ui, ("wand", key), Some(v), stroke_unit, 64.0, 1.0, 0.0, &[]),
+                    };
+                    if let Some(n) = n {
                         app.run("magicWand.set", json!({ key: n.clamp(0.0, max) })).ok();
                     }
                 });
@@ -37,15 +49,15 @@ fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(app);
-    row(app, ui, &o, "Fill Color", "fillColor", Some(("fillTolerance", "", 255.0)));
+    row(app, ui, &o, "Fill Color", "fillColor", Some(("fillTolerance", Tol::Plain(""), 255.0)));
     if !pstate::<bool>(ui.ctx(), "wand-hide-stroke") {
         widgets::divider(ui);
-        row(app, ui, &o, "Stroke Color", "strokeColor", Some(("strokeTolerance", "", 255.0)));
-        row(app, ui, &o, "Stroke Weight", "strokeWeight", Some(("weightTolerance", " pt", 1000.0)));
+        row(app, ui, &o, "Stroke Color", "strokeColor", Some(("strokeTolerance", Tol::Plain(""), 255.0)));
+        row(app, ui, &o, "Stroke Weight", "strokeWeight", Some(("weightTolerance", Tol::Weight, 1000.0)));
     }
     if !pstate::<bool>(ui.ctx(), "wand-hide-transparency") {
         widgets::divider(ui);
-        row(app, ui, &o, "Opacity", "opacity", Some(("opacityTolerance", "%", 100.0)));
+        row(app, ui, &o, "Opacity", "opacity", Some(("opacityTolerance", Tol::Plain("%"), 100.0)));
         row(app, ui, &o, "Blending Mode", "blendingMode", None);
     }
 }

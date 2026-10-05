@@ -378,10 +378,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     };
     let r = match id {
         "file.newDialog" => {
-            app.ui.dialog = Some(crate::state::Dialog::new(
-                "newDocument",
-                json!({"preset": "Letter", "width": "612 pt", "height": "792 pt", "units": "Points", "artboards": 1, "colorMode": "RGB", "name": "Untitled-1"}),
-            ));
+            crate::dialogs::open_new_document(app);
             Ok(Value::Null)
         }
         "file.open" => match s("path") {

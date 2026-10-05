@@ -23,6 +23,10 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     // One field per preference key or group (the flattener presets have commands of their own).
     let mut fields: Map<String, Value> = app.session.prefs.to_json().as_object().cloned().unwrap_or_default();
     fields.retain(|k, _| vectorcraft_engine::cmd::prefscmds::spec(k).is_some() || PREF_GROUPS.contains(&k.as_str()));
+    // Units ▸ General shows (and OK sets) the open document's units.
+    if let Some(st) = app.session.active() {
+        fields.insert("unitsGeneral".into(), json!(st.doc.units.key()));
+    }
     let cat = category.and_then(|c| PREF_CATEGORIES.iter().find(|x| x.eq_ignore_ascii_case(c))).copied().unwrap_or(PREF_CATEGORIES[0]);
     fields.insert("__category".into(), json!(cat));
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));
@@ -231,6 +235,16 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     };
                     if r.changed() {
                         d.fields.insert(sp.key.into(), json!(x));
+                    }
+                });
+            }
+            PrefKind::Length { min, max, measure } => {
+                // In the dialog's own Units choice, so a change there shows right away.
+                let unit = vectorcraft_doc::Unit::named(&d.str(measure.pref_key())).unwrap_or_default();
+                let x = d.f64(sp.key, min);
+                labeled(ui, sp.label, |ui| {
+                    if let Some(x) = widgets::num_field(ui, sp.key, Some(x), unit, 110.0) {
+                        d.fields.insert(sp.key.into(), json!(x.clamp(min, max)));
                     }
                 });
             }

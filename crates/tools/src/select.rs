@@ -160,14 +160,14 @@ impl Tool for SelectionTool {
                     self.guides.clear();
                 }
                 self.state = State::Moving { start, began: true };
-                self.measure = Some((p, format!("dX: {:.2} pt\ndY: {:.2} pt", d.x, d.y)));
+                self.measure = Some((p, cx.offset_label(d.x, d.y)));
                 out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
                 out
             }
             (PointerKind::Drag, State::Scaling { handle, rect, .. }) => {
                 let a = scale_for_drag(rect, handle, p, m.shift, m.alt);
                 let nr = a.transform_rect_bbox(rect);
-                self.measure = Some((p, format!("W: {:.2} pt\nH: {:.2} pt", nr.width(), nr.height())));
+                self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
                 vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(a), "copy": false }))]
             }
             (PointerKind::Drag, State::Rotating { center, start, .. }) => {
@@ -217,11 +217,11 @@ impl Tool for SelectionTool {
         }
     }
 
-    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = vec![];
         match &self.state {
             State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
-            State::Corner(c) => o.extend(c.overlays()),
+            State::Corner(c) => o.extend(c.overlays(cx)),
             _ => {}
         }
         o.extend(self.guides.iter().cloned());

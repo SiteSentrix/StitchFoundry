@@ -28,7 +28,7 @@ pub mod xform;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Document, NodeId, Selection};
+use vectorcraft_doc::{Document, NodeId, Selection, Unit};
 use vectorcraft_geom::{BezPath, Point, Rect};
 
 pub use catalog::{TOOL_GROUPS, ToolInfo, tool_info};
@@ -201,12 +201,28 @@ pub struct ToolContext<'a> {
     pub raster_sample: u32,
     /// General → Use Preview Bounds: the bounding box measures visual bounds (strokes included).
     pub preview_bounds: bool,
+    /// Units ▸ General: the unit measurement labels show lengths in.
+    pub unit: Unit,
+    /// Units ▸ Stroke: the unit measurement labels show stroke widths in.
+    pub stroke_unit: Unit,
 }
 
 impl ToolContext<'_> {
     /// Tolerance in document units for `px` screen pixels.
     pub fn tol(&self, px: f64) -> f64 {
         px / self.zoom.max(1e-9)
+    }
+    /// A length as measurement labels show it, in the General unit (`12.50 mm`).
+    pub fn len(&self, v: f64) -> String {
+        self.unit.readout(v)
+    }
+    /// A size label: `W: …` over `H: …`.
+    pub fn size_label(&self, w: f64, h: f64) -> String {
+        format!("W: {}\nH: {}", self.len(w), self.len(h))
+    }
+    /// A move label: `dX: …` over `dY: …`.
+    pub fn offset_label(&self, dx: f64, dy: f64) -> String {
+        format!("dX: {}\ndY: {}", self.len(dx), self.len(dy))
     }
     pub fn hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
         vectorcraft_doc::hit::HitOptions { tol: self.tol(3.0), outline: self.outline, path_only: false }
@@ -384,6 +400,8 @@ pub(crate) mod testutil {
             freeform_point: None,
             raster_sample: 1,
             preview_bounds: false,
+            unit: Unit::Points,
+            stroke_unit: Unit::Points,
         }
     }
 }

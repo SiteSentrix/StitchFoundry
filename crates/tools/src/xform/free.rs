@@ -148,7 +148,7 @@ impl FreeTransformTool {
         r.contains(p).then_some(Op::Move)
     }
 
-    fn preview(&mut self, d: Drag, p: Point, m: Mods) -> Action {
+    fn preview(&mut self, cx: &ToolContext, d: Drag, p: Point, m: Mods) -> Action {
         let shift = m.shift || self.constrain;
         let delta = p - d.start;
         let xf = match d.op {
@@ -161,13 +161,13 @@ impl FreeTransformTool {
             }
             Op::Move => {
                 let v = move_delta(d.start, p, shift);
-                self.measure = Some((p, format!("dX: {:.2} pt\ndY: {:.2} pt", v.x, v.y)));
+                self.measure = Some((p, cx.offset_label(v.x, v.y)));
                 Affine::translate(v)
             }
             Op::Scale(h) => {
                 let a = scale_for_drag(d.rect, h, p, shift, m.alt);
                 let nr = a.transform_rect_bbox(d.rect);
-                self.measure = Some((p, format!("W: {:.2} pt\nH: {:.2} pt", nr.width(), nr.height())));
+                self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
                 a
             }
             Op::Shear(h) => shear_for_side(d.rect, h, delta, m.alt),
@@ -220,7 +220,7 @@ impl Tool for FreeTransformTool {
                     out.push(Action::Begin(label.into()));
                 }
                 self.drag = Some(d);
-                out.push(self.preview(d, p, ev.mods));
+                out.push(self.preview(cx, d, p, ev.mods));
                 out
             }
             PointerKind::Up => {

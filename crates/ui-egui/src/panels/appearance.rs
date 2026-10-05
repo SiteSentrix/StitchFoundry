@@ -328,7 +328,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         chip(ui, Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0)), it.paint());
         if let AppearanceItem::Stroke(st) = it {
-            let w = format!("{} pt", st.width);
+            let w = app.session.stroke_unit().format(st.width);
             text(ui, pos2(r.left() + EYE_W + 106.0, r.center().y), &w, false);
             stroke_notes(ui, Rect::from_min_max(pos2(r.left() + EYE_W + 166.0, r.top()), pos2(r.right() - 4.0, r.bottom())), st);
         }
@@ -428,7 +428,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         if let AppearanceItem::Stroke(st) = it {
             let fr = Rect::from_min_size(pos2(r.left() + EYE_W + 104.0, r.center().y - 12.0), vec2(56.0, 24.0));
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(fr).layout(egui::Layout::left_to_right(egui::Align::Center)));
-            if let Some(w) = widgets::num_field(&mut child, ("ap-w", i), Some(st.width), vectorcraft_doc::Unit::Points, 56.0) {
+            if let Some(w) = widgets::num_field(&mut child, ("ap-w", i), Some(st.width), app.session.stroke_unit(), 56.0) {
                 app.run("appearance.setItem", json!({"index": i, "weight": w})).ok();
             }
             stroke_notes(ui, Rect::from_min_max(pos2(fr.right() + 6.0, r.top()), pos2(r.right() - 4.0, r.bottom())), st);
@@ -712,6 +712,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
         }
     }
     let mut change: Option<(String, Value)> = None;
+    let (unit, relative) = (app.session.general_unit(), params.get("relative").and_then(Value::as_bool).unwrap_or(false));
     egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin { left: (EYE_W + 12.0) as i8, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
         if params.is_empty() {
@@ -734,8 +735,13 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                         }
                     }
                     Value::Number(n) => {
-                        let x = n.as_f64().unwrap_or(0.0);
-                        if let Some(nx) = widgets::plain_field(ui, ("fx", item, k, key.as_str()), x, "", 2, 70.0) {
+                        let (x, id) = (n.as_f64().unwrap_or(0.0), ("fx", item, k, key.as_str()));
+                        let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
+                            widgets::num_field(ui, id, Some(x), unit, 70.0)
+                        } else {
+                            widgets::plain_field(ui, id, x, "", 2, 70.0)
+                        };
+                        if let Some(nx) = nx {
                             change = Some((key.clone(), json!(nx)));
                         }
                     }

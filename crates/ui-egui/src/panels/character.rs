@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, NodeId, NodeKind, Unit};
+use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_tools::{Mods, ToolKey};
 
 use super::{first_selected, pstate, set_pstate};
@@ -253,15 +253,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.add_space(2.0);
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
+    let unit = app.session.type_unit();
     egui::Grid::new("ch-grid").num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
         cell(ui, "T", "Font Size", |ui| {
-            if let Some(v) = widgets::spin_field(ui, "ch-size", Some(s.size), Unit::Points, fw, 1.0, 0.1, &SIZE_PRESETS) {
+            if let Some(v) = widgets::spin_field(ui, "ch-size", Some(s.size), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
                 style(app, json!({"size": v}));
             }
         });
         cell(ui, "A↕", "Leading", |ui| {
             let presets: Vec<f64> = SIZE_PRESETS.iter().map(|v| v * 1.2).collect();
-            if let Some(v) = widgets::spin_field(ui, "ch-lead", Some(s.effective_leading()), Unit::Points, fw, 1.0, 0.1, &presets) {
+            if let Some(v) = widgets::spin_field(ui, "ch-lead", Some(s.effective_leading()), unit, fw, 1.0, 0.1, &presets) {
                 style(app, json!({"leading": v}));
             }
         });
@@ -290,7 +291,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
             ui.end_row();
             cell(ui, "Aª", "Baseline Shift", |ui| {
-                if let Some(v) = widgets::spin_field(ui, "ch-bs", Some(s.baseline_shift), Unit::Points, fw, 1.0, -1296.0, &[]) {
+                if let Some(v) = widgets::spin_field(ui, "ch-bs", Some(s.baseline_shift), unit, fw, 1.0, -1296.0, &[]) {
                     format(app, json!({"baselineShift": v}));
                 }
             });

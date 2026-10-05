@@ -231,10 +231,10 @@ impl Tool for DirectSelectionTool {
             _ => vec![],
         }
     }
-    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         match &self.state {
             State::Marquee { start, cur, .. } => vec![Overlay::Marquee(Rect::from_points(*start, *cur))],
-            State::Corner(c) => c.overlays(),
+            State::Corner(c) => c.overlays(cx),
             _ => vec![],
         }
     }

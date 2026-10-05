@@ -19,7 +19,7 @@ const COPIES: [(&str, u32); 4] = [("3 x 3", 3), ("5 x 5", 5), ("7 x 7", 7), ("9 
 fn editing(app: &VectorcraftApp) -> Option<(PatternDef, Unit)> {
     let st = app.session.active()?;
     let pe = st.doc.pattern_edit.as_ref()?;
-    Some((st.doc.pattern(&pe.pattern)?.clone(), st.doc.units))
+    Some((st.doc.pattern(&pe.pattern)?.clone(), app.session.general_unit()))
 }
 
 fn row(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui)) {

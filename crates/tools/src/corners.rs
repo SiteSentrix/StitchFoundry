@@ -123,11 +123,11 @@ impl CornerDrag {
     }
 
     /// The radius readout next to the pointer.
-    pub fn overlays(&self) -> Vec<Overlay> {
+    pub fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if !self.began {
             return vec![];
         }
-        vec![Overlay::Measure { p: self.at, text: format!("Radius: {}", crate::xform::fmt_pt(self.radius)) }]
+        vec![Overlay::Measure { p: self.at, text: format!("Radius: {}", cx.len(self.radius)) }]
     }
 }
 

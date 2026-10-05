@@ -241,7 +241,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
 impl Session {
     /// Units > Stroke (Preferences): the unit stroke weights and dash lengths show in.
     pub fn stroke_unit(&self) -> Unit {
-        super::edit::parse_unit(&self.prefs.units_stroke).unwrap_or_default()
+        self.unit(crate::units::Measure::Stroke)
     }
 
     /// The stroke the Stroke panel, the Control bar and the Properties panel show, picked as the

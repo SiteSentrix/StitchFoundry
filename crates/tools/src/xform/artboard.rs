@@ -172,10 +172,7 @@ impl Tool for ArtboardTool {
         if let Some(Drag::Create { start, cur }) = self.drag {
             let r = Rect::from_points(start, cur);
             o.push(Overlay::Marquee(r));
-            o.push(Overlay::Measure {
-                p: cur + Vec2::new(cx.tol(12.0), cx.tol(12.0)),
-                text: format!("W: {:.2} pt\nH: {:.2} pt", r.width(), r.height()),
-            });
+            o.push(Overlay::Measure { p: cur + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.size_label(r.width(), r.height()) });
             return o;
         }
         let Some(ab) = cx.doc.artboards.get(self.active) else { return o };
@@ -188,7 +185,7 @@ impl Tool for ArtboardTool {
         if let Some(Drag::Resize { began: true, .. }) = self.drag {
             o.push(Overlay::Measure {
                 p: Point::new(r.x1, r.y1) + Vec2::new(cx.tol(12.0), cx.tol(12.0)),
-                text: format!("W: {:.2} pt\nH: {:.2} pt", r.width(), r.height()),
+                text: cx.size_label(r.width(), r.height()),
             });
         }
         o

@@ -47,6 +47,7 @@ use serde_json::{Value, json};
 
 pub use color_picker::open as open_color_picker;
 pub use effect::open as open_effect_dialog;
+pub use new_document::open as open_new_document;
 pub use save_pdf::open as open_save_pdf;
 pub use tools::open_tool_dialog;
 
@@ -82,8 +83,8 @@ impl DialogSpec {
     pub const FORM: Self = Self {
         window: None,
         heading: |_| "Dialog".into(),
-        body: |_, ui, d| {
-            form::grid(ui, d);
+        body: |app, ui, d| {
+            form::grid(ui, d, app.session.general_unit());
             false
         },
         confirm: |app, _| {
