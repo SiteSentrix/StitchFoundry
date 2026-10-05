@@ -1,6 +1,7 @@
 //! usvg tree → document conversion.
 
-use std::collections::HashMap;
+use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -20,7 +21,8 @@ mod css;
 mod text;
 
 pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
-    let (svg, links) = link_ids(svg);
+    let (linked, links) = link_ids(svg);
+    let (svg, hidden) = hidden_groups(&linked);
     let svg = svg.as_ref();
     let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() })
         .map_err(|e| SvgError::Parse(e.to_string()))?;
@@ -42,6 +44,7 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
         patterns: HashMap::new(),
         midpoints: midpoint_stops(&xml),
         labels: labels(&xml),
+        hidden,
     };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
@@ -83,6 +86,7 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
             if let Some(ch) = l.children_mut() {
                 *ch = children;
             }
+            l.visible = !im.hidden.contains(g.id());
             im.doc.layers.push(Arc::new(l));
         }
     } else {
@@ -154,6 +158,8 @@ struct Importer {
     midpoints: HashMap<String, Vec<Option<f32>>>,
     /// Object names by element id (see [`labels`]).
     labels: HashMap<String, String>,
+    /// Ids of the hidden groups shown for usvg ([`hidden_groups`]).
+    hidden: HashSet<String>,
 }
 
 /// The stops our export added for midpoints (`data-vc-midpoint`), by gradient id: for each stop,
@@ -228,27 +234,72 @@ fn link_ids(svg: &str) -> (std::borrow::Cow<'_, str>, HashMap<String, String>) {
         let id = match a.attribute("id") {
             Some(id) => id.to_string(),
             None => {
-                let start = a.range().start;
-                let end = svg[start + 1..].find(|c: char| c.is_whitespace() || c == '/' || c == '>').map_or(start + 2, |i| start + 1 + i);
                 let id = format!("{LINK_ID}{}", inserts.len());
-                inserts.push((end, id.clone()));
+                inserts.push((tag_name_end(svg, a), format!(" id=\"{id}\"")));
                 id
             }
         };
         links.insert(id, url.to_string());
     }
+    (insert(svg, inserts), links)
+}
+
+/// Where the start tag of element `n` ends its name (where an attribute can go).
+fn tag_name_end(svg: &str, n: XNode) -> usize {
+    let start = n.range().start;
+    svg.get(start + 1..).and_then(|s| s.find(|c: char| c.is_whitespace() || c == '/' || c == '>')).map_or(start + 2, |i| start + 1 + i)
+}
+
+/// `svg` with each `(offset, text)` of `inserts` (in offset order) inserted; offsets that are out
+/// of order or not on a character boundary are skipped.
+fn insert(svg: &str, inserts: Vec<(usize, String)>) -> Cow<'_, str> {
     if inserts.is_empty() {
-        return (svg.into(), links);
+        return svg.into();
     }
-    let mut out = String::with_capacity(svg.len() + inserts.len() * 32);
+    let mut out = String::with_capacity(svg.len() + inserts.iter().map(|(_, t)| t.len()).sum::<usize>());
     let mut last = 0;
-    for (at, id) in inserts {
-        out.push_str(&svg[last..at]);
-        out.push_str(&format!(" id=\"{id}\""));
+    for (at, text) in inserts {
+        let Some(part) = svg.get(last..at) else { continue };
+        out.push_str(part);
+        out.push_str(&text);
         last = at;
     }
-    out.push_str(&svg[last..]);
-    (out.into(), links)
+    out.push_str(svg.get(last..).unwrap_or(""));
+    out.into()
+}
+
+/// usvg drops what isn't displayed, but hidden layers (as Save writes them: `display: none` on a
+/// top-level `<g id>`, or on such a group inside groups) come back hidden. Those groups are shown
+/// for usvg; returns the SVG so changed and their ids. A group something links to (a `<use>`
+/// template) stays as it is.
+fn hidden_groups(svg: &str) -> (Cow<'_, str>, HashSet<String>) {
+    let mut ids = HashSet::new();
+    if !svg.contains("display") {
+        return (svg.into(), ids);
+    }
+    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
+        return (svg.into(), ids);
+    };
+    let css = css::Styles::new(&xml);
+    let linked: HashSet<&str> = xml.descendants().filter_map(href).filter_map(|h| h.strip_prefix('#')).collect();
+    let group = |n: &XNode| n.is_element() && n.tag_name().name() == "g" && n.attribute("id").is_none_or(|id| !linked.contains(id));
+    let mut inserts = vec![];
+    let mut groups: Vec<XNode> = xml.root_element().children().filter(group).collect();
+    while let Some(g) = groups.pop() {
+        groups.extend(g.children().filter(group));
+        let Some(id) = g.attribute("id").filter(|id| !id.is_empty()) else { continue };
+        if css.own(g, "display").as_deref() != Some("none") {
+            continue;
+        }
+        ids.insert(id.to_string());
+        // A `style` declaration wins over the attribute and style sheet rules.
+        inserts.push(match g.attributes().find(|a| a.name() == "style" && a.namespace().is_none()) {
+            Some(a) => (a.range_value().end, ";display:inline".to_string()),
+            None => (tag_name_end(svg, g), " style=\"display:inline\"".to_string()),
+        });
+    }
+    inserts.sort_by_key(|(at, _)| *at);
+    (insert(svg, inserts), ids)
 }
 
 /// Make `n` link to `url`, unless it links somewhere already (an inner link wins).
@@ -374,6 +425,9 @@ impl Importer {
         let mut n = self.group_node(g, acc)?;
         if let Some(url) = url {
             link(&mut n, &url);
+        }
+        if self.hidden.contains(g.id()) {
+            n.visible = false;
         }
         Some(n)
     }

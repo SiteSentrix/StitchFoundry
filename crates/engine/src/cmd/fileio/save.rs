@@ -22,7 +22,7 @@ pub fn save_format(format: Option<&str>, path: Option<&str>) -> std::result::Res
 
 /// What Save writes for `st` in format `f` (see [`save_format`]) → the encoded file and the
 /// options to remember for the next Save. An SVG save takes the SVG options in `p`, else the ones
-/// the document was last saved with.
+/// the document was last saved with, and keeps hidden layers (hidden) unless they say otherwise.
 pub fn save_encoding(st: &DocState, f: &Format, p: &Value) -> Result<(Encoded, Value)> {
     const C: &str = "document.save";
     if f.id == "vectorcraft" {
@@ -30,7 +30,9 @@ pub fn save_encoding(st: &DocState, f: &Format, p: &Value) -> Result<(Encoded, V
     }
     let given = super::svg_options(p).map_err(|e| bad(C, e))?;
     let opts = if given.is_empty() { st.save_options.clone() } else { Value::Object(given) };
-    let enc = encode_all(&st.doc, f.id, &json!({ "svg": opts }))?;
+    let mut svg = opts.as_object().cloned().unwrap_or_default();
+    svg.entry("hiddenLayers").or_insert(Value::Bool(true));
+    let enc = encode_all(&st.doc, f.id, &json!({ "svg": svg }))?;
     if enc.files.len() != 1 {
         return Err(bad(C, "Save writes one artboard: name one, or export several with document.export"));
     }

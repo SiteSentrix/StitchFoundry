@@ -3,7 +3,8 @@
 //! * [`export`] / [`export_full`] write a [`Document`] as SVG 1.1 with our own writer, as set by
 //!   [`ExportOptions`] (presentation attributes, inline styles, style entities or internal CSS
 //!   classes; gradients in `<defs>` with `userSpaceOnUse`; clip groups as `<clipPath>`; images
-//!   embedded as `data:` URIs or linked; text as `<text>`/`<tspan>` or outlines).
+//!   embedded as `data:` URIs or linked; text as `<text>`/`<tspan>` or outlines; symbols as one
+//!   `<symbol>` each with a `<use>` per instance; hidden layers left out, or kept not displayed).
 //! * [`import`] / [`import_with_report`] parse SVG with `usvg` and convert its normalized tree into
 //!   document nodes with all transforms baked into the geometry.
 //!
@@ -22,6 +23,9 @@
 //!   `<path>` per appearance item, in paint order.
 //! * Live geometry effects are written as their result and raster effects (shadows, glows, blurs)
 //!   as SVG filters. Freeform gradients export as linear gradients.
+//! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
+//!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
+//!   pattern paints or unlinked masks, which stay on the page) are written as their own art.
 //!
 //! ## Import approximations
 //!
@@ -36,6 +40,9 @@
 //!   clip only.
 //! * `<pattern>` becomes a pattern swatch (its content clipped to the tile) painted with the
 //!   pattern's placement.
+//! * A `<g id>` layer (top-level, or inside one) that isn't displayed (`display: none`) comes back
+//!   as a hidden layer or group, unless a `<use>` refers to it. Other undisplayed elements are left
+//!   out. `<use>` instances (and `<symbol>`s) become plain art.
 //! * Text lines after the first start at the first line's x; text in a clip path is ignored;
 //!   absolute positions inside type on a path are ignored; vertical text sets every glyph sideways.
 //!
@@ -137,6 +144,8 @@ pub struct ExportOptions {
     /// One positioned `<tspan>` per line of type instead of one per style run, tab stop and
     /// justified word (smaller; viewers then space the line with their own font metrics).
     pub fewer_tspans: bool,
+    /// Keep hidden layers, written hidden (`display:none`), as Save does; exports leave them out.
+    pub hidden_layers: bool,
 }
 
 impl Default for ExportOptions {
@@ -153,6 +162,7 @@ impl Default for ExportOptions {
             preserve_editing: false,
             metadata: false,
             fewer_tspans: false,
+            hidden_layers: false,
         }
     }
 }

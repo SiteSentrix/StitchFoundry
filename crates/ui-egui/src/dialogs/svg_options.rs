@@ -59,9 +59,11 @@ const OBJECT_IDS: [(&str, &str); 3] = [("layerNames", "Layer Names"), ("minimal"
 const UI_KEYS: [&str; 5] = ["mode", "path", "showCode", "allArtboards", "range"];
 
 /// The options a first SVG Options dialog starts from: the engine's defaults with Internal CSS
-/// and Responsive on (as the reference app's Export As starts).
+/// and Responsive on (as the reference app's Export As starts). Hidden layers are left to the
+/// command (Save keeps them, Export leaves them out).
 fn first_use() -> Map<String, Value> {
     let mut m = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+    m.remove("hiddenLayers");
     m.insert("styling".into(), json!("css"));
     m.insert("responsive".into(), json!(true));
     m.insert("useArtboards".into(), json!(true));

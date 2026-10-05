@@ -56,6 +56,9 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         warnings: vec![],
         id_prefix,
         linked: Vec::new(),
+        instance_xf: Affine::IDENTITY,
+        symbols: HashMap::new(),
+        symbol_nest: 0,
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -173,6 +176,34 @@ struct Writer<'a> {
     id_prefix: &'a str,
     /// Image files the SVG links to ([`ImageMode::Link`]).
     linked: Vec<LinkedImage>,
+    /// The transform of the symbol instances written out as their own art around the object
+    /// being written (document space; identity outside them and in symbol defs).
+    instance_xf: Affine,
+    /// What each symbol's instances can share, by symbol name (see [`Writer::symbol_use`]).
+    symbols: HashMap<String, SymbolDef>,
+    /// Symbols being written inside one another (instances nested deeper are left out: a symbol
+    /// can't contain itself).
+    symbol_nest: u32,
+}
+
+/// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
+struct SymbolDef {
+    /// The def's id, once written.
+    id: Option<String>,
+    reuse: Reuse,
+}
+
+/// Which instance transforms paint a symbol's art exactly as the def under that transform (the
+/// canvas transforms the art's geometry alone: stroke weights, effects, patterns and unlinked
+/// masks stay put).
+#[derive(Clone, Copy)]
+struct Reuse {
+    /// Translations (no pattern paints or unlinked masks).
+    moves: bool,
+    /// Rotations and reflections (nor effects or brushes).
+    turns: bool,
+    /// Any other transform (nor strokes or live objects).
+    scales: bool,
 }
 
 /// How one stroke is written.
@@ -180,6 +211,101 @@ enum StrokePlan {
     /// Its brush art (document space).
     Brush(Vec<Node>),
     Written(Written),
+}
+
+/// How deep symbols may sit in one another's art (deeper instances are left out).
+const MAX_SYMBOL_NEST: u32 = 8;
+
+impl Reuse {
+    const NONE: Self = Self { moves: false, turns: false, scales: false };
+
+    /// What a def of symbol art `art` stands for.
+    fn of(doc: &Document, art: &Node) -> Self {
+        let mut r = Self { moves: true, turns: true, scales: true };
+        r.scan(doc, art, 0);
+        r
+    }
+
+    /// Narrow down to what `n` (inside symbols nested `depth` deep) allows.
+    fn scan(&mut self, doc: &Document, n: &Node, depth: u32) {
+        let pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
+        let text_patterns = matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke)));
+        let unlinked_mask = n.mask.as_ref().is_some_and(|m| !m.linked);
+        if depth > MAX_SYMBOL_NEST || text_patterns || unlinked_mask || vectorcraft_doc::pattern::uses_pattern(n, None) {
+            *self = Self::NONE;
+            return;
+        }
+        let effects = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
+        if effects(&n.appearance.effects) || n.appearance.items.iter().any(|i| effects(i.effects())) {
+            (self.turns, self.scales) = (false, false);
+        }
+        for i in &n.appearance.items {
+            if let AppearanceItem::Stroke(s) = i
+                && s.visible
+                && !s.paint.is_none()
+                && s.width > 0.0
+            {
+                // Stroke weights don't scale; brushes can orient their art to the page.
+                self.scales = false;
+                self.turns &= s.brush.is_none();
+            }
+        }
+        match &n.kind {
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
+                (self.turns, self.scales) = (false, false)
+            }
+            NodeKind::SymbolInstance { symbol, .. } => {
+                if let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol) {
+                    self.scan(doc, &s.art, depth + 1);
+                }
+            }
+            _ => {}
+        }
+        if let Some(m) = &n.mask {
+            self.scan(doc, &m.art, depth);
+        }
+        for c in n.children().into_iter().flatten() {
+            self.scan(doc, c, depth);
+        }
+    }
+
+    /// Can the def stand for an instance with transform `xf`?
+    fn allows(self, xf: Affine) -> bool {
+        const EPS: f64 = 1e-9;
+        let [a, b, c, d, _, _] = xf.as_coeffs();
+        if (a - 1.0).abs() < EPS && b.abs() < EPS && c.abs() < EPS && (d - 1.0).abs() < EPS {
+            return self.moves;
+        }
+        let rigid = (a * a + b * b - 1.0).abs() < EPS && (c * c + d * d - 1.0).abs() < EPS && (a * c + b * d).abs() < EPS;
+        if rigid { self.turns } else { self.scales }
+    }
+}
+
+/// Art about to be written moved by `m.inverse()` (a symbol instance's): map what the canvas
+/// leaves on the page by `m` first, so it stays there. That is every pattern paint's placement
+/// and the art of unlinked opacity masks.
+fn pin_to_page(n: &mut Node, m: Affine) {
+    vectorcraft_doc::pattern::transform_pattern_paints(n, m);
+    if let Some(mask) = n.mask.as_deref_mut() {
+        let linked = mask.linked;
+        let art = std::sync::Arc::make_mut(&mut mask.art);
+        if !linked {
+            art.transform(m, false);
+        }
+        pin_to_page(art, m);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        pin_to_page(std::sync::Arc::make_mut(c), m);
+    }
+}
+
+/// The Dublin Core terms File Info writes to `<metadata>`.
+fn dublin_core(doc: &Document) -> Vec<(&'static str, String)> {
+    let mut terms = vec![("format", "image/svg+xml".to_string())];
+    if !doc.title.is_empty() {
+        terms.push(("title", doc.title.clone()));
+    }
+    terms
 }
 
 /// A region covering any artwork (mask and filter extents).
@@ -337,8 +463,8 @@ impl Writer<'_> {
         }
     }
 
-    /// `<metadata>`: the Dublin Core title and format ([`ExportOptions::metadata`]) and the native
-    /// document ([`ExportOptions::preserve_editing`]).
+    /// `<metadata>`: the Dublin Core terms of File Info ([`ExportOptions::metadata`]) and the
+    /// native document ([`ExportOptions::preserve_editing`]).
     fn metadata(&self, out: &mut String, native: Option<&[u8]>) {
         let native = native.filter(|_| self.opts.preserve_editing);
         if !self.opts.metadata && native.is_none() {
@@ -354,9 +480,8 @@ impl Writer<'_> {
         if self.opts.metadata {
             line(2, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">");
             line(3, "<rdf:Description rdf:about=\"\">");
-            line(4, "<dc:format>image/svg+xml</dc:format>");
-            if !self.doc.title.is_empty() {
-                line(4, &format!("<dc:title>{}</dc:title>", xml_escape(&self.doc.title)));
+            for (term, value) in dublin_core(self.doc) {
+                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_escape(&value)));
             }
             line(3, "</rdf:Description>");
             line(2, "</rdf:RDF>");
@@ -838,11 +963,14 @@ impl Writer<'_> {
         std::mem::replace(&mut self.body, body)
     }
 
-    /// Props of a group: a knockout group is isolated.
+    /// Props of a group (or layer): a knockout group is isolated, a hidden layer not displayed.
     fn group_props(&self, n: &Node) -> Props {
         let mut p = Self::node_props(n);
         if !n.isolate && n.knocks_out(self.knockout) {
             p.push(("isolation", "isolate".into()));
+        }
+        if !n.visible {
+            p.push(("display", "none".into()));
         }
         p
     }
@@ -923,7 +1051,9 @@ impl Writer<'_> {
     }
 
     fn node_body(&mut self, n: &Node) {
-        if !n.visible {
+        // Hidden objects are left out; hidden layers too, unless the options keep them (hidden).
+        let kept = self.opts.hidden_layers && matches!(n.kind, NodeKind::Layer { template: false, .. });
+        if !(n.visible || kept) {
             return;
         }
         if has_raster(&n.appearance.effects) {
@@ -1032,20 +1162,40 @@ impl Writer<'_> {
                 ));
             }
             NodeKind::SymbolInstance { symbol, xf } => {
-                let Some(sym) = self.doc.symbols.iter().find(|s| s.name == *symbol) else { return };
-                let saved = self.xf;
-                self.xf = saved * *xf;
+                let doc = self.doc;
+                let Some(sym) = doc.symbols.iter().find(|s| s.name == *symbol) else { return };
+                if self.symbol_nest > MAX_SYMBOL_NEST {
+                    return;
+                }
                 let id = self.id_attr(n);
                 let a = self.attrs(&Self::node_props(n));
+                if let Some(def) = self.symbol_use(sym, n, *xf) {
+                    let m = self.xf * *xf;
+                    let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
+                    self.line(&format!("<use{id} xlink:href=\"#{def}\"{tr}{a}/>"));
+                    return;
+                }
+                // An instance of its own: the (stained) art moved by the instance, its pattern
+                // paints and unlinked masks left in place as on the canvas.
+                let mut art = vectorcraft_brush::instance_art(&sym.art, n);
+                let moved = self.instance_xf * *xf;
+                if moved.determinant().abs() > 1e-12 {
+                    pin_to_page(&mut art, moved.inverse());
+                }
+                let saved = (self.xf, self.instance_xf);
+                self.xf = saved.0 * *xf;
+                self.instance_xf = moved;
                 self.line(&format!("<g{id}{a}>"));
                 self.depth += 1;
                 // The symbol's art is the instance's own picture, outside any knockout around it.
                 let knockout = std::mem::take(&mut self.knockout);
-                self.node(&sym.art.clone());
+                self.symbol_nest += 1;
+                self.node(&art);
+                self.symbol_nest -= 1;
                 self.knockout = knockout;
                 self.depth -= 1;
                 self.line("</g>");
-                self.xf = saved;
+                (self.xf, self.instance_xf) = saved;
             }
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
@@ -1053,6 +1203,42 @@ impl Writer<'_> {
                 self.node_body(&g);
             }
         }
+    }
+
+    /// The id of the `<symbol>` def instance `inst` (transform `xf`) can `<use>`, written on first
+    /// use. `None` when the instance needs its own copy of the art: stained by its fill, or moved
+    /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
+    fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {
+        if vectorcraft_brush::stain(inst).is_some() {
+            return None;
+        }
+        if !self.symbols.contains_key(&sym.name) {
+            let reuse = Reuse::of(self.doc, &sym.art);
+            self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse });
+        }
+        let def = self.symbols.get(&sym.name)?;
+        if !def.reuse.allows(xf) {
+            return None;
+        }
+        if let Some(id) = &def.id {
+            return Some(id.clone());
+        }
+        // The art in symbol space, as its own picture: no knockout around it, and no object ids
+        // (every instance shows it).
+        let id = self.unique_id(&sanitize_id(&sym.name));
+        let saved = (self.xf, self.instance_xf, std::mem::take(&mut self.knockout), std::mem::take(&mut self.names), self.anonymous);
+        (self.xf, self.instance_xf, self.anonymous) = (Affine::IDENTITY, Affine::IDENTITY, false);
+        self.symbol_nest += 1;
+        let art = self.detached(3, |w| w.node(&sym.art));
+        self.symbol_nest -= 1;
+        (self.xf, self.instance_xf, self.knockout, self.names, self.anonymous) = saved;
+        self.def(1, &format!("<symbol id=\"{id}\" overflow=\"visible\">"));
+        self.defs.push_str(&art);
+        self.def(1, "</symbol>");
+        if let Some(def) = self.symbols.get_mut(&sym.name) {
+            def.id = Some(id.clone());
+        }
+        Some(id)
     }
 
     /// Raster effects (drop shadow, glows, Gaussian blur, feather) as SVG filters: one `<g filter>`
