@@ -165,6 +165,15 @@ built-in presets don't change. New, Delete, Import… and Export… are `flatten
 Opening a `.vcflattener` file with `app.open` imports its presets. In the Flatten Transparency dialog, Save Preset…
 keeps the dialog's options as a saved preset.
 
+PDF presets: `ui.pdfPresetsDialog {selected?}` opens Edit → PDF Presets (dialog `pdfPresets`, field `selected`: a
+preset name). Built-in presets are read-only. New… and Edit… open the preset editor, which `ui.pdfPresetDialog {name?
+(a saved preset to edit) | preset? (the preset a new one starts from)}` opens too: dialog `pdfPreset`, the Save PDF
+dialog's option fields plus `name` and `description`; `ui.dialog.confirm` runs `pdf.preset.save` and returns to PDF
+Presets (a new preset can't take a name in use). Delete, Import… and Export… are `pdf.preset.delete`,
+`pdf.preset.import` and `pdf.preset.export`; `ui.dialog.confirm` closes. Opening a `.vcpdfpresets` file with `app.open`
+imports its presets. In the Save PDF dialog, Save Preset… shows a name field (`__savePresetAs`): while it shows,
+`ui.dialog.confirm` saves the dialog's settings as that preset and selects it instead of writing the PDF.
+
 Flattener Preview: `window.panel {panel: "flattenerPreview"}` shows the panel; `ui.flattenerPreview {highlight?,
 overprints?, preset?, options?, showOptions?}` sets it (a preset loads its options, `options` adjust them), shows it
 and refreshes its snapshot of the document, answering as `flattener.preview` does. `ui.inspect` reports the settings

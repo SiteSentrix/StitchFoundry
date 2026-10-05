@@ -166,6 +166,8 @@ mod tests_import_color;
 #[cfg(test)]
 mod tests_import_options;
 #[cfg(test)]
+mod tests_presets;
+#[cfg(test)]
 mod tests_settings;
 #[cfg(test)]
 mod tests_stroke;

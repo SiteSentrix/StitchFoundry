@@ -424,6 +424,12 @@ impl PdfSettings {
         within("advanced.fontSubsetPercent", self.advanced.font_subset_percent, 0.0, 100.0, "%")
     }
 
+    /// Forget the passwords (presets never store them).
+    pub fn clear_passwords(&mut self) {
+        self.security.open_password.clear();
+        self.security.permissions_password.clear();
+    }
+
     /// Options that are accepted but not applied by the writer yet, one warning each.
     pub fn warnings(&self) -> Vec<String> {
         let d = Self::default();

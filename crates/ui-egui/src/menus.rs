@@ -404,6 +404,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Document Raster Effects Settings (dialog `rasterEffectsSettings`: the document.rasterEffectsSettings fields); OK runs it. The menu item opens it too",
     ),
+    (
+        "ui.pdfPresetsDialog",
+        "PDF Presets…",
+        "",
+        "{selected?: preset name} open Edit → PDF Presets (dialog `pdfPresets`, field `selected`): the built-in presets (read-only) and the saved ones, with the selected one's description and settings. New… and Edit… open the preset editor (ui.pdfPresetDialog); Delete, Import… and Export… run pdf.preset.delete / import / export",
+    ),
+    (
+        "ui.pdfPresetDialog",
+        "PDF Preset",
+        "",
+        "{name?: a saved preset to edit | preset?: the preset a new one starts from (default VectorCraft Default)} open the preset editor (dialog `pdfPreset`: the Save PDF dialog's option fields plus `name` and `description`); OK runs pdf.preset.save and returns to PDF Presets",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -777,6 +789,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.exportAs" => io::export(app, s("format").as_deref(), s("path"), p),
         "ui.fileInfoDialog" => crate::dialogs::file_info::open(app),
         "ui.rasterEffectsSettingsDialog" => crate::dialogs::raster_effects::open(app),
+        "ui.pdfPresetsDialog" => {
+            crate::dialogs::pdf_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
+        "ui.pdfPresetDialog" => crate::dialogs::open_pdf_preset(app, p),
         _ => return None,
     };
     Some(r)
@@ -1090,7 +1107,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 todo("Print Presets…"),
-                todo("PDF Presets…"),
+                c("PDF Presets…", "ui.pdfPresetsDialog"),
                 cp("Perspective Grid Presets…", "perspective.grid.preset", json!({"kind": 2})),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),

@@ -563,3 +563,30 @@ proptest! {
         survive("mutated ai", || vectorcraft_engine::cmd::fileio::load("saved.ai", &b).ok().map(|l| l.doc))?;
     }
 }
+
+// ---------- PDF presets files ----------
+
+/// Import PDF presets from `data`, then export with each one imported (and save the .ai).
+fn pdf_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "pdf.preset.import", data, |s, r| {
+        for name in r["imported"].as_array().into_iter().flatten() {
+            let _ = s.execute("document.exportPdf", &json!({"preset": name}));
+            let _ = s.execute("document.save", &json!({"format": "ai", "preset": name}));
+        }
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn pdf_presets_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "{\"format\": \"vcpdfpresets\", ", "{\"format\": \"vcpdfpresets\", \"presets\": [{\"name\": \"x\", \"settings\": "])) {
+        pdf_presets("pdf presets garbage", &format!("{head}{s}"))?;
+    }
+
+    #[test]
+    fn mutated_pdf_presets_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        let text = saved("pdf.preset.export", json!({"names": ["VectorCraft Default", "Smallest File Size", "PDF/X-4:2010"]}));
+        pdf_presets("mutated pdf presets", &mutate_text(&text, cut, &edits))?;
+    }
+}

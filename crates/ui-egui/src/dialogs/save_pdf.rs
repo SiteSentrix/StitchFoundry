@@ -4,7 +4,10 @@
 //! The fields are the `document.exportPdf` options (sections are objects such as `compression`),
 //! plus `preset`, `range`, `path?` and UI-only `__` keys, so agents fill the dialog with
 //! `ui.dialog.set`. OK runs `document.exportPdf` through [`io::export_pdf`]; the Summary is
-//! `document.pdfSettings`.
+//! `document.pdfSettings`. Save Preset… names the settings as a preset (`pdf.preset.save`).
+//!
+//! The same dialog edits a preset (kind `pdfPreset`, from Edit → PDF Presets): a `name` and
+//! `description` instead of the preset and artboards, and OK saves the preset.
 
 use std::sync::LazyLock;
 
@@ -25,7 +28,23 @@ pub(super) const KIND: &str = "savePdf";
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Save PDF".into(), body, confirm, ok: Some("Save PDF"), ..DialogSpec::FORM };
 
-const SECTIONS: [&str; 7] = ["General", "Compression", "Marks and Bleeds", "Output", "Advanced", "Security", "Summary"];
+/// The dialog kind of the preset editor (New / Edit in Edit → PDF Presets).
+pub(super) const PRESET_KIND: &str = "pdfPreset";
+
+pub(super) const PRESET_SPEC: DialogSpec = DialogSpec {
+    heading: |d| if d.str(EDITING).is_empty() { "New PDF Preset" } else { "Edit PDF Preset" }.into(),
+    body,
+    confirm: confirm_preset,
+    ok: Some("Save Preset"),
+    ..DialogSpec::FORM
+};
+
+/// The preset editor's field holding the name of the saved preset it edits (empty: a new one).
+const EDITING: &str = "__editing";
+/// Save PDF's field holding the name typed for Save Preset… (present while that row shows).
+const SAVE_AS: &str = "__savePresetAs";
+
+pub(super) const SECTIONS: [&str; 7] = ["General", "Compression", "Marks and Bleeds", "Output", "Advanced", "Security", "Summary"];
 
 /// The default settings as JSON: what a field an agent left out reads as.
 static DEFAULTS: LazyLock<Value> = LazyLock::new(|| serde_json::to_value(PdfSettings::default()).unwrap_or_default());
@@ -82,12 +101,80 @@ fn params(d: &Dialog) -> Value {
 }
 
 /// Save PDF: write the file; the dialog stays open when that fails (bad range, cancelled save…).
+/// While Save Preset… asks for a name, OK (and Enter) saves the preset instead.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.fields.contains_key(SAVE_AS) {
+        let mut d = d.clone();
+        let r = save_preset(app, &mut d);
+        app.ui.dialog = Some(d);
+        return r;
+    }
     let r = io::export_pdf(app, params(d));
     if r.is_ok() {
         app.ui.dialog = None;
     }
     r
+}
+
+/// The settings as `pdf.preset.save` params (without the artboards and path).
+fn preset_params(d: &Dialog) -> Value {
+    let mut p = form::params(d);
+    if let Some(o) = p.as_object_mut() {
+        for k in ["range", "path"] {
+            o.remove(k);
+        }
+    }
+    p
+}
+
+/// Save Preset…: save the settings under the typed name and pick that preset.
+fn save_preset(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<Value, String> {
+    let mut p = preset_params(d);
+    p["name"] = json!(d.str(SAVE_AS));
+    let r = app.run("pdf.preset.save", p)?;
+    d.fields.remove(SAVE_AS);
+    d.fields.insert("preset".into(), r["name"].clone());
+    d.fields.insert("__presets".into(), json!(pdf::presets(&app.session)));
+    Ok(r)
+}
+
+/// Open the preset editor on the saved preset `name`, or on a new preset starting from `preset`
+/// (default: the app default).
+pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
+    let s = |k: &str| params.get(k).and_then(Value::as_str);
+    let (base, name, description, editing) = match s("name") {
+        Some(name) => {
+            let p = app.session.prefs.pdf_presets.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim()));
+            let p = p.ok_or_else(|| format!("no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)"))?;
+            (p.name.clone(), p.name.clone(), p.description.clone(), p.name.clone())
+        }
+        None => (s("preset").unwrap_or(pdf::DEFAULT_PRESET).to_string(), app.session.new_pdf_preset_name(), String::new(), String::new()),
+    };
+    let mut fields = settings_fields(app, &json!({ "preset": base }))?;
+    fields.insert("name".into(), json!(name));
+    fields.insert("description".into(), json!(description));
+    fields.insert(EDITING.into(), json!(editing));
+    fields.insert("__section".into(), json!(SECTIONS[0]));
+    app.ui.dialog = Some(Dialog { kind: PRESET_KIND.into(), fields });
+    Ok(Value::Null)
+}
+
+/// Save Preset (the preset editor's OK): `pdf.preset.save`, then back to Edit → PDF Presets on it.
+/// A new preset may not take the name of another one.
+fn confirm_preset(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut p = preset_params(d);
+    let (name, editing) = (d.str("name"), d.str(EDITING));
+    if editing.is_empty() {
+        if app.session.pdf_presets().iter().any(|q| q.name.eq_ignore_ascii_case(name.trim())) {
+            return Err(format!("a preset named `{}` exists", name.trim()));
+        }
+    } else {
+        p["name"] = json!(editing);
+        p["newName"] = json!(name);
+    }
+    let r = app.run("pdf.preset.save", p)?;
+    super::pdf_presets::open(app, r["name"].as_str());
+    Ok(r)
 }
 
 // ---------- fields by path (`compression.color.ppi`) ----------
@@ -204,15 +291,14 @@ fn text(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) {
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
-    row_with(ui, "Preset:", TOP_LABEL_WIDTH, |ui| {
-        let presets: Vec<&str> =
-            d.fields.get("__presets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-        let current = d.str("preset");
-        let chosen = widgets::dropdown(ui, "pdf-preset", &current, &presets, 300.0).and_then(|i| presets.get(i)).map(|p| p.to_string());
-        if let Some(name) = chosen {
-            apply_preset(app, d, &name);
-        }
-    });
+    let editor = d.kind == PRESET_KIND;
+    if editor {
+        row_with(ui, "Preset name:", TOP_LABEL_WIDTH, |ui| {
+            form::text_edit(ui, d, "name", 288.0);
+        });
+    } else {
+        preset_rows(app, ui, d);
+    }
     row_with(ui, "Standard:", TOP_LABEL_WIDTH, |ui| {
         let picked = pick::<Standard>(ui, d, "standard", 170.0, Standard::supported);
         let standard = choice::<Standard>(d, "standard").unwrap_or_default();
@@ -257,11 +343,46 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 "Advanced" => advanced(ui, d),
                 "Security" => security(ui, d),
                 "Summary" => summary(app, ui, d),
-                _ => general(ui, d),
+                _ => general(ui, d, editor),
             });
         });
     });
     false
+}
+
+/// The Preset row (the presets, built-in and saved, and Save Preset…) and, while Save Preset…
+/// asks for a name, the row taking it.
+fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    row_with(ui, "Preset:", TOP_LABEL_WIDTH, |ui| {
+        let presets = pdf::presets(&app.session);
+        let names: Vec<&str> = presets.iter().map(String::as_str).collect();
+        let chosen = widgets::dropdown(ui, "pdf-preset", &d.str("preset"), &names, 300.0).and_then(|i| names.get(i)).map(|p| p.to_string());
+        if let Some(name) = chosen {
+            apply_preset(app, d, &name);
+        }
+        let asking = d.fields.contains_key(SAVE_AS);
+        if ui
+            .add_enabled_ui(!asking, |ui| widgets::flat_button(ui, "Save Preset…", 96.0))
+            .inner
+            .on_hover_text("Save these settings as a preset")
+            .clicked()
+        {
+            d.fields.insert(SAVE_AS.into(), json!(app.session.new_pdf_preset_name()));
+        }
+    });
+    if d.fields.contains_key(SAVE_AS) {
+        row_with(ui, "Save as preset:", TOP_LABEL_WIDTH, |ui| {
+            form::text_edit(ui, d, SAVE_AS, 200.0);
+            if widgets::flat_button(ui, "Save", 52.0).clicked()
+                && let Err(e) = save_preset(app, d)
+            {
+                app.status(e);
+            }
+            if widgets::flat_button(ui, "Cancel", 60.0).clicked() {
+                d.fields.remove(SAVE_AS);
+            }
+        });
+    }
 }
 
 /// Replace the settings with preset `name`'s (the artboard choice and path stay).
@@ -275,7 +396,8 @@ fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
     }
 }
 
-fn general(ui: &mut egui::Ui, d: &mut Dialog) {
+/// General: the options, then the artboards (Save PDF) or the description (preset editor).
+fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
     heading(ui, "Options");
     let plain = choice::<Standard>(d, "standard").unwrap_or_default() == Standard::None;
     flag(ui, d, "preserveEditing", "Preserve editing capabilities", plain);
@@ -283,6 +405,13 @@ fn general(ui: &mut egui::Ui, d: &mut Dialog) {
     flag(ui, d, "fastWebView", "Optimize for fast web view", true);
     flag(ui, d, "viewAfterSaving", "View PDF after saving", true);
     flag(ui, d, "createLayers", "Create PDF layers from top-level layers", true);
+    if editor {
+        heading(ui, "Description");
+        if let Some(text) = widgets::text_field(ui, "pdf-preset-description", Some(&d.str("description")), 460.0, 3) {
+            d.fields.insert("description".into(), json!(text));
+        }
+        return;
+    }
     heading(ui, "Artboards");
     let mut all = d.bool("__allArtboards");
     ui.horizontal(|ui| {
@@ -455,7 +584,7 @@ fn security(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// The section a changed option belongs to (for the Summary's order).
-fn section_of(option: &str) -> usize {
+pub(super) fn section_of(option: &str) -> usize {
     match option.split('.').next().unwrap_or_default() {
         "compression" => 1,
         "marks" | "bleed" => 2,
@@ -468,7 +597,7 @@ fn section_of(option: &str) -> usize {
 
 /// `compression.color.abovePpi` → "Compression › Color › Above Ppi": the section, then the keys
 /// (without the section's own object), `thumbnails` → "General › Thumbnails".
-fn option_label(option: &str) -> String {
+pub(super) fn option_label(option: &str) -> String {
     let section = SECTIONS.get(section_of(option)).copied().unwrap_or(SECTIONS[0]);
     let mut keys = option.split('.').peekable();
     keys.next_if(|k| k.eq_ignore_ascii_case(section));
@@ -507,7 +636,8 @@ fn summary(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let mut changed: Vec<&Value> = v["changed"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
     changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()));
     if changed.is_empty() {
-        note(ui, "Every option is at its default.");
+        let base = if d.kind == PRESET_KIND { pdf::DEFAULT_PRESET } else { "the preset" };
+        note(ui, &format!("Every option matches {base}."));
     }
     for c in changed {
         let value = match &c["value"] {

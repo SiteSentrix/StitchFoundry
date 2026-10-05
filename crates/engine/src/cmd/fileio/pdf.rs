@@ -24,7 +24,12 @@ pub(super) const OPTIONS: &[FormatOption] = &[
     super::ARTBOARDS,
     super::RANGE,
     super::USE_ARTBOARDS,
-    FormatOption { name: "preset", ty: "string", default: "\"VectorCraft Default\"", description: "the PDF preset the other options apply over" },
+    FormatOption {
+        name: "preset",
+        ty: "string",
+        default: "\"VectorCraft Default\"",
+        description: "the PDF preset the other options apply over (built-in or saved: pdf.preset.list)",
+    },
     FormatOption { name: "standard", ty: "string", default: "\"none\"", description: "none | pdfA2b (PDF/X is not supported yet)" },
     FormatOption { name: "compatibility", ty: "string", default: "\"1.7\"", description: "PDF version: 1.4 | 1.5 | 1.6 | 1.7 | 2.0" },
     FormatOption {
@@ -48,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export PDF",
             [],
             None,
-            "{path?, preset?: \"VectorCraft Default\", artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), standard?: none|pdfA2b|pdfX1a|pdfX3|pdfX4, compatibility?: 1.4|1.5|1.6|1.7 (default)|2.0, preserveEditing? (on in VectorCraft Default: the native document as an embedded file, which document.open restores; choosing a standard turns it off, PDF/A refuses it), thumbnails?, fastWebView?, viewAfterSaving? (the app opens the written file), createLayers?, compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength}, compressText?: true}, marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6}, bleed?: {useDocument, top, bottom, left, right} (pt), output?: {conversion: none|destination|preserveNumbers, destination, profiles: none|all|destination|taggedSource, outputIntent, outputCondition, outputConditionId, registry, trapped}, advanced?: {fontSubsetPercent: 100, outlineText: true, overprint: preserve|discard}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; PDF/X, passwords and PDF/A-2b at 2.0 are refused. document.export {format: pdf} takes the same options",
+            "{path?, preset?: \"VectorCraft Default\" (built-in or saved: pdf.preset.list), artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), standard?: none|pdfA2b|pdfX1a|pdfX3|pdfX4, compatibility?: 1.4|1.5|1.6|1.7 (default)|2.0, preserveEditing? (on in VectorCraft Default: the native document as an embedded file, which document.open restores; choosing a standard turns it off, PDF/A refuses it), thumbnails?, fastWebView?, viewAfterSaving? (the app opens the written file), createLayers?, compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength}, compressText?: true}, marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25, offset: 6}, bleed?: {useDocument, top, bottom, left, right} (pt), output?: {conversion: none|destination|preserveNumbers, destination, profiles: none|all|destination|taggedSource, outputIntent, outputCondition, outputConditionId, registry, trapped}, advanced?: {fontSubsetPercent: 100, outlineText: true, overprint: preserve|discard}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; PDF/X, passwords and PDF/A-2b at 2.0 are refused. document.export {format: pdf} takes the same options",
             has_doc,
             export_pdf
         ),
@@ -57,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "PDF Settings",
             [],
             None,
-            "{preset?, includeDocument?: false, …document.exportPdf options} → {settings (the preset with the options applied), presets: [name…], changed: [{option: \"compression.compressText\", value}] (what differs from the defaults), warnings}; includeDocument also exports the active document in memory and adds its warnings (pattern strokes, effects left out…)",
+            "{preset?, includeDocument?: false, …document.exportPdf options} → {settings (the preset with the options applied), presets: [name…], changed: [{option: \"compression.compressText\", value}] (what differs from the preset), warnings}; includeDocument also exports the active document in memory and adds its warnings (pattern strokes, effects left out…)",
             always,
             pdf_settings
         ),
@@ -66,7 +71,12 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// Every preset name: the built-in ones, then the saved ones ([`crate::Prefs::pdf_presets`]).
 pub fn presets(s: &Session) -> Vec<String> {
-    vectorcraft_pdf::builtin_presets().into_iter().map(|p| p.name).chain(s.prefs.pdf_presets.iter().map(|p| p.name.clone())).collect()
+    names(&s.prefs.pdf_presets)
+}
+
+/// The built-in preset names, then those of `saved`.
+fn names(saved: &[PdfPreset]) -> Vec<String> {
+    vectorcraft_pdf::builtin_presets().into_iter().map(|p| p.name).chain(saved.iter().map(|p| p.name.clone())).collect()
 }
 
 /// The preset `name` names: a built-in one (any case; `default` is the app default) or one of
@@ -76,10 +86,9 @@ pub fn find_preset(name: &str, saved: &[PdfPreset]) -> Option<PdfPreset> {
 }
 
 fn preset(cmd: &str, name: &str, saved: &[PdfPreset]) -> Result<PdfSettings> {
-    find_preset(name, saved).map(|p| p.settings).ok_or_else(|| {
-        let names: Vec<String> = vectorcraft_pdf::builtin_presets().into_iter().map(|p| p.name).chain(saved.iter().map(|p| p.name.clone())).collect();
-        bad(cmd, format!("unknown PDF preset `{name}` (presets: {})", names.join(", ")))
-    })
+    find_preset(name, saved)
+        .map(|p| p.settings)
+        .ok_or_else(|| bad(cmd, format!("unknown PDF preset `{name}` (presets: {})", names(saved).join(", "))))
 }
 
 /// The settings of the preset `p` names (default: [`DEFAULT_PRESET`]), before `p`'s options.

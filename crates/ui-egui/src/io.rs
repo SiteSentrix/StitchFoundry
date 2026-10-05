@@ -8,13 +8,18 @@ use crate::VectorcraftApp;
 use crate::dialogs::svg_options;
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
-/// graphic style library files open in the library panel and flattener presets files are imported.
+/// graphic style library files open in the library panel and flattener and PDF presets files are
+/// imported.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<(), String> {
     let ext = fileio::extension(name);
-    if vectorcraft_engine::cmd::flatten::PRESET_EXTS.contains(&ext.as_str()) {
-        let r = app.run("flattener.presets.import", serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
+    let presets = [
+        (vectorcraft_engine::cmd::flatten::PRESET_EXTS, "flattener.presets.import", "flattener presets"),
+        (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
+    ];
+    if let Some((_, import, what)) = presets.iter().find(|(exts, ..)| exts.contains(&ext.as_str())) {
+        let r = app.run(import, serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
         let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-        app.status(format!("Imported flattener presets: {}", names.join(", ")));
+        app.status(format!("Imported {what}: {}", names.join(", ")));
         return Ok(());
     }
     let swatches = vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&ext.as_str());

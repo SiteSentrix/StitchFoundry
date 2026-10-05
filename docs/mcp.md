@@ -183,7 +183,7 @@ PDF files take the Save PDF dialog's options: `preset`, `standard`, `compatibili
 `compression`, `marks`, `bleed`, `output`, `advanced` and `security` sections (`list_commands` with filter `exportPdf`
 documents every field). `document.exportPdf` and `export` (format `pdf`, the options in `options`) return `warnings`:
 options accepted but not applied yet, and features approximated or left out. PDF/X, passwords and PDF/A-2b at 2.0 are refused.
-`document.pdfSettings` lists the options that differ from the defaults and the warnings without writing a file.
+`document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)
@@ -958,4 +958,21 @@ bounds, or the artboard less a 36 pt margin.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/notes.txt","text":{"removeLineReturns":true,"removeParagraphReturns":true}}}}
+```
+
+## PDF presets
+
+`pdf.preset.list` lists the built-in presets (`VectorCraft Default`, which preserves editing, then High Quality Print,
+Press Quality, Smallest File Size and the PDF/X presets, `builtIn: true`; `supported: false` where the writer can't
+produce the standard yet) and the saved ones, each with its `description` and `settings`. `pdf.preset.save {name?,
+newName?, description?, preset?, …document.exportPdf options}` creates or changes a saved preset (a change starts from
+the preset's own settings; `newName` renames it; built-in presets are read-only; passwords are never stored);
+`pdf.preset.delete {name}` deletes one. `pdf.preset.export {names?, path?}` writes them as a `.vcpdfpresets` JSON file
+(without `path` it returns `data`), and `pdf.preset.import {path? | data? | dataBase64?, replace?}` adds a file's
+presets (names in use get a number unless `replace`). Saved presets live with the preferences and work as `preset`
+in `document.exportPdf`, `document.pdfSettings`, `document.export`/`serialize` with format `pdf` and `.ai` saves.
+
+```json
+{"name":"run_command","arguments":{"command":"pdf.preset.save","params":{"name":"Web","preset":"Smallest File Size","compatibility":"1.5"}}}
+{"name":"run_command","arguments":{"command":"document.exportPdf","params":{"preset":"Web","path":"/tmp/web.pdf"}}}
 ```
