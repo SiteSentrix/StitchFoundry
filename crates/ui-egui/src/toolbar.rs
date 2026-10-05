@@ -29,7 +29,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         "Draw",
         &[
             &["pencil", "smooth", "pathEraser", "join"],
-            &["eraser", "scissors", "knife"],
+            &["eraser", "scissors", "knife", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
             &["pen", "addAnchor", "deleteAnchor", "anchorPoint"],
             &["curvature"],
@@ -215,6 +215,32 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
         _ => Err(format!("the {tool} tool has no options")),
     }
+}
+
+/// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps (set
+/// through `tool.setOption`).
+pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    /// (value, label) of each choice.
+    type Choices = &'static [(&'static str, &'static str)];
+    const MIRROR: [(&str, &str, Choices); 2] = [
+        ("axis", "Axis:", &[("free", "Free"), ("vertical", "Vertical"), ("horizontal", "Horizontal")]),
+        ("keep", "Keep:", &[("left", "Left"), ("right", "Right"), ("top", "Top"), ("bottom", "Bottom")]),
+    ];
+    if app.session.tool_id() != "mirrorCut" {
+        return;
+    }
+    let t = Tokens::get(ui.ctx());
+    let opts = app.session.tool_options();
+    for (key, label, choices) in MIRROR {
+        ui.label(egui::RichText::new(label).size(12.0).color(t.text));
+        let cur = opts[key].as_str().unwrap_or_default();
+        let shown = choices.iter().find(|(v, _)| *v == cur).map_or(cur, |(_, l)| *l);
+        let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
+        if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, 96.0).and_then(|i| choices.get(i)) {
+            app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
+        }
+    }
+    ui.separator();
 }
 
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {

@@ -11,6 +11,7 @@ pub mod bbox;
 pub mod builder;
 pub mod catalog;
 pub mod corners;
+pub mod cut;
 pub mod direct;
 pub mod distort;
 pub mod draw2;
@@ -364,6 +365,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| extra::create(other))
             .or_else(|| slice::create(other))
             .or_else(|| printtiling::create(other))
+            .or_else(|| cut::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }

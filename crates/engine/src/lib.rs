@@ -1138,6 +1138,8 @@ mod tests_containers;
 #[cfg(test)]
 mod tests_css;
 #[cfg(test)]
+mod tests_cut;
+#[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
 mod tests_distort;

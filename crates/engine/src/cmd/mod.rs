@@ -11,6 +11,7 @@ pub mod colormgmt;
 pub mod colortheme;
 mod create;
 mod css;
+mod cut;
 pub(crate) mod distortcmds;
 mod docinfo;
 mod docmenu;
@@ -246,6 +247,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(printpresets::specs());
         v.extend(printtiling::specs());
         v.extend(plugin::specs());
+        v.extend(cut::specs());
         v
     })
 }

@@ -1,6 +1,8 @@
 //! Commands backing the drawing tools (pencil, curvature, anchor tools, scissors, knife, eraser,
 //! blob brush, smooth, path eraser, join).
 
+use std::sync::Arc;
+
 use kurbo::{ParamCurve, ParamCurveNearest};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -224,19 +226,43 @@ fn target_paths(doc: &Document, sel: &Selection, area: Rect) -> Vec<NodeId> {
     out
 }
 
-/// A copy of path node `id` (fresh id, no live shape) with geometry `pd`.
+/// The members of a compound path with geometry `pd`: one path per subpath, with fresh ids.
+fn compound_members(d: &mut Document, pd: PathData) -> Vec<Arc<Node>> {
+    pd.subpaths.into_iter().map(|sp| Arc::new(Node::path(d.alloc_id(), PathData::single(sp), Appearance::default()))).collect()
+}
+
+/// Give path or compound path `id` the geometry `pd` (dropping a live shape; a compound's members
+/// are rebuilt, one per subpath).
+pub(super) fn set_geometry(d: &mut Document, id: NodeId, pd: PathData) -> Result<()> {
+    if matches!(d.node(id).map(|n| &n.kind), Some(NodeKind::Compound { .. })) {
+        let members = compound_members(d, pd);
+        if let Some(NodeKind::Compound { children, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+            *children = members;
+        }
+        return Ok(());
+    }
+    *path_mut(d, id)? = pd;
+    Ok(())
+}
+
+/// A copy of path or compound path node `id` (fresh ids, no live shape) with geometry `pd`.
 fn sibling_with(d: &mut Document, id: NodeId, pd: PathData) -> Result<Node> {
     let mut n = d.node(id).ok_or(EngineError::NoNode(id))?.clone();
     n.id = d.alloc_id();
-    if let NodeKind::Path { path, live, .. } = &mut n.kind {
-        *path = pd;
-        *live = None;
+    match &mut n.kind {
+        NodeKind::Path { path, live, .. } => {
+            *path = pd;
+            *live = None;
+        }
+        NodeKind::Compound { children, .. } => *children = compound_members(d, pd),
+        _ => {}
     }
     Ok(n)
 }
 
-/// Replace path `id` with `pieces` (first keeps the id, the rest go right above it). Returns ids.
-fn replace_with_pieces(d: &mut Document, id: NodeId, pieces: Vec<PathData>) -> Result<Vec<NodeId>> {
+/// Replace path or compound path `id` with `pieces` (first keeps the id, the rest go right above
+/// it; none removes it). Returns ids.
+pub(super) fn replace_with_pieces(d: &mut Document, id: NodeId, pieces: Vec<PathData>) -> Result<Vec<NodeId>> {
     let mut it = pieces.into_iter();
     let Some(first) = it.next() else {
         d.remove(id)?;
@@ -248,16 +274,16 @@ fn replace_with_pieces(d: &mut Document, id: NodeId, pieces: Vec<PathData>) -> R
         let n = sibling_with(d, id, pd)?;
         ids.push(d.insert(parent, idx + 1 + k, n)?);
     }
-    *path_mut(d, id)? = first;
+    set_geometry(d, id, first)?;
     Ok(ids)
 }
 
-fn ids_json(ids: &[NodeId]) -> Value {
+pub(super) fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
 /// Split a filled path into connected pieces (each outer contour with its holes).
-fn components(pd: &PathData) -> Vec<PathData> {
+pub(super) fn components(pd: &PathData) -> Vec<PathData> {
     let subs: Vec<&SubPath> = pd.subpaths.iter().filter(|s| s.closed && s.anchors.len() >= 2).collect();
     if subs.len() <= 1 {
         return if pd.is_empty() { vec![] } else { vec![pd.clone()] };
@@ -382,7 +408,7 @@ fn cut_subpath(sp: &SubPath, remove: &dyn Fn(Point) -> bool) -> Option<Vec<SubPa
 
 /// Erase from an outline path (open or closed) where `remove` holds. Returns the new geometry per
 /// output object (one object per piece when the path had a single subpath), or None if unchanged.
-fn erase_outline(pd: &PathData, remove: &dyn Fn(Point) -> bool) -> Option<Vec<PathData>> {
+pub(super) fn erase_outline(pd: &PathData, remove: &dyn Fn(Point) -> bool) -> Option<Vec<PathData>> {
     let mut changed = false;
     let mut subs = vec![];
     for sp in &pd.subpaths {
