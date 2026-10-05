@@ -3,7 +3,6 @@
 //! flags; UI brightness and everything else is untouched when switching.
 
 use std::sync::atomic::Ordering;
-use std::sync::{OnceLock, RwLock};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -196,10 +195,7 @@ pub fn rename(ui: &mut UiState, from: &str, to: &str) -> Result<(), String> {
 
 // ---------- menu support (menu_tree has no app access) ----------
 
-fn names_store() -> &'static RwLock<Vec<&'static str>> {
-    static S: OnceLock<RwLock<Vec<&'static str>>> = OnceLock::new();
-    S.get_or_init(Default::default)
-}
+crate::shortcut_editor::ui_mirror!(fn names_store() -> Vec<&'static str>);
 
 /// Mirror the user workspace names for the (static) menu tree.
 pub fn sync(ui: &UiState) {

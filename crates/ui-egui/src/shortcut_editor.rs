@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock, RwLock};
+use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, KeyboardShortcut, Modifiers};
 use serde_json::{Value, json};
@@ -35,10 +35,30 @@ pub fn deserialize_set_name<'de, D: serde::Deserializer<'de>>(d: D) -> Result<St
 /// Bumped whenever overrides or the workspace list change (the native menu rebuilds on it).
 pub static GENERATION: AtomicU64 = AtomicU64::new(0);
 
-fn store() -> &'static RwLock<BTreeMap<String, &'static str>> {
-    static S: OnceLock<RwLock<BTreeMap<String, &'static str>>> = OnceLock::new();
-    S.get_or_init(Default::default)
+/// Declares `fn $name() -> &'static RwLock<$t>`: a mirror of UI state for code without app access
+/// (menus, the shortcut dispatcher). One per process in the app; one per thread in unit tests,
+/// which run in parallel threads, each driving its own app whose every frame syncs the mirror: a
+/// shared one would let a test's frames overwrite another test's state mid-assertion.
+macro_rules! ui_mirror {
+    ($(#[$meta:meta])* $vis:vis fn $name:ident() -> $t:ty) => {
+        $(#[$meta])*
+        $vis fn $name() -> &'static std::sync::RwLock<$t> {
+            #[cfg(not(test))]
+            {
+                static S: std::sync::OnceLock<std::sync::RwLock<$t>> = std::sync::OnceLock::new();
+                S.get_or_init(Default::default)
+            }
+            #[cfg(test)]
+            {
+                thread_local!(static S: &'static std::sync::RwLock<$t> = Box::leak(Box::default()));
+                S.with(|s| *s)
+            }
+        }
+    };
 }
+pub(crate) use ui_mirror;
+
+ui_mirror!(fn store() -> BTreeMap<String, &'static str>);
 
 /// Leak-once interning for override strings (bounded by the chords a user ever assigns).
 pub fn intern(s: &str) -> &'static str {
@@ -771,6 +791,18 @@ mod tests {
         assert_eq!(tool_for_key("Shift+9"), Some("measure"));
         sync(&UiState::default());
         assert_eq!(menus::shortcut_of("test.nonexistent"), None);
+    }
+
+    #[test]
+    fn another_tests_frames_leave_this_tests_mirror_alone() {
+        let mut ui = UiState::default();
+        ui.shortcut_overrides.insert("tool:measure".into(), "Shift+8".into());
+        crate::workspaces::save_as(&mut ui, "Mine").unwrap();
+        sync(&ui);
+        // What each frame of a test running in parallel does with its default state.
+        std::thread::spawn(|| sync(&UiState::default())).join().unwrap();
+        assert_eq!(tool_shortcut("measure"), Some("Shift+8"));
+        assert!(crate::workspaces::menu_items().iter().any(|i| matches!(i, menus::Item::Cmd("Mine", ..))));
     }
 
     #[test]
