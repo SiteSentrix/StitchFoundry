@@ -19,6 +19,7 @@ use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, Rect};
 
 use crate::lab_spot::{find, rfind};
+use crate::marks::PageBoxes;
 use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 
 /// Export `doc` as PDF bytes: one page per artboard (or the artboards chosen in `opts`).
@@ -104,6 +105,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         lab_spots: vec![],
         interpolate: set.standard != Standard::PdfA2b,
         compression: &set.compression,
+        non_printing: set.include_non_printing || set.create_layers,
     };
     // CMYK documents blend in CMYK, as on screen: their groups' blending space is rewritten (see
     // `cmyk_blending`), and transparency at the top of a page is put in a non-isolated group of
@@ -111,14 +113,17 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     let cmyk = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
     let page_group = doc.page_isolate || doc.page_knockout;
     let cmyk_page_group = cmyk && !page_group && doc.layers.iter().any(|l| l.shows_transparency());
+    // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed.
+    let bleed = set.bleed_of(doc);
     for i in indices {
-        let ab = &doc.artboards[i];
-        let r = ab.rect;
-        let size = Size::from_wh(r.width().max(1.0) as f32, r.height().max(1.0) as f32).ok_or(PdfError::BadArtboard(i))?;
-        let mut page = pdf.start_page_with(PageSettings::new(size));
+        let boxes = PageBoxes::new(doc.artboards[i].rect, bleed);
+        let (m, r) = (boxes.media, boxes.bleed);
+        let size = Size::from_wh(m.width().max(1.0) as f32, m.height().max(1.0) as f32).ok_or(PdfError::BadArtboard(i))?;
+        // The boxes in page space (y-down from the media box's top-left corner, like ours).
+        let at = |b: Rect| krilla::geom::Rect::from_ltrb((b.x0 - m.x0) as f32, (b.y0 - m.y0) as f32, (b.x1 - m.x0) as f32, (b.y1 - m.y0) as f32);
+        let mut page = pdf.start_page_with(PageSettings::new(size).with_trim_box(at(boxes.trim)).with_bleed_box(at(boxes.bleed)));
         let mut s = page.surface();
-        // krilla's page space is y-down with the origin at the top-left corner, like ours.
-        s.push_transform(&xf(Affine::translate((-r.x0, -r.y0))));
+        s.push_transform(&xf(Affine::translate((-m.x0, -m.y0))));
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
         // writer has no page group attributes).
         if page_group {
@@ -232,6 +237,8 @@ struct Exporter<'a> {
     interpolate: bool,
     /// How images are resampled and compressed.
     compression: &'a crate::CompressionSettings,
+    /// Layers whose Print option is off are written too.
+    non_printing: bool,
 }
 
 /// Most pixels along a side of a freeform gradient's image (its colour field is smooth).
@@ -600,7 +607,9 @@ impl Exporter<'_> {
         if !force && !n.visible {
             return;
         }
-        if let NodeKind::Layer { template: true, .. } = n.kind {
+        if let NodeKind::Layer { template, printable, .. } = n.kind
+            && (template || !(printable || self.non_printing))
+        {
             return;
         }
         match n.visual_bounds() {

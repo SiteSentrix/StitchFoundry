@@ -257,8 +257,7 @@ impl Default for DocSetup {
 impl DocSetup {
     /// `artboard` grown by the bleed.
     pub fn bleed_rect(&self, artboard: Rect) -> Rect {
-        let [top, bottom, left, right] = self.bleed;
-        Rect::new(artboard.x0 - left, artboard.y0 - top, artboard.x1 + right, artboard.y1 + bottom)
+        crate::marks::outset(artboard, self.bleed)
     }
     pub fn has_bleed(&self) -> bool {
         self.bleed.iter().any(|b| *b > 0.0)

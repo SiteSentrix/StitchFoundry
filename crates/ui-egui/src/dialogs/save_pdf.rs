@@ -409,6 +409,7 @@ fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
     flag(ui, d, "fastWebView", "Optimize for fast web view", true);
     flag(ui, d, "viewAfterSaving", "View PDF after saving", true);
     flag(ui, d, "createLayers", "Create PDF layers from top-level layers", true);
+    flag(ui, d, "includeNonPrinting", "Include non-printing layers", true);
     if editor {
         heading(ui, "Description");
         if let Some(text) = widgets::text_field(ui, "pdf-preset-description", Some(&d.str("description")), 460.0, 3) {
@@ -501,12 +502,18 @@ fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     row(ui, "Offset:", |ui| length(ui, d, "marks.offset", unit, true));
     heading(ui, "Bleeds");
     flag(ui, d, "bleed.useDocument", "Use document bleed settings", true);
-    let custom = get(d, "bleed.useDocument").as_bool() != Some(true);
+    // With the document's bleed the fields show it (Document Setup's `[top, bottom, left, right]`).
+    let document = (get(d, "bleed.useDocument").as_bool() == Some(true)).then(|| app.session.active().map_or([0.0; 4], |s| s.doc.setup.bleed));
     egui::Grid::new("pdf-bleed").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
-        for pair in [[("bleed.top", "Top:"), ("bleed.bottom", "Bottom:")], [("bleed.left", "Left:"), ("bleed.right", "Right:")]] {
-            for (p, label) in pair {
+        for pair in [[(0, "bleed.top", "Top:"), (1, "bleed.bottom", "Bottom:")], [(2, "bleed.left", "Left:"), (3, "bleed.right", "Right:")]] {
+            for (i, p, label) in pair {
                 ui.label(label);
-                length(ui, d, p, unit, custom);
+                match document {
+                    Some(b) => {
+                        ui.add_enabled_ui(false, |ui| widgets::num_field(ui, p, b.get(i).copied(), unit, 80.0));
+                    }
+                    None => length(ui, d, p, unit, true),
+                }
             }
             ui.end_row();
         }
@@ -794,6 +801,34 @@ mod tests {
         assert_eq!(get(&d, "compatibility"), "1.7");
         assert_eq!(get(&d, "marks.trim"), false);
         assert!(app.run("ui.savePdfDialog", json!({"compatibility": "1.0"})).is_err(), "bad options are refused");
+    }
+
+    #[test]
+    fn bleed_and_non_printing_layers_reach_the_pdf() {
+        let (mut app, written, _) = app();
+        app.run("document.setup", json!({"bleed": 9})).unwrap();
+        let notes = app.run("layer.new", json!({})).unwrap()["id"].clone();
+        app.run("layer.setProps", json!({"id": notes, "printable": false})).unwrap();
+        app.run("shape.ellipse", json!({"x": 60, "y": 40, "width": 20, "height": 20})).unwrap();
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/marks.pdf"})).unwrap();
+        set_field(&mut app, "__section", json!("Marks and Bleeds"));
+        set_field(&mut app, "bleed.useDocument", json!(true));
+        frame(&mut app);
+        set_field(&mut app, "__section", json!("General"));
+        set_field(&mut app, "includeNonPrinting", json!(true));
+        frame(&mut app);
+        let r = super::super::confirm(&mut app).unwrap();
+        assert_eq!(r["warnings"], json!([]), "the bleed is applied");
+        let bytes = &written.borrow()[0].1;
+        let page = &vectorcraft_pdf::info(bytes, None).unwrap().pages[0];
+        let trim = page.boxes.iter().find(|(b, _)| *b == vectorcraft_pdf::CropTo::Trim).unwrap().1;
+        assert_eq!((trim.width(), trim.x0), (120.0, 9.0), "the trim box is the artboard, inside the bleed");
+        let mut ellipse = false;
+        vectorcraft_pdf::import(bytes).unwrap().walk(|n| {
+            let b = n.path_data().and_then(|p| p.bounds()).unwrap_or_default();
+            ellipse |= (b.width() - 20.0).abs() < 0.1 && (b.height() - 20.0).abs() < 0.1;
+        });
+        assert!(ellipse, "the non-printing layer is included");
     }
 
     #[test]

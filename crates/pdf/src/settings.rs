@@ -209,6 +209,9 @@ pub struct PdfSettings {
     pub view_after_saving: bool,
     /// Write top-level layers as PDF layers (optional content).
     pub create_layers: bool,
+    /// Keep the layers whose Print option is off (they are left out otherwise, unless
+    /// `create_layers` is on).
+    pub include_non_printing: bool,
     pub compression: CompressionSettings,
     pub marks: MarkSettings,
     pub bleed: BleedSettings,
@@ -310,7 +313,8 @@ pub struct BleedSettings {
 }
 
 impl BleedSettings {
-    fn values(&self) -> [f64; 4] {
+    /// `[top, bottom, left, right]`.
+    pub(crate) fn values(&self) -> [f64; 4] {
         [self.top, self.bottom, self.left, self.right]
     }
 }
@@ -440,7 +444,6 @@ impl PdfSettings {
             (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers, "PDF layers are not written yet: every layer is plain page content"),
             (self.marks.any(), "printer's marks are not drawn yet"),
-            (!self.bleed.use_document && self.bleed.values().iter().any(|v| *v > 0.0), "bleed is not added yet: each page is its artboard"),
             (o.conversion != ColorConversion::None, "colour conversion is not applied yet: colours are written as they are"),
             (o.profiles != ProfileInclusion::None, "ICC profiles are not embedded yet"),
             (

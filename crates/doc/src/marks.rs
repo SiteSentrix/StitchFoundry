@@ -120,6 +120,11 @@ impl TrimMarks {
     }
 }
 
+/// `r` grown by `[top, bottom, left, right]` (a bleed, or how far marks reach).
+pub fn outset(r: Rect, [top, bottom, left, right]: [f64; 4]) -> Rect {
+    Rect::new(r.x0 - left, r.y0 - top, r.x1 + right, r.y1 + bottom)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

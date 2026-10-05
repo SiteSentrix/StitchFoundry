@@ -6,7 +6,10 @@
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
 //!   freeform gradients as images (clipped to what they paint), embedded images (resampled and
-//!   compressed as the Compression settings say) and text as outlined glyph paths. Hidden objects, guides and template layers are skipped. [`PdfSettings`] is the Save PDF
+//!   compressed as the Compression settings say) and text as outlined glyph paths. Hidden objects,
+//!   guides and template layers are skipped, and so are non-printing layers unless asked for.
+//!   Each page is its artboard (the trim box) grown by the bleed (the bleed box and media box).
+//!   [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
 //!   Editing the native document rides along as an embedded file ([`editing()`]).
@@ -35,6 +38,7 @@ mod import_scan;
 mod import_shading;
 mod import_text;
 mod lab_spot;
+mod marks;
 mod pages;
 mod presets;
 mod settings;
@@ -196,6 +200,8 @@ mod tests_import_fidelity;
 mod tests_import_layers;
 #[cfg(test)]
 mod tests_import_options;
+#[cfg(test)]
+mod tests_marks;
 #[cfg(test)]
 mod tests_presets;
 #[cfg(test)]
