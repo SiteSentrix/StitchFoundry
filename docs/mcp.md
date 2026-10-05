@@ -148,7 +148,15 @@ Long-tail commands:
 {"name":"run_command","arguments":{"command":"select.all"}}
 {"name":"run_command","arguments":{"command":"object.align","params":{"align":"left"}}}
 {"name":"run_command","arguments":{"command":"object.group"}}
+{"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/art.pdf","range":"1, 3","compatibility":"1.5"}}}
+{"name":"run_command","arguments":{"command":"document.pdfSettings","params":{"marks":{"trim":true},"includeDocument":true}}}
 ```
+
+PDF files take the Save PDF dialog's options: `preset`, `standard`, `compatibility`, the General toggles and the
+`compression`, `marks`, `bleed`, `output`, `advanced` and `security` sections (`list_commands` with filter `exportPdf`
+documents every field). `document.exportPdf` and `export` (format `pdf`, the options in `options`) return `warnings`:
+options accepted but not applied yet, and features approximated or left out. PDF/X, passwords and PDF/A-2b at 2.0 are refused.
+`document.pdfSettings` lists the options that differ from the defaults and the warnings without writing a file.
 
 Drive a tool like a mouse:
 

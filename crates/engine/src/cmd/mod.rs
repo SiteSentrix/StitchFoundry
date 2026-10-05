@@ -210,6 +210,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(attributes::specs());
         v.extend(newart::specs());
         v.extend(colortheme::specs());
+        v.extend(fileio::pdf::specs());
         v
     })
 }

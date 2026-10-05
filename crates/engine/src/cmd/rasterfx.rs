@@ -181,9 +181,18 @@ pub fn flatten_raster_effects(doc: &Document) -> Option<Document> {
 
 /// PDF bytes for `doc`, with raster effects rendered as images.
 pub fn export_pdf(doc: &Document, opts: &vectorcraft_pdf::PdfOptions) -> std::result::Result<Vec<u8>, vectorcraft_pdf::PdfError> {
+    export_pdf_with_report(doc, opts).map(|r| r.bytes)
+}
+
+/// Like [`export_pdf`], also returning the writer's warnings (options not applied yet, features
+/// approximated or left out).
+pub fn export_pdf_with_report(
+    doc: &Document,
+    opts: &vectorcraft_pdf::PdfOptions,
+) -> std::result::Result<vectorcraft_pdf::ExportReport, vectorcraft_pdf::PdfError> {
     match flatten_raster_effects(doc) {
-        Some(d) => vectorcraft_pdf::export(&d, opts),
-        None => vectorcraft_pdf::export(doc, opts),
+        Some(d) => vectorcraft_pdf::export_with_report(&d, opts),
+        None => vectorcraft_pdf::export_with_report(doc, opts),
     }
 }
 

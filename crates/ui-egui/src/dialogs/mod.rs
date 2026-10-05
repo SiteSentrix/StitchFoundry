@@ -31,6 +31,7 @@ mod path_ops;
 pub mod recolor;
 pub mod saturate;
 mod save_changes;
+mod save_pdf;
 pub mod save_style_library;
 pub mod save_swatch_library;
 mod shapes;
@@ -46,6 +47,7 @@ use serde_json::{Value, json};
 
 pub use color_picker::open as open_color_picker;
 pub use effect::open as open_effect_dialog;
+pub use save_pdf::open as open_save_pdf;
 pub use tools::open_tool_dialog;
 
 use crate::state::Dialog;
@@ -170,6 +172,7 @@ registry! {
     SpotColors: [spot_colors::KIND] => spot_colors::SPEC,
     TransformEach: [transform_each::KIND] => transform_each::SPEC,
     WidthPoint: [width_point::KIND] => width_point::SPEC,
+    SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

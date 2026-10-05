@@ -57,7 +57,8 @@ fn grouped_spot_swatches_print_on_their_own_plate() {
     assert!(plates["plates"].as_array().unwrap().iter().any(|p| p["name"] == "Signal Orange" && p["spot"] == true), "{plates}");
     let a = rect(&mut s);
     run(&mut s, "paint.setFill", json!({"ids": [a.0], "swatch": "Signal Orange"}));
-    let bytes = vectorcraft_pdf::export(doc(&s), &vectorcraft_pdf::PdfOptions { compress: false, created: Some(0), ..Default::default() }).unwrap();
+    let bytes =
+        vectorcraft_pdf::export(doc(&s), &vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() }).unwrap();
     let pdf = String::from_utf8_lossy(&bytes);
     assert!(pdf.contains("/Separation") && pdf.contains("Signal#20Orange"), "a grouped spot swatch is a Separation");
     let info = run(&mut s, "document.info", json!({}));

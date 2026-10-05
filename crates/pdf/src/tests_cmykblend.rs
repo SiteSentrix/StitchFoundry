@@ -37,7 +37,7 @@ fn doc(mode: ColorMode, grouped: bool) -> Document {
 
 /// The file's text with spaces removed (content streams uncompressed), after checking it reads.
 fn text(d: &Document) -> String {
-    let bytes = export(d, &PdfOptions { compress: false, ..Default::default() }).unwrap();
+    let bytes = export(d, &PdfOptions::uncompressed()).unwrap();
     import(&bytes).expect("the rewritten file still reads");
     String::from_utf8_lossy(&bytes).replace(' ', "")
 }

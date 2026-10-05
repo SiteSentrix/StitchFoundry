@@ -5,6 +5,7 @@
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
 //! - `save`: `document.save`, `file.saveAsTemplate`.
+//! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
@@ -13,11 +14,12 @@ mod batch;
 mod encode;
 mod export;
 mod load;
+pub mod pdf;
 mod save;
 
 use serde_json::{Value, json};
 
-pub use encode::{ARTBOARD_PARAMS, ArtboardPick, encode};
+pub use encode::{ARTBOARD_PARAMS, ArtboardPick, encode, encode_with_warnings};
 pub use load::{Loaded, RasterImage, detect, load, open_bytes, raster_image};
 
 use super::*;
@@ -48,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Serialize Document",
             [],
             None,
-            "{format?: vectorcraft (default)|svg|pdf|png|jpg|webp, …the format's options (see document.formats)} → {text} for svg, else {dataBase64}",
+            "{format?: vectorcraft (default)|svg|pdf|png|jpg|webp, …the format's options (see document.formats)} → {text, warnings} for svg, else {dataBase64, warnings}",
             has_doc,
             export::serialize
         ),
@@ -57,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" (1-based; PDF writes one page per artboard, default all; the other formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), outlineText?: bool (svg)} → {path, format, bytes}; no path → {dataBase64, format, bytes}. Never changes the document's path",
+            "{path?, format?: svg|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" (1-based; PDF writes one page per artboard, default all; the other formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), outlineText?: bool (svg), …the PDF options of document.exportPdf} → {path, format, bytes, warnings}; no path → {dataBase64, format, bytes, warnings}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -105,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
 #[derive(Clone, Copy, Debug)]
 pub struct FormatOption {
     pub name: &'static str,
-    /// JSON type: `number`, `integer`, `boolean`, `string` or `array`.
+    /// JSON type: `number`, `integer`, `boolean`, `string`, `array` or `object`.
     pub ty: &'static str,
     /// The default as a JSON literal (`"1"`, `"false"`, `"null"`).
     pub default: &'static str,
@@ -200,16 +202,7 @@ pub const FORMATS: &[Format] = &[
         options: &[ARTBOARD, OUTLINE_TEXT],
     },
     reader("svgz", "SVG Compressed", &["svgz"], "image/svg+xml", false),
-    Format {
-        id: "pdf",
-        label: "PDF",
-        extensions: &["pdf"],
-        mime: "application/pdf",
-        read: true,
-        write: true,
-        raster: false,
-        options: &[ARTBOARD, ARTBOARDS, RANGE],
-    },
+    Format { id: "pdf", label: "PDF", extensions: &["pdf"], mime: "application/pdf", read: true, write: true, raster: false, options: pdf::OPTIONS },
     reader("ai", "PDF-compatible .ai", &["ai"], "application/pdf", false),
     reader("ait", "PDF-compatible .ait template", &["ait"], "application/pdf", false),
     Format { id: "png", label: "PNG", extensions: &["png"], mime: "image/png", read: true, write: true, raster: true, options: &[ARTBOARD, SCALE] },
@@ -346,3 +339,5 @@ fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) -> Result<Val
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_pdf;

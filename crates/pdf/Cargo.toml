@@ -23,6 +23,8 @@ hayro-syntax = "0.7.2"
 hayro-interpret = { version = "0.7.0", default-features = false, features = ["embed-fonts"] }
 log = { workspace = true }
 smallvec = "1"
+serde = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
+serde_json = { workspace = true }

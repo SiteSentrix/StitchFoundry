@@ -165,7 +165,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name, or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
     ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
-    ("file.export.pdf", "Save as PDF…", "", "{path?, artboard? | artboards? | range?: \"1-3, 5\"} (document.export options)"),
+    (
+        "file.export.pdf",
+        "Save as PDF…",
+        "",
+        "{} opens the Save PDF dialog; with params = document.exportPdf options written to path (asked when missing; viewAfterSaving opens the file) → {path, bytes, warnings}",
+    ),
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
@@ -349,6 +354,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Limit Color Guide to Library",
         "",
         "{library: swatch library id or name (see swatch.library.list) | \"document\" (the document's swatches) | \"\" or null (no limit)} limit the Color Guide panel's colours to that library: every harmony colour and variation snaps to its nearest colour, as color.harmony {limitTo} answers (ui.inspect: ui.color_guide_limit) → {limitTo, name}",
+    ),
+    (
+        "ui.savePdfDialog",
+        "Save PDF Dialog",
+        "",
+        "{path?, preset?, range?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks)",
     ),
 ];
 
@@ -634,7 +645,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some((e, params)) => app.run("effect.apply", json!({"effect": e, "params": params})),
             None => Err("no effect applied yet".into()),
         },
-        "file.export.pdf" => io::export(app, Some("pdf"), s("path"), p).map(|p| json!({"path": p})),
+        "file.export.pdf" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::open_save_pdf(app, &json!({})),
+        "file.export.pdf" => io::export_pdf(app, p.clone()),
         "help.about" => {
             app.ui.about = true;
             Ok(Value::Null)
@@ -721,6 +733,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
+        "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
         _ => return None,
     };
     Some(r)
@@ -896,7 +909,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         }
         "effect.dialog" | "ui.recolorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
-        "file.export.pdf" => app.session.active().is_some(),
+        "file.export.pdf" | "ui.savePdfDialog" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),

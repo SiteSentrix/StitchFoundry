@@ -8,22 +8,22 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 
 use super::super::*;
-use super::{ARTBOARD_PARAMS, ArtboardPick, Format, create_dir, encode, writable, write_file, write_or_return};
+use super::{ARTBOARD_PARAMS, ArtboardPick, Format, create_dir, encode, encode_with_warnings, writable, write_file, write_or_return};
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
-    let bytes = encode(&s.doc()?.doc, f.id, p)?;
+    let (bytes, warnings) = encode_with_warnings(&s.doc()?.doc, f.id, p)?;
     if f.id == "svg" {
-        return Ok(json!({ "text": String::from_utf8_lossy(&bytes) }));
+        return Ok(json!({ "text": String::from_utf8_lossy(&bytes), "warnings": warnings }));
     }
-    Ok(json!({ "dataBase64": vectorcraft_format::base64_encode(&bytes) }))
+    Ok(json!({ "dataBase64": vectorcraft_format::base64_encode(&bytes), "warnings": warnings }))
 }
 
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path");
     let f = writable("document.export", str_param(p, "format"), path)?;
-    let bytes = encode(&s.doc()?.doc, f.id, p)?;
-    write_or_return(path, &bytes, json!({ "format": f.id }))
+    let (bytes, warnings) = encode_with_warnings(&s.doc()?.doc, f.id, p)?;
+    write_or_return(path, &bytes, json!({ "format": f.id, "warnings": warnings }))
 }
 
 /// `p` without its artboard choice (for documents made of one synthetic artboard).

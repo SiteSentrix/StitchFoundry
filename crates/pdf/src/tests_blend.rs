@@ -18,7 +18,7 @@ fn add(d: &mut Document, mut n: Node) {
 
 /// The file's text with spaces removed (content streams uncompressed).
 fn text(d: &Document) -> String {
-    let bytes = export(d, &PdfOptions { compress: false, ..Default::default() }).unwrap();
+    let bytes = export(d, &PdfOptions::uncompressed()).unwrap();
     String::from_utf8_lossy(&bytes).replace(' ', "")
 }
 

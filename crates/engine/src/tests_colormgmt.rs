@@ -318,7 +318,8 @@ fn has_cmyk_op(pdf: &str) -> bool {
 }
 
 fn pdf_text(doc: &Document) -> String {
-    let bytes = vectorcraft_pdf::export(doc, &vectorcraft_pdf::PdfOptions { compress: false, created: Some(0), ..Default::default() }).unwrap();
+    let bytes =
+        vectorcraft_pdf::export(doc, &vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() }).unwrap();
     String::from_utf8_lossy(&bytes).into_owned()
 }
 

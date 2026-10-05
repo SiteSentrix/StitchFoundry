@@ -133,7 +133,7 @@ fn svg_and_pdf_write_the_same_gradient_as_slices_with_a_warning() {
         assert!(svg.contains("<clipPath") && svg.matches("<linearGradient").count() > 3, "{mode}: sliced");
         let back = vectorcraft_svg::import(&svg).unwrap();
         assert_same(&before, &render(&back), 0.04, &format!("{mode} SVG"));
-        let opts = vectorcraft_pdf::PdfOptions { compress: false, ..Default::default() };
+        let opts = vectorcraft_pdf::PdfOptions::uncompressed();
         let r = vectorcraft_pdf::export_with_report(doc(&s), &opts).unwrap();
         assert!(r.warnings.iter().any(|w| w.contains("along or across strokes")), "{:?}", r.warnings);
         assert!(String::from_utf8_lossy(&r.bytes).matches("/ShadingType 2").count() > 3, "{mode}: axial shadings");

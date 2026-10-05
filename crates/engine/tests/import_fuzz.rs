@@ -50,7 +50,7 @@ fn rich_svg() -> String {
 }
 
 fn rich_pdf() -> Vec<u8> {
-    vectorcraft_engine::export_pdf(&rich_doc(), &vectorcraft_pdf::PdfOptions { compress: false, ..Default::default() }).unwrap()
+    vectorcraft_engine::export_pdf(&rich_doc(), &vectorcraft_pdf::PdfOptions::uncompressed()).unwrap()
 }
 
 /// Numbers that tend to break arithmetic: zero, negatives, huge, tiny, exponents, junk.
