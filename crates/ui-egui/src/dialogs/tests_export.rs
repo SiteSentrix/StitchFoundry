@@ -10,11 +10,11 @@ use vectorcraft_engine::cmd::fileio;
 use super::*;
 use crate::Services;
 
-type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
+pub(super) type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
 /// An app with `artboards` 60×40 pt artboards whose save dialog answers `/out/<suggested>` and
 /// whose writer records what it is given.
-fn app(artboards: usize) -> (VectorcraftApp, Written) {
+pub(super) fn app(artboards: usize) -> (VectorcraftApp, Written) {
     let written = Written::default();
     let w = written.clone();
     let services = Services {
@@ -33,18 +33,18 @@ fn app(artboards: usize) -> (VectorcraftApp, Written) {
 }
 
 /// One headless frame of the dialog layer.
-fn frame(app: &mut VectorcraftApp) {
+pub(super) fn frame(app: &mut VectorcraftApp) {
     let ctx = egui::Context::default();
     theme::install_fonts(&ctx);
     let mut out = ctx.run_ui(Default::default(), |ui| show(app, ui.ctx()));
     out.textures_delta.clear();
 }
 
-fn kind(app: &VectorcraftApp) -> Option<&str> {
+pub(super) fn kind(app: &VectorcraftApp) -> Option<&str> {
     app.ui.dialog.as_ref().map(|d| d.kind.as_str())
 }
 
-fn set(app: &mut VectorcraftApp, field: &str, value: serde_json::Value) {
+pub(super) fn set(app: &mut VectorcraftApp, field: &str, value: serde_json::Value) {
     app.ui.dialog.as_mut().expect("a dialog is open").fields.insert(field.into(), value);
 }
 

@@ -1,16 +1,20 @@
 //! One encoder per writable format. Each format's options are parsed, typed, from the export params
 //! (unknown keys are ignored, so one params object can carry the options of several formats).
 
+use std::borrow::Cow;
+
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use vectorcraft_doc::{Artboard, Document};
 use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
+use vectorcraft_render::encode::jpeg::{self, JpegOptions};
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::super::*;
 use super::Format;
+use super::imagemap::{self, MapKind};
 
 const C: &str = "document.export";
 
@@ -65,6 +69,8 @@ pub struct Encoded {
     pub files: Vec<(Option<usize>, Vec<u8>)>,
     /// Images to write next to the file(s) (SVG `images: "link"`).
     pub linked: Vec<vectorcraft_svg::LinkedImage>,
+    /// Image maps, each written beside its image under the image's name (raster `imageMap`).
+    pub maps: Vec<imagemap::Map>,
     /// The encoder's warnings (features approximated or left out, options not applied yet).
     pub warnings: Vec<String>,
 }
@@ -76,13 +82,13 @@ impl Encoded {
 
     /// Every file to write for the destination `path` (a path or a file name): the file itself
     /// when there is one, else `{stem}-{artboard name}.{ext}` beside it, then the linked images
-    /// beside it under their own names.
-    pub fn named<'a>(&'a self, doc: &Document, path: &str) -> Vec<(String, &'a [u8])> {
+    /// beside it under their own names, then the image maps as `{image stem}.html` or `.map`.
+    pub fn named<'a>(&'a self, doc: &Document, path: &str) -> Vec<(String, Cow<'a, [u8]>)> {
         // Siblings keep the path's own separators (this runs on every platform and on the web).
         let dir = &path[..path.rfind(['/', '\\']).map_or(0, |i| i + 1)];
         let sibling = |name: &str| format!("{dir}{name}");
-        let mut out: Vec<(String, &[u8])> = match self.files.as_slice() {
-            [(_, bytes)] => vec![(path.to_string(), bytes.as_slice())],
+        let mut out: Vec<(String, Cow<[u8]>)> = match self.files.as_slice() {
+            [(_, bytes)] => vec![(path.to_string(), Cow::Borrowed(bytes.as_slice()))],
             files => {
                 let boards: Vec<usize> = files.iter().map(|(b, _)| b.unwrap_or(0)).collect();
                 let file = std::path::Path::new(&path[dir.len()..]);
@@ -91,18 +97,28 @@ impl Encoded {
                 super::artboard_file_names(doc, &boards)
                     .into_iter()
                     .zip(files)
-                    .map(|(board, (_, bytes))| (sibling(&format!("{stem}-{board}{ext}")), bytes.as_slice()))
+                    .map(|(board, (_, bytes))| (sibling(&format!("{stem}-{board}{ext}")), Cow::Borrowed(bytes.as_slice())))
                     .collect()
             }
         };
-        out.extend(self.linked.iter().map(|l| (sibling(&l.name), l.bytes.as_slice())));
+        let maps: Vec<(String, Cow<[u8]>)> = self
+            .maps
+            .iter()
+            .filter_map(|m| {
+                let image = std::path::Path::new(&out.get(m.file)?.0);
+                let name = image.file_name()?.to_string_lossy();
+                Some((image.with_extension(m.kind.ext()).to_string_lossy().into_owned(), Cow::Owned(m.text(&name).into_bytes())))
+            })
+            .collect();
+        out.extend(self.linked.iter().map(|l| (sibling(&l.name), Cow::Borrowed(l.bytes.as_slice()))));
+        out.extend(maps);
         out
     }
 
     /// The one file and the warnings, when the export wrote nothing else.
     fn single(self, f: &Format) -> Result<(Vec<u8>, Vec<String>)> {
-        if !self.linked.is_empty() {
-            return Err(bad(C, format!("{} with linked images writes several files: use document.export or document.save", f.label)));
+        if !self.linked.is_empty() || !self.maps.is_empty() {
+            return Err(bad(C, format!("{} with linked images or an image map writes several files: use document.export", f.label)));
         }
         match <[_; 1]>::try_from(self.files) {
             Ok([(_, bytes)]) => Ok((bytes, self.warnings)),
@@ -123,6 +139,11 @@ struct RasterOptions {
     background: Option<Value>,
     anti_alias: Option<String>,
     interlaced: Option<bool>,
+    color_model: Option<String>,
+    method: Option<String>,
+    scans: Option<u8>,
+    embed_icc: Option<bool>,
+    image_map: Option<String>,
 }
 
 impl RasterOptions {
@@ -141,9 +162,20 @@ impl RasterOptions {
             },
             anti_alias: self.anti_alias.as_deref().map(anti_alias).transpose().map_err(|e| bad(C, e))?.unwrap_or_default(),
             interlaced: self.interlaced.unwrap_or(false),
-            quality: self.quality.unwrap_or(90),
+            quality: self.quality.unwrap_or(90).min(100),
+            jpeg: JpegOptions {
+                color_model: parse(self.color_model.as_deref(), jpeg::ColorModel::from_id, "colorModel", "rgb, cmyk or gray")?,
+                method: parse(self.method.as_deref(), jpeg::Method::from_id, "method", "baseline, optimized or progressive")?,
+                scans: self.scans.unwrap_or(3).clamp(*jpeg::SCANS.start(), *jpeg::SCANS.end()),
+                embed_icc: self.embed_icc.unwrap_or(true),
+            },
         })
     }
+}
+
+/// An enum option by id (its default when absent).
+fn parse<T: Default>(v: Option<&str>, from_id: fn(&str) -> Option<T>, name: &str, ids: &str) -> Result<T> {
+    v.map(|s| from_id(s).ok_or_else(|| bad(C, format!("{name} `{s}`: {ids}")))).transpose().map(Option::unwrap_or_default)
 }
 
 /// A raster background: `transparent` (also `none` or null), `white`, `black` or a colour
@@ -276,12 +308,18 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
                 Some(true) => boards(o.boards.resolve(n))?.unwrap_or_else(|| (0..n).collect()),
                 _ => vec![boards(o.boards.one(n))?],
             };
+            // JPEG Options → Image Map.
+            let map = match (format, o.image_map.as_deref()) {
+                (RasterFormat::Jpeg, Some(m)) => MapKind::from_id(m).ok_or_else(|| bad(C, format!("imageMap `{m}`: none, client or server")))?,
+                _ => MapKind::None,
+            };
             let mut enc = Encoded::default();
             let mut renderer = vectorcraft_render::Renderer::new();
             for b in chosen {
                 let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
                 check_format_size(f, region.width() * scale, region.height() * scale)?;
                 vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
+                enc.maps.extend(imagemap::build(doc, region, scale, map, enc.files.len()));
                 let bytes = renderer.export_region(doc, region, format, &settings).map_err(EngineError::Other)?;
                 // File Info as PNG text chunks.
                 let bytes = if format == RasterFormat::Png {

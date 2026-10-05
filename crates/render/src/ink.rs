@@ -225,6 +225,18 @@ pub(crate) fn compose(cmy: &[u8], k: &[u8], background: Option<[u8; 4]>) -> Vec<
     out
 }
 
+/// Each pixel's ink amounts (C, M, Y, K bytes, 0 = no ink) from its ink planes (premultiplied
+/// RGBA8 drawn with [`Ink::Cmy`] and [`Ink::K`]): a plane holds the complement of its inks, so
+/// the ink is coverage minus plane value (partly covered pixels carry that much ink).
+pub(crate) fn amounts(cmy: &[u8], k: &[u8]) -> Vec<u8> {
+    cmy.as_chunks::<4>()
+        .0
+        .iter()
+        .zip(k.as_chunks::<4>().0)
+        .flat_map(|(p, q)| [p[3].saturating_sub(p[0]), p[3].saturating_sub(p[1]), p[3].saturating_sub(p[2]), q[3].saturating_sub(q[0])])
+        .collect()
+}
+
 impl Renderer {
     /// Placed image `key` (decoded as `pm`) as painted with `ink`, cached.
     pub(crate) fn ink_image(&mut self, key: &str, pm: &Arc<Pixmap>, ink: Ink) -> Arc<Pixmap> {

@@ -48,6 +48,7 @@ skrifa = "0.47"
 harfrust = "0.13"
 linesweeper = "0.4"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 
 # ui
 egui = "0.36"

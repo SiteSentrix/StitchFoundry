@@ -27,7 +27,7 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
         "svg" => json!({ "text": String::from_utf8_lossy(bytes) }),
         _ => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
-    let mut out = merge(data(main.first().map_or(&[][..], |m| m.1)), json!({ "warnings": enc.warnings }));
+    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.warnings }));
     if main.len() > 1 {
         out["files"] = main.iter().map(|(name, bytes)| merge(json!({ "name": name }), data(bytes))).collect();
     }

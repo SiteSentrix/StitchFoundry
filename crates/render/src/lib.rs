@@ -397,6 +397,12 @@ impl Renderer {
 
     /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform).
     pub fn render(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Rendered {
+        self.render_as(doc, width, height, view, opts, false)
+    }
+
+    /// [`Self::render`], or with `inks` the ink amounts in the working CMYK space instead of
+    /// screen colours (4 bytes a pixel, see [`Self::render_region_inks`]).
+    fn render_as(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions, inks: bool) -> Rendered {
         let start = now();
         let prepared = proof::prepare(doc, opts);
         let doc: &Document = &prepared;
@@ -417,13 +423,13 @@ impl Renderer {
             self.stats.micros = now().saturating_sub(start);
             return Rendered { width: w as u32, height: h as u32, pixels };
         }
-        let mut pixels = if ink::blends_in_cmyk(doc, opts) {
+        let mut pixels = if inks || ink::blends_in_cmyk(doc, opts) {
             // Blending in CMYK: one frame per ink plane, then their inks shown on screen.
             let cmy = self.draw_frame(&Frame { ink: Ink::Cmy, ..frame }, w, h);
             let stats = self.stats;
             let k = self.draw_frame(&Frame { ink: Ink::K, ..frame }, w, h);
             self.stats = stats;
-            ink::compose(&cmy, &k, opts.background)
+            if inks { ink::amounts(&cmy, &k) } else { ink::compose(&cmy, &k, opts.background) }
         } else {
             self.draw_frame(&frame, w, h)
         };
@@ -441,7 +447,9 @@ impl Renderer {
         if self.shadows.len() > 256 {
             self.shadows.retain(|_, e| g - e.stamp <= 3);
         }
-        proof::post(&mut pixels, opts);
+        if !inks {
+            proof::post(&mut pixels, opts);
+        }
         self.stats.micros = now().saturating_sub(start);
         Rendered { width: w as u32, height: h as u32, pixels }
     }
@@ -534,6 +542,16 @@ impl Renderer {
         let (w, h) = region_pixels(region, scale);
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
         self.render(doc, w, h, view, opts)
+    }
+
+    /// `region` of `doc` as ink amounts in the working CMYK space, 4 bytes a pixel (0 = no ink):
+    /// drawn as the two ink planes of [`ink`], so CMYK colours keep their own inks (black type
+    /// stays black ink alone) and RGB ones are separated with the colour settings. Where nothing
+    /// is drawn (no background) there is no ink. CMYK exports draw this.
+    pub fn render_region_inks(&mut self, doc: &Document, region: Rect, scale: f64, opts: &RenderOptions) -> Vec<u8> {
+        let (w, h) = region_pixels(region, scale);
+        let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+        self.render_as(doc, w, h, view, opts, true).pixels
     }
 
     /// Render a single node (thumbnails, previews) fitted into `size`×`size` pixels.

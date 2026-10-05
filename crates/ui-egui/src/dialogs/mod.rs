@@ -308,3 +308,5 @@ mod tests;
 mod tests_export;
 #[cfg(test)]
 mod tests_import_pdf;
+#[cfg(test)]
+mod tests_raster_formats;

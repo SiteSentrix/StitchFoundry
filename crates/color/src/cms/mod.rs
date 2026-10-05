@@ -33,6 +33,8 @@ pub const PROPHOTO_RGB: &str = "ProPhoto RGB";
 pub const GENERIC_CMYK: &str = "VectorCraft Generic CMYK (SWOP-like)";
 /// Profile-free CMYK (`rgb = (1−c)(1−k)` …): uncalibrated, kept for legacy numbers.
 pub const DEVICE_CMYK: &str = "Device CMYK (uncalibrated)";
+/// The grey space greyscale exports are written in: sRGB's tone curve (a grey shows as on screen).
+pub const GRAY: &str = "Gray (sRGB tone curve)";
 
 /// Built-in RGB and CMYK working spaces, in menu order.
 const BUILTIN_RGB: [&str; 4] = [SRGB, WIDE_GAMUT_RGB, DISPLAY_P3, PROPHOTO_RGB];
@@ -250,6 +252,33 @@ pub fn register_icc(bytes: &[u8], name: Option<String>) -> Result<ProfileInfo, C
     drop(u);
     clear_proof_cache();
     Ok(info)
+}
+
+/// Profile `name` as an ICC file to embed in an export: any RGB or CMYK profile of [`profiles`]
+/// (by its current or legacy name), or [`GRAY`]. Built-in profiles are written in code from the
+/// CMS: the RGB spaces from their primaries, the CMYK spaces as lookup tables sampled from their
+/// model (both directions, perceptual and relative colorimetric, Lab PCS); a profile the user
+/// loaded is the file it came from. Cached.
+pub fn icc_bytes(name: &str) -> Result<Arc<[u8]>, CmsError> {
+    static CACHE: Mutex<Vec<(String, Arc<[u8]>)>> = Mutex::new(Vec::new());
+    let name = canonical_name(name);
+    if let Some(p) = user_profile(name) {
+        return p.bytes().map(Arc::from);
+    }
+    if let Some((_, b)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(n, _)| n == name) {
+        return Ok(b.clone());
+    }
+    let bytes: Arc<[u8]> = if name == GRAY {
+        icc::encode(&icc::gray_profile(name))?
+    } else if BUILTIN_CMYK.contains(&name) {
+        let cms = Cms::new(&ColorSettings { cmyk: name.into(), ..ColorSettings::default() })?;
+        icc::encode(&icc::cmyk_profile(name, |c| cms.cmyk_to_lab(c), |l| cms.lab_to_cmyk(l, Intent::RelativeColorimetric)))?
+    } else {
+        icc::builtin_rgb_bytes(name)?
+    }
+    .into();
+    CACHE.lock().unwrap_or_else(|e| e.into_inner()).push((name.to_string(), bytes.clone()));
+    Ok(bytes)
 }
 
 /// Load a `.icc`/`.icm` file from disk (native only).
@@ -671,3 +700,5 @@ pub(crate) fn cmyk_is_device() -> bool {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_icc;

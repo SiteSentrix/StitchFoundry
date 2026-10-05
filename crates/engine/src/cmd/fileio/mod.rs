@@ -16,6 +16,7 @@
 mod batch;
 mod encode;
 mod export;
+mod imagemap;
 mod load;
 pub mod pdf;
 mod pdfimport;
@@ -63,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft|template (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), quality?: 90 (jpg); SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft|template (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), jpg: quality?: 90 (0–100), colorModel?: rgb|cmyk|gray, method?: baseline|optimized|progressive, scans?: 3 (3–5, progressive), embedIcc?: true, imageMap?: none|client|server (an HTML or NCSA map of the objects with a URL, written as <stem>.html / <stem>.map); SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images, image maps)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -181,7 +182,8 @@ const RANGE: FormatOption = FormatOption {
     description: "1-based artboards such as \"1-3, 5\", or \"all\" (wins over artboards and artboard)",
 };
 const SCALE: FormatOption = FormatOption { name: "scale", ty: "number", default: "1", description: "pixels per point (0.01–64)" };
-const QUALITY: FormatOption = FormatOption { name: "quality", ty: "integer", default: "90", description: "JPEG quality 1–100" };
+const QUALITY: FormatOption =
+    FormatOption { name: "quality", ty: "integer", default: "90", description: "JPEG quality 0–100 (the JPEG Options dialog shows 0–10)" };
 const USE_ARTBOARDS: FormatOption = FormatOption {
     name: "useArtboards",
     ty: "boolean",
@@ -208,6 +210,31 @@ const ANTI_ALIAS: FormatOption = FormatOption {
 };
 const INTERLACED: FormatOption =
     FormatOption { name: "interlaced", ty: "boolean", default: "false", description: "Adam7 interlacing (the image builds up while it loads)" };
+const COLOR_MODEL: FormatOption = FormatOption {
+    name: "colorModel",
+    ty: "string",
+    default: "\"rgb\"",
+    description: "rgb, cmyk (ink amounts in the working CMYK space: CMYK colours keep their inks) or gray",
+};
+const METHOD: FormatOption = FormatOption {
+    name: "method",
+    ty: "string",
+    default: "\"baseline\"",
+    description: "baseline (standard), optimized (smaller Huffman tables) or progressive (builds up in scans)",
+};
+const SCANS: FormatOption = FormatOption { name: "scans", ty: "integer", default: "3", description: "progressive scans, 3–5" };
+const EMBED_ICC: FormatOption = FormatOption {
+    name: "embedIcc",
+    ty: "boolean",
+    default: "true",
+    description: "embed the colour profile: sRGB (RGB), the working CMYK space (CMYK) or gray with sRGB's tone curve",
+};
+const IMAGE_MAP: FormatOption = FormatOption {
+    name: "imageMap",
+    ty: "string",
+    default: "\"none\"",
+    description: "none, client (an HTML page with <map>, <stem>.html) or server (an NCSA <stem>.map): the areas of objects with a URL and an Image Map shape (attributes.set)",
+};
 
 /// A format `document.open` reads but nothing writes yet.
 const fn reader(id: &'static str, label: &'static str, extensions: &'static [&'static str], mime: &'static str, raster: bool) -> Format {
@@ -258,7 +285,22 @@ pub const FORMATS: &[Format] = &[
         read: true,
         write: true,
         raster: true,
-        options: &[ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, PPI, SCALE, BACKGROUND, ANTI_ALIAS, QUALITY],
+        options: &[
+            ARTBOARD,
+            ARTBOARDS,
+            RANGE,
+            USE_ARTBOARDS,
+            PPI,
+            SCALE,
+            BACKGROUND,
+            ANTI_ALIAS,
+            QUALITY,
+            COLOR_MODEL,
+            METHOD,
+            SCANS,
+            EMBED_ICC,
+            IMAGE_MAP,
+        ],
     },
     reader("gif", "GIF", &["gif"], "image/gif", true),
     Format {
@@ -459,7 +501,7 @@ pub fn artboard_file_names(doc: &vectorcraft_doc::Document, boards: &[usize]) ->
 fn write_encoded(path: Option<&str>, name: &str, doc: &vectorcraft_doc::Document, enc: &Encoded, extra: Value) -> Result<Value> {
     let files = enc.named(doc, path.unwrap_or(name));
     let (main, linked) = files.split_at(enc.files.len());
-    let row = |(name, bytes): &(String, &[u8])| match path {
+    let row = |(name, bytes): &(String, std::borrow::Cow<[u8]>)| match path {
         Some(_) => json!(name),
         None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
@@ -528,3 +570,6 @@ mod tests_raster;
 
 #[cfg(test)]
 mod tests_exportas;
+
+#[cfg(test)]
+mod tests_jpeg;

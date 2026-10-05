@@ -1,7 +1,8 @@
 //! Raster export: render a document region with [`RasterExportOptions`] (resolution, background,
 //! anti-aliasing) and encode it as PNG ([`png`]: resolution in `pHYs`, Adam7 interlacing), JPEG
-//! (resolution in the JFIF header) or lossless WebP.
+//! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile) or lossless WebP.
 
+pub mod jpeg;
 pub mod png;
 
 use vectorcraft_doc::{Document, Node, NodeKind};
@@ -27,13 +28,15 @@ pub struct RasterExportOptions {
     pub anti_alias: AntiAlias,
     /// PNG: Adam7 interlacing.
     pub interlaced: bool,
-    /// JPEG quality 1–100.
+    /// JPEG quality 0–100.
     pub quality: u8,
+    /// JPEG colour model, coding and profile.
+    pub jpeg: jpeg::JpegOptions,
 }
 
 impl Default for RasterExportOptions {
     fn default() -> Self {
-        Self { ppi: 72.0, background: None, anti_alias: AntiAlias::Art, interlaced: false, quality: 90 }
+        Self { ppi: 72.0, background: None, anti_alias: AntiAlias::Art, interlaced: false, quality: 90, jpeg: jpeg::JpegOptions::default() }
     }
 }
 
@@ -55,13 +58,20 @@ impl RasterExportOptions {
         }
     }
 
-    /// Encode a rendered image as `format`.
+    /// Encode a rendered image as `format`. A CMYK JPEG separates the screen colours;
+    /// [`Renderer::export_region`] draws the inks instead.
     pub fn encode(&self, img: &Rendered, format: RasterFormat) -> Result<Vec<u8>, String> {
         match format {
             RasterFormat::Png => {
                 png::encode(&img.to_straight(), img.width, img.height, &png::PngOptions { ppi: Some(self.ppi), interlaced: self.interlaced })
             }
-            RasterFormat::Jpeg => jpeg(img, self.quality, Some(self.ppi)),
+            RasterFormat::Jpeg => {
+                let px = match self.jpeg.color_model {
+                    jpeg::ColorModel::Cmyk => jpeg::separated(img),
+                    model => jpeg::screen_pixels(img, model == jpeg::ColorModel::Gray),
+                };
+                jpeg::encode(&px, img.width, img.height, self.quality, Some(self.ppi), &self.jpeg)
+            }
             RasterFormat::WebP => webp(img),
         }
     }
@@ -69,35 +79,24 @@ impl RasterExportOptions {
 
 impl Renderer {
     /// Render `region` of `doc` (an artboard or any rect) as exported and encode it as `format`.
-    /// Callers check the size first ([`crate::raster_size`]).
+    /// Callers check the size first ([`crate::raster_size`]). A CMYK JPEG is drawn as ink amounts
+    /// ([`Renderer::render_region_inks`]).
     pub fn export_region(&mut self, doc: &Document, region: Rect, format: RasterFormat, opts: &RasterExportOptions) -> Result<Vec<u8>, String> {
+        if format == RasterFormat::Jpeg && opts.jpeg.color_model == jpeg::ColorModel::Cmyk {
+            let (w, h) = crate::region_pixels(region, opts.scale());
+            let inks = self.render_region_inks(doc, region, opts.scale(), &opts.render_options(format));
+            return jpeg::encode(&inks, w, h, opts.quality, Some(opts.ppi), &opts.jpeg);
+        }
         let img = self.render_region_with(doc, region, opts.scale(), &opts.render_options(format));
         opts.encode(&img, format)
     }
 }
 
-/// JPEG at `quality` 1–100, partly transparent pixels flattened on white, with the resolution
-/// `ppi` (if any) in the JFIF header.
+/// Baseline RGB JPEG at `quality` 1–100, partly transparent pixels flattened on white, with the
+/// resolution `ppi` (if any) in the JFIF header and no colour profile.
 pub(crate) fn jpeg(img: &Rendered, quality: u8, ppi: Option<f64>) -> Result<Vec<u8>, String> {
-    let rgb: Vec<u8> = img
-        .to_straight()
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .flat_map(|p| {
-            let a = p[3] as u32;
-            let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
-            [mix(p[0]), mix(p[1]), mix(p[2])]
-        })
-        .collect();
-    let mut buf = Vec::new();
-    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality.clamp(1, 100));
-    if let Some(ppi) = ppi {
-        enc.set_pixel_density(image::codecs::jpeg::PixelDensity::dpi(ppi.round().clamp(1.0, u16::MAX as f64) as u16));
-    }
-    image::ImageEncoder::write_image(enc, &rgb, img.width, img.height, image::ExtendedColorType::Rgb8)
-        .map_err(|e| format!("JPEG encoding failed: {e}"))?;
-    Ok(buf)
+    let o = jpeg::JpegOptions { embed_icc: false, ..Default::default() };
+    jpeg::encode(&jpeg::screen_pixels(img, false), img.width, img.height, quality, ppi, &o)
 }
 
 /// Lossless WebP.
@@ -131,3 +130,5 @@ fn drawn_bounds(n: &Node) -> Option<Rect> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_jpeg;
