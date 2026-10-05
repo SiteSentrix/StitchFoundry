@@ -163,6 +163,11 @@ impl DocState {
     pub fn mark_saved(&mut self) {
         self.saved_doc = self.doc.clone();
     }
+    /// Record `snapshot` (the document as a background save took it) as saved: edits made since
+    /// keep the document modified.
+    pub fn mark_saved_as(&mut self, snapshot: &Arc<Document>) {
+        self.saved_doc = snapshot.clone();
+    }
     pub fn title(&self) -> String {
         let name = self
             .path
@@ -394,6 +399,9 @@ pub struct Prefs {
     pub templates_folder: String,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
+    /// File Handling → Use Compression: native saves are gzip-compressed (`document.save
+    /// {compress}` overrides it).
+    pub use_compression: bool,
 }
 
 impl Default for Prefs {
@@ -522,6 +530,7 @@ impl Default for Prefs {
             pdf_presets: vec![],
             templates_folder: String::new(),
             append_converted: true,
+            use_compression: false,
         }
     }
 }
@@ -620,6 +629,10 @@ impl Session {
 
     pub fn documents(&self) -> &[DocState] {
         &self.docs
+    }
+    /// The open document with [`DocState::uid`] `uid` (it may have closed since it was looked up).
+    pub fn document_mut(&mut self, uid: u64) -> Option<&mut DocState> {
+        self.docs.iter_mut().find(|d| d.uid == uid)
     }
     pub fn active_index(&self) -> Option<usize> {
         self.active
@@ -1052,6 +1065,8 @@ mod tests_live;
 mod tests_maskview;
 #[cfg(test)]
 mod tests_menucmds;
+#[cfg(test)]
+mod tests_nativefile;
 #[cfg(test)]
 mod tests_newart;
 #[cfg(test)]

@@ -82,6 +82,8 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "documents": app.session.documents().iter().map(|d| json!({"title": d.title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
         "perf": {"frameMs": app.perf.frame_ms, "renderMs": app.perf.render_ms, "fps": app.perf.fps},
+        // Saves and exports still being written in the background (Background Save / Export).
+        "background": app.background.jobs.iter().map(|j| j.label.as_str()).collect::<Vec<_>>(),
     })
 }
 

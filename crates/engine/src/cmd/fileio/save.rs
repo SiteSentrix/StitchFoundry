@@ -6,13 +6,15 @@
 //! the caller's writer (the file system here; a save panel or a browser download in the apps) and
 //! makes the file the document's own (path, format, options, saved state) for Save and Save As.
 
-use std::borrow::Cow;
+use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 
 use super::super::*;
-use super::{Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, write_encoded, write_file};
+use super::{
+    Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, with_compression_pref, write_encoded, write_file,
+};
 use crate::{DocState, Prefs};
 
 /// The formats Save As offers, in menu order (append-only). The other writable formats are exports:
@@ -152,8 +154,9 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         let mut svg = super::svg_options(&Value::Object(given)).map_err(|e| bad(cmd, e))?;
         svg.extend(super::svg_options(p).map_err(|e| bad(cmd, e))?);
         given = svg;
-    } else if is_pdf(format) {
-        // So do PDF options (as the Save PDF dialog and document.exportPdf name them).
+    } else {
+        // So do PDF options (as the Save PDF dialog and document.exportPdf name them) and the
+        // native ones (compress, version, preview).
         if let Some(o) = p.as_object() {
             given.extend(
                 o.iter().filter(|(k, v)| !v.is_null() && k.as_str() != "path" && reads_option(format, k)).map(|(k, v)| (k.clone(), v.clone())),
@@ -203,13 +206,13 @@ fn is_svg(f: &Format) -> bool {
 }
 
 /// The document as written: native files carry the view to reopen at.
-fn doc_to_save<'a>(st: &'a DocState, f: &Format) -> Cow<'a, Document> {
+fn doc_to_save(st: &DocState, f: &Format) -> Arc<Document> {
     if is_native(f) && st.doc.last_view != st.view {
         let mut d = (*st.doc).clone();
         d.last_view = st.view.clone();
-        Cow::Owned(d)
+        Arc::new(d)
     } else {
-        Cow::Borrowed(&st.doc)
+        st.doc.clone()
     }
 }
 
@@ -223,12 +226,23 @@ fn fidelity_warning(f: &Format) -> Option<String> {
     })
 }
 
-/// Encode `plan` and write it with `write` (the file, then the images an SVG links to, beside it).
-/// Without a path → `{dataBase64, bytes, format, name, folder?, warnings, linked?: [{name,
-/// dataBase64}]}` and the document is unchanged; with one → `{path, format, bytes, warnings,
-/// linked?: [path…]}`, and Save or Save As (except to a template) make the file the document's
-/// own: path, title, format, options, saved state.
-pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+/// A save of the active document, snapshotted and ready to encode and write anywhere (Background
+/// Save does both on a worker thread): [`save_job`], then [`SaveJob::write`], then
+/// [`SaveJob::finish`]. Cheap to clone (the documents are shared).
+#[derive(Clone)]
+pub struct SaveJob {
+    plan: SavePlan,
+    /// The document as written (with the view to reopen at, links relative to the file).
+    doc: Arc<Document>,
+    /// The encoder's params.
+    params: Value,
+    /// The document when the job was made: what counts as saved once the file is written.
+    snapshot: Arc<Document>,
+}
+
+/// Snapshot the active document for `plan` (stamping File Info's dates when the file becomes the
+/// document's own). Bad options fail here, before anything is encoded.
+pub fn save_job(s: &mut Session, plan: SavePlan) -> Result<SaveJob> {
     let cmd = plan.mode.command();
     let retargets = plan.retargets();
     // The web build, without a clock, leaves the dates unless given one.
@@ -238,60 +252,94 @@ pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[
     {
         stamp_save_dates(s.doc_mut()?, at);
     }
-    let own = doc_to_save(s.doc()?, plan.format);
+    let st = s.doc()?;
+    let own = doc_to_save(st, plan.format);
     // A native file records its links' paths relative to where it is written.
     let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(&own, p));
-    let doc: &Document = relative.as_ref().unwrap_or(&own);
+    let doc = relative.map_or(own, Arc::new);
     let mut params = plan.options.clone();
     if is_svg(plan.format) {
         // A save keeps hidden layers (not displayed) unless told otherwise; exports leave them out.
         params.entry("hiddenLayers").or_insert(Value::Bool(true));
     }
-    let params = Value::Object(params);
-    let params = super::pdf::expand_preset(s, cmd, &params)?;
-    let mut enc = if plan.format.id == "ai" {
+    let mut params = Value::Object(params);
+    if matches!(plan.format.id, "vectorcraft" | "template") {
+        // Not remembered with the options: the preference decides each time it isn't given.
+        params = with_compression_pref(&s.prefs, &params);
+        super::native::save_options(cmd, plan.format, &doc, &params)?;
+    }
+    let mut params = super::pdf::expand_preset(s, cmd, &params)?.into_owned();
+    if let (Some(o), "ai") = (params.as_object_mut(), plan.format.id) {
         // A PDF of every artboard with the PDF options, always carrying the native document.
-        let mut q = params.into_owned();
-        if let Some(o) = q.as_object_mut() {
-            o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
+        o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
+    }
+    Ok(SaveJob { plan, doc, params, snapshot: s.doc()?.doc.clone() })
+}
+
+impl SaveJob {
+    pub fn plan(&self) -> &SavePlan {
+        &self.plan
+    }
+
+    /// Encode the file and write it with `write` (the file, then the images an SVG links to,
+    /// beside it). Without a path → `{dataBase64, bytes, format, name, folder?, warnings, linked?:
+    /// [{name, dataBase64}]}`; with one → `{path, format, bytes, warnings, linked?: [path…]}`.
+    pub fn write(&self, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+        let (cmd, plan, doc) = (self.plan.mode.command(), &self.plan, &*self.doc);
+        let mut enc = if plan.format.id == "ai" {
+            let (bytes, warnings) = super::pdf::encode(cmd, &doc.without_edit_modes(), &self.params)?;
+            Encoded { warnings, ..Encoded::one(bytes) }
+        } else {
+            encode_all(doc, plan.format.id, &self.params)?
+        };
+        if enc.files.len() != 1 {
+            return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
         }
-        let (bytes, warnings) = super::pdf::encode(cmd, &doc.without_edit_modes(), &q)?;
-        Encoded { warnings, ..Encoded::one(bytes) }
-    } else {
-        encode_all(doc, plan.format.id, &params)?
-    };
-    if enc.files.len() != 1 {
-        return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
-    }
-    // What the format loses first, then the encoder's own notes (PDF options not applied yet…).
-    let mut warnings = std::mem::take(&mut enc.warnings);
-    warnings.splice(0..0, fidelity_warning(plan.format));
-    let extra = json!({ "format": plan.format.id, "warnings": warnings });
-    let Some(path) = plan.path else {
-        let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
-        out["name"] = json!(plan.name);
-        if let Some(folder) = plan.folder {
-            out["folder"] = json!(folder);
+        // What the format loses first, then the encoder's own notes (PDF options not applied yet…).
+        let mut warnings = std::mem::take(&mut enc.warnings);
+        warnings.splice(0..0, fidelity_warning(plan.format));
+        let extra = json!({ "format": plan.format.id, "warnings": warnings });
+        let Some(path) = &plan.path else {
+            let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
+            out["name"] = json!(plan.name);
+            if let Some(folder) = &plan.folder {
+                out["folder"] = json!(folder);
+            }
+            return Ok(out);
+        };
+        let files = enc.named(doc, path);
+        for (p, bytes) in &files {
+            write(p, bytes)?;
         }
-        return Ok(out);
-    };
-    let files = enc.named(doc, &path);
-    for (p, bytes) in &files {
-        write(p, bytes)?;
+        let bytes = files.first().map_or(0, |f| f.1.len());
+        let mut out = super::merge(json!({ "path": path, "bytes": bytes }), extra);
+        if let Some(linked) = files.get(1..).filter(|l| !l.is_empty()) {
+            out["linked"] = linked.iter().map(|(p, _)| json!(p)).collect();
+        }
+        Ok(out)
     }
-    let bytes = files.first().map_or(0, |f| f.1.len());
-    let mut out = super::merge(json!({ "path": path, "bytes": bytes }), extra);
-    if let Some(linked) = files.get(1..).filter(|l| !l.is_empty()) {
-        out["linked"] = linked.iter().map(|(p, _)| json!(p)).collect();
+
+    /// Once written: Save and Save As (except to a template) make the file `st`'s own: path,
+    /// title, format, options, and the snapshot as the saved state (edits made since the job was
+    /// made keep the document modified).
+    pub fn finish(self, st: &mut DocState) {
+        let retargets = self.plan.retargets();
+        if let (true, Some(path)) = (retargets, self.plan.path) {
+            st.path = Some(path);
+            st.format = self.plan.format.id;
+            st.save_options = self.plan.options;
+            st.converted = false;
+            st.mark_saved_as(&self.snapshot);
+        }
     }
-    if retargets {
-        let st = s.doc_mut()?;
-        st.path = Some(path.clone());
-        st.format = plan.format.id;
-        st.save_options = plan.options;
-        st.converted = false;
-        st.mark_saved();
-    }
+}
+
+/// Encode `plan` and write it with `write`, then make the file the document's own (see
+/// [`SaveJob`]). Without a path the document is unchanged.
+pub fn save_with(s: &mut Session, plan: SavePlan, write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    let job = save_job(s, plan)?;
+    let out = job.write(write)?;
+    job.finish(s.doc_mut()?);
     Ok(out)
 }
 
@@ -328,10 +376,13 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "format").or(st.map(|d| d.format)).unwrap_or("vectorcraft");
     let f = format(id).filter(|f| f.write).ok_or_else(|| bad(C, format!("`{id}` is no writable format (see document.formats)")))?;
     let saved = st.filter(|d| d.format == f.id).map(|d| &d.save_options);
+    // A native save compresses as Use Compression says, unless told otherwise.
+    let prefs = with_compression_pref(&s.prefs, &json!({}));
     let mut v = f.to_json();
     if let Some(options) = v["options"].as_object_mut() {
         for (name, o) in options.iter_mut() {
-            o["value"] = saved.and_then(|m| m.get(name)).unwrap_or(&o["default"]).clone();
+            let default = prefs.get(name).filter(|_| matches!(f.id, "vectorcraft" | "template")).unwrap_or(&o["default"]);
+            o["value"] = saved.and_then(|m| m.get(name)).unwrap_or(default).clone();
         }
     }
     v["saveFormats"] =
@@ -346,7 +397,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 3 (2 or 1: for older VectorCraft versions, never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),
@@ -373,7 +424,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save as Template…",
             ["File"],
             None,
-            "{path?} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.vctemplate\", folder: the Templates folder (preference templatesFolder), warnings}",
+            "{path?, compress?, version?, preview? (as document.save)} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.vctemplate\", folder: the Templates folder (preference templatesFolder), warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
         ),

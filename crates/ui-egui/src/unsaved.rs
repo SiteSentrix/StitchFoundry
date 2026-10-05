@@ -18,6 +18,8 @@ pub const KIND: &str = "saveChanges";
 
 /// File → Close (or a tab's ×) for document `i`.
 pub fn close(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
+    // A save still running decides whether there is anything left to save.
+    crate::background::wait_all(app);
     let dirty = app.session.documents().get(i).ok_or("no such document")?.is_dirty();
     if dirty { ask(app, i, "close") } else { close_now(app, i) }
 }
@@ -25,6 +27,7 @@ pub fn close(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
 /// File → Close All (`then` = `closeAll`) or Quit (`quit`): ask about the next modified document,
 /// or finish once none is left.
 pub fn close_all(app: &mut VectorcraftApp, then: &str) -> Result<Value, String> {
+    crate::background::wait_all(app);
     if let Some(i) = app.session.documents().iter().position(|d| d.is_dirty()) {
         return ask(app, i, then);
     }
@@ -71,7 +74,14 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let i = i.ok_or("no such document")?;
     if !d.bool("discard") {
         app.session.set_active(i);
-        io::save(app, vectorcraft_engine::cmd::fileio::SaveMode::Save, &json!({}), false)?;
+        let r = io::save(app, vectorcraft_engine::cmd::fileio::SaveMode::Save, &json!({}), false)?;
+        // Closing needs the file written: wait for a background save, and stop if it failed.
+        if r["background"] == true {
+            crate::background::wait_all(app);
+            if let Some(d) = app.session.documents().get(i).filter(|d| d.is_dirty()) {
+                return Err(format!("{}: not saved, so not closed", d.title()));
+            }
+        }
     }
     close_now(app, i)?;
     match d.str("then").as_str() {

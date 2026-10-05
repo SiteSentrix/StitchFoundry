@@ -1,7 +1,8 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG and PDF input,
 //! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
-//! (`.vcflattener`) libraries, must load as an error or as a document that then renders and
-//! exports, without a panic; nor may bitmaps, PDF and text pasted from other apps.
+//! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
+//! must load as an error or as a document that then renders and exports, without a panic; nor may
+//! bitmaps, PDF and text pasted from other apps.
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -689,5 +690,59 @@ proptest! {
     #[test]
     fn pasted_text_never_panics(text in r"[\x00-\x7f\u{300}\u{feff}\u{fffd}é€]{0,200}") {
         paste_from_elsewhere("clipboard.importText", json!({ "text": text }))?;
+    }
+}
+
+// ---------- native files: compressed, and saved for older versions ----------
+
+/// The rich document saved compressed, as v1 and as v2 (pretty).
+fn native_samples() -> &'static [Vec<u8>] {
+    use vectorcraft_format::{SaveOptions, save_with};
+    static SAMPLES: std::sync::OnceLock<Vec<Vec<u8>>> = std::sync::OnceLock::new();
+    SAMPLES.get_or_init(|| {
+        let d = rich_doc();
+        [
+            SaveOptions { compress: true, ..SaveOptions::default() },
+            SaveOptions { version: 1, ..SaveOptions::default() },
+            SaveOptions { version: 2, pretty: true, ..SaveOptions::default() },
+        ]
+        .iter()
+        .map(|o| save_with(&d, o).unwrap())
+        .collect()
+    })
+}
+
+fn gzip(bytes: &[u8]) -> Vec<u8> {
+    use std::io::Write as _;
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    gz.write_all(bytes).unwrap();
+    gz.finish().unwrap()
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Damaged native files of every kind: flipped bytes and cuts in the compressed stream, in v1
+    /// and v2 text, and in the text inside an intact compressed stream.
+    #[test]
+    fn native_mutated_files_never_panic(which in 0usize..4, cut in 0usize..80_000, edits in prop::collection::vec((0usize..80_000, any::<u8>()), 0..10)) {
+        let samples = native_samples();
+        let mut bytes = samples.get(which).cloned().unwrap_or_else(|| {
+            let mut f = vectorcraft_format::save(&rich_doc(), false);
+            f.truncate(cut.max(16));
+            f
+        });
+        for &(at, b) in &edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        if which < samples.len() {
+            bytes.truncate(cut.max(2));
+        } else {
+            bytes = gzip(&bytes);
+        }
+        let _ = vectorcraft_format::sniff(&bytes);
+        let _ = vectorcraft_format::preview(&bytes);
+        survive("mutated native file", || vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes).ok().map(|l| l.doc))?;
     }
 }

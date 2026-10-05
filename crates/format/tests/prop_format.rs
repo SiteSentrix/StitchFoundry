@@ -4,8 +4,9 @@
 
 use proptest::prelude::*;
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, ImageBlob, NodeId};
-use vectorcraft_format::{base64_decode, base64_encode, load, save, sniff};
+use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeId, NodeKind};
+use vectorcraft_format::{SaveOptions, base64_decode, base64_encode, load, preview, save, save_with, sniff};
+use vectorcraft_geom::Affine;
 use vectorcraft_testkit::fixtures;
 use vectorcraft_testkit::invariants::{check_document, check_native_roundtrip, check_native_roundtrip_exact, doc_json, json_approx_eq};
 use vectorcraft_testkit::strategies::arb_ops;
@@ -67,13 +68,50 @@ proptest! {
         prop_assert_eq!(a, b);
     }
 
-    /// Embedded image bytes survive the base64 round trip exactly.
+    /// Embedded image bytes survive the base64 round trip exactly (saves keep the images in use).
     #[test]
-    fn images_roundtrip(data in prop::collection::vec(any::<u8>(), 0..2000), key in "[a-z]{1,8}") {
+    fn images_roundtrip(data in prop::collection::vec(any::<u8>(), 0..2000), key in "[a-z \"\\\\]{1,8}") {
         let mut d = Document::new(10.0, 10.0);
         d.images.insert(key.clone(), ImageBlob::new("image/png", data.clone()));
-        let back = load(&save(&d, false)).unwrap();
-        prop_assert_eq!(back.images.get(&key).map(|b| b.bytes.as_ref().clone()), Some(data));
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let im = ImageObject { key: key.clone(), width: 1, height: 1, xf: Affine::IDENTITY, link: None };
+        d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(im))).unwrap();
+        for pretty in [false, true] {
+            let back = load(&save(&d, pretty)).unwrap();
+            prop_assert_eq!(back.images.get(&key).map(|b| b.bytes.as_ref().clone()), Some(data.clone()));
+        }
+    }
+
+    /// Compressed and older-version saves of random documents load to the same document.
+    #[test]
+    fn compressed_and_older_saves_roundtrip(ops in arb_ops(5..30)) {
+        let mut s = fixtures::session();
+        for op in &ops {
+            let _ = op.apply(&mut s);
+        }
+        let d = s.doc().unwrap().doc.clone();
+        let want = doc_json(&load(&save(&d, false)).unwrap());
+        for o in [SaveOptions { compress: true, ..SaveOptions::default() }, SaveOptions { version: 2, ..SaveOptions::default() }, SaveOptions { version: 1, pretty: true, ..SaveOptions::default() }] {
+            let back = load(&save_with(&d, &o).unwrap()).unwrap();
+            prop_assert!(json_approx_eq(&doc_json(&back), &want, 1e-12), "{:?} differs", o);
+        }
+    }
+
+    /// Mutating a compressed file (byte flips / truncation) never panics the loader or the sniffer.
+    #[test]
+    fn load_mutated_compressed_file_never_panics(cut in 0usize..2000, flips in prop::collection::vec((0usize..2000, any::<u8>()), 0..8)) {
+        let mut bytes = save_with(&Document::new(100.0, 100.0), &SaveOptions { compress: true, ..SaveOptions::default() }).unwrap();
+        for (i, b) in flips {
+            let n = bytes.len();
+            bytes[i % n] = b;
+        }
+        bytes.truncate(cut.min(bytes.len()));
+        let _ = sniff(&bytes);
+        let _ = preview(&bytes);
+        if let Ok(d) = load(&bytes) {
+            check_document(&d).map_err(TestCaseError::fail)?;
+        }
     }
 }
 

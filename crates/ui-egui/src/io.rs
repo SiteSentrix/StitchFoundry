@@ -6,6 +6,7 @@ use vectorcraft_doc::SavedView;
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, SavePlan};
 
+use crate::background::{self, Writer};
 use crate::dialogs::svg_options;
 use crate::state::Dialog;
 use crate::{FilePick, Services, VectorcraftApp, dialogs};
@@ -101,7 +102,7 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
 }
 
 /// Web: download `bytes` under `path`'s file name; desktop: write them to `path`.
-fn write_to(services: &mut Services, path: &str, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_to(services: &mut Services, path: &str, bytes: &[u8]) -> Result<(), String> {
     if let Some(dl) = services.download.as_mut() {
         dl(&fileio::file_name(path), bytes);
         return Ok(());
@@ -161,10 +162,10 @@ fn with_save_extension(path: &str, f: &Format) -> String {
 
 /// Write every file of an export (one per artboard, linked images) for the destination `path`.
 /// → the export's own files (without the linked images).
-fn write_encoded(app: &mut VectorcraftApp, doc: &vectorcraft_doc::Document, path: &str, enc: &fileio::Encoded) -> Result<Vec<String>, String> {
+fn write_encoded(write: Writer, doc: &vectorcraft_doc::Document, path: &str, enc: &fileio::Encoded) -> Result<Vec<String>, String> {
     let named = enc.named(doc, path);
     for (p, bytes) in &named {
-        write_to(&mut app.services, p, bytes)?;
+        write(p, bytes)?;
     }
     Ok(named.into_iter().take(enc.files.len()).map(|(p, _)| p).collect())
 }
@@ -207,7 +208,8 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         o.insert("path".into(), json!(with_save_extension(&picked, first.format)));
     }
     let chosen = plan(app, mode, &q)?;
-    if ask && !chosen.format.options.is_empty() {
+    // Native saves don't stop to ask: Use Compression decides, and options can be passed.
+    if ask && !chosen.format.options.is_empty() && !matches!(chosen.format.id, "vectorcraft" | "template") {
         let path = chosen.path.clone().unwrap_or_default();
         return ask_format_options(app, mode, chosen.format, &path);
     }
@@ -273,16 +275,43 @@ fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
 }
 
 /// Write a planned save through the services and report it in the status bar.
+/// With Background Save on, the file is encoded and written from a snapshot off the UI thread
+/// ([`background`]): this returns `{path, background: true, status}` at once, and the document
+/// takes the file (and counts as saved, as of the snapshot) once it is written.
 fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String> {
-    let retargets = plan.retargets();
-    let services = &mut app.services;
-    let r = fileio::save_with(&mut app.session, plan, |path, bytes| write_to(services, path, bytes).map_err(EngineError::Other))
-        .map_err(|e| e.to_string())?;
-    let path = r["path"].as_str().unwrap_or_default().to_string();
-    if retargets {
-        note_recent(app, &path);
+    let uid = app.session.active().ok_or("no document")?.uid;
+    // Saves of one document finish in order.
+    if app.background.busy_with(uid) {
+        background::wait_all(app);
     }
-    report_saved(app, &path, &r);
+    let job = fileio::save_job(&mut app.session, plan).map_err(|e| e.to_string())?;
+    let (retargets, target) = (job.plan().retargets(), job.plan().path.clone());
+    let label = match &target {
+        Some(path) => format!("Saving {}", fileio::file_name(path)),
+        None => "Saving".into(),
+    };
+    // Without a path the bytes come back to the caller: nothing to do in the background.
+    let enabled = app.session.prefs.background_save && target.is_some();
+    // The work writes the file; the copy makes it the document's own afterwards.
+    let done = job.clone();
+    let work = move |write: Writer| job.write(|p, b| write(p, b).map_err(EngineError::Other)).map_err(|e| e.to_string());
+    let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
+        let r = r?;
+        // The document may have closed meanwhile: the file is written all the same.
+        if let Some(st) = app.session.document_mut(uid) {
+            done.finish(st);
+        }
+        let path = r["path"].as_str().unwrap_or_default().to_string();
+        if retargets {
+            note_recent(app, &path);
+        }
+        report_saved(app, &path, &r);
+        Ok(r)
+    };
+    let mut r = background::run(app, enabled, label, Some(uid), work, then)?;
+    if let Some(path) = target.filter(|_| r.get("path").is_none()) {
+        r["path"] = json!(path);
+    }
     Ok(r)
 }
 
@@ -334,21 +363,36 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         Some(z) if f.id == "svg" && z.id == "svgz" => z,
         _ => f,
     };
-    let enc = fileio::encode_all(&doc, f.id, params).map_err(|e| e.to_string())?;
-    let files = write_encoded(app, &doc, &path, &enc)?;
-    let what = match files.as_slice() {
-        [one] => one.clone(),
-        _ => format!("{} files", files.len()),
+    // Background Export: encoded and written from this snapshot while editing goes on.
+    let label = format!("Exporting {}", fileio::file_name(&path));
+    let (params, target) = (params.clone(), path.clone());
+    let work = move |write: Writer| {
+        let enc = fileio::encode_all(&doc, f.id, &params).map_err(|e| e.to_string())?;
+        let files = write_encoded(write, &doc, &path, &enc)?;
+        let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
+        if files.len() > 1 {
+            out["files"] = json!(files);
+        }
+        Ok(out)
     };
-    app.status(match enc.warnings.first() {
-        Some(first) => format!("Exported {what} with {} note(s): {first}", enc.warnings.len()),
-        None => format!("Exported {what}"),
-    });
-    let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
-    if files.len() > 1 {
-        out["files"] = json!(files);
+    let enabled = app.session.prefs.background_export;
+    let mut r = background::run(app, enabled, label, None, work, |app, r| {
+        let r = r?;
+        let what = match r["files"].as_array() {
+            Some(files) => format!("{} files", files.len()),
+            None => r["path"].as_str().unwrap_or_default().to_string(),
+        };
+        let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+        app.status(match warnings.first() {
+            Some(first) => format!("Exported {what} with {} note(s): {first}", warnings.len()),
+            None => format!("Exported {what}"),
+        });
+        Ok(r)
+    })?;
+    if r.get("path").is_none() {
+        r["path"] = json!(target);
     }
-    Ok(out)
+    Ok(r)
 }
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path

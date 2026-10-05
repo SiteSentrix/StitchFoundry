@@ -92,7 +92,8 @@ fn save_prefs(app: &VectorcraftApp) {
         let mut ui = app.ui.clone();
         ui.engine_prefs = app.session.prefs.to_json();
         if let Ok(bytes) = serde_json::to_vec_pretty(&ui) {
-            let _ = std::fs::write(p, bytes);
+            // Preferences are best effort: a failed write keeps the previous file.
+            let _ = fileio::write_atomic(&p, &bytes);
         }
     }
 }
@@ -137,6 +138,11 @@ fn reveal_command(path: &str) -> std::process::Command {
     c
 }
 
+/// Write a file the safe way: a failed write keeps the old file ([`fileio::write_atomic`]).
+fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
+    fileio::write_atomic(std::path::Path::new(path), bytes).map_err(|e| e.to_string())
+}
+
 fn services() -> Services {
     Services {
         pick_open: Some(Box::new(|pick: &FilePick| file_dialog(pick).pick_file().map(|p| p.to_string_lossy().to_string()))),
@@ -157,7 +163,9 @@ fn services() -> Services {
             file_dialog(pick).save_file().map(|p| p.to_string_lossy().to_string())
         })),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
-        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+        write: Some(Box::new(write_file)),
+        // Background Save and Export write from a worker thread.
+        write_shared: Some(std::sync::Arc::new(write_file)),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
         system_clipboard: Some(clipboard::system_clipboard()),
         // Help → Discord / website / GitHub, the Discord button, About and Home links.

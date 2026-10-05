@@ -20,6 +20,7 @@ mod encode;
 mod export;
 mod imagemap;
 mod load;
+mod native;
 pub mod pdf;
 mod pdfimport;
 pub mod pngtext;
@@ -38,9 +39,16 @@ use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
+pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
-pub use save::{SAVE_FORMATS, SaveMode, SavePlan, save_filters, save_format, save_plan, save_with, stamp_save_dates, templates_folder};
+pub use save::{
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, templates_folder,
+};
 pub use svg::options_map as svg_options;
+/// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
+/// file it replaces), for the apps' own writers too.
+#[cfg(not(target_arch = "wasm32"))]
+pub use vectorcraft_format::write_atomic;
 
 use super::*;
 use crate::EngineError;
@@ -320,7 +328,7 @@ pub const FORMATS: &[Format] = &[
         read: true,
         write: true,
         raster: false,
-        options: &[],
+        options: native::OPTIONS,
     },
     Format { id: "svg", label: "SVG", extensions: &["svg"], mime: "image/svg+xml", read: true, write: true, raster: false, options: svg::OPTIONS },
     Format {
@@ -392,7 +400,7 @@ pub const FORMATS: &[Format] = &[
         read: true,
         write: true,
         raster: false,
-        options: &[],
+        options: native::OPTIONS,
     },
     Format { id: "png8", label: "PNG-8", extensions: &["png"], mime: "image/png", read: false, write: true, raster: true, options: PALETTE_OPTIONS },
     Format { id: "txt", label: "Text", extensions: TEXT_EXTS, mime: "text/plain", read: false, write: true, raster: false, options: text::OPTIONS },
@@ -488,7 +496,8 @@ pub(crate) fn read_file(path: &str) -> Result<Vec<u8>> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
-    std::fs::write(path, bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+    // Never a half-written file: see [`write_atomic`].
+    write_atomic(std::path::Path::new(path), bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
