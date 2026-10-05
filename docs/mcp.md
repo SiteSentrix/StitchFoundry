@@ -481,6 +481,7 @@ that split into many regions. The result reports `{ids, vector, rasterized, opti
 ```json
 {"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"ids":[12,15],"preset":"high"}}}
 {"name":"run_command","arguments":{"command":"object.flattenTransparency","params":{"balance":0,"lineArtPpi":150}}}
+```
 
 ## Pattern editing display
 
@@ -593,6 +594,7 @@ and flat-colour regions, plus `regions` (bounds, and `id` for objects) for the `
 
 ```json
 {"name":"run_command","arguments":{"command":"flattener.preview","params":{"highlight":"allRasterized","preset":"low"}}}
+```
 
 ## Width profiles
 
@@ -640,6 +642,7 @@ stroke}`), and `object.mesh.create` on a gradient-filled object colours the mesh
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
 {"name":"run_command","arguments":{"command":"object.expand","params":{"steps":16}}}
+```
 
 ## Lab spot colours
 
