@@ -169,6 +169,24 @@ The details are in [`docs/mcp.md`](docs/mcp.md) and [`docs/control-protocol.md`]
 VectorCraft is under active development. [**ROADMAP.md**](ROADMAP.md) covers what ships today, the
 milestones, and honest time-to-parity estimates.
 
+**Where we are (2026-10-05):** roughly 68–74% of Illustrator's features exist and work, and about 40–55% of
+"a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
+Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles and threading, and
+files (SVG, PDF and PDF-compatible `.ai`, EPS, DXF, raster formats, Print, Package). The scores are
+self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-05) explains how far to trust them.
+
+**What's missing:**
+- 3D and Materials;
+- the Photoshop-style raster effects (Effect Gallery);
+- vertical and CJK type;
+- Variables and scripting;
+- an interaction-fidelity pass covering every tool's modifiers and small behaviours;
+- packaging for Windows and Linux.
+
+**Where we're going:** next is the interaction-fidelity pass alongside the raster-effects package, then 3D and
+advanced type, then hardening and packaging for 1.0. The prioritized list is in
+[Where we're lacking](ROADMAP.md#where-were-lacking-in-priority-order).
+
 **Workspace:** `crates/{geom, color, doc, pathops, text, effects, trace, brush, render, svg, pdf, format, tools, engine, ui-egui, mcp, testkit}`
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
 the UI can be swapped without touching the engine.
