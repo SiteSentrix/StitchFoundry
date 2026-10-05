@@ -455,6 +455,8 @@ mod tests_appearance;
 #[cfg(test)]
 mod tests_asset_export;
 #[cfg(test)]
+mod tests_constrain;
+#[cfg(test)]
 mod tests_css_properties;
 #[cfg(test)]
 mod tests_effectedit;
