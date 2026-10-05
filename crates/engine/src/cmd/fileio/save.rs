@@ -67,7 +67,7 @@ impl SaveMode {
 pub struct SavePlan {
     pub mode: SaveMode,
     /// Where to write. `None` when no path is known (never saved, converted from an older version,
-    /// or a format other than the document's own): the caller asks for one or takes the bytes.
+    /// restored by Data Recovery, or a format other than the document's own): the caller asks for one or takes the bytes.
     pub path: Option<String>,
     pub format: &'static Format,
     /// The format's options (only those its encoder reads).
@@ -178,7 +178,8 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     // None given: the ones the document was last saved with in this format.
     let options = if given.is_empty() && format.id == st.format { st.save_options.clone() } else { given };
     // Save writes the document's own file; the other modes only where they are told to.
-    let path = path.or_else(|| (mode == SaveMode::Save && !st.converted && format.id == st.format).then(|| st.path.clone()).flatten());
+    let path =
+        path.or_else(|| (mode == SaveMode::Save && !st.converted && !st.recovered && format.id == st.format).then(|| st.path.clone()).flatten());
     let stem = file_stem(st.path.as_deref().unwrap_or(&st.doc.title));
     let ext = format.extensions[0];
     let name = match mode {
@@ -255,16 +256,20 @@ pub struct SaveJob {
 /// Snapshot the active document for `plan` (stamping File Info's dates when the file becomes the
 /// document's own). Bad options fail here, before anything is encoded.
 pub fn save_job(s: &mut Session, plan: SavePlan) -> Result<SaveJob> {
-    let cmd = plan.mode.command();
-    let retargets = plan.retargets();
     // The web build, without a clock, leaves the dates unless given one.
     if plan.path.is_some()
-        && retargets
+        && plan.retargets()
         && let Some(at) = clock_date(s, "modified", plan.modified)
     {
         stamp_save_dates(s.doc_mut()?, at);
     }
-    let st = s.doc()?;
+    job_for(s, s.doc()?, plan)
+}
+
+/// Snapshot `st` (any open document of `s`) for `plan`, without stamping dates (Data Recovery
+/// snapshots documents that aren't active).
+pub(crate) fn job_for(s: &Session, st: &DocState, plan: SavePlan) -> Result<SaveJob> {
+    let cmd = plan.mode.command();
     let own = doc_to_save(st, plan.format);
     // A native file records its links' paths relative to where it is written.
     let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(&own, p));
@@ -285,7 +290,7 @@ pub fn save_job(s: &mut Session, plan: SavePlan) -> Result<SaveJob> {
         // A PDF of every artboard with the PDF options, always carrying the native document.
         o.extend([("preserveEditing".into(), json!(true)), ("range".into(), json!("all"))]);
     }
-    Ok(SaveJob { plan, doc, params, snapshot: s.doc()?.doc.clone() })
+    Ok(SaveJob { plan, doc, params, snapshot: st.doc.clone() })
 }
 
 impl SaveJob {
@@ -293,10 +298,14 @@ impl SaveJob {
         &self.plan
     }
 
-    /// Encode the file and write it with `write` (the file, then the images an SVG links to,
-    /// beside it). Without a path → `{dataBase64, bytes, format, name, folder?, warnings, linked?:
-    /// [{name, dataBase64}]}`; with one → `{path, format, bytes, warnings, linked?: [path…]}`.
-    pub fn write(&self, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    /// The document when the job was made (what counts as saved once the file is written).
+    pub(crate) fn snapshot(&self) -> &Arc<Document> {
+        &self.snapshot
+    }
+
+    /// Encode the file → it, with the warnings (what the format loses first, then the encoder's
+    /// own notes: PDF options not applied yet…).
+    pub fn encode(&self) -> Result<Encoded> {
         let (cmd, plan, doc) = (self.plan.mode.command(), &self.plan, &*self.doc);
         let mut enc = if plan.format.id == "ai" {
             let (bytes, warnings) = super::pdf::encode(cmd, &doc.without_edit_modes(), &self.params)?;
@@ -307,9 +316,17 @@ impl SaveJob {
         if enc.files.len() != 1 {
             return Err(bad(cmd, "Save writes one artboard: name one, or export several with document.export"));
         }
-        // What the format loses first, then the encoder's own notes (PDF options not applied yet…).
-        let mut warnings = std::mem::take(&mut enc.warnings);
-        warnings.splice(0..0, fidelity_warning(plan.format));
+        enc.warnings.splice(0..0, fidelity_warning(plan.format));
+        Ok(enc)
+    }
+
+    /// Encode the file and write it with `write` (the file, then the images an SVG links to,
+    /// beside it). Without a path → `{dataBase64, bytes, format, name, folder?, warnings, linked?:
+    /// [{name, dataBase64}]}`; with one → `{path, format, bytes, warnings, linked?: [path…]}`.
+    pub fn write(&self, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+        let (plan, doc) = (&self.plan, &*self.doc);
+        let mut enc = self.encode()?;
+        let warnings = std::mem::take(&mut enc.warnings);
         let extra = json!({ "format": plan.format.id, "warnings": warnings });
         let Some(path) = &plan.path else {
             let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
@@ -341,7 +358,20 @@ impl SaveJob {
             st.format = self.plan.format.id;
             st.save_options = self.plan.options;
             st.converted = false;
+            st.recovered = false;
             st.mark_saved_as(&self.snapshot);
+        }
+    }
+
+    /// [`SaveJob::finish`] for document `uid` of `s`, if it is still open; a file that became
+    /// its own also ends its Data Recovery copy.
+    pub fn complete(self, s: &mut Session, uid: u64) {
+        let saved = self.plan.retargets() && self.plan.path.is_some();
+        if let Some(st) = s.document_mut(uid) {
+            self.finish(st);
+        }
+        if saved {
+            crate::cmd::recovery::forget(s, uid);
         }
     }
 }
@@ -350,8 +380,9 @@ impl SaveJob {
 /// [`SaveJob`]). Without a path the document is unchanged.
 pub fn save_with(s: &mut Session, plan: SavePlan, write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
     let job = save_job(s, plan)?;
+    let uid = s.doc()?.uid;
     let out = job.write(write)?;
-    job.finish(s.doc_mut()?);
+    job.complete(s, uid);
     Ok(out)
 }
 
@@ -377,6 +408,9 @@ fn revert(s: &mut Session, _: &Value) -> Result<Value> {
     let path = s.doc()?.path.clone().ok_or_else(|| bad("file.revert", "the document has never been saved"))?;
     let Loaded { mut doc, .. } = load(&path, &read_file(&path)?)?;
     doc.template = false;
+    // Back to the saved file: its recovery copy has nothing left to recover.
+    let uid = s.doc()?.uid;
+    crate::cmd::recovery::forget(s, uid);
     s.replace_document(index, doc);
     Ok(json!({ "path": path }))
 }
@@ -409,7 +443,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 3 (2 or 1: for older VectorCraft versions, never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 3 (2 or 1: for older VectorCraft versions, never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, restored by Data Recovery, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),

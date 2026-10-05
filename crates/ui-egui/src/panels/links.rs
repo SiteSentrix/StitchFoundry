@@ -335,7 +335,7 @@ fn size_label(bytes: u64) -> String {
 }
 
 /// Milliseconds since the Unix epoch as a UTC date and time.
-fn date_label(ms: u64) -> String {
+pub(crate) fn date_label(ms: u64) -> String {
     let [y, mo, d, h, mi, _] = vectorcraft_doc::metadata::civil(i64::try_from(ms / 1000).unwrap_or(i64::MAX));
     format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02} UTC")
 }

@@ -23,6 +23,7 @@ pub mod palette;
 pub mod panels;
 pub mod place;
 pub mod prefs_dialog;
+pub mod recovery;
 pub mod render_worker;
 pub mod shortcut_editor;
 pub mod shortcuts;
@@ -53,6 +54,8 @@ mod tests_paintchips;
 mod tests_place;
 #[cfg(test)]
 mod tests_recolor;
+#[cfg(test)]
+mod tests_recovery;
 #[cfg(test)]
 mod tests_save;
 #[cfg(test)]
@@ -148,6 +151,9 @@ pub struct Services {
     pub open_file: Option<RevealFn>,
     /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
     pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
+    /// Where Data Recovery keeps its copies when not in a folder (the web's browser storage;
+    /// tests): installed into the session ([`vectorcraft_engine::cmd::recovery`]).
+    pub recovery_store: Option<std::sync::Arc<dyn vectorcraft_engine::cmd::recovery::RecoveryStore>>,
 }
 
 /// Cached canvas raster.
@@ -240,13 +246,18 @@ pub struct VectorcraftApp {
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
     pub background: background::Background,
+    /// Data Recovery's timer and startup question ([`recovery`]).
+    pub recovery: recovery::Timer,
 }
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
 const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
-    pub fn new(session: Session, services: Services) -> Self {
+    pub fn new(mut session: Session, services: Services) -> Self {
+        if let Some(store) = &services.recovery_store {
+            session.recovery.set_store(store.clone());
+        }
         let views = session.documents().iter().map(View::of).collect();
         Self {
             session,
@@ -288,6 +299,7 @@ impl VectorcraftApp {
             system_paste_at: f64::NEG_INFINITY,
             paste_chord: Default::default(),
             background: Default::default(),
+            recovery: Default::default(),
         }
     }
 
@@ -566,7 +578,14 @@ impl VectorcraftApp {
                 if let Err(e) = unsaved::close_all(self, "quit") {
                     self.status(e);
                 }
+            } else {
+                // Quitting with nothing unsaved: no copies to leave behind.
+                vectorcraft_engine::cmd::recovery::forget_all(&mut self.session);
             }
+        }
+        if let Some(wait) = recovery::frame(self, now) {
+            // The timer and heartbeat run in an idle window too.
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
         shortcut_editor::sync(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);

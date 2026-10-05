@@ -328,3 +328,38 @@ fn every_command_undoes_exactly() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Data Recovery reads whatever its store holds: damaged copies and details fail cleanly, and junk
+/// params never panic.
+#[test]
+fn recovery_commands_with_a_damaged_store_and_junk_params() {
+    use std::sync::Arc;
+    use vectorcraft_engine::cmd::recovery::{MemoryStore, RecoveryStore};
+    let store = Arc::new(MemoryStore::default());
+    for (name, bytes) in [
+        ("1-1/bad-1.vectorcraft", &b"{not json"[..]),
+        ("1-1/bad-1.json", b"[1, 2"),
+        ("1-1/gz-1.vectorcraft", &[0x1f, 0x8b, 0, 1, 2][..]),
+        ("1-1/meta-only.json", br#"{"title": 5, "path": [], "saved": "x"}"#),
+        ("2-1/heartbeat", b"not a number"),
+        ("2-1/x.vectorcraft", b"{}"),
+        ("../escape.vectorcraft", b"{}"),
+        ("no-area.vectorcraft", b"{}"),
+        ("/.vectorcraft", b"{}"),
+    ] {
+        store.write(name, bytes).unwrap();
+    }
+    let path = safe_path();
+    for fx in Fixture::ALL {
+        for id in ["file.recovery.save", "file.recovery.list", "file.recovery.restore", "file.recovery.discard"] {
+            let spec = command_specs().iter().find(|c| c.id == id).unwrap();
+            for p in std::iter::once(json!({})).chain(junk_params(spec.params, &path)) {
+                let mut s = fx.session();
+                s.recovery.set_store(store.clone());
+                let r = catch_quiet(|| s.execute(id, &p));
+                assert!(r.is_ok(), "PANIC {id} {p} [{fx:?}]");
+                check_session(&s).unwrap_or_else(|e| panic!("{id} {p} [{fx:?}]: {e}"));
+            }
+        }
+    }
+}

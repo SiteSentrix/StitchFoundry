@@ -47,6 +47,7 @@ pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
+pub(crate) use save::job_for;
 pub use save::{
     SAVE_FORMATS, SaveJob, SaveMode, SavePlan, export_folder, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates,
     templates_folder,
@@ -648,7 +649,7 @@ fn write_encoded(path: Option<&str>, name: &str, doc: &vectorcraft_doc::Document
 }
 
 /// `a` with the fields of `b`.
-fn merge(mut a: Value, b: Value) -> Value {
+pub(crate) fn merge(mut a: Value, b: Value) -> Value {
     if let (Some(a), Value::Object(b)) = (a.as_object_mut(), b) {
         a.extend(b);
     }

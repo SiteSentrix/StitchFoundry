@@ -124,6 +124,11 @@ pub struct DocState {
     /// The view saved into native files (`Document::last_view`); the UI keeps it current before a
     /// save and restores it when the document opens.
     pub view: Option<vectorcraft_doc::SavedView>,
+    /// Restored by Data Recovery: the title says "[Recovered]" and Save asks where to save it
+    /// (suggesting `path`, the file it was copied from) instead of overwriting that file.
+    pub recovered: bool,
+    /// The document's Data Recovery copy, once one was written ([`cmd::recovery`]).
+    pub recovery: Option<cmd::recovery::RecoveryCopy>,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -153,6 +158,8 @@ impl DocState {
             save_options: Default::default(),
             converted: false,
             view,
+            recovered: false,
+            recovery: None,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -186,6 +193,10 @@ impl DocState {
             self.revision += 1;
         }
     }
+    /// Count the document as modified, as if never saved (a document restored by Data Recovery).
+    pub fn mark_unsaved(&mut self) {
+        self.saved_doc = Arc::new(Document::new(1.0, 1.0));
+    }
     pub fn title(&self) -> String {
         let name = self
             .path
@@ -193,7 +204,13 @@ impl DocState {
             .and_then(|p| std::path::Path::new(p).file_name())
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| self.doc.title.clone());
-        if self.converted { format!("{} [Converted]", cmd::fileio::file_stem(&name)) } else { name }
+        if self.converted {
+            format!("{} [Converted]", cmd::fileio::file_stem(&name))
+        } else if self.recovered {
+            format!("{} [Recovered]", cmd::fileio::file_stem(&name))
+        } else {
+            name
+        }
     }
     /// Where new art is inserted: the isolation container, else the active layer.
     /// The current layer, if the remembered id still names a layer (ids are reused after undo).
@@ -632,6 +649,8 @@ pub struct Session {
     /// While `command.batch` runs: the documents its steps closed or replaced (Revert), which an
     /// error brings back; `None` otherwise.
     pub(crate) batch_stash: Option<Vec<DocState>>,
+    /// Where Data Recovery keeps its copies ([`cmd::recovery`]).
+    pub recovery: cmd::recovery::Recovery,
 }
 
 impl Default for Session {
@@ -671,6 +690,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             batch_stash: None,
+            recovery: Default::default(),
         }
     }
 
@@ -791,6 +811,9 @@ impl Session {
             return false;
         }
         self.reset_tool_for_doc_switch();
+        // Closed (saved or discarded): nothing left to recover.
+        let uid = self.docs[index].uid;
+        cmd::recovery::forget(self, uid);
         let old = self.docs.remove(index);
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
@@ -1175,6 +1198,8 @@ mod tests_proxyitems;
 mod tests_rastersettings;
 #[cfg(test)]
 mod tests_recolor;
+#[cfg(test)]
+mod tests_recovery;
 #[cfg(test)]
 mod tests_registration;
 #[cfg(test)]

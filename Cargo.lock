@@ -4533,6 +4533,7 @@ dependencies = [
  "log",
  "rfd",
  "vectorcraft-engine",
+ "vectorcraft-format",
  "vectorcraft-ui-egui",
  "wasm-bindgen",
  "wasm-bindgen-futures",

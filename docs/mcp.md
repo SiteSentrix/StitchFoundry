@@ -1265,3 +1265,29 @@ as they do for art larger than the imageable area and for overprints in composit
 {"name":"run_command","arguments":{"command":"print.preview","params":{"settings":{"output":{"mode":"separations"}}}}}
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.pdf","settings":{"copies":2}}}}
 ```
+
+## Data Recovery
+
+Modified documents get recovery copies (`file.recovery.save`; the app runs it every `autosaveInterval` minutes while
+`autosaveRecovery` is on, skipping documents of more than 20,000 objects while `recoveryOffForComplex` is on). A copy
+goes when its document is saved, reverted or closed, so copies still there after the app quits were left by a crash.
+The copies live in the `recoveryFolder` preference's folder (default: `Data Recovery` beside the app's preferences;
+none when the app runs with `VECTORCRAFT_NO_PREFS`) or, on the web, in browser storage.
+
+Each running app (each browser tab) keeps its copies in an area of its own (`<area>/<name>`): a sub-folder whose
+`.lock` file it keeps locked while it runs, or on the web an area with a heartbeat it refreshes every minute. Only
+areas nobody holds are offered: their lock is free, or their heartbeat is older than three intervals (at least three
+minutes). Several apps running at once (agents' instances included) never see each other's copies as crash leftovers,
+and an area being restored or discarded is held, so two apps launched together never both take it.
+
+`file.recovery.list` → `{copies: [{file, title, path, format, saved, open, running}], location}` (`open`: the copy of a
+document open here; `running`: kept by another VectorCraft that is running). `file.recovery.restore {file?}` opens
+copies left behind (default: all) as `"<name> [Recovered]"`: modified, and Save asks where to save them (suggesting
+their original file); the copy moves into this app's area. `file.recovery.discard {file?}` deletes them. Without a
+folder or browser storage the commands are disabled and say how to set one.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"recoveryFolder","value":"/tmp/vc-recovery"}}}
+{"name":"run_command","arguments":{"command":"file.recovery.save","params":{}}}
+{"name":"run_command","arguments":{"command":"file.recovery.restore","params":{"file":"1759650000-1/Poster-1"}}}
+```

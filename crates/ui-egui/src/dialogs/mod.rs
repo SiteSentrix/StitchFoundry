@@ -42,6 +42,7 @@ pub mod placement_options;
 mod png_options;
 pub mod raster_effects;
 pub mod recolor;
+mod recovery;
 pub mod saturate;
 mod save_changes;
 pub(crate) mod save_options;
@@ -223,6 +224,7 @@ registry! {
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
+    Recovery: [crate::recovery::KIND] => recovery::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

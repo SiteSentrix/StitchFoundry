@@ -312,9 +312,7 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan) -> Result<Value, String>
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         let r = r?;
         // The document may have closed meanwhile: the file is written all the same.
-        if let Some(st) = app.session.document_mut(uid) {
-            done.finish(st);
-        }
+        done.complete(&mut app.session, uid);
         let path = r["path"].as_str().unwrap_or_default().to_string();
         if retargets {
             note_recent(app, &path);
