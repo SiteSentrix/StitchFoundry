@@ -76,6 +76,8 @@ mod tests_svg;
 #[cfg(test)]
 mod tests_svgsave;
 #[cfg(test)]
+mod tests_synthetic;
+#[cfg(test)]
 mod tests_sysclip;
 #[cfg(test)]
 mod tests_sysclip_emf;
@@ -269,6 +271,10 @@ pub struct VectorcraftApp {
     pub background: background::Background,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
+    /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
+    host_modifiers: egui::Modifiers,
+    /// Synthetic input set the modifiers egui holds (see [`Self::raw_input_hook`]).
+    synthetic_modifiers: bool,
 }
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
@@ -322,6 +328,8 @@ impl VectorcraftApp {
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
+            host_modifiers: Default::default(),
+            synthetic_modifiers: false,
         }
     }
 
@@ -654,19 +662,51 @@ impl VectorcraftApp {
         place::drop_files(self, files, target);
     }
 
-    /// Inject synthetic events (one press/release step per frame).
+    /// Inject synthetic events (one press/release step per frame). Handlers read the modifiers
+    /// egui holds (`i.modifiers`), so a synthetic key or button holds its own for the frames it
+    /// spans (a drag's moves included); the keyboard's come back after.
     pub fn raw_input_hook(&mut self, raw: &mut egui::RawInput) {
-        if self.synthetic.is_empty() {
-            return;
+        for e in &raw.events {
+            match e {
+                egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
+                egui::Event::WindowFocused(false) => self.host_modifiers = egui::Modifiers::NONE,
+                _ => {}
+            }
         }
+        let Some(first) = self.synthetic.first() else {
+            if std::mem::take(&mut self.synthetic_modifiers) {
+                raw.events.push(egui::Event::ModifiersChanged(self.host_modifiers));
+            }
+            return;
+        };
         // Pointer events go one per frame so egui sees presses, drags and releases as real input;
         // keyboard sequences go up to the key release.
-        let n = match self.synthetic[0] {
+        let n = match first {
             egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. } => 1,
             _ => self.synthetic.iter().position(|e| matches!(e, egui::Event::Key { pressed: false, .. })).map_or(self.synthetic.len(), |i| i + 1),
         };
-        if let Some(egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. }) = self.synthetic.first() {
+        if let egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } = first {
             raw.events.push(egui::Event::PointerMoved(*p));
+        }
+        let (now, later) = self.synthetic.split_at(n.min(self.synthetic.len()));
+        // This frame's key or button, else the button a drag holds down (released later).
+        let held = now
+            .iter()
+            .find_map(|e| match e {
+                egui::Event::Key { modifiers, .. } | egui::Event::PointerButton { modifiers, .. } => Some(*modifiers),
+                _ => None,
+            })
+            .or_else(|| match later.iter().find(|e| matches!(e, egui::Event::PointerButton { .. })) {
+                Some(egui::Event::PointerButton { pressed: false, modifiers, .. }) => Some(*modifiers),
+                _ => None,
+            });
+        match held {
+            Some(m) => {
+                raw.events.push(egui::Event::ModifiersChanged(m));
+                self.synthetic_modifiers = true;
+            }
+            None if std::mem::take(&mut self.synthetic_modifiers) => raw.events.push(egui::Event::ModifiersChanged(self.host_modifiers)),
+            None => {}
         }
         raw.events.extend(self.synthetic.drain(..n));
     }
