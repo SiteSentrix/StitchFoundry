@@ -34,6 +34,8 @@ pub mod widgets;
 pub mod workspaces;
 
 #[cfg(test)]
+mod tests_clipboard;
+#[cfg(test)]
 mod tests_docsetup;
 #[cfg(test)]
 mod tests_labels;
@@ -174,7 +176,15 @@ pub struct VectorcraftApp {
     pub custom_titlebar: bool,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
+    /// The Paste commands can paste from the system clipboard alone: it holds SVG while the
+    /// internal clipboard is empty. It enables the Paste menu items.
+    pub(crate) system_svg: bool,
+    /// When `system_svg` was last checked (app time, s; at most once per frame).
+    system_svg_at: f64,
 }
+
+/// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_svg`].
+const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
     pub fn new(session: Session, services: Services) -> Self {
@@ -214,6 +224,8 @@ impl VectorcraftApp {
             hover_doc: None,
             custom_titlebar: false,
             place: Default::default(),
+            system_svg: false,
+            system_svg_at: f64::NEG_INFINITY,
         }
     }
 
@@ -258,8 +270,20 @@ impl VectorcraftApp {
         if let Some(r) = menus::run_ui_command(self, id, &params) {
             return r;
         }
+        let mut params = params;
         if id.starts_with("edit.paste") {
             self.adopt_system_clipboard();
+            // Paste (also without formatting) goes to the centre of the view.
+            if matches!(id, "edit.paste" | "edit.pasteWithoutFormatting")
+                && ["center", "dx", "dy"].iter().all(|k| params.get(k).is_none())
+                && let Some(c) = self.view().filter(|v| v.fitted).map(|v| v.center)
+                && let Some(p) = params.as_object_mut()
+            {
+                p.insert("center".into(), serde_json::json!([c.x, c.y]));
+            }
+            if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
+                return r;
+            }
         }
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") && self.session.prefs.copy_as_svg {
@@ -471,6 +495,19 @@ impl VectorcraftApp {
         }
         self.last_time = now;
         self.sync_views();
+        // Read the system clipboard only when that alone decides whether Paste is enabled, and at
+        // most a few times a second (opening it locks it against other apps on some systems).
+        if !(0.0..SYSTEM_CLIPBOARD_POLL).contains(&(now - self.system_svg_at)) {
+            self.system_svg_at = now;
+            self.system_svg = self.session.clipboard.is_empty()
+                && self.session.active().is_some()
+                && self
+                    .services
+                    .clipboard_read
+                    .as_mut()
+                    .and_then(|read| read())
+                    .is_some_and(|t| vectorcraft_engine::cmd::clipboard::looks_like_svg(&t));
+        }
         // The window's close button (or the system quitting the app) asks about unsaved documents.
         if ctx.input(|i| i.viewport().close_requested()) && unsaved::any_dirty(self) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);

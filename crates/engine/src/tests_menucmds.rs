@@ -437,7 +437,7 @@ fn paste_without_formatting_resets_text_style() {
     assert_eq!(tt.first_style().size, 12.0);
     assert_eq!(undo_len(&s), n + 1);
     // Clipboard keeps its formatting.
-    let NodeKind::Text(ct) = &s.clipboard[0].kind else { panic!() };
+    let NodeKind::Text(ct) = &s.clipboard.nodes[0].kind else { panic!() };
     assert_eq!(ct.first_style().size, 40.0);
 }
 

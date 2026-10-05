@@ -21,6 +21,7 @@ use vectorcraft_geom::Affine;
 use vectorcraft_tools::{PaintDefaults, Tool};
 
 pub use cmd::EyedropperOptions;
+pub use cmd::clipboard::Clipboard;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use tooling::{UiRequest, ViewInfo};
@@ -500,8 +501,8 @@ pub struct Session {
     pub paint: PaintDefaults,
     /// Which proxy is in front (true = Fill, false = Stroke) — the X key toggles.
     pub fill_active: bool,
-    /// Internal clipboard (serialized nodes).
-    pub clipboard: Vec<vectorcraft_doc::Node>,
+    /// Internal clipboard: the copied objects and the document resources they use.
+    pub clipboard: Clipboard,
     /// Executed commands (for actions and debugging).
     pub journal: Vec<(String, Value)>,
     pub(crate) tool: Box<dyn Tool>,
@@ -560,7 +561,7 @@ impl Session {
             prefs: Prefs::default(),
             paint: PaintDefaults::default(),
             fill_active: true,
-            clipboard: vec![],
+            clipboard: Clipboard::default(),
             journal: vec![],
             tool: vectorcraft_tools::create("selection"),
             last_view: ViewInfo::default(),
@@ -901,6 +902,8 @@ mod tests_build;
 mod tests_charstroke;
 #[cfg(test)]
 mod tests_clip;
+#[cfg(test)]
+mod tests_clipboard;
 #[cfg(test)]
 mod tests_clippaint;
 #[cfg(test)]

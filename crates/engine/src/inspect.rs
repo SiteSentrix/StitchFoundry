@@ -71,6 +71,7 @@ pub fn document(s: &Session) -> Value {
         "objects": d.node_count(),
         "tool": s.tool_id(),
         "paint": {"fill": s.paint.fill.label(), "stroke": s.paint.stroke.label(), "strokeWidth": s.paint.stroke_width, "fillActive": s.fill_active, "appearanceItem": s.appearance_item()},
+        "pasteRemembersLayers": d.paste_remembers_layers,
     })
 }
 

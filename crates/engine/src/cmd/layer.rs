@@ -65,7 +65,29 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             target
         ),
+        cmd!(
+            "layer.pasteRemembersLayers",
+            "Paste Remembers Layers",
+            ["Window", "Layers"],
+            None,
+            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers they were copied from (by name; a missing one is made on top), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
+            has_doc,
+            paste_remembers_layers
+        ),
     ]
+}
+
+/// Layers panel → Paste Remembers Layers.
+fn paste_remembers_layers(s: &mut Session, p: &Value) -> Result<Value> {
+    let cur = s.doc()?.doc.paste_remembers_layers;
+    let on = bool_or(p, "on", !cur);
+    if on != cur {
+        s.edit("Paste Remembers Layers", |d, _| {
+            d.paste_remembers_layers = on;
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "on": on }))
 }
 
 /// The Layers panel's target circle.

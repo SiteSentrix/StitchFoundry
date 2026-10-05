@@ -863,3 +863,32 @@ with `pointer_gesture` (a click places at 100% with the top-left corner there, a
 {"name":"run_command","arguments":{"command":"file.place.queue","params":{"paths":["/tmp/a.png","/tmp/b.pdf"]}}}
 {"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":40,"y":40},{"kind":"up","x":40,"y":40}]}}
 ```
+
+## Copy and paste between documents
+
+`edit.copy` keeps the copied objects with the document resources they use: image blobs, symbols, patterns, global
+and spot swatches (with the tint swatches of the tints used; never the built-in [Registration] swatch), the gradient
+swatches their gradients came from, graphic styles the objects are linked to, character and paragraph styles and
+brushes. Width profiles live in the preferences, so they need no copying. Every `edit.paste*` command (also `edit.pasteWithoutFormatting`, which leaves
+text styles behind) brings them into the active document in the same undo step: an identical resource is reused,
+a missing one added, and one of the same name that differs is added renamed ("Mark 2"; a copy an earlier paste
+added is reused), which the pasted objects follow. Linked colours show the document's swatch at their tint (a Lab
+spot colour as its Spot Colors option says). The result reports `{ids, added, merged, renamed: [{kind, from,
+to}]}`.
+
+A global or spot swatch whose name the document gives another colour is a conflict: `clipboard.conflicts` lists
+them, and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
+pasted swatch comes in renamed) or one answer per name. Pasting back into the document the objects came from uses
+its resources as they are now and raises no conflict.
+
+Placement: `edit.paste {center}` centres the objects on a point (the app passes the view centre), else offsets them
+by `dx`/`dy` (the Paste Offset preference). With nothing selected, `edit.pasteInFront` / `edit.pasteInBack` put them
+on top / at the bottom of the current layer. `edit.pasteOnAllArtboards` keeps their offset to the artboard they were
+copied from. `layer.pasteRemembersLayers {on?}` (a document option, `document.inspect` → `pasteRemembersLayers`)
+pastes objects back into the layers they came from, by name, making missing ones.
+
+```json
+{"name":"run_command","arguments":{"command":"clipboard.conflicts","params":{}}}
+{"name":"run_command","arguments":{"command":"edit.paste","params":{"center":[300,200],"swatchConflict":{"Brand":"add"}}}}
+{"name":"run_command","arguments":{"command":"layer.pasteRemembersLayers","params":{"on":true}}}
+```

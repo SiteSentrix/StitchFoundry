@@ -97,7 +97,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{dx?, dy?} paste; pasted text takes the default character style (one run)",
+            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -590,13 +590,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
 }
 
 fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
-    let saved = s.clipboard.clone();
-    for n in &mut s.clipboard {
+    let saved = s.clipboard.nodes.clone();
+    for n in &mut s.clipboard.nodes {
         strip_formatting(n);
     }
     let paste = find_command("edit.paste").map(|c| c.run).ok_or_else(|| EngineError::Other("paste unavailable".into()))?;
     let r = paste(s, p);
-    s.clipboard = saved;
+    s.clipboard.nodes = saved;
     if r.is_ok()
         && let Some(e) = s.active_mut().and_then(|d| d.history.undo.last_mut())
     {

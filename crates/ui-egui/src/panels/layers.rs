@@ -397,6 +397,31 @@ fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
     });
 }
 
+/// The Layers panel's (≡) menu.
+pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
+    const ITEMS: [(&str, &str); 6] = [
+        ("New Layer…", "layer.new"),
+        ("New Sublayer…", "layer.newSublayer"),
+        ("Duplicate Layer", "layer.duplicate"),
+        ("Delete Layer", "layer.delete"),
+        ("Make/Release Clipping Mask", "layer.clippingMask.toggle"),
+        ("Collect in New Layer", "layer.collectInNew"),
+    ];
+    for (i, (label, cmd)) in ITEMS.into_iter().enumerate() {
+        if i == 4 {
+            ui.separator();
+        }
+        if widgets::menu_item(ui, label, crate::menus::enabled(app, cmd), false) {
+            app.run(cmd, json!({})).ok();
+        }
+    }
+    ui.separator();
+    let remembers = app.session.active().is_some_and(|d| d.doc.paste_remembers_layers);
+    if widgets::menu_item(ui, "Paste Remembers Layers", app.session.active().is_some(), remembers) {
+        app.run("layer.pasteRemembersLayers", json!({"on": !remembers})).ok();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;

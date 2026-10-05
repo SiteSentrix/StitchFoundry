@@ -1,16 +1,28 @@
-//! System clipboard interchange: the copied objects as SVG markup (what other apps paste), and
-//! SVG markup from other apps turned into clipboard objects (pasted with the Paste commands).
+//! The internal clipboard and system clipboard interchange.
 //!
-//! The UI owns the platform clipboard; these commands only convert. Within VectorCraft the
-//! internal clipboard stays lossless (live effects, masks, symbols); SVG is the outside format.
+//! Copy keeps the objects together with the document resources they use ([`Clipboard`]), so
+//! pasting into any document brings those along (see `resources`).
+//!
+//! System clipboard: the copied objects as SVG markup (what other apps paste), and SVG markup from
+//! other apps turned into clipboard objects (pasted with the Paste commands). The UI owns the
+//! platform clipboard; these commands only convert. Within VectorCraft the internal clipboard stays
+//! lossless (live effects, masks, symbols); SVG is the outside format.
 
+mod resources;
+
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId};
-use vectorcraft_geom::{Affine, Point};
+use vectorcraft_brush::Brush;
+use vectorcraft_color::Swatch;
+use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDef, Symbol, TextStyleDef};
+use vectorcraft_geom::{Affine, Rect};
+
+pub(crate) use resources::SwatchChoices;
 
 use super::*;
+use crate::DocState;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -20,9 +32,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load SVG into Clipboard",
             [],
             None,
-            "{svg | dataBase64 (SVG or SVGZ bytes), center?: [x, y]} replace the clipboard with the SVG's objects, centred on `center` (default: the first artboard) → {count}; then run edit.pasteInPlace",
+            "{svg | dataBase64 (SVG or SVGZ bytes), center?: [x, y]} replace the clipboard with the SVG's objects (and the images, patterns and symbols they use), centred on `center` (default: the first artboard) → {count}; then run edit.pasteInPlace",
             has_doc,
             import_svg
+        ),
+        cmd!(
+            query "clipboard.conflicts",
+            "Swatch Conflicts",
+            [],
+            None,
+            "{} → {swatches: [{name, document, clipboard, spot}]} the global or spot swatches the copied objects use whose name the active document gives another colour (`document`/`clipboard`: #rrggbb): Paste asks Merge or Add for each (pass the answer as edit.paste* {swatchConflict}). Pasting back into the document the objects came from raises none",
+            has_doc,
+            conflicts
         ),
     ]
 }
@@ -33,19 +54,114 @@ pub fn looks_like_svg(text: &str) -> bool {
     (t.starts_with("<svg") || t.starts_with("<?xml") || t.starts_with("<!--") || t.starts_with("<!DOCTYPE svg")) && t.contains("<svg")
 }
 
+/// What Copy puts on the internal clipboard: the objects and every document resource they use.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Clipboard {
+    /// The copied objects in paint order (document coordinates).
+    pub nodes: Vec<Node>,
+    /// Blobs of the images the objects show, by key.
+    pub images: BTreeMap<String, ImageBlob>,
+    /// Symbols the objects place (also inside other symbols and patterns).
+    pub symbols: Vec<Symbol>,
+    /// Patterns the objects paint with (pasting makes their swatches again).
+    pub patterns: Vec<PatternDef>,
+    /// Global and spot swatches the objects' colours link to, the tint swatches of the tints they
+    /// use and the gradient swatches their gradients came from. Never the built-in [Registration]
+    /// swatch, which every document has.
+    pub swatches: Vec<Swatch>,
+    /// Graphic styles the objects are linked to.
+    pub graphic_styles: Vec<GraphicStyle>,
+    pub char_styles: Vec<TextStyleDef>,
+    pub para_styles: Vec<TextStyleDef>,
+    /// Brushes the objects' strokes use.
+    pub brushes: Vec<Brush>,
+    /// The artboard the objects were copied from: Paste on All Artboards keeps their offset to it.
+    pub source_artboard: Option<Rect>,
+    /// Per object: the name of the layer it was copied from (Paste Remembers Layers).
+    pub source_layers: Vec<Option<String>>,
+    /// The open document the objects came from ([`DocState::uid`]): pasting back into it uses its
+    /// own resources as they are now.
+    pub source_doc: Option<u64>,
+}
+
+impl Clipboard {
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    /// Objects `roots` of `st`'s document with their resources, source artboard and layers.
+    pub(crate) fn copy(st: &DocState, roots: &[NodeId]) -> Self {
+        let d = &*st.doc;
+        let mut nodes = vec![];
+        let mut source_layers = vec![];
+        for id in roots {
+            let (Some(n), Some(anc)) = (d.node(*id), d.ancestry(*id)) else { continue };
+            nodes.push(n.clone());
+            // The nearest enclosing layer (or sublayer).
+            source_layers.push(anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|l| l.is_layer())).and_then(|l| l.name.clone()));
+        }
+        let bounds = nodes.iter().filter_map(Node::visual_bounds).reduce(|a, b| a.union(b));
+        let board = bounds.and_then(|b| d.artboard_at(b.center())).unwrap_or(0);
+        Self { source_artboard: d.artboards.get(board).map(|a| a.rect), source_layers, source_doc: Some(st.uid), ..Self::gather(d, nodes) }
+    }
+
+    /// Every object of `src` (each top-level layer's contents) with its resources, for Place and
+    /// pasting outside SVG. Their layers don't count for Paste Remembers Layers.
+    pub fn from_document(src: &Document) -> Self {
+        let nodes = src.layers.iter().flat_map(|l| l.children().into_iter().flatten()).map(|n| (**n).clone()).collect();
+        Self::gather(src, nodes)
+    }
+
+    /// Union of the objects' visual bounds.
+    pub fn bounds(&self) -> Option<Rect> {
+        self.nodes.iter().filter_map(Node::visual_bounds).reduce(|a, b| a.union(b))
+    }
+
+    /// The swatch name conflicts pasting into `st` raises, as (pasted, document) swatches: none
+    /// back in the document the objects came from.
+    pub fn swatch_conflicts<'a>(&'a self, st: &'a DocState) -> Vec<(&'a Swatch, &'a Swatch)> {
+        if self.source_doc == Some(st.uid) {
+            return vec![];
+        }
+        self.conflicts(&st.doc, &self.used())
+    }
+
+    /// A standalone document holding the objects and their resources (SVG export).
+    pub fn to_document(&self) -> Document {
+        let mut d = Document::new(100.0, 100.0);
+        d.images = self.images.clone();
+        d.symbols = self.symbols.clone();
+        d.patterns = self.patterns.clone();
+        d.swatches.extend(self.swatches.iter().cloned());
+        d.graphic_styles.extend(self.graphic_styles.iter().cloned());
+        d.char_styles = self.char_styles.clone();
+        d.para_styles = self.para_styles.clone();
+        if !self.brushes.is_empty() {
+            let mut lib = vectorcraft_brush::library(&d);
+            for b in &self.brushes {
+                match lib.iter_mut().find(|x| x.name == b.name) {
+                    Some(x) => *x = b.clone(),
+                    None => lib.push(b.clone()),
+                }
+            }
+            vectorcraft_brush::store(&mut d, &lib);
+        }
+        let mut layer = Node::layer(NodeId(u64::MAX), "Clipboard", vectorcraft_doc::LayerColor::Preset(0));
+        if let Some(ch) = layer.children_mut() {
+            *ch = self.nodes.iter().cloned().map(Arc::new).collect();
+        }
+        d.layers = vec![Arc::new(layer)];
+        d
+    }
+}
+
 impl Session {
     /// The internal clipboard as standalone SVG (`None` when it is empty).
     pub fn clipboard_svg(&self) -> Option<String> {
         if self.clipboard.is_empty() {
             return None;
         }
-        // The active document supplies swatches, symbols, patterns and image blobs.
-        let mut d = self.active().map(|st| (*st.doc).clone()).unwrap_or_else(|| Document::new(100.0, 100.0));
-        let mut layer = Node::layer(NodeId(u64::MAX), "Clipboard", vectorcraft_doc::LayerColor::Preset(0));
-        if let Some(ch) = layer.children_mut() {
-            *ch = self.clipboard.iter().cloned().map(Arc::new).collect();
-        }
-        d.layers = vec![Arc::new(layer)];
+        let d = self.clipboard.to_document();
         Some(vectorcraft_svg::export(
             &d,
             &vectorcraft_svg::ExportOptions { artboard: None, object_ids: vectorcraft_svg::ObjectIds::Minimal, ..Default::default() },
@@ -68,32 +184,34 @@ fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
         (None, None) => return Err(bad(C, "give svg, or dataBase64 of an SVG or SVGZ file")),
     };
     let src = vectorcraft_svg::import(&svg).map_err(|e| bad(C, e.to_string()))?;
-    let mut nodes: Vec<Node> = src.layers.iter().flat_map(|l| l.children().cloned().unwrap_or_default()).map(|n| (*n).clone()).collect();
-    if nodes.is_empty() {
-        return Err(bad("clipboard.importSvg", "the SVG has no drawable objects"));
+    let mut clip = Clipboard::from_document(&src);
+    if clip.is_empty() {
+        return Err(bad(C, "the SVG has no drawable objects"));
     }
-    let center = match p.get("center").and_then(Value::as_array) {
-        Some(c) if c.len() == 2 => Point::new(c[0].as_f64().unwrap_or(0.0), c[1].as_f64().unwrap_or(0.0)),
-        _ => s.doc()?.doc.artboards.first().map(|a| a.rect.center()).unwrap_or_default(),
+    let center = match point_param(p, "center") {
+        Some(c) => c,
+        None => s.doc()?.doc.artboards.first().map(|a| a.rect.center()).unwrap_or_default(),
     };
-    let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b));
-    if let Some(b) = bounds {
+    if let Some(b) = clip.bounds() {
         let xf = Affine::translate(center - b.center());
-        for n in &mut nodes {
+        for n in &mut clip.nodes {
             n.transform(xf, false);
         }
     }
-    // Embedded images: their blobs join the document (keys are content hashes).
-    if !src.images.is_empty() {
-        let st = s.doc_mut()?;
-        let d = Arc::make_mut(&mut st.doc);
-        for (k, b) in &src.images {
-            d.images.entry(k.clone()).or_insert_with(|| b.clone());
-        }
-    }
-    let count = nodes.len();
-    s.clipboard = nodes;
+    let count = clip.nodes.len();
+    s.clipboard = clip;
     Ok(json!({ "count": count }))
+}
+
+fn conflicts(s: &mut Session, _: &Value) -> Result<Value> {
+    let hex = |w: &Swatch| w.paint.color().map(|c| c.to_hex());
+    let list: Vec<Value> = s
+        .clipboard
+        .swatch_conflicts(s.doc()?)
+        .into_iter()
+        .map(|(c, t)| json!({"name": c.name, "document": hex(t), "clipboard": hex(c), "spot": c.spot}))
+        .collect();
+    Ok(json!({ "swatches": list }))
 }
 
 #[cfg(test)]
