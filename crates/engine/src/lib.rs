@@ -1228,6 +1228,8 @@ mod tests_pdfraster;
 #[cfg(test)]
 mod tests_place;
 #[cfg(test)]
+mod tests_plugins;
+#[cfg(test)]
 mod tests_prefs;
 #[cfg(test)]
 mod tests_previewbounds;

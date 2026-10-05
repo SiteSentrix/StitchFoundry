@@ -530,6 +530,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name?: a saved preset to edit | preset?: the preset a new one starts from (default [Default])} open the preset editor (dialog `printPreset`: the Print dialog's settings fields plus `name`); OK runs print.presets.save and returns to Print Presets",
     ),
+    (
+        "plugin.dialog",
+        "Plug-in…",
+        "",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step)",
+    ),
+    (
+        "ui.installPlugin",
+        "Install Plug-in…",
+        "",
+        "{path?: a .wasm file} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -945,6 +957,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "ui.printPresetDialog" => crate::dialogs::print::open_preset(app, p),
+        "plugin.dialog" => crate::dialogs::plugin::open(app, p),
+        "ui.installPlugin" => io::install_plugin(app, s("path")),
         _ => return None,
     };
     Some(r)
@@ -1113,6 +1127,12 @@ pub fn listed_slots(app: &VectorcraftApp) -> usize {
     views + io::recent_files(app).len().min(RECENT_IDS.len()) + user(swatchlib::libraries(&app.session)) + user(stylelib::libraries(&app.session))
 }
 
+/// Changes whenever a plug-in is installed or removed: Object › Plug-ins and Effect › Plug-ins
+/// list them, so a menu built once (the native one) is rebuilt.
+pub fn plugin_revision() -> u64 {
+    vectorcraft_plugins::registry::revision()
+}
+
 /// Type → Recent Fonts slots.
 const RECENT_FONT_IDS: [&str; 10] = [
     "type.recentFont1",
@@ -1184,6 +1204,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        "plugin.dialog" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1543,6 +1564,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         cp("As Multiple Assets", "assets.add", json!({"multiple": true})),
                     ],
                 ),
+                Sep,
+                sub("Plug-ins", crate::dialogs::plugin::object_menu()),
             ],
         ),
         (
@@ -1942,7 +1965,7 @@ fn label_of(it: &Item) -> &'static str {
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode");
+        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
@@ -2249,6 +2272,8 @@ fn effect_menu() -> Vec<Item> {
             })
             .collect();
         if sub_name == "Blur" {
+            // Live-effect plug-ins close the vector effects.
+            out.extend(crate::dialogs::plugin::effect_menu());
             if !items.is_empty() {
                 out.push(Sep);
                 out.push(Item::Header("Raster Effects"));

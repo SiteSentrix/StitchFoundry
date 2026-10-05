@@ -64,6 +64,8 @@ mod tests_pdfoutput;
 #[cfg(test)]
 mod tests_place;
 #[cfg(test)]
+mod tests_plugins;
+#[cfg(test)]
 mod tests_printps;
 #[cfg(test)]
 mod tests_printtiling;

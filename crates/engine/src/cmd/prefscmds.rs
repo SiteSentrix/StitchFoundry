@@ -455,6 +455,8 @@ impl Session {
                 st.revision += 1;
             }
         }
+        // Plug-ins in a newly set Additional Plug-ins Folder are installed.
+        super::plugin::sync_prefs(self);
     }
 }
 

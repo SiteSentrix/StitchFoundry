@@ -205,6 +205,48 @@ pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog, is_length: &dyn Fn
     changed
 }
 
+/// Editor for a plug-in's parameters from its schema (plug-in filter and effect dialogs): numbers
+/// within their range, whole numbers, checkboxes and dropdowns, in declaration order. Returns
+/// true when a value changed.
+pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String, vectorcraft_plugins::ParamSpec)]) -> bool {
+    use vectorcraft_plugins::ParamSpec;
+    let t = Tokens::get(ui.ctx());
+    let mut changed = false;
+    egui::Grid::new("plugin-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+        for (k, spec) in specs {
+            ui.label(egui::RichText::new(humanize(k)).color(t.text));
+            let cur = d.fields.get(k).cloned().unwrap_or_else(|| spec.default_value());
+            let new = match spec {
+                ParamSpec::Number { min, max, .. } => {
+                    let mut x = cur.as_f64().unwrap_or(*min).clamp(*min, *max);
+                    let speed = ((max - min) / 200.0).clamp(0.01, 10.0);
+                    ui.add(egui::DragValue::new(&mut x).range(*min..=*max).speed(speed).max_decimals(2)).changed().then(|| json!(x))
+                }
+                ParamSpec::Int { min, max, .. } => {
+                    let mut x = cur.as_i64().unwrap_or(*min).clamp(*min, *max);
+                    ui.add(egui::DragValue::new(&mut x).range(*min..=*max).speed(0.2)).changed().then(|| json!(x))
+                }
+                ParamSpec::Bool { .. } => {
+                    let mut b = cur.as_bool().unwrap_or(false);
+                    ui.checkbox(&mut b, "").changed().then(|| json!(b))
+                }
+                ParamSpec::Choice { options, .. } => {
+                    let labels: Vec<&str> = options.iter().map(String::as_str).collect();
+                    crate::widgets::dropdown(ui, ("plugin-choice", k), cur.as_str().unwrap_or_default(), &labels, 140.0)
+                        .and_then(|i| options.get(i))
+                        .map(|o| json!(o))
+                }
+            };
+            if let Some(v) = new {
+                d.fields.insert(k.clone(), v);
+                changed = true;
+            }
+            ui.end_row();
+        }
+    });
+    changed
+}
+
 /// A field label from its camelCase key (`miterLimit` → "Miter Limit:").
 pub(super) fn humanize(k: &str) -> String {
     let mut s = String::new();

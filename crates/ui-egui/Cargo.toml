@@ -18,6 +18,7 @@ vectorcraft-tools = { workspace = true }
 vectorcraft-engine = { workspace = true }
 vectorcraft-svg = { workspace = true }
 vectorcraft-effects = { workspace = true }
+vectorcraft-plugins = { workspace = true }
 vectorcraft-pdf = { workspace = true }
 vectorcraft-cad = { workspace = true }
 vectorcraft-eps = { workspace = true }
@@ -31,3 +32,4 @@ log = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
+wat = { workspace = true }

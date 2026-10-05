@@ -59,15 +59,16 @@ pub const TABLE: &[(&str, Class)] = &[
     ("cad", Class::Layer(3)),
     ("eps", Class::Layer(3)),
     ("metafile", Class::Layer(3)),
+    ("plugins", Class::Layer(2)),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
 /// The L0 foundation is a small chain: `raster` builds on `color` and
 /// `geom`, which the §3 diagram draws on one line. The GPU backend (`gpu`)
 /// reuses the CPU reference (`compose`) for LUTs and parity tests. EPS previews use the renderer's
-/// TIFF writer.
+/// TIFF writer. Live effects run effect plug-ins.
 pub const INTRA_LAYER_ORDER: &[&[&str]] =
-    &[&["geom", "color"], &["pathops", "effects"], &["pathops", "trace"], &["text", "effects"], &["render", "eps"]];
+    &[&["geom", "color"], &["pathops", "effects"], &["pathops", "trace"], &["text", "effects"], &["render", "eps"], &["plugins", "effects"]];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {
     let (from, to) = (short_name(from), short_name(to));

@@ -40,6 +40,7 @@ mod path_ops;
 pub mod pdf_presets;
 pub mod place;
 pub mod placement_options;
+pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
@@ -241,6 +242,7 @@ registry! {
     Print: [print::KIND] => print::SPEC,
     PrintPreset: [print::PRESET_KIND] => print::PRESET_SPEC,
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
+    Plugin: [plugin::KIND] => plugin::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

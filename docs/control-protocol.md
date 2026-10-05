@@ -86,6 +86,13 @@ effects) prefilled with its values, and `ui.dialog.confirm` runs `effect.setPara
 `effectExists` question: `ui.dialog.confirm` opens the applied effect's dialog, `ui.dialog.set {field: "discard",
 value: true}` then confirm opens a fresh one that adds another, `ui.dialog.cancel` drops it.
 
+Plug-in dialogs: `engine.execute {command: "plugin.dialog", params: {id}}` (Object › Plug-ins) runs an object filter
+plug-in at once when it takes no parameters, else opens the `plugin` dialog: one field per declared parameter (named
+after it), `__plugin` (the plug-in id) and `preview`. It previews `plugin.run` on the canvas while open;
+`ui.dialog.confirm` keeps the result as one undo step and `ui.dialog.cancel` rolls it back. Live-effect plug-ins open
+the `effect` dialog (`effect.dialog {effect: "plugin.<id>"}`). `ui.installPlugin {path?}` installs a `.wasm` (without
+a path it asks for one); see [plugins.md](plugins.md).
+
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
 `includeSpotBlacks`); `ui.dialog.set` then `ui.dialog.confirm` runs it on the selection.

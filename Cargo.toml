@@ -32,6 +32,7 @@ vectorcraft-testkit = { path = "crates/testkit" }
 vectorcraft-cad = { path = "crates/cad" }
 vectorcraft-eps = { path = "crates/eps" }
 vectorcraft-metafile = { path = "crates/metafile" }
+vectorcraft-plugins = { path = "crates/plugins" }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }
@@ -43,6 +44,12 @@ log = "0.4"
 proptest = "1"
 # tests: a TCP port bound without listening (connections to it are refused)
 socket2 = "0.6"
+# Sandboxed WebAssembly plug-ins: a pure-Rust interpreter (MIT OR Apache-2.0) that builds for wasm32
+# too. Without `wat` (text parsing is test-only) and memory64; `validate` keeps full module
+# validation on; the portable dispatcher can't overflow the host stack on long-running modules.
+wasmi = { version = "2.0.0", default-features = false, features = ["std", "validate", "stable", "portable-dispatch"] }
+# Tests: WebAssembly text -> binary for the plug-in fixtures (Apache-2.0 WITH LLVM-exception).
+wat = "1.228"
 
 # rendering / formats
 vello_cpu = "0.2"
