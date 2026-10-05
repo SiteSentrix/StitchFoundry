@@ -8,7 +8,7 @@ use usvg::roxmltree;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, CharStyle, Dash, Document, FillLayer, ImageBlob, ImageObject, Justify, LayerColor, LineCap, LineJoin, Node, NodeKind,
-    StrokeLayer, TextKind, TextObject, TextRun,
+    StrokeLayer, TextKind, TextObject, TextRun, Unit,
 };
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Vec2};
 
@@ -17,13 +17,13 @@ use crate::SvgError;
 pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     let (svg, links) = link_ids(svg);
     let svg = svg.as_ref();
-    let opt = usvg::Options::default();
+    let units = RootUnits::of(svg);
+    let opt = usvg::Options { dpi: units.dpi as f32, font_size: DEFAULT_FONT_SIZE as f32, ..usvg::Options::default() };
     let tree = usvg::Tree::from_str(svg, &opt).map_err(|e| SvgError::Parse(e.to_string()))?;
     let size = tree.size();
-    // Document points from CSS pixels: 1 px = 1 pt (as we export), except that a root size in
-    // absolute units is that physical size (usvg resolves it to 96 px per inch, i.e. 4/3 px per pt).
-    let (kx, ky) = physical_scale(svg);
-    let doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
+    let (kx, ky) = units.k;
+    let mut doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
+    doc.units = units.unit;
     let mut im = Importer { doc, warnings: Vec::new(), mask_flags: mask_flags(svg), links };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
@@ -62,27 +62,54 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
         }
     }
 
-    text_fallback(&mut im, svg, size.width() as f64, size.height() as f64, (kx, ky), layer_mode);
+    text_fallback(&mut im, svg, size.width() as f64, size.height() as f64, &units, layer_mode);
     Ok((im.doc, im.warnings))
 }
 
-/// Points per CSS pixel along x and y for the root `<svg>`'s `width` / `height`: 0.75 (72 / 96) for
-/// absolute units (in, cm, mm, pt, pc), so that `width="210mm"` is 595.3 pt wide; 1 otherwise
-/// (unitless, px, %, em, or absent).
-fn physical_scale(svg: &str) -> (f64, f64) {
-    let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
-        return (1.0, 1.0);
-    };
-    let root = xml.root_element();
-    let k = |name: &str| {
-        use svgtypes::LengthUnit as U;
-        match root.attribute(name).and_then(|v| svgtypes::Length::from_str(v.trim()).ok()).map(|l| l.unit) {
-            Some(U::In | U::Cm | U::Mm | U::Pt | U::Pc) => 0.75,
-            _ => 1.0,
-        }
-    };
-    (k("width"), k("height"))
+/// SVG's initial `font-size` (`medium`) in user units.
+const DEFAULT_FONT_SIZE: f64 = 12.0;
+
+/// How lengths become points, from the root `<svg>`'s `width` / `height`.
+///
+/// A pixel (and a unitless user unit) is a point, as we export, and absolute lengths keep their
+/// physical size at 72 pt per inch: `font-size="12pt"` is 12 pt, `1in` is 72 pt. A root size in
+/// absolute units (`width="210mm"`) is that physical size, and its user units are CSS pixels of it
+/// (96 per inch, 0.75 pt each), so a drawing without a `viewBox` keeps its proportions.
+struct RootUnits {
+    /// Pixels per inch usvg (and the text pass) convert absolute lengths at.
+    dpi: f64,
+    /// Points per user unit of the root along x and y.
+    k: (f64, f64),
+    /// Document units: those of the root `width` (pixels when it has none).
+    unit: Unit,
 }
+
+impl RootUnits {
+    fn of(svg: &str) -> Self {
+        let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() });
+        let root = xml.as_ref().ok().map(|x| x.root_element());
+        let unit = |name: &str| root.and_then(|r| r.attribute(name)).and_then(|v| svgtypes::Length::from_str(v.trim()).ok()).map(|l| l.unit);
+        use svgtypes::LengthUnit as U;
+        let physical = |u: Option<U>| matches!(u, Some(U::In | U::Cm | U::Mm | U::Pt | U::Pc));
+        let (w, h) = (unit("width"), unit("height"));
+        let k = |u| if physical(u) { PT_PER_IN / CSS_PX_PER_IN } else { 1.0 };
+        let dpi = if physical(w) || physical(h) { CSS_PX_PER_IN } else { PT_PER_IN };
+        let unit = match w {
+            Some(U::Mm) => Unit::Millimeters,
+            Some(U::Cm) => Unit::Centimeters,
+            Some(U::In) => Unit::Inches,
+            Some(U::Pt) => Unit::Points,
+            Some(U::Pc) => Unit::Picas,
+            _ => Unit::Pixels,
+        };
+        Self { dpi, k: (k(w), k(h)), unit }
+    }
+}
+
+/// Points per inch.
+const PT_PER_IN: f64 = 72.0;
+/// CSS pixels per inch.
+const CSS_PX_PER_IN: f64 = 96.0;
 
 struct Importer {
     doc: Document,
@@ -544,6 +571,8 @@ type XNode<'a, 'i> = roxmltree::Node<'a, 'i>;
 struct TextCtx {
     /// `.class` → declarations from `<style>` elements.
     classes: HashMap<String, Vec<(String, String)>>,
+    /// Pixels per inch absolute lengths convert at ([`RootUnits::dpi`]).
+    dpi: f64,
 }
 
 fn parse_decls(s: &str) -> Vec<(String, String)> {
@@ -556,7 +585,7 @@ fn parse_decls(s: &str) -> Vec<(String, String)> {
 }
 
 impl TextCtx {
-    fn new(doc: &roxmltree::Document) -> Self {
+    fn new(doc: &roxmltree::Document, dpi: f64) -> Self {
         let mut classes: HashMap<String, Vec<(String, String)>> = HashMap::new();
         for st in doc.descendants().filter(|n| n.has_tag_name("style") || n.tag_name().name() == "style") {
             let css: String = st.children().filter_map(|c| c.text()).collect();
@@ -572,7 +601,7 @@ impl TextCtx {
                 }
             }
         }
-        Self { classes }
+        Self { classes, dpi }
     }
 
     /// A property on this element only: style attribute > class rule > presentation attribute.
@@ -595,6 +624,53 @@ impl TextCtx {
     /// An inherited property.
     fn prop(&self, n: XNode, name: &str) -> Option<String> {
         n.ancestors().filter(|a| a.is_element()).find_map(|a| self.own(a, name).filter(|v| v != "inherit"))
+    }
+
+    /// A length in user units: absolute units convert at [`Self::dpi`]; `em`, `ex` and percentages
+    /// are relative to `em` (the font size).
+    fn length(&self, v: &str, em: f64) -> Option<f64> {
+        use svgtypes::LengthUnit as L;
+        let l = svgtypes::Length::from_str(v.trim()).ok()?;
+        let n = l.number;
+        Some(match l.unit {
+            L::None | L::Px => n,
+            L::Pt => n * self.dpi / PT_PER_IN,
+            L::Pc => n * self.dpi / 6.0,
+            L::In => n * self.dpi,
+            L::Cm => n * self.dpi / 2.54,
+            L::Mm => n * self.dpi / 25.4,
+            L::Em => n * em,
+            L::Ex => n * em / 2.0,
+            L::Percent => n / 100.0 * em,
+        })
+    }
+
+    /// The first length of a list attribute (`x="10 20"` → 10) in user units.
+    fn first_length(&self, s: Option<&str>, em: f64) -> f64 {
+        s.and_then(|s| s.split(|c: char| c.is_whitespace() || c == ',').find(|t| !t.is_empty())).and_then(|t| self.length(t, em)).unwrap_or(0.0)
+    }
+
+    /// Computed font size of an element in user units.
+    fn font_size(&self, n: XNode) -> f64 {
+        let parent = n.parent_element().map_or(DEFAULT_FONT_SIZE, |p| self.font_size(p));
+        self.own(n, "font-size").and_then(|v| self.parse_font_size(&v, parent)).unwrap_or(parent)
+    }
+
+    /// A `font-size` value given the parent's computed size (CSS keywords are relative to `medium`).
+    fn parse_font_size(&self, v: &str, parent: f64) -> Option<f64> {
+        let k = match v.trim() {
+            "xx-small" => 3.0 / 5.0,
+            "x-small" => 3.0 / 4.0,
+            "small" => 8.0 / 9.0,
+            "medium" => 1.0,
+            "large" => 6.0 / 5.0,
+            "x-large" => 3.0 / 2.0,
+            "xx-large" => 2.0,
+            "larger" => return Some(parent * 1.2),
+            "smaller" => return Some(parent / 1.2),
+            v => return self.length(v, parent).filter(|s| *s > 0.0),
+        };
+        Some(DEFAULT_FONT_SIZE * k)
     }
 }
 
@@ -634,16 +710,7 @@ fn char_style(ctx: &TextCtx, n: XNode) -> CharStyle {
             st.font_family = fam;
         }
     }
-    if let Some(s) = ctx.prop(n, "font-size")
-        && let Ok(l) = svgtypes::Length::from_str(s.trim())
-        && l.number > 0.0
-    {
-        st.size = match l.unit {
-            svgtypes::LengthUnit::Em => l.number * 12.0,
-            svgtypes::LengthUnit::Percent => l.number / 100.0 * 12.0,
-            _ => l.number,
-        };
-    }
+    st.size = ctx.font_size(n);
     let bold = ctx.prop(n, "font-weight").is_some_and(|w| w == "bold" || w == "bolder" || w.parse::<u32>().is_ok_and(|v| v >= 600));
     let italic = ctx.prop(n, "font-style").is_some_and(|s| s == "italic" || s == "oblique");
     st.font_style = match (bold, italic) {
@@ -658,7 +725,7 @@ fn char_style(ctx: &TextCtx, n: XNode) -> CharStyle {
     }
     if let Some(s) = ctx.prop(n, "stroke") {
         st.stroke = parse_color_paint(&s);
-        st.stroke_width = ctx.prop(n, "stroke-width").map(|w| first_number(Some(&w))).unwrap_or(1.0);
+        st.stroke_width = ctx.prop(n, "stroke-width").map(|w| ctx.first_length(Some(&w), st.size)).unwrap_or(1.0);
         st.stroke_cap = match ctx.prop(n, "stroke-linecap").as_deref() {
             Some("round") => LineCap::Round,
             Some("square") => LineCap::Square,
@@ -671,13 +738,13 @@ fn char_style(ctx: &TextCtx, n: XNode) -> CharStyle {
         };
         st.stroke_miter_limit = ctx.prop(n, "stroke-miterlimit").map_or(4.0, |m| first_number(Some(&m)).max(1.0));
         let pattern: Vec<f64> =
-            ctx.prop(n, "stroke-dasharray").map_or(vec![], |d| d.split([' ', ',']).filter_map(|v| v.trim().parse().ok()).collect());
-        let offset = ctx.prop(n, "stroke-dashoffset").map_or(0.0, |o| first_number(Some(&o)));
+            ctx.prop(n, "stroke-dasharray").map_or(vec![], |d| d.split([' ', ',']).filter_map(|v| ctx.length(v, st.size)).collect());
+        let offset = ctx.prop(n, "stroke-dashoffset").map_or(0.0, |o| ctx.first_length(Some(&o), st.size));
         st.stroke_dash = Some(Dash { pattern, offset, align_corners: false }).filter(Dash::is_dashed);
     }
     if let Some(ls) = ctx.prop(n, "letter-spacing") {
-        let v = first_number(Some(&ls));
-        if v != 0.0 {
+        let v = ctx.first_length(Some(&ls), st.size);
+        if v != 0.0 && st.size > 0.0 {
             st.tracking = v / st.size * 1000.0;
         }
     }
@@ -770,9 +837,10 @@ fn collect_runs(ctx: &TextCtx, el: XNode, rb: &mut RunBuilder) {
                 continue;
             }
             if !rb.runs.is_empty() {
-                let lead = char_style(ctx, c).effective_leading().max(1e-6);
+                let st = char_style(ctx, c);
+                let lead = st.effective_leading().max(1e-6);
                 if let Some(y) = c.attribute("y") {
-                    let y = first_number(Some(y));
+                    let y = ctx.first_length(Some(y), st.size);
                     // One line break per line of baseline gap: none for a tspan on the same baseline
                     // (a styled or kerned run of the same line), at least one for a tspan placed
                     // higher up, and capped so that a far-off (or non-finite) y can't ask for billions.
@@ -786,8 +854,8 @@ fn collect_runs(ctx: &TextCtx, el: XNode, rb: &mut RunBuilder) {
                     };
                     rb.newline(n);
                     rb.last_y = y;
-                } else if c.attribute("dy").is_some_and(|dy| first_number(Some(dy)) > 1e-9) {
-                    rb.last_y += first_number(c.attribute("dy"));
+                } else if let Some(dy) = Some(ctx.first_length(c.attribute("dy"), st.size)).filter(|dy| *dy > 1e-9) {
+                    rb.last_y += dy;
                     rb.newline(1);
                 }
             }
@@ -796,11 +864,11 @@ fn collect_runs(ctx: &TextCtx, el: XNode, rb: &mut RunBuilder) {
     }
 }
 
-fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, (kx, ky): (f64, f64), layer_mode: bool) {
+fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, units: &RootUnits, layer_mode: bool) {
     let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else { return };
-    let ctx = TextCtx::new(&xml);
+    let ctx = TextCtx::new(&xml, units.dpi);
     let root = xml.root_element();
-    let vb = Affine::scale_non_uniform(kx, ky) * view_box_transform(root, w, h);
+    let vb = Affine::scale_non_uniform(units.k.0, units.k.1) * view_box_transform(root, w, h);
     const SKIP: [&str; 8] = ["defs", "clipPath", "mask", "pattern", "symbol", "marker", "title", "desc"];
     for t in root.descendants().filter(|n| n.is_element() && n.tag_name().name() == "text") {
         if t.ancestors().skip(1).any(|a| a.is_element() && SKIP.contains(&a.tag_name().name())) {
@@ -820,8 +888,9 @@ fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, (kx, ky): (f64, f
                 acc *= parse_transform(a.attribute("transform"));
             }
         }
-        let y0 = first_number(t.attribute("y"));
-        let xf = acc * Affine::translate((first_number(t.attribute("x")), y0));
+        let em = ctx.font_size(t);
+        let y0 = ctx.first_length(t.attribute("y"), em);
+        let xf = acc * Affine::translate((ctx.first_length(t.attribute("x"), em), y0));
         let preserve = t.ancestors().filter(|a| a.is_element()).find_map(|a| a.attribute((roxmltree::NS_XML_URI, "space"))) == Some("preserve");
         // tspan y values are absolute in the text's user space, like the text's own y.
         let mut rb = RunBuilder { runs: Vec::new(), last_y: y0, preserve };
@@ -849,7 +918,7 @@ fn text_fallback(im: &mut Importer, svg: &str, w: f64, h: f64, (kx, ky): (f64, f
                 Some(o) if o.ends_with('%') => first_number(o.strip_suffix('%')) / 100.0,
                 Some(o) => {
                     let len: f64 = bp.segments().map(|s| kurbo::ParamCurveArclen::arclen(&s, 1e-3)).sum();
-                    if len > 0.0 { first_number(Some(o)) / len } else { 0.0 }
+                    if len > 0.0 { ctx.first_length(Some(o), em) / len } else { 0.0 }
                 }
                 None => 0.0,
             };

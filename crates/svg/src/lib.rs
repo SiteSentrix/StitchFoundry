@@ -24,9 +24,11 @@
 //!
 //! ## Import approximations
 //!
-//! * One CSS pixel (user unit) is one point, as on export; a root `width`/`height` in absolute units
-//!   (`in`, `cm`, `mm`, `pt`, `pc`) keeps its physical size (72 pt per inch), so a 210 mm SVG opens on
-//!   a 210 mm artboard.
+//! * One CSS pixel (user unit) is one point, as on export, and absolute lengths (`in`, `cm`, `mm`,
+//!   `pt`, `pc`) keep their physical size (72 pt per inch): `font-size="12pt"` is 12 pt. A root
+//!   `width`/`height` in absolute units keeps its physical size, so a 210 mm SVG opens on a 210 mm
+//!   artboard, its user units being CSS pixels of it (96 per inch). The document's units follow the
+//!   unit of the root `width` (pixels when it has none).
 //! * `<mask>` imports as a luminance opacity mask; a mask we exported keeps its options and art
 //!   (its `data-vectorcraft-mask="noclip invert"` lists the options that differ from clipping and
 //!   not inverted). Filters are ignored (reported as warnings); nested clip paths use the outer
