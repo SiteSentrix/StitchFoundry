@@ -10,7 +10,7 @@ use super::super::*;
 use super::{err, source};
 
 /// The `document.open` options besides the file. The PDF ones (pages, box, password, text,
-/// layers) are ignored by other formats.
+/// layers) and the DXF ones are ignored by other formats.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoadOptions {
     /// 1-based pages to import, such as `"2-3, 5"`; `None` = every page.
@@ -27,18 +27,28 @@ pub struct LoadOptions {
     /// A PDF's optional content groups become layers (else one layer per page, without the art
     /// that is off).
     pub layers: bool,
+    /// How a DXF drawing comes in (the `dxf` param, see [`super::dxfimport`]).
+    pub dxf: vectorcraft_cad::ImportOptions,
 }
 
 impl Default for LoadOptions {
     fn default() -> Self {
-        Self { pages: None, crop: CropTo::default(), password: None, color_mode: None, text_as: TextAs::default(), layers: true }
+        Self {
+            pages: None,
+            crop: CropTo::default(),
+            password: None,
+            color_mode: None,
+            text_as: TextAs::default(),
+            layers: true,
+            dxf: Default::default(),
+        }
     }
 }
 
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`),
-    /// `textAs` (`text` | `outlines`) and `layers` (true | false).
+    /// `textAs` (`text` | `outlines`), `layers` (true | false) and `dxf` (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
             None => None,
@@ -60,7 +70,8 @@ impl LoadOptions {
             None => true,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "layers must be true or false"))?,
         };
-        Ok(Self { pages, crop, password, color_mode, text_as, layers })
+        let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
+        Ok(Self { pages, crop, password, color_mode, text_as, layers, dxf })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another

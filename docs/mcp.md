@@ -1112,6 +1112,30 @@ opened.
 {"name":"export","arguments":{"path":"/tmp/plan.dxf","options":{"useArtboards":true,"colors":256}}}
 ```
 
+## DXF import
+
+`document.open` reads ASCII DXF drawings of any version (by content or the `.dxf` extension), and `file.place`
+places one as a group. Both take `dxf: {layout, unit, scale, fit, fitTo, scaleLineweights, center, mergeLayers}`
+(all optional). `document.dxfInfo` reads a drawing without opening it: its `version`, drawing `units`, `layouts`
+(`Model` first, then the paper layouts), `layers`, and the default ratio (`unit`, `scale`: the drawing at 1:1 in its
+own unit; unitless metric drawings read millimetres, imperial ones inches). A ratio is 1 `unit` of the art = `scale`
+drawing units; `fit: true` instead scales the art to fit `fitTo` (a letter page when opening; when placing, the
+artboard under `at`). `center: false` puts the drawing's origin (fitted art: its bottom-left corner) on the
+artboard's bottom-left corner; `mergeLayers` puts all art on one layer. Each DXF layer holding art becomes a layer
+(off and frozen layers hidden, locked ones locked, non-plotting ones non-printing). Lines, polylines (arc segments from
+bulges), circles, arcs, ellipses, splines (NURBS, within a millionth of their size), solids and hatches become paths (solid
+hatches filled, pattern hatches as their boundaries), text and multiline text point type, named blocks symbols
+(one per look when their art takes colour "by block"), anonymous blocks such as dimensions groups. Indexed colours
+(7 is black on paper), true colour, lineweights (`scaleLineweights` scales them with the art), linetypes and
+transparency resolve through layers and blocks. What is left out (viewports, images, meshes, unknown entities) is
+listed in `warnings`. Binary DXF and DWG files answer an error saying to save them as ASCII DXF.
+
+```json
+{"name":"run_command","arguments":{"command":"document.dxfInfo","params":{"path":"/tmp/plan.dxf"}}}
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/plan.dxf","dxf":{"layout":"Layout1","fit":true,"mergeLayers":true}}}}
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/detail.dxf","dxf":{"unit":"mm","scale":10,"center":false}}}}
+```
+
 ## Links panel
 
 `links.list {show?: all|missing|modified|embedded, sort?: name|kind|status}` lists every image in the layers, top

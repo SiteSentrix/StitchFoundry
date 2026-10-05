@@ -232,6 +232,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(slices::specs());
         v.extend(print::specs());
         v.extend(recovery::specs());
+        v.extend(fileio::dxfimport::specs());
         v
     })
 }

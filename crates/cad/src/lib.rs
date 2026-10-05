@@ -1,4 +1,4 @@
-//! CAD interchange: a hand-written ASCII DXF writer, versions R12 to 2018.
+//! CAD interchange: a hand-written ASCII DXF writer (versions R12 to 2018) and reader.
 //!
 //! [`export`] writes the visible art of a document into one DXF drawing: each layer becomes a DXF
 //! layer (hidden ones switched off, locked ones locked, non-printing ones not plotted), paths
@@ -10,11 +10,15 @@
 //! What DXF can't hold (blending modes, opacity masks, raster effects, gradients, patterns,
 //! clipping) is approximated or left out, and each such loss comes back as a warning.
 //!
+//! [`import()`] reads an ASCII DXF drawing (any version) into a document: see [`import`].
+//!
 //! - `aci`: the 256-colour index palette and the nearest index of a colour.
 //! - `writer`: group codes, handles and the file's sections, tables and objects.
 //! - `scene`: the document walk that turns objects into entities.
+//! - `import`: the reader, entities to art, blocks to symbols.
 
 mod aci;
+pub mod import;
 mod scene;
 mod writer;
 
@@ -22,6 +26,21 @@ use vectorcraft_doc::{Document, Unit};
 use vectorcraft_geom::Rect;
 
 pub use aci::{aci_rgb, nearest_aci};
+pub use import::{DxfInfo, ImportOptions, Imported, import, info, is_dxf};
+
+/// How deep symbols, blocks and brush art may nest in one another (deeper art is left out).
+const MAX_NEST: u32 = 8;
+/// Cap height as a fraction of the type size: the height of CAD text is that of its capitals.
+const CAP_HEIGHT: f64 = 0.7;
+
+/// The `$INSUNITS` codes of the units documents use (feet and inches write feet).
+const INSUNITS: [(u8, Unit); 7] =
+    [(1, Unit::Inches), (2, Unit::Feet), (2, Unit::FeetInches), (4, Unit::Millimeters), (5, Unit::Centimeters), (6, Unit::Meters), (10, Unit::Yards)];
+
+/// The `$INSUNITS` code of `unit` (none for points, picas and pixels).
+fn insunits_code(unit: Unit) -> Option<u8> {
+    INSUNITS.iter().find(|(_, u)| *u == unit).map(|(c, _)| *c)
+}
 
 /// The DXF version a file is written for (the `$ACADVER` it declares).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]

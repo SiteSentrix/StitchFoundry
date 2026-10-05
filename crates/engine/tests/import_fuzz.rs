@@ -1,4 +1,4 @@
-//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG and PDF input,
+//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
 //! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
 //! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
@@ -882,5 +882,112 @@ proptest! {
             }
         });
         r.map_err(|msg| TestCaseError::fail(format!("{password}: panicked: {msg}")))?;
+    }
+}
+
+// ---------- DXF ----------
+
+/// The rich document exported as DXF (2018: hatches, splines, text, images; R12: polylines).
+fn rich_dxf(version: &str) -> Vec<u8> {
+    vectorcraft_engine::cmd::fileio::encode(&rich_doc(), "dxf", &json!({"version": version, "preserve": "editability"})).unwrap()
+}
+
+/// Group-code pairs as DXF text.
+fn dxf_text(pairs: &[(i32, String)]) -> String {
+    pairs.iter().map(|(c, v)| format!("{c:>3}\n{v}\n")).collect()
+}
+
+/// One entity: a type and a run of groups with hostile numbers and names.
+fn arb_dxf_entity() -> impl Strategy<Value = Vec<(i32, String)>> {
+    let kind = prop::sample::select(vec![
+        "LINE",
+        "CIRCLE",
+        "ARC",
+        "ELLIPSE",
+        "LWPOLYLINE",
+        "POLYLINE",
+        "VERTEX",
+        "SEQEND",
+        "SPLINE",
+        "SOLID",
+        "3DFACE",
+        "HATCH",
+        "TEXT",
+        "MTEXT",
+        "INSERT",
+        "ATTRIB",
+        "DIMENSION",
+        "VIEWPORT",
+    ]);
+    let code = prop::sample::select(vec![
+        2, 6, 7, 8, 10, 11, 12, 13, 20, 21, 22, 23, 40, 41, 42, 43, 44, 45, 48, 50, 51, 60, 62, 66, 67, 70, 71, 72, 73, 74, 75, 76, 90, 91, 92, 93,
+        94, 95, 96, 97, 210, 220, 230, 370, 420, 440, 450,
+    ]);
+    let value = prop_oneof![arb_num(), Just("B".to_string()), Just("*U1".to_string()), Just(r"{\fA;x}\P%%c^".to_string())];
+    (kind, prop::collection::vec((code, value), 0..24)).prop_map(|(k, g)| std::iter::once((0, k.to_string())).chain(g).collect())
+}
+
+/// A drawing whose block "B" holds `block` (it may insert itself) and whose entities are `body`.
+fn hostile_dxf(block: &[Vec<(i32, String)>], body: &[Vec<(i32, String)>]) -> Vec<u8> {
+    let head: Vec<(i32, String)> =
+        [(0, "SECTION"), (2, "BLOCKS"), (0, "BLOCK"), (2, "B"), (10, "0"), (20, "0")].iter().map(|(c, v)| (*c, v.to_string())).collect();
+    let mid: Vec<(i32, String)> = [(0, "ENDBLK"), (0, "ENDSEC"), (0, "SECTION"), (2, "ENTITIES")].iter().map(|(c, v)| (*c, v.to_string())).collect();
+    let tail = vec![(0, "ENDSEC".to_string()), (0, "EOF".to_string())];
+    let all: Vec<(i32, String)> = head.into_iter().chain(block.concat()).chain(mid).chain(body.concat()).chain(tail).collect();
+    dxf_text(&all).into_bytes()
+}
+
+/// Import with every option at once, and place it; whatever comes back must render and export.
+fn survive_dxf(what: &str, bytes: &[u8], fit: bool) -> Result<(), TestCaseError> {
+    let o = vectorcraft_cad::ImportOptions { fit, center: !fit, merge_layers: fit, ..Default::default() };
+    survive(what, || vectorcraft_cad::import(bytes, &o).ok().map(|r| r.document))?;
+    let _ = vectorcraft_cad::info(bytes);
+    let _ = vectorcraft_cad::is_dxf(bytes);
+    survive(what, || {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 300, "height": 200})).ok()?;
+        let p = json!({"name": "x.dxf", "dataBase64": vectorcraft_format::base64_encode(bytes), "dxf": {"fit": fit}, "thumbnail": 8});
+        let _ = s.execute("file.place.info", &p);
+        let _ = s.execute("file.place", &p);
+        let _ = s.execute("document.dxfInfo", &p);
+        Some((*s.doc().ok()?.doc).clone())
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn dxf_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..400), section in any::<bool>()) {
+        let mut b = if section { b"  0\nSECTION\n  2\nENTITIES\n".to_vec() } else { vec![] };
+        b.extend(bytes);
+        survive_dxf("dxf garbage", &b, section)?;
+    }
+
+    #[test]
+    fn dxf_hostile_entities_never_panic(
+        block in prop::collection::vec(arb_dxf_entity(), 0..4),
+        body in prop::collection::vec(arb_dxf_entity(), 0..8),
+        fit in any::<bool>(),
+    ) {
+        let bytes = hostile_dxf(&block, &body);
+        survive_dxf("hostile dxf", &bytes, fit)?;
+    }
+
+    #[test]
+    fn dxf_mutated_export_never_panics(
+        r12 in any::<bool>(),
+        cut in 0usize..60_000,
+        edits in prop::collection::vec((0usize..60_000, prop::sample::select(vec![b'0', b'1', b'9', b'-', b'.', b'e', b'\n', b' ', b'A', b'^', b'\\', 0xC3])), 0..12),
+    ) {
+        static SAMPLES: std::sync::OnceLock<[Vec<u8>; 2]> = std::sync::OnceLock::new();
+        let samples = SAMPLES.get_or_init(|| [rich_dxf("2018"), rich_dxf("R12")]);
+        let mut bytes = samples[usize::from(r12)].clone();
+        for &(at, b) in &edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        bytes.truncate(cut.max(8));
+        survive_dxf("mutated dxf", &bytes, cut % 2 == 0)?;
     }
 }

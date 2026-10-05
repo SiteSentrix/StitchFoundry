@@ -150,7 +150,8 @@ fn formats_list_dxf_and_what_can_not_be_written() {
     let mut s = Session::new();
     let r = s.execute("document.formats", &json!({})).unwrap();
     let dxf = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "dxf").unwrap().clone();
-    assert_eq!((dxf["read"].as_bool(), dxf["write"].as_bool()), (Some(false), Some(true)));
+    // Read too since DXF import (tests_dxfimport).
+    assert_eq!((dxf["read"].as_bool(), dxf["write"].as_bool()), (Some(true), Some(true)));
     for o in [
         "version",
         "unit",

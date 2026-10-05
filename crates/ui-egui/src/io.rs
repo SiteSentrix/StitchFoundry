@@ -38,8 +38,11 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
         return load(app, p).map(|_| ());
     }
-    // A PDF with several pages or a password asks first (the Import PDF dialog).
-    if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None) {
+    // A PDF with several pages or a password asks first (the Import PDF dialog), and so does a
+    // DXF drawing (DXF Import Options).
+    if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None)
+        || crate::dialogs::dxf_import::offer(app, name, bytes, path.clone(), None)
+    {
         return Ok(());
     }
     open_document(app, name, bytes, path, &Value::Null)

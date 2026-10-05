@@ -28,12 +28,88 @@ pub(super) const SPEC: DialogSpec =
 const PREVIEW: f32 = 200.0;
 const LABEL_WIDTH: f32 = 70.0;
 
-/// The file the dialog reads.
+/// The file an import dialog reads (Import PDF, DXF Import Options).
 #[derive(Debug)]
 pub struct DialogFile {
     pub bytes: Vec<u8>,
     /// Unique per file the dialog opened (keys its preview cache).
-    token: u64,
+    pub(super) token: u64,
+}
+
+impl DialogFile {
+    pub fn new(bytes: Vec<u8>) -> Arc<Self> {
+        static TOKEN: AtomicU64 = AtomicU64::new(0);
+        Arc::new(Self { bytes, token: TOKEN.fetch_add(1, Ordering::Relaxed) })
+    }
+}
+
+/// The file `file.place` params `p` name when it is one `wanted` takes by its extension (a path,
+/// read through the app's services) or given as `dataBase64` → (name, bytes, path).
+pub(super) fn place_source(app: &VectorcraftApp, p: &Value, wanted: impl Fn(&str) -> bool) -> Option<(String, Vec<u8>, Option<String>)> {
+    let s = |k: &str| p.get(k).and_then(Value::as_str);
+    match (s("path"), s("dataBase64")) {
+        (Some(path), _) if wanted(&fileio::extension(path)) => {
+            let bytes = app.services.read.as_ref().and_then(|r| r(path).ok())?;
+            Some((path.to_string(), bytes, Some(path.to_string())))
+        }
+        (None, Some(b64)) => Some((s("name").unwrap_or("Untitled").to_string(), vectorcraft_format::base64_decode(b64)?, None)),
+        _ => None,
+    }
+}
+
+/// The `file.place` params besides the file and `taken` (kept by an import dialog for its OK).
+pub(super) fn other_place_params(p: &Value, taken: &[&str]) -> Value {
+    let rest =
+        p.as_object().into_iter().flatten().filter(|(k, _)| !matches!(k.as_str(), "path" | "name" | "dataBase64") && !taken.contains(&k.as_str()));
+    Value::Object(rest.map(|(k, v)| (k.clone(), v.clone())).collect())
+}
+
+/// `p` naming the dialog's file again: its path, or its name and bytes.
+pub(super) fn with_file(p: Option<&Value>, d: &Dialog, file: &DialogFile) -> Value {
+    let mut p = p.filter(|v| v.is_object()).cloned().unwrap_or_else(|| json!({}));
+    match d.fields.get("path").and_then(Value::as_str) {
+        Some(path) => p["path"] = json!(path),
+        None => {
+            p["name"] = json!(d.str("name"));
+            p["dataBase64"] = json!(vectorcraft_format::base64_encode(&file.bytes));
+        }
+    }
+    p
+}
+
+/// A preview of `doc`'s first artboard, at most `size` points on its longer side, rendered once
+/// per `key` (`None`: there is nothing to show).
+pub(super) fn preview_texture(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    key: egui::Id,
+    name: &str,
+    size: f32,
+    doc: impl FnOnce() -> Option<vectorcraft_engine::doc::Document>,
+) -> Option<egui::TextureHandle> {
+    if let Some(t) = ctx.data(|m| m.get_temp::<Option<egui::TextureHandle>>(key)) {
+        return t;
+    }
+    let tex = doc().and_then(|doc| {
+        let r = doc.artboards.first()?.rect;
+        let px = size as f64 * ctx.pixels_per_point() as f64;
+        Some(widgets::region_texture(ctx, &mut app.canvas.renderer, name, &doc, r, px))
+    });
+    ctx.data_mut(|m| m.insert_temp(key, tex.clone()));
+    tex
+}
+
+/// `tex` fitted in a `size` square on the pasteboard, framed.
+pub(super) fn show_preview(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>, size: f32) {
+    let t = Tokens::get(ui.ctx());
+    let (r, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    ui.painter().rect_filled(r, 2.0, t.pasteboard);
+    if let Some(tex) = tex {
+        let sz = tex.size_vec2();
+        let ir = egui::Rect::from_center_size(r.center(), sz * (size / sz.x.max(sz.y)));
+        ui.painter().image(tex.id(), ir, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+        ui.painter().rect_stroke(ir, 0.0, egui::Stroke::new(1.0, t.divider), egui::StrokeKind::Outside);
+    }
 }
 
 /// Open `bytes` (or place them with the `file.place` params `place`) through the dialog when the
@@ -48,8 +124,7 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
         Err(PdfError::NeedsPassword) => (0, true),
         _ => return false,
     };
-    static TOKEN: AtomicU64 = AtomicU64::new(0);
-    app.ui.dialog_file = Some(Arc::new(DialogFile { bytes: bytes.to_vec(), token: TOKEN.fetch_add(1, Ordering::Relaxed) }));
+    app.ui.dialog_file = Some(DialogFile::new(bytes.to_vec()));
     let mut fields = json!({
         "mode": if place.is_some() { "place" } else { "open" },
         "name": name,
@@ -64,13 +139,8 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
     if let Some(p) = path {
         fields["path"] = json!(p);
     }
-    if let Some(Value::Object(p)) = place {
-        let rest: serde_json::Map<String, Value> = p
-            .iter()
-            .filter(|(k, _)| !matches!(k.as_str(), "path" | "name" | "dataBase64" | "page" | "crop" | "password"))
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        fields["__place"] = Value::Object(rest);
+    if let Some(p) = place {
+        fields["__place"] = other_place_params(p, &["page", "crop", "password"]);
     }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     true
@@ -82,18 +152,7 @@ pub fn offer_place(app: &mut VectorcraftApp, p: &Value) -> bool {
     if p.get("page").is_some() {
         return false;
     }
-    let s = |k: &str| p.get(k).and_then(Value::as_str);
-    let (name, bytes, path) = match (s("path"), s("dataBase64")) {
-        (Some(path), _) if matches!(fileio::extension(path).as_str(), "pdf" | "ai" | "ait") => {
-            let Some(bytes) = app.services.read.as_ref().and_then(|r| r(path).ok()) else { return false };
-            (path.to_string(), bytes, Some(path.to_string()))
-        }
-        (None, Some(b64)) => match vectorcraft_format::base64_decode(b64) {
-            Some(bytes) => (s("name").unwrap_or("Untitled").to_string(), bytes, None),
-            None => return false,
-        },
-        _ => return false,
-    };
+    let Some((name, bytes, path)) = place_source(app, p, |ext| matches!(ext, "pdf" | "ai" | "ait")) else { return false };
     offer(app, &name, &bytes, path, Some(p))
 }
 
@@ -131,14 +190,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let name = d.str("name");
     let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
     let r = if d.str("mode") == "place" {
-        let mut p = d.fields.get("__place").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
-        match &path {
-            Some(path) => p["path"] = json!(path),
-            None => {
-                p["name"] = json!(name);
-                p["dataBase64"] = json!(vectorcraft_format::base64_encode(&file.bytes));
-            }
-        }
+        let mut p = with_file(d.fields.get("__place"), &d, &file);
         p["page"] = json!(page(&d));
         p["crop"] = json!(crop(&d).id());
         if let Some(pw) = password(&d) {
@@ -180,14 +232,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let mut current = page(d);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            let (r, _) = ui.allocate_exact_size(egui::vec2(PREVIEW, PREVIEW), egui::Sense::hover());
-            ui.painter().rect_filled(r, 2.0, t.pasteboard);
-            if let Some(tex) = preview(app, ui.ctx(), d, current) {
-                let sz = tex.size_vec2();
-                let ir = egui::Rect::from_center_size(r.center(), sz * (PREVIEW / sz.x.max(sz.y)));
-                ui.painter().image(tex.id(), ir, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
-                ui.painter().rect_stroke(ir, 0.0, egui::Stroke::new(1.0, t.divider), egui::StrokeKind::Outside);
-            }
+            show_preview(ui, preview(app, ui.ctx(), d, current).as_ref(), PREVIEW);
             ui.add_space(6.0);
             // Page navigation: first, previous, the page number, next, last.
             ui.horizontal(|ui| {
@@ -261,16 +306,9 @@ fn preview(app: &mut VectorcraftApp, ctx: &egui::Context, d: &Dialog, page: usiz
     let file = app.ui.dialog_file.clone()?;
     let crop = crop(d);
     let key = egui::Id::new(("pdf-preview", file.token, page, crop.id()));
-    if let Some(t) = ctx.data(|m| m.get_temp::<Option<egui::TextureHandle>>(key)) {
-        return t;
-    }
     let opts = fileio::LoadOptions { crop, password: password(d), ..Default::default() };
     // A page that can't be read shows an empty preview (and isn't read again).
-    let tex = fileio::page_document(&file.bytes, page - 1, &opts).ok().and_then(|(doc, _)| {
-        let r = doc.artboards.first()?.rect;
-        let px = PREVIEW as f64 * ctx.pixels_per_point() as f64;
-        Some(widgets::region_texture(ctx, &mut app.canvas.renderer, &format!("pdf-preview-{page}"), &doc, r, px))
-    });
-    ctx.data_mut(|m| m.insert_temp(key, tex.clone()));
-    tex
+    preview_texture(app, ctx, key, &format!("pdf-preview-{page}"), PREVIEW, || {
+        fileio::page_document(&file.bytes, page - 1, &opts).ok().map(|(doc, _)| doc)
+    })
 }
