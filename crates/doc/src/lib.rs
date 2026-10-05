@@ -177,8 +177,11 @@ impl Unit {
         if s == "-0" { "0".into() } else { s.into() }
     }
     /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), simple `+ - * /` arithmetic.
+    ///
+    /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
+    /// math typed before a field's unit suffix works.
     pub fn parse(self, s: &str) -> Option<f64> {
-        parse_measure(s, self)
+        parse_measure(s, self).filter(|v| v.is_finite())
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
     /// `feetInches`).
@@ -221,14 +224,20 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
             if l.trim().is_empty() {
                 continue;
             }
-            let a = parse_measure(l, default)?;
             return match op {
-                '+' => Some(a + parse_measure(r, default)?),
-                '-' => Some(a - parse_measure(r, default)?),
-                '*' => Some(a * r.trim().parse::<f64>().ok()?),
+                '+' => Some(parse_measure(l, default)? + parse_measure(r, default)?),
+                '-' => Some(parse_measure(l, default)? - parse_measure(r, default)?),
                 _ => {
-                    let d = r.trim().parse::<f64>().ok()?;
-                    if d == 0.0 { None } else { Some(a / d) }
+                    // A factor or divisor is a plain number; a unit after it is the expression's.
+                    let (k, unit) = number_unit(r)?;
+                    let a = parse_measure(l, unit.unwrap_or(default))?;
+                    if op == '*' {
+                        Some(a * k)
+                    } else if k == 0.0 {
+                        None
+                    } else {
+                        Some(a / k)
+                    }
                 }
             };
         }
@@ -242,22 +251,40 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     {
         return Some(p.trim().parse::<f64>().ok()? * 12.0 + pt.trim().parse::<f64>().unwrap_or(0.0));
     }
+    let (v, unit) = number_unit(s)?;
+    Some(unit.unwrap_or(default).to_pt(v))
+}
+
+/// A number with an optional unit suffix (`12`, `3 mm`, `2in`) → (the number, its unit).
+fn number_unit(s: &str) -> Option<(f64, Option<Unit>)> {
+    let s = s.trim();
     let num_end = s.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-')).unwrap_or(s.len());
-    let v: f64 = s[..num_end].trim().parse().ok()?;
-    let unit = match s[num_end..].trim() {
-        "" => default,
-        "pt" => Unit::Points,
-        "px" => Unit::Pixels,
-        "in" | "\"" => Unit::Inches,
-        "mm" => Unit::Millimeters,
-        "cm" => Unit::Centimeters,
-        "m" => Unit::Meters,
-        "ft" | "'" => Unit::Feet,
-        "yd" => Unit::Yards,
-        "pc" => Unit::Picas,
+    let v: f64 = s.get(..num_end)?.trim().parse().ok()?;
+    let unit = match s.get(num_end..)?.trim() {
+        "" => None,
+        "pt" => Some(Unit::Points),
+        "px" => Some(Unit::Pixels),
+        "in" | "\"" => Some(Unit::Inches),
+        "mm" => Some(Unit::Millimeters),
+        "cm" => Some(Unit::Centimeters),
+        "m" => Some(Unit::Meters),
+        "ft" | "'" => Some(Unit::Feet),
+        "yd" => Some(Unit::Yards),
+        "p" | "pc" => Some(Unit::Picas),
         _ => return None,
     };
-    Some(unit.to_pt(v))
+    Some((v, unit))
+}
+
+/// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
+/// [`Unit::parse`] (`45*2`, `100/3`); text other than digits, `.` and operators reads as nothing.
+pub fn parse_number(s: &str) -> Option<f64> {
+    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/".contains(c)) {
+        return None;
+    }
+    // A leading `+` is a sign (`+5`), as a plain number read it.
+    let s = s.trim();
+    Unit::Points.parse(s.strip_prefix('+').unwrap_or(s))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
