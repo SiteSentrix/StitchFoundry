@@ -1,5 +1,6 @@
 //! Symbols export as one `<symbol>` def and a `<use>` per instance (instances the def can't stand
-//! for get their own art), and hidden layers are kept hidden when asked and come back hidden.
+//! for get their own art), hidden layers are kept hidden when asked and come back hidden, and the
+//! editing data notices edits made elsewhere.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -9,7 +10,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::pattern::pattern_paint;
 use vectorcraft_doc::{Appearance, Document, Node, NodeKind, PatternDef, Symbol};
 use vectorcraft_geom::{Affine, Rect, shapes};
-use vectorcraft_svg::{ExportOptions, export, import};
+use vectorcraft_svg::{ExportOptions, editing, export, export_full, import};
 use vectorcraft_testkit::raster::{Image, assert_similar, render_artboard};
 
 /// The exported SVG rendered by resvg on white at 1 px/pt.
@@ -215,4 +216,29 @@ fn hidden_groups_others_use_stay_hidden() {
     });
     // Read as before: the template isn't shown (nor shown through the `<use>`).
     assert_eq!((paths, hidden), (0, 0), "{:?}", d.layers);
+}
+
+#[test]
+fn editing_data_notices_edits_made_elsewhere() {
+    let d = symbol_doc(2.0, &[Affine::translate((50.0, 50.0))]);
+    let opts = ExportOptions { preserve_editing: true, metadata: true, ..Default::default() };
+    let svg = export_full(&d, &opts, Some(b"native bytes")).svg;
+    assert!(svg.contains("<![CDATA[") && svg.contains(" hash=\""), "{svg}");
+    let e = editing(&svg).unwrap();
+    assert!(e.intact && e.data == vectorcraft_svg::base64_encode(b"native bytes"));
+    // Re-indented, with other line endings: still the same picture.
+    let reformatted = svg.replace("\n  ", "\r\n\t\t");
+    assert!(editing(&reformatted).unwrap().intact);
+    let minified = export_full(&d, &ExportOptions { minify: true, ..opts.clone() }, Some(b"native bytes")).svg;
+    assert!(editing(&minified).unwrap().intact);
+    // A colour changed elsewhere.
+    let edited = svg.replacen("#1e5adc", "#ff0000", 1);
+    assert_ne!(edited, svg);
+    assert!(!editing(&edited).unwrap().intact);
+    // Metadata edits don't count: only the markup around the <metadata> element does.
+    let retitled = svg.replacen("<dc:format>", "<dc:creator>someone</dc:creator><dc:format>", 1);
+    assert!(editing(&retitled).unwrap().intact);
+    // Unique ids hash the final output.
+    let unique = export_full(&d, &ExportOptions { object_ids: vectorcraft_svg::ObjectIds::Unique, ..opts }, Some(b"native bytes")).svg;
+    assert!(editing(&unique).unwrap().intact);
 }

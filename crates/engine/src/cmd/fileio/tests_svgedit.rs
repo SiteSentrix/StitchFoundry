@@ -1,7 +1,9 @@
-//! SVG files that reopen as they were: Save keeps hidden layers and linked images stay linked.
+//! SVG files that reopen as they were: Preserve Editing restores the document exactly (unless the
+//! SVG was edited elsewhere), Save keeps hidden layers, symbols share one def, and linked images
+//! stay linked.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::{Document, NodeKind};
 
 use super::tests_svg::{image_session, svg};
 use super::*;
@@ -14,8 +16,73 @@ fn rect(s: &mut Session, x: f64, y: f64) -> u64 {
     new_id(&s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 20, "height": 20})).unwrap())
 }
 
+fn select(s: &mut Session, ids: &[u64]) {
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+}
+
+/// A roughened square, three instances of a symbol and a square filled with a pattern.
+fn rich() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    let rough = rect(&mut s, 10.0, 10.0);
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [rough]})).unwrap();
+    let mark = rect(&mut s, 60.0, 10.0);
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+    for (x, y) in [(150.0, 50.0), (200.0, 120.0)] {
+        s.execute("symbol.place", &json!({"name": "Mark", "x": x, "y": y})).unwrap();
+    }
+    let dot = rect(&mut s, 0.0, 150.0);
+    s.execute("paint.setFill", &json!({"ids": [dot], "color": "#ff0000"})).unwrap();
+    select(&mut s, &[dot]);
+    s.execute("object.pattern.make", &json!({"name": "Dots", "width": 30, "height": 30})).unwrap();
+    s.execute("object.pattern.done", &json!({})).unwrap();
+    let filled = rect(&mut s, 100.0, 150.0);
+    s.execute("paint.setFill", &json!({"ids": [filled], "swatch": "Dots"})).unwrap();
+    s
+}
+
 fn open(s: &mut Session, name: &str, text: &str) -> Value {
     s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(text.as_bytes())})).unwrap()
+}
+
+/// `d` without what opening a file sets anew.
+fn comparable(d: &Document) -> Document {
+    let mut d = d.clone();
+    d.title.clear();
+    d
+}
+
+#[test]
+fn preserve_editing_restores_effects_symbols_and_patterns_exactly() {
+    let mut s = rich();
+    let before = comparable(&s.doc().unwrap().doc);
+    assert!(before.symbols.iter().any(|x| x.name == "Mark") && before.pattern("Dots").is_some());
+    let text = svg(&mut s, json!({"preserveEditing": true, "styling": "css"}));
+    assert_eq!(text.matches("<use ").count(), 3, "{text}");
+    let r = open(&mut s, "rich.svg", &text);
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    let after = comparable(&s.doc().unwrap().doc);
+    assert_eq!(after, before, "the document came back exactly");
+    let mut effects = 0;
+    after.walk(|n| effects += n.appearance.effects.len());
+    assert_eq!(effects, 1, "the live effect is still live");
+}
+
+#[test]
+fn an_svg_edited_elsewhere_opens_as_plain_svg_with_a_warning() {
+    let mut s = rich();
+    let text = svg(&mut s, json!({"preserveEditing": true}));
+    // Another app changes a colour (the pattern's red).
+    let edited = text.replacen("#ff0000", "#00ff00", 1);
+    assert_ne!(edited, text);
+    let r = open(&mut s, "edited.svg", &edited);
+    assert_eq!(r["warnings"][0], load::EDITING_STALE, "{r}");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.symbols.is_empty() && d.patterns.iter().all(|p| p.name != "Dots"), "plain import: no symbols, no named pattern");
+    // Unreadable editing data (the hash only covers the markup around it) falls back too.
+    let damaged = text.replacen("<![CDATA[", "<![CDATA[!!", 1);
+    let r = open(&mut s, "damaged.svg", &damaged);
+    assert_eq!(r["warnings"][0], load::EDITING_DAMAGED, "{r}");
 }
 
 #[test]

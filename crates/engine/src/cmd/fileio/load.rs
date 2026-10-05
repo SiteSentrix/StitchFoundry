@@ -67,6 +67,11 @@ fn image_format(f: image::ImageFormat) -> Option<&'static Format> {
     f.extensions_str().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
 }
 
+/// Why an SVG carrying editing data opened as plain SVG: it was changed after it was saved.
+pub const EDITING_STALE: &str = "this SVG was changed in another app after it was saved with its editing data: it opened as plain SVG";
+/// Why an SVG carrying editing data opened as plain SVG: the data can't be read.
+pub const EDITING_DAMAGED: &str = "this SVG's editing data can't be read: it opened as plain SVG";
+
 /// Read a file of any readable format (`name`: its file name or path, for the extension and title).
 pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
     let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")))?;
@@ -76,12 +81,22 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
         "vectorcraft" => vectorcraft_format::load(bytes).map_err(err)?,
         "svg" | "svgz" => {
             let text = vectorcraft_svg::text_of(bytes).map_err(err)?;
-            // An SVG saved with Preserve Editing carries the native document: open that.
-            match vectorcraft_svg::editing_data(&text).and_then(|b64| vectorcraft_format::base64_decode(&b64)) {
-                Some(native) => vectorcraft_format::load(&native).map_err(err)?,
+            // An SVG saved with Preserve Editing carries the native document: open that, unless
+            // the SVG was edited since (or the data is damaged).
+            let editing = vectorcraft_svg::editing(&text);
+            let native = editing
+                .as_ref()
+                .filter(|e| e.intact)
+                .and_then(|e| vectorcraft_format::base64_decode(&e.data))
+                .and_then(|b| vectorcraft_format::load(&b).ok());
+            match native {
+                Some(d) => d,
                 None => {
                     let (d, w) = vectorcraft_svg::import_with_report(&text).map_err(err)?;
                     warnings = w;
+                    if let Some(e) = editing {
+                        warnings.insert(0, (if e.intact { EDITING_DAMAGED } else { EDITING_STALE }).to_string());
+                    }
                     d
                 }
             }

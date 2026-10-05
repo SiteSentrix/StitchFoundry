@@ -448,3 +448,28 @@ proptest! {
         prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
     }
 }
+
+// ---------- SVG saved with hidden layers and editing data ----------
+
+/// The rich document with a hidden layer, saved as SVG with its editing data.
+fn saved_svg() -> String {
+    let mut d = rich_doc();
+    if let Some(l) = d.layers.first_mut() {
+        std::sync::Arc::make_mut(l).visible = false;
+    }
+    let opts = vectorcraft_svg::ExportOptions { hidden_layers: true, preserve_editing: true, ..Default::default() };
+    vectorcraft_svg::export_full(&d, &opts, Some(&vectorcraft_format::save(&d, false))).svg
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn svg_mutated_save_never_panics(
+        cut in 0usize..40_000,
+        edits in prop::collection::vec((0usize..40_000, prop::sample::select(vec!['<', '>', '"', '/', '-', '9', 'e', '.', ' ', '#', '%', '&', ';', 'x', ']', 'A'])), 0..10),
+    ) {
+        let svg = mutate_text(&saved_svg(), cut, &edits);
+        survive("mutated saved svg", || vectorcraft_engine::cmd::fileio::load("saved.svg", svg.as_bytes()).ok().map(|l| l.doc))?;
+    }
+}

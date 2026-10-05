@@ -135,7 +135,9 @@ own art: one stained by its fill; one scaled while the symbol has strokes (their
 scaled while it has effects, brushes or live objects; and every instance of a symbol with pattern paints or unlinked
 opacity masks (those stay on the page). `hiddenLayers: true` keeps hidden layers as groups that aren't displayed
 (`display:none`); `document.save` keeps them unless told otherwise, exports leave them out, and they reopen as
-hidden layers.
+hidden layers. A `preserveEditing` SVG carries the native document (CDATA in `<metadata>`) and a hash of the
+markup around it: if another app changed the SVG since, `document.open` reads it as plain SVG and says so in
+`warnings`.
 
 ## Resources
 

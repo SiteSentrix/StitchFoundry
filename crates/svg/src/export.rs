@@ -10,7 +10,7 @@ use vectorcraft_doc::{CharStyle, Justify};
 use vectorcraft_effects::stroke::{self, Written, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
-use crate::{EDITING_NS, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Styling, base64_encode, fmt_num, fnv1a, xml_escape};
+use crate::{EDITING_NS, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Styling, base64_encode, body_hash, fmt_num, fnv1a, xml_escape};
 
 type Props = Vec<(&'static str, String)>;
 
@@ -112,6 +112,8 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(&w.indent(1));
         out.push_str(&format!("<title>{}</title>{nl}", xml_escape(&doc.title)));
     }
+    // The editing data carries a hash of the markup around its `<metadata>`.
+    let native = native.filter(|_| opts.preserve_editing).map(|bytes| (bytes, body_hash(&[&out, &w.body, "</svg>", nl])));
     w.metadata(&mut out, native);
     out.push_str(&w.body);
     out.push_str("</svg>");
@@ -464,9 +466,9 @@ impl Writer<'_> {
     }
 
     /// `<metadata>`: the Dublin Core terms of File Info ([`ExportOptions::metadata`]) and the
-    /// native document ([`ExportOptions::preserve_editing`]).
-    fn metadata(&self, out: &mut String, native: Option<&[u8]>) {
-        let native = native.filter(|_| self.opts.preserve_editing);
+    /// native document ([`ExportOptions::preserve_editing`]) with the [`body_hash`] of the markup
+    /// around this element.
+    fn metadata(&self, out: &mut String, native: Option<(&[u8], String)>) {
         if !self.opts.metadata && native.is_none() {
             return;
         }
@@ -486,8 +488,14 @@ impl Writer<'_> {
             line(3, "</rdf:Description>");
             line(2, "</rdf:RDF>");
         }
-        if let Some(bytes) = native {
-            line(2, &format!("<vectorcraft:document xmlns:vectorcraft=\"{EDITING_NS}\">{}</vectorcraft:document>", base64_encode(bytes)));
+        if let Some((bytes, hash)) = native {
+            line(
+                2,
+                &format!(
+                    "<vectorcraft:document xmlns:vectorcraft=\"{EDITING_NS}\" hash=\"{hash}\"><![CDATA[{}]]></vectorcraft:document>",
+                    base64_encode(bytes)
+                ),
+            );
         }
         line(1, "</metadata>");
     }
