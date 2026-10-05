@@ -503,6 +503,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…]}",
     ),
+    (
+        "file.print",
+        "Print…",
+        "Cmd+P",
+        "{} open the Print dialog (dialog `print`: the print.setup settings, printer, toFile; Print keeps the settings with the document and prints, Done (discard: true) only keeps them); with params {settings? (over the document's), printer? (print.printers name; \"\" the default), toFile?, path?} print without it: the print-ready PDF (engine file.print) goes to the printer → {pages, printer, printed: true, warnings}; with toFile, a path or no printing here (no print service) it is saved as a PDF at path (else a picked file, the web downloads it) → {path, pages, printed: false, warnings}",
+    ),
+    (
+        "print.printers",
+        "Printers",
+        "",
+        "{} → {printers: [{name, default}] (the system's printers), service (printing is available; else Print saves a PDF), setup (print.printerSetup can open the printer settings)}",
+    ),
+    ("print.printerSetup", "Printer Setup…", "", "{printer?} open the system's settings of the printer (the Print dialog's Setup…; desktop)"),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -898,6 +911,17 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }),
         "css.copy" => crate::panels::css_properties::copy(app, p),
         "css.exportFile" => crate::panels::css_properties::export_file(app, p),
+        // File → Print…: its dialog; with params, print (or save the job as a PDF) without it.
+        "file.print" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::print::open(app),
+        "file.print" => crate::print::run(app, p),
+        "print.printers" => Ok(crate::print::printers(app)),
+        "print.printerSetup" => {
+            let printer = s("printer").filter(|n| !n.is_empty());
+            match app.services.print.as_mut() {
+                Some(service) => service.setup(printer.as_deref()).map(|_| Value::Null),
+                None => Err("printing isn't available here".into()),
+            }
+        }
         _ => return None,
     };
     Some(r)
@@ -1135,6 +1159,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
+        "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
         _ => true,
     }
 }
@@ -1213,7 +1238,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 c("File Info…", "file.info"),
                 Sep,
-                todos("Print…", "Cmd+P"),
+                c("Print…", "file.print"),
             ],
         ),
         (

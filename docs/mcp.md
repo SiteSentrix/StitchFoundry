@@ -1488,3 +1488,21 @@ drawn. Files are at most 30000 pixels a side; PSD files don't open in VectorCraf
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"maxEditability":true}}}
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"psd","layers":false,"colorModel":"cmyk"}}}
 ```
+
+## Printing
+
+`print.setup {settings?}` keeps print settings with the document (one undo step; without `settings` it answers the
+current ones): the copies, artboards, paper, orientation, placement, scaling and tiling, marks and bleed, composite or
+separations output, graphics and colour management options of File › Print. `print.preview {settings?}` lays the job
+out without printing: `pages`, then one copy's `sheets`, each with its page size, scale, the `transform` from the
+document onto the page (pt, y down), the document `area` it prints and its `trim` box on the page, plus `tiles`, the
+`inks` of a separation and `warnings`. `file.print {settings?, path?}` writes the job as a print-ready PDF (one page per
+sheet, tile, ink and copy); headless it answers `dataBase64`. In the app, `file.print` with no params opens the Print
+dialog, and with params it prints through the system (`printer`: a name from `print.printers`, default the system's
+default printer) or, with `toFile`, a `path` or no printing available, saves the PDF.
+
+```json
+{"name":"run_command","arguments":{"command":"print.setup","params":{"settings":{"media":"a4","scaling":"fit","marks":{"trim":true}}}}}
+{"name":"run_command","arguments":{"command":"print.preview","params":{"settings":{"copies":2,"output":{"mode":"separations"}}}}}
+{"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.pdf"}}}
+```

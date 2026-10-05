@@ -58,11 +58,11 @@ const DOCUMENT_PROFILE: &str = "Document profile";
 /// The Output Intent Profile entry for no output intent (stored as "").
 const NO_PROFILE: &str = "None";
 
-const LABEL_WIDTH: f32 = 150.0;
+pub(super) const LABEL_WIDTH: f32 = 150.0;
 /// Width of the section list (its frame adds 6 px a side).
-const LIST_WIDTH: f32 = 150.0;
+pub(super) const LIST_WIDTH: f32 = 150.0;
 /// The top rows' labels end where the section content starts, so their dropdowns line up with it.
-const TOP_LABEL_WIDTH: f32 = LIST_WIDTH + 26.0;
+pub(super) const TOP_LABEL_WIDTH: f32 = LIST_WIDTH + 26.0;
 
 /// Open the dialog with `params` (`document.exportPdf` options and `path?`) applied over their
 /// preset.
@@ -191,12 +191,14 @@ fn lookup<'a>(m: &'a Map<String, Value>, path: &str) -> Option<&'a Value> {
     keys.try_fold(first, |v, k| v.get(k))
 }
 
-/// The value at `path`: the dialog's, else the default.
-fn get<'a>(d: &'a Dialog, path: &str) -> &'a Value {
-    lookup(&d.fields, path).or_else(|| DEFAULTS.as_object().and_then(|m| lookup(m, path))).unwrap_or(&Value::Null)
+/// The value at `path`: the dialog's, else the default of the settings it edits (the PDF
+/// settings, or the print settings of the Print dialogs).
+pub(super) fn get<'a>(d: &'a Dialog, path: &str) -> &'a Value {
+    let defaults = super::print::defaults(&d.kind).unwrap_or(&DEFAULTS);
+    lookup(&d.fields, path).or_else(|| defaults.as_object().and_then(|m| lookup(m, path))).unwrap_or(&Value::Null)
 }
 
-fn set(d: &mut Dialog, path: &str, value: Value) {
+pub(super) fn set(d: &mut Dialog, path: &str, value: Value) {
     let (parents, key) = path.rsplit_once('.').unwrap_or(("", path));
     let mut map = &mut d.fields;
     for k in parents.split('.').filter(|k| !k.is_empty()) {
@@ -212,24 +214,24 @@ fn set(d: &mut Dialog, path: &str, value: Value) {
 
 // ---------- widgets bound to a path ----------
 
-fn heading(ui: &mut egui::Ui, text: &str) {
+pub(super) fn heading(ui: &mut egui::Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
     ui.add_space(6.0);
     ui.label(egui::RichText::new(text).font(theme::semibold(12.5)).color(t.text_strong));
     ui.add_space(2.0);
 }
 
-fn note(ui: &mut egui::Ui, text: &str) {
+pub(super) fn note(ui: &mut egui::Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(text).size(11.5).color(t.text_dim));
 }
 
 /// A labelled row.
-fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
     row_with(ui, label, LABEL_WIDTH, add);
 }
 
-fn row_with(ui: &mut egui::Ui, label: &str, width: f32, add: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn row_with(ui: &mut egui::Ui, label: &str, width: f32, add: impl FnOnce(&mut egui::Ui)) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         ui.allocate_ui_with_layout(egui::vec2(width, 24.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -240,7 +242,7 @@ fn row_with(ui: &mut egui::Ui, label: &str, width: f32, add: impl FnOnce(&mut eg
     });
 }
 
-fn flag(ui: &mut egui::Ui, d: &mut Dialog, path: &str, label: &str, enabled: bool) {
+pub(super) fn flag(ui: &mut egui::Ui, d: &mut Dialog, path: &str, label: &str, enabled: bool) {
     let on = get(d, path).as_bool().unwrap_or(false);
     if widgets::check(ui, label, on, enabled) {
         set(d, path, json!(!on));
@@ -253,12 +255,12 @@ fn choice_index<T: Choice>(d: &Dialog, path: &str) -> Option<usize> {
 }
 
 /// The choice at `path`.
-fn choice<T: Choice>(d: &Dialog, path: &str) -> Option<T> {
+pub(super) fn choice<T: Choice>(d: &Dialog, path: &str) -> Option<T> {
     choice_index::<T>(d, path).and_then(|i| T::ALL.get(i).copied())
 }
 
 /// A dropdown of the choices `T` (options for which `enabled` is false are greyed).
-fn pick<T: Choice>(ui: &mut egui::Ui, d: &mut Dialog, path: &str, width: f32, enabled: impl Fn(T) -> bool) -> bool {
+pub(super) fn pick<T: Choice>(ui: &mut egui::Ui, d: &mut Dialog, path: &str, width: f32, enabled: impl Fn(T) -> bool) -> bool {
     let current = choice_index::<T>(d, path);
     let label = current.and_then(|i| T::LABELS.get(i)).copied().unwrap_or_default();
     let chosen = widgets::dropdown_with(ui, path, label, T::LABELS, width, |i| T::ALL.get(i).is_some_and(|c| enabled(*c)));
@@ -267,7 +269,7 @@ fn pick<T: Choice>(ui: &mut egui::Ui, d: &mut Dialog, path: &str, width: f32, en
     true
 }
 
-fn number(ui: &mut egui::Ui, d: &mut Dialog, path: &str, suffix: &str, enabled: bool) {
+pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, path: &str, suffix: &str, enabled: bool) {
     let v = get(d, path).as_f64().unwrap_or(0.0);
     ui.add_enabled_ui(enabled, |ui| {
         if let Some(x) = widgets::plain_field(ui, path, v, suffix, 3, 64.0) {
@@ -277,7 +279,7 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, path: &str, suffix: &str, enabled: 
 }
 
 /// A length in points, shown in the document's units.
-fn length(ui: &mut egui::Ui, d: &mut Dialog, path: &str, unit: Unit, enabled: bool) {
+pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, path: &str, unit: Unit, enabled: bool) {
     let v = get(d, path).as_f64();
     ui.add_enabled_ui(enabled, |ui| {
         if let Some(x) = widgets::num_field(ui, path, v, unit, 80.0) {
@@ -286,7 +288,7 @@ fn length(ui: &mut egui::Ui, d: &mut Dialog, path: &str, unit: Unit, enabled: bo
     });
 }
 
-fn text(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) {
+pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) {
     let mut s = get(d, path).as_str().unwrap_or_default().to_string();
     if ui.add_enabled(enabled, egui::TextEdit::singleline(&mut s).desired_width(240.0)).changed() {
         set(d, path, json!(s));
@@ -324,23 +326,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         pick::<Compatibility>(ui, d, "compatibility", 110.0, |c| standard.allows(c));
     });
     ui.add_space(10.0);
-    let section = SECTIONS.iter().copied().find(|s| *s == d.str("__section")).unwrap_or(SECTIONS[0]);
+    let section = current_section(d, &SECTIONS);
     ui.horizontal_top(|ui| {
-        egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
-            ui.set_width(LIST_WIDTH);
-            ui.set_min_height(380.0);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 1.0;
-                for s in SECTIONS {
-                    let sel = s == section;
-                    let label = egui::RichText::new(s).size(12.5).color(if sel { t.text_strong } else { t.text });
-                    if ui.add(egui::Button::selectable(sel, label).frame_when_inactive(false).min_size(egui::vec2(LIST_WIDTH - 12.0, 24.0))).clicked()
-                    {
-                        d.fields.insert("__section".into(), json!(s));
-                    }
-                }
-            });
-        });
+        section_frame(ui, |ui| section_list(ui, d, &SECTIONS, section));
         ui.add_space(14.0);
         ui.vertical(|ui| {
             ui.set_width(500.0);
@@ -357,6 +345,34 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
     });
     false
+}
+
+/// The section `__section` names (default: the first).
+pub(super) fn current_section(d: &Dialog, sections: &[&'static str]) -> &'static str {
+    sections.iter().copied().find(|s| *s == d.str("__section")).or_else(|| sections.first().copied()).unwrap_or_default()
+}
+
+/// The frame of the section list column, at least as tall as the section content.
+pub(super) fn section_frame(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    let t = Tokens::get(ui.ctx());
+    egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
+        ui.set_width(LIST_WIDTH);
+        ui.set_min_height(380.0);
+        ui.vertical(add);
+    });
+}
+
+/// The section list: clicking a section shows it (`__section`).
+pub(super) fn section_list(ui: &mut egui::Ui, d: &mut Dialog, sections: &[&str], section: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.spacing_mut().item_spacing.y = 1.0;
+    for s in sections {
+        let sel = *s == section;
+        let label = egui::RichText::new(*s).size(12.5).color(if sel { t.text_strong } else { t.text });
+        if ui.add(egui::Button::selectable(sel, label).frame_when_inactive(false).min_size(egui::vec2(LIST_WIDTH - 12.0, 24.0))).clicked() {
+            d.fields.insert("__section".into(), json!(s));
+        }
+    }
 }
 
 /// The Preset row (the presets, built-in and saved, and Save Preset…) and, while Save Preset…
@@ -470,7 +486,7 @@ fn compression(ui: &mut egui::Ui, d: &mut Dialog) {
     flag(ui, d, "compression.compressText", "Compress text and line art", true);
 }
 
-fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let unit = app.session.general_unit();
     const MARKS: [(&str, &str); 4] = [
         ("marks.trim", "Trim marks"),
@@ -693,16 +709,27 @@ fn summary(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         let base = if d.kind == PRESET_KIND { pdf::DEFAULT_PRESET } else { "the preset" };
         note(ui, &format!("Every option matches {base}."));
     }
+    option_rows(ui, changed, option_label);
+    heading(ui, "Warnings");
+    warning_rows(ui, v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default());
+}
+
+/// A Summary line per changed option (`{option, value}`), labelled by `label`.
+pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item = &'a Value>, label: impl Fn(&str) -> String) {
+    let t = Tokens::get(ui.ctx());
     for c in changed {
         let value = match &c["value"] {
             Value::Bool(b) => if *b { "On" } else { "Off" }.to_string(),
             Value::String(s) => s.clone(),
             other => other.to_string(),
         };
-        ui.label(egui::RichText::new(format!("{}: {value}", option_label(c["option"].as_str().unwrap_or_default()))).color(t.text));
+        ui.label(egui::RichText::new(format!("{}: {value}", label(c["option"].as_str().unwrap_or_default()))).color(t.text));
     }
-    heading(ui, "Warnings");
-    let warnings = v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default();
+}
+
+/// The Summary's warnings ("None." without any).
+pub(super) fn warning_rows(ui: &mut egui::Ui, warnings: &[Value]) {
+    let t = Tokens::get(ui.ctx());
     if warnings.is_empty() {
         note(ui, "None.");
     }

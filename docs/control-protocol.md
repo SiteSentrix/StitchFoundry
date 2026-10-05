@@ -392,3 +392,16 @@ the raster rows of PNG Options (`ppi`, `background`, `antiAlias`), then `colorMo
 document starts on `cmyk`), `layers` (true: Write Layers; false: Flat Image, whose background list starts at White),
 `maxEditability` and `hiddenLayers` (with layers) and `embedIcc`. `ui.dialog.set` the fields and `ui.dialog.confirm`
 writes the file(s) with `document.export`.
+
+Print: File → Print… (`file.print` with no params, Ctrl/Cmd+P) opens the `print` dialog on the document's print
+settings. Its fields are the `print.setup` settings (`copies`, `artboards`, `range`, `media`, `orientation`,
+`placement`, `scaling`, `marks`, `bleed`, `output`, `graphics`, `color`, `margin`…; a section is an object, as
+`{field: "marks", value: {"trim": true}}`) plus `printer` (a name from `print.printers`, `""` the system's default) and
+`toFile` (save the job as a PDF), and the UI-only `__section` (General, Marks and Bleed, Output, Graphics, Color
+Management, Advanced, Summary) and `__sheet` (the page the preview shows, 0-based). `ui.dialog.confirm` (Print) keeps
+the settings with the document (`print.setup`, one undo step) and prints them: to the printer through the system's
+print queue (the web: the browser's print dialog), else, with `toFile` or no printing available, a save panel for the
+PDF. With `discard: true` it is Done: it only keeps the settings. Settings that can't print (a missing artboard, a
+range of no tiles) answer with an error and keep the dialog open. `file.print {settings?, printer?, toFile?, path?}`
+prints without the dialog; `print.printers` lists the printers and `print.printerSetup {printer?}` opens their system
+settings (Setup…).

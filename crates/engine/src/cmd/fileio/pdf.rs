@@ -239,7 +239,7 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// `(path, value)` for every leaf of `v` that differs from `default` (`compression.color.ppi`).
-fn changed(prefix: &str, v: &Value, default: &Value, out: &mut Vec<Value>) {
+pub fn changed(prefix: &str, v: &Value, default: &Value, out: &mut Vec<Value>) {
     match (v, default) {
         (Value::Object(o), Value::Object(d)) => {
             for (k, x) in o {

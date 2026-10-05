@@ -1210,6 +1210,8 @@ mod tests_previewbounds;
 #[cfg(test)]
 mod tests_print;
 #[cfg(test)]
+mod tests_printpreview;
+#[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]
 mod tests_rastersettings;

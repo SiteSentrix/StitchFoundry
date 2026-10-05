@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Preview",
             [],
             None,
-            "{settings?: {…print.setup settings} (over the document's)} → {pages (copies included), sheets: [{artboard (0-based; null with artboards ignored), tile? (1-based), ink? (separations), width, height (pt, the page), orientation, scale: [width %, height %]}] (one copy, in order), tiles: [{artboard, columns, rows, printed: [1-based tiles], tiles: [[x0, y0, x1, y1]…] (document space)}], inks: [{name, spot, print, frequency, angle}] (separations), warnings (art larger than the imageable area, options not applied yet…), settings} without printing",
+            "{settings?: {…print.setup settings} (over the document's)} → {pages (copies included), sheets: [{artboard (0-based; null with artboards ignored), tile? (1-based), ink? (separations), width, height (pt, the page), orientation, scale: [width %, height %], transform: [a, b, c, d, e, f] (document space → the page, pt, y down), area: [x0, y0, x1, y1] (the document region the page prints), trim: [x0, y0, x1, y1] (the artboard on the page)}] (one copy, in order), tiles: [{artboard, columns, rows, printed: [1-based tiles], tiles: [[x0, y0, x1, y1]…] (document space)}], inks: [{name, spot, print, frequency, angle}] (separations), warnings (art larger than the imageable area, options not applied yet…), settings} without printing",
             has_doc,
             preview
         ),
@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "file.print",
             "Print",
             [],
-            None,
+            Some("Cmd+P"),
             "{settings?: {…print.setup settings} (over the document's), path?} print the document as a print-ready PDF, one page per sheet of paper (per tile, per ink, per copy) → {pages, path, bytes, warnings}; no path → {dataBase64, bytes, pages, warnings}. Raster effects print at the document's raster effects resolution; halftone screens and flatness are left to the output device",
             has_doc,
             print

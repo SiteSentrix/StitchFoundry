@@ -294,7 +294,7 @@ fn view_file(app: &mut VectorcraftApp, path: &str) {
 }
 
 /// "Saved <path>", with the first of the result's warnings.
-fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
+pub(crate) fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
     let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     app.status(match warnings.first() {
         Some(first) => format!("Saved {path} with {} note(s): {first}", warnings.len()),
@@ -433,7 +433,7 @@ pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, params
 /// that path (else a picked or suggested name) → (path, the command's result without the data).
 /// The command runs before a path is asked for, so bad params never open a save dialog, except
 /// for Export Selection without a `format`, which takes it from the picked path.
-fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value) -> Result<(String, Value), String> {
+pub(crate) fn run_to_file(app: &mut VectorcraftApp, id: &str, ext: &str, mut params: Value) -> Result<(String, Value), String> {
     let mut path = params.as_object_mut().and_then(|o| o.remove("path")).and_then(|p| p.as_str().map(str::to_string));
     if let Some(o) = params.as_object_mut()
         && o.get("format").is_none()
