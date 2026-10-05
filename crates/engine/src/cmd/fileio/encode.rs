@@ -151,6 +151,7 @@ struct RasterOptions {
     dither_amount: Option<u8>,
     transparency: Option<bool>,
     matte: Option<Value>,
+    lossless: Option<bool>,
 }
 
 impl RasterOptions {
@@ -309,6 +310,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             d.template = true;
             vectorcraft_format::save_file(&d)
         }
+        "txt" => super::text::encode(doc, p)?,
         "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
         "pdf" => {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
@@ -356,6 +358,9 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             }
             if enc.files.is_empty() {
                 return Err(bad(C, "the document has no artboard"));
+            }
+            if format == RasterFormat::WebP && o.lossless == Some(false) {
+                enc.warnings.push("lossy WebP isn't available yet: the file is lossless (exact, but larger)".into());
             }
             return Ok(enc);
         }

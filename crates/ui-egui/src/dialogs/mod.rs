@@ -31,6 +31,7 @@ pub mod missing_links;
 pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
+pub mod office_export;
 mod path_ops;
 pub mod pdf_presets;
 pub mod place;
@@ -48,6 +49,7 @@ pub mod spot_colors;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
+mod text_export;
 pub mod text_import;
 pub mod tile_edge_color;
 mod tools;
@@ -203,6 +205,8 @@ registry! {
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
     SaveOptions: [save_options::KIND] => save_options::SPEC,
+    TextExport: [text_export::KIND] => text_export::SPEC,
+    OfficeExport: [office_export::KIND] => office_export::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

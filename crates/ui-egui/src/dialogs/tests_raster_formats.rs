@@ -1,4 +1,5 @@
-//! The options of the raster formats beyond PNG, drawn headlessly: JPEG, PNG-8 and GIF.
+//! The options of the export formats beyond PNG, drawn headlessly: JPEG, PNG-8, GIF and WebP, Text
+//! Export Options and Save for Office Documents.
 
 use serde_json::json;
 
@@ -76,4 +77,59 @@ fn palette_options_reduce_the_colours() {
     let (path, png) = written.borrow()[1].clone();
     assert_eq!(path, "/out/Untitled-1.png");
     assert_eq!(png[25], 3, "indexed");
+}
+
+#[test]
+fn text_export_options_write_the_stories() {
+    let (mut app, written) = app(1);
+    app.run("text.create", json!({"x": 5, "y": 30, "text": "Hello\nthere"})).unwrap();
+    app.run("file.exportAs", json!({"format": "txt"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("txtOptions"));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("path"), d.str("encoding")), ("/out/Untitled-1.txt".into(), "utf8".into()));
+    frame(&mut app);
+    set(&mut app, "lineEndings", json!("crlf"));
+    set(&mut app, "encoding", json!("bogus"));
+    assert!(confirm(&mut app).is_err());
+    assert_eq!(kind(&app), Some("txtOptions"), "a bad option keeps the dialog open");
+    set(&mut app, "encoding", json!("utf8"));
+    frame(&mut app);
+    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.txt");
+    assert!(app.ui.dialog.is_none());
+    let (path, bytes) = written.borrow().last().cloned().unwrap();
+    assert_eq!((path.as_str(), bytes.as_slice()), ("/out/Untitled-1.txt", &b"Hello\r\nthere\r\n"[..]));
+}
+
+#[test]
+fn webp_options_say_the_file_is_lossless() {
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": "webp"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("webpOptions"));
+    frame(&mut app);
+}
+
+#[test]
+fn save_for_office_documents_picks_the_resolution() {
+    let (mut app, written) = app(2);
+    let item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("document.exportForOffice")).unwrap();
+    assert_eq!((item.path[0].as_str(), item.label.as_str(), item.enabled), ("File", "Save for Office Documents…", true));
+    app.run("document.exportForOffice", json!({})).unwrap();
+    assert_eq!(kind(&app), Some("saveForOffice"));
+    frame(&mut app);
+    set(&mut app, "ppi", json!(300));
+    set(&mut app, "artboard", json!(1));
+    set(&mut app, "transparent", json!(true));
+    frame(&mut app);
+    assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.png");
+    let img = image::load_from_memory(&written.borrow()[0].1).unwrap().to_rgba8();
+    assert_eq!(img.dimensions(), (250, 167), "60 × 40 pt at 300 ppi");
+    assert_eq!(img.get_pixel(0, 0)[3], 0, "transparent");
+    // With a path (agents), no dialog.
+    let r = app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
+    assert_eq!(r["path"], "/x/o.png");
+    assert!(app.ui.dialog.is_none());
+    let img = image::load_from_memory(&written.borrow()[1].1).unwrap().to_rgba8();
+    assert_eq!((img.dimensions(), img.get_pixel(0, 0).0), ((60, 40), [255, 255, 255, 255]));
 }

@@ -19,9 +19,9 @@ use crate::{VectorcraftApp, io, widgets};
 pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, ok: Some("Export"), min_width: 360.0, ..DialogSpec::FORM };
 
 /// Resolution presets (pixels per inch).
-const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
+pub(super) const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
 /// Their labels, then `Other` (any resolution).
-const RESOLUTION_LABELS: [&str; 4] = ["Screen (72 ppi)", "Medium (150 ppi)", "High (300 ppi)", "Other"];
+pub(super) const RESOLUTION_LABELS: [&str; 4] = ["Screen (72 ppi)", "Medium (150 ppi)", "High (300 ppi)", "Other"];
 /// Background param values.
 const BACKGROUNDS: [&str; 3] = ["transparent", "white", "black"];
 /// Their labels, then `Other` (a colour).
@@ -171,6 +171,11 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
             "jpg" => jpeg_rows(ui, d, &label),
             "gif" | "png8" => palette_rows(ui, d, &label),
+            "webp" => {
+                ui.label("");
+                label(ui, "Lossless (lossy WebP isn't available yet)");
+                ui.end_row();
+            }
             _ => {}
         }
 
@@ -279,7 +284,7 @@ fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui,
 }
 
 /// A colour button bound to `d.fields[key]` (`"#rrggbb"`; grey when unset).
-fn color_button(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
+pub(super) fn color_button(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
     let c = vectorcraft_color::Color::from_hex(&d.str(key)).map_or([128, 128, 128, 255], |c| c.to_rgba8(1.0));
     let mut rgb = [c[0], c[1], c[2]];
     if ui.color_edit_button_srgb(&mut rgb).changed() {
@@ -288,7 +293,7 @@ fn color_button(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
 }
 
 /// A dropdown bound to `d.fields[key]`: one of `ids`, shown by its label (the first when unknown).
-fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str], labels: &[&str]) {
+pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str], labels: &[&str]) {
     let cur = d.str(key);
     let at = ids.iter().position(|v| v.eq_ignore_ascii_case(&cur)).unwrap_or(0);
     if let Some(i) = widgets::dropdown(ui, ("ro", key), labels.get(at).copied().unwrap_or_default(), labels, 150.0)
