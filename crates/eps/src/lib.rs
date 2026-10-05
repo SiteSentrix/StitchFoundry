@@ -18,13 +18,21 @@
 //! native document, both in comments that PostScript interpreters skip ([`native`],
 //! [`thumbnail`] read them back).
 //!
+//! [`import`] reads EPS and PostScript files back: the native document when the file carries one
+//! is [`native`]'s job; other files are run through a small PostScript interpreter, or come in as
+//! their TIFF preview.
+//!
 //! - `ps`: numbers, strings, paths and the data encodings (ASCII85, run-length, Flate).
 //! - `scene`: the document walk that writes the page.
 //! - `tiff`: the TIFF preview.
+//! - `import`: the PostScript interpreter.
 
+mod import;
 mod ps;
 mod scene;
 mod tiff;
+
+pub use import::{Imported, family_style, import};
 
 use vectorcraft_doc::Document;
 use vectorcraft_geom::{Point, Rect};
@@ -363,6 +371,12 @@ pub fn sections(bytes: &[u8]) -> Option<(&[u8], Option<&[u8]>)> {
 pub fn native(bytes: &[u8]) -> Option<Vec<u8>> {
     let (ps, _) = sections(bytes)?;
     ps::inflate(&read_data(ps, NATIVE)?, MAX_NATIVE)
+}
+
+/// Does the EPS file carry a native document (readable or not)?
+pub fn has_native(bytes: &[u8]) -> bool {
+    let marker = format!("{BEGIN_DATA}{NATIVE}");
+    sections(bytes).is_some_and(|(ps, _)| ps.windows(marker.len()).any(|w| w == marker.as_bytes()))
 }
 
 /// The PNG thumbnail an EPS file written by [`export`] carries, if any.

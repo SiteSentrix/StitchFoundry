@@ -149,7 +149,9 @@ fn load_options_read_pages_crop_and_password() {
 
 #[test]
 fn a_postscript_ai_file_says_it_cannot_be_opened_yet() {
-    let ps = b"%!PS-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 moveto 100 100 lineto stroke\nshowpage\n%%EOF\n";
+    // PostScript opens through the EPS reader now (tests_epsimport.rs): a program it can't read,
+    // with no preview to fall back on, still says so.
+    let ps = b"%!PS-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 moveto 100 100 frobnicate stroke\nshowpage\n%%EOF\n";
     let mut s = Session::new();
     for name in ["legacy.ai", "art.eps", "named.pdf", "template.ait"] {
         let e = s.execute("document.open", &json!({"name": name, "dataBase64": b64(ps)})).unwrap_err().to_string();

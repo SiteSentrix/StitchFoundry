@@ -55,6 +55,11 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_svg::is_svgz(bytes) {
         return format("svgz");
     }
+    if vectorcraft_pdf::is_postscript(bytes) {
+        // PostScript (.eps, and .ai saved without PDF compatibility) by any name; .ai and .ait
+        // keep their meaning (a template), read as PostScript all the same.
+        return by_name.filter(|f| matches!(f.id, "ai" | "ait")).or_else(|| format("eps"));
+    }
     if bytes.starts_with(b"%PDF") {
         // .ai and .ait files are PDF inside; the extension keeps the template meaning.
         return by_name.filter(|f| matches!(f.id, "ai" | "ait")).or_else(|| format("pdf"));
@@ -124,11 +129,6 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 
 /// [`load`] with `document.open` options (the PDF pages, box and password; the DXF options).
 pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
-    // PostScript (.ai saved in an older format or without PDF compatibility, .eps) says so, by
-    // any name.
-    if vectorcraft_pdf::is_postscript(bytes) {
-        return Err(err(format!("can't open `{}`: {}", file_name(name), vectorcraft_pdf::PdfError::PostScript)));
-    }
     let format = detect(name, bytes).ok_or_else(|| match super::unsupported(&super::extension(name)) {
         Some(u) => err(format!("can't open `{}`: {}", file_name(name), u.hint)),
         None => err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")),
@@ -136,6 +136,14 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     let title = file_name(name);
     let mut converted = false;
     let (mut doc, warnings, restored) = match format.id {
+        // EPS and PostScript .ai: the document our EPS files carry, else the PostScript read.
+        _ if format.id == "eps" || vectorcraft_pdf::is_postscript(bytes) => {
+            let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
+            restore_or_import(editing, || {
+                let r = vectorcraft_eps::import(bytes).map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
+                Ok((r.document, r.warnings))
+            })?
+        }
         "vectorcraft" | "template" => {
             let (d, info, warnings) = native_file(bytes)?;
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;

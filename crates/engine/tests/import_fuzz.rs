@@ -3,7 +3,8 @@
 //! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
-//! of every kind with random contents) opened, placed or pasted.
+//! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
+//! (damaged ones, hostile programs) read by the PostScript interpreter.
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -857,6 +858,67 @@ proptest! {
         let _ = vectorcraft_eps::thumbnail(&bytes);
         survive("mutated EPS file", || vectorcraft_eps::native(&bytes).and_then(|n| vectorcraft_format::load(&n).ok()))?;
     }
+
+    /// Damaged EPS files without the document: the PostScript interpreter (or the preview
+    /// fallback) reads them as an error or a document.
+    #[test]
+    fn eps_mutated_postscript_never_panics(cut in 0usize..400_000, edits in prop::collection::vec((0usize..400_000, any::<u8>()), 0..12)) {
+        static SAMPLE: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+        let mut bytes = SAMPLE.get_or_init(foreign_eps_sample).clone();
+        for &(at, b) in &edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        bytes.truncate(cut.max(4));
+        survive("mutated EPS PostScript", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// Hostile PostScript programs: operators in any order with any operands, opened and placed.
+    #[test]
+    fn eps_hostile_programs_never_panic(tokens in prop::collection::vec(arb_ps_token(), 0..60)) {
+        let ps = format!("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 200\n%%EndComments\n{}\nshowpage\n", tokens.join(" "));
+        survive("hostile PostScript", || vectorcraft_engine::cmd::fileio::load("x.eps", ps.as_bytes()).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = rich_session();
+            let _ = s.execute("file.place", &json!({"name": "x.eps", "dataBase64": vectorcraft_format::base64_encode(ps.as_bytes())}));
+        });
+        r.map_err(|msg| TestCaseError::fail(format!("placing hostile PostScript panicked: {msg}")))?;
+    }
+}
+
+/// [`eps_sample`] as another app would write it: without the document it carries, so its
+/// PostScript is read.
+fn foreign_eps_sample() -> Vec<u8> {
+    let mut bytes = eps_sample();
+    let marker = b"%VectorCraft_BeginData: native";
+    let at = bytes.windows(marker.len()).position(|w| w == marker).unwrap();
+    bytes[at + marker.len() - 1] = b'x';
+    bytes
+}
+
+/// The operators and operands of a hostile PostScript program.
+fn arb_ps_token() -> impl Strategy<Value = String> {
+    prop_oneof![
+        arb_num(),
+        prop::sample::select(vec![
+            "moveto", "lineto", "curveto", "rlineto", "rmoveto", "closepath", "fill", "eofill", "stroke", "clip", "eoclip", "newpath",
+            "gsave", "grestore", "save", "restore", "concat", "translate", "scale", "rotate", "setlinewidth", "setdash", "setgray",
+            "setrgbcolor", "setcmykcolor", "sethsbcolor", "setcolorspace", "setcolor", "setpattern", "makepattern", "shfill", "arc", "arcn",
+            "arct", "arcto", "rectfill", "rectclip", "rectstroke", "image", "imagemask", "colorimage", "currentfile", "filter",
+            "readhexstring", "readstring", "show", "stringwidth", "charpath", "findfont", "scalefont", "makefont", "setfont", "selectfont",
+            "def", "bind", "load", "dup", "exch", "pop", "roll", "index", "copy", "for", "repeat", "loop", "exit", "if", "ifelse", "exec",
+            "stopped", "begin", "end", "dict", "array", "string", "get", "put", "getinterval", "putinterval", "aload", "astore", "forall",
+            "[", "]", "<<", ">>", "{", "}", "matrix", "currentmatrix", "setmatrix", "transform", "itransform", "invertmatrix", "pathbbox",
+            "clippath", "initclip", "currentpoint", "eexec", "cleartomark", "mark", "counttomark", "showpage", "gstate", "setgstate",
+            "/ASCII85Decode", "/ASCIIHexDecode", "/FlateDecode", "/RunLengthDecode", "/LZWDecode", "/DCTDecode", "/SubFileDecode",
+            "/DeviceRGB", "/DeviceCMYK", "/DeviceGray", "/Pattern", "/x", "x", "/Helvetica", "(abc)", "<ff00>", "<~87cURD]i,\"Ebo80~>",
+            "true", "false", "null", "[/Separation (S) /DeviceCMYK {dup dup dup}]", "[/Indexed /DeviceRGB 1 <ff000000ff00>]",
+            "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 1 1] /Function << /FunctionType 2 /C0 [0 0 0] /C1 [1 1 1] /N 1 >> >>",
+            "<< /PatternType 2 /Shading << /ShadingType 3 /ColorSpace /DeviceGray /Coords [0 0 0 9 9 9] /Function << /FunctionType 3 /Functions [] /Bounds [] /Encode [] >> >> >>",
+            "<< /ImageType 1 /Width 2 /Height 2 /BitsPerComponent 8 /ImageMatrix [2 0 0 2 0 0] /DataSource (abcdefghijkl) >>",
+        ])
+        .prop_map(str::to_string),
+    ]
 }
 
 proptest! {

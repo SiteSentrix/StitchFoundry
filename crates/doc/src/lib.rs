@@ -7,6 +7,7 @@
 
 pub mod appearance;
 pub mod assets;
+pub mod clipnest;
 pub mod graph;
 pub mod hit;
 pub mod inks;

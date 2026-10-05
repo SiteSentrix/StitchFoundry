@@ -8,6 +8,9 @@
 //!   (`dxf`, [`fileio::dxfimport`]).
 //! - An EMF or WMF picture becomes one group, clipped to its frame (`crop: "crop"`) or bounded by
 //!   its art (`crop: "bounding"`).
+//! - An EPS file (or a PostScript .ai) becomes one group, clipped to its bounding box or bounded by
+//!   its art: the document an EPS file of ours carries, else what its PostScript draws, else its
+//!   preview ([`fileio::load`]).
 //! - A PDF/.ai/.ait page or a native document's artboard becomes one group, clipped to the page
 //!   (`crop: "crop"`; a PDF page's `art`, `trim`, `bleed` or `media` box too) or bounded by its art
 //!   (`crop: "bounding"`).
@@ -50,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name+dataBase64, link?: true (a raster image keeps its file's path; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside, aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default) | \"bounding\" (the art's bounds) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame) and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
+            "{path | name+dataBase64, link?: true (a raster image keeps its file's path; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside, aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default) | \"bounding\" (the art's bounds) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it) and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
             has_doc,
             place
         ),
@@ -145,7 +148,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
     {
         opts.dxf.fit_to = (b.width(), b.height());
     }
-    let pdf = matches!(format.id, "pdf" | "ai" | "ait");
+    // PostScript .ai files are read like EPS.
+    let pdf = matches!(format.id, "pdf" | "ai" | "ait") && !vectorcraft_pdf::is_postscript(&src.bytes);
     if !pdf && !matches!(opts.crop, CropTo::Crop | CropTo::Bounding) {
         return Err(bad(
             cmd,
@@ -164,7 +168,7 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
     let (mut doc, warnings) = match format.id {
         // Only the page placed is read, its artboard the box asked for (Bounding Box: the art's
         // bounds, below).
-        "pdf" | "ai" | "ait" => {
+        "pdf" | "ai" | "ait" if pdf => {
             let o = fileio::LoadOptions { crop: if crop { opts.crop } else { CropTo::Crop }, ..opts };
             fileio::page_document(&src.bytes, page - 1, &o).map_err(|e| bad(cmd, format!("{name}: {e}")))?
         }
@@ -190,10 +194,9 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
             let what = if matches!(format.id, "vectorcraft" | "template") { "artboard" } else { "page" };
             bad(cmd, format!("page {page}: `{name}` has {n} {what}(s)"))
         })?;
-        // A PDF import has one layer per page; a native document's art is whatever lies on the
-        // artboard.
-        let pages: Vec<&Arc<Node>> =
-            if matches!(format.id, "vectorcraft" | "template") { layers.iter().collect() } else { layers.get(index).into_iter().collect() };
+        // A PDF import has one layer per page; a native document's (or an EPS file's) art is
+        // whatever lies on the artboard.
+        let pages: Vec<&Arc<Node>> = if pdf { layers.get(index).into_iter().collect() } else { layers.iter().collect() };
         let on_board = |c: &&Arc<Node>| c.visual_bounds().is_some_and(|b| b.intersect(board).area() > 0.0 || board.contains(b.origin()));
         let nodes = art_of(pages.into_iter().filter(|l| placeable(l)).flat_map(|l| l.children().into_iter().flatten()).filter(on_board));
         (nodes, crop.then_some(board))

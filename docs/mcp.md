@@ -240,8 +240,8 @@ and Separation and DeviceN inks become spot swatches the art links to at its tin
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/brochure.pdf","pages":"2-3","cropTo":"trim"}}}
 ```
 
-PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) can't be opened yet and
-say so, as does an `.ai` whose PDF part is only a placeholder page.
+PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) open through the EPS
+reader (see EPS and PostScript import); an `.ai` whose PDF part is only a placeholder page says it can't be opened.
 
 What a PDF holds comes in as editable art: soft masks become opacity masks (an alpha mask as a white copy of its art;
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
@@ -1520,4 +1520,27 @@ unless `replace`). Saved presets live with the preferences. To print with a pres
 
 ```json
 {"name":"run_command","arguments":{"command":"print.presets.save","params":{"name":"Posters","settings":{"scaling":"tileImageable","overlap":18,"marks":{"trim":true}}}}}
+```
+
+## EPS and PostScript import
+
+`document.open` and `file.place` read `.eps` files, and PostScript by any name (an `.ai` saved without PDF
+compatibility opens as artwork; an `.ait` one as a new untitled document). An EPS file VectorCraft wrote restores the
+document it carries (`restored: true`, as Preserve Editing does for PDF and SVG); when that document can't be read the
+PostScript is read instead and the first warning says why.
+
+Other files are run through a small PostScript interpreter (Level 3, first page only): paths, fills and strokes with
+their width, caps, joins, miter limit and dashes (a fill and a stroke of the same path become one object), grey, RGB,
+CMYK, indexed and spot colours (a Separation ink becomes a spot swatch, painted at its tint), clips (clipping groups),
+`gsave`/`grestore`, `save`/`restore`, transforms, procedures with `bind def`, loops and dictionaries, axial and radial
+shadings and shading patterns (gradients), images and image masks (data in the file through ASCII85, hex, run-length,
+Flate, LZW or DCT filters, or from procedures), and type as point type in the font the file names (embedded font
+programs are skipped). The artboard is the `%%HiResBoundingBox` (else `%%BoundingBox`; a letter page without one).
+A program the interpreter can't run (an operator it doesn't know, an error, a runaway loop) or that draws nothing comes
+in as its TIFF preview with a warning; without a preview, the art drawn up to the error is kept with a warning, and a
+file with none is refused with a message saying why.
+
+```json
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/logo.eps"}}}
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/logo.eps","at":[300,300]}}}
 ```
