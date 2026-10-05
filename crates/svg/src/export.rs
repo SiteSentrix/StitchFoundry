@@ -411,10 +411,6 @@ impl Writer<'_> {
     fn tiny(&self) -> bool {
         self.opts.profile == Profile::Tiny12
     }
-    /// Are the fonts type uses embedded?
-    fn embeds_fonts(&self) -> bool {
-        self.opts.embed_fonts && !self.opts.outline_text && !self.tiny()
-    }
     fn num(&self, v: f64) -> String {
         fmt_num(v, self.opts.decimals)
     }
@@ -1505,7 +1501,7 @@ impl Writer<'_> {
     fn char_props(&mut self, st: &CharStyle, space: (Rect, Affine)) -> Props {
         let decimals = self.opts.decimals;
         let len = |v: f64| fmt_num(v, decimals);
-        let mut p = css::font_props(st, &len, self.embeds_fonts());
+        let mut p = css::font_props(st, &len);
         // Character paints resolve in the text's space (`to_user` maps it into user space).
         let (bounds, to_user) = space;
         let saved = std::mem::replace(&mut self.xf, to_user);

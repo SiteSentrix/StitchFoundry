@@ -72,21 +72,18 @@ pub(crate) fn font_descriptor(st: &CharStyle) -> (u16, bool) {
 }
 
 /// The font of character style `st`: family, size (the vertical scale; writers stretch the
-/// horizontal one), weight and style, lengths written by `len`. `numeric_weight`: the face's
-/// weight as a number (embedded faces are told apart by it), else `bold` for bold styles.
-pub(crate) fn font_props(st: &CharStyle, len: &dyn Fn(f64) -> String, numeric_weight: bool) -> Props {
+/// horizontal one), weight and style, lengths written by `len`. The weight is the style's number
+/// (600 for Semibold, 300 for Light), `bold` for 700 and left out for 400.
+pub(crate) fn font_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
     let mut p = Props::new();
     let fam = if st.font_family.contains(|c: char| c.is_whitespace() || c == ',') { format!("'{}'", st.font_family) } else { st.font_family.clone() };
     p.push(("font-family", fam));
     p.push(("font-size", len(st.size * st.v_scale / 100.0)));
-    let fs = st.font_style.to_ascii_lowercase();
     let (weight, italic) = font_descriptor(st);
-    if numeric_weight {
-        if weight != 400 {
-            p.push(("font-weight", weight.to_string()));
-        }
-    } else if fs.contains("bold") || fs.contains("black") || fs.contains("heavy") {
-        p.push(("font-weight", "bold".into()));
+    match weight {
+        400 => {}
+        700 => p.push(("font-weight", "bold".into())),
+        w => p.push(("font-weight", w.to_string())),
     }
     if italic {
         p.push(("font-style", "italic".into()));
@@ -531,7 +528,7 @@ impl Rules<'_> {
             self.warn("type with several character styles is written in its first one");
         }
         let len = |v: f64| self.len(v);
-        art.props.extend(font_props(&st, &len, false));
+        art.props.extend(font_props(&st, &len));
         match &st.fill {
             Paint::Solid { color, .. } => art.props.push(("color", color.to_hex())),
             Paint::None => art.props.push(("color", "transparent".into())),
