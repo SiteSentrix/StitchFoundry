@@ -66,7 +66,7 @@ fn bad_options_are_refused() {
         json!({"range": "0"}),
         json!({"artboards": []}),
         json!({"preset": "Nope"}),
-        json!({"standard": "pdfX4"}),
+        json!({"standard": "pdfX4", "compatibility": "1.7"}),
         json!({"standard": "pdfA2b", "compatibility": "2.0"}),
         json!({"compression": {"color": {"ppi": 0}}}),
         json!({"compression": "zip"}),

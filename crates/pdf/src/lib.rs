@@ -50,6 +50,7 @@ mod marks;
 mod output;
 mod pages;
 mod patch;
+mod pdfx;
 mod presets;
 mod print;
 mod settings;
@@ -219,6 +220,8 @@ mod tests_import_options;
 mod tests_marks;
 #[cfg(test)]
 mod tests_output;
+#[cfg(test)]
+mod tests_pdfx;
 #[cfg(test)]
 mod tests_presets;
 #[cfg(test)]

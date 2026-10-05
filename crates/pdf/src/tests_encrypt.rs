@@ -148,11 +148,11 @@ fn permission_bits_follow_the_options() {
 fn standards_and_bad_passwords_are_refused() {
     let set = |standard, compatibility, sec| PdfSettings { standard, compatibility, security: sec, ..Default::default() };
     for standard in [Standard::PdfA2b, Standard::PdfX1a, Standard::PdfX3, Standard::PdfX4] {
-        let e = set(standard, Compatibility::Pdf17, security("pw", "")).check_values().unwrap_err();
+        let e = set(standard, standard.version(), security("pw", "")).check_values().unwrap_err();
         assert!(matches!(&e, PdfError::BadSetting(m) if m.contains("password-protected")), "{standard:?}: {e}");
-        let e = set(standard, Compatibility::Pdf17, security("", "pw")).check_values().unwrap_err();
+        let e = set(standard, standard.version(), security("", "pw")).check_values().unwrap_err();
         assert!(e.to_string().contains("password-protected"), "{standard:?}: {e}");
-        assert!(set(standard, Compatibility::Pdf17, security("", "")).check_values().is_ok(), "{standard:?} without passwords");
+        assert!(set(standard, standard.version(), security("", "")).check_values().is_ok(), "{standard:?} without passwords");
     }
     let bad = |c, sec| set(Standard::None, c, sec).check_values().unwrap_err().to_string();
     assert!(bad(Compatibility::Pdf17, security("same", "same")).contains("must differ"));

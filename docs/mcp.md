@@ -215,7 +215,9 @@ Long-tail commands:
 PDF files take the Save PDF dialog's options: `preset`, `standard`, `compatibility`, the General toggles and the
 `compression`, `marks`, `bleed`, `output`, `advanced` and `security` sections (`list_commands` with filter `exportPdf`
 documents every field). `document.exportPdf` and `export` (format `pdf`, the options in `options`) return `warnings`:
-options accepted but not applied yet, and features approximated or left out. PDF/X and PDF/A-2b at 2.0 are refused.
+options accepted but not applied yet, and features approximated or left out. A standard with a PDF version it doesn't
+allow is refused (PDF/A-2b at 2.0, PDF/X-4 above 1.6, PDF/X-1a and PDF/X-3 at anything but 1.4); choosing a standard
+without giving `compatibility` sets the latest it allows.
 A `security` password encrypts the file (RC4 128-bit at PDF 1.4–1.5, AES-128 at 1.6, AES-256 at 1.7 and 2.0) with its
 permissions; either password opens it (`document.open {password}`), and a password with PDF/A or PDF/X is refused.
 Pattern fills and strokes are written as their tiles clipped to the area they paint (a stroke's outline, with its
@@ -1057,8 +1059,8 @@ bounds, or the artboard less a 36 pt margin.
 ## PDF presets
 
 `pdf.preset.list` lists the built-in presets (`VectorCraft Default`, which preserves editing, then High Quality Print,
-Press Quality, Smallest File Size and the PDF/X presets, `builtIn: true`; `supported: false` where the writer can't
-produce the standard yet) and the saved ones, each with its `description` and `settings`. `pdf.preset.save {name?,
+Press Quality, Smallest File Size and the PDF/X presets, `builtIn: true`; `supported` says the writer produces the
+preset's standard) and the saved ones, each with its `description` and `settings`. `pdf.preset.save {name?,
 newName?, description?, preset?, …document.exportPdf options}` creates or changes a saved preset (a change starts from
 the preset's own settings; `newName` renames it; built-in presets are read-only; passwords are never stored);
 `pdf.preset.delete {name}` deletes one. `pdf.preset.export {names?, path?}` writes them as a `.vcpdfpresets` JSON file
@@ -1555,4 +1557,30 @@ file with none is refused with a message saying why.
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/logo.eps"}}}
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/logo.eps","at":[300,300]}}}
+```
+
+## PDF/X
+
+`document.exportPdf {standard: "pdfX1a" | "pdfX3" | "pdfX4"}` (or the built-in PDF/X presets) writes print exchange
+files as their standards say. Every PDF/X file gets a `/GTS_PDFX` output intent (`output.outputIntent`; blank, the
+CMYK profile in effect: the destination when converting to CMYK, else the working one, embedded; in PDF/X-1a and
+PDF/X-3 a name that isn't a profile needs `output.registry`, a registered printing condition named without a profile;
+PDF/X-4 always embeds one), a TrimBox on every page (the artboard), `/Trapped` True or False, `/GTS_PDFXVersion`, a title (`Untitled` when the
+document has none) and dates; type is outlined or embedded; editing data, passwords and, in PDF/X-1a and PDF/X-3, PDF
+layers are refused.
+
+- **pdfX1a** (PDF/X-1a:2001, written as PDF 1.3): CMYK, grey and spot colours only. Every colour and image is converted
+  to `output.destination` (blank: the output intent's CMYK profile, else the working CMYK profile), untagged; an RGB
+  destination or output intent is refused. Transparency is flattened before writing.
+- **pdfX3** (PDF/X-3:2002, written as PDF 1.3): colours are tagged with ICC profiles; transparency is flattened.
+- **pdfX4** (PDF/X-4:2010, PDF 1.6 at most): transparency and layers are kept, colours are tagged, and the XMP metadata
+  names the standard.
+
+Flattening uses the High Resolution flattener preset on a copy (the document is untouched; a warning says so), and
+images with see-through pixels count as transparency. The written file is checked against its standard: what it still
+breaks (transparency, RGB in PDF/X-1a, a font not embedded) fails the export instead of writing a file that only
+claims the standard.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"PDF/X-1a:2001","output":{"outputIntent":"VectorCraft Generic CMYK (SWOP-like)","outputCondition":"Coated","trapped":false}}}}
 ```

@@ -14,9 +14,11 @@ fn built_in_presets() {
         let back: PdfPreset = serde_json::from_value(serde_json::to_value(p).unwrap()).unwrap();
         assert_eq!(&back, p, "round-trips");
     }
-    // PDF/X presets name standards the writer doesn't produce yet.
-    let x4 = builtin_preset("pdf/x-4:2010").unwrap();
-    assert!(matches!(x4.settings.check(), Err(PdfError::Unsupported(_))));
+    // The PDF/X presets are written as their standards say.
+    for name in ["pdf/x-1a:2001", "PDF/X-3:2002", "pdf/x-4:2010"] {
+        let x = builtin_preset(name).unwrap();
+        assert!(x.settings.standard.is_pdfx() && x.settings.check().is_ok(), "{name}");
+    }
     assert_eq!(builtin_preset("default").unwrap().name, DEFAULT_PRESET);
     assert!(builtin_preset("Nope").is_none());
 }
