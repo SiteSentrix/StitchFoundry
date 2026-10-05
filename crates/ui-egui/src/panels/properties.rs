@@ -268,7 +268,9 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
         }
         ui.add_space(6.0);
-        let fw = ((ui.available_width() - 44.0) / 2.0).clamp(60.0, 110.0);
+        let link = app.session.prefs.constrain_proportions;
+        // Room for the labels and the W/H link.
+        let fw = ((ui.available_width() - 70.0) / 2.0).clamp(60.0, 110.0);
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
             if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x), units, fw) {
@@ -276,7 +278,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             dim_label(ui, "W:");
             if let Some(v) = widgets::num_field(ui, "tw", Some(b.width()), units, fw) {
-                app.run("object.setBounds", json!({"width": v, "reference": refi})).ok();
+                app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link})).ok();
             }
             ui.end_row();
             dim_label(ui, "Y:");
@@ -285,10 +287,11 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             dim_label(ui, "H:");
             if let Some(v) = widgets::num_field(ui, "th", Some(b.height()), units, fw) {
-                app.run("object.setBounds", json!({"height": v, "reference": refi})).ok();
+                app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link})).ok();
             }
             ui.end_row();
         });
+        super::transform::constrain_link(app, ui);
     });
     ui.horizontal(|ui| {
         icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);

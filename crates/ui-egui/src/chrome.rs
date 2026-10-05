@@ -203,10 +203,15 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 // The bounding box, rotated with rotated objects: its centre and its own sides.
                 if let Some(b) = app.selection_box() {
                     let c = b.center();
+                    let link = app.session.prefs.constrain_proportions;
                     for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", b.rect.width()), ("height", "H:", b.rect.height())] {
+                        // The W/H link sits between W and H.
+                        if k == "height" {
+                            crate::panels::transform::constrain_link(app, ui);
+                        }
                         ui.label(egui::RichText::new(lbl).size(12.0).color(t.text_dim));
                         if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v), units, 80.0) {
-                            app.run("object.setBounds", json!({k: nv, "reference": 4})).ok();
+                            app.run("object.setBounds", json!({k: nv, "reference": 4, "proportional": link})).ok();
                         }
                     }
                 }

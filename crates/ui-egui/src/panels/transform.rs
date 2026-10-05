@@ -33,7 +33,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let bx = app.selection_box();
     let bounds = bx.map(|b| b.rect);
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
-    let link: bool = pstate(ui.ctx(), "xf-link");
+    let link = app.session.prefs.constrain_proportions;
     let has = bounds.is_some();
     let rp = bx.map(|b| b.reference_point(refi));
     ui.horizontal(|ui| {
@@ -63,9 +63,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.end_row();
             });
         });
-        if widgets::icon_button(ui, if link { "link" } else { "link-2-off" }, "Constrain Width and Height Proportions", link, 22.0).clicked() {
-            set_pstate(ui.ctx(), "xf-link", !link);
-        }
+        constrain_link(app, ui);
     });
     ui.add_space(4.0);
     let origin = rp.map(|p| json!([p.x, p.y]));
@@ -136,6 +134,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::check(ui, "Scale Strokes & Effects", ss, true) {
         set_pref(app, "scaleStrokes", !ss);
+    }
+}
+
+/// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
+/// `constrainProportions` preference, which the size fields pass on as `proportional`.
+pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let on = app.session.prefs.constrain_proportions;
+    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, "Constrain Width and Height Proportions", on, 22.0).clicked() {
+        set_pref(app, "constrainProportions", !on);
     }
 }
 

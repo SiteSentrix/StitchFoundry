@@ -472,6 +472,10 @@ pub struct Prefs {
     /// Preferences dialog field: resetting the preferences keeps it; `print.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub print_presets: Vec<cmd::printpresets::PrintPreset>,
+    /// Constrain Width and Height Proportions: the link between W and H in the Transform panel,
+    /// the Properties panel and the Control bar (their size fields pass `proportional` to
+    /// `object.setBounds`).
+    pub constrain_proportions: bool,
 }
 
 impl Default for Prefs {
@@ -604,6 +608,7 @@ impl Default for Prefs {
             web_export_presets: vec![],
             web_export_settings: None,
             print_presets: vec![],
+            constrain_proportions: false,
         }
     }
 }

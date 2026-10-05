@@ -1667,3 +1667,14 @@ its undo history are as if the click never happened. Commands on the edited text
 ```json
 {"name":"run_command","arguments":{"command":"text.discardEmpty","params":{"id":42}}}
 ```
+
+## Constrain proportions
+
+The link between W and H in the Transform panel, the Properties panel and the Control bar is the
+`constrainProportions` preference (`prefs.get` / `prefs.set`). With it on, those fields send `proportional: true`
+to `object.setBounds`, which scales the other dimension by the same factor; agents pass `proportional` themselves.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"constrainProportions","value":true}}}
+{"name":"run_command","arguments":{"command":"object.setBounds","params":{"width":200,"proportional":true}}}
+```
