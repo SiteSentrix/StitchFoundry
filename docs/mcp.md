@@ -921,3 +921,33 @@ in one undo step.
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}
 ```
+
+## Linked images
+
+A placed image linked to its file (`file.place {path}`, Link on) records the file's absolute path, its size,
+modification time and hash, and keeps a low-resolution preview (at most 256 px a side): a `.vectorcraft` save writes
+the preview instead of the pixels, plus the path relative to the saved file. `document.open` reads
+the linked files again, looking for each at its path, then at its relative path and by name in the document's folder
+(so a folder moved with its links still opens): the result lists `missingLinks` (their images show the preview),
+`modifiedLinks` (left as they were; read again only with the preference `updateLinks: "automatically"`, then they are
+in `updatedLinks`), each as `{name, path, ids}`. `links.check` reports every link's `status` (`ok`, `modified`,
+`missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
+another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. Without a
+file system (the web), linked images show their previews.
+
+```json
+{"name":"run_command","arguments":{"command":"links.check","params":{}}}
+{"name":"run_command","arguments":{"command":"links.relink","params":{"ids":[12],"path":"/new/photo.png"}}}
+{"name":"run_command","arguments":{"command":"links.update","params":{}}}
+```
+
+Placing a text file (`.txt`) sets it as area type: `file.place {path | name+dataBase64, text?: {characterSet?:
+"unicode" | "ansi", platform?: "windows" | "mac", removeLineReturns?, removeParagraphReturns?, replaceSpaces?: n}}`
+(Text Import Options). Unicode reads UTF-8, or UTF-16 with a byte-order mark; ANSI reads Windows-1252 (Mac Roman on
+`mac`). `removeLineReturns` joins the lines of each block into one paragraph, `removeParagraphReturns` drops blank
+lines, `replaceSpaces: 3` turns runs of 3 or more spaces into tabs. The frame fills `rect`, the replaced object's
+bounds, or the artboard less a 36 pt margin.
+
+```json
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/notes.txt","text":{"removeLineReturns":true,"removeParagraphReturns":true}}}}
+```

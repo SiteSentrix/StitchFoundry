@@ -27,6 +27,7 @@ mod form;
 mod gradient_stop;
 pub mod graphic_style_options;
 pub mod import_pdf;
+pub mod missing_links;
 pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
@@ -45,6 +46,7 @@ pub mod spot_colors;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
+pub mod text_import;
 pub mod tile_edge_color;
 mod tools;
 mod transform;
@@ -194,6 +196,8 @@ registry! {
     SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,
     FileInfo: [file_info::KIND] => file_info::SPEC,
     RasterEffectsSettings: [raster_effects::KIND] => raster_effects::SPEC,
+    MissingLinks: [missing_links::KIND] => missing_links::SPEC,
+    TextImport: [text_import::KIND] => text_import::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

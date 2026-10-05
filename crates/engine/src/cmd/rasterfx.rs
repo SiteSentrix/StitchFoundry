@@ -201,7 +201,7 @@ pub(crate) fn effect_image(out: &mut Document, whole: &Node, knockout: Option<&N
     while out.images.contains_key(&key) {
         key.push('+');
     }
-    out.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
+    out.images.insert(key.clone(), ImageBlob::new("image/png", png));
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
     let mut image = Node::new(id, NodeKind::Image(ImageObject { key, width: img.width, height: img.height, xf, link: None }));
     image.name = Some("Raster effect".into());

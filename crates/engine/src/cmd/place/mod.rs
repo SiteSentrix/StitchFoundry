@@ -2,12 +2,14 @@
 //! the clipboard.
 //!
 //! - A raster image becomes one image at 100% of its physical size: its pixels at the resolution
-//!   the file declares ([`fileio::ppi`]; 72 ppi when it declares none), linked to its path with
-//!   `link`.
+//!   the file declares ([`fileio::ppi`]; 72 ppi when it declares none), linked to its file with
+//!   `link` ([`super::links`]).
 //! - An SVG becomes one group of its art.
 //! - A PDF/.ai/.ait page or a native document's artboard becomes one group, clipped to the page
 //!   (`crop: "crop"`; a PDF page's `art`, `trim`, `bleed` or `media` box too) or bounded by its art
 //!   (`crop: "bounding"`).
+//! - A text file becomes area type, decoded and cleaned up with the Text Import Options (`text`,
+//!   [`text`]).
 //!
 //! The art lands centred on `at`, fitted into `rect`, or (Replace) where the replaced object was,
 //! with its transform; Template puts it on a new template layer. The images, symbols, patterns and
@@ -15,12 +17,13 @@
 //! `place` tool) with several files, which emits one `file.place` per click or drag.
 
 mod adopt;
+mod text;
 
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Appearance, Document, ImageObject, Node, NodeId, NodeKind, Scaling};
+use vectorcraft_doc::{Appearance, Document, ImageObject, LinkInfo, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_pdf::CropTo;
 
@@ -34,6 +37,8 @@ const QUEUE: &str = "file.place.queue";
 const MAX_QUEUE: usize = 100;
 /// The longest thumbnail side `thumbnail` may ask for (px).
 const MAX_THUMBNAIL: f64 = 512.0;
+/// A text file's natural box (`file.place.info`, the place cursor): a letter page less 1 in margins.
+const TEXT_FRAME: Rect = Rect::new(0.0, 0.0, 468.0, 648.0);
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -42,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name+dataBase64, link?: true (a raster image keeps its file's path; other files are embedded), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside, aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default) | \"bounding\" (the art's bounds) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, PDF/.ai and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
+            "{path | name+dataBase64, link?: true (a raster image keeps its file's path; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside, aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default) | \"bounding\" (the art's bounds) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, PDF/.ai and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard",
             has_doc,
             place
         ),
@@ -69,7 +74,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Place Cursor",
             [],
             None,
-            "{paths?: [path…], files?: [{name, dataBase64}…], link?, template?, page?, crop?, thumbnail?: px} load the place cursor (the `place` tool) with up to 100 files (as file.place reads them): a click places the current file at 100% with its top-left corner there, a drag places it at the dragged size (aspect kept), ←/→ and ↑/↓ cycle the files, Esc discards the current one; each placement is a file.place, and the previous tool returns after the last → {count, files: [{name, format, width, height, thumbnailBase64?}], skipped: [{name, error}]}",
+            "{paths?: [path…], files?: [{name, dataBase64}…], link?, template?, page?, crop?, text?, thumbnail?: px} load the place cursor (the `place` tool) with up to 100 files (as file.place reads them): a click places the current file at 100% with its top-left corner there, a drag places it at the dragged size (aspect kept), ←/→ and ↑/↓ cycle the files, Esc discards the current one; each placement is a file.place, and the previous tool returns after the last → {count, files: [{name, format, width, height, thumbnailBase64?}], skipped: [{name, error}]}",
             has_doc,
             queue
         ),
@@ -81,6 +86,8 @@ pub fn specs() -> Vec<CommandSpec> {
 /// A file's art at its natural size, before it joins a document.
 enum Art {
     Image(RasterImage),
+    /// A text file's text, placed as area type filling the natural box.
+    Text(String),
     Vector {
         /// The loaded document: the source of the art's resources.
         src: Box<Document>,
@@ -98,8 +105,8 @@ struct Loaded {
     /// The art's natural box (what `at` centres and `rect` fits).
     natural: Rect,
     warnings: Vec<String>,
-    /// The file's path (for Link).
-    path: Option<String>,
+    /// The link to a raster image's file (for Link), when read from a path.
+    link: Option<LinkInfo>,
 }
 
 /// Points per pixel of a raster image at the resolution it declares (72 ppi when none).
@@ -112,6 +119,13 @@ fn pt_per_px(ppi: Option<(f64, f64)>) -> (f64, f64) {
 fn load(p: &Value, cmd: &str) -> Result<Loaded> {
     let src = fileio::source(p, cmd)?;
     let name = fileio::file_name(src.name);
+    if fileio::TEXT_EXTS.contains(&fileio::extension(src.name).as_str()) {
+        let text = text::import(&src.bytes, text::TextOptions::parse(p, cmd)?, cmd)?;
+        if text.trim().is_empty() {
+            return Err(bad(cmd, format!("`{name}` has no text to place")));
+        }
+        return Ok(Loaded { name, format: &text::FORMAT, art: Art::Text(text), natural: TEXT_FRAME, warnings: vec![], link: None });
+    }
     let format = fileio::detect(src.name, &src.bytes)
         .ok_or_else(|| bad(cmd, format!("can't place `{name}`: not a format VectorCraft reads (see document.formats)")))?;
     let page = match p.get("page") {
@@ -127,12 +141,12 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
         ));
     }
     let crop = opts.crop != CropTo::Bounding;
-    let path = src.path.map(str::to_string);
     if format.raster {
         let img = fileio::raster_image(&src.bytes)?;
         let (sx, sy) = pt_per_px(img.ppi);
         let natural = Rect::new(0.0, 0.0, img.width as f64 * sx, img.height as f64 * sy);
-        return Ok(Loaded { name, format, art: Art::Image(img), natural, warnings: vec![], path });
+        let link = src.path.map(|path| super::links::link_info(path, &src.bytes));
+        return Ok(Loaded { name, format, art: Art::Image(img), natural, warnings: vec![], link });
     }
     let (mut doc, warnings) = match format.id {
         // Only the page placed is read, its artboard the box asked for (Bounding Box: the art's
@@ -142,7 +156,9 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
             fileio::page_document(&src.bytes, page - 1, &o).map_err(|e| bad(cmd, format!("{name}: {e}")))?
         }
         _ => {
-            let l = fileio::load(src.name, &src.bytes)?;
+            let mut l = fileio::load(src.name, &src.bytes)?;
+            // Linked images (a native document's) show their files, found from its folder.
+            super::links::resolve(&mut l.doc, src.path, false);
             (l.doc, l.warnings)
         }
     };
@@ -167,7 +183,7 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
     };
     let natural = clip.or_else(|| nodes.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds())));
     let natural = natural.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, format!("`{name}` has no art to place")))?;
-    Ok(Loaded { name, format, art: Art::Vector { src: Box::new(doc), nodes, clip }, natural, warnings, path })
+    Ok(Loaded { name, format, art: Art::Vector { src: Box::new(doc), nodes, clip }, natural, warnings, link: None })
 }
 
 /// A visible, non-template layer.
@@ -191,14 +207,15 @@ fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
 }
 
 /// The art as one object of `d` (its resources added), at its natural size and position.
-fn build(d: &mut Document, l: Loaded, link: Option<String>) -> Node {
+fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
     let mut node = match l.art {
         Art::Image(img) => {
             let (sx, sy) = pt_per_px(img.ppi);
-            d.images.entry(img.key.clone()).or_insert(img.blob);
+            super::links::store_image(d, &img.key, img.blob, link.is_some());
             let im = ImageObject { key: img.key, width: img.width, height: img.height, xf: Affine::scale_non_uniform(sx, sy), link };
             Node::new(d.alloc_id(), NodeKind::Image(im))
         }
+        Art::Text(t) => Node::new(d.alloc_id(), NodeKind::Text(Box::new(text::area_text(t, l.natural)))),
         Art::Vector { src, mut nodes, clip } => {
             adopt::adopt(d, &src, &mut nodes);
             let mut children: Vec<Arc<Node>> = nodes.iter().map(|n| Arc::new(d.reid(n))).collect();
@@ -236,10 +253,10 @@ fn rect_param(p: &Value) -> Result<Option<Rect>> {
 }
 
 /// The transform that puts new art with the natural box `natural` where `old` is: an image's scale
-/// and rotation relative to its 100% size (its resolution's) and its centre are kept; other objects
-/// keep their centre.
-fn replace_xf(d: &Document, old: &Node, natural: Rect) -> Affine {
-    if let NodeKind::Image(im) = &old.kind {
+/// and rotation relative to its 100% size (its resolution's) and its centre are kept (with
+/// `image_xf`); other objects keep their centre.
+fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool) -> Affine {
+    if image_xf && let NodeKind::Image(im) = &old.kind {
         let (sx, sy) = pt_per_px(d.images.get(&im.key).and_then(|b| fileio::ppi::resolution(&b.bytes)));
         let full = Affine::scale_non_uniform(sx, sy);
         let centre = full * Point::new(im.width as f64 / 2.0, im.height as f64 / 2.0);
@@ -277,9 +294,20 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let mut loaded = load(p, PLACE)?;
+    let old_node = old.and_then(|id| st.doc.node(id));
+    // Type reflows rather than scales: its frame takes the size it is placed at.
+    let is_text = matches!(loaded.art, Art::Text(_));
+    if is_text {
+        let size = match (old_node.and_then(Node::geometric_bounds), rect) {
+            (Some(b), _) => b.size(),
+            (None, Some(r)) => r.size(),
+            (None, None) => text_frame(&st.doc, at).size(),
+        };
+        loaded.natural = Rect::from_origin_size(Point::ORIGIN, size);
+    }
     let natural = loaded.natural;
-    let m = match (old.and_then(|id| st.doc.node(id)), rect) {
-        (Some(o), _) => replace_xf(&st.doc, o, natural),
+    let m = match (old_node, rect) {
+        (Some(o), _) => replace_xf(&st.doc, o, natural, !is_text),
         (None, Some(r)) => fit(natural, r),
         (None, None) => {
             let c = at.or_else(|| st.doc.artboards.first().map(|a| a.rect.center())).unwrap_or_default();
@@ -288,7 +316,7 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let parent = st.insertion_parent();
     let below = st.current_layer().or_else(|| parent.and_then(|p| st.doc.layer_of(p)));
-    let link = loaded.path.take().filter(|_| bool_or(p, "link", true) && loaded.format.raster);
+    let link = loaded.link.take().filter(|_| bool_or(p, "link", true));
     let linked = link.is_some();
     let (name, format, warnings) = (loaded.name.clone(), loaded.format.id, std::mem::take(&mut loaded.warnings));
     let (id, size) = s.edit("Place", |d, sel| {
@@ -315,6 +343,13 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(
         json!({ "ids": [id.0], "name": name, "format": format, "linked": linked, "width": size.width(), "height": size.height(), "warnings": warnings }),
     )
+}
+
+/// Placed type's frame without `rect` or Replace: the artboard under `at` (else the first) less a
+/// 36 pt margin.
+fn text_frame(d: &Document, at: Option<Point>) -> Rect {
+    let board = at.and_then(|c| d.artboards.iter().find(|a| a.rect.contains(c))).or(d.artboards.first()).map_or(TEXT_FRAME, |a| a.rect);
+    Rect::from_center_size(board.center(), ((board.width() - 72.0).max(72.0), (board.height() - 72.0).max(72.0)))
 }
 
 /// A new locked template layer named after the file, right below the layer `below` (else at the
@@ -359,7 +394,7 @@ fn queue(s: &mut Session, p: &Value) -> Result<Value> {
     let thumbnail = p.get("thumbnail").and_then(Value::as_f64);
     let (mut entries, mut files, mut skipped) = (vec![], vec![], vec![]);
     for mut q in queued_files(p)? {
-        for k in ["link", "template", "page", "crop"] {
+        for k in ["link", "template", "page", "crop", "text"] {
             if let Some(v) = p.get(k) {
                 q[k] = v.clone();
             }
@@ -462,7 +497,7 @@ fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         "id": id.0,
         "name": n.display_name(),
         "linked": im.link.is_some(),
-        "link": im.link,
+        "link": im.link.as_ref().map(|l| &l.path),
         "colorMode": st.doc.images.get(&im.key).map_or("RGB", |b| color_mode(&b.bytes)),
         "pixelWidth": im.width,
         "pixelHeight": im.height,

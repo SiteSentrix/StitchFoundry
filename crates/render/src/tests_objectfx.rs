@@ -46,7 +46,7 @@ fn image_doc(effects: Vec<Effect>) -> Document {
     let img = image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]));
     let mut png = vec![];
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
-    d.images.insert("red".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
     let mut n = Node::new(
         NodeId(0),
         NodeKind::Image(ImageObject { key: "red".into(), width: 30, height: 30, xf: Affine::translate((20.0, 20.0)), link: None }),

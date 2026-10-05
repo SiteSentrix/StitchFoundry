@@ -57,7 +57,7 @@ fn image_color_at(cx: &ToolContext, n: &Node, p: Point) -> Option<Color> {
         return None;
     }
     let px = im.xf.inverse() * p;
-    let [r, g, b, _] = cx.doc.images.get(&im.key)?.sample(px.x, px.y, cx.raster_sample)?;
+    let [r, g, b, _] = cx.doc.images.get(&im.key)?.sample_object(px.x, px.y, (im.width, im.height), cx.raster_sample)?;
     Some(Color::rgb8(r, g, b))
 }
 

@@ -61,14 +61,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// A dropdown row bound to the string `d.fields[key]`; `options` are (value, label).
 pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]) {
-    let cur = d.str(key);
-    let shown = options.iter().find(|(v, _)| v.eq_ignore_ascii_case(&cur)).map_or(cur.as_str(), |(_, l)| l);
-    let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
-    widgets::label_row(ui, label, LABEL, |ui| {
-        if let Some((value, _)) = widgets::dropdown(ui, key, shown, &labels, 220.0).and_then(|i| options.get(i)) {
-            d.fields.insert(key.into(), json!(value));
-        }
-    });
+    form::choice(ui, d, key, label, (LABEL, 220.0), options);
 }
 
 /// A checkbox bound to `d.fields[key]`.

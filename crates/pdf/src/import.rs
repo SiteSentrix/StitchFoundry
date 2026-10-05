@@ -638,7 +638,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 if jpeg {
                     let (w, h) = (r.width(), r.height());
                     let bytes = st.raw_data().to_vec();
-                    self.add_image(key, || Some((ImageBlob { mime: "image/jpeg".into(), bytes: Arc::new(bytes) }, w, h)), transform);
+                    self.add_image(key, || Some((ImageBlob::new("image/jpeg", bytes), w, h)), transform);
                     return;
                 }
                 let mut decoded: Option<Decoded> = None;
@@ -659,7 +659,7 @@ impl<'a> Device<'a> for Builder<'_> {
                     return;
                 };
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
-                self.add_image(key, || rgba_png(rgba, w, h).map(|png| (ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) }, w, h)), xf);
+                self.add_image(key, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
             }
             Image::Stencil(s) => {
                 let key = hayro_interpret::CacheKey::cache_key(&s);
@@ -677,11 +677,7 @@ impl<'a> Device<'a> for Builder<'_> {
                 );
                 let Some((rgba, w, h, sf)) = decoded else { return };
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
-                self.add_image(
-                    key ^ 0x5_7e9c,
-                    || rgba_png(rgba, w, h).map(|png| (ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) }, w, h)),
-                    xf,
-                );
+                self.add_image(key ^ 0x5_7e9c, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
             }
         }
     }

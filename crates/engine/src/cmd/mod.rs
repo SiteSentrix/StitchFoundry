@@ -26,6 +26,7 @@ pub(crate) mod gradient;
 pub(crate) mod graph;
 pub mod help;
 mod layer;
+pub mod links;
 mod live;
 pub(crate) mod maskedit;
 pub(crate) mod menucmds;
@@ -218,6 +219,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(docsetup::specs());
         v.extend(newdoc::specs());
         v.extend(place::specs());
+        v.extend(links::specs());
         v
     })
 }

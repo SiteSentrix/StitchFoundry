@@ -1154,7 +1154,7 @@ impl Writer<'_> {
             NodeKind::Image(im) => {
                 let link = self.opts.images == ImageMode::Link;
                 let href = match (im.link.as_ref().filter(|_| link), self.doc.images.get(&im.key)) {
-                    (Some(l), _) => l.clone(),
+                    (Some(l), _) => l.path.clone(),
                     (None, Some(b)) if !b.bytes.is_empty() && link => {
                         // Named after the bytes: image keys ("raster-1"…) repeat across documents.
                         let name = format!("{}.{}", b.content_key(), image_ext(&b.mime));
@@ -1165,7 +1165,7 @@ impl Writer<'_> {
                     }
                     (None, Some(b)) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
                     _ => match &im.link {
-                        Some(l) => l.clone(),
+                        Some(l) => l.path.clone(),
                         None => return,
                     },
                 };

@@ -40,6 +40,7 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
     if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
         app.status(format!("Opened with {} note(s): {}", w.len(), w[0].as_str().unwrap_or_default()));
     }
+    crate::dialogs::missing_links::after_open(app, &r);
     Ok(())
 }
 
@@ -111,7 +112,7 @@ pub fn save(app: &mut VectorcraftApp, path: Option<String>, save_as: bool, param
     let f = fileio::save_format(format_param(params), Some(&path))?;
     fileio::stamp_save_dates(app.session.active_mut().ok_or("no document")?);
     let st = app.session.active().ok_or("no document")?;
-    let (enc, opts) = fileio::save_encoding(st, f, params).map_err(|e| e.to_string())?;
+    let (enc, opts) = fileio::save_encoding(st, f, params, Some(&path)).map_err(|e| e.to_string())?;
     let doc = st.doc.clone();
     write_encoded(app, &doc, &path, &enc)?;
     if let Some(st) = app.session.active_mut() {
@@ -139,7 +140,8 @@ pub fn save_as(app: &mut VectorcraftApp, copy: bool, p: &Value) -> Result<Value,
         return save(app, Some(path), true, p).map(|p| json!({ "path": p }));
     }
     let doc = app.session.active().ok_or("no document")?.doc.clone();
-    let enc = fileio::encode_all(&doc, f.id, p).map_err(|e| e.to_string())?;
+    let copy = vectorcraft_engine::cmd::links::with_relative_paths(&doc, &path);
+    let enc = fileio::encode_all(copy.as_ref().unwrap_or(&doc), f.id, p).map_err(|e| e.to_string())?;
     write_encoded(app, &doc, &path, &enc)?;
     app.status(format!("Saved a copy as {path}"));
     Ok(json!({ "path": path }))
@@ -317,7 +319,7 @@ mod tests {
         place_bytes(&mut app, "tiny.webp", &webp).unwrap();
         let placed = app.session.doc().unwrap().selection.objects[0];
         assert_eq!(image_size(&app, placed), (3, 2));
-        assert!(place_bytes(&mut app, "x.txt", b"hello").is_err());
+        assert!(place_bytes(&mut app, "x.xyz", b"hello").is_err());
     }
 
     #[test]

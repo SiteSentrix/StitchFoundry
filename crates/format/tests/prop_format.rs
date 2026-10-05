@@ -2,8 +2,6 @@
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::sync::Arc;
-
 use proptest::prelude::*;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, NodeId};
@@ -73,7 +71,7 @@ proptest! {
     #[test]
     fn images_roundtrip(data in prop::collection::vec(any::<u8>(), 0..2000), key in "[a-z]{1,8}") {
         let mut d = Document::new(10.0, 10.0);
-        d.images.insert(key.clone(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(data.clone()) });
+        d.images.insert(key.clone(), ImageBlob::new("image/png", data.clone()));
         let back = load(&save(&d, false)).unwrap();
         prop_assert_eq!(back.images.get(&key).map(|b| b.bytes.as_ref().clone()), Some(data));
     }

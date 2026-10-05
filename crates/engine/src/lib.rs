@@ -963,6 +963,8 @@ mod tests_layerclip;
 #[cfg(test)]
 mod tests_linked_stops;
 #[cfg(test)]
+mod tests_links;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_maskview;
@@ -1028,6 +1030,8 @@ mod tests_swatchlib;
 mod tests_targeting;
 #[cfg(test)]
 mod tests_textedit;
+#[cfg(test)]
+mod tests_textimport;
 #[cfg(test)]
 mod tests_tileedge;
 #[cfg(test)]
