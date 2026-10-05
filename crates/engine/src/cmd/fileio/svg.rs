@@ -62,6 +62,12 @@ pub const OPTIONS: &[FormatOption] = &[
         description: "type: one positioned <tspan> per line instead of one per style run, tab and justified word (smaller; viewers space the line themselves)",
     },
     FormatOption {
+        name: "hiddenLayers",
+        ty: "boolean",
+        default: "false",
+        description: "keep hidden layers, not displayed (display:none); document.save sets it unless given",
+    },
+    FormatOption {
         name: "svg",
         ty: "object",
         default: "null",

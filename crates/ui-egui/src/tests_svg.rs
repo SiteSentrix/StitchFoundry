@@ -8,10 +8,10 @@ use vectorcraft_engine::Session;
 
 use crate::{Services, VectorcraftApp, io};
 
-type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
+pub(super) type Written = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
 /// An app with a rectangle whose save dialog answers `picked`; the writer records its files.
-fn app(picked: &str) -> (VectorcraftApp, Written) {
+pub(super) fn app(picked: &str) -> (VectorcraftApp, Written) {
     let written = Written::default();
     let w = written.clone();
     let picked = picked.to_string();

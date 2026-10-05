@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|svg|svgz (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}} (default path: the document's) → {path, linked?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with. A never-saved document without path → {dataBase64} (stays modified)",
+            "{path?, format?: vectorcraft|svg|svgz (default: from the path's extension, else vectorcraft), svg?: {…SVG options, see document.formats}} (default path: the document's) → {path, linked?}; the document takes the path. An SVG save uses the given SVG options, else the ones this document was last saved with, and keeps hidden layers (display:none) unless hiddenLayers is false. A never-saved document without path → {dataBase64} (stays modified)",
             has_doc,
             save::save
         ),
@@ -65,7 +65,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), scale?: 1 (raster), quality?: 90 (jpg), SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -416,3 +416,5 @@ mod tests;
 mod tests_pdf;
 #[cfg(test)]
 mod tests_svg;
+#[cfg(test)]
+mod tests_svgedit;

@@ -3,7 +3,8 @@
 //! * [`export`] / [`export_full`] write a [`Document`] as SVG 1.1 with our own writer, as set by
 //!   [`ExportOptions`] (presentation attributes, inline styles, style entities or internal CSS
 //!   classes; gradients in `<defs>` with `userSpaceOnUse`; clip groups as `<clipPath>`; images
-//!   embedded as `data:` URIs or linked; text as `<text>`/`<tspan>` or outlines).
+//!   embedded as `data:` URIs or linked; text as `<text>`/`<tspan>` or outlines; symbols as one
+//!   `<symbol>` each with a `<use>` per instance; hidden layers left out, or kept not displayed).
 //! * [`import`] / [`import_with_report`] parse SVG with `usvg` and convert its normalized tree into
 //!   document nodes with all transforms baked into the geometry.
 //!
@@ -22,6 +23,9 @@
 //!   `<path>` per appearance item, in paint order.
 //! * Live geometry effects are written as their result and raster effects (shadows, glows, blurs)
 //!   as SVG filters. Freeform gradients export as linear gradients.
+//! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
+//!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
+//!   pattern paints or unlinked masks, which stay on the page) are written as their own art.
 //!
 //! ## Import approximations
 //!
@@ -36,6 +40,9 @@
 //!   clip only.
 //! * `<pattern>` becomes a pattern swatch (its content clipped to the tile) painted with the
 //!   pattern's placement.
+//! * A `<g id>` layer (top-level, or inside one) that isn't displayed (`display: none`) comes back
+//!   as a hidden layer or group, unless a `<use>` refers to it. Other undisplayed elements are left
+//!   out. `<use>` instances (and `<symbol>`s) become plain art.
 //! * Text lines after the first start at the first line's x; text in a clip path is ignored;
 //!   absolute positions inside type on a path are ignored; vertical text sets every glyph sideways.
 //!
@@ -130,13 +137,15 @@ pub struct ExportOptions {
     /// Fonts → Convert to Outlines: text becomes paths (portable, no font needed to view it).
     pub outline_text: bool,
     /// Embed the native document (passed to [`export_full`]) in `<metadata>` so VectorCraft
-    /// reopens the SVG with nothing lost (see [`editing_data`]).
+    /// reopens the SVG with nothing lost (see [`editing`]).
     pub preserve_editing: bool,
     /// Write `<metadata>` with the document's Dublin Core title and format.
     pub metadata: bool,
     /// One positioned `<tspan>` per line of type instead of one per style run, tab stop and
     /// justified word (smaller; viewers then space the line with their own font metrics).
     pub fewer_tspans: bool,
+    /// Keep hidden layers, written hidden (`display:none`), as Save does; exports leave them out.
+    pub hidden_layers: bool,
 }
 
 impl Default for ExportOptions {
@@ -153,6 +162,7 @@ impl Default for ExportOptions {
             preserve_editing: false,
             metadata: false,
             fewer_tspans: false,
+            hidden_layers: false,
         }
     }
 }
@@ -215,9 +225,19 @@ pub fn export_full(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) 
 /// The XML namespace of the editing data [`ExportOptions::preserve_editing`] embeds.
 pub const EDITING_NS: &str = "urn:vectorcraft:editing";
 
-/// The native document an SVG carries (base64, as written with
-/// [`ExportOptions::preserve_editing`]), if any.
-pub fn editing_data(svg: &str) -> Option<String> {
+/// The native document an SVG carries ([`ExportOptions::preserve_editing`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Editing {
+    /// The native document, base64.
+    pub data: String,
+    /// The SVG around it is still the one written with it: the hash it keeps of the markup
+    /// outside its `<metadata>` matches (whitespace between tags and line endings aside). False
+    /// once another app edited the SVG; true for editing data written without a hash.
+    pub intact: bool,
+}
+
+/// The native document an SVG carries, if any, and whether the SVG was edited since.
+pub fn editing(svg: &str) -> Option<Editing> {
     if !svg.contains(EDITING_NS) {
         return None;
     }
@@ -225,7 +245,48 @@ pub fn editing_data(svg: &str) -> Option<String> {
     let xml = usvg::roxmltree::Document::parse_with_options(svg, opts).ok()?;
     let el = xml.descendants().find(|n| n.tag_name().namespace() == Some(EDITING_NS) && n.tag_name().name() == "document")?;
     let data: String = el.children().filter_map(|c| c.text()).flat_map(|t| t.chars().filter(|c| !c.is_whitespace())).collect();
-    Some(data).filter(|d| !d.is_empty())
+    if data.is_empty() {
+        return None;
+    }
+    // The hash covers everything but the `<metadata>` element holding the data.
+    let intact = match (el.attribute("hash"), el.parent_element()) {
+        (None, _) => true,
+        (Some(h), Some(meta)) => {
+            let r = meta.range();
+            let (head, tail) = (svg.get(..r.start).unwrap_or(""), svg.get(r.end..).unwrap_or(""));
+            body_hash(&[head, tail]) == h
+        }
+        (Some(_), None) => false,
+    };
+    Some(Editing { data, intact })
+}
+
+/// The native document an SVG carries (base64), if any, edited since or not (see [`editing`]).
+pub fn editing_data(svg: &str) -> Option<String> {
+    editing(svg).map(|e| e.data)
+}
+
+/// The hash [`ExportOptions::preserve_editing`] keeps of an SVG's markup outside its
+/// `<metadata>` (`parts`, in order): FNV-1a of the text with whitespace between tags dropped and
+/// other whitespace runs read as one space, so re-indenting or other line endings don't count as
+/// edits.
+pub(crate) fn body_hash(parts: &[&str]) -> String {
+    let mut h = FNV_SEED;
+    // The last byte hashed and whether whitespace came after it.
+    let (mut last, mut gap) = (None, false);
+    for b in parts.iter().flat_map(|p| p.bytes()) {
+        if b.is_ascii_whitespace() {
+            gap = true;
+            continue;
+        }
+        if gap && last.is_some_and(|l| l != b'>') && b != b'<' {
+            h = fnv1a_from(h, b" ");
+        }
+        gap = false;
+        last = Some(b);
+        h = fnv1a_from(h, &[b]);
+    }
+    format!("{h:016x}")
 }
 
 /// Does `bytes` start like gzip data (an SVGZ file)?
@@ -275,7 +336,14 @@ pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError
 
 /// FNV-1a: a stable content hash (image keys, unique id prefixes).
 pub(crate) fn fnv1a(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf29ce484222325, |h, b| (h ^ *b as u64).wrapping_mul(0x100000001b3))
+    fnv1a_from(FNV_SEED, bytes)
+}
+
+const FNV_SEED: u64 = 0xcbf29ce484222325;
+
+/// FNV-1a of `bytes` continued from hash `h`.
+fn fnv1a_from(h: u64, bytes: &[u8]) -> u64 {
+    bytes.iter().fold(h, |h, b| (h ^ *b as u64).wrapping_mul(0x100000001b3))
 }
 
 /// Standard base64 (RFC 4648, with padding).

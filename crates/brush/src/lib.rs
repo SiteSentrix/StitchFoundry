@@ -23,7 +23,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, Rect};
 
-pub use colorize::{colorize, tint_node};
+pub use colorize::{colorize, instance_art, stain, tint_node};
 pub use defaults::defaults;
 pub use serde_json;
 

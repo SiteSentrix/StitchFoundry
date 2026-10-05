@@ -61,18 +61,7 @@ pub(crate) fn cull_bounds(n: &Node) -> Option<Rect> {
     Some(b.inflate(pad, pad))
 }
 
-/// A symbol's art for instance `inst`, stained by the instance's fill (Symbol Stainer: the fill
-/// colour mixed in by the fill layer's opacity).
-pub fn instance_art(art: &Node, inst: &Node) -> Node {
-    let mut a = art.clone();
-    if let Some(f) = inst.appearance.fill()
-        && f.visible
-        && let Some(c) = f.paint.color()
-    {
-        vectorcraft_brush::tint_node(&mut a, &c, f.opacity);
-    }
-    a
-}
+pub use vectorcraft_brush::instance_art;
 
 impl Renderer {
     /// Paint stroke `st` of `n` (outline `bp`) with its brush. Returns false when the brush is

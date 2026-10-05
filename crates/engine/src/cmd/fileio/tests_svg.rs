@@ -12,7 +12,7 @@ fn session(artboards: usize) -> Session {
     s
 }
 
-fn svg(s: &mut Session, p: Value) -> String {
+pub(super) fn svg(s: &mut Session, p: Value) -> String {
     let mut p = p;
     p["format"] = json!("svg");
     s.execute("document.serialize", &p).unwrap_or_else(|e| panic!("{p}: {e}"))["text"].as_str().unwrap().to_string()
@@ -25,7 +25,7 @@ fn tmp_dir(tag: &str) -> std::path::PathBuf {
 }
 
 /// A session whose document holds one embedded 2×2 PNG.
-fn image_session() -> Session {
+pub(super) fn image_session() -> Session {
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(2, 2, image::Rgba([10, 200, 30, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
