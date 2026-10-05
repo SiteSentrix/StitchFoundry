@@ -11,6 +11,7 @@
 
 mod composer;
 pub mod edit;
+pub mod embed;
 mod features;
 mod fontdb;
 pub mod hyphen;
@@ -19,7 +20,7 @@ mod shape;
 pub mod thread;
 
 pub use features::OtFeatures;
-pub use fontdb::{FALLBACK_FAMILY, FontDb, FontFace};
+pub use fontdb::{FALLBACK_FAMILY, FontDb, FontFace, style_weight};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
 pub use vectorcraft_doc::TextObject;
@@ -352,6 +353,8 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_embed;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]

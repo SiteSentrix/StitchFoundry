@@ -28,6 +28,8 @@ image = { workspace = true }
 svgtypes = "0.16"
 
 [dev-dependencies]
+# Reading embedded font subsets back.
+skrifa = { workspace = true }
 resvg = { version = "0.45", default-features = false }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }

@@ -1,6 +1,6 @@
-//! SVG Options (Export As SVG, Save As / Save a Copy to .svg): styling, fonts, images, object ids,
-//! decimals, minify, responsive, artboards (export) or editing data (save), and a read-only view
-//! of the code. OK remembers the choices for next time and runs the export or save command with
+//! SVG Options (Export As SVG, Save As / Save a Copy to .svg): profile, styling, fonts, images,
+//! object ids, decimals, encoding, minify, responsive, embedded fonts, artboards (export) or
+//! editing data (save), and a read-only view of the code. OK remembers the choices for next time and runs the export or save command with
 //! them as `svg: {…}`.
 
 use std::sync::Arc;
@@ -54,6 +54,8 @@ const STYLING: [(&str, &str); 4] = [
 const FONTS: [(bool, &str); 2] = [(false, "SVG"), (true, "Convert To Outlines")];
 const IMAGES: [(&str, &str); 2] = [("embed", "Embed"), ("link", "Link")];
 const OBJECT_IDS: [(&str, &str); 3] = [("layerNames", "Layer Names"), ("minimal", "Minimal"), ("unique", "Unique")];
+const PROFILES: [(&str, &str); 2] = [("svg11", "SVG 1.1"), ("tiny12", "SVG Tiny 1.2")];
+const ENCODINGS: [(&str, &str); 3] = [("utf8", "Unicode (UTF-8)"), ("utf16", "Unicode (UTF-16)"), ("latin1", "ISO 8859-1")];
 
 /// Dialog fields that are not SVG options.
 const UI_KEYS: [&str; 5] = ["mode", "path", "showCode", "allArtboards", "range"];
@@ -137,14 +139,16 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     app.run(id, params)
 }
 
-/// One labelled choice row: the dropdown sets `d.fields[key]` to the chosen value.
-fn choice<V: Into<Value> + Copy>(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, choices: &[(V, &str)]) {
+/// One labelled choice row: the dropdown sets `d.fields[key]` to the chosen value. `forced`: the
+/// value the export uses whatever is chosen (shown, the dropdown disabled).
+fn choice<V: Into<Value> + Copy>(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, choices: &[(V, &str)], forced: Option<V>) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(label).color(t.text_dim));
-    let current = d.fields.get(key).cloned().unwrap_or(Value::Null);
+    let current = forced.map(Into::into).or_else(|| d.fields.get(key).cloned()).unwrap_or(Value::Null);
     let shown = choices.iter().find(|(v, _)| (*v).into() == current).or(choices.first()).map_or("", |(_, l)| *l);
     let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
-    if let Some((v, _)) = widgets::dropdown(ui, key, shown, &labels, 250.0).and_then(|i| choices.get(i)) {
+    let picked = ui.add_enabled_ui(forced.is_none(), |ui| widgets::dropdown(ui, key, shown, &labels, 250.0)).inner;
+    if let Some((v, _)) = picked.and_then(|i| choices.get(i)) {
         d.fields.insert(key.into(), (*v).into());
     }
     ui.end_row();
@@ -181,13 +185,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// image is another file.
 pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     let t = Tokens::get(ui.ctx());
+    // SVG Tiny has presentation attributes alone and no web fonts.
+    let tiny = d.str("profile") == "tiny12";
     egui::Grid::new("svg-options").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-        choice(ui, d, "styling", "Styling:", &STYLING);
-        choice(ui, d, "outlineText", "Font:", &FONTS);
+        choice(ui, d, "profile", "SVG Profile:", &PROFILES, None);
+        choice(ui, d, "styling", "Styling:", &STYLING, tiny.then_some("presentation"));
+        choice(ui, d, "outlineText", "Font:", &FONTS, None);
         if !screens {
-            choice(ui, d, "images", "Images:", &IMAGES);
+            choice(ui, d, "images", "Images:", &IMAGES, None);
         }
-        choice(ui, d, "objectIds", "Object IDs:", &OBJECT_IDS);
+        choice(ui, d, "objectIds", "Object IDs:", &OBJECT_IDS, None);
         ui.label(egui::RichText::new("Decimal:").color(t.text_dim));
         let decimals = d.f64("decimals", 3.0);
         if let Some(v) = widgets::spin_plain(ui, "svg-decimals", decimals, "", 0, 70.0, 1.0, 1.0, &[]) {
@@ -195,6 +202,7 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
             d.fields.insert("decimals".into(), json!(v.round().clamp(lo, hi) as u8));
         }
         ui.end_row();
+        choice(ui, d, "encoding", "Encoding:", &ENCODINGS, None);
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
@@ -202,6 +210,7 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
         ui.add_space(12.0);
         check(ui, d, "responsive", "Responsive", true);
     });
+    check(ui, d, "embedFonts", "Embed Fonts (Glyphs Used)", !d.bool("outlineText") && !tiny);
     check(ui, d, "fewerTspans", "Fewer <tspan> Elements", !d.bool("outlineText"));
     check(ui, d, "metadata", "Include Metadata", true);
 }
@@ -252,7 +261,13 @@ fn code_view(app: &VectorcraftApp, ui: &mut egui::Ui, d: &Dialog) {
         None => {
             const MAX: usize = 200_000;
             let mut text = match vectorcraft_engine::cmd::fileio::encode_all(&st.doc, "svg", &json!({ "svg": opts })) {
-                Ok(enc) => enc.files.into_iter().next().map(|(_, b)| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default(),
+                // Shown as text whatever the file's encoding.
+                Ok(enc) => enc
+                    .files
+                    .into_iter()
+                    .next()
+                    .map(|(_, b)| vectorcraft_svg::text_of(&b).map_or_else(|_| String::from_utf8_lossy(&b).into_owned(), |t| t.into_owned()))
+                    .unwrap_or_default(),
                 Err(e) => e.to_string(),
             };
             if text.len() > MAX {
@@ -387,5 +402,35 @@ mod tests {
         // A native Save As needs no options.
         app.run("file.saveAs", json!({"path": "/tmp/doc.vectorcraft"})).unwrap();
         assert!(vectorcraft_format::sniff(&written.borrow()[3].1));
+    }
+
+    #[test]
+    fn profile_encoding_and_embedded_fonts_reach_the_file() {
+        let (mut app, written) = app("/tmp/tiny.svg");
+        app.run("text.create", json!({"x": 10, "y": 60, "text": "Grüße €"})).unwrap();
+        app.run("file.export.svg", Value::Null).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!((d.str("profile"), d.str("encoding"), d.bool("embedFonts")), ("svg11".into(), "utf8".into(), false), "the defaults");
+        let f = &mut app.ui.dialog.as_mut().unwrap().fields;
+        f.insert("profile".into(), json!("tiny12"));
+        f.insert("encoding".into(), json!("latin1"));
+        f.insert("showCode".into(), json!(true));
+        // Tiny shows Presentation Attributes (disabled) and greys out Embed Fonts; the code view
+        // reads the Latin-1 file.
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        let bytes = written.borrow()[0].1.clone();
+        assert!(bytes.starts_with(b"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>"));
+        let svg = vectorcraft_svg::text_of(&bytes).unwrap();
+        assert!(svg.contains("baseProfile=\"tiny\"") && !svg.contains("<style>") && svg.contains("&#x20AC;"), "{svg}");
+        // SVG 1.1 with embedded fonts: an @font-face rule for the type.
+        app.run("file.export.svg", Value::Null).unwrap();
+        let f = &mut app.ui.dialog.as_mut().unwrap().fields;
+        f.insert("profile".into(), json!("svg11"));
+        f.insert("embedFonts".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        // Two artboards: two files each time; the type is on the first.
+        assert_eq!(written.borrow().len(), 4);
+        assert!(String::from_utf8_lossy(&written.borrow()[2].1).contains("@font-face{"));
     }
 }
