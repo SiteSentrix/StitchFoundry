@@ -31,6 +31,7 @@ vectorcraft-mcp = { path = "crates/mcp" }
 vectorcraft-testkit = { path = "crates/testkit" }
 vectorcraft-cad = { path = "crates/cad" }
 vectorcraft-eps = { path = "crates/eps" }
+vectorcraft-metafile = { path = "crates/metafile" }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }

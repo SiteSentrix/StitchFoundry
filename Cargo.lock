@@ -4284,6 +4284,7 @@ dependencies = [
  "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
+ "vectorcraft-metafile",
  "vectorcraft-pathops",
  "vectorcraft-pdf",
  "vectorcraft-render",
@@ -4353,6 +4354,20 @@ dependencies = [
  "vectorcraft-svg",
  "vectorcraft-testkit",
  "vectorcraft-tools",
+]
+
+[[package]]
+name = "vectorcraft-metafile"
+version = "0.2.0"
+dependencies = [
+ "image",
+ "kurbo 0.13.1",
+ "vectorcraft-brush",
+ "vectorcraft-color",
+ "vectorcraft-doc",
+ "vectorcraft-effects",
+ "vectorcraft-geom",
+ "vectorcraft-text",
 ]
 
 [[package]]

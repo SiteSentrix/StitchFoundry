@@ -23,6 +23,7 @@ vectorcraft-format = { workspace = true }
 vectorcraft-pdf = { workspace = true }
 vectorcraft-cad = { workspace = true }
 vectorcraft-eps = { workspace = true }
+vectorcraft-metafile = { workspace = true }
 image = { workspace = true }
 flate2 = { workspace = true }
 kurbo = { workspace = true }

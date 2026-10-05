@@ -1338,3 +1338,20 @@ and Save as Template reuse the options as last saved (or Use Compression).
 {"name":"run_command","arguments":{"command":"file.saveAs","params":{"path":"/tmp/set.vectorcraft","separateArtboards":true,"range":"2-3","includeLinked":true}}}
 {"name":"run_command","arguments":{"command":"file.saveAs","params":{"path":"/tmp/set.ai","pdfCompatible":false}}}
 ```
+
+## EMF and WMF
+
+`document.export` (and `export`) with format `emf` or `wmf` writes a Windows metafile of the first artboard (or
+`artboard`); `useArtboards: true` writes one file per chosen artboard (`{stem}-{artboard}.emf`), `false` the bounds of
+the visible art. EMF keeps Bézier curves, solid fills (brushes), strokes as geometric pens with their width, caps,
+joins, miter limit and dashes, clipping masks (path clips), images with their transparency (AlphaBlend) and type as
+outlines; gradients become images clipped to their shape, pattern fills their tiles clipped to the shape, and raster
+effects images rendered at the document's raster effects resolution. The header's frame is the artboard in 0.01 mm.
+WMF flattens curves into polygons in 16-bit units behind a placeable header (1440 units an inch, fewer for pictures
+over about 22 inches); it has no clipping, transparency or gradients, so clipped art is written whole, images over
+white and gradients and patterns as one colour. What a format leaves out comes back in `warnings`.
+
+```json
+{"name":"export","arguments":{"path":"/tmp/logo.emf"}}
+{"name":"run_command","arguments":{"command":"document.export","params":{"format":"wmf","useArtboards":true,"path":"/tmp/icons.wmf"}}}
+```

@@ -344,3 +344,6 @@ mod tests_screens;
 
 #[cfg(test)]
 mod tests_eps;
+
+#[cfg(test)]
+mod tests_metafile;
