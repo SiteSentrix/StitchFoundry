@@ -1,4 +1,4 @@
-//! The Home icon shows the Home screen over open documents.
+//! The Home icon shows the Home screen over open documents; Cmd+N opens the New Document dialog.
 
 use serde_json::json;
 
@@ -37,4 +37,13 @@ fn home_shows_over_open_documents_until_a_document_is_chosen() {
     app.run("file.new", json!({})).unwrap();
     assert!(shows_document(&mut app));
     assert!(app.ui.home.is_none());
+}
+
+#[test]
+fn cmd_n_opens_the_new_document_dialog() {
+    assert_eq!(crate::shortcut_editor::command_for_key("Cmd+N"), Some("file.newDialog"));
+    let mut app = app_with_doc();
+    app.run("file.newDialog", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("newDocument"));
+    assert_eq!(app.session.documents().len(), 1, "no document is made until the dialog's OK");
 }
