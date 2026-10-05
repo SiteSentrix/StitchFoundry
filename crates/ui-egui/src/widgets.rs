@@ -426,6 +426,19 @@ fn combo<R>(
         .inner
 }
 
+/// The body of a menu or popup list: as tall as its items up to the bottom of the window, and
+/// scrolling only past that, so long menus (Window, Effect, a panel's menu) stay reachable on
+/// small windows.
+pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    // Room left below the popup's first item, less the popup frame and a small gap.
+    const BOTTOM_GAP: f32 = 12.0;
+    const MIN_HEIGHT: f32 = 120.0;
+    let room = (ui.ctx().content_rect().bottom() - ui.next_widget_position().y - BOTTOM_GAP).max(MIN_HEIGHT);
+    // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
+    // its items when they need less.
+    egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).show(ui, add_contents).inner
+}
+
 /// Whether the blend-mode list draws a separator above `BlendMode::ALL[i]`: where a
 /// [`BlendMode::group`] starts.
 pub fn blend_separator_before(i: usize) -> bool {

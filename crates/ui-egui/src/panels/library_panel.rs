@@ -374,9 +374,11 @@ pub(crate) fn library_items(ui: &mut Ui, libs: &[LibraryRef], current: Option<&s
     }
     for s in subs {
         ui.menu_button(s, |ui| {
-            for l in libs.iter().filter(|l| l.submenu == Some(s)) {
-                item(ui, l);
-            }
+            crate::widgets::menu_scroll(ui, |ui| {
+                for l in libs.iter().filter(|l| l.submenu == Some(s)) {
+                    item(ui, l);
+                }
+            });
         });
     }
     chosen
