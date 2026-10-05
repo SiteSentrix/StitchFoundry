@@ -24,6 +24,11 @@ pub struct Selection {
     /// art selected). Any other selection change clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target: Option<NodeId>,
+    /// Slices selected with the Slice Selection tool: user slice ids and the ids of objects whose
+    /// object slice is selected (see [`crate::slices`]). Any change to the object selection
+    /// clears them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub slices: Vec<NodeId>,
 }
 
 impl Selection {
@@ -41,6 +46,7 @@ impl Selection {
         self.anchors.clear();
         self.key = None;
         self.target = None;
+        self.slices.clear();
     }
     pub fn set(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();
@@ -50,16 +56,27 @@ impl Selection {
     }
     pub fn add(&mut self, id: NodeId) {
         self.target = None;
+        self.slices.clear();
         if !self.objects.contains(&id) {
             self.objects.push(id);
         }
     }
     pub fn remove(&mut self, id: NodeId) {
         self.target = None;
+        self.slices.clear();
         self.objects.retain(|x| *x != id);
         self.anchors.remove(&id);
         if self.key == Some(id) {
             self.key = None;
+        }
+    }
+    /// Select slices `ids` (see [`Selection::slices`]) and nothing else.
+    pub fn set_slices(&mut self, ids: impl IntoIterator<Item = NodeId>) {
+        self.clear();
+        for id in ids {
+            if !self.slices.contains(&id) {
+                self.slices.push(id);
+            }
         }
     }
     pub fn toggle(&mut self, id: NodeId) {
@@ -79,6 +96,7 @@ impl Selection {
         if self.target.is_some_and(|t| doc.node(t).is_none()) {
             self.target = None;
         }
+        self.slices.retain(|id| doc.is_slice(*id));
     }
     /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected,
     /// anything else is selected itself.

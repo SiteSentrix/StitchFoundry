@@ -331,6 +331,10 @@ pub struct Node {
     /// Attributes panel: centre point display, image map, URL and note (`None`: all defaults).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attrs: Option<Box<ObjectAttributes>>,
+    /// Object → Slice → Make: the object is an object slice (its slice follows its bounds) with
+    /// these options.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slice: Option<Box<crate::SliceOptions>>,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -378,6 +382,7 @@ impl Node {
             kind,
             graphic_style: None,
             attrs: None,
+            slice: None,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {

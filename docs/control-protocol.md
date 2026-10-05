@@ -318,3 +318,10 @@ gets a `confirm` dialog whose OK runs `file.saveAs`). Fields: `folder` (the loca
 `copyLinks`, `linksFolder`, `relink`, `copyFonts`, `report`. `ui.dialog.confirm` saves unsaved changes, runs
 `file.package` and then opens a `confirm` dialog whose OK runs `file.showPackage {folder}`; the web downloads the zip
 instead. Document Info's flyout picks a category and Save… runs `docInfo.save {path?, selectionOnly?}`.
+
+Slices: through the app, `object.slice.options` and `object.slice.divide` with no params open their dialogs on the
+selected slices. `sliceOptions` (fields `kind`: `image`/`noImage`/`htmlText`, `name`, `url`, `target`, `message`,
+`alt`, `text`, `background`: `""`/`matte`/`#rrggbb`, `hAlign`, `vAlign`; `__html` says whether HTML Text applies)
+runs `object.slice.options` on `ui.dialog.confirm`; `divideSlices` (fields `divideRows`, `rows`, `rowMode`:
+`count`/`size`, `rowHeight`, and `divideColumns`, `columns`, `columnMode`, `columnWidth`) runs `object.slice.divide`.
+Read slice options with `slice.list`.

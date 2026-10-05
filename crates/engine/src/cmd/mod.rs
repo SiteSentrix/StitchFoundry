@@ -47,6 +47,7 @@ pub mod prefscmds;
 pub mod rasterfx;
 mod recolor;
 mod select;
+pub(crate) mod slices;
 mod stroke;
 mod style;
 pub mod stylelib;
@@ -225,6 +226,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(pdfcmds::specs());
         v.extend(fileio::dxf::specs());
         v.extend(package::specs());
+        v.extend(slices::specs());
         v
     })
 }

@@ -56,6 +56,8 @@ mod tests_recolor;
 #[cfg(test)]
 mod tests_save;
 #[cfg(test)]
+mod tests_slices;
+#[cfg(test)]
 mod tests_svg;
 #[cfg(test)]
 mod tests_svgsave;
@@ -156,7 +158,12 @@ pub struct CanvasCache {
     pub last_ms: f64,
     pub worker: Option<render_worker::Worker>,
     pub worker_started: bool,
+    /// The slices as laid out for (document uid, revision): the canvas draws them every frame.
+    pub slices: Option<SliceCache>,
 }
+
+/// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
+pub type SliceCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_doc::SliceArea>>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CacheKey {
@@ -253,6 +260,7 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 worker: None,
                 worker_started: false,
+                slices: None,
             },
             perf: Perf::default(),
             integrated_titlebar: false,

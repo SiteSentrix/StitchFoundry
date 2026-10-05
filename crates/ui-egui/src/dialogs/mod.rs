@@ -48,6 +48,7 @@ mod save_pdf;
 pub mod save_style_library;
 pub mod save_swatch_library;
 mod shapes;
+pub mod slices;
 pub mod spot_colors;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
@@ -213,6 +214,8 @@ registry! {
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
     Package: [package::KIND] => package::SPEC,
+    SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
+    DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

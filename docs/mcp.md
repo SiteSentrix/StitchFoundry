@@ -1114,3 +1114,27 @@ the package report write.
 {"name":"run_command","arguments":{"command":"document.info","params":{"format":"text","category":"fontDetails"}}}
 ```
 
+## Slices
+
+Object → Slice cuts the art into the pieces web output saves. User slices are rectangles of their own
+(`document.slices`, ids from the object id counter); `object.slice.make` turns the selected objects into object
+slices, whose slice follows the object's bounds; auto slices fill what no other slice covers (the artboards with
+Clip to Artboard on, the default, else the art and the slices). `slice.list` returns every slice as laid out,
+numbered left to right and top to bottom: `{number, id (null for auto slices), source: user|object|auto, name, x, y,
+width, height, options, selected}`, plus `clipToArtboard`, `hidden` and `locked`.
+
+The Object → Slice commands act on the selected slices: the ones `select.object.slices` (Select → Object → Slices)
+selects, and the selected objects that are object slices. `object.slice.release` (an object slice leaves its object,
+a user slice becomes an unpainted rectangle), `object.slice.fromGuides` (the grid the ruler guides cut the artboards
+into), `object.slice.fromSelection`, `object.slice.duplicate {dx?, dy?}`, `object.slice.combine`,
+`object.slice.divide {rows? | rowHeight?, columns? | columnWidth?}`, `object.slice.deleteAll`,
+`object.slice.options {kind?: image|noImage|htmlText, name?, url?, target?, message?, alt?, text?, background?:
+""|matte|#rrggbb, hAlign?, vAlign?}` and `object.slice.clipToArtboard {on?}` are each one undo step.
+`view.slices.hide {hidden?}` and `view.slices.lock {locked?}` are session view state; the canvas draws the slices in
+the `sliceLineColor` preference, numbered while `showSliceNumbers` is on.
+
+```json
+{"name":"run_command","arguments":{"command":"object.slice.make","params":{}}}
+{"name":"run_command","arguments":{"command":"object.slice.options","params":{"name":"logo","url":"https://example.com","alt":"Logo"}}}
+{"name":"run_command","arguments":{"command":"slice.list","params":{}}}
+```
