@@ -4,26 +4,34 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use hayro_interpret::font::Glyph;
-use hayro_interpret::pattern::Pattern;
-use hayro_interpret::shading::ShadingType;
+use hayro_interpret::hayro_cmap::BfString;
+use hayro_interpret::pattern::{Pattern, TilingPattern};
 use hayro_interpret::{
-    ClipPath, Context, Device, GlyphDrawMode, Image, ImageData, InterpreterCache, InterpreterSettings, InterpreterWarning, LumaData, PathDrawMode,
-    SoftMask, StrokeProps, interpret_page,
+    CacheKey, ClipPath, Context, Device, GlyphDrawMode, Image, ImageData, InterpreterCache, InterpreterSettings, InterpreterWarning, LumaData,
+    MaskType, PathDrawMode, SoftMask, StrokeProps, interpret_page,
 };
 use hayro_syntax::object::Name;
-use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
-use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
+use kurbo::{Affine, BezPath, Rect, Shape};
+use vectorcraft_color::{BlendMode, Color, Paint, Swatch};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, Node, NodeId,
-    NodeKind, StrokeLayer,
+    Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
+    Node, NodeId, NodeKind, OpacityMask, PatternDef, StrokeLayer,
 };
 use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
-use crate::{CropTo, ImportOptions, ImportReport, PdfError};
+use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec};
+use crate::import_scan::{Ocgs, Scan, scan_page};
+use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
+use crate::import_text::{Families, Look, Placement, TextLine};
+use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
 /// The name of the paths text imports as.
 const TEXT_OUTLINES: &str = "<Text Outlines>";
+/// The deepest soft masks, patterns and type 3 glyphs are read within each other.
+const MAX_NESTED: u32 = 8;
+/// A tiling pattern read this many times with the same art is taken to always draw it.
+const PATTERN_REUSE: u32 = 16;
 
 /// Import a PDF (or PDF-compatible `.ai`) with default options.
 pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
@@ -35,6 +43,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let pdf = crate::pages::open(bytes, opts.password.as_deref())?;
     let pages = pdf.pages();
     let picked = crate::pages::picked(opts, pages.len())?;
+    let ocgs = Ocgs::read(&pdf);
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink2 = sink.clone();
@@ -58,8 +67,9 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     doc.title = "Imported PDF".into();
     doc.artboards.clear();
     doc.layers.clear();
-    let taken = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
-    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken));
+    let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken.clone()), opts.text_as);
+    b.taken = taken;
     let cache = InterpreterCache::new();
     let mut x = 0.0;
     // Every page only a placeholder (text) over private data: the file's art isn't in its PDF part.
@@ -72,7 +82,8 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         let xf = Affine::translate((x - frame.x0, -frame.y0)) * init;
         let mut ctx = Context::new(xf, ab, &cache, pdf.xref(), settings.clone());
         b.page = ab;
-        b.begin_page();
+        let scan = scan_page(page, &ocgs, &mut b.fonts);
+        b.begin_page(scan);
         interpret_page(page, &mut ctx, &mut b);
         let children = b.end_page();
         placeholder &= crate::pages::has_private_data(page) && only_text(&children);
@@ -109,10 +120,25 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
     }
     doc.swatches.extend(b.colors.swatches());
+    // Tiling patterns are pattern swatches.
+    for p in b.patterns.drain(..) {
+        doc.swatches.push(Swatch {
+            name: p.name.clone(),
+            paint: Paint::Pattern { pattern: p.name.clone(), xf: Affine::IDENTITY },
+            global: false,
+            spot: false,
+        });
+        doc.patterns.push(p);
+    }
     if b.colors.mixed {
         b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
+    if !b.missing_fonts.is_empty() {
+        let list = b.missing_fonts.join(", ");
+        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
+    }
     doc.fix_next_id();
+    doc.reserve_ids(b.next);
 
     let mut warnings = b.warnings;
     if let Ok(v) = sink.lock() {
@@ -131,6 +157,10 @@ fn only_text(nodes: &[Arc<Node>]) -> bool {
         nodes.iter().all(|n| match &n.kind {
             NodeKind::Path { clipping: true, .. } => true,
             NodeKind::Path { .. } if n.name.as_deref() == Some(TEXT_OUTLINES) => {
+                *text = true;
+                true
+            }
+            NodeKind::Text(_) => {
                 *text = true;
                 true
             }
@@ -154,13 +184,21 @@ enum FrameKind {
     Group {
         opacity: f32,
         blend: BlendMode,
-        masked: bool,
+        mask: Option<Arc<MaskSpec>>,
+        isolate: bool,
+        knockout: bool,
     },
 }
 
 struct Frame {
     kind: FrameKind,
     children: Vec<Arc<Node>>,
+}
+
+impl Frame {
+    fn new(kind: FrameKind) -> Self {
+        Self { kind, children: vec![] }
+    }
 }
 
 /// Glyphs drawn consecutively with the same paint, merged into one path.
@@ -172,6 +210,19 @@ struct GlyphRun {
     scale: f64,
 }
 
+/// How often a tiling pattern was read, and the art (as its paints) each reading drew with the
+/// swatch made for it.
+type PatternReadings = (u32, Vec<(Vec<Paint>, String)>);
+
+/// Builder state a nested interpretation (soft mask, pattern cell) starts afresh and gives back.
+struct Saved {
+    stack: Vec<Frame>,
+    blend: BlendMode,
+    mask: Option<Arc<MaskSpec>>,
+    page: Rect,
+    pending: bool,
+}
+
 struct Builder<'p> {
     colors: Colors<'p>,
     next: u64,
@@ -179,9 +230,31 @@ struct Builder<'p> {
     blend: BlendMode,
     page: Rect,
     glyphs: Option<GlyphRun>,
+    text: Option<TextLine>,
+    text_as: TextAs,
     images: HashMap<String, ImageBlob>,
     image_keys: HashMap<u128, (String, u32, u32)>,
     warnings: Vec<String>,
+    /// Fonts by cache key → base font name (from [`scan_page`]).
+    fonts: HashMap<u128, String>,
+    font_names: HashMap<u128, (String, String)>,
+    families: Option<Families>,
+    missing_fonts: Vec<String>,
+    /// The soft mask of the graphics state, the art drawn through it so far, and the masks read.
+    mask: Option<Arc<MaskSpec>>,
+    masked: Vec<Arc<Node>>,
+    masks: HashMap<u128, Arc<MaskSpec>>,
+    /// Pattern swatches made, and per (pattern, stroke) the art signatures read and their names.
+    patterns: Vec<PatternDef>,
+    pattern_keys: HashMap<(u128, bool), PatternReadings>,
+    /// Swatch names in use.
+    taken: Vec<String>,
+    /// The page as walked by [`scan_page`], and how far the interpreter is through its groups.
+    scan: Scan,
+    group_at: usize,
+    /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
+    pending: bool,
+    nested: u32,
 }
 
 fn blend(b: hayro_interpret::BlendMode) -> BlendMode {
@@ -237,12 +310,26 @@ fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f64) -> Stro
     st
 }
 
-fn round3(v: f32) -> f32 {
+pub(crate) fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
 }
 
+/// The paints of `nodes`' leaves, in order: what tells two readings of a pattern cell apart.
+fn paints(nodes: &[Arc<Node>]) -> Vec<Paint> {
+    let mut out = vec![];
+    for n in nodes {
+        n.walk(&mut |c| out.extend(c.appearance.items.iter().map(|i| i.paint().clone())));
+    }
+    out
+}
+
+/// Visual bounds of `nodes`; `None` when one has none.
+fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
+    nodes.iter().try_fold(None, |acc, n| n.visual_bounds().map(|b| Some(acc.map_or(b, |a: Rect| a.union(b)))))?
+}
+
 impl<'p> Builder<'p> {
-    fn new(next: u64, colors: Colors<'p>) -> Self {
+    fn new(next: u64, colors: Colors<'p>, text_as: TextAs) -> Self {
         Self {
             colors,
             next,
@@ -250,9 +337,25 @@ impl<'p> Builder<'p> {
             blend: BlendMode::Normal,
             page: Rect::ZERO,
             glyphs: None,
+            text: None,
+            text_as,
             images: HashMap::new(),
             image_keys: HashMap::new(),
             warnings: vec![],
+            fonts: HashMap::new(),
+            font_names: HashMap::new(),
+            families: None,
+            missing_fonts: vec![],
+            mask: None,
+            masked: vec![],
+            masks: HashMap::new(),
+            patterns: vec![],
+            pattern_keys: HashMap::new(),
+            taken: vec![],
+            scan: Scan::default(),
+            group_at: 0,
+            pending: false,
+            nested: 0,
         }
     }
 
@@ -262,33 +365,124 @@ impl<'p> Builder<'p> {
         id
     }
 
+    /// A deep copy of `node` with fresh ids.
+    fn reid(&mut self, node: &Node) -> Node {
+        let mut n = node.clone();
+        n.id = self.id();
+        if let Some(ch) = n.children_mut() {
+            let old = std::mem::take(ch);
+            *ch = old.iter().map(|c| Arc::new(self.reid(c))).collect();
+        }
+        n
+    }
+
+    /// `m` with fresh ids for its art: a mask read once can mask several objects.
+    fn fresh_mask(&mut self, mut m: OpacityMask) -> OpacityMask {
+        m.art = Arc::new(self.reid(&m.art));
+        m
+    }
+
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
         }
     }
 
-    fn begin_page(&mut self) {
-        self.stack = vec![Frame { kind: FrameKind::Root, children: vec![] }];
+    fn begin_page(&mut self, scan: Scan) {
+        self.stack = vec![Frame::new(FrameKind::Root)];
         self.blend = BlendMode::Normal;
         self.glyphs = None;
+        self.text = None;
+        self.mask = None;
+        self.masked.clear();
+        self.pending = false;
+        (self.scan, self.group_at) = (scan, 0);
     }
 
+    /// The page's art.
     fn end_page(&mut self) -> Vec<Arc<Node>> {
-        self.flush_glyphs();
+        self.close_frames()
+    }
+
+    /// Finish the open runs and frames → the root frame's children.
+    fn close_frames(&mut self) -> Vec<Arc<Node>> {
+        self.flush();
         while self.stack.len() > 1 {
             self.pop_frame();
         }
         self.stack.pop().map(|f| f.children).unwrap_or_default()
     }
 
+    /// Add `n` to the open frame.
+    fn emit(&mut self, n: Arc<Node>) {
+        if let Some(f) = self.stack.last_mut() {
+            f.children.push(n);
+        }
+    }
+
     fn push_node(&mut self, mut n: Node) {
         if self.blend != BlendMode::Normal && !n.is_container() {
             n.blend = self.blend;
         }
-        if let Some(f) = self.stack.last_mut() {
-            f.children.push(Arc::new(n));
+        if self.mask.is_some() {
+            self.masked.push(Arc::new(n));
+        } else {
+            self.emit(Arc::new(n));
         }
+    }
+
+    /// Finish the open glyph runs and the art drawn through the current soft mask.
+    fn flush(&mut self) {
+        self.flush_glyphs();
+        self.flush_text();
+        self.flush_masked();
+    }
+
+    /// The art drawn through the graphics state's soft mask so far, as one masked object.
+    fn flush_masked(&mut self) {
+        if self.masked.is_empty() {
+            return;
+        }
+        let art = std::mem::take(&mut self.masked);
+        let Some(spec) = self.mask.clone() else {
+            art.into_iter().for_each(|n| self.emit(n));
+            return;
+        };
+        match spec.as_ref() {
+            // Each object is drawn through the mask on its own.
+            MaskSpec::Opacity(a) => {
+                for mut n in art {
+                    Arc::make_mut(&mut n).opacity *= a;
+                    self.emit(n);
+                }
+            }
+            MaskSpec::Mask(m) => {
+                let m = self.fresh_mask(m.clone());
+                let node = match <[Arc<Node>; 1]>::try_from(art) {
+                    Ok([one]) if one.mask.is_none() => {
+                        fold_stop_opacity(&one, &m).unwrap_or_else(|| Node { mask: Some(Box::new(m)), ..Arc::unwrap_or_clone(one) })
+                    }
+                    Ok([one]) => {
+                        let mut g = Node::group(self.id(), vec![one]);
+                        g.mask = Some(Box::new(m));
+                        g
+                    }
+                    Err(all) => {
+                        let mut g = Node::group(self.id(), all);
+                        g.mask = Some(Box::new(m));
+                        g
+                    }
+                };
+                self.emit(Arc::new(node));
+            }
+        }
+    }
+
+    /// A clip path node.
+    fn clip_node(&mut self, path: &BezPath, rule: FillRule) -> Node {
+        let mut clip = Node::new(self.id(), NodeKind::Path { path: PathData::from_bezpath(path), rule, live: None, clipping: true, guide: false });
+        clip.name = Some("<Clipping Path>".into());
+        clip
     }
 
     fn pop_frame(&mut self) {
@@ -299,13 +493,16 @@ impl<'p> Builder<'p> {
         let node = match f.kind {
             FrameKind::Root => None,
             FrameKind::Skip => {
-                if let Some(p) = self.stack.last_mut() {
-                    p.children.extend(f.children);
-                }
+                f.children.into_iter().for_each(|c| self.emit(c));
                 None
             }
             FrameKind::Clip(clip) => {
+                let noop = clip.path_data().map(|p| p.to_bezpath()).filter(is_rectangle).map(|p| p.bounding_box().inflate(0.01, 0.01));
                 if f.children.is_empty() {
+                    None
+                } else if noop.is_some_and(|r| bounds(&f.children).is_some_and(|b| contains(r, b))) {
+                    // A rectangle around all of its art (a form's box) clips nothing.
+                    f.children.into_iter().for_each(|c| self.emit(c));
                     None
                 } else {
                     let mut ch = vec![Arc::new(*clip)];
@@ -313,34 +510,53 @@ impl<'p> Builder<'p> {
                     Some(Node::new(self.id(), NodeKind::Group { children: ch, clip: true }))
                 }
             }
-            FrameKind::Group { opacity, blend, masked } => {
-                if f.children.is_empty() {
+            FrameKind::Group { opacity, blend, mask, isolate, knockout } => {
+                let children = f.children;
+                // A constant alpha mask is opacity (of a group that isn't isolated).
+                let (opacity, mask) = match mask.as_deref() {
+                    Some(MaskSpec::Opacity(a)) => (opacity * a, None),
+                    Some(MaskSpec::Mask(m)) => (opacity, Some(m.clone())),
+                    None => (opacity, None),
+                };
+                // Isolation only shows with blending inside; knockout with several objects.
+                let isolate = isolate && Node::children_blend(&children, &mut |c| c.blends_through());
+                let knockout = knockout && children.len() > 1;
+                let plain = opacity >= 0.999 && blend == BlendMode::Normal && mask.is_none() && !isolate && !knockout;
+                if children.is_empty() {
                     None
-                } else if opacity >= 0.999 && blend == BlendMode::Normal && !masked {
-                    if let Some(p) = self.stack.last_mut() {
-                        p.children.extend(f.children);
-                    }
+                } else if plain {
+                    children.into_iter().for_each(|c| self.emit(c));
                     None
-                } else if f.children.len() == 1 && !f.children[0].is_container() && !masked {
-                    // A single object in a group: fold opacity/blend into the object itself.
-                    let mut only = (*f.children[0]).clone();
+                } else if let [only] = children.as_slice()
+                    && !only.is_container()
+                    && !isolate
+                    && !knockout
+                    && (mask.is_none() || only.mask.is_none())
+                {
+                    // A single object in a group: fold opacity, blend and mask into the object.
+                    let mut only = (**only).clone();
                     only.opacity *= opacity;
                     if blend != BlendMode::Normal {
                         only.blend = blend;
                     }
+                    if let Some(m) = mask {
+                        let m = self.fresh_mask(m);
+                        only = fold_stop_opacity(&only, &m).unwrap_or(Node { mask: Some(Box::new(m)), ..only });
+                    }
                     Some(only)
                 } else {
-                    let mut g = Node::group(self.id(), f.children);
-                    g.opacity = opacity;
-                    g.blend = blend;
+                    let mut g = Node::group(self.id(), children);
+                    (g.opacity, g.blend, g.isolate) = (opacity, blend, isolate);
+                    if knockout {
+                        g.knockout = Knockout::On;
+                    }
+                    g.mask = mask.map(|m| Box::new(self.fresh_mask(m)));
                     Some(g)
                 }
             }
         };
-        if let Some(n) = node
-            && let Some(p) = self.stack.last_mut()
-        {
-            p.children.push(Arc::new(n));
+        if let Some(n) = node {
+            self.emit(Arc::new(n));
         }
     }
 
@@ -364,9 +580,15 @@ impl<'p> Builder<'p> {
         self.push_node(n);
     }
 
-    /// Convert a hayro paint to a VectorCraft paint and opacity. `bbox` is the painted area in
-    /// document coordinates (for patterns).
-    fn paint(&mut self, p: &hayro_interpret::Paint<'_>) -> (Paint, f32) {
+    fn flush_text(&mut self) {
+        let Some((t, opacity)) = self.text.take().and_then(TextLine::finish) else { return };
+        let mut n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
+        n.opacity = opacity;
+        self.push_node(n);
+    }
+
+    /// Convert a hayro paint to a VectorCraft paint and opacity (`stroke`: for a stroke).
+    fn paint(&mut self, p: &hayro_interpret::Paint<'_>, stroke: bool) -> (Paint, f32) {
         match p {
             hayro_interpret::Paint::Color(c) => {
                 let [r, g, b, a] = c.to_rgba().components();
@@ -375,18 +597,105 @@ impl<'p> Builder<'p> {
             }
             hayro_interpret::Paint::Pattern(pat) => match pat.as_ref() {
                 Pattern::Shading(sp) => match shading_gradient(sp, &mut self.colors) {
-                    Some(g) => (Paint::Gradient(Box::new(g)), sp.opacity),
+                    Some((g, _)) => (Paint::Gradient(Box::new(g)), sp.opacity),
                     None => {
-                        self.warn("mesh/function shadings are imported as a flat colour");
+                        self.warn("function-based shadings (and very large meshes) are imported as a flat colour");
                         (Paint::solid(Color::rgb(0.5, 0.5, 0.5)), sp.opacity)
                     }
                 },
-                Pattern::Tiling(_) => {
-                    self.warn("tiling patterns are imported as a flat grey");
-                    (Paint::solid(Color::rgb(0.5, 0.5, 0.5)), 1.0)
-                }
+                Pattern::Tiling(t) => match self.tiling(t, stroke) {
+                    Some(paint) => (paint, 1.0),
+                    None => {
+                        self.warn("tiling patterns nested too deeply are imported as a flat grey");
+                        (Paint::solid(Color::rgb(0.5, 0.5, 0.5)), 1.0)
+                    }
+                },
             },
         }
+    }
+
+    /// Read a soft mask, pattern cell or type 3 glyph (`read`) on its own: its art, in the
+    /// coordinates `page` has. `None` when nested too deeply.
+    fn nested(&mut self, page: Rect, read: impl FnOnce(&mut Self)) -> Option<Vec<Arc<Node>>> {
+        if self.nested >= MAX_NESTED {
+            return None;
+        }
+        self.flush();
+        let saved = Saved {
+            stack: std::mem::replace(&mut self.stack, vec![Frame::new(FrameKind::Root)]),
+            blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
+            mask: self.mask.take(),
+            page: std::mem::replace(&mut self.page, page),
+            pending: std::mem::take(&mut self.pending),
+        };
+        self.nested += 1;
+        read(self);
+        let art = self.close_frames();
+        self.nested -= 1;
+        (self.stack, self.blend, self.mask, self.page, self.pending) = (saved.stack, saved.blend, saved.mask, saved.page, saved.pending);
+        Some(art)
+    }
+
+    /// What soft mask `m` does (read once per mask and placement).
+    fn soft_mask(&mut self, m: &SoftMask<'_>) -> Arc<MaskSpec> {
+        let key = m.cache_key();
+        if let Some(s) = self.masks.get(&key) {
+            return s.clone();
+        }
+        let page = self.page;
+        let spec = match self.nested(page, |b| m.interpret(b)) {
+            Some(art) => {
+                let [r, g, b, _] = m.background_color().to_rgba().components();
+                let backdrop = luminance(&Color::rgb(r, g, b));
+                let inverted = m.transfer_function().is_some_and(|tf| tf.apply(0.0) > tf.apply(1.0));
+                let id = self.id();
+                mask_spec(art, m.mask_type() == MaskType::Alpha, backdrop, inverted, page, |all| Node::group(id, all))
+            }
+            None => {
+                self.warn("soft masks nested too deeply were left out (content drawn unmasked)");
+                MaskSpec::Opacity(1.0)
+            }
+        };
+        let spec = Arc::new(spec);
+        self.masks.insert(key, spec.clone());
+        spec
+    }
+
+    /// Tiling pattern `t` as a pattern swatch's paint (the swatch made the first time).
+    fn tiling(&mut self, t: &TilingPattern<'_>, stroke: bool) -> Option<Paint> {
+        let key = (t.cache_key(), stroke);
+        let tile = Rect::from_origin_size(t.bbox.origin(), (t.x_step.abs().max(1e-3) as f64, t.y_step.abs().max(1e-3) as f64));
+        let xf = t.matrix * Affine::translate(tile.origin().to_vec2());
+        // An uncoloured pattern draws in the current colour: read it again unless it always
+        // drew the same.
+        if let Some((n, seen)) = self.pattern_keys.get(&key)
+            && *n >= PATTERN_REUSE
+            && let [(_, name)] = seen.as_slice()
+        {
+            return Some(Paint::Pattern { pattern: name.clone(), xf });
+        }
+        let art = self.nested(Rect::ZERO, |b| {
+            // A cell whose content can't be decoded is empty.
+            let _ = t.interpret(b, Affine::IDENTITY, stroke);
+        })?;
+        let sig = paints(&art);
+        let entry = self.pattern_keys.entry(key).or_default();
+        entry.0 += 1;
+        let name = match entry.1.iter().find(|(s, _)| *s == sig) {
+            Some((_, name)) => name.clone(),
+            None => {
+                let name = (self.patterns.len() + 1..).map(|i| format!("Pattern {i}")).find(|n| !self.taken.contains(n)).unwrap_or_default();
+                self.taken.push(name.clone());
+                let mut def = PatternDef::new(&name, art);
+                def.tile = tile;
+                self.patterns.push(def);
+                if let Some(e) = self.pattern_keys.get_mut(&key) {
+                    e.1.push((sig, name.clone()));
+                }
+                name
+            }
+        };
+        Some(Paint::Pattern { pattern: name, xf })
     }
 
     fn add_image(&mut self, key: u128, make: impl FnOnce() -> Option<(ImageBlob, u32, u32)>, xf: Affine) {
@@ -406,70 +715,93 @@ impl<'p> Builder<'p> {
         let id = self.id();
         self.push_node(Node::new(id, NodeKind::Image(ImageObject { key: k, width: w, height: h, xf, link: None, placement: Default::default() })));
     }
-}
 
-/// Axial/radial shading → gradient paint (stops sampled from the shading function, in the
-/// shading's own colour model).
-fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern, colors: &mut Colors<'_>) -> Option<GradientPaint> {
-    let ShadingType::RadialAxial { coords, domain, function, axial, .. } = sp.shading.shading_type.as_ref() else {
-        return None;
-    };
-    let m = sp.matrix;
-    let cs = &sp.shading.color_space;
-    let at = |t: f32| function.eval(&smallvec::smallvec![domain[0] + (domain[1] - domain[0]) * t]);
-    let space = colors.shading_space(cs, at(0.0)?.len());
-    // RGB to decide which samples are stops; the stops keep the shading's model.
-    let sample = |t: f32| -> Option<(Color, f32)> {
-        let [r, g, b, a] = cs.to_rgba(&at(t)?, 1.0, false).components();
-        Some((Color::rgb(round3(r), round3(g), round3(b)), a))
-    };
-    // Sample densely, then drop samples that linear interpolation reproduces.
-    const N: usize = 64;
-    let mut pts: Vec<(f32, [f32; 3])> = Vec::with_capacity(N + 1);
-    for i in 0..=N {
-        let t = i as f32 / N as f32;
-        let (c, _) = sample(t)?;
-        pts.push((t, c.to_rgb()));
-    }
-    let mut keep = vec![0usize];
-    for i in 1..N {
-        let a = pts[keep.last().copied().unwrap_or(0)];
-        let b = pts[i + 1];
-        let u = (pts[i].0 - a.0) / (b.0 - a.0).max(1e-6);
-        let off = (0..3).map(|k| (a.1[k] + (b.1[k] - a.1[k]) * u - pts[i].1[k]).abs()).fold(0.0f32, f32::max);
-        if off > 1.5 / 255.0 {
-            keep.push(i);
+    /// Mesh shadings filling `region` (document space): gradient meshes, clipped to the region
+    /// when they reach past it.
+    fn draw_meshes(&mut self, meshes: Vec<vectorcraft_doc::live::GradientMesh>, region: &BezPath, opacity: f32) {
+        let nodes: Vec<Arc<Node>> = meshes.into_iter().map(|m| Arc::new(Node::new(self.id(), NodeKind::Mesh(m)))).collect();
+        let Some(art) = bounds(&nodes) else { return };
+        let mut content = match <[Arc<Node>; 1]>::try_from(nodes) {
+            Ok([one]) => Arc::unwrap_or_clone(one),
+            Err(all) => Node::group(self.id(), all),
+        };
+        content.opacity *= opacity;
+        if !contains(region.bounding_box().inflate(0.5, 0.5), art) {
+            let clip = self.clip_node(region, FillRule::NonZero);
+            content = clipped(clip, content, self.id());
         }
+        self.push_node(content);
     }
-    keep.push(N);
-    let mut stop_at = |t: f32, offset: f32| -> GradientStop {
-        let (rgb, _) = sample(t).unwrap_or((Color::BLACK, 1.0));
-        match at(t).and_then(|v| colors.native(space, &v)) {
-            Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
-            Some(Native { color, link: None }) => GradientStop::new(offset, color),
-            None => GradientStop::new(offset, rgb),
+
+    /// The family and style of font `key` (drawing glyph `o`).
+    fn font_name(&mut self, key: u128, o: &hayro_interpret::font::OutlineGlyph) -> (String, String) {
+        if let Some(n) = self.font_names.get(&key) {
+            return n.clone();
         }
-    };
-    let c = |x: f32, y: f32| m * Point::new(x as f64, y as f64);
-    let (kind, geom, stops) = if *axial {
-        let geom = GradientGeom { start: c(coords[0], coords[1]), end: c(coords[2], coords[3]), aspect: 1.0, focal: None };
-        (GradientKind::Linear, geom, keep.iter().map(|&i| stop_at(pts[i].0, pts[i].0)).collect::<Vec<_>>())
-    } else {
-        let (r0, r1) = (coords[2].max(0.0), coords[5].max(1e-6));
-        // The end circle, mapped (as an ellipse) into the page; a start circle off its centre
-        // gives the focal point.
-        let p = |x: f32, y: f32| Point::new(x as f64, y as f64);
-        let centre = p(coords[3], coords[4]);
-        let mut geom = GradientGeom { start: centre, end: centre + Vec2::new(r1 as f64, 0.0), aspect: 1.0, focal: None };
-        geom.set_focal(Some(p(coords[0], coords[1])));
-        geom.transform(m, GradientKind::Radial);
-        // Offsets are relative to the outer radius; an inner radius shifts them outwards.
-        let stops = keep.iter().map(|&i| stop_at(pts[i].0, (r0 + (r1 - r0) * pts[i].0) / r1)).collect();
-        (GradientKind::Radial, geom, stops)
-    };
-    let mut g = GradientPaint::new(Gradient { kind, stops });
-    g.geom = Some(geom);
-    Some(g)
+        let data = o.font_data();
+        let name = self.fonts.get(&key).cloned().or_else(|| data.as_ref().and_then(|d| d.postscript_name.clone()));
+        let (weight, italic) = data.as_ref().map_or((None, false), |d| (d.weight, d.is_italic));
+        let families = self.families.get_or_insert_with(Families::available);
+        let n = match name {
+            Some(name) => {
+                let (family, style, found) = families.resolve(&name, weight, italic);
+                if !found && !family.is_empty() && !self.missing_fonts.contains(&family) {
+                    self.missing_fonts.push(family.clone());
+                }
+                (family, style)
+            }
+            None => {
+                let d = vectorcraft_doc::CharStyle::default();
+                (d.font_family, d.font_style)
+            }
+        };
+        self.font_names.insert(key, n.clone());
+        n
+    }
+
+    /// Glyph `o` as type: added to the line being gathered (or starting one). `false`: it keeps
+    /// its outline (no Unicode text, mirrored, or not type mode).
+    fn type_glyph(
+        &mut self,
+        o: &hayro_interpret::font::OutlineGlyph,
+        m: Affine,
+        scale: f64,
+        paint: &hayro_interpret::Paint<'_>,
+        stroke: Option<&StrokeProps>,
+    ) -> bool {
+        if self.text_as != TextAs::Text || self.nested > 0 {
+            return false;
+        }
+        let text = match o.as_unicode() {
+            Some(BfString::Char(c)) => c.to_string(),
+            Some(BfString::String(s)) => s,
+            None => return false,
+        };
+        let Some(at) = Placement::of(m) else { return false };
+        if text.is_empty() || text.chars().any(|c| c.is_control()) {
+            return false;
+        }
+        self.flush_glyphs();
+        let font = o.font_cache_key();
+        let (paint, opacity) = self.paint(paint, stroke.is_some());
+        let stroke = stroke.map(|p| (paint.clone(), p.line_width as f64 * scale));
+        // A stroke over the glyph just filled (fill and stroke rendering).
+        if let (Some(s), Some(line)) = (&stroke, &mut self.text)
+            && line.stroke_last(font, at, s.clone())
+        {
+            return true;
+        }
+        let (family, style) = self.font_name(font, o);
+        let look = Look { font, family, style, size: at.size, h_scale: at.h_scale, fill: stroke.is_none().then_some(paint), stroke };
+        let advance = o.advance_width().filter(|w| w.is_finite()).map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
+        if !self.text.as_mut().is_some_and(|l| l.push(&look, at, opacity, advance, &text)) {
+            self.flush_text();
+            let mut line = TextLine::new(at, opacity);
+            line.push(&look, at, opacity, advance, &text);
+            self.text = Some(line);
+        }
+        true
+    }
 }
 
 fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
@@ -491,24 +823,67 @@ fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
 
 impl<'a> Device<'a> for Builder<'_> {
     fn set_soft_mask(&mut self, mask: Option<SoftMask<'a>>) {
-        if mask.is_some() {
-            self.warn("soft masks are not imported (content drawn unmasked)");
+        let spec = mask.map(|m| self.soft_mask(&m));
+        let same = match (&spec, &self.mask) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            self.flush();
+            self.mask = spec;
         }
     }
 
     fn set_blend_mode(&mut self, blend_mode: hayro_interpret::BlendMode) {
-        self.blend = blend(blend_mode);
+        let b = blend(blend_mode);
+        if b != self.blend {
+            self.flush_glyphs();
+            self.flush_text();
+            self.blend = b;
+        }
     }
 
     fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &hayro_interpret::Paint<'a>, draw_mode: &PathDrawMode) {
         self.flush_glyphs();
+        self.flush_text();
+        self.pending = false;
         let mut bp = path.clone();
         bp.apply_affine(transform);
         if bp.elements().is_empty() {
             return;
         }
+        let shading = match paint {
+            hayro_interpret::Paint::Pattern(p) => match p.as_ref() {
+                Pattern::Shading(sp) => Some(sp),
+                Pattern::Tiling(_) => None,
+            },
+            hayro_interpret::Paint::Color(_) => None,
+        };
+        // Patch and triangle meshes are gradient meshes.
+        if let (PathDrawMode::Fill(_), Some(sp)) = (draw_mode, shading)
+            && let Some(meshes) = mesh_shading(sp, &mut self.colors)
+        {
+            self.draw_meshes(meshes, &bp, sp.opacity);
+            return;
+        }
         let pd = PathData::from_bezpath(&bp);
-        let (paint, opacity) = self.paint(paint);
+        let stroke = matches!(draw_mode, PathDrawMode::Stroke(_));
+        let (paint, opacity) = self.paint(paint, stroke);
+        // A gradient that doesn't extend past its ends paints only between them.
+        let width = match draw_mode {
+            PathDrawMode::Stroke(p) => p.line_width as f64 * mean_scale(transform),
+            PathDrawMode::Fill(_) => 0.0,
+        };
+        let band = shading.and_then(|sp| extend_clip(sp, bp.bounding_box().inflate(width, width)));
+        let wrap = |b: &mut Self, n: Node| match &band {
+            Some(band) => {
+                let clip = b.clip_node(band, FillRule::EvenOdd);
+                let id = b.id();
+                clipped(clip, n, id)
+            }
+            None => n,
+        };
         match draw_mode {
             PathDrawMode::Fill(rule) => {
                 let mut f = FillLayer::new(paint);
@@ -517,14 +892,19 @@ impl<'a> Device<'a> for Builder<'_> {
                 if let NodeKind::Path { rule: r, .. } = &mut n.kind {
                     *r = fill_rule(*rule);
                 }
+                let n = wrap(self, n);
                 self.push_node(n);
             }
             PathDrawMode::Stroke(props) => {
                 let st = stroke_layer(paint, opacity, props, mean_scale(transform));
                 // Fill-then-stroke of the same path (the `B` operator) becomes one object.
                 let blend = self.blend;
-                if let Some(f) = self.stack.last_mut()
-                    && let Some(last) = f.children.last_mut()
+                let last = match self.mask {
+                    Some(_) => self.masked.last_mut(),
+                    None => self.stack.last_mut().and_then(|f| f.children.last_mut()),
+                };
+                if band.is_none()
+                    && let Some(last) = last
                     && last.blend == blend
                     && last.path_data() == Some(&pd)
                     && last.appearance.stroke().is_none()
@@ -533,13 +913,25 @@ impl<'a> Device<'a> for Builder<'_> {
                     return;
                 }
                 let n = Node::path(self.id(), pd, Appearance { items: vec![AppearanceItem::Stroke(st)], ..Default::default() });
+                let n = wrap(self, n);
                 self.push_node(n);
             }
         }
     }
 
     fn push_clip_path(&mut self, clip_path: &ClipPath) {
-        self.flush_glyphs();
+        self.flush();
+        // A form's box right after its transparency group: the group's isolate and knockout
+        // flags are the next ones read from the file.
+        if std::mem::take(&mut self.pending) {
+            let flags = self.scan.groups.get(self.group_at).copied();
+            self.group_at += 1;
+            if let Some((i, k)) = flags
+                && let Some(Frame { kind: FrameKind::Group { isolate, knockout, .. }, .. }) = self.stack.last_mut()
+            {
+                (*isolate, *knockout) = (i, k);
+            }
+        }
         let bb = clip_path.path.bounding_box();
         // Clips that contain the whole page do nothing visible; don't create groups for them.
         let redundant = clip_path.path.elements().len() <= 6
@@ -548,32 +940,15 @@ impl<'a> Device<'a> for Builder<'_> {
             && bb.x1 >= self.page.x1 - 0.01
             && bb.y1 >= self.page.y1 - 0.01
             && self.page.area() > 0.0;
-        let kind = if redundant {
-            FrameKind::Skip
-        } else {
-            let mut clip = Node::new(
-                self.id(),
-                NodeKind::Path {
-                    path: PathData::from_bezpath(&clip_path.path),
-                    rule: fill_rule(clip_path.fill),
-                    live: None,
-                    clipping: true,
-                    guide: false,
-                },
-            );
-            clip.name = Some("<Clipping Path>".into());
-            FrameKind::Clip(Box::new(clip))
-        };
-        self.stack.push(Frame { kind, children: vec![] });
+        let kind = if redundant { FrameKind::Skip } else { FrameKind::Clip(Box::new(self.clip_node(&clip_path.path, fill_rule(clip_path.fill)))) };
+        self.stack.push(Frame::new(kind));
     }
 
     fn push_transparency_group(&mut self, opacity: f32, mask: Option<SoftMask<'a>>, blend_mode: hayro_interpret::BlendMode) {
-        self.flush_glyphs();
-        let masked = mask.is_some();
-        if masked {
-            self.warn("soft masks are not imported (content drawn unmasked)");
-        }
-        self.stack.push(Frame { kind: FrameKind::Group { opacity, blend: blend(blend_mode), masked }, children: vec![] });
+        self.flush();
+        let mask = mask.map(|m| self.soft_mask(&m));
+        self.stack.push(Frame::new(FrameKind::Group { opacity, blend: blend(blend_mode), mask, isolate: false, knockout: false }));
+        self.pending = self.nested == 0;
         // Blend mode applies to the group as a whole, not to its children.
         self.blend = BlendMode::Normal;
     }
@@ -586,6 +961,7 @@ impl<'a> Device<'a> for Builder<'_> {
         paint: &hayro_interpret::Paint<'a>,
         draw_mode: &GlyphDrawMode,
     ) {
+        self.pending = false;
         let stroke = match draw_mode {
             GlyphDrawMode::Invisible => return,
             GlyphDrawMode::Fill => None,
@@ -593,10 +969,14 @@ impl<'a> Device<'a> for Builder<'_> {
         };
         match glyph {
             Glyph::Outline(o) => {
+                let scale = mean_scale(transform);
+                if self.type_glyph(o, transform * glyph_transform, scale, paint, stroke.as_ref()) {
+                    return;
+                }
+                self.flush_text();
                 let mut bp = o.outline();
                 bp.apply_affine(transform * glyph_transform);
-                let (paint, opacity) = self.paint(paint);
-                let scale = mean_scale(transform);
+                let (paint, opacity) = self.paint(paint, stroke.is_some());
                 let same = self.glyphs.as_ref().is_some_and(|r| {
                     r.paint == paint
                         && r.opacity == opacity
@@ -613,14 +993,21 @@ impl<'a> Device<'a> for Builder<'_> {
                 self.warn("text was converted to outlines");
             }
             Glyph::Type3(t3) => {
-                self.flush_glyphs();
+                if self.nested >= MAX_NESTED {
+                    return;
+                }
+                self.flush();
+                self.nested += 1;
                 t3.interpret(self, transform, glyph_transform, paint);
+                self.nested -= 1;
             }
         }
     }
 
     fn draw_image(&mut self, image: Image<'a, '_>, transform: Affine) {
         self.flush_glyphs();
+        self.flush_text();
+        self.pending = false;
         match image {
             Image::Raster(r) => {
                 let key = hayro_interpret::CacheKey::cache_key(&r);
@@ -683,12 +1070,14 @@ impl<'a> Device<'a> for Builder<'_> {
     }
 
     fn pop_clip_path(&mut self) {
-        self.flush_glyphs();
+        self.flush();
+        self.pending = false;
         self.pop_frame();
     }
 
     fn pop_transparency_group(&mut self) {
-        self.flush_glyphs();
+        self.flush();
+        self.pending = false;
         self.pop_frame();
     }
 }

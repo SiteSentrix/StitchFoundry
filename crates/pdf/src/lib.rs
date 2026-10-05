@@ -11,9 +11,11 @@
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
 //!   Editing the native document rides along as an embedded file ([`editing()`]).
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
-//!   [`Document`]: one artboard and one layer per page, paths with fill/stroke, clip groups,
-//!   transparency groups, axial/radial shadings → gradients, images (JPEG passthrough, others
-//!   re-encoded as PNG) and text as glyph outlines. Colours keep their model: CMYK, Gray, and spot
+//!   [`Document`]: one artboard and one layer per page, paths with fill/stroke, clip groups, transparency groups (with isolation and knockout), soft
+//!   masks → opacity masks, axial/radial shadings → gradients (stop opacity and unextended ends
+//!   kept), mesh shadings → gradient meshes, tiling patterns → pattern swatches, images (JPEG
+//!   passthrough, others re-encoded as PNG) and text as point type (or glyph outlines, see
+//!   [`TextAs`]). Colours keep their model: CMYK, Gray, and spot
 //!   inks (Separation, DeviceN) as spot swatches at a tint; a file painted mostly in CMYK opens as a
 //!   CMYK document. [`ImportOptions`] pick the pages, the box each
 //!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
@@ -26,6 +28,10 @@ mod export;
 mod images;
 mod import;
 mod import_color;
+mod import_mask;
+mod import_scan;
+mod import_shading;
+mod import_text;
 mod lab_spot;
 mod pages;
 mod presets;
@@ -76,12 +82,24 @@ pub struct ImportOptions {
     pub crop: CropTo,
     /// The (user) password of an encrypted PDF.
     pub password: Option<String>,
+    /// What text becomes.
+    pub text_as: TextAs,
 }
 
 impl Default for ImportOptions {
     fn default() -> Self {
-        Self { max_pages: None, artboard_gap: 36.0, pages: None, crop: CropTo::default(), password: None }
+        Self { max_pages: None, artboard_gap: 36.0, pages: None, crop: CropTo::default(), password: None, text_as: TextAs::default() }
     }
+}
+
+settings::choice! {
+    /// What imported text becomes.
+    TextAs {
+        /// Point type, one object per line run, in the file's fonts (by name).
+        Text = "text", "Text";
+        /// Paths of the glyphs' outlines (looks the same without the fonts).
+        Outlines = "outlines", "Outlines";
+    } default Text
 }
 
 settings::choice! {
@@ -167,6 +185,8 @@ mod tests_focal;
 mod tests_fx;
 #[cfg(test)]
 mod tests_import_color;
+#[cfg(test)]
+mod tests_import_fidelity;
 #[cfg(test)]
 mod tests_import_options;
 #[cfg(test)]
