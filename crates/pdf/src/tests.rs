@@ -366,7 +366,14 @@ fn tiny_png() -> Vec<u8> {
 fn image_roundtrip() {
     let mut d = doc(200.0, 200.0);
     d.images.insert("img1".into(), ImageBlob::new("image/png", tiny_png()));
-    let im = ImageObject { key: "img1".into(), width: 4, height: 2, xf: Affine::translate((20.0, 30.0)) * Affine::scale(10.0), link: None };
+    let im = ImageObject {
+        key: "img1".into(),
+        width: 4,
+        height: 2,
+        xf: Affine::translate((20.0, 30.0)) * Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+    };
     add(&mut d, Node::new(NodeId(0), NodeKind::Image(im)));
     let out = roundtrip(&d);
     let l = leaves(&out);

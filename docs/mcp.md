@@ -1073,3 +1073,24 @@ opened.
 {"name":"run_command","arguments":{"command":"document.exportDxf","params":{"path":"/tmp/plan.dxf","version":"2013","unit":"mm","scale":10,"preserve":"editability"}}}
 {"name":"export","arguments":{"path":"/tmp/plan.dxf","options":{"useArtboards":true,"colors":256}}}
 ```
+
+## Links panel
+
+`links.list {show?: all|missing|modified|embedded, sort?: name|kind|status}` lists every image in the layers, top
+first, as the Links panel does: `{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth,
+pixelHeight, path?, found?, page?, preview?}`. `links.info {id?}` is the Link Info: `image.info`'s fields plus
+`status`, `format`, the file's `ppi` and the `effectivePpi`, `scale` (% of 100%), `rotation` (degrees,
+counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
+`links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
+file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
+(another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
+`links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeftÃ¢â‚¬Â¦bottomRight,
+clip?}` decides how a relinked or updated file takes an image's place (default `bounds`: stretched into the old
+bounds; `clip` puts it in a clip group of the old bounds when it is larger). The UI commands `links.editOriginal` and
+`links.reveal` open the linked file in its app or show it in its folder (desktop).
+
+```json
+{"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}
+{"name":"run_command","arguments":{"command":"links.placementOptions","params":{"ids":[12],"preserve":"fit","align":"top"}}}
+{"name":"run_command","arguments":{"command":"links.unembed","params":{"id":14,"path":"/tmp/logo.png"}}}
+```

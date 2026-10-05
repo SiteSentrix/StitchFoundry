@@ -335,24 +335,36 @@ pub fn paint_drop_highlight(app: &VectorcraftApp, ctx: &egui::Context, painter: 
 
 // ---------- the Control bar ----------
 
-/// The Control bar's details for the one selected image: Linked File or Embedded, its file name,
-/// colour mode and effective resolution (`image.info`, fetched again only when it changes).
-pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    let Some(st) = app.session.active() else { return };
+/// `image.info` of the one selected image, fetched again only when it changes (the Control bar's
+/// and the Properties panel's image details).
+pub fn selected_image_info(app: &mut VectorcraftApp) -> Option<&Value> {
+    let st = app.session.active()?;
     let key = match &st.selection.objects[..] {
         [id] if st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Image(_))) => (st.uid, st.revision, id.0),
-        _ => return,
+        _ => return None,
     };
     if app.place.info.as_ref().is_none_or(|(k, _)| *k != key) {
         let info = app.session.execute("image.info", &json!({ "id": key.2 })).unwrap_or_default();
         app.place.info = Some((key, info));
     }
-    let Some((_, i)) = &app.place.info else { return };
-    let t = Tokens::get(ui.ctx());
+    app.place.info.as_ref().map(|(_, i)| i)
+}
+
+/// An image's file name, and its colour mode and effective resolution (`image.info` `i`).
+pub fn image_summary(i: &Value) -> (String, String) {
     let name = i["link"].as_str().map(fileio::file_name).or_else(|| i["name"].as_str().map(str::to_string)).unwrap_or_default();
+    let ppi = i["ppi"].as_array().and_then(|a| a.first()).and_then(Value::as_f64).unwrap_or(0.0);
+    (name, format!("{}   PPI: {}", i["colorMode"].as_str().unwrap_or("RGB"), fmt_ppi(ppi)))
+}
+
+/// The Control bar's details for the one selected image: Linked File or Embedded, its file name,
+/// colour mode and effective resolution.
+pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    let Some(i) = selected_image_info(app) else { return };
+    let (name, details) = image_summary(i);
+    let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(name).size(12.0).color(t.text_strong));
     ui.separator();
-    let ppi = i["ppi"].as_array().and_then(|a| a.first()).and_then(Value::as_f64).unwrap_or(0.0);
-    ui.label(egui::RichText::new(format!("{}   PPI: {}", i["colorMode"].as_str().unwrap_or("RGB"), fmt_ppi(ppi))).size(12.0).color(t.text_dim));
+    ui.label(egui::RichText::new(details).size(12.0).color(t.text_dim));
     ui.separator();
 }

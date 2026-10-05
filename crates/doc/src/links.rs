@@ -156,6 +156,136 @@ impl Document {
     }
 }
 
+/// Links panel → Placement Options: how a file read again (Relink, Update Link) takes the place of
+/// the art it replaces.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlacementOptions {
+    #[serde(default)]
+    pub preserve: Preserve,
+    /// Where the new art sits in the old bounds (all but [`Preserve::Bounds`]).
+    #[serde(default)]
+    pub align: Align,
+    /// Clip the new art to the old bounds where it is larger.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clip: bool,
+}
+
+/// What a relinked image keeps of the art it replaces.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Preserve {
+    /// Its scale (relative to each file's 100% size), rotation and position.
+    Transforms,
+    /// Its bounds: the new art is stretched into them.
+    #[default]
+    Bounds,
+    /// Nothing but its position: the new art at 100%, unrotated.
+    FileDimensions,
+    /// Its bounds: the new art scaled proportionally to fit inside them.
+    Fit,
+    /// Its bounds: the new art scaled proportionally to fill them.
+    Fill,
+}
+
+impl Preserve {
+    pub const ALL: [Preserve; 5] = [Preserve::Transforms, Preserve::Bounds, Preserve::FileDimensions, Preserve::Fit, Preserve::Fill];
+
+    /// The id commands use (`transforms`, `bounds`, `fileDimensions`, `fit`, `fill`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Preserve::Transforms => "transforms",
+            Preserve::Bounds => "bounds",
+            Preserve::FileDimensions => "fileDimensions",
+            Preserve::Fit => "fit",
+            Preserve::Fill => "fill",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|p| p.id() == id)
+    }
+}
+
+/// A point of the 3×3 alignment grid, row by row from the top left.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Align {
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    #[default]
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+impl Align {
+    pub const ALL: [Align; 9] =
+        [Align::TopLeft, Align::Top, Align::TopRight, Align::Left, Align::Center, Align::Right, Align::BottomLeft, Align::Bottom, Align::BottomRight];
+
+    /// The id commands use (`topLeft` … `bottomRight`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Align::TopLeft => "topLeft",
+            Align::Top => "top",
+            Align::TopRight => "topRight",
+            Align::Left => "left",
+            Align::Center => "center",
+            Align::Right => "right",
+            Align::BottomLeft => "bottomLeft",
+            Align::Bottom => "bottom",
+            Align::BottomRight => "bottomRight",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|a| a.id() == id)
+    }
+
+    /// The fractions (0, ½ or 1) of the free room left of and above the new art.
+    pub fn fractions(self) -> (f64, f64) {
+        let i = Self::ALL.iter().position(|a| *a == self).unwrap_or(4);
+        ((i % 3) as f64 / 2.0, (i / 3) as f64 / 2.0)
+    }
+}
+
+impl Document {
+    /// Change every image object (in the layers, symbol definitions and pattern swatches, opacity-mask
+    /// art included) for which `pick` holds; only the subtrees holding one are copied.
+    pub fn update_images(&mut self, pick: impl Fn(&ImageObject) -> bool, mut f: impl FnMut(&mut ImageObject)) {
+        fn holds(n: &Node, pick: &dyn Fn(&ImageObject) -> bool) -> bool {
+            let mut hit = false;
+            walk_all(n, &mut |c| hit |= matches!(&c.kind, NodeKind::Image(im) if pick(im)));
+            hit
+        }
+        fn update(n: &mut Arc<Node>, pick: &dyn Fn(&ImageObject) -> bool, f: &mut dyn FnMut(&mut ImageObject)) {
+            if !holds(n, pick) {
+                return;
+            }
+            let n = Arc::make_mut(n);
+            if let NodeKind::Image(im) = &mut n.kind
+                && pick(im)
+            {
+                f(im);
+            }
+            if let Some(m) = &mut n.mask {
+                update(&mut m.art, pick, f);
+            }
+            for c in n.children_mut().into_iter().flatten() {
+                update(c, pick, f);
+            }
+        }
+        let roots =
+            self.layers.iter_mut().chain(self.symbols.iter_mut().map(|s| &mut s.art)).chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+        for root in roots {
+            update(root, &pick, &mut f);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,8 +301,15 @@ mod tests {
     fn image(d: &mut Document, key: &str, link: Option<LinkInfo>) -> NodeId {
         let id = d.alloc_id();
         let layer = d.layers[0].id;
-        d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(ImageObject { key: key.into(), width: 4, height: 4, xf: Affine::IDENTITY, link })))
-            .unwrap()
+        d.insert(
+            Some(layer),
+            0,
+            Node::new(
+                id,
+                NodeKind::Image(ImageObject { key: key.into(), width: 4, height: 4, xf: Affine::IDENTITY, link, placement: Default::default() }),
+            ),
+        )
+        .unwrap()
     }
 
     #[test]

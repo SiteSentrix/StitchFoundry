@@ -514,6 +514,18 @@ pub(crate) fn file_stamp(path: &str) -> Option<(u64, Option<u64>)> {
     Some((m.len(), modified))
 }
 
+/// When the file at `path` was created (ms since the Unix epoch), when the file system keeps it.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn file_created(path: &str) -> Option<u64> {
+    let t = std::fs::metadata(path).ok()?.created().ok()?;
+    t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn file_created(_: &str) -> Option<u64> {
+    None
+}
+
 /// `path` made absolute against the working directory (as given when absolute already, or when
 /// that fails).
 #[cfg(not(target_arch = "wasm32"))]

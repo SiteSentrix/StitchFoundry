@@ -340,7 +340,14 @@ fn image_roundtrip() {
     let id = d.alloc_id();
     let n = Node::new(
         id,
-        NodeKind::Image(ImageObject { key: "k".into(), width: 4, height: 2, xf: Affine::translate((10.0, 20.0)) * Affine::scale(10.0), link: None }),
+        NodeKind::Image(ImageObject {
+            key: "k".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((10.0, 20.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+        }),
     );
     let mut d = doc_with(vec![n]);
     d.images.insert("k".into(), ImageBlob::new("image/png", png.clone()));

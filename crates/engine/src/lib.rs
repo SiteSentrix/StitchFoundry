@@ -1060,6 +1060,8 @@ mod tests_linked_stops;
 #[cfg(test)]
 mod tests_links;
 #[cfg(test)]
+mod tests_linkspanel;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_maskview;

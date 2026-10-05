@@ -479,8 +479,18 @@ pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// File → Show in Folder: the document's file in the system file manager.
 pub fn reveal(app: &mut VectorcraftApp) -> Result<Value, String> {
     let path = app.session.active().and_then(|d| d.path.clone()).ok_or("the document has never been saved")?;
-    app.services.reveal.as_mut().ok_or("no file manager here")?(&path)?;
+    reveal_path(app, &path)?;
     Ok(json!({ "path": path }))
+}
+
+/// Show the file at `path` in the system file manager (desktop).
+pub(crate) fn reveal_path(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    app.services.reveal.as_mut().ok_or("no file manager here")?(path)
+}
+
+/// Open `path` (a file or a folder) in the system's default app for it (desktop).
+pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    app.services.open_file.as_mut().ok_or("no app to open files here")?(path)
 }
 
 /// Place a file's bytes (no path, so embedded) centred in the view: `file.place`.

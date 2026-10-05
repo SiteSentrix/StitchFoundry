@@ -137,7 +137,14 @@ fn image_node(s: &mut Session) -> NodeId {
     s.edit("Place", |d, sel| {
         d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(bytes));
         let id = d.alloc_id();
-        let im = vectorcraft_doc::ImageObject { key: "pic".into(), width: 2, height: 2, xf: Default::default(), link: None };
+        let im = vectorcraft_doc::ImageObject {
+            key: "pic".into(),
+            width: 2,
+            height: 2,
+            xf: Default::default(),
+            link: None,
+            placement: Default::default(),
+        };
         d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(im)))?;
         sel.set([id]);
         Ok(id)

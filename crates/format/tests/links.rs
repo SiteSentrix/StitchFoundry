@@ -12,7 +12,7 @@ use vectorcraft_geom::Affine;
 
 fn image(d: &mut Document, key: &str, link: Option<LinkInfo>) {
     let (id, layer) = (d.alloc_id(), d.layers[0].id);
-    let im = ImageObject { key: key.into(), width: 600, height: 300, xf: Affine::IDENTITY, link };
+    let im = ImageObject { key: key.into(), width: 600, height: 300, xf: Affine::IDENTITY, link, placement: Default::default() };
     d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(im))).unwrap();
 }
 

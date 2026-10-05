@@ -102,7 +102,7 @@ pub type DownloadFn = Box<dyn FnMut(&str, &[u8])>;
 /// Opens a URL in the system browser.
 pub type OpenUrlFn = Box<dyn FnMut(&str)>;
 
-/// Shows a file in the system file manager.
+/// Shows a file in the system file manager, or opens it in its app.
 pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 
 /// Platform services injected by the host app (desktop or web).
@@ -141,6 +141,11 @@ pub struct Services {
     /// Write a file from any thread (desktop): lets Background Save and Export write off the UI
     /// thread ([`background`]). Without it they run at once.
     pub write_shared: Option<background::SharedWriteFn>,
+    /// Open a file (or a folder) in the system's default app for it (desktop: Edit Original, Show
+    /// Package). Without it (the web) those answer with an error.
+    pub open_file: Option<RevealFn>,
+    /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
+    pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
 }
 
 /// Cached canvas raster.

@@ -30,6 +30,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     transform_section(app, ui);
     divider(ui);
+    if n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Image(_))) {
+        image_section(app, ui);
+        divider(ui);
+    }
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -107,6 +111,46 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
+}
+
+/// The one selected image: its file (or Embedded), colour mode and resolution, and the Links
+/// panel's actions for it.
+fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
+    let Some(i) = crate::place::selected_image_info(app) else { return };
+    let (name, details) = crate::place::image_summary(i);
+    let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return };
+    section_header(ui, if linked { "Linked File" } else { "Embedded Image" });
+    ui.add(egui::Label::new(egui::RichText::new(&name).size(12.0).color(t.text_strong)).truncate());
+    dim_label(ui, &details);
+    ui.add_space(4.0);
+    let w = (ui.available_width() - 6.0) / 2.0;
+    let links = crate::panels::links::ID;
+    ui.horizontal(|ui| {
+        if linked {
+            if widgets::flat_button(ui, "Embed", w).clicked() {
+                app.run("links.embed", json!({ "ids": [id] })).ok();
+            }
+            if widgets::flat_button(ui, "Edit Original", w).clicked() {
+                crate::menus::invoke(app, "links.editOriginal", json!({ "id": id }));
+            }
+        } else {
+            if widgets::flat_button(ui, "Unembed…", w).clicked() {
+                crate::panels::links::unembed(app, id, &name);
+            }
+            if widgets::flat_button(ui, "Image Trace", w).clicked() {
+                app.ui.open_panel = Some("imageTrace".into());
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        if app.services.pick_open.is_some() && widgets::flat_button(ui, "Relink…", w).clicked() {
+            crate::panels::links::relink(app, vec![id]);
+        }
+        if widgets::flat_button(ui, "Links", w).clicked() {
+            app.ui.open_panel = Some(links.into());
+        }
+    });
 }
 
 /// Whether the selection uses more than one colour (`recolor.colors`), which offers the Recolor

@@ -36,6 +36,7 @@ pub mod office_export;
 mod path_ops;
 pub mod pdf_presets;
 pub mod place;
+pub mod placement_options;
 mod png_options;
 pub mod raster_effects;
 pub mod recolor;
@@ -209,6 +210,7 @@ registry! {
     TextExport: [text_export::KIND] => text_export::SPEC,
     OfficeExport: [office_export::KIND] => office_export::SPEC,
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
+    PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

@@ -280,7 +280,10 @@ fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     let mut d = Document::new(width as f64, height as f64);
     let layer = d.layers[0].id;
     let id = d.alloc_id();
-    let mut n = Node::new(id, NodeKind::Image(ImageObject { key: key.clone(), width, height, xf: Affine::IDENTITY, link: None }));
+    let mut n = Node::new(
+        id,
+        NodeKind::Image(ImageObject { key: key.clone(), width, height, xf: Affine::IDENTITY, link: None, placement: Default::default() }),
+    );
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;

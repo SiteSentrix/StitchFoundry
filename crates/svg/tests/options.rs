@@ -55,7 +55,7 @@ fn image_doc(key: &str, bytes: Vec<u8>) -> Document {
     let mut d = Document::new(100.0, 100.0);
     d.images.insert(key.into(), ImageBlob::new("image/png", bytes));
     let l = d.layers[0].id;
-    let im = ImageObject { key: key.into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None };
+    let im = ImageObject { key: key.into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None, placement: Default::default() };
     let n = Node::new(d.alloc_id(), NodeKind::Image(im));
     d.insert(Some(l), usize::MAX, n).unwrap();
     d

@@ -328,7 +328,14 @@ fn images_link_png_or_jpeg_files() {
     let mut png = vec![];
     image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 128])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
     let mut d = doc_with(|d| {
-        let im = ImageObject { key: "raster-1".into(), width: 4, height: 2, xf: Affine::translate((10.0, 20.0)) * Affine::scale(5.0), link: None };
+        let im = ImageObject {
+            key: "raster-1".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((10.0, 20.0)) * Affine::scale(5.0),
+            link: None,
+            placement: Default::default(),
+        };
         vec![Node::new(d.alloc_id(), NodeKind::Image(im))]
     });
     d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });

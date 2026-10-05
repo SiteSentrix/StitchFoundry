@@ -48,7 +48,7 @@ pub use appearance::{
 };
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
-pub use links::LinkInfo;
+pub use links::{LinkInfo, PlacementOptions};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
 pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;

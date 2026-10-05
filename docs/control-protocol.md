@@ -305,3 +305,10 @@ DXF Options: Export As… with the DXF format (`file.exportAs {format: "dxf"}`, 
 Export Selected Art Only with nothing selected, keeps the dialog open), remembers them for the next DXF Options and
 writes the file (asking for a path when there is none). Export As also lists DWG, greyed out: setting its `format` to
 `dwg` shows, and on confirm answers, the hint to export DXF instead.
+
+Placement Options: the Links panel's flyout (or `ui.placementOptionsDialog {ids?}` for agents) opens the
+`placementOptions` dialog for the selected images (fields `ids`, `preserve`: `transforms`/`bounds`/`fileDimensions`/
+`fit`/`fill`, `align`: `topLeft` … `bottomRight`, `clip`). `ui.dialog.confirm` runs `links.placementOptions` with them as
+one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
+`links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
+the system and return `{path}`.

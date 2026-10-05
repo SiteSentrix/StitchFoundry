@@ -1019,7 +1019,7 @@ impl Importer {
             if link.is_some() && !missing { blob.with_proxy() } else { blob }
         });
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);
-        Some(self.named(i.id(), NodeKind::Image(ImageObject { key, width: pw, height: ph, xf, link })))
+        Some(self.named(i.id(), NodeKind::Image(ImageObject { key, width: pw, height: ph, xf, link, placement: Default::default() })))
     }
 
     /// An SVG shown as an image (a data URL or a linked file) → its art, `acc` mapping its size.

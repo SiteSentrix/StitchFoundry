@@ -337,7 +337,7 @@ fn has_styled_target(n: &Node) -> bool {
 
 /// A real rendered thumbnail, cached by node identity (unchanged nodes keep their `Arc`
 /// allocation, so the address is a free change detector). Only rendered for visible rows.
-fn real_thumb(ui: &Ui, doc: &vectorcraft_doc::Document, n: &Node, r: egui::Rect) -> bool {
+pub(crate) fn real_thumb(ui: &Ui, doc: &vectorcraft_doc::Document, n: &Node, r: egui::Rect) -> bool {
     use std::cell::RefCell;
     use std::collections::HashMap;
     thread_local! {

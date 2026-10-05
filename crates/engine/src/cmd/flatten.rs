@@ -1039,7 +1039,10 @@ fn apply(d: &mut Document, sel: &mut vectorcraft_doc::Selection, plan: Plan, o: 
 fn raster_node(d: &mut Document, r: Raster) -> Node {
     let key = unique_key(d, "flattened");
     d.images.insert(key.clone(), ImageBlob::new("image/png", r.png));
-    let image = Node::new(d.alloc_id(), NodeKind::Image(ImageObject { key, width: r.width, height: r.height, xf: r.xf, link: None }));
+    let image = Node::new(
+        d.alloc_id(),
+        NodeKind::Image(ImageObject { key, width: r.width, height: r.height, xf: r.xf, link: None, placement: Default::default() }),
+    );
     let Some(path) = r.clip else { return image };
     super::rasterfx::clip_group(d, path, FillRule::NonZero, image)
 }

@@ -213,7 +213,14 @@ fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
         Art::Image(img) => {
             let (sx, sy) = pt_per_px(img.ppi);
             super::links::store_image(d, &img.key, img.blob, link.is_some());
-            let im = ImageObject { key: img.key, width: img.width, height: img.height, xf: Affine::scale_non_uniform(sx, sy), link };
+            let im = ImageObject {
+                key: img.key,
+                width: img.width,
+                height: img.height,
+                xf: Affine::scale_non_uniform(sx, sy),
+                link,
+                placement: Default::default(),
+            };
             Node::new(d.alloc_id(), NodeKind::Image(im))
         }
         Art::Text(t) => Node::new(d.alloc_id(), NodeKind::Text(Box::new(text::area_text(t, l.natural)))),
@@ -480,7 +487,7 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "image.info";
     let st = s.doc()?;
     let id = match (id_param(p, "id"), &st.selection.objects[..]) {

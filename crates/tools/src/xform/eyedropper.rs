@@ -199,7 +199,14 @@ mod tests {
         let mut png = vec![];
         img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
         d.images.insert("px".into(), ImageBlob::png(png));
-        let im = ImageObject { key: "px".into(), width: 3, height: 1, xf: vectorcraft_geom::Affine::scale(10.0), link: None };
+        let im = ImageObject {
+            key: "px".into(),
+            width: 3,
+            height: 1,
+            xf: vectorcraft_geom::Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+        };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(im))).unwrap();
         let (s, p) = (Selection::default(), paint());
         let mut cx = cx(&d, &s, &p);

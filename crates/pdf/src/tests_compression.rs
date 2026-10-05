@@ -27,7 +27,10 @@ fn doc(bytes: Vec<u8>, mime: &str) -> Document {
     let mut d = Document::new(100.0, 100.0);
     d.images.insert("img".into(), ImageBlob::new(mime, bytes));
     let xf = Affine::scale(72.0 / 600.0);
-    let n = Node::new(d.alloc_id(), NodeKind::Image(ImageObject { key: "img".into(), width: 600, height: 600, xf, link: None }));
+    let n = Node::new(
+        d.alloc_id(),
+        NodeKind::Image(ImageObject { key: "img".into(), width: 600, height: 600, xf, link: None, placement: Default::default() }),
+    );
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
     d

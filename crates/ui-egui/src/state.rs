@@ -106,6 +106,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::flattener_preview::ID, "Flattener Preview", "eye"),
     ("attributes", "Attributes", "settings"),
     ("colorThemes", "Color Themes", "sun"),
+    (crate::panels::links::ID, "Links", "link"),
 ];
 
 /// Groups of icon panels separated by dividers in the collapsed column.

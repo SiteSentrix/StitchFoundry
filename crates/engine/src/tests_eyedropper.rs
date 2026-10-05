@@ -157,7 +157,7 @@ fn clicking_an_image_samples_its_pixel() {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
-        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None };
+        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default() };
         d.insert(Some(l), 0, Node::new(id, NodeKind::Image(im))).map_err(|e| crate::EngineError::Other(e.to_string()))
     })
     .unwrap();

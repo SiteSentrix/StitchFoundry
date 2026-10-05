@@ -431,6 +431,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
     ),
+    (
+        "links.editOriginal",
+        "Edit Original",
+        "",
+        "{id?} open the file of linked image `id` (default: the selected linked image) in the system's default app for its type (Links panel, Edit › Edit Original) → {path}; edits saved there show after links.update",
+    ),
+    (
+        "links.reveal",
+        "Show in Folder",
+        "",
+        "{id?} show the file of linked image `id` (default: the selected linked image) in the system's file manager → {path}",
+    ),
+    (
+        "ui.placementOptionsDialog",
+        "Placement Options…",
+        "",
+        "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -804,6 +822,9 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::dxf_options::open(app, p);
             Ok(Value::Null)
         }
+        "links.editOriginal" => crate::panels::links::open_file(app, p, false),
+        "links.reveal" => crate::panels::links::open_file(app, p, true),
+        "ui.placementOptionsDialog" => crate::dialogs::placement_options::open(app, p),
         _ => return None,
     };
     Some(r)
@@ -1031,8 +1052,17 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.spotColors" => app.session.active().is_some(),
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
+        "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()),
+        "ui.placementOptionsDialog" => selected_image(app, |_| true),
         _ => true,
     }
+}
+
+/// Is an image `keep` accepts selected?
+fn selected_image(app: &VectorcraftApp, keep: impl Fn(&vectorcraft_doc::ImageObject) -> bool) -> bool {
+    app.session.active().is_some_and(|st| {
+        st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(|n| matches!(&n.kind, vectorcraft_doc::NodeKind::Image(im) if keep(im))))
+    })
 }
 
 pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
@@ -1154,7 +1184,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Saturate…", "ui.saturateDialog"),
                     ],
                 ),
-                todo("Edit Original"),
+                c("Edit Original", "links.editOriginal"),
                 Sep,
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 todo("Print Presets…"),
@@ -1604,7 +1634,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Info", "info"),
                 panel("Layers", "layers"),
                 panel("Libraries", "libraries"),
-                todo("Links"),
+                panel("Links", crate::panels::links::ID),
                 panel("Magic Wand", "magicWand"),
                 panel("Navigator", "navigator"),
                 panel("Pathfinder", "pathfinder"),

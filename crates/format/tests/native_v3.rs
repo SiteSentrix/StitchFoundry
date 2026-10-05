@@ -33,7 +33,10 @@ fn blob(bytes: &[u8]) -> ImageBlob {
 
 fn image_node(d: &mut Document, key: &str) -> Node {
     let id = d.alloc_id();
-    Node::new(id, NodeKind::Image(ImageObject { key: key.into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None }))
+    Node::new(
+        id,
+        NodeKind::Image(ImageObject { key: key.into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None, placement: Default::default() }),
+    )
 }
 
 fn opts(version: u32, compress: bool) -> SaveOptions {

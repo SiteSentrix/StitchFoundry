@@ -28,7 +28,7 @@ const OBJECT_LABELS: [(&str, &str); 16] = [
     ("guides", "Guides"),
 ];
 
-fn row(ui: &mut Ui, label: &str, value: String) {
+pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(label).size(12.0).color(t.text_dim));

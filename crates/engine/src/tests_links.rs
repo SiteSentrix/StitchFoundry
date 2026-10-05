@@ -11,16 +11,16 @@ use vectorcraft_geom::Rect;
 use super::*;
 
 /// A fresh folder for one test (removed when dropped).
-struct Folder(PathBuf);
+pub(crate) struct Folder(pub(crate) PathBuf);
 
 impl Folder {
-    fn new(name: &str) -> Self {
+    pub(crate) fn new(name: &str) -> Self {
         let dir = std::env::temp_dir().join(format!("vectorcraft-links-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Self(dir)
     }
-    fn file(&self, name: &str) -> String {
+    pub(crate) fn file(&self, name: &str) -> String {
         self.0.join(name).to_string_lossy().into_owned()
     }
 }
@@ -32,55 +32,55 @@ impl Drop for Folder {
 }
 
 /// A `w`×`h` PNG of one colour.
-fn png(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
+pub(crate) fn png(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
     let mut out = vec![];
     let [r, g, b] = rgb;
     image::RgbaImage::from_pixel(w, h, image::Rgba([r, g, b, 255])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
     out
 }
 
-const RED: [u8; 3] = [230, 20, 20];
-const BLUE: [u8; 3] = [20, 20, 230];
+pub(crate) const RED: [u8; 3] = [230, 20, 20];
+pub(crate) const BLUE: [u8; 3] = [20, 20, 230];
 
-fn write(path: &str, bytes: &[u8]) {
+pub(crate) fn write(path: &str, bytes: &[u8]) {
     if let Some(dir) = Path::new(path).parent() {
         std::fs::create_dir_all(dir).unwrap();
     }
     std::fs::write(path, bytes).unwrap();
 }
 
-fn session() -> Session {
+pub(crate) fn session() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     s
 }
 
 /// Place the file at `path` (linked) → its id.
-fn place(s: &mut Session, path: &str) -> NodeId {
+pub(crate) fn place(s: &mut Session, path: &str) -> NodeId {
     let r = s.execute("file.place", &json!({"path": path, "at": [200, 150]})).unwrap();
     assert_eq!(r["linked"], true, "{r}");
     NodeId(r["ids"][0].as_u64().unwrap())
 }
 
-fn image(s: &Session, id: NodeId) -> ImageObject {
+pub(crate) fn image(s: &Session, id: NodeId) -> ImageObject {
     match &s.doc().unwrap().doc.node(id).unwrap().kind {
         NodeKind::Image(im) => im.clone(),
         k => panic!("not an image: {k:?}"),
     }
 }
 
-fn bounds(s: &Session, id: NodeId) -> Rect {
+pub(crate) fn bounds(s: &Session, id: NodeId) -> Rect {
     s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap()
 }
 
 /// The colour at the centre of the active document's artboard.
-fn centre_colour(doc: &Document) -> [u8; 3] {
+pub(crate) fn centre_colour(doc: &Document) -> [u8; 3] {
     let img = vectorcraft_render::Renderer::new().render_region(doc, Rect::new(0.0, 0.0, 400.0, 300.0), 1.0, true);
     let [r, g, b, _] = img.pixel(200, 150);
     [r, g, b]
 }
 
-fn near(a: [u8; 3], b: [u8; 3]) -> bool {
+pub(crate) fn near(a: [u8; 3], b: [u8; 3]) -> bool {
     a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 6)
 }
 
@@ -89,11 +89,11 @@ fn saved_image(v: &mut Value) -> &mut Value {
     &mut v["document"]["layers"][0]["kind"]["children"][0]["kind"]
 }
 
-fn save(s: &mut Session, path: &str) {
+pub(crate) fn save(s: &mut Session, path: &str) {
     s.execute("document.save", &json!({"path": path})).unwrap();
 }
 
-fn open(s: &mut Session, path: &str) -> Value {
+pub(crate) fn open(s: &mut Session, path: &str) -> Value {
     s.execute("document.open", &json!({"path": path})).unwrap()
 }
 
@@ -285,8 +285,14 @@ fn relative_paths_are_written_against_the_saved_file() {
     let (lid, nid) = (d.layers[0].id, d.alloc_id());
     let root = if cfg!(windows) { "C:\\work" } else { "/work" };
     let sep = std::path::MAIN_SEPARATOR;
-    let im =
-        ImageObject { key: "k".into(), width: 1, height: 1, xf: Default::default(), link: Some(LinkInfo::new(format!("{root}{sep}art{sep}a.png"))) };
+    let im = ImageObject {
+        key: "k".into(),
+        width: 1,
+        height: 1,
+        xf: Default::default(),
+        link: Some(LinkInfo::new(format!("{root}{sep}art{sep}a.png"))),
+        placement: Default::default(),
+    };
     d.insert(Some(lid), 0, vectorcraft_doc::Node::new(nid, NodeKind::Image(im))).unwrap();
     let rel = |dest: String| {
         let d = cmd::links::with_relative_paths(&d, &dest).unwrap_or_else(|| d.clone());
