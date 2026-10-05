@@ -134,12 +134,25 @@ pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: 
 }
 
 /// Where a file goes when no path was given: the suggested name on the web (a download), else the
-/// save panel's choice.
+/// save panel's choice, given the suggested name's extension when it names no file type (a name
+/// typed without one).
 fn pick_path(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
     if is_web(app) {
         return Ok(pick.name.clone());
     }
-    app.services.pick_save.as_mut().and_then(|f| f(pick)).ok_or_else(|| "cancelled".into())
+    let picked = app.services.pick_save.as_mut().and_then(|f| f(pick)).ok_or("cancelled")?;
+    Ok(with_extension(&picked, &fileio::extension(&pick.name), |_| true))
+}
+
+/// `path` as typed in a save panel: kept when it ends in `ext` or its extension names a format
+/// `keeps` takes, else with `.ext` added.
+fn with_extension(path: &str, ext: &str, keeps: impl Fn(&Format) -> bool) -> String {
+    let has = fileio::extension(path);
+    if ext.is_empty() || has.eq_ignore_ascii_case(ext) || fileio::format_for_name(path).is_some_and(keeps) {
+        path.to_string()
+    } else {
+        format!("{path}.{ext}")
+    }
 }
 
 /// The active document's file name with extension `ext`, and its folder.
@@ -172,10 +185,7 @@ pub fn remember_view(app: &mut VectorcraftApp) {
 /// A path typed in a save panel: kept when its extension names a save format (the panel's file
 /// type), else `f`'s extension is added.
 fn with_save_extension(path: &str, f: &Format) -> String {
-    match fileio::format_for_name(path) {
-        Some(g) if SAVE_FORMATS.contains(&g.id) => path.to_string(),
-        _ => format!("{path}.{}", f.extensions[0]),
-    }
+    with_extension(path, f.extensions[0], |g| SAVE_FORMATS.contains(&g.id))
 }
 
 /// Write every file of an export (one per artboard, linked images) for the destination `path`.
