@@ -54,8 +54,10 @@ fn checks_refuse_what_the_writer_cant_honour() {
     assert_eq!(PdfSettings::default().check(), Ok(()));
     let refused = |v: serde_json::Value| settings(v).check().unwrap_err();
     assert!(matches!(refused(json!({"standard": "pdfX4"})), PdfError::Unsupported(_)));
-    assert!(matches!(refused(json!({"security": {"openPassword": "x"}})), PdfError::Unsupported(_)));
-    assert!(matches!(refused(json!({"security": {"permissionsPassword": "x"}})), PdfError::Unsupported(_)));
+    // Passwords are written (the file is encrypted); a password with a standard is not.
+    assert_eq!(settings(json!({"security": {"openPassword": "x"}})).check(), Ok(()));
+    assert_eq!(settings(json!({"security": {"permissionsPassword": "x"}})).check(), Ok(()));
+    assert!(matches!(refused(json!({"standard": "pdfA2b", "security": {"openPassword": "x"}})), PdfError::BadSetting(_)));
     assert!(matches!(refused(json!({"compression": {"color": {"ppi": 5}}})), PdfError::BadSetting(m) if m.contains("compression.color.ppi")));
     assert!(matches!(refused(json!({"bleed": {"left": 100}})), PdfError::BadSetting(m) if m.contains("bleed.left")));
     assert!(matches!(refused(json!({"marks": {"weight": 0}})), PdfError::BadSetting(_)));

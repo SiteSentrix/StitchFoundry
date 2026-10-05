@@ -92,6 +92,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     w.absorb(ex);
     let (bytes, more) = w.finish()?;
     let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
+    let bytes = crate::encrypt::protect(bytes, set)?;
     warnings.extend(more);
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })

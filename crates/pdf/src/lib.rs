@@ -28,9 +28,13 @@
 //! - Presets: named settings, the built-in ones generated in code ([`builtin_presets`]).
 //! - [`print()`] lays a document out on paper as File → Print does ([`PrintSettings`]) and writes
 //!   the job as a print-ready PDF: composite or one page per ink.
+//! - Security: the open and permissions passwords encrypt the written file with the standard
+//!   security handler, the algorithm following the compatibility ([`Encryption`]); either password
+//!   opens an encrypted file.
 #![forbid(unsafe_code)]
 
 mod editing;
+mod encrypt;
 mod export;
 mod images;
 mod import;
@@ -46,7 +50,8 @@ mod presets;
 mod print;
 mod settings;
 
-pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing};
+pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
+pub use encrypt::Encryption;
 pub use export::{export, export_with_report};
 pub use import::{import, import_with_report};
 pub use pages::{PageInfo, PdfInfo, info, is_postscript};
@@ -192,6 +197,8 @@ mod tests_compression;
 mod tests_dashalign;
 #[cfg(test)]
 mod tests_editing;
+#[cfg(test)]
+mod tests_encrypt;
 #[cfg(test)]
 mod tests_focal;
 #[cfg(test)]

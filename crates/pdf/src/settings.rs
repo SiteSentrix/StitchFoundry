@@ -391,14 +391,11 @@ pub(crate) fn within(name: &str, v: f64, lo: f64, hi: f64, unit: &str) -> Result
 }
 
 impl PdfSettings {
-    /// Refuse settings the writer can't honour: an unsupported standard, a password (the file
-    /// would not be protected), or what [`Self::check_values`] refuses.
+    /// Refuse settings the writer can't honour: an unsupported standard, or what
+    /// [`Self::check_values`] refuses.
     pub fn check(&self) -> Result<(), PdfError> {
         if !self.standard.supported() {
             return Err(PdfError::Unsupported(format!("{} output is not supported yet", self.standard.label())));
-        }
-        if !self.security.open_password.is_empty() || !self.security.permissions_password.is_empty() {
-            return Err(PdfError::Unsupported("password protection is not supported yet (the PDF would not be encrypted)".into()));
         }
         self.check_values()
     }
@@ -407,6 +404,7 @@ impl PdfSettings {
     /// produce yet): a standard with a PDF version it doesn't allow, PDF/A with editing data, or
     /// an out-of-range value.
     pub fn check_values(&self) -> Result<(), PdfError> {
+        self.security.check(self.standard, self.compatibility)?;
         if !self.standard.allows(self.compatibility) {
             return Err(PdfError::BadSetting(format!("{} files can't be {}", self.standard.label(), self.compatibility.label())));
         }
@@ -452,17 +450,19 @@ impl PdfSettings {
             ),
             (!self.advanced.outline_text, "text is exported as outlines: real, selectable text is not written yet"),
             (
-                s.printing != d.security.printing
-                    || s.changes != d.security.changes
-                    || s.copy != d.security.copy
-                    || s.screen_reader != d.security.screen_reader
-                    || s.plaintext_metadata != d.security.plaintext_metadata,
-                "permissions need a permissions password, which is not supported yet: they are not applied",
+                !s.protected()
+                    && (s.printing != d.security.printing
+                        || s.changes != d.security.changes
+                        || s.copy != d.security.copy
+                        || s.screen_reader != d.security.screen_reader
+                        || s.plaintext_metadata != d.security.plaintext_metadata),
+                "permissions need a password: without one they are not applied",
             ),
         ]
         .into_iter()
         .filter(|(on, _)| *on)
         .map(|(_, w)| w.to_string())
+        .chain(crate::encrypt::warnings(self))
         .collect()
     }
 }

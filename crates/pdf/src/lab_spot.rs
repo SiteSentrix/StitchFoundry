@@ -115,7 +115,7 @@ pub(crate) fn rfind(hay: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 /// The offset `startxref` gives, when it points at a cross-reference table.
-fn xref_offset(pdf: &[u8]) -> Option<usize> {
+pub(crate) fn xref_offset(pdf: &[u8]) -> Option<usize> {
     let sx = rfind(pdf, b"startxref")?;
     let off: usize = std::str::from_utf8(&pdf[sx + 9..]).ok()?.split_whitespace().next()?.parse().ok()?;
     pdf.get(off..)?.starts_with(b"xref").then_some(off)

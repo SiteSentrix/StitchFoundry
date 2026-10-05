@@ -32,17 +32,28 @@ pub fn is_postscript(bytes: &[u8]) -> bool {
     bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
 }
 
-/// Read a PDF, decrypting it with `password` (none: the empty user password).
+/// Read a PDF, decrypting it with `password` (none: the empty user password). The permissions
+/// password opens a file too.
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
     if is_postscript(bytes) {
         return Err(PdfError::PostScript);
     }
     let password = password.unwrap_or_default();
-    Pdf::new_with_password(bytes.to_vec(), password).map_err(|e| match e {
-        LoadPdfError::Decryption(DecryptionError::PasswordProtected) if password.is_empty() => PdfError::NeedsPassword,
-        LoadPdfError::Decryption(DecryptionError::PasswordProtected) => PdfError::WrongPassword,
-        e => PdfError::Parse(format!("{e:?}")),
-    })
+    let read = |pw: &str| Pdf::new_with_password(bytes.to_vec(), pw);
+    read(password)
+        .or_else(|e| match e {
+            // The reader takes only the open password of RC4 and 128-bit AES files: the
+            // permissions password gives it.
+            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if !password.is_empty() => {
+                crate::encrypt::user_password(bytes, password).map_or(Err(e), |user| read(&user))
+            }
+            e => Err(e),
+        })
+        .map_err(|e| match e {
+            LoadPdfError::Decryption(DecryptionError::PasswordProtected) if password.is_empty() => PdfError::NeedsPassword,
+            LoadPdfError::Decryption(DecryptionError::PasswordProtected) => PdfError::WrongPassword,
+            e => PdfError::Parse(format!("{e:?}")),
+        })
 }
 
 /// The pages and their boxes. An encrypted PDF needs its `password`

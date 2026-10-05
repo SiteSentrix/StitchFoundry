@@ -70,7 +70,8 @@ fn bad_options_are_refused() {
         json!({"standard": "pdfA2b", "compatibility": "2.0"}),
         json!({"compression": {"color": {"ppi": 0}}}),
         json!({"compression": "zip"}),
-        json!({"security": {"openPassword": "x"}}),
+        json!({"standard": "pdfA2b", "security": {"openPassword": "x"}}),
+        json!({"security": {"openPassword": "x", "permissionsPassword": "x"}}),
     ] {
         let e = s.execute("document.exportPdf", &p).unwrap_err();
         assert!(matches!(e, crate::EngineError::BadParams { .. }), "{p}: {e}");

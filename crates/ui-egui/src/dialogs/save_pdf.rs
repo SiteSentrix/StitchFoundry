@@ -15,8 +15,8 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::fileio::{SaveMode, pdf};
 use vectorcraft_pdf::{
-    Changes, Choice, ColorConversion, Compatibility, Downsample, ImageCodec, JpegQuality, MarkKind, MonoCodec, Overprint, PdfSettings, Printing,
-    ProfileInclusion, Standard,
+    Changes, Choice, ColorConversion, Compatibility, Downsample, Encryption, ImageCodec, JpegQuality, MarkKind, MonoCodec, Overprint, PdfSettings,
+    Printing, ProfileInclusion, Standard,
 };
 
 use super::{DialogSpec, form};
@@ -311,8 +311,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             set(d, "compatibility", json!(Compatibility::Pdf17.id()));
         }
         if picked && standard != Standard::None {
-            // Files of a standard don't carry the editing data.
+            // Files of a standard don't carry the editing data, nor passwords.
             set(d, "preserveEditing", json!(false));
+            for p in [OPEN_PASSWORD, PERMISSIONS_PASSWORD] {
+                set(d, p, json!(""));
+            }
         }
         ui.add_space(16.0);
         ui.label(egui::RichText::new("Compatibility:").color(t.text));
@@ -569,19 +572,42 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// The password fields (never stored in presets).
+const OPEN_PASSWORD: &str = "security.openPassword";
+const PERMISSIONS_PASSWORD: &str = "security.permissionsPassword";
+
+/// A checkbox turning a password on (UI-only `flag`) or off (clearing it); checked while the
+/// password is set. Returns whether the password applies.
+fn password_check(ui: &mut egui::Ui, d: &mut Dialog, path: &str, flag: &str, label: &str, enabled: bool) -> bool {
+    let on = d.bool(flag) || get(d, path).as_str().is_some_and(|s| !s.is_empty());
+    if widgets::check(ui, label, on, enabled) {
+        d.fields.insert(flag.into(), json!(!on));
+        if on {
+            set(d, path, json!(""));
+        }
+    }
+    on && enabled
+}
+
+fn password_field(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) {
+    let mut s = get(d, path).as_str().unwrap_or_default().to_string();
+    if ui.add_enabled(enabled, egui::TextEdit::singleline(&mut s).password(true).desired_width(200.0)).changed() {
+        set(d, path, json!(s));
+    }
+}
+
 fn security(ui: &mut egui::Ui, d: &mut Dialog) {
-    note(ui, "Password protection is not available yet, so these options are off.");
+    let plain = choice::<Standard>(d, "standard").unwrap_or_default() == Standard::None;
+    if !plain {
+        note(ui, "Files of a PDF standard can't be password-protected.");
+    }
     heading(ui, "Document open password");
-    widgets::check(ui, "Require a password to open the document", false, false);
-    row(ui, "Password:", |ui| {
-        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).password(true).desired_width(200.0));
-    });
+    let open = password_check(ui, d, OPEN_PASSWORD, "__requireOpenPassword", "Require a password to open the document", plain);
+    row(ui, "Open password:", |ui| password_field(ui, d, OPEN_PASSWORD, open));
     heading(ui, "Permissions");
-    widgets::check(ui, "Restrict printing, editing and other tasks", false, false);
-    row(ui, "Permissions password:", |ui| {
-        ui.add_enabled(false, egui::TextEdit::singleline(&mut String::new()).password(true).desired_width(200.0));
-    });
-    ui.add_enabled_ui(false, |ui| {
+    let restrict = password_check(ui, d, PERMISSIONS_PASSWORD, "__restrictPermissions", "Restrict printing, editing and other tasks", plain);
+    row(ui, "Permissions password:", |ui| password_field(ui, d, PERMISSIONS_PASSWORD, restrict));
+    ui.add_enabled_ui(restrict, |ui| {
         row(ui, "Printing allowed:", |ui| {
             pick::<Printing>(ui, d, "security.printing", 260.0, |_| true);
         });
@@ -589,9 +615,18 @@ fn security(ui: &mut egui::Ui, d: &mut Dialog) {
             pick::<Changes>(ui, d, "security.changes", 260.0, |_| true);
         });
     });
-    flag(ui, d, "security.copy", "Enable copying of text, images and other content", false);
-    flag(ui, d, "security.screenReader", "Enable text access for screen readers", false);
-    flag(ui, d, "security.plaintextMetadata", "Enable plaintext metadata", false);
+    flag(ui, d, "security.copy", "Enable copying of text, images and other content", restrict);
+    let reader = "Enable text access for screen readers";
+    if get(d, "security.copy").as_bool() == Some(true) {
+        // What can be copied can be read out.
+        widgets::check(ui, reader, true, false);
+    } else {
+        flag(ui, d, "security.screenReader", reader, restrict);
+    }
+    let compatibility = choice::<Compatibility>(d, "compatibility").unwrap_or_default();
+    flag(ui, d, "security.plaintextMetadata", "Enable plaintext metadata", (open || restrict) && compatibility != Compatibility::Pdf14);
+    ui.add_space(6.0);
+    note(ui, &format!("Encryption: {} (set by Compatibility)", Encryption::for_compatibility(compatibility).label()));
 }
 
 /// The section a changed option belongs to (for the Summary's order).
@@ -840,5 +875,26 @@ mod tests {
         assert_eq!(option_label("bleed.top"), "Marks and Bleeds › Bleed › Top");
         assert_eq!(section_of("bleed.top"), 2);
         assert_eq!(SECTIONS[section_of("standard")], "General");
+    }
+
+    #[test]
+    fn the_security_section_takes_passwords_that_presets_drop() {
+        let (mut app, _, _) = app();
+        app.run("ui.savePdfDialog", json!({})).unwrap();
+        set_field(&mut app, "__section", json!("Security"));
+        set_field(&mut app, OPEN_PASSWORD, json!("open"));
+        set_field(&mut app, PERMISSIONS_PASSWORD, json!("own"));
+        set_field(&mut app, "security.copy", json!(false));
+        frame(&mut app);
+        let p = params(app.ui.dialog.as_ref().unwrap());
+        assert_eq!((p["security"]["openPassword"].as_str(), p["security"]["permissionsPassword"].as_str()), (Some("open"), Some("own")));
+        assert_eq!(p["security"]["copy"], false);
+        // With a standard the section still draws (greyed); a preset brings its own security.
+        set_field(&mut app, "standard", json!(Standard::PdfA2b.id()));
+        frame(&mut app);
+        let mut d = app.ui.dialog.clone().unwrap();
+        apply_preset(&mut app, &mut d, pdf::DEFAULT_PRESET);
+        assert_eq!(get(&d, OPEN_PASSWORD), &Value::Null, "presets carry no passwords");
+        assert_eq!(get(&d, "security.copy"), true);
     }
 }

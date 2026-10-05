@@ -24,6 +24,10 @@ hayro-interpret = { version = "0.7.0", default-features = false, features = ["em
 log = { workspace = true }
 smallvec = "1"
 serde = { workspace = true }
+# PDF security (encrypt.rs): pure Rust, MIT OR Apache-2.0, builds for wasm.
+aes = "0.8"
+md-5 = { version = "0.10", default-features = false }
+sha2 = { version = "0.10", default-features = false }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }

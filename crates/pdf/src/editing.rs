@@ -63,7 +63,13 @@ pub(crate) fn seal(pdf: Vec<u8>) -> Result<Vec<u8>, PdfError> {
 
 /// The native document `bytes` (a PDF) carries, if any, and whether its pages changed since.
 pub fn editing(bytes: &[u8]) -> Option<Editing> {
-    editing_in(&Pdf::new(bytes.to_vec()).ok()?)
+    editing_with(bytes, None)
+}
+
+/// [`editing`] of a PDF that may be encrypted, opened with `password` (its open or permissions
+/// password).
+pub fn editing_with(bytes: &[u8], password: Option<&str>) -> Option<Editing> {
+    editing_in(&crate::pages::open(bytes, password).ok()?)
 }
 
 /// [`editing`] of a parsed PDF.
