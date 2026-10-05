@@ -92,7 +92,8 @@ fn save_prefs(app: &VectorcraftApp) {
         let mut ui = app.ui.clone();
         ui.engine_prefs = app.session.prefs.to_json();
         if let Ok(bytes) = serde_json::to_vec_pretty(&ui) {
-            let _ = std::fs::write(p, bytes);
+            // Preferences are best effort: a failed write keeps the previous file.
+            let _ = fileio::write_atomic(&p, &bytes);
         }
     }
 }
@@ -157,7 +158,7 @@ fn services() -> Services {
             file_dialog(pick).save_file().map(|p| p.to_string_lossy().to_string())
         })),
         read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))),
-        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+        write: Some(Box::new(|p: &str, b: &[u8]| fileio::write_atomic(std::path::Path::new(p), b).map_err(|e| e.to_string()))),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
         system_clipboard: Some(clipboard::system_clipboard()),
         // Help → Discord / website / GitHub, the Discord button, About and Home links.

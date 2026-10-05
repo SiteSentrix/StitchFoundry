@@ -16,6 +16,7 @@ pub mod node;
 pub mod overprint;
 pub mod pattern;
 mod pixels;
+pub mod profiles;
 pub mod rastersettings;
 mod reach;
 pub mod selection;
@@ -55,6 +56,7 @@ pub use node::Scaling;
 pub use node::{ImageMap, ObjectAttributes};
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
+pub use profiles::ColorProfiles;
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
 pub use selection::{AnchorRef, Selection};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
@@ -497,6 +499,14 @@ pub struct Document {
     /// save time only, so changing the view never marks the document modified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_view: Option<SavedView>,
+    /// Edit → Assign Profile: the profiles the document is tagged with (files before format v3
+    /// kept them in `unknown`, see [`Document::migrate_color_profiles`]).
+    #[serde(default, skip_serializing_if = "ColorProfiles::is_empty")]
+    pub color_profiles: ColorProfiles,
+    /// Top-level keys this version doesn't know (written by a newer one), kept so saving doesn't
+    /// lose them. Separate from [`Document::unknown`], which holds foreign data by design.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 fn ppi72() -> f64 {
@@ -557,6 +567,8 @@ impl Document {
             metadata: DocMetadata::default(),
             raster_effects: RasterEffectsSettings::default(),
             last_view: None,
+            color_profiles: ColorProfiles::default(),
+            extra: Default::default(),
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));

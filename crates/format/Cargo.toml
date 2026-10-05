@@ -13,6 +13,7 @@ vectorcraft-doc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+flate2 = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }

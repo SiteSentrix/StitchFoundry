@@ -12,7 +12,9 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 
 use super::super::*;
-use super::{Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, write_encoded, write_file};
+use super::{
+    Encoded, Format, Loaded, encode_all, file_stem, format, format_for_name, load, read_file, with_compression_pref, write_encoded, write_file,
+};
 use crate::{DocState, Prefs};
 
 /// The formats Save As offers, in menu order (append-only). The other writable formats are exports:
@@ -152,8 +154,9 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         let mut svg = super::svg_options(&Value::Object(given)).map_err(|e| bad(cmd, e))?;
         svg.extend(super::svg_options(p).map_err(|e| bad(cmd, e))?);
         given = svg;
-    } else if is_pdf(format) {
-        // So do PDF options (as the Save PDF dialog and document.exportPdf name them).
+    } else {
+        // So do PDF options (as the Save PDF dialog and document.exportPdf name them) and the
+        // native ones (compress, version, preview).
         if let Some(o) = p.as_object() {
             given.extend(
                 o.iter().filter(|(k, v)| !v.is_null() && k.as_str() != "path" && reads_option(format, k)).map(|(k, v)| (k.clone(), v.clone())),
@@ -247,7 +250,11 @@ pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[
         // A save keeps hidden layers (not displayed) unless told otherwise; exports leave them out.
         params.entry("hiddenLayers").or_insert(Value::Bool(true));
     }
-    let params = Value::Object(params);
+    let mut params = Value::Object(params);
+    if matches!(plan.format.id, "vectorcraft" | "template") {
+        // Not remembered with the options: the preference decides each time it isn't given.
+        params = with_compression_pref(&s.prefs, &params);
+    }
     let params = super::pdf::expand_preset(s, cmd, &params)?;
     let mut enc = if plan.format.id == "ai" {
         // A PDF of every artboard with the PDF options, always carrying the native document.
@@ -328,10 +335,13 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "format").or(st.map(|d| d.format)).unwrap_or("vectorcraft");
     let f = format(id).filter(|f| f.write).ok_or_else(|| bad(C, format!("`{id}` is no writable format (see document.formats)")))?;
     let saved = st.filter(|d| d.format == f.id).map(|d| &d.save_options);
+    // A native save compresses as Use Compression says, unless told otherwise.
+    let prefs = with_compression_pref(&s.prefs, &json!({}));
     let mut v = f.to_json();
     if let Some(options) = v["options"].as_object_mut() {
         for (name, o) in options.iter_mut() {
-            o["value"] = saved.and_then(|m| m.get(name)).unwrap_or(&o["default"]).clone();
+            let default = prefs.get(name).filter(|_| matches!(f.id, "vectorcraft" | "template")).unwrap_or(&o["default"]);
+            o["value"] = saved.and_then(|m| m.get(name)).unwrap_or(default).clone();
         }
     }
     v["saveFormats"] =
@@ -346,7 +356,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), native (also flat): compress?: bool (gzip; default: the useCompression preference), version?: 3 (2 or 1: for older VectorCraft versions, never compressed), preview?: false (embed a PNG of the first artboard, at most 256 px), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),
@@ -373,7 +383,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save as Template…",
             ["File"],
             None,
-            "{path?} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.vctemplate\", folder: the Templates folder (preference templatesFolder), warnings}",
+            "{path?, compress?, version?, preview? (as document.save)} a native template (.vctemplate) that opens as a new untitled document; the document is unchanged → {path, format, bytes, warnings}; no path → {dataBase64, format, name: \"<name> template.vctemplate\", folder: the Templates folder (preference templatesFolder), warnings}",
             has_doc,
             |s, p| save(s, SaveMode::Template, p)
         ),

@@ -394,6 +394,9 @@ pub struct Prefs {
     pub templates_folder: String,
     /// Open older native files as "<name> [Converted]" so Save asks for a new name.
     pub append_converted: bool,
+    /// File Handling → Use Compression: native saves are gzip-compressed (`document.save
+    /// {compress}` overrides it).
+    pub use_compression: bool,
 }
 
 impl Default for Prefs {
@@ -522,6 +525,7 @@ impl Default for Prefs {
             pdf_presets: vec![],
             templates_folder: String::new(),
             append_converted: true,
+            use_compression: false,
         }
     }
 }
@@ -1052,6 +1056,8 @@ mod tests_live;
 mod tests_maskview;
 #[cfg(test)]
 mod tests_menucmds;
+#[cfg(test)]
+mod tests_nativefile;
 #[cfg(test)]
 mod tests_newart;
 #[cfg(test)]

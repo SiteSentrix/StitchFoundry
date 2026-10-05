@@ -4,7 +4,8 @@
 //!
 //! Colour settings and the proof view are process-wide (`vectorcraft_color::cms::active`,
 //! `vectorcraft_render::proof::view`). A document's assigned profiles are stored in
-//! `Document.unknown["colorProfiles"]` (`{rgb?, cmyk?}`) and become active when assigned.
+//! `Document::color_profiles` (files before format v3: `Document.unknown["colorProfiles"]`) and
+//! become active when assigned.
 
 use std::collections::BTreeMap;
 
@@ -16,8 +17,9 @@ use vectorcraft_render::proof;
 
 use super::*;
 
-/// `Document.unknown` key for the assigned profiles.
-pub const PROFILES_KEY: &str = "colorProfiles";
+/// `Document.unknown` key under which files before format v3 kept the assigned profiles (migrated
+/// to `Document::color_profiles` on load).
+pub const PROFILES_KEY: &str = vectorcraft_doc::profiles::LEGACY_PROFILES_KEY;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -188,9 +190,8 @@ fn load_profile(_: &mut Session, _: &Value) -> Result<Value> {
 
 /// The document's assigned profiles (`None` = working space).
 pub fn doc_profiles(d: &vectorcraft_doc::Document) -> (Option<String>, Option<String>) {
-    let o = d.unknown.get(PROFILES_KEY);
-    let get = |k: &str| o.and_then(|o| o.get(k)).and_then(Value::as_str).map(|n| cms::canonical_name(n).to_string());
-    (get("rgb"), get("cmyk"))
+    let get = |n: &Option<String>| n.as_deref().map(|n| cms::canonical_name(n).to_string());
+    (get(&d.color_profiles.rgb), get(&d.color_profiles.cmyk))
 }
 
 fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
@@ -213,13 +214,9 @@ fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let changed = pick("rgb", &mut rgb, cms::ProfileKind::Rgb)? | pick("cmyk", &mut cmyk, cms::ProfileKind::Cmyk)?;
     if changed {
-        let (r, c) = (rgb.clone(), cmyk.clone());
+        let profiles = vectorcraft_doc::ColorProfiles { rgb: rgb.clone(), cmyk: cmyk.clone() };
         s.edit("Assign Profile", |d, _| {
-            if r.is_none() && c.is_none() {
-                d.unknown.remove(PROFILES_KEY);
-            } else {
-                d.unknown.insert(PROFILES_KEY.into(), json!({"rgb": r, "cmyk": c}));
-            }
+            d.color_profiles = profiles;
             Ok(())
         })?;
         let mut st = cms::active_settings();

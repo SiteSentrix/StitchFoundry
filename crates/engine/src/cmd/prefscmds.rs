@@ -318,6 +318,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // File Handling (continued)
     p!("templatesFolder", "File Handling", "Files", "Templates Folder", text),
     p!("appendConverted", "File Handling", "Files", "Mark Older Files as [Converted] When Opened", bool),
+    // Native saves (`document.save {compress}`)
+    p!("useCompression", "File Handling", "Files", "Use Compression", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

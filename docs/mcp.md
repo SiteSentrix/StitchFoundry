@@ -159,6 +159,13 @@ and reflected or repeated gradients (`spreadMethod`) are expanded into stops. `<
 found in the SVG's folder) stay linked images (see Linked images); SVG files and `data:` SVGs become art; a file that
 can't be read becomes a placeholder in its box, named in `warnings` and `missingLinks`.
 
+Native files: `run_command document.save {compress: true}` writes a gzip-compressed `.vectorcraft` (the
+`useCompression` preference makes that the default for saves; compressed files open like any other, told apart by
+their content). `version: 2` or `1` writes a file older VectorCraft versions open (format name `drawcraft`, never
+compressed), and `preview: true` embeds a PNG of the first artboard, at most 256 px on its longer side. A save writes
+a temporary file and renames it over the old one, so a failed save never damages the file; only the images the
+document uses are written, and document keys written by a newer version are kept.
+
 ## Resources
 
 | URI | Content |

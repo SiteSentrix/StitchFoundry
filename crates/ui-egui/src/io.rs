@@ -207,7 +207,8 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
         o.insert("path".into(), json!(with_save_extension(&picked, first.format)));
     }
     let chosen = plan(app, mode, &q)?;
-    if ask && !chosen.format.options.is_empty() {
+    // Native saves don't stop to ask: Use Compression decides, and options can be passed.
+    if ask && !chosen.format.options.is_empty() && !matches!(chosen.format.id, "vectorcraft" | "template") {
         let path = chosen.path.clone().unwrap_or_default();
         return ask_format_options(app, mode, chosen.format, &path);
     }

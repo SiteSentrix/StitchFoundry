@@ -250,7 +250,7 @@ fn boards<T>(r: std::result::Result<T, String>) -> Result<T> {
     r.map_err(|e| bad(C, e))
 }
 
-fn options<T: DeserializeOwned + Default>(f: &Format, p: &Value) -> Result<T> {
+pub(super) fn options<T: DeserializeOwned + Default>(f: &Format, p: &Value) -> Result<T> {
     if !p.is_object() {
         return Ok(T::default());
     }
@@ -303,12 +303,12 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
         return encode_all(&single_artboard(doc, bounds, "Art"), f.id, &q);
     }
     let bytes = match f.id {
-        "vectorcraft" => vectorcraft_format::save_file(doc),
+        "vectorcraft" => super::native::encode(C, f, doc, p)?,
         // A native file flagged so opening it starts a new untitled document.
         "template" => {
             let mut d = doc.clone();
             d.template = true;
-            vectorcraft_format::save_file(&d)
+            super::native::encode(C, f, &d, p)?
         }
         "txt" => super::text::encode(doc, p)?,
         "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
