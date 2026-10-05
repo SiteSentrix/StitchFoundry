@@ -125,9 +125,24 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
                 .inner
         })
         .inner;
+    select_all_on_focus(ui, &resp, &buf);
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if commit { unit.parse(&buf) } else { None }
+}
+
+/// Numeric fields take the whole text, unit included, when they gain focus or are double-clicked
+/// (egui would select one word): typing a number or an expression replaces it.
+fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
+    if !(resp.gained_focus() || resp.double_clicked()) {
+        return;
+    }
+    if let Some(mut st) = egui::TextEdit::load_state(ui.ctx(), resp.id) {
+        let all = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(text.chars().count()));
+        st.cursor.set_char_range(Some(all));
+        st.store(ui.ctx(), resp.id);
+        ui.ctx().request_repaint();
+    }
 }
 
 /// The recessed text box of the panel fields showing `shown`, `rows` lines tall (1: single line),
@@ -206,8 +221,12 @@ pub fn mixed_field(
         })
         .unwrap_or_default();
     let (buf, resp) = recessed_text(ui, id, &shown, width, 1);
+    select_all_on_focus(ui, &resp, &buf);
     if resp.lost_focus() && buf != shown {
-        buf.trim().trim_end_matches(suffix.trim()).trim().trim_end_matches(['%', '°']).parse::<f64>().ok()
+        // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
+        let suffix = suffix.trim();
+        let bare = if suffix.is_empty() { buf.clone() } else { buf.replace(suffix, "") };
+        vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
     } else {
         None
     }
@@ -1001,6 +1020,7 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
             )
         })
         .inner;
+    select_all_on_focus(ui, &resp, &buf);
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if resp.lost_focus() && buf != shown {
         let s = buf.trim();
