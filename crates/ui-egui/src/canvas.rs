@@ -996,7 +996,13 @@ fn print_tiling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
 /// The print tiling's lines: a neutral grey that reads on the paper and on the pasteboard.
 const PRINT_TILING: Color32 = Color32::from_gray(96);
 
-fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    // The Selection tool's bounding box (rotated with the objects after a rotation).
+    let show_box = app.session.tool_id() == "selection"
+        && app.ui.view.bounding_box
+        && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
+    let bbox = if show_box { app.selection_box() } else { None };
+    let app = &*app;
     let Some(st) = app.session.active() else { return };
     let tool = app.session.tool_id();
     let direct = matches!(tool, "directSelection" | "pen" | "addAnchor" | "deleteAnchor" | "anchorPoint" | "curvature");
@@ -1061,12 +1067,11 @@ fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         }
     }
     // Bounding box with handles (Selection tool).
-    if tool == "selection" && app.ui.view.bounding_box && !st.selection.is_empty() && st.selection.anchors.is_empty() {
-        let Some(b) = app.session.transform_bounds(&st.selection.objects) else { return };
+    if let Some(b) = bbox {
         let color = c32(st.doc.layer_color(st.selection.objects[0]));
-        p.add(Shape::closed_line(xf.quad(b), Stroke::new(1.0, color)));
+        p.add(Shape::closed_line(b.corners().iter().map(|q| xf.to_screen(*q)).collect(), Stroke::new(1.0, color)));
         for h in vectorcraft_tools::bbox::Handle::ALL {
-            let c = xf.to_screen(h.pos(b));
+            let c = xf.to_screen(b.to_doc() * h.pos(b.rect));
             let hr = egui::Rect::from_center_size(c, vec2(6.0, 6.0));
             p.rect_filled(hr, 0.0, Color32::WHITE);
             p.rect_stroke(hr, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);

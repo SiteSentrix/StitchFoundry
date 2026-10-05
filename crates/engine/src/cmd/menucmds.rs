@@ -86,9 +86,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Bounding Box",
             ["Object", "Transform"],
             None,
-            "{} no-op: VectorCraft bounding boxes are always axis-aligned to the document → {changed: 0}",
+            "{} square the bounding box of the selected objects to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset}",
             has_selection,
-            |_, _| Ok(json!({ "changed": 0 }))
+            reset_bounding_box
         ),
         cmd!(
             "object.rasterize",
@@ -175,6 +175,25 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
             h[from].label = label.to_string();
         }
     }
+}
+
+// ---------- Reset Bounding Box ----------
+
+fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
+    let ids = selected_roots(s)?;
+    let d = &s.doc()?.doc;
+    let turned: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.bbox_angle != 0.0)).collect();
+    if !turned.is_empty() {
+        s.edit("Reset Bounding Box", |d, _| {
+            for id in &turned {
+                if let Some(n) = d.node_mut(*id) {
+                    n.bbox_angle = 0.0;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "changed": turned.len() }))
 }
 
 // ---------- Lock / Hide ----------

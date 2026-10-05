@@ -1,10 +1,12 @@
 //! The Selection tool (V): click/shift-click, marquee, move (Alt copies, Shift constrains),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's corner widget to round its corners, double-click to enter isolation mode.
+//! The bounding box stands at the selection's own angle after a rotation, so its handles scale
+//! along the objects' axes.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeId;
 use vectorcraft_doc::hit::{hit_test, marquee};
+use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
@@ -22,7 +24,7 @@ enum State {
     },
     Scaling {
         handle: Handle,
-        rect: Rect,
+        bx: OrientedBox,
     },
     Rotating {
         center: Point,
@@ -55,6 +57,28 @@ pub fn matrix_json(a: Affine) -> Value {
 /// geometric bounds.
 pub fn selection_bounds(cx: &ToolContext) -> Option<Rect> {
     cx.doc.bounds_of(&cx.selection.objects, cx.preview_bounds)
+}
+
+/// [`selection_bounds`] square to the selection's own angle: the bounding box the Selection tool
+/// shows and drags (rotated after a rotation).
+pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
+    cx.doc.oriented_bounds(&cx.selection.objects, cx.preview_bounds)
+}
+
+/// What of the bounding box is under the pointer.
+enum BoxHit {
+    Handle(Handle),
+    /// Just outside a corner.
+    Rotate,
+}
+
+/// The bounding-box handle or rotate zone under `p`.
+fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
+    let (tol, lp) = (cx.tol(5.0), b.to_local(p));
+    if let Some(h) = hit_handle(b.rect, lp, tol) {
+        return Some(BoxHit::Handle(h));
+    }
+    in_rotate_zone(b.rect, lp, tol, cx.tol(18.0)).map(|_| BoxHit::Rotate)
 }
 
 impl SelectionTool {
@@ -98,16 +122,18 @@ impl Tool for SelectionTool {
                     return vec![];
                 }
                 if cx.show_bbox
-                    && let Some(r) = selection_bounds(cx)
+                    && let Some(bx) = selection_box(cx)
                 {
-                    let tol = cx.tol(5.0);
-                    if let Some(h) = hit_handle(r, p, tol) {
-                        self.state = State::Scaling { handle: h, rect: r };
-                        return vec![Action::Begin("Scale".into())];
-                    }
-                    if in_rotate_zone(r, p, tol, cx.tol(18.0)).is_some() {
-                        self.state = State::Rotating { center: r.center(), start: p };
-                        return vec![Action::Begin("Rotate".into())];
+                    match box_hit(cx, &bx, p) {
+                        Some(BoxHit::Handle(handle)) => {
+                            self.state = State::Scaling { handle, bx };
+                            return vec![Action::Begin("Scale".into())];
+                        }
+                        Some(BoxHit::Rotate) => {
+                            self.state = State::Rotating { center: bx.center(), start: p };
+                            return vec![Action::Begin("Rotate".into())];
+                        }
+                        None => {}
                     }
                 }
                 // 2. Objects.
@@ -164,11 +190,12 @@ impl Tool for SelectionTool {
                 out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
                 out
             }
-            (PointerKind::Drag, State::Scaling { handle, rect, .. }) => {
-                let a = scale_for_drag(rect, handle, p, m.shift, m.alt);
-                let nr = a.transform_rect_bbox(rect);
+            (PointerKind::Drag, State::Scaling { handle, bx }) => {
+                // Scale in the box's own frame: along the objects' axes when it is rotated.
+                let a = scale_for_drag(bx.rect, handle, bx.to_local(p), m.shift, m.alt);
+                let nr = a.transform_rect_bbox(bx.rect);
                 self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
-                vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(a), "copy": false }))]
+                vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false }))]
             }
             (PointerKind::Drag, State::Rotating { center, start, .. }) => {
                 let (a, deg) = rotate_for_drag(center, start, p, m.shift);
@@ -234,7 +261,7 @@ impl Tool for SelectionTool {
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         match self.state {
             State::Rotating { .. } => return Cursor::Rotate,
-            State::Scaling { handle, .. } => return handle_cursor(handle),
+            State::Scaling { handle, bx } => return handle_cursor(handle, bx.angle),
             State::Moving { began: true, .. } => return Cursor::Arrow,
             State::Corner(_) => return Cursor::CornerRadius,
             _ => {}
@@ -243,14 +270,12 @@ impl Tool for SelectionTool {
             return Cursor::CornerRadius;
         }
         if cx.show_bbox
-            && let Some(r) = selection_bounds(cx)
+            && let Some(bx) = selection_box(cx)
         {
-            let tol = cx.tol(5.0);
-            if let Some(h) = hit_handle(r, p, tol) {
-                return handle_cursor(h);
-            }
-            if in_rotate_zone(r, p, tol, cx.tol(18.0)).is_some() {
-                return Cursor::Rotate;
+            match box_hit(cx, &bx, p) {
+                Some(BoxHit::Handle(h)) => return handle_cursor(h, bx.angle),
+                Some(BoxHit::Rotate) => return Cursor::Rotate,
+                None => {}
             }
         }
         if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
@@ -263,7 +288,11 @@ impl Tool for SelectionTool {
     }
 }
 
-fn handle_cursor(h: Handle) -> Cursor {
+/// The resize cursor for handle `h` of a box turned by `angle` (counter-clockwise degrees): the
+/// handle that sits where `h` appears on screen, in 45° steps.
+fn handle_cursor(h: Handle, angle: f64) -> Cursor {
+    let steps = if angle.is_finite() { (angle / 45.0).round() as i64 } else { 0 };
+    let h = Handle::ALL.get((h as i64 - steps).rem_euclid(8) as usize).copied().unwrap_or(h);
     match h {
         Handle::Top | Handle::Bottom => Cursor::ResizeV,
         Handle::Left | Handle::Right => Cursor::ResizeH,
@@ -337,6 +366,34 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 300.0));
         assert!(matches!(&a[0], Action::Preview(_, v) if v["matrix"][0] == 2.0));
         assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn turned_box_handles_turn_and_scale_along_the_object() {
+        let (mut d, id) = doc_with_rect();
+        let c = Point::new(150.0, 150.0);
+        let turn = Affine::translate(c.to_vec2()) * Affine::rotate(-std::f64::consts::FRAC_PI_4) * Affine::translate(-c.to_vec2());
+        d.node_mut(id).unwrap().transform(turn, false);
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        // The Right handle sits up and to the right, where a diagonal cursor fits it.
+        let k = 50.0 * std::f64::consts::FRAC_1_SQRT_2;
+        let right = Point::new(150.0 + k, 150.0 - k);
+        let mut t = SelectionTool::default();
+        assert_eq!(t.cursor(&cx, right, Mods::default()), Cursor::ResizeNeSw);
+        // The page box's corner is no handle any more.
+        assert_ne!(t.cursor(&cx, Point::new(150.0 + 2.0 * k, 150.0 - 2.0 * k), Mods::default()), Cursor::ResizeNeSw);
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, right.x, right.y)), vec![Action::Begin("Scale".into())]);
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, right.x + k, right.y - k));
+        let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+        // Doubling the width along 45° about the left side: the left handle stays put.
+        let m: Vec<f64> = v["matrix"].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+        let m = Affine::new([m[0], m[1], m[2], m[3], m[4], m[5]]);
+        let left = Point::new(150.0 - k, 150.0 + k);
+        assert!((m * left).distance(left) < 1e-9);
+        assert!((m * right).distance(Point::new(right.x + k, right.y - k)) < 1e-9);
     }
 
     #[test]

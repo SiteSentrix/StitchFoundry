@@ -137,7 +137,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
 | # | Milestone | Status | Est. remaining, one agent (h) |
 |---|---|---|---|
 | M0 | Skeleton + vertical slice | ✅ done | — |
-| M1 | Selection, transform, layers, MCP | ✅ mostly done (transform reference point snaps to anchors/centres; rotated persistent bbox pending) | 4–6 |
+| M1 | Selection, transform, layers, MCP | ✅ mostly done (transform reference point snaps to anchors/centres; rotated objects keep a rotated bounding box and their angle; Free Transform, Scale and Reflect along a rotated box pending) | 4–6 |
 | M2 | Drawing tools + smart guides | ✅ mostly done (Flare, Reshape, Live Corners widget dragging landed; Shaper, Pen modifier nuances) | 15–20 |
 | M3 | Paint & appearance (swatches, color, gradient, stroke, appearance, transparency, styles) | ✅ done (M3.7–M3.98): swatches, groups, libraries, tints, Lab spots and Registration; Color Picker, Color panel, Color Guide, Color Themes, Edit Colors and Recolor Artwork; gradients that follow every transform, the annotator, linked stops, freeform gradients, focal points, gradients on strokes and Expand; stroke geometry, arrowheads, dashes fitted to corners, stroke on type, width profiles and the Width tool, Scale Strokes and preview bounds; Appearance targeting, container appearance, target circles, Expand Appearance; knockout, isolation, blend accuracy, CMYK blending, overprint, Attributes, masks and clipping, Flatten Transparency; graphic styles, links and libraries. Left: freeform and mixed spot/process gradients export as stops or process colours to SVG/PDF; confirm the Scale Strokes & Effects default | 4–8 |
 | M4 | Files (native, SVG, PDF, raster, Export for Screens, clipboard interop) | ✅ done (M4.14–M4.98 on 2026-10-05): Save As/Save a Copy/Revert/templates, Data Recovery and background save, SVG import and export fidelity (units, text, symbols, filters, SVGZ, Preserve Editing, SVG Options), PDF import (colours, layers, masks, editable text, security) and export (presets, marks, bleed, ICC and output intent, raster effects, subset fonts, PDF/X-1a, X-3 and X-4, PDF layers, overprint, page thumbnails, fast web view, PDF 1.3), Place and Links, Package, EPS and DXF in and out, EMF/WMF, TIFF/BMP/Targa/PSD/GIF/PNG-8 export, Print and print presets, slices, Save for Web, Asset Export, clipboard flavours, File Info. Left: DWG (use DXF), PSD placement as layers, overprint read back from PDF, polish | 3–6 |
@@ -169,7 +169,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 
 | Area | Weight | Done | Missing (main items) | One agent (h) |
 |---|---:|---:|---|---:|
-| Selection, transform & align tools | 6 | 85% | rotated persistent bounding box, Start Global Edit, transform nuances | 4–6 |
+| Selection, transform & align tools | 6 | 85% | Free Transform/Scale/Reflect along a rotated box, Start Global Edit, transform nuances (the rotated persistent bounding box is done) | 4–6 |
 | Drawing tools | 7 | 85% | Shaper Groups (merge/punch overlapping shapes), pen/pencil modifier nuances, Touch Type | 10–15 |
 | Path operations, Pathfinder, Shape Builder, Live Paint | 5 | 85% | Live Paint gap options, Shape Builder edge cases | 3–6 |
 | Colour, swatches, gradients, patterns, mesh, recolor | 7 | 96% | freeform and mixed spot/process gradients in SVG/PDF (exported as stops or process colours), pattern fills in Expand | 2–4 |

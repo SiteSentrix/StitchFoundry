@@ -200,11 +200,10 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 ui.separator();
                 // Transform fields.
-                let b = app.session.active().and_then(|s| app.session.transform_bounds(&s.selection.objects));
-                if let Some(b) = b {
-                    for (k, lbl, v) in
-                        [("x", "X:", b.center().x), ("y", "Y:", b.center().y), ("width", "W:", b.width()), ("height", "H:", b.height())]
-                    {
+                // The bounding box, rotated with rotated objects: its centre and its own sides.
+                if let Some(b) = app.selection_box() {
+                    let c = b.center();
+                    for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", b.rect.width()), ("height", "H:", b.rect.height())] {
                         ui.label(egui::RichText::new(lbl).size(12.0).color(t.text_dim));
                         if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v), units, 80.0) {
                             app.run("object.setBounds", json!({k: nv, "reference": 4})).ok();

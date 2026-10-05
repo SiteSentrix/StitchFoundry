@@ -250,14 +250,18 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(st) = app.session.active() else { return };
+    if app.session.active().is_none() {
+        return;
+    }
     let units = app.session.general_unit();
-    let Some(b) = app.session.transform_bounds(&st.selection.objects) else {
+    // The bounding box, rotated with rotated objects (as in the Transform panel).
+    let Some(bx) = app.selection_box() else {
         dim_label(ui, "No Selection");
         return;
     };
+    let b = bx.rect;
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
-    let rp = vectorcraft_geom::reference_point(b, refi);
+    let rp = bx.reference_point(refi);
     section_header(ui, "Transform");
     ui.horizontal(|ui| {
         if let Some(i) = widgets::reference_point(ui, refi) {
@@ -288,8 +292,9 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.horizontal(|ui| {
         icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);
-        if let Some(a) = widgets::plain_field(ui, "rot", 0.0, "°", 2, 70.0) {
-            app.run("object.rotate", json!({"angle": a})).ok();
+        // The bounding box's angle: a new value turns the selection to it.
+        if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, 70.0) {
+            app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
         }
         ui.add_space(10.0);
         if widgets::icon_button(ui, "flip-horizontal-2", "Flip Along Horizontal Axis", false, 24.0).clicked() {

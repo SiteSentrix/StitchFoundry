@@ -335,6 +335,11 @@ pub struct Node {
     /// these options.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slice: Option<Box<crate::SliceOptions>>,
+    /// The angle of the object's own axes, counter-clockwise degrees (0: square to the page): its
+    /// bounding box and handles stand at this angle. Transforms turn it with the object (see
+    /// [`crate::orient`]); Reset Bounding Box sets it back to 0.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub bbox_angle: f64,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -383,6 +388,7 @@ impl Node {
             graphic_style: None,
             attrs: None,
             slice: None,
+            bbox_angle: 0.0,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
@@ -572,6 +578,9 @@ impl Node {
         self.transform_scaled(a, &scaling.into());
     }
     fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
+        if !self.is_layer() {
+            self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
+        }
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
         if !keeps_gradient_fit(a) {
             self.pin_gradients();

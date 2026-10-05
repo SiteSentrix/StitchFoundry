@@ -188,6 +188,8 @@ pub struct CanvasCache {
     pub slices: Option<SliceCache>,
     /// The print tiling's pages for (document uid, revision) (View → Show Print Tiling).
     pub print_tiling: Option<PrintTilingCache>,
+    /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
+    pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
@@ -302,6 +304,7 @@ impl VectorcraftApp {
                 worker_started: false,
                 slices: None,
                 print_tiling: None,
+                selection_box: None,
             },
             perf: Perf::default(),
             integrated_titlebar: false,
@@ -559,6 +562,23 @@ pub fn now_ms() -> f64 {
     #[cfg(target_arch = "wasm32")]
     {
         0.0
+    }
+}
+
+impl VectorcraftApp {
+    /// The selection's bounding box, rotated with rotated objects ([`Session::transform_box`]). The
+    /// canvas and the transform fields read it every frame: it is measured once per revision.
+    pub fn selection_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
+        let st = self.session.active()?;
+        let key = (st.uid, st.revision, self.session.prefs.use_preview_bounds);
+        if let Some((k, b)) = self.canvas.selection_box
+            && k == key
+        {
+            return b;
+        }
+        let b = self.session.transform_box(&st.selection.objects);
+        self.canvas.selection_box = Some((key, b));
+        b
     }
 }
 

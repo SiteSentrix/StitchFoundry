@@ -1640,3 +1640,17 @@ CMYK one. Settings saved before these options load with their defaults.
 ```json
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/proof.pdf","settings":{"advanced":{"overprints":"simulate","flattenerPreset":"High Resolution"},"color":{"profile":"VectorCraft Generic CMYK (SWOP-like)","intent":"perceptual"}}}}}
 ```
+
+### Rotated bounding boxes
+
+Every object keeps the angle of its own axes (counter-clockwise degrees; `document.inspect` reports it as a node's
+`rotation`, and the selection's shared angle as `selectionRotation`, 0 when the selected objects differ). Transforms
+turn it with the object while its path geometry is still baked, so after a rotation the bounding box and its handles
+stay square to it, as in the reference app. `object.rotate {angle, absolute: true}` turns the selection to an angle
+(the Transform and Properties panels' Rotate field), and `object.setBounds` measures width, height and the reference
+point along the turned box (x, y stay page coordinates). Objects turned together share the box. A new group starts
+square to the page. `object.resetBoundingBox` squares the box again without moving the art.
+
+```json
+{"name":"run_command","arguments":{"command":"object.rotate","params":{"angle":45,"absolute":true}}}
+```
