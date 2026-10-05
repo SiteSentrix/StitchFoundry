@@ -13,7 +13,9 @@ use vectorcraft_color::harmony::{Guide, GuideOptions, Harmony, Variation};
 use vectorcraft_color::{Color, Paint, keep_model};
 use vectorcraft_doc::live::lerp_color;
 use vectorcraft_doc::pattern::PatternDef;
-use vectorcraft_doc::{AppearanceItem, Document, ImageBlob, Node, NodeId, NodeKind};
+pub(crate) use vectorcraft_doc::recolor::map_paint;
+use vectorcraft_doc::recolor::{ColorVisitor, Reach, map_links, recolor_node};
+use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, NodeKind};
 
 use super::edit::selected_roots;
 use super::*;
@@ -144,30 +146,6 @@ fn gray_level(c: Color) -> f32 {
 /// gradient stop): `(colour, link, tint)`, true when it changed them.
 pub(crate) type LinkMap<'a> = dyn Fn(&mut Color, &mut Option<String>, &mut f32) -> bool + 'a;
 
-/// Apply `f` to the solid colour or gradient stops of a paint ([`Paint::map_links`]); a gradient
-/// that changes is no longer its gradient swatch's. Returns whether anything changed.
-fn map_links(p: &mut Paint, f: &LinkMap) -> bool {
-    let changed = p.map_links(&mut |c, l, t| f(c, l, t));
-    if changed && let Paint::Gradient(g) = p {
-        g.swatch = None;
-    }
-    changed
-}
-
-/// Apply `f` to a paint's colours; a colour that changes loses its swatch link. Returns whether
-/// anything changed.
-pub(crate) fn map_paint(p: &mut Paint, f: &dyn Fn(Color) -> Color) -> bool {
-    map_links(p, &|c, link, _| {
-        let n = f(*c);
-        if n == *c {
-            return false;
-        }
-        *c = n;
-        *link = None;
-        true
-    })
-}
-
 /// The identity colour map (a pass that only maps linked colours).
 fn same(c: Color) -> Color {
     c
@@ -258,68 +236,24 @@ impl<'a> Recolor<'a> {
         out
     }
 
-    /// `n` recoloured, or `None` when nothing changed.
+    /// `n` recoloured (through the shared colour visitor), or `None` when nothing changed.
     fn subtree(&mut self, d: &Document, n: &Node) -> Option<Node> {
-        let before = self.changed;
-        let mut m = n.clone();
-        self.node(d, &mut m);
-        (self.changed > before).then_some(m)
-    }
-
-    fn node(&mut self, d: &Document, n: &mut Node) {
         let Scope { fill, stroke, images, .. } = self.scope;
-        for it in &mut n.appearance.items {
-            match it {
-                AppearanceItem::Fill(l) if fill => self.paint(d, &mut l.paint),
-                AppearanceItem::Stroke(l) if stroke => self.paint(d, &mut l.paint),
-                _ => {}
-            }
-        }
-        match &mut n.kind {
-            NodeKind::Text(t) => {
-                for r in &mut t.runs {
-                    if fill {
-                        self.paint(d, &mut r.style.fill);
-                    }
-                    if stroke {
-                        self.paint(d, &mut r.style.stroke);
-                    }
-                }
-            }
-            NodeKind::Mesh(m) if fill => {
-                let mut ch = false;
-                for p in &mut m.points {
-                    let c = (self.f)(p.color);
-                    ch |= c != p.color;
-                    p.color = c;
-                }
-                self.changed += ch as usize;
-            }
-            NodeKind::Image(im) if images && im.link.is_none() => {
-                if let Some(k) = self.image(d, &im.key) {
-                    im.key = k;
-                    self.changed += 1;
-                }
-            }
-            _ => {
-                for c in n.children_mut().into_iter().flatten() {
-                    if let Some(new) = self.subtree(d, c) {
-                        *c = Arc::new(new);
-                    }
-                }
-            }
-        }
+        let mut m = n.clone();
+        let changed = recolor_node(&mut m, Reach { fill, stroke, images }, &mut Visit { pass: self, d });
+        self.changed += changed;
+        (changed > 0).then_some(m)
     }
 
-    fn paint(&mut self, d: &Document, p: &mut Paint) {
-        let changed = match p {
+    /// Recolour one paint: true when it changed.
+    fn paint(&mut self, d: &Document, p: &mut Paint) -> bool {
+        match p {
             Paint::Pattern { pattern, .. } if self.scope.patterns => self.pattern(d, pattern).map(|new| *pattern = new).is_some(),
             _ => match self.links {
                 Some(f) => map_links(p, f),
                 None => map_paint(p, self.f),
             },
-        };
-        self.changed += changed as usize;
+        }
     }
 
     /// The key of image `key` recoloured (one copy per pass), `None` when no pixel changes.
@@ -367,6 +301,24 @@ impl<'a> Recolor<'a> {
         self.new_patterns.push(def);
         self.patterns.insert(name.to_string(), Some(new.clone()));
         Some(new)
+    }
+}
+
+/// What a pass over document `d` does to each colour the shared visitor meets.
+struct Visit<'p, 'a> {
+    pass: &'p mut Recolor<'a>,
+    d: &'p Document,
+}
+
+impl ColorVisitor for Visit<'_, '_> {
+    fn paint(&mut self, p: &mut Paint) -> bool {
+        self.pass.paint(self.d, p)
+    }
+    fn color(&mut self, c: Color) -> Color {
+        (self.pass.f)(c)
+    }
+    fn image(&mut self, key: &str) -> Option<String> {
+        self.pass.image(self.d, key)
     }
 }
 

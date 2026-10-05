@@ -49,10 +49,13 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 }
 
 /// Does `n` carry visible object-level effects that only apply through its art (type, images,
-/// symbol instances, live objects; Crop Marks on anything), or is it a group or layer with an
-/// appearance of its own (see [`Renderer::draw_object_fx`])?
+/// symbol instances, live objects; Crop Marks and colour adjustments on anything), or is it a group
+/// or layer with an appearance of its own (see [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
-    (effects::needs_outline(n) && visible(&n.appearance.effects)) || effects::has_container_appearance(n) || effects::has_crop_marks(n)
+    (effects::needs_outline(n) && visible(&n.appearance.effects))
+        || effects::has_container_appearance(n)
+        || effects::has_crop_marks(n)
+        || effects::has_adjustment(n)
 }
 
 /// Is `n` a group or layer (whose evaluated art keeps its knockout setting)?
@@ -399,9 +402,10 @@ impl Renderer {
     }
 
     /// The art [`Self::draw_object_fx`] draws for `a` (cached by `Arc` identity when `cache`):
-    /// reshaped by its geometry effects, else type and images as themselves and the others as
-    /// their evaluated art (groups and layers: [`effects::evaluate_container`], keeping their
-    /// knockout setting); without the object's transparency and effects.
+    /// reshaped by its geometry effects, else type, images and paths as themselves and the others
+    /// as their evaluated art (groups and layers: [`effects::evaluate_container`], keeping their
+    /// knockout setting), recoloured by the colour adjustments in it ([`Self::adjusted_art`]);
+    /// without the object's transparency and effects (a path keeps its geometry effects).
     fn fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>, cache: bool) -> Arc<Node> {
         let key = Arc::as_ptr(a) as usize;
         if cache
@@ -420,9 +424,13 @@ impl Renderer {
         let art = match effects::crop_marks_art(a).or_else(|| effects::reshape(a, symbol.as_ref())) {
             Some(r) => r,
             None if container => effects::evaluate_container(a).unwrap_or_else(|| (**a).clone()),
-            None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_)) => (**a).clone(),
+            None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::Path { .. } | NodeKind::Compound { .. }) => (**a).clone(),
             None => effects::outline_art(a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
+        let mut art = self.adjusted_art(doc, art, effects::color_map(&a.appearance.effects).as_ref());
+        // A path's geometry effects still apply when it is drawn.
+        let path = matches!(art.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+        art.appearance.effects.retain(|e| path && effects::is_geometry(&e.id));
         let art = Arc::new(Node {
             opacity: 1.0,
             blend: Default::default(),
@@ -431,7 +439,6 @@ impl Renderer {
             // its knockout setting says).
             knockout: if container { a.knockout } else { vectorcraft_doc::Knockout::Off },
             mask: None,
-            appearance: vectorcraft_doc::Appearance { effects: vec![], ..art.appearance },
             ..art
         });
         if cache {
@@ -441,6 +448,25 @@ impl Renderer {
             self.fx_arts.insert(key, (a.clone(), art.clone()));
         }
         art
+    }
+
+    /// `art` with the colour adjustments inside it applied, then `outer` (its object's own) on
+    /// everything ([`effects::adjust`]). Embedded images become recoloured copies, cached with the
+    /// decoded images under a key naming the adjustment.
+    fn adjusted_art(&mut self, doc: &vectorcraft_doc::Document, mut art: Node, outer: Option<&effects::ColorMap>) -> Node {
+        art.appearance.effects.retain(|e| !effects::is_adjustment(&e.id));
+        let mut wanted: Vec<(String, String, effects::ColorMap)> = vec![];
+        let adjusted = effects::adjust(&art, outer, &mut |key, map| {
+            let mut h = std::hash::DefaultHasher::new();
+            std::hash::Hash::hash(&format!("{map:?}"), &mut h);
+            let derived = format!("{key}\u{0}adjust\u{0}{:016x}", std::hash::Hasher::finish(&h));
+            wanted.push((key.to_string(), derived.clone(), map.clone()));
+            Some(derived)
+        });
+        for (key, derived, map) in wanted {
+            self.adjusted_image(doc, &key, derived, &map);
+        }
+        adjusted.unwrap_or(art)
     }
 
     /// Paint `content` with raster effects `rfx` (see the module docs): shadows and outer glows

@@ -64,7 +64,8 @@ pub fn blend_mode(s: &str) -> BlendMode {
     BlendMode::ALL.iter().copied().find(|m| format!("{m:?}").to_ascii_lowercase() == key).unwrap_or(BlendMode::Normal)
 }
 
-fn color(p: &Value, default: Color) -> Color {
+/// An effect's `color` parameter (`"#rrggbb"`, `[r, g, b]` 0..1 or a colour object).
+pub(crate) fn color_param(p: &Value, default: Color) -> Color {
     match p.get("color") {
         Some(Value::String(s)) => Color::from_hex(s).unwrap_or(default),
         Some(Value::Array(a)) if a.len() >= 3 => {
@@ -95,19 +96,19 @@ pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
                     dx: num(&p, "x", 7.0).clamp(-1e4, 1e4),
                     dy: num(&p, "y", 7.0).clamp(-1e4, 1e4),
                     blur,
-                    color: color(&p, Color::BLACK),
+                    color: color_param(&p, Color::BLACK),
                 },
                 "stylize.outerGlow" => RasterFx::OuterGlow {
                     mode: blend_mode(text(&p, "mode", "screen")),
                     opacity: opacity(&p),
                     blur,
-                    color: color(&p, Color::rgb(1.0, 1.0, 0.0)),
+                    color: color_param(&p, Color::rgb(1.0, 1.0, 0.0)),
                 },
                 "stylize.innerGlow" => RasterFx::InnerGlow {
                     mode: blend_mode(text(&p, "mode", "screen")),
                     opacity: opacity(&p),
                     blur,
-                    color: color(&p, Color::WHITE),
+                    color: color_param(&p, Color::WHITE),
                     center: text(&p, "source", "edge").eq_ignore_ascii_case("center"),
                 },
                 "stylize.feather" => RasterFx::Feather { radius: num(&p, "radius", 5.0).clamp(0.0, 1000.0) },

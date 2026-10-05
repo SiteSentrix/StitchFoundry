@@ -131,7 +131,7 @@ pub fn expand_outlined(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
 }
 
 /// [`reshape`] without its checks (no geometry effects: just the art).
-fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
+pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     let fx = geometry_effects(n);
     let mut art = match &n.kind {
         NodeKind::Image(im) => {

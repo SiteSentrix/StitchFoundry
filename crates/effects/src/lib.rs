@@ -21,11 +21,15 @@
 //! - **Plug-in effects** (`plugin.<plug-in id>`, Effect › Plug-ins) are geometry effects run by an
 //!   installed WebAssembly plug-in (`vectorcraft-plugins`); [`effect_info`] describes them like
 //!   built-in ones, and an effect whose plug-in isn't installed leaves the geometry as it is.
+//! - **Colour adjustments** (Brightness/Contrast, Curves, Levels, Hue/Saturation, Shift to Color,
+//!   Temperature/Tint) recolour what an object paints with: [`adjust`] evaluates them for the
+//!   renderer and the exporters.
 //!
 //! Everything is deterministic: "random" effects (Roughen, Tweak, Scribble) use a seeded hash
 //! noise (`seed` parameter, default 0).
 #![forbid(unsafe_code)]
 
+mod adjust;
 mod bake;
 mod clip;
 mod distort;
@@ -47,6 +51,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 
+pub use adjust::{ADJUSTMENTS, ColorMap, ImageHook, adjust, adjust_in_document, color_map, curve_at, curve_points, has_adjustment, is_adjustment};
 pub use bake::{StrokeArt, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
 pub use clip::clip_outline;
 pub use group::{
@@ -129,6 +134,7 @@ const WARP: &[&str] = &["Effect", "Warp"];
 const BLUR: &[&str] = &["Effect", "Blur"];
 const PATHFINDER: &[&str] = &["Effect", "Pathfinder"];
 const PLUGINS: &[&str] = &["Effect", "Plug-ins"];
+const ADJUST: &[&str] = &["Effect", "Color Adjustments"];
 
 /// The warp styles in Illustrator's Style menu order: (id suffix, label).
 pub const WARP_STYLES: [(&str, &str); 15] = [
@@ -258,6 +264,50 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
         r("stylize.feather", "Feather…", STYLIZE, "{radius: pt (5)}", json!({"radius": 5.0})),
         r("blur.gaussian", "Gaussian Blur…", BLUR, "{radius: pt (5)}", json!({"radius": 5.0})),
     ];
+    v.extend([
+        g(
+            "adjust.brightnessContrast",
+            "Brightness/Contrast…",
+            ADJUST,
+            "{brightness: -100..100 (0; bends the tones, black and white stay), contrast: -100..100 (0)} recolours the object's fills, strokes, type, meshes and embedded images (each colour keeps its model)",
+            json!({"brightness": 0.0, "contrast": 0.0}),
+        ),
+        g(
+            "adjust.curves",
+            "Curves…",
+            ADJUST,
+            "{points: \"x,y x,y …\" or [[x, y], …] (input, output 0..255; a smooth monotone curve through them, flat past the ends; \"0,0 128,128 255,255\"), channel: \"rgb\"|\"red\"|\"green\"|\"blue\" (\"rgb\")} recolours as Brightness/Contrast does",
+            json!({"points": "0,0 128,128 255,255", "channel": "rgb"}),
+        ),
+        g(
+            "adjust.hueSaturation",
+            "Hue/Saturation…",
+            ADJUST,
+            "{hue: deg -180..180 (0), saturation: -100..100 (0), lightness: -100..100 (0), colorize: bool (false; true: every colour takes hue `hue` (0..360) at saturation (100 + saturation) / 2 %)} recolours as Brightness/Contrast does",
+            json!({"hue": 0.0, "saturation": 0.0, "lightness": 0.0, "colorize": false}),
+        ),
+        g(
+            "adjust.levels",
+            "Levels…",
+            ADJUST,
+            "{inputBlack: 0..255 (0), inputWhite: 0..255 (255), gamma: 0.1..10 (1; above 1 lightens the midtones), outputBlack: 0..255 (0), outputWhite: 0..255 (255), channel: \"rgb\"|\"red\"|\"green\"|\"blue\" (\"rgb\")} recolours as Brightness/Contrast does",
+            json!({"inputBlack": 0.0, "inputWhite": 255.0, "gamma": 1.0, "outputBlack": 0.0, "outputWhite": 255.0, "channel": "rgb"}),
+        ),
+        g(
+            "adjust.shiftToColor",
+            "Shift to Color…",
+            ADJUST,
+            "{color: \"#rrggbb\" (\"#ff8000\"), amount: 0..100 % (50), preserveLightness: bool (true: colours take the target's hue and saturation and keep their lightness; false: they mix with it)} recolours as Brightness/Contrast does",
+            json!({"color": "#ff8000", "amount": 50.0, "preserveLightness": true}),
+        ),
+        g(
+            "adjust.temperatureTint",
+            "Temperature/Tint…",
+            ADJUST,
+            "{temperature: -100 (cooler) .. 100 (warmer) (0), tint: -100 (greener) .. 100 (more magenta) (0)} recolours as Brightness/Contrast does",
+            json!({"temperature": 0.0, "tint": 0.0}),
+        ),
+    ]);
     for (suffix, label) in WARP_STYLES {
         let id: &'static str = match suffix {
             "arc" => "warp.arc",
@@ -378,11 +428,13 @@ pub fn is_raster(id: &str) -> bool {
     matches!(id, "stylize.dropShadow" | "stylize.innerGlow" | "stylize.outerGlow" | "stylize.feather" | "blur.gaussian")
 }
 
-/// Does `id` change geometry? (Crop Marks adds art of its own instead, [`crop_marks_art`].)
-/// Plug-in effects do, installed or not (a missing plug-in leaves the geometry as it is).
+/// Does `id` change geometry? (Crop Marks adds art of its own instead, [`crop_marks_art`]; colour
+/// adjustments recolour, [`adjust`].) Plug-in effects do, installed or not (a missing plug-in
+/// leaves the geometry as it is).
 pub fn is_geometry(id: &str) -> bool {
     !is_raster(id)
         && !is_pathfinder(id)
+        && !is_adjustment(id)
         && id != CROP_MARKS
         && (catalog_index().contains_key(id) || vectorcraft_plugins::effect::plugin_id(id).is_some())
 }

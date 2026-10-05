@@ -322,11 +322,25 @@ fn expand_pieces(d: &mut Document, m: &mut Node, all: bool, stroke_art: effects:
 /// stroke becomes an object of its own (strokes outlined, brushes as their art), geometry effects
 /// are baked, raster effects become an embedded image, and the object keeps its transparency.
 fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
-    let Some(n) = d.node(id).cloned() else { return };
-    let container = is_container(&n);
+    let Some(mut n) = d.node(id).cloned() else { return };
     if !expandable(&n) {
         return;
     }
+    // Colour adjustments: the colours inside become the adjusted ones (an embedded image a
+    // recoloured copy), then the rest of the appearance expands.
+    if effects::has_adjustment(&n)
+        && let Some(m) = effects::adjust_in_document(d, &n)
+        && let Some(slot) = d.node_mut(id)
+    {
+        *slot = m.clone();
+        out.push(id);
+        n = m;
+        if !expandable(&n) {
+            return;
+        }
+    }
+    // (A symbol instance has become its art, a group.)
+    let container = is_container(&n);
     // Crop Marks: a group of the object and its marks, then the object expands on its own.
     if let Some(mut m) = effects::crop_marks_art(&n) {
         let mut seen = std::collections::HashSet::from([id]);
@@ -386,7 +400,9 @@ fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush
         && let Some(slot) = d.node_mut(id)
     {
         *slot = m;
-        out.push(id);
+        if out.last() != Some(&id) {
+            out.push(id);
+        }
     }
     if container {
         let children: Vec<NodeId> = d.node(id).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).collect()).unwrap_or_default();
