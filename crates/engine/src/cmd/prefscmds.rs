@@ -7,6 +7,8 @@ use serde_json::{Map, Value, json};
 
 use super::*;
 use crate::Prefs;
+use crate::units::Measure;
+use vectorcraft_doc::Unit;
 
 /// What kind of value a preference holds.
 #[derive(Clone, Copy, Debug)]
@@ -17,6 +19,13 @@ pub enum PrefKind {
         min: f64,
         max: f64,
         unit: &'static str,
+    },
+    /// A length in points in `min..=max`, shown and typed in the unit of `measure` (also given
+    /// as a string with a unit, "5 mm").
+    Length {
+        min: f64,
+        max: f64,
+        measure: Measure,
     },
     /// A whole number in `min..=max`.
     Int {
@@ -59,6 +68,7 @@ pub const PREF_CATEGORIES: &[&str] = &[
     "Devices",
 ];
 
+/// Every unit as (`Unit::key`, `Unit::label`).
 pub const UNITS: &[(&str, &str)] = &[
     ("points", "Points"),
     ("picas", "Picas"),
@@ -66,6 +76,10 @@ pub const UNITS: &[(&str, &str)] = &[
     ("millimeters", "Millimeters"),
     ("centimeters", "Centimeters"),
     ("pixels", "Pixels"),
+    ("feetInches", "Feet & Inches"),
+    ("meters", "Meters"),
+    ("yards", "Yards"),
+    ("feet", "Feet"),
 ];
 const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
 const BLACK: &[(&str, &str)] = &[("accurate", "Display All Blacks Accurately"), ("rich", "Display All Blacks as Rich Black")];
@@ -77,6 +91,9 @@ macro_rules! p {
     };
     ($key:literal, $cat:literal, $sec:literal, $label:literal, num($min:expr, $max:expr, $unit:literal)) => {
         PrefSpec { key: $key, category: $cat, section: $sec, label: $label, kind: PrefKind::Num { min: $min, max: $max, unit: $unit } }
+    };
+    ($key:literal, $cat:literal, $sec:literal, $label:literal, len($min:expr, $max:expr, $m:ident)) => {
+        PrefSpec { key: $key, category: $cat, section: $sec, label: $label, kind: PrefKind::Length { min: $min, max: $max, measure: Measure::$m } }
     };
     ($key:literal, $cat:literal, $sec:literal, $label:literal, int($min:expr, $max:expr)) => {
         PrefSpec { key: $key, category: $cat, section: $sec, label: $label, kind: PrefKind::Int { min: $min, max: $max } }
@@ -94,10 +111,10 @@ macro_rules! p {
 
 pub const PREF_SPECS: &[PrefSpec] = &[
     // General
-    p!("keyboardIncrement", "General", "", "Keyboard Increment", num(0.001, 1296.0, "pt")),
+    p!("keyboardIncrement", "General", "", "Keyboard Increment", len(0.001, 1296.0, General)),
     p!("constrainAngle", "General", "", "Constrain Angle", num(-360.0, 360.0, "°")),
-    p!("cornerRadius", "General", "", "Corner Radius", num(0.0, 1296.0, "pt")),
-    p!("pasteOffset", "General", "", "Paste Offset", num(0.0, 1296.0, "pt")),
+    p!("cornerRadius", "General", "", "Corner Radius", len(0.0, 1296.0, General)),
+    p!("pasteOffset", "General", "", "Paste Offset", len(0.0, 1296.0, General)),
     p!("disableAutoAddDelete", "General", "Options", "Disable Auto Add/Delete", bool),
     p!("usePreciseCursors", "General", "Options", "Use Precise Cursors", bool),
     p!("showToolTips", "General", "Options", "Show Tool Tips", bool),
@@ -150,9 +167,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("penRubberBand", "Selection & Anchor Display", "Enable Rubber Band for", "Pen Tool", bool),
     p!("curvatureRubberBand", "Selection & Anchor Display", "Enable Rubber Band for", "Curvature Tool", bool),
     // Type
-    p!("typeSizeIncrement", "Type", "", "Size/Leading", num(0.001, 1296.0, "pt")),
+    p!("typeSizeIncrement", "Type", "", "Size/Leading", len(0.001, 1296.0, Type)),
     p!("trackingIncrement", "Type", "", "Tracking", num(1.0, 1000.0, "/1000 em")),
-    p!("baselineShiftIncrement", "Type", "", "Baseline Shift", num(0.001, 1296.0, "pt")),
+    p!("baselineShiftIncrement", "Type", "", "Baseline Shift", len(0.001, 1296.0, Type)),
     p!("showEastAsianOptions", "Type", "Language Options", "Show East Asian Options", bool),
     p!("showIndicOptions", "Type", "Language Options", "Show Indic Options", bool),
     p!("typeSelectionByPathOnly", "Type", "Options", "Type Object Selection by Path Only", bool),
@@ -176,7 +193,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("guideStyle", "Guides & Grid", "Guides", "Style", choice(LINE_STYLE)),
     p!("gridColor", "Guides & Grid", "Grid", "Color", color),
     p!("gridStyle", "Guides & Grid", "Grid", "Style", choice(LINE_STYLE)),
-    p!("gridlineEvery", "Guides & Grid", "Grid", "Gridline every", num(1.0, 16383.0, "pt")),
+    p!("gridlineEvery", "Guides & Grid", "Grid", "Gridline every", len(1.0, 16383.0, General)),
     p!("gridSubdivisions", "Guides & Grid", "Grid", "Subdivisions", int(1, 1000)),
     p!("gridsInBack", "Guides & Grid", "Grid", "Grids In Back", bool),
     p!("showPixelGrid", "Guides & Grid", "Grid", "Show Pixel Grid (Above 600% Zoom)", bool),
@@ -333,11 +350,8 @@ pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
             Value::String(s) if s == "true" || s == "false" => Ok(json!(s == "true")),
             _ => Err(format!("`{key}` must be true or false")),
         },
-        PrefKind::Num { min, max, .. } => match num() {
-            Some(x) if x.is_finite() && (min..=max).contains(&x) => Ok(json!(x)),
-            Some(x) => Err(format!("`{key}` must be between {min} and {max} (got {x})")),
-            None => Err(format!("`{key}` must be a number")),
-        },
+        PrefKind::Num { min, max, .. } => in_range(key, num(), min, max),
+        PrefKind::Length { min, max, .. } => in_range(key, v.as_f64().or_else(|| v.as_str().and_then(|s| Unit::Points.parse(s))), min, max),
         PrefKind::Int { min, max } => match num() {
             Some(x) if x.fract() == 0.0 && (min as f64..=max as f64).contains(&x) => Ok(json!(x as i64)),
             Some(x) => Err(format!("`{key}` must be a whole number between {min} and {max} (got {x})")),
@@ -363,6 +377,15 @@ pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
             Value::String(s) => Ok(json!(s)),
             _ => Err(format!("`{key}` must be a string")),
         },
+    }
+}
+
+/// `x` (`None`: not a number) as the value of number preference `key` in `min..=max`.
+fn in_range(key: &str, x: Option<f64>, min: f64, max: f64) -> std::result::Result<Value, String> {
+    match x {
+        Some(x) if x.is_finite() && (min..=max).contains(&x) => Ok(json!(x)),
+        Some(x) => Err(format!("`{key}` must be between {min} and {max} (got {x})")),
+        None => Err(format!("`{key}` must be a number")),
     }
 }
 
@@ -436,7 +459,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Preference",
             [],
             None,
-            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; the eyedropper group takes a partial object, as eyedropper.setOptions)",
+            "{key, value} or {values: {key: value, …}} set preferences (validated; see prefs.list; lengths in pt or strings with a unit; unitsGeneral also sets the active document's units, one undo step; the eyedropper group takes a partial object, as eyedropper.setOptions)",
             always,
             set
         ),
@@ -465,6 +488,10 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
     let mut next = s.prefs.clone();
     next.set_values(&values).map_err(|e| bad("prefs.set", e))?;
     s.apply_prefs(next);
+    // Units ▸ General is also the open document's units (as Document Setup sets them).
+    if values.contains_key("unitsGeneral") && s.active().is_some() {
+        s.set_document_units(s.default_units())?;
+    }
     let all = s.prefs.to_json();
     Ok(Value::Object(values.keys().map(|k| (k.clone(), all[k.as_str()].clone())).collect()))
 }
@@ -496,6 +523,13 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
                         o["min"] = json!(min);
                         o["max"] = json!(max);
                         o["unit"] = json!(unit);
+                    }
+                    PrefKind::Length { min, max, measure } => {
+                        o["kind"] = json!("number");
+                        o["min"] = json!(min);
+                        o["max"] = json!(max);
+                        o["unit"] = json!("pt");
+                        o["measure"] = json!(measure.name());
                     }
                     PrefKind::Int { min, max } => {
                         o["kind"] = json!("integer");

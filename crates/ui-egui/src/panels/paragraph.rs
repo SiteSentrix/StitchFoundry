@@ -2,7 +2,7 @@
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Justify, Unit};
+use vectorcraft_doc::Justify;
 
 use super::character::text_style;
 use super::{pstate, set_pstate};
@@ -49,32 +49,34 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.add_space(4.0);
     let fw = ((ui.available_width() - 66.0) / 2.0).clamp(60.0, 100.0);
+    // Indents and paragraph spacing are distances (General); type sizes follow Units ▸ Type.
+    let unit = app.session.general_unit();
     let label = |ui: &mut Ui, s: &str, tip: &str| {
         ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(s).size(11.5).strong().color(t.text))).on_hover_text(tip);
     };
     egui::Grid::new("para-grid").num_columns(4).spacing([4.0, 4.0]).show(ui, |ui| {
         label(ui, "→|", "Left Indent");
-        if let Some(v) = widgets::spin_field(ui, "pa-li", Some(para.left_indent), Unit::Points, fw, 1.0, -1296.0, &[]) {
+        if let Some(v) = widgets::spin_field(ui, "pa-li", Some(para.left_indent), unit, fw, 1.0, -1296.0, &[]) {
             format(app, json!({"leftIndent": v}));
         }
         label(ui, "|←", "Right Indent");
-        if let Some(v) = widgets::spin_field(ui, "pa-ri", Some(para.right_indent), Unit::Points, fw, 1.0, -1296.0, &[]) {
+        if let Some(v) = widgets::spin_field(ui, "pa-ri", Some(para.right_indent), unit, fw, 1.0, -1296.0, &[]) {
             format(app, json!({"rightIndent": v}));
         }
         ui.end_row();
         label(ui, "1→", "First-line Left Indent");
-        if let Some(v) = widgets::spin_field(ui, "pa-fi", Some(para.first_line_indent), Unit::Points, fw, 1.0, -1296.0, &[]) {
+        if let Some(v) = widgets::spin_field(ui, "pa-fi", Some(para.first_line_indent), unit, fw, 1.0, -1296.0, &[]) {
             format(app, json!({"firstLineIndent": v}));
         }
         ui.label("");
         ui.label("");
         ui.end_row();
         label(ui, "↑¶", "Space Before Paragraph");
-        if let Some(v) = widgets::spin_field(ui, "pa-sb", Some(para.space_before), Unit::Points, fw, 1.0, 0.0, &[]) {
+        if let Some(v) = widgets::spin_field(ui, "pa-sb", Some(para.space_before), unit, fw, 1.0, 0.0, &[]) {
             format(app, json!({"spaceBefore": v}));
         }
         label(ui, "↓¶", "Space After Paragraph");
-        if let Some(v) = widgets::spin_field(ui, "pa-sa", Some(para.space_after), Unit::Points, fw, 1.0, 0.0, &[]) {
+        if let Some(v) = widgets::spin_field(ui, "pa-sa", Some(para.space_after), unit, fw, 1.0, 0.0, &[]) {
             format(app, json!({"spaceAfter": v}));
         }
         ui.end_row();

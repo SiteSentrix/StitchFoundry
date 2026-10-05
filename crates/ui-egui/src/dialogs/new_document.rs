@@ -1,39 +1,57 @@
-//! File → New: presets and the document details (name, size, artboards, colour mode).
+//! File → New: presets and the document details (name, size, units, artboards, colour mode).
+//!
+//! Fields: `preset`, `name`, `width` and `height` (points, or strings with a unit), `units` (a unit
+//! label; print presets start in Preferences ▸ Units ▸ General), `artboards`, `colorMode`.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::Unit;
 
 use super::{DialogSpec, form};
-use crate::VectorcraftApp;
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
+use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| "New Document".into(), body, confirm, ok: Some("Create"), min_width: 560.0, ..DialogSpec::FORM };
 
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+/// The presets: (name, width, height in points, in pixels).
+const PRESETS: [(&str, f64, f64, bool); 8] = [
+    ("Letter", 612.0, 792.0, false),
+    ("Legal", 612.0, 1008.0, false),
+    ("Tabloid", 792.0, 1224.0, false),
+    ("A4", 595.28, 841.89, false),
+    ("A3", 841.89, 1190.55, false),
+    ("Web 1920", 1920.0, 1080.0, true),
+    ("Phone 390×844", 390.0, 844.0, true),
+    ("Square Post", 1080.0, 1080.0, true),
+];
+
+/// The units a preset starts in: pixels for screen presets, else the General preference.
+fn preset_units(app: &VectorcraftApp, pixels: bool) -> Unit {
+    if pixels { Unit::Pixels } else { app.session.default_units() }
+}
+
+/// Open the dialog on the Letter preset.
+pub fn open(app: &mut VectorcraftApp) {
+    let units = preset_units(app, false).label();
+    let fields = json!({"preset": "Letter", "width": 612, "height": 792, "units": units, "artboards": 1, "colorMode": "RGB", "name": "Untitled-1"});
+    app.ui.dialog = Some(Dialog::new("newDocument", fields));
+}
+
+fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
-    let presets: [(&str, &str, &str, &str); 8] = [
-        ("Letter", "612 pt", "792 pt", "Points"),
-        ("Legal", "612 pt", "1008 pt", "Points"),
-        ("Tabloid", "792 pt", "1224 pt", "Points"),
-        ("A4", "595.28 pt", "841.89 pt", "Points"),
-        ("A3", "841.89 pt", "1190.55 pt", "Points"),
-        ("Web 1920", "1920 px", "1080 px", "Pixels"),
-        ("Phone 390×844", "390 px", "844 px", "Pixels"),
-        ("Square Post", "1080 px", "1080 px", "Pixels"),
-    ];
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
             ui.set_width(300.0);
             ui.label(egui::RichText::new("Presets").color(t.text_dim));
             ui.horizontal_wrapped(|ui| {
-                for (name, w, h, u) in presets {
+                for (name, w, h, pixels) in PRESETS {
                     let sel = d.str("preset") == name;
                     if ui.selectable_label(sel, name).clicked() {
                         d.fields.insert("preset".into(), json!(name));
                         d.fields.insert("width".into(), json!(w));
                         d.fields.insert("height".into(), json!(h));
-                        d.fields.insert("units".into(), json!(u));
+                        d.fields.insert("units".into(), json!(preset_units(app, pixels).label()));
                     }
                 }
             });
@@ -41,10 +59,17 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.separator();
         ui.vertical(|ui| {
             ui.label(egui::RichText::new("Preset Details").font(theme::semibold(12.5)));
+            let unit = Unit::named(&d.str("units")).unwrap_or_default();
             egui::Grid::new("newdoc").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
                 form::field(ui, d, "name", "Name:");
-                form::field(ui, d, "width", "Width:");
-                form::field(ui, d, "height", "Height:");
+                form::length_field(ui, d, "width", "Width:", unit);
+                form::length_field(ui, d, "height", "Height:", unit);
+                ui.label(egui::RichText::new("Units:").color(t.text_dim));
+                let labels: Vec<&str> = Unit::ALL.iter().map(|u| u.label()).collect();
+                if let Some(i) = widgets::dropdown(ui, "newdoc-units", unit.label(), &labels, 132.0) {
+                    d.fields.insert("units".into(), json!(labels[i]));
+                }
+                ui.end_row();
                 form::field(ui, d, "artboards", "Artboards:");
                 form::field(ui, d, "colorMode", "Color Mode:");
             });

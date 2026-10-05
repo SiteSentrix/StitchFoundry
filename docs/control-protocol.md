@@ -196,3 +196,10 @@ Width Point Edit: double-clicking a width point with the Width tool, or `ui.widt
 `widthPoint` dialog (fields `id`, `index`, `t`, `side1` and `side2`: the left and right widths in points, `linked`,
 `adjustAdjoining`). `ui.dialog.confirm` runs `stroke.widthPoint.set` with them; `ui.dialog.set {field: "discard",
 value: true}` then confirm (the Delete button) removes the point with `stroke.widthPoint.remove`.
+
+Units: dialog distance fields (Move's `dx`/`dy`, shape sizes, Offset Path's `offset`, Split Into Grid's `gutter`,
+Artboard Options' sizes, effects' distances, `transformEach`'s `moveH`/`moveV`, New Document's `width`/`height`, the
+length preferences in `preferences`) show in the General unit (the active document's units, or `unitsGeneral` without a
+document). Through `ui.dialog.set` a number is in points and a string may carry its unit (`"10 mm"`; a bare number in a
+string is points). The `preferences` dialog's `unitsGeneral` starts as the active document's units, and OK sets them.
+`newDocument` has `units` (a unit label; print presets start in `unitsGeneral`, screen presets in Pixels).

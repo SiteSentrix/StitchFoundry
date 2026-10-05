@@ -10,6 +10,7 @@ pub mod cmd;
 pub mod guard;
 pub mod inspect;
 mod tooling;
+pub mod units;
 
 use std::sync::Arc;
 
@@ -1003,6 +1004,8 @@ mod tests_tileedge;
 mod tests_tints;
 #[cfg(test)]
 mod tests_transparencygrid;
+#[cfg(test)]
+mod tests_units;
 #[cfg(test)]
 mod tests_widthpoints;
 #[cfg(test)]

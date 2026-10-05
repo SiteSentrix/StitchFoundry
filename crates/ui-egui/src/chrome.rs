@@ -28,7 +28,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::brand::paint_mark(ui, r);
             ui.add_space(4.0);
             if widgets::icon_button(ui, "house", "Home", false, 24.0).clicked() {
-                app.ui.dialog = Some(crate::state::Dialog::new("newDocument", json!({"preset": "Letter", "width": "612 pt", "height": "792 pt", "units": "Points", "artboards": 1, "colorMode": "RGB", "name": "Untitled-1"})));
+                crate::dialogs::open_new_document(app);
             }
             ui.add_space(2.0);
             let menus_end = if app.native_menu {
@@ -66,9 +66,20 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let open_palette = if search_full {
                 let (r, resp) = ui.allocate_exact_size(vec2(200.0, 24.0), Sense::click());
                 ui.painter().rect_filled(r, CornerRadius::same(12), t.input);
-                ui.painter().rect_stroke(r, CornerRadius::same(12), Stroke::new(1.0, if resp.hovered() { t.input_border } else { t.divider }), StrokeKind::Inside);
+                ui.painter().rect_stroke(
+                    r,
+                    CornerRadius::same(12),
+                    Stroke::new(1.0, if resp.hovered() { t.input_border } else { t.divider }),
+                    StrokeKind::Inside,
+                );
                 icons::paint(ui, "search", egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(13.0, 13.0)), t.text_dim);
-                ui.painter().text(r.left_center() + vec2(26.0, 0.0), egui::Align2::LEFT_CENTER, "Search commands and tools", egui::FontId::proportional(11.5), t.text_dim);
+                ui.painter().text(
+                    r.left_center() + vec2(26.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    "Search commands and tools",
+                    egui::FontId::proportional(11.5),
+                    t.text_dim,
+                );
                 resp.clicked()
             } else {
                 widgets::icon_button(ui, "search", "Search commands and tools", false, 24.0).clicked()
@@ -106,7 +117,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     return;
                 };
                 let sel = st.selection.objects.clone();
-                let units = st.doc.units;
+                let units = app.session.general_unit();
                 let first = sel.first().and_then(|id| st.doc.node(*id)).cloned();
                 let anchor_mode = !st.selection.anchors.is_empty();
                 let label = match &first {
@@ -185,7 +196,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         [("x", "X:", b.center().x), ("y", "Y:", b.center().y), ("width", "W:", b.width()), ("height", "H:", b.height())]
                     {
                         ui.label(egui::RichText::new(lbl).size(12.0).color(t.text_dim));
-                        if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v), units, 74.0) {
+                        if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v), units, 80.0) {
                             app.run("object.setBounds", json!({k: nv, "reference": 4})).ok();
                         }
                     }
@@ -360,7 +371,10 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         .color(t.text_disabled),
                     );
                     if let Some(p) = app.hover_doc {
-                        ui.label(egui::RichText::new(format!("X: {:.2}  Y: {:.2}", p.x, p.y)).font(theme::mono(10.5)).color(t.text_dim));
+                        let u = app.session.general_unit();
+                        ui.label(
+                            egui::RichText::new(format!("X: {}  Y: {}", u.readout(p.x), u.readout(p.y))).font(theme::mono(10.5)).color(t.text_dim),
+                        );
                     }
                     if !app.ui.status.is_empty() {
                         ui.label(egui::RichText::new(&app.ui.status).size(11.0).color(t.text));

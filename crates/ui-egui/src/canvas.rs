@@ -3,7 +3,7 @@
 
 use egui::{Color32, CornerRadius, Pos2, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Node, NodeKind, Unit};
 use vectorcraft_geom::{Affine, BezPath, PathEl, Point, Rect};
 use vectorcraft_tools::{Cursor, Mods, Overlay, PointerEvent, PointerKind};
 
@@ -296,7 +296,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
-        rulers(ui, full, &xf, app.hover_doc, &t);
+        rulers(ui, full, &xf, app.hover_doc, app.session.general_unit(), &t);
     }
     if app.ui.task_bar && !app.session.tool_busy() && app.ui.screen_mode < 3 {
         task_bar(app, ui, &xf);
@@ -573,7 +573,16 @@ fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32) {
     }
 }
 
-fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, t: &Tokens) {
+/// A ruler label for `v` (in the ruler's unit) on a ruler whose labels are `step` apart: whole
+/// numbers, or as many decimals as the step has.
+pub(crate) fn ruler_label(v: f64, step: f64) -> String {
+    let decimals = if step >= 1.0 { 0 } else { (-step.log10()).ceil() as usize };
+    let s = format!("{v:.decimals$}");
+    if s.trim_start_matches('-').chars().all(|c| c == '0' || c == '.') { "0".into() } else { s }
+}
+
+/// The rulers, numbered in `unit` (the General unit).
+fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, unit: Unit, t: &Tokens) {
     let p = ui.painter();
     let top = egui::Rect::from_min_max(pos2(full.left() + RULER, full.top()), pos2(full.right(), full.top() + RULER));
     let left = egui::Rect::from_min_max(pos2(full.left(), full.top() + RULER), pos2(full.left() + RULER, full.bottom()));
@@ -586,17 +595,19 @@ fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, t: &Tokens) 
     // Crosshair in the origin box.
     p.line_segment([corner.center() - vec2(4.0, 0.0), corner.center() + vec2(4.0, 0.0)], Stroke::new(1.0, t.ruler_tick));
     p.line_segment([corner.center() - vec2(0.0, 4.0), corner.center() + vec2(0.0, 4.0)], Stroke::new(1.0, t.ruler_tick));
-    // Pick a label step that gives ≥ 50 px between labels.
-    let steps = [1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0];
-    let step = steps.iter().copied().find(|s| s * xf.zoom >= 50.0).unwrap_or(10000.0);
+    // Pick a label step (in `unit`) that gives ≥ 50 px between labels; positions below are in `unit`
+    // (`per` points each).
+    let per = unit.points();
+    let steps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0];
+    let step = steps.iter().copied().find(|s| s * per * xf.zoom >= 50.0).unwrap_or(10000.0);
     let minor = step / 10.0;
     let font = egui::FontId::proportional(9.5);
     let a = xf.to_doc(top.left_top());
     let b = xf.to_doc(top.right_top());
     let clip_top = p.with_clip_rect(top);
-    let mut x = (a.x / minor).floor() * minor;
-    while x <= b.x {
-        let sx = xf.to_screen(Point::new(x, 0.0)).x;
+    let mut x = (a.x / per / minor).floor() * minor;
+    while x * per <= b.x {
+        let sx = xf.to_screen(Point::new(x * per, 0.0)).x;
         let is_major = ((x / step).round() * step - x).abs() < minor * 0.01;
         let is_mid = ((x / (step / 2.0)).round() * (step / 2.0) - x).abs() < minor * 0.01;
         let len = if is_major {
@@ -608,16 +619,16 @@ fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, t: &Tokens) 
         };
         clip_top.line_segment([pos2(sx, top.bottom() - len), pos2(sx, top.bottom())], Stroke::new(1.0, t.ruler_tick));
         if is_major {
-            clip_top.text(pos2(sx + 2.0, top.top() + 1.0), egui::Align2::LEFT_TOP, format!("{}", x.round() as i64), font.clone(), t.ruler_tick);
+            clip_top.text(pos2(sx + 2.0, top.top() + 1.0), egui::Align2::LEFT_TOP, ruler_label(x, step), font.clone(), t.ruler_tick);
         }
         x += minor;
     }
     let a = xf.to_doc(left.left_top());
     let b = xf.to_doc(left.left_bottom());
     let clip_left = p.with_clip_rect(left);
-    let mut y = (a.y / minor).floor() * minor;
-    while y <= b.y {
-        let sy = xf.to_screen(Point::new(0.0, y)).y;
+    let mut y = (a.y / per / minor).floor() * minor;
+    while y * per <= b.y {
+        let sy = xf.to_screen(Point::new(0.0, y * per)).y;
         let is_major = ((y / step).round() * step - y).abs() < minor * 0.01;
         let is_mid = ((y / (step / 2.0)).round() * (step / 2.0) - y).abs() < minor * 0.01;
         let len = if is_major {
@@ -630,7 +641,7 @@ fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, t: &Tokens) 
         clip_left.line_segment([pos2(left.right() - len, sy), pos2(left.right(), sy)], Stroke::new(1.0, t.ruler_tick));
         if is_major {
             // Vertical labels read top-to-bottom, one digit per line like Illustrator.
-            let s = format!("{}", y.round() as i64);
+            let s = ruler_label(y, step);
             for (k, ch) in s.chars().enumerate() {
                 clip_left.text(
                     pos2(left.left() + 4.0, sy + 2.0 + k as f32 * 8.5),
@@ -1013,17 +1024,21 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     ui.add_space(28.0);
     ui.label(egui::RichText::new("Quickly start a new file").font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
-    let presets: [(&str, &str, f64, f64); 6] = [
-        ("Letter", "612 × 792 pt", 612.0, 792.0),
-        ("A4", "595.28 × 841.89 pt", 595.28, 841.89),
-        ("Web 1920", "1920 × 1080 px", 1920.0, 1080.0),
-        ("Mobile", "390 × 844 px", 390.0, 844.0),
-        ("Postcard", "288 × 432 pt", 432.0, 288.0),
-        ("Square", "1080 × 1080 px", 1080.0, 1080.0),
+    // (name, width, height in points, in pixels); print sizes show in Preferences ▸ Units ▸ General.
+    let presets: [(&str, f64, f64, bool); 6] = [
+        ("Letter", 612.0, 792.0, false),
+        ("A4", 595.28, 841.89, false),
+        ("Web 1920", 1920.0, 1080.0, true),
+        ("Mobile", 390.0, 844.0, true),
+        ("Postcard", 432.0, 288.0, false),
+        ("Square", 1080.0, 1080.0, true),
     ];
+    let print = app.session.default_units();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(14.0, 14.0);
-        for (name, size, w, h) in presets {
+        for (name, w, h, pixels) in presets {
+            let unit = if pixels { Unit::Pixels } else { print };
+            let size = format!("{} × {}", unit.number(w), unit.format(h));
             let (r, resp) = ui.allocate_exact_size(vec2(120.0, 132.0), Sense::click());
             ui.painter().rect_filled(r, CornerRadius::same(8), if resp.hovered() { t.hover } else { t.panel });
             let s = (70.0 / w.max(h)) as f32;
@@ -1033,7 +1048,7 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
             ui.painter().text(r.center_bottom() - vec2(0.0, 30.0), egui::Align2::CENTER_CENTER, name, theme::semibold(12.5), t.text);
             ui.painter().text(r.center_bottom() - vec2(0.0, 14.0), egui::Align2::CENTER_CENTER, size, egui::FontId::proportional(11.0), t.text_dim);
             if resp.clicked() {
-                app.run("file.new", json!({"width": w, "height": h, "units": if size.ends_with("px") { "Pixels" } else { "Points" }})).ok();
+                app.run("file.new", json!({"width": w, "height": h, "units": unit.label()})).ok();
             }
         }
     });

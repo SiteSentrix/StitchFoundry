@@ -126,7 +126,7 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
 }
 
 fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let units = app.session.active().map(|d| d.doc.units).unwrap_or_default();
+    let units = app.session.general_unit();
     section_header(ui, "Document");
     ui.horizontal(|ui| {
         dim_label(ui, "Units");
@@ -207,7 +207,7 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
-    let units = st.doc.units;
+    let units = app.session.general_unit();
     let Some(b) = app.session.transform_bounds(&st.selection.objects) else {
         dim_label(ui, "No Selection");
         return;
@@ -337,11 +337,12 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         dim_label(ui, "Size");
-        if let Some(v) = widgets::num_field(ui, "fsize", Some(s.size), Unit::Points, 70.0) {
+        let type_unit = app.session.type_unit();
+        if let Some(v) = widgets::num_field(ui, "fsize", Some(s.size), type_unit, 70.0) {
             app.run("text.setStyle", json!({"size": v})).ok();
         }
         dim_label(ui, "Leading");
-        if let Some(v) = widgets::num_field(ui, "lead", Some(s.effective_leading()), Unit::Points, 70.0) {
+        if let Some(v) = widgets::num_field(ui, "lead", Some(s.effective_leading()), type_unit, 70.0) {
             app.run("text.setStyle", json!({"leading": v})).ok();
         }
     });

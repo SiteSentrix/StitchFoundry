@@ -8,7 +8,7 @@ use vectorcraft_doc::{Document, Justify, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::PathData;
 
 use super::edit::selected_roots;
-use super::pathops::{num_param, shape_node};
+use super::pathops::{len_param, num_param, shape_node};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -169,14 +169,14 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
     let font = str_param(p, "font").map(str::to_string);
     let style = str_param(p, "style").map(str::to_string);
-    let size = num_param(p, "size");
+    let size = len_param(p, "size");
     if size.is_some_and(|v| v <= 0.0) {
         return Err(bad(C, "size must be positive"));
     }
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(_) => Some(Some(num_param(p, "leading").ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0))),
+        Some(_) => Some(Some(len_param(p, "leading").ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0))),
     };
     let tracking = num_param(p, "tracking");
     let justify = match str_param(p, "justify") {

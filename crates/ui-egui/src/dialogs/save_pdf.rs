@@ -326,7 +326,7 @@ fn compression(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    let unit = app.session.active().map_or(Unit::Points, |s| s.doc.units);
+    let unit = app.session.general_unit();
     const MARKS: [(&str, &str); 4] = [
         ("marks.trim", "Trim marks"),
         ("marks.registration", "Registration marks"),

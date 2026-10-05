@@ -180,6 +180,15 @@ pub(crate) fn num_param(p: &Value, key: &str) -> Option<f64> {
     .filter(|v: &f64| v.is_finite())
 }
 
+/// A distance param in points: a number, or a string with a unit (`"5 mm"`; bare numbers are
+/// points).
+pub(crate) fn len_param(p: &Value, key: &str) -> Option<f64> {
+    match p.get(key)? {
+        Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).filter(|v| v.is_finite()).or_else(|| num_param(p, key)),
+        _ => num_param(p, key),
+    }
+}
+
 fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
@@ -397,7 +406,7 @@ fn join_param(p: &Value, key: &str) -> po::Join {
 }
 
 fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
-    let delta = num_param(p, "offset").unwrap_or(10.0);
+    let delta = len_param(p, "offset").unwrap_or(10.0);
     if delta.abs() > 1e5 {
         return Err(bad("object.path.offsetPath", "offset out of range"));
     }
@@ -661,7 +670,7 @@ fn edit_paths(s: &mut Session, label: &str, f: impl Fn(&PathData) -> PathData) -
 
 fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     let opts = po::SimplifyOptions {
-        tolerance: num_param(p, "tolerance").unwrap_or(1.0).clamp(1e-4, 1e4),
+        tolerance: len_param(p, "tolerance").unwrap_or(1.0).clamp(1e-4, 1e4),
         corner_angle_deg: num_param(p, "cornerAngle").unwrap_or(30.0).clamp(0.0, 180.0),
         straight_lines: bool_or(p, "straightLines", false),
     };
@@ -682,7 +691,7 @@ fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
     if !(1.0..=500.0).contains(&rows) || !(1.0..=500.0).contains(&cols) {
         return Err(bad("object.path.splitIntoGrid", "rows and columns must be 1..500"));
     }
-    let gutter = num_param(p, "gutter").unwrap_or(12.0).max(0.0);
+    let gutter = len_param(p, "gutter").unwrap_or(12.0).max(0.0);
     let roots = selected_roots(s)?;
     let ids = s.edit("Split Into Grid", |d, sel| {
         let mut out = vec![];

@@ -111,7 +111,8 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let changed = form::param_fields(ui, d);
+    let (id, relative) = (d.str("__effect"), d.bool("relative"));
+    let changed = form::param_fields(ui, d, &|k| vectorcraft_effects::is_length(&id, k, relative), app.session.general_unit());
     ui.add_space(6.0);
     let mut pv = d.bool("preview");
     let pv_changed = ui.checkbox(&mut pv, "Preview").changed();

@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New…",
             ["File"],
             Some("Cmd+N"),
-            "{width?: pt=612, height?: pt=792, units?: \"Points\"|\"Inches\"|\"Millimeters\"|\"Pixels\"…, title?, artboards?: n, colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK)}",
+            "{width?: pt=612, height?: pt=792, units?: \"Points\"|\"Inches\"|\"Millimeters\"|\"Pixels\"… (default: prefs unitsGeneral), title?, artboards?: n, colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK)}",
             always,
             file_new
         ),
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Units",
             ["File", "Document Setup"],
             None,
-            "{units: \"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Pixels\"}",
+            "{units: \"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Pixels\"|\"Feet & Inches\"|\"Meters\"|\"Yards\"|\"Feet\"} the document's units: every length the UI shows and reads (General)",
             has_doc,
             set_units
         ),
@@ -64,9 +64,10 @@ fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut d = Document::new_with_mode(w, h, mode);
     d.title = str_param(p, "title").map(str::to_string).unwrap_or_else(|| s.next_untitled());
-    if let Some(u) = str_param(p, "units") {
-        d.units = parse_unit(u).ok_or_else(|| bad("file.new", format!("unknown units `{u}`")))?;
-    }
+    d.units = match str_param(p, "units") {
+        Some(u) => Unit::named(u).ok_or_else(|| bad("file.new", format!("unknown units `{u}`")))?,
+        None => s.default_units(),
+    };
     let n = p.get("artboards").and_then(Value::as_u64).unwrap_or(1).clamp(1, 1000) as usize;
     for i in 1..n {
         let r = vectorcraft_geom::Rect::new(0.0, 0.0, w, h) + Vec2::new(i as f64 * (w + 20.0), 0.0);
@@ -80,11 +81,6 @@ fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let i = s.add_document(d, None);
     Ok(json!({ "index": i }))
-}
-
-pub(crate) fn parse_unit(u: &str) -> Option<Unit> {
-    let n = u.to_ascii_lowercase();
-    Unit::ALL.into_iter().find(|x| x.label().to_ascii_lowercase() == n || x.suffix() == n)
 }
 
 fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
@@ -107,11 +103,8 @@ fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
-    let u = str_param(p, "units").and_then(parse_unit).ok_or_else(|| bad("document.setUnits", "unknown units"))?;
-    s.edit("Document Setup", |d, _| {
-        d.units = u;
-        Ok(())
-    })?;
+    let u = str_param(p, "units").and_then(Unit::named).ok_or_else(|| bad("document.setUnits", "unknown units"))?;
+    s.set_document_units(u)?;
     ok()
 }
 

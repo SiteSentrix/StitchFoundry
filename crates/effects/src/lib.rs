@@ -83,6 +83,19 @@ pub struct Lengths {
     pub absolute: &'static [&'static str],
 }
 
+impl Lengths {
+    /// The distance parameters while the effect's `relative` parameter is `relative`.
+    pub fn keys(&self, relative: bool) -> impl Iterator<Item = &'static str> + '_ {
+        self.always.iter().chain(if relative { &[][..] } else { self.absolute }).copied()
+    }
+}
+
+/// Is parameter `key` of effect `id` a distance in points while its `relative` parameter is
+/// `relative`?
+pub fn is_length(id: &str, key: &str, relative: bool) -> bool {
+    catalog_index().get(id).is_some_and(|info| info.lengths.keys(relative).any(|k| k == key))
+}
+
 /// The distance parameters of effect `id` (none for unknown effects).
 fn lengths_of(id: &str) -> Lengths {
     let always = |always| Lengths { always, absolute: &[] };
@@ -316,14 +329,13 @@ pub fn scale_effect(e: &mut Effect, s: f64) {
     let Some(info) = catalog_index().get(e.id.as_str()) else { return };
     let merged = merged_params(&e.id, &e.params);
     let relative = util::flag(&merged, "relative", false);
-    let keys = info.lengths.always.iter().chain(if relative { &[][..] } else { info.lengths.absolute });
-    for k in keys {
+    for k in info.lengths.keys(relative) {
         let v = util::num(&merged, k, f64::NAN);
         if v.is_finite() {
             if !e.params.is_object() {
                 e.params = Value::Object(Map::new());
             }
-            e.params[*k] = json!(v * s);
+            e.params[k] = json!(v * s);
         }
     }
 }

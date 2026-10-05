@@ -149,15 +149,45 @@ impl Unit {
     }
     /// Format a point value in this unit the way fields show it (e.g. `12.5 pt`, `3 in`).
     pub fn format(self, pt: f64) -> String {
-        let v = self.from_pt(pt);
-        let s = format!("{:.3}", v);
+        format!("{} {}", self.number(pt), self.suffix())
+    }
+    /// [`Unit::format`] without the suffix (`12.5`), for narrow fields.
+    pub fn number(self, pt: f64) -> String {
+        let s = format!("{:.3}", self.from_pt(pt));
         let s = s.trim_end_matches('0').trim_end_matches('.');
-        let s = if s == "-0" { "0" } else { s };
-        format!("{s} {}", self.suffix())
+        if s == "-0" { "0".into() } else { s.into() }
     }
     /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), simple `+ - * /` arithmetic.
     pub fn parse(self, s: &str) -> Option<f64> {
         parse_measure(s, self)
+    }
+    /// The value naming this unit in the Units preferences (`points`, `millimeters`,
+    /// `feetInches`).
+    pub fn key(self) -> &'static str {
+        match self {
+            Unit::Points => "points",
+            Unit::Picas => "picas",
+            Unit::Inches => "inches",
+            Unit::Millimeters => "millimeters",
+            Unit::Centimeters => "centimeters",
+            Unit::Pixels => "pixels",
+            Unit::FeetInches => "feetInches",
+            Unit::Meters => "meters",
+            Unit::Yards => "yards",
+            Unit::Feet => "feet",
+        }
+    }
+    /// The unit `name` names: its label, suffix or [`Unit::key`] in any case, ignoring spaces and
+    /// punctuation (`Millimeters`, `mm`, `Feet & Inches`, `feetInches`).
+    pub fn named(name: &str) -> Option<Unit> {
+        let letters = |s: &'static str| s.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase());
+        let given = || name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase());
+        Unit::ALL.into_iter().find(|u| letters(u.label()).eq(given()) || u.suffix().chars().eq(given()))
+    }
+    /// A point value as the canvas measurement labels show it: two decimals and the suffix
+    /// (`12.50 mm`).
+    pub fn readout(self, pt: f64) -> String {
+        format!("{:.2} {}", self.from_pt(pt), self.suffix())
     }
 }
 
@@ -165,7 +195,9 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     let s = s.trim();
     // Simple arithmetic on the right (Illustrator fields accept "10+5", "100/2", "3in*2").
     for op in ['+', '-', '*', '/'] {
-        if let Some(i) = s[1.min(s.len())..].rfind(op).map(|i| i + 1.min(s.len())) {
+        // Past the first character, so a leading sign isn't an operator.
+        let skip = s.chars().next().map_or(0, char::len_utf8);
+        if let Some(i) = s[skip..].rfind(op).map(|i| i + skip) {
             let (l, r) = (&s[..i], &s[i + 1..]);
             if l.trim().is_empty() {
                 continue;
@@ -901,3 +933,6 @@ mod tests {
         assert_eq!(Unit::Inches.format(144.0), "2 in");
     }
 }
+
+#[cfg(test)]
+mod tests_units;

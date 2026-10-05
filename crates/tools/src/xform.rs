@@ -86,7 +86,3 @@ pub fn paint_owner(doc: &Document, leaf: NodeId) -> NodeId {
         _ => leaf,
     }
 }
-
-pub(crate) fn fmt_pt(v: f64) -> String {
-    format!("{v:.2} pt")
-}

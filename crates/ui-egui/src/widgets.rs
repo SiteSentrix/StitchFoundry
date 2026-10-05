@@ -978,7 +978,7 @@ pub fn menu_item(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool
 pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value: Option<f64>, unit: Unit, width: f32) -> Option<Option<f64>> {
     let t = Tokens::get(ui.ctx());
     let id = ui.id().with(id);
-    let shown = value.map(|v| unit.format(v).trim_end_matches(unit.suffix()).trim_end().to_string()).unwrap_or_default();
+    let shown = value.map(|v| unit.number(v)).unwrap_or_default();
     let editing = ui.memory(|m| m.has_focus(id));
     let mut buf: String = if editing { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| shown.clone()) } else { shown.clone() };
     let enabled = ui.is_enabled();

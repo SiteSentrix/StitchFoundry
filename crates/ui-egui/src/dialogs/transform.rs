@@ -20,7 +20,7 @@ fn title(kind: &str) -> &'static str {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    form::grid(ui, d);
+    form::grid(ui, d, app.session.general_unit());
     ui.add_space(6.0);
     if d.kind == "scale" {
         form::check(ui, d, "uniform", "Uniform");

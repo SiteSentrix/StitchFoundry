@@ -3,7 +3,6 @@
 
 use egui::Ui;
 use serde_json::{Value, json};
-use vectorcraft_doc::Unit;
 
 use super::{pstate, selection_len, set_pstate};
 use crate::VectorcraftApp;
@@ -100,7 +99,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.run("object.distributeSpacing", json!({"axis": "horizontal", "spacing": sp})).ok();
                 }
                 ui.add_enabled_ui(key, |ui| {
-                    if let Some(v) = widgets::spin_field(ui, "align-spacing", Some(spacing), Unit::Points, 70.0, 1.0, 0.0, &[]) {
+                    if let Some(v) = widgets::spin_field(ui, "align-spacing", Some(spacing), app.session.general_unit(), 70.0, 1.0, 0.0, &[]) {
                         set_pstate(ui.ctx(), "align-spacing", Some(v));
                     }
                 });

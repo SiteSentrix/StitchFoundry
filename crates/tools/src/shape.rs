@@ -185,12 +185,12 @@ impl Tool for ShapeTool {
             vec![]
         }
     }
-    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         match self.start {
             Some(s) if self.began => {
                 let d = self.last - s;
                 let mut o = self.guides.clone();
-                o.push(Overlay::Measure { p: self.last, text: format!("W: {:.2} pt\nH: {:.2} pt", d.x.abs(), d.y.abs()) });
+                o.push(Overlay::Measure { p: self.last, text: cx.size_label(d.x.abs(), d.y.abs()) });
                 o
             }
             _ => vec![],

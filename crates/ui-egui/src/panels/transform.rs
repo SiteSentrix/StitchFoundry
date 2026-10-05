@@ -27,7 +27,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, "No document");
         return;
     };
-    let units = st.doc.units;
+    let units = app.session.general_unit();
     let bounds = app.session.transform_bounds(&st.selection.objects);
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
     let link: bool = pstate(ui.ctx(), "xf-link");
@@ -41,20 +41,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_enabled_ui(has, |ui| {
             egui::Grid::new("xfp-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
                 widgets::dim_label(ui, "X:");
-                if let Some(v) = widgets::num_field(ui, "xfp-x", rp.map(|p| p.x), units, 74.0) {
+                if let Some(v) = widgets::num_field(ui, "xfp-x", rp.map(|p| p.x), units, 80.0) {
                     app.run("object.setBounds", json!({"x": v, "reference": refi})).ok();
                 }
                 widgets::dim_label(ui, "W:");
-                if let Some(v) = widgets::num_field(ui, "xfp-w", bounds.map(|b| b.width()), units, 74.0) {
+                if let Some(v) = widgets::num_field(ui, "xfp-w", bounds.map(|b| b.width()), units, 80.0) {
                     app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link})).ok();
                 }
                 ui.end_row();
                 widgets::dim_label(ui, "Y:");
-                if let Some(v) = widgets::num_field(ui, "xfp-y", rp.map(|p| p.y), units, 74.0) {
+                if let Some(v) = widgets::num_field(ui, "xfp-y", rp.map(|p| p.y), units, 80.0) {
                     app.run("object.setBounds", json!({"y": v, "reference": refi})).ok();
                 }
                 widgets::dim_label(ui, "H:");
-                if let Some(v) = widgets::num_field(ui, "xfp-h", bounds.map(|b| b.height()), units, 74.0) {
+                if let Some(v) = widgets::num_field(ui, "xfp-h", bounds.map(|b| b.height()), units, 80.0) {
                     app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link})).ok();
                 }
                 ui.end_row();

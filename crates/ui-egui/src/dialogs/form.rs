@@ -2,16 +2,54 @@
 //! and the typed parameter editor of the command and effect dialogs.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::Unit;
 
 use crate::state::Dialog;
 use crate::theme::Tokens;
+
+/// Width of a dialog's value fields ([`text`] and [`length`], frame included).
+const FIELD_W: f32 = 132.0;
 
 /// A labelled text field bound to `d.fields[key]` (one grid row).
 pub(super) fn field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let t = Tokens::get(ui.ctx());
     ui.label(egui::RichText::new(label).color(t.text_dim));
-    text(ui, d, key, 120.0);
+    text(ui, d, key, FIELD_W - 12.0);
     ui.end_row();
+}
+
+/// A labelled [`length`] field (one grid row).
+pub(super) fn length_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, unit: Unit) {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new(label).color(t.text_dim));
+    length(ui, d, key, unit, FIELD_W);
+    ui.end_row();
+}
+
+/// A distance field `width` wide bound to `d.fields[key]`: shown and typed in `unit` (a typed unit,
+/// "5 mm", wins), kept in points (a string with a unit, "12 pt", also reads). Returns true when it
+/// changed.
+pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, key: &str, unit: Unit, width: f32) -> bool {
+    let value = d.fields.contains_key(key).then(|| d.f64(key, 0.0));
+    let Some(v) = crate::widgets::num_field(ui, ("dlg-len", key), value, unit, width) else { return false };
+    d.fields.insert(key.into(), json!(v));
+    true
+}
+
+/// The fields of the form dialogs ([`grid`]) that are distances, by dialog kind.
+fn lengths(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "move" => &["dx", "dy"],
+        "rectangle" | "ellipse" | "artboardOptions" => &["width", "height"],
+        "roundedRectangle" => &["width", "height", "radius"],
+        "polygon" => &["radius"],
+        "star" => &["radius1", "radius2"],
+        "lineSegment" => &["length"],
+        "offsetPath" => &["offset"],
+        "simplify" => &["tolerance"],
+        "splitIntoGrid" => &["gutter"],
+        _ => &[],
+    }
 }
 
 /// A text field `width` wide bound to `d.fields[key]`. Returns true when it changed.
@@ -43,15 +81,21 @@ pub(super) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     }
 }
 
-/// The generic dialog body: a text field per non-boolean value (positions and indices hidden).
-pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog) {
+/// The generic dialog body: a field per non-boolean value (positions and indices hidden), the
+/// distances in `unit`.
+pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
+    let lengths = lengths(&d.kind);
     egui::Grid::new("dlg").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
         let keys: Vec<(String, Value)> = d.fields.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         for (k, v) in keys {
             if k == "x" || k == "y" || k == "origin" || k == "index" || v.is_boolean() {
                 continue;
             }
-            field(ui, d, &k, &humanize(&k));
+            if lengths.contains(&k.as_str()) {
+                length_field(ui, d, &k, &humanize(&k), unit);
+            } else {
+                field(ui, d, &k, &humanize(&k));
+            }
         }
     });
 }
@@ -61,9 +105,10 @@ pub(super) fn params(d: &Dialog) -> Value {
     Value::Object(d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect())
 }
 
-/// Generic editor for command/effect parameters: numbers, booleans, strings and colours.
-/// Returns true when a value changed.
-pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+/// Generic editor for command/effect parameters: numbers, booleans, strings and colours; the
+/// parameters `is_length` names are distances shown and typed in `unit`. Returns true when a
+/// value changed.
+pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog, is_length: &dyn Fn(&str) -> bool, unit: Unit) -> bool {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     egui::Grid::new("fxgrid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
@@ -76,6 +121,11 @@ pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     d.fields.insert(k, m);
                     changed = true;
                 }
+                ui.end_row();
+                continue;
+            }
+            if is_length(&k) {
+                changed |= length(ui, d, &k, unit, 140.0);
                 ui.end_row();
                 continue;
             }

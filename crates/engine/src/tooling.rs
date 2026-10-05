@@ -65,6 +65,7 @@ impl Session {
         R: Default,
     {
         let Some(st) = self.active.and_then(|i| self.docs.get(i)) else { return R::default() };
+        let (unit, stroke_unit) = (self.general_unit(), self.stroke_unit());
         let cx = ToolContext {
             doc: &st.doc,
             selection: &st.selection,
@@ -85,6 +86,8 @@ impl Session {
             freeform_point: self.selected_freeform_point(),
             raster_sample: self.prefs.eyedropper.sample_size,
             preview_bounds: self.prefs.use_preview_bounds,
+            unit,
+            stroke_unit,
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
