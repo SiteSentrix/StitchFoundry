@@ -104,9 +104,9 @@ fn pdf_a_refuses_pdf_2() {
 #[test]
 fn options_not_applied_yet_and_document_features_warn() {
     let mut s = session(1);
-    let w = warnings(&export(&mut s, json!({"thumbnails": true, "marks": {"trim": true}})));
+    let w = warnings(&export(&mut s, json!({"thumbnails": true, "fastWebView": true, "marks": {"trim": true}})));
     assert_eq!(w.len(), 2, "{w:?}");
-    assert!(w.iter().any(|w| w.contains("thumbnails")) && w.iter().any(|w| w.contains("marks")));
+    assert!(w.iter().any(|w| w.contains("thumbnails")) && w.iter().any(|w| w.contains("fast web view")), "printer's marks are drawn: no warning");
     // A pattern stroke is written as its tiles clipped to the stroke: nothing to report.
     let tile = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [tile]})).unwrap();
