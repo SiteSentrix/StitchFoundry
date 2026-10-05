@@ -1,11 +1,13 @@
 //! Printing through the platform. The host app installs a [`PrintService`] ([`crate::Services`]):
 //! the desktop hands the job to the system's print spooler, the web to the browser's print dialog.
 //! `file.print` with settings sends the engine's print-ready PDF (`file.print` in the engine) to
-//! it, or saves the PDF when asked to (`toFile`, `path`) or when there is no print service;
-//! `print.printers` lists the printers.
+//! it, or saves the PDF when asked to (`toFile`, `path`) or when there is no print service; a
+//! PostScript file (`format: "postscript"`, or a `.ps` path) is always saved. `print.printers`
+//! lists the printers.
 
 use serde::Serialize;
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::fileio;
 
 use crate::{VectorcraftApp, io};
 
@@ -50,19 +52,28 @@ pub fn printers(app: &mut VectorcraftApp) -> Value {
 
 /// `file.print` with settings: print the active document with `settings` (over the document's)
 /// on `printer` (default: the system's default), or save the job as a PDF at `path` (else a picked
-/// file, the web downloads it) with `toFile`, a `path` or no print service.
+/// file, the web downloads it) with `toFile`, a `path` or no print service. A PostScript file
+/// (`format: "postscript"` or a `.ps` path, at `level`, flattened with `flattenerPreset`) is saved
+/// the same way.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
-    let to_file = p.get("toFile").and_then(Value::as_bool).unwrap_or(false) || s("path").is_some();
+    let postscript = s("format").as_deref() == Some("postscript") || s("path").is_some_and(|path| fileio::extension(&path) == "ps");
+    let to_file = p.get("toFile").and_then(Value::as_bool).unwrap_or(false) || s("path").is_some() || postscript;
     let mut q = json!({});
-    if let Some(set) = p.get("settings").filter(|v| !v.is_null()) {
-        q["settings"] = set.clone();
+    for k in ["settings", "format", "level", "flattenerPreset"] {
+        if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+            q[k] = v.clone();
+        }
+    }
+    if postscript {
+        // The path is taken off before the engine runs: it can't tell the format from it.
+        q["format"] = json!("postscript");
     }
     if to_file || app.services.print.is_none() {
         if let Some(path) = s("path") {
             q["path"] = json!(path);
         }
-        let (path, mut v) = io::run_to_file(app, "file.print", "pdf", q)?;
+        let (path, mut v) = io::run_to_file(app, "file.print", if postscript { "ps" } else { "pdf" }, q)?;
         io::report_saved(app, &path, &v);
         if !to_file {
             app.ui.status.push_str(" (printing isn't available here: the job was saved as a PDF)");

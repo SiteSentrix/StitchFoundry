@@ -152,10 +152,7 @@ fn parse(p: &Value) -> Result<Settings> {
     let overprint = choice("overprints", q.overprints.clone(), Overprint::from_id, d.overprint, "preserve or discard")?;
     let mut flatten = flattener(&q, &[])?;
     flatten.preserve_overprints &= overprint == Overprint::Preserve;
-    let level = q.level.as_ref().map(|v| match v {
-        Value::String(s) => s.clone(),
-        other => other.to_string(),
-    });
+    let level = q.level.as_ref().map(super::dxf::text);
     let eps = EpsOptions {
         level: choice("level", level, Level::from_id, d.level, "2 or 3")?,
         preview: choice("previewFormat", q.preview_format.clone(), Preview::from_id, d.preview, "none, tiffBw or tiffColor")?,

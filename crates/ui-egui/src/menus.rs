@@ -507,7 +507,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.print",
         "Print…",
         "Cmd+P",
-        "{} open the Print dialog (dialog `print`: the print.setup settings, preset (setting it loads that print preset; Save Preset… saves them as one), printer, toFile; Print keeps the settings with the document and prints, Done (discard: true) only keeps them); with params {settings? (over the document's), printer? (print.printers name; \"\" the default), toFile?, path?} print without it: the print-ready PDF (engine file.print) goes to the printer → {pages, printer, printed: true, warnings}; with toFile, a path or no printing here (no print service) it is saved as a PDF at path (else a picked file, the web downloads it) → {path, pages, printed: false, warnings}",
+        "{} open the Print dialog (dialog `print`: the print.setup settings, preset (setting it loads that print preset; Save Preset… saves them as one), printer, toFile; Print keeps the settings with the document and prints, Done (discard: true) only keeps them); with params {settings? (over the document's), printer? (print.printers name; \"\" the default), toFile?, path?, format?: pdf|postscript, level?, flattenerPreset? (as engine file.print)} print without it: the print-ready PDF (engine file.print) goes to the printer → {pages, printer, printed: true, warnings}; with toFile, a path or no printing here (no print service) it is saved as a PDF at path (else a picked file, the web downloads it) → {path, pages, printed: false, warnings}; a PostScript file (format postscript, or a .ps path) is always saved that way",
     ),
     (
         "print.printers",

@@ -1306,6 +1306,18 @@ as they do for art larger than the imageable area and for overprints in composit
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.pdf","settings":{"copies":2}}}}
 ```
 
+Print to a PostScript file: `file.print {format: "postscript"}` (the default for a `.ps` path) writes the same job as
+PostScript, `level: 3` (default) or `2`, answering `format: "postscript"` (`"pdf"` otherwise; in the app the job is
+saved, not sent to a printer). The file follows the
+DSC: `%%Pages` is the page count (copies included), each `%%Page` sets its paper size, separations name their ink
+(`%%PlateColor`) and set its halftone screen (`frequency`, `angle`, a round dot), a fixed flatness is written
+(`setflat`), negatives invert the transfer, and the marks print in Registration. PostScript has no transparency: it
+is flattened first with `flattenerPreset` (`medium` by default; `high`, `low` or a saved one), with a warning.
+
+```json
+{"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.ps","level":2,"settings":{"output":{"mode":"separations"}}}}}
+```
+
 ## Data Recovery
 
 Modified documents get recovery copies (`file.recovery.save`; the app runs it every `autosaveInterval` minutes while

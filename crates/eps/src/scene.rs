@@ -132,6 +132,16 @@ impl<'a> Scene<'a> {
         for l in &doc.layers {
             self.node(l, false);
         }
+        self.page()
+    }
+
+    /// Write one object (art outside the document: a print job's marks) instead of the layers.
+    pub fn run_node(mut self, n: &Node) -> Page {
+        self.node(n, false);
+        self.page()
+    }
+
+    fn page(self) -> Page {
         let custom = self.spots.iter().filter(|(n, _)| n != vectorcraft_color::swatch::REGISTRATION).cloned().collect();
         Page { setup: self.setup, body: self.body, custom, warnings: self.warnings }
     }

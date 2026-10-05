@@ -1,13 +1,16 @@
-//! File → Print as a print-ready PDF (`file.print`), what it would print (`print.preview`) and the
-//! print settings saved with the document (`print.setup`, [`vectorcraft_doc::Document::print_setup`]).
+//! File → Print as a print-ready PDF or a PostScript file (`file.print`), what it would print
+//! (`print.preview`) and the print settings saved with the document (`print.setup`,
+//! [`vectorcraft_doc::Document::print_setup`]).
 
 use serde::Deserialize;
 use serde_json::{Value, json};
 use vectorcraft_doc::Document;
+use vectorcraft_eps::{Level, PrintJob, PrintPage};
 use vectorcraft_pdf::{PrintOptions, PrintSettings};
 
 use super::fileio::pdf::{merge, pdf_error};
-use super::fileio::write_or_return;
+use super::fileio::{extension, write_or_return};
+use super::flatten::{FlattenOptions, flatten_document};
 use super::*;
 
 const SETUP: &str = "print.setup";
@@ -37,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print",
             [],
             Some("Cmd+P"),
-            "{settings?: {…print.setup settings} (over the document's), path?} print the document as a print-ready PDF, one page per sheet of paper (per tile, per ink, per copy) → {pages, path, bytes, warnings}; no path → {dataBase64, bytes, pages, warnings}. Raster effects print at the document's raster effects resolution; halftone screens and flatness are left to the output device",
+            "{settings?: {…print.setup settings} (over the document's), path?, format?: pdf (default: a print-ready PDF) | postscript (the default for a .ps path: a PostScript file with DSC comments, %%Pages, a page per sheet with its paper size, marks, separations with their ink and halftone screen, the fixed flatness, negatives), level?: 3|2 (the PostScript language level), flattenerPreset?: \"medium\" (PostScript: the preset transparency is flattened with — high, low or a saved one, see flattener.presets.list)} print the document, one page per sheet of paper (per tile, per ink, per copy) → {pages, format, path, bytes, warnings}; no path → {dataBase64, bytes, pages, format, warnings}. Raster effects print at the document's raster effects resolution; a PDF leaves halftone screens and flatness to the output device",
             has_doc,
             print
         ),
@@ -93,13 +96,76 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(v)
 }
 
+const PRINT: &str = "file.print";
+
+/// Whether `file.print` writes PostScript: `format`, else a `.ps` path.
+fn to_postscript(p: &Value) -> Result<bool> {
+    match str_param(p, "format") {
+        None => Ok(str_param(p, "path").is_some_and(|path| extension(path) == "ps")),
+        Some("postscript") => Ok(true),
+        Some("pdf") => Ok(false),
+        Some(f) => Err(bad(PRINT, format!("format `{f}`: pdf or postscript"))),
+    }
+}
+
 fn print(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "file.print";
+    let postscript = to_postscript(p)?;
+    let flattener = if postscript {
+        let preset = str_param(p, "flattenerPreset").unwrap_or("medium");
+        Some(
+            FlattenOptions::find_preset(preset, &s.prefs.flattener_presets)
+                .ok_or_else(|| bad(PRINT, format!("flattenerPreset `{preset}`: high, medium, low or a saved one (see flattener.presets.list)")))?,
+        )
+    } else {
+        None
+    };
     let doc = &s.doc()?.doc;
-    let set = settings(C, doc, p)?;
+    let set = settings(PRINT, doc, p)?;
     // Raster effects print as images at the document's raster effects resolution.
     let flat = super::rasterfx::flatten_raster_effects(doc);
-    let r =
-        vectorcraft_pdf::print(flat.as_ref().unwrap_or(doc), &PrintOptions { settings: set, ..Default::default() }).map_err(|e| pdf_error(C, e))?;
-    write_or_return(str_param(p, "path"), &r.bytes, json!({ "pages": r.pages, "warnings": r.warnings }))
+    let doc = flat.as_ref().unwrap_or(doc);
+    let path = str_param(p, "path");
+    let Some(flattener) = flattener else {
+        let r = vectorcraft_pdf::print(doc, &PrintOptions { settings: set, ..Default::default() }).map_err(|e| pdf_error(PRINT, e))?;
+        return write_or_return(path, &r.bytes, json!({ "pages": r.pages, "format": "pdf", "warnings": r.warnings }));
+    };
+    let level = match p.get("level").filter(|v| !v.is_null()) {
+        Some(v) => {
+            let t = super::fileio::dxf::text(v);
+            Level::from_id(&t).ok_or_else(|| bad(PRINT, format!("level `{t}`: 2 or 3")))?
+        }
+        None => Level::default(),
+    };
+    // PostScript has no transparency.
+    let flat = flatten_document(doc, &flattener)?;
+    let mut warnings = vec![];
+    if flat.is_some() && doc.layers.iter().any(|l| l.shows_transparency()) {
+        warnings.push("transparency is flattened into opaque art and images (PostScript has none): see flattenerPreset".to_string());
+    }
+    let flatness = (!set.graphics.auto_flatness).then_some(set.graphics.flatness);
+    let plan = vectorcraft_pdf::plan(flat.as_ref().unwrap_or(doc), &PrintOptions { settings: set, postscript: true, ..Default::default() })
+        .map_err(|e| pdf_error(PRINT, e))?;
+    let pages: Vec<PrintPage> = plan
+        .sheets
+        .iter()
+        .map(|sh| PrintPage {
+            doc: sh.plate.and_then(|i| plan.plates.get(i)).unwrap_or(&plan.doc),
+            size: sh.size,
+            view: sh.view,
+            window: sh.window,
+            place: sh.place,
+            area: sh.area,
+            marks: sh.marks.as_ref(),
+            negative: sh.negative,
+            ink: sh.ink.as_ref().map(|i| (i.name.as_str(), i.frequency, i.angle)),
+        })
+        .collect();
+    let job = PrintJob { level, title: plan.title.clone(), created: plan.created, flatness };
+    let out = vectorcraft_eps::print(&pages, &plan.order, &job).map_err(|e| bad(PRINT, e))?;
+    for w in plan.warnings.iter().chain(&out.warnings) {
+        if !warnings.contains(w) {
+            warnings.push(w.clone());
+        }
+    }
+    write_or_return(path, &out.bytes, json!({ "pages": plan.order.len(), "format": "postscript", "warnings": warnings }))
 }

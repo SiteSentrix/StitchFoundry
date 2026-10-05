@@ -126,7 +126,7 @@ struct Params {
 }
 
 /// A string or number param as text (`2018` and `"2018"` alike).
-fn text(v: &Value) -> String {
+pub(crate) fn text(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
         other => other.to_string(),

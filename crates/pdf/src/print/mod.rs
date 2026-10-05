@@ -15,7 +15,8 @@
 //!   colours keep their numbers.
 //!
 //! Halftone screens and flatness are left to the output device (warnings say so). [`preview`]
-//! lists the pages, tiles and inks without writing the file.
+//! lists the pages, tiles and inks without writing the file; [`plan`] lays the job out for other
+//! writers (PostScript), which can write screens and flatness themselves.
 
 mod layout;
 mod plates;
@@ -24,6 +25,7 @@ mod settings;
 use std::borrow::Cow;
 use std::sync::Arc;
 
+use kurbo::{Affine, Rect};
 use serde::Serialize;
 use vectorcraft_doc::marks::PrinterMarks;
 use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
@@ -51,6 +53,9 @@ pub struct PrintOptions {
     pub created: Option<i64>,
     /// Content streams uncompressed (readable operators, for tests and debugging).
     pub uncompressed: bool,
+    /// The job is written as PostScript, which carries halftone screens and flatness: no
+    /// warnings that they are left to the device.
+    pub postscript: bool,
 }
 
 /// A printed job.
@@ -141,7 +146,7 @@ pub fn keep_layers(nodes: &mut Vec<Arc<Node>>, which: PrintLayers) {
 }
 
 impl<'a> Job<'a> {
-    fn new(doc: &'a Document, set: &PrintSettings) -> Result<Self, PdfError> {
+    fn new(doc: &'a Document, set: &PrintSettings, postscript: bool) -> Result<Self, PdfError> {
         set.check()?;
         // Live effects print as their result (raster effects are rendered by the app first).
         let mut doc = vectorcraft_effects::bake_document(doc).map_or(Cow::Borrowed(doc), Cow::Owned);
@@ -163,13 +168,13 @@ impl<'a> Job<'a> {
         if separations && doc.color_mode == ColorMode::Rgb {
             warnings.push("the document is RGB: separations convert its colours to CMYK with the colour settings".into());
         }
-        if separations && set.output.inks.iter().any(|i| i.frequency.is_some() || i.angle.is_some()) {
+        if !postscript && separations && set.output.inks.iter().any(|i| i.frequency.is_some() || i.angle.is_some()) {
             warnings.push("ink frequencies and angles are not written as halftone screens yet: the output device's screens apply".into());
         }
         if !separations && doc.layers.iter().any(|l| l.has_overprint()) {
             warnings.push("overprinting fills and strokes print as knockouts in composite output (separations honour them)".into());
         }
-        if !set.graphics.auto_flatness {
+        if !postscript && !set.graphics.auto_flatness {
             warnings.push("a fixed flatness is not written yet: the output device flattens curves".into());
         }
         Ok(Self { doc, layouts, tiles, inks, plates, sheets, warnings })
@@ -180,13 +185,14 @@ impl<'a> Job<'a> {
         self.inks.get(*self.plates.get(plate?)?)
     }
 
-    /// Every page, copies included, in print order: (layout, ink).
-    fn pages(&self, set: &PrintSettings) -> Vec<(usize, Option<usize>)> {
+    /// Every page, copies included, in print order: indices into `sheets`.
+    fn order(&self, set: &PrintSettings) -> Vec<usize> {
         let copies = set.copies.max(1) as usize;
-        let mut v: Vec<_> = if set.collate {
-            (0..copies).flat_map(|_| self.sheets.iter().copied()).collect()
+        let sheets = 0..self.sheets.len();
+        let mut v: Vec<usize> = if set.collate {
+            (0..copies).flat_map(|_| sheets.clone()).collect()
         } else {
-            self.sheets.iter().flat_map(|s| std::iter::repeat_n(*s, copies)).collect()
+            sheets.flat_map(|s| std::iter::repeat_n(s, copies)).collect()
         };
         if set.reverse {
             v.reverse();
@@ -197,7 +203,7 @@ impl<'a> Job<'a> {
 
 /// What printing `doc` with `set` makes: pages, tiles, inks and warnings.
 pub fn preview(doc: &Document, set: &PrintSettings) -> Result<PrintPreview, PdfError> {
-    let job = Job::new(doc, set)?;
+    let job = Job::new(doc, set, false)?;
     let sheets = job
         .sheets
         .iter()
@@ -220,61 +226,136 @@ pub fn preview(doc: &Document, set: &PrintSettings) -> Result<PrintPreview, PdfE
     Ok(PrintPreview { pages: job.sheets.len() * set.copies.max(1) as usize, sheets, tiles: job.tiles, inks: job.inks, warnings: job.warnings })
 }
 
+/// One sheet of a laid-out job, ready for a writer (PDF here, PostScript in the EPS writer).
+#[derive(Clone, Debug)]
+pub struct PlannedSheet {
+    /// The page size in points.
+    pub size: (f64, f64),
+    /// The TrimBox and BleedBox, in page space (y down from the top-left corner).
+    pub trim: Rect,
+    pub bleed: Rect,
+    /// Drawing space → page space.
+    pub view: Affine,
+    /// The part of the drawing space that shows (a tile): art and marks are clipped to it.
+    pub window: Option<Rect>,
+    /// Document space → drawing space.
+    pub place: Affine,
+    /// The art drawn, in document space (the bleed box): what lies outside it is left out.
+    pub area: Rect,
+    /// Printer's marks, in drawing space (separated for the sheet's ink).
+    pub marks: Option<Node>,
+    /// Invert the page: paper black, ink clear (a film negative).
+    pub negative: bool,
+    /// The plate the sheet prints ([`PrintPlan::plates`]); `None`: composite.
+    pub plate: Option<usize>,
+    /// The ink of a separation, with its screen.
+    pub ink: Option<PrintInk>,
+}
+
+impl PlannedSheet {
+    fn sheet(&self) -> Sheet<'_> {
+        Sheet {
+            size: self.size,
+            trim: self.trim,
+            bleed: self.bleed,
+            view: self.view,
+            window: self.window,
+            place: self.place,
+            area: self.area,
+            clip: true,
+            marks: self.marks.as_ref(),
+            negative: self.negative,
+        }
+    }
+}
+
+/// A laid-out job: the documents it draws, its sheets and the order they print in.
+#[derive(Debug)]
+pub struct PrintPlan<'a> {
+    /// The document as it prints: live effects applied, the layers that print.
+    pub doc: Cow<'a, Document>,
+    /// With separations, one grey document per ink that prints (its coverage).
+    pub plates: Vec<Document>,
+    /// One copy's sheets.
+    pub sheets: Vec<PlannedSheet>,
+    /// Every page in print order, copies included: indices into `sheets`.
+    pub order: Vec<usize>,
+    pub title: String,
+    /// When the job ran (Unix seconds, UTC).
+    pub created: Option<i64>,
+    pub warnings: Vec<String>,
+}
+
+/// Lay out printing `doc` as `opts` say, for a writer to draw.
+pub fn plan<'a>(doc: &'a Document, opts: &PrintOptions) -> Result<PrintPlan<'a>, PdfError> {
+    let set = &opts.settings;
+    let job = Job::new(doc, set, opts.postscript)?;
+    let title = opts.title.clone().unwrap_or_else(|| job.doc.title.clone());
+    let created = opts.created.or_else(vectorcraft_doc::metadata::now_unix);
+    let sep = Separator::new(&job.doc, set);
+    let plates: Vec<Document> = (0..job.plates.len()).filter_map(|p| job.ink(Some(p))).map(|i| sep.plate(&i.name)).collect();
+    let marks = set.marks.printer_marks();
+    let sheets = job
+        .sheets
+        .iter()
+        .filter_map(|(l, plate)| {
+            let l = job.layouts.get(*l)?;
+            let ink = job.ink(*plate);
+            let art = marks_art(&job.doc, &marks, l, ink, &title, created).map(|mut art| {
+                if let Some(ink) = ink {
+                    sep.node(&ink.name, &mut art);
+                }
+                art
+            });
+            Some(PlannedSheet {
+                size: l.size,
+                trim: l.page_trim,
+                bleed: l.page_bleed,
+                view: l.view,
+                window: l.window,
+                place: l.place,
+                area: l.area,
+                marks: art,
+                negative: set.output.image == PrintImage::Negative,
+                plate: *plate,
+                ink: ink.cloned(),
+            })
+        })
+        .collect();
+    let order = job.order(set);
+    Ok(PrintPlan { plates, sheets, order, title, created, warnings: job.warnings, doc: job.doc })
+}
+
 /// Print `doc` to a PDF as `opts` say.
 pub fn print(doc: &Document, opts: &PrintOptions) -> Result<PrintReport, PdfError> {
-    let set = &opts.settings;
-    let job = Job::new(doc, set)?;
-    let doc = &*job.doc;
+    let plan = plan(doc, opts)?;
+    let doc = &*plan.doc;
     let pdf = PdfSettings { compression: CompressionSettings { compress_text: !opts.uncompressed, ..Default::default() }, ..Default::default() };
-    let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
-    let created = opts.created.or_else(vectorcraft_doc::metadata::now_unix);
-    let separations = set.output.mode == OutputMode::Separations;
-    let mut w = Writer::new(doc, &pdf, &title, created, !separations && doc.color_mode == ColorMode::Cmyk)?;
+    let separations = opts.settings.output.mode == OutputMode::Separations;
+    let mut w = Writer::new(doc, &pdf, &plan.title, plan.created, !separations && doc.color_mode == ColorMode::Cmyk)?;
     // One exporter per ink (one for composite), each drawing its own document.
-    let sep = Separator::new(doc, set);
-    let plates: Vec<Document> = (0..job.plates.len()).filter_map(|p| job.ink(Some(p))).map(|i| sep.plate(&i.name)).collect();
     let mut exporters: Vec<Exporter> =
-        if separations { plates.iter().map(|d| Exporter::new(d, &pdf)).collect() } else { vec![Exporter::new(doc, &pdf)] };
+        if separations { plan.plates.iter().map(|d| Exporter::new(d, &pdf)).collect() } else { vec![Exporter::new(doc, &pdf)] };
     for ex in &mut exporters {
         ex.non_printing = true;
-        ex.intent = set.color.intent;
+        ex.intent = opts.settings.color.intent;
     }
-    let marks = set.marks.printer_marks();
-    let pages = job.pages(set);
-    for (l, plate) in &pages {
-        let (Some(l), Some(ex)) = (job.layouts.get(*l), exporters.get_mut(plate.unwrap_or(0))) else { continue };
-        let ink = job.ink(*plate);
-        let art = marks_art(doc, &marks, l, ink, &title, created).map(|mut art| {
-            if let Some(ink) = ink {
-                sep.node(&ink.name, &mut art);
-            }
-            art
-        });
-        let sheet = Sheet {
-            size: l.size,
-            trim: l.page_trim,
-            bleed: l.page_bleed,
-            view: l.view,
-            window: l.window,
-            place: l.place,
-            area: l.area,
-            clip: true,
-            marks: art.as_ref(),
-            negative: set.output.image == PrintImage::Negative,
-        };
-        w.page(ex, &sheet)?;
+    for &i in &plan.order {
+        let Some(s) = plan.sheets.get(i) else { continue };
+        let Some(ex) = exporters.get_mut(s.plate.unwrap_or(0)) else { continue };
+        w.page(ex, &s.sheet())?;
     }
     for ex in exporters {
         w.absorb(ex);
     }
     let (bytes, more) = w.finish()?;
-    let mut warnings = job.warnings;
+    let mut warnings = plan.warnings;
     for m in more {
         if !warnings.contains(&m) {
             warnings.push(m);
         }
     }
-    Ok(PrintReport { bytes, pages: pages.len(), warnings })
+    Ok(PrintReport { bytes, pages: plan.order.len(), warnings })
 }
 
 /// The printer's marks of page `l` (`None` without marks), with its page information: the
