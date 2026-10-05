@@ -414,6 +414,9 @@ pub enum TextKind {
 /// A text object. `runs` split into paragraphs at `\n`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TextObject {
+    /// Top-to-bottom, right-to-left writing. Defaults to horizontal for old documents.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub vertical: bool,
     pub kind: TextKind,
     /// Maps text space (origin = first baseline start for point type) to the document.
     pub xf: Affine,
@@ -437,6 +440,7 @@ pub struct TextObject {
 impl TextObject {
     pub fn point(origin: Point, text: &str, style: CharStyle) -> Self {
         Self {
+            vertical: false,
             kind: TextKind::Point,
             xf: Affine::translate(origin.to_vec2()),
             runs: vec![TextRun { text: text.into(), style }],

@@ -50,6 +50,7 @@ use Item::Sep;
 
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
+    ("app.language", "Interface Language", "", "{lang: en|ja} — persistent interface language"),
     ("file.open", "Open…", "Cmd+O", "{path?}"),
     (
         "file.save",
@@ -671,6 +672,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    if id == "app.language" {
+        let language = p.get("lang").and_then(Value::as_str).and_then(crate::i18n::Language::parse);
+        let Some(language) = language else { return Some(Err("lang must be en or ja".into())) };
+        app.ui.language = language;
+        return Some(Ok(json!(language)));
+    }
     if let Some(r) = crate::panels::character::intercept_text_command(app, id) {
         return Some(r);
     }
@@ -1102,8 +1109,19 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
+    if id == "app.language" {
+        return Some(p.get("lang").and_then(Value::as_str).and_then(crate::i18n::Language::parse) == Some(app.ui.language));
+    }
     let v = &app.ui.view;
     Some(match id {
+        "type.orientation.vertical" | "type.orientation.horizontal" => {
+            let st = app.session.active()?;
+            let t = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+                Some(vectorcraft_engine::doc::NodeKind::Text(t)) => Some(t),
+                _ => None,
+            })?;
+            t.vertical == (id == "type.orientation.vertical")
+        }
         "view.outline" => v.outline,
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
@@ -1432,6 +1450,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Join Our Discord", "help.discord"),
                 Sep,
                 c("Settings…", "edit.preferences"),
+                sub("Language", vec![cp("English", "app.language", json!({"lang": "en"})), cp("日本語", "app.language", json!({"lang": "ja"}))]),
                 Sep,
                 sub("UI Brightness", Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({"brightness": b.id()}))).collect()),
                 Sep,
@@ -1837,7 +1856,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Fill with Placeholder Text", "type.fillPlaceholder"),
                 Sep,
                 c("Show Hidden Characters", "type.hiddenCharacters"),
-                sub("Type Orientation", vec![todo("Horizontal"), todo("Vertical")]),
+                sub("Type Orientation", vec![c("Horizontal", "type.orientation.horizontal"), c("Vertical", "type.orientation.vertical")]),
             ],
         ),
         (
@@ -2094,9 +2113,9 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         .ui(ui, |ui| {
             for (i, (title, items)) in tree.iter().enumerate() {
                 let text = if i == 0 {
-                    egui::RichText::new(*title).font(theme::semibold(13.0)).color(t.text)
+                    egui::RichText::new(app.ui.language.tr(title)).font(theme::semibold(13.0)).color(t.text)
                 } else {
-                    egui::RichText::new(*title).size(13.0).color(t.text)
+                    egui::RichText::new(app.ui.language.tr(title)).size(13.0).color(t.text)
                 };
                 ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked));
             }
@@ -2126,10 +2145,10 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
                 ui.separator();
             }
             Item::Header(h) => {
-                ui.label(egui::RichText::new(*h).size(11.0).color(t.text_dim));
+                ui.label(egui::RichText::new(app.ui.language.tr(h)).size(11.0).color(t.text_dim));
             }
             Item::Sub(label, children) => {
-                ui.menu_button(*label, |ui| {
+                ui.menu_button(app.ui.language.tr(label), |ui| {
                     widgets::menu_scroll(ui, |ui| {
                         ui.set_min_width(200.0);
                         render_items(app, ui, children, clicked);
@@ -2138,7 +2157,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             }
             Item::Todo(label, sc) => {
                 ui.add_enabled_ui(false, |ui| {
-                    ui.add(egui::Button::new(*label).shortcut_text(pretty_shortcut(sc)));
+                    ui.add(egui::Button::new(app.ui.language.tr(label)).shortcut_text(pretty_shortcut(sc)));
                 })
                 .response
                 .on_disabled_hover_text("Coming soon — tracked in the parity plan");
@@ -2150,6 +2169,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
                     continue;
                 }
                 let label = dynamic_label(app, id, label);
+                let label = app.ui.language.tr(&label).to_string();
                 let sc = item_shortcut(id, p).map(pretty_shortcut).unwrap_or_default();
                 let chk = checked(app, id, p);
                 let text = match chk {

@@ -221,3 +221,15 @@ command, gesture and dialog drivable by agents (MCP, CLI, control channel).
 
 ## How to update this file
 After each milestone task lands, update the status column and remaining estimates, and move items into "Shipped so far". Keep estimates honest: re-derive them from what remains, never from wishful velocity.
+
+### Interface localization
+
+The VectorCraft > Language submenu switches English/Japanese and persists in UI state (`app.language {lang: en|ja}`). Both macOS native and in-window menus translate core labels; the native menu refreshes after a language change. Bundled OFL Shippori Mincho provides Japanese UI/document glyph fallback without system fonts. Untranslated labels use English. Broader dialog/panel translation and vertical/CJK composition remain open.
+
+Vertical point/area/path type tools now create persisted vertical text. Type > Orientation
+switches existing objects. Point/area text flows down columns progressing right to left, with
+upright Japanese glyphs and vert/vrt2 alternates. Hit testing, caret/selection and arrow keys
+use the writing axes. Vertical path type turns glyphs across the baseline path. SVG exports
+vertical text as outlines to preserve appearance; native documents retain editable text.
+This is initial vertical support, without kinsoku, ruby, tate-chu-yoko, vertical font metrics
+or full mixed-script Unicode vertical orientation.

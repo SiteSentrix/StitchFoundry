@@ -254,6 +254,10 @@ pub fn install_fonts(ctx: &egui::Context) {
     let mut mono = vec!["JetBrainsMono".to_string()];
     mono.extend(fallback);
     fonts.families.insert(FontFamily::Name(FONT_MONO.into()), mono);
+    add(&mut fonts, "japanese", vectorcraft_text::SHIPPORI_MINCHO_REGULAR);
+    for stack in fonts.families.values_mut() {
+        stack.push("japanese".into());
+    }
     ctx.set_fonts(fonts);
 }
 

@@ -15,6 +15,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 pub mod find_font;
+pub mod i18n;
 pub mod icon_data;
 pub mod icons;
 pub mod io;

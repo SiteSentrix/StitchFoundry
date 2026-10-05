@@ -13,6 +13,18 @@ use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
+        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
+            orientation(s, p, true)
+        }),
+        cmd!(
+            "type.orientation.horizontal",
+            "Horizontal",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set horizontal writing",
+            has_selection,
+            |s, p| orientation(s, p, false)
+        ),
         cmd!(
             "type.createOutlines",
             "Create Outlines",
@@ -59,6 +71,21 @@ pub fn specs() -> Vec<CommandSpec> {
             set_style
         ),
     ]
+}
+
+fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
+    let ids = text_targets(s, p, "Text Orientation")?;
+    s.edit("Text Orientation", |d, _| {
+        for id in &ids {
+            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
+                return Err(EngineError::NoNode(*id));
+            };
+            t.vertical = vertical;
+            refresh_bounds(t);
+        }
+        Ok(())
+    })?;
+    Ok(json!({"vertical": vertical, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Recompute the layout bounds cache after a text edit.

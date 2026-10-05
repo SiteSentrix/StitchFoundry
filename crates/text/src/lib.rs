@@ -20,7 +20,7 @@ mod shape;
 pub mod thread;
 
 pub use features::OtFeatures;
-pub use fontdb::{FALLBACK_FAMILY, FontDb, FontFace, style_weight, system_font_dirs};
+pub use fontdb::{FALLBACK_FAMILY, FontDb, FontFace, SHIPPORI_MINCHO_REGULAR, style_weight, system_font_dirs};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
 pub use vectorcraft_doc::TextObject;
@@ -124,6 +124,8 @@ pub struct LineInfo {
 
 #[derive(Clone, Debug, Default)]
 pub struct TextLayout {
+    /// Lines retain inline/block coordinates; glyph geometry is in physical text space.
+    pub vertical: bool,
     pub glyphs: Vec<PositionedGlyph>,
     pub lines: Vec<LineInfo>,
     /// Ink/advance bounds in text space.
@@ -138,6 +140,13 @@ pub struct TextLayout {
 }
 
 impl TextLayout {
+    /// Convert physical text coordinates to inline/block coordinates.
+    pub fn logical_point(&self, p: Point) -> Point {
+        if self.vertical { Point::new(p.y, -p.x) } else { p }
+    }
+    pub fn physical_point(&self, p: Point) -> Point {
+        if self.vertical { Point::new(-p.y, p.x) } else { p }
+    }
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
         let mut p = BezPath::new();
@@ -192,7 +201,7 @@ pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     } else if let Some(g) = glyphs.last() {
         (g.origin + dir(g.angle) * g.advance, g.angle)
     } else {
-        (Point::new(line.x0, line.baseline), 0.0)
+        (layout.physical_point(Point::new(line.x0, line.baseline)), if layout.vertical { std::f64::consts::FRAC_PI_2 } else { 0.0 })
     };
     // Up vector in y-down space, rotated with the baseline.
     let d = dir(angle);
@@ -214,6 +223,7 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
             None => layout.lines.first().map_or(0, |l| l.start),
         };
     }
+    let p = layout.logical_point(p);
     // Nearest line band (vertical distance first, then distance to the line's column).
     let dist = |l: &LineInfo| {
         let dy = if p.y < l.baseline - l.ascent {
@@ -247,7 +257,7 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
 pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
     let Some(line) = layout.lines.get(li) else { return 0 };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    if let Some(g) = glyphs.iter().find(|g| x < g.origin.x + g.advance * 0.5) {
+    if let Some(g) = glyphs.iter().find(|g| x < layout.logical_point(g.origin).x + g.advance * 0.5) {
         return g.byte;
     }
     line_end(layout, li)
@@ -281,9 +291,9 @@ fn x_in_line(layout: &TextLayout, li: usize, byte: usize) -> f64 {
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
     if let Some(g) = glyphs.iter().find(|g| g.byte + g.len > byte) {
         let frac = if byte <= g.byte { 0.0 } else { (byte - g.byte) as f64 / g.len.max(1) as f64 };
-        return g.origin.x + g.advance * frac;
+        return layout.logical_point(g.origin).x + g.advance * frac;
     }
-    glyphs.last().map_or(line.x0, |g| g.origin.x + g.advance)
+    glyphs.last().map_or(line.x0, |g| layout.logical_point(g.origin).x + g.advance)
 }
 
 /// Move the caret `delta` lines up (negative) or down, keeping horizontal position `goal_x`
@@ -345,14 +355,14 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         let mut xb = x_in_line(layout, li, b.min(l.end));
         if b > l.end {
             // The selection continues past the line: include the line break / trailing space.
-            let last = layout.glyphs[l.glyph_start..l.glyph_end].last().map_or(l.x1, |g| g.origin.x + g.advance);
+            let last = layout.glyphs[l.glyph_start..l.glyph_end].last().map_or(l.x1, |g| layout.logical_point(g.origin).x + g.advance);
             xb = last.max(l.x1) + (l.ascent + l.descent) * 0.25;
         }
         if xb - xa <= 1e-9 {
             continue;
         }
         let (t, bt) = (l.baseline - l.ascent, l.baseline + l.descent);
-        out.push([Point::new(xa, t), Point::new(xb, t), Point::new(xb, bt), Point::new(xa, bt)]);
+        out.push([Point::new(xa, t), Point::new(xb, t), Point::new(xb, bt), Point::new(xa, bt)].map(|p| layout.physical_point(p)));
     }
     out
 }

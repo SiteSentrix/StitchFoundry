@@ -14,6 +14,8 @@ use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, PositionedGlyph, T
 const EPS: f64 = 1e-6;
 
 struct Ctx<'a> {
+    vertical: bool,
+    on_path: bool,
     db: &'a FontDb,
     text: &'a str,
     runs: Vec<(Range<usize>, &'a CharStyle)>,
@@ -37,7 +39,22 @@ impl Ctx<'_> {
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
         let src = self.db.outline(&g.face, g.gid);
         let local = Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
-        let m = pre * local;
+        let mut m = pre * local;
+        let mut origin = origin;
+        let mut angle = angle;
+        if self.vertical {
+            let writing = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
+            if self.on_path {
+                // Vertical path type keeps the baseline path and turns each glyph across it.
+                m = Affine::translate(origin.to_vec2()) * Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::translate(-origin.to_vec2()) * m;
+            } else {
+                let physical = writing * origin;
+                let upright = matches!(g.ch as u32, 0x3000..=0x30ff | 0x3400..=0x9fff | 0xf900..=0xfaff | 0xfe10..=0xfe4f | 0xff01..=0xff60 | 0x20000..=0x3134f);
+                m = if upright { Affine::translate((physical - origin) + Vec2::new(-g.descent, g.ascent)) * m } else { writing * m };
+                origin = physical;
+                angle += std::f64::consts::FRAC_PI_2;
+            }
+        }
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
             BezPath::new()
@@ -99,15 +116,42 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
         }
     }
     paras.push(s..text.len());
-    let mut cx = Ctx { db, text: &text, runs, default: CharStyle::default(), opts, out: TextLayout::default() };
+    let mut vertical_opts = opts.clone();
+    vertical_opts.features.vertical = t.vertical;
+    let opts = &vertical_opts;
+    let is_on_path = matches!(&t.kind, TextKind::OnPath { .. });
+    let mut cx = Ctx {
+        vertical: t.vertical,
+        on_path: is_on_path,
+        db,
+        text: &text,
+        runs,
+        default: CharStyle::default(),
+        opts,
+        out: TextLayout { vertical: t.vertical && !is_on_path, ..Default::default() },
+    };
     match &t.kind {
         TextKind::Point => flow(&mut cx, &paras, &t.para, None),
         TextKind::Area { frame } => {
-            let regions = Region::cells(&frame.to_bezpath(), opts, &t.wrap);
+            let inverse = Affine::new([0.0, -1.0, 1.0, 0.0, 0.0, 0.0]);
+            let frame = if t.vertical { frame.transformed(inverse) } else { frame.clone() };
+            let mut wrap = t.wrap.clone();
+            if t.vertical {
+                for w in &mut wrap {
+                    w.path.transform(inverse);
+                }
+            }
+            let regions = Region::cells(&frame.to_bezpath(), opts, &wrap);
             cx.out.frames = regions.iter().map(|r| r.cell).collect();
             flow(&mut cx, &paras, &t.para, Some(&regions));
         }
         TextKind::OnPath { path, start } => on_path(&mut cx, &paras, &t.para, &path.to_bezpath(), *start, path.is_closed(), t.path_effect),
+    }
+    if cx.out.vertical {
+        let writing = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
+        for frame in &mut cx.out.frames {
+            *frame = writing.transform_rect_bbox(*frame);
+        }
     }
     finish_bounds(&mut cx.out);
     cx.out
@@ -123,7 +167,8 @@ fn finish_bounds(out: &mut TextLayout) {
     }
     if !out.on_path {
         for l in &out.lines {
-            add(Rect::new(l.x0.min(l.x1), l.baseline - l.ascent, l.x0.max(l.x1), l.baseline + l.descent));
+            let r = Rect::new(l.x0.min(l.x1), l.baseline - l.ascent, l.x0.max(l.x1), l.baseline + l.descent);
+            add(if out.vertical { Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]).transform_rect_bbox(r) } else { r });
         }
     }
     out.bounds = b.unwrap_or_default();

@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area / Path Type",
             [],
             None,
-            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", at?: [x, y] (on-path start: nearest point), size?, font?} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id}",
+            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?, font?} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id}",
             has_doc,
             create_in_path
         ),
@@ -368,6 +368,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let kind = if on_path { TextKind::OnPath { path: path.clone(), start } } else { TextKind::Area { frame: path.clone() } };
     let mut t = TextObject {
+        vertical: p.get("vertical").and_then(Value::as_bool).unwrap_or(false),
         kind,
         xf: Affine::IDENTITY,
         runs: vec![TextRun { text, style }],
@@ -404,6 +405,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
     let head = edit::slice_runs(&t.runs, 0, end);
     let measure = |tr: f64| {
         let mut h = TextObject {
+            vertical: t.vertical,
             kind: TextKind::Point,
             xf: Affine::IDENTITY,
             runs: head.clone(),

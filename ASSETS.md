@@ -46,6 +46,8 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/fonts/OFL-JetBrainsMono.txt` | (licence text) | upstream project | — |  |
 | `assets/fonts/OFL-SourceSans3.txt` | (licence text) | upstream project | — |  |
 | `assets/fonts/OFL-SourceSerif4.txt` | (licence text) | upstream project | — |  |
+| `assets/fonts/ShipporiMincho-Regular.ttf` | The Shippori Mincho Project Authors (FONTDASU) | https://github.com/google/fonts/tree/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/shipporimincho | OFL-1.1 (`assets/fonts/OFL-ShipporiMincho.txt`) | Japanese UI/document fallback; SHA-256 `769b5269f0f9bc6534b352c0e6bd856a566e03ff788f107191c2d835863570b2` |
+| `assets/fonts/OFL-ShipporiMincho.txt` | The Shippori Mincho Project Authors (FONTDASU) | https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/shipporimincho/OFL.txt | OFL-1.1 | Licence for Shippori Mincho |
 | `assets/icons/LICENSE-lucide.txt` | (licence text) | upstream project | — |  |
 | `assets/icons/align-center-horizontal.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
 | `assets/icons/align-center-vertical.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
