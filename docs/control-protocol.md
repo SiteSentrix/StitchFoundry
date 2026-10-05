@@ -239,3 +239,10 @@ paste at the centre of the view. The Paste menu items are enabled while the syst
 nothing copied in the app (looked at up to four times a second; `ui.menu.list` shows it). The Layers panel menu (≡ on
 the dock's tab strip while Layers shows) lists the layer commands and Paste Remembers Layers
 (`layer.pasteRemembersLayers`, checked when on).
+
+File Info: File → File Info… (`file.info` from the menu or Cmd+Alt+Shift+I; `ui.fileInfoDialog` for agents) opens the
+`fileInfo` dialog. Its fields are what `file.info` reports (`title`, `author`, `authorTitle`, `description`,
+`keywords` (a list: the chips), `rating`, `copyrightStatus`, `copyrightNotice`, `copyrightUrl`; `created` and
+`modified` are shown read-only) plus `__keyword`, keywords typed but not added yet (comma-separated; OK adds them).
+`ui.dialog.confirm` runs `file.info` with them as one undo step; a bad value answers with an error and the dialog
+stays open.

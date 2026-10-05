@@ -109,6 +109,7 @@ pub fn save(app: &mut VectorcraftApp, path: Option<String>, save_as: bool, param
     let existing = if save_as { None } else { st.path.clone() };
     let path = target_path(app, path.or(existing), vectorcraft_format::EXTENSION)?;
     let f = fileio::save_format(format_param(params), Some(&path))?;
+    fileio::stamp_save_dates(app.session.active_mut().ok_or("no document")?);
     let st = app.session.active().ok_or("no document")?;
     let (enc, opts) = fileio::save_encoding(st, f, params).map_err(|e| e.to_string())?;
     let doc = st.doc.clone();

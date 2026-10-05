@@ -558,6 +558,7 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
         Some(t) => t.to_string(),
         None => s.next_untitled(),
     };
+    d.metadata.created = vectorcraft_doc::metadata::now_unix();
     let i = s.add_document(d, None);
     // Overprint Preview is the engine's (the UI turns Pixel Preview on from `previewMode`). Both
     // are views of the whole app, so Default leaves them as they are.

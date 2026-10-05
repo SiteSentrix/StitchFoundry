@@ -939,6 +939,8 @@ mod tests_eyedropper;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]
+mod tests_fileinfo;
+#[cfg(test)]
 mod tests_flatpresets;
 #[cfg(test)]
 mod tests_flatpreview;

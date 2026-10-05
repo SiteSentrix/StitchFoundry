@@ -112,6 +112,11 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(&w.indent(1));
         out.push_str(&format!("<title>{}</title>{nl}", xml_escape(&doc.title)));
     }
+    // File Info's description.
+    if !doc.metadata.description.trim().is_empty() {
+        out.push_str(&w.indent(1));
+        out.push_str(&format!("<desc>{}</desc>{nl}", xml_escape(&doc.metadata.description)));
+    }
     // The editing data carries a hash of the markup around its `<metadata>`.
     let native = native.filter(|_| opts.preserve_editing).map(|bytes| (bytes, body_hash(&[&out, &w.body, "</svg>", nl])));
     w.metadata(&mut out, native);
@@ -301,12 +306,17 @@ fn pin_to_page(n: &mut Node, m: Affine) {
     }
 }
 
-/// The Dublin Core terms File Info writes to `<metadata>`.
+/// The Dublin Core terms File Info writes to `<metadata>`: the format, title, author (creator),
+/// description, each keyword (subject), copyright notice and URL (rights) and created date, the
+/// empty ones left out.
 fn dublin_core(doc: &Document) -> Vec<(&'static str, String)> {
+    let info = &doc.metadata;
     let mut terms = vec![("format", "image/svg+xml".to_string())];
-    if !doc.title.is_empty() {
-        terms.push(("title", doc.title.clone()));
-    }
+    let created = info.created.map(vectorcraft_doc::metadata::iso8601).unwrap_or_default();
+    let fields = [("title", doc.title.as_str()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
+    let rights = [("rights", info.copyright_notice.as_str()), ("rights", info.copyright_url.as_str()), ("date", created.as_str())];
+    let keywords = info.keywords.iter().map(|k| ("subject", k.as_str()));
+    terms.extend(fields.into_iter().chain(keywords).chain(rights).filter(|(_, v)| !v.trim().is_empty()).map(|(k, v)| (k, v.to_string())));
     terms
 }
 

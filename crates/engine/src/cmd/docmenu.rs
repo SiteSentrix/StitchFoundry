@@ -158,9 +158,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "File Info…",
             ["File"],
             Some("Cmd+Alt+Shift+I"),
-            "{title?} set the document title; always → {title, colorMode, units, artboards, objects}",
+            "{title?, author?, authorTitle?, description?, keywords?: [string…]|\"a, b\" (each once), rating?: 0–5, copyrightStatus?: \"unknown\"|\"copyrighted\"|\"publicDomain\", copyrightNotice?, copyrightUrl?} set the File Info in one undo step (SVG with metadata, PDF and PNG exports carry it); no params → {title, author, authorTitle, description, keywords, rating, copyrightStatus, copyrightNotice, copyrightUrl, created, modified (ISO 8601 UTC or null; read-only), colorMode, units, artboards, objects}",
             has_doc,
-            file_info
+            super::fileinfo::file_info
         ),
     ]
 }
@@ -483,22 +483,4 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
             *color = f(*color);
         }
     }
-}
-
-fn file_info(s: &mut Session, p: &Value) -> Result<Value> {
-    if let Some(t) = str_param(p, "title") {
-        let t = t.to_string();
-        s.edit("File Info", |d, _| {
-            d.title = t;
-            Ok(())
-        })?;
-    }
-    let d = &s.doc()?.doc;
-    Ok(json!({
-        "title": d.title,
-        "colorMode": match d.color_mode { ColorMode::Rgb => "rgb", ColorMode::Cmyk => "cmyk" },
-        "units": d.units.label(),
-        "artboards": d.artboards.len(),
-        "objects": d.node_count(),
-    }))
 }

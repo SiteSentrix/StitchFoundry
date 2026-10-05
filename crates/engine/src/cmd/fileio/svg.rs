@@ -54,7 +54,12 @@ pub const OPTIONS: &[FormatOption] = &[
         default: "false",
         description: "embed the native document in <metadata> so VectorCraft reopens the SVG with nothing lost",
     },
-    FormatOption { name: "metadata", ty: "boolean", default: "false", description: "write <metadata> with the title and format (Dublin Core)" },
+    FormatOption {
+        name: "metadata",
+        ty: "boolean",
+        default: "false",
+        description: "write <metadata> with the title, format and File Info (Dublin Core)",
+    },
     FormatOption {
         name: "fewerTspans",
         ty: "boolean",

@@ -18,6 +18,7 @@ mod export;
 mod load;
 pub mod pdf;
 mod pdfimport;
+pub mod pngtext;
 pub mod ppi;
 mod save;
 mod svg;
@@ -30,7 +31,7 @@ use load::err;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, raster_image};
 pub use pdfimport::{LoadOptions, page_document};
-pub use save::{save_encoding, save_format};
+pub use save::{save_encoding, save_format, stamp_save_dates};
 pub use svg::options_map as svg_options;
 
 use super::*;

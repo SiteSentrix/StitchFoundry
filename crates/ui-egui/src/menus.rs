@@ -382,6 +382,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}",
     ),
+    (
+        "ui.fileInfoDialog",
+        "File Info Dialog",
+        "",
+        "{} open File Info (dialog `fileInfo`: the file.info fields, plus __keyword, keywords typed but not added yet); OK runs file.info. The File Info… menu item opens it too",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -753,6 +759,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "file.exportAs" => io::export(app, s("format").as_deref(), s("path"), p),
+        "ui.fileInfoDialog" => crate::dialogs::file_info::open(app),
         _ => return None,
     };
     Some(r)
@@ -930,7 +937,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         }
         "effect.dialog" | "ui.recolorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "effect.applyLast" | "effect.last" => app.last_effect.is_some() && app.session.active().is_some_and(|d| !d.selection.is_empty()),
-        "file.export.pdf" | "ui.savePdfDialog" => app.session.active().is_some(),
+        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
         "ui.graphicStyleOptions" => app.session.active().is_some(),
         "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
@@ -1737,6 +1744,13 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
                 let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Document Raster Effects Settings", "params": v}));
             }
             Err(e) => app.status(e.to_string()),
+        }
+        return;
+    }
+    // File Info: its dialog.
+    if id == "file.info" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::file_info::open(app) {
+            app.status(e);
         }
         return;
     }

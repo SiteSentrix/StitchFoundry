@@ -20,6 +20,7 @@ pub mod expand;
 mod export_as;
 mod export_for_screens;
 pub mod eyedropper;
+pub mod file_info;
 pub mod flatten;
 pub mod flattener_presets;
 mod form;
@@ -190,6 +191,7 @@ registry! {
     ExportAs: ["exportAs"] => export_as::SPEC,
     ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
     SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,
+    FileInfo: [file_info::KIND] => file_info::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

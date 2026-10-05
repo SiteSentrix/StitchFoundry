@@ -139,7 +139,7 @@ pub struct ExportOptions {
     /// Embed the native document (passed to [`export_full`]) in `<metadata>` so VectorCraft
     /// reopens the SVG with nothing lost (see [`editing`]).
     pub preserve_editing: bool,
-    /// Write `<metadata>` with the document's Dublin Core title and format.
+    /// Write `<metadata>` with the document's title, format and File Info (Dublin Core).
     pub metadata: bool,
     /// One positioned `<tspan>` per line of type instead of one per style run, tab stop and
     /// justified word (smaller; viewers then space the line with their own font metrics).

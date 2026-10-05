@@ -10,6 +10,7 @@ pub mod graph;
 pub mod hit;
 pub mod live;
 pub mod marks;
+pub mod metadata;
 pub mod node;
 pub mod overprint;
 pub mod pattern;
@@ -45,6 +46,7 @@ pub use appearance::{
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
+pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;
 pub use node::Scaling;
 pub use node::{ImageMap, ObjectAttributes};
@@ -476,6 +478,9 @@ pub struct Document {
     /// they were copied from instead of the current layer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_remembers_layers: bool,
+    /// File → File Info (the title is [`Document::title`]).
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub metadata: DocMetadata,
 }
 
 fn ppi72() -> f64 {
@@ -533,6 +538,7 @@ impl Document {
             spot_use_lab: true,
             setup: DocSetup::default(),
             paste_remembers_layers: false,
+            metadata: DocMetadata::default(),
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
