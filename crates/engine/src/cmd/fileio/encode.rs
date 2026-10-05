@@ -12,7 +12,7 @@ use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 use vectorcraft_render::encode::tiff::{ByteOrder, TiffOptions};
-use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, bmp};
 
 use super::super::*;
 use super::Format;
@@ -165,6 +165,12 @@ struct RasterOptions {
     lossless: Option<bool>,
     lzw: Option<bool>,
     byte_order: Option<String>,
+    /// BMP bits per pixel.
+    depth: Option<u8>,
+    /// BMP layout: `windows` or `os2`.
+    file_format: Option<String>,
+    rle: Option<bool>,
+    flip_rows: Option<bool>,
 }
 
 impl RasterOptions {
@@ -214,8 +220,36 @@ impl RasterOptions {
                 byte_order: parse(self.byte_order.as_deref(), ByteOrder::from_id, "byteOrder", "little or big")?,
                 embed_icc,
             },
+            bmp: bmp::BmpOptions {
+                os2: parse(self.file_format.as_deref(), bmp_layout, "fileFormat", "windows or os2")?,
+                depth: self.depth.unwrap_or(24),
+                rle: self.rle.unwrap_or(false),
+                top_down: self.flip_rows.unwrap_or(false),
+                gray: color_model == jpeg::ColorModel::Gray,
+            },
         })
     }
+}
+
+/// The BMP layout by name: `true` for OS/2.
+fn bmp_layout(s: &str) -> Option<bool> {
+    match s.to_ascii_lowercase().as_str() {
+        "windows" => Some(false),
+        "os2" | "os/2" => Some(true),
+        _ => None,
+    }
+}
+
+/// Refuse options `format` can't write together: BMP depths and layouts, and colour models (BMP
+/// is RGB or grey).
+fn check_options(format: RasterFormat, o: &RasterExportOptions) -> Result<()> {
+    let model = o.jpeg.color_model;
+    let r = match format {
+        RasterFormat::Bmp if model == jpeg::ColorModel::Cmyk => Err("BMP files are RGB or grayscale: colorModel rgb or gray".to_string()),
+        RasterFormat::Bmp => o.bmp.check(),
+        _ => Ok(()),
+    };
+    r.map_err(|e| bad(C, e))
 }
 
 /// An enum option by id (its default when absent).
@@ -342,7 +376,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });
         }
-        "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" => {
+        "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" | "bmp" => {
             let o: RasterOptions = options(f, p)?;
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
@@ -355,8 +389,10 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
                 "gif" => RasterFormat::Gif,
                 "png8" => RasterFormat::Png8,
                 "tiff" => RasterFormat::Tiff,
+                "bmp" => RasterFormat::Bmp,
                 _ => RasterFormat::WebP,
             };
+            check_options(format, &settings)?;
             // Use Artboards: one file per chosen artboard (default all); else the one chosen.
             let chosen = match use_artboards {
                 Some(true) => boards(o.boards.resolve(n))?.unwrap_or_else(|| (0..n).collect()),

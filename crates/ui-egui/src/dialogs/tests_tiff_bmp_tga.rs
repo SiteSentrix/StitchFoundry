@@ -1,4 +1,4 @@
-//! TIFF Options through Export As, drawn headlessly.
+//! TIFF and BMP Options through Export As, drawn headlessly.
 
 use serde_json::json;
 
@@ -30,4 +30,34 @@ fn tiff_options_pick_the_model_byte_order_and_compression() {
     app.run("file.exportAs", json!({"format": "tiff"})).unwrap();
     confirm(&mut app).unwrap();
     assert_eq!(app.ui.dialog.as_ref().unwrap().str("colorModel"), "cmyk");
+}
+
+#[test]
+fn bmp_options_keep_their_choices_writable() {
+    let (mut app, written) = app(1);
+    app.run("file.exportAs", json!({"format": "bmp"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("bmpOptions"));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(
+        (d.str("colorModel"), d.str("fileFormat"), d.f64("depth", 0.0), d.bool("rle"), d.bool("flipRows")),
+        ("rgb".into(), "windows".into(), 24.0, false, false)
+    );
+    frame(&mut app);
+    // OS/2 has no 32 bits: the depth falls back to 24.
+    set(&mut app, "fileFormat", json!("os2"));
+    set(&mut app, "depth", json!(32));
+    frame(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("depth", 0.0), 24.0);
+    // Compressed rows are bottom-up: RLE turns flipped rows off.
+    set(&mut app, "fileFormat", json!("windows"));
+    set(&mut app, "depth", json!(8));
+    set(&mut app, "flipRows", json!(true));
+    set(&mut app, "rle", json!(true));
+    frame(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("flipRows"));
+    confirm(&mut app).unwrap();
+    let (path, bmp) = written.borrow()[0].clone();
+    assert_eq!(path, "/out/Untitled-1.bmp");
+    assert_eq!((&bmp[..2], bmp[28], bmp[30]), (&b"BM"[..], 8, 1), "8-bit RLE8");
 }

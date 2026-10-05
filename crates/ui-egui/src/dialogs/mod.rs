@@ -228,7 +228,7 @@ registry! {
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
-    RasterFormatOptions: ["tiffOptions"] => png_options::SPEC,
+    RasterFormatOptions: ["tiffOptions", "bmpOptions"] => png_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

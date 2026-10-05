@@ -1,4 +1,4 @@
-//! TIFF export through `document.export`: the options reach the files, impossible
+//! TIFF and BMP export through `document.export`: the options reach the files, impossible
 //! ones are refused, and the files open again.
 
 use serde_json::{Value, json};
@@ -88,14 +88,51 @@ fn tiff_options_reach_the_file() {
 }
 
 #[test]
+fn bmp_options_reach_the_file() {
+    let mut s = session();
+    let bmp = |s: &mut Session, p: Value| export(s, merge(json!({"format": "bmp"}), p));
+    let bits = |f: &[u8]| u16::from_le_bytes([f[28], f[29]]);
+    let plain = bmp(&mut s, json!({}));
+    assert_eq!((&plain[..2], bits(&plain)), (&b"BM"[..], 24));
+    for depth in [1, 4, 8, 16, 32] {
+        assert_eq!(bits(&bmp(&mut s, json!({"depth": depth}))), depth);
+    }
+    let rle = bmp(&mut s, json!({"depth": 8, "rle": true}));
+    assert_eq!(u32::from_le_bytes(rle[30..34].try_into().unwrap()), 1, "RLE8");
+    let flipped = bmp(&mut s, json!({"flipRows": true}));
+    assert_eq!(i32::from_le_bytes(flipped[22..26].try_into().unwrap()), -40, "top-down rows");
+    let os2 = bmp(&mut s, json!({"fileFormat": "os2", "depth": 4}));
+    assert_eq!(u32::from_le_bytes(os2[14..18].try_into().unwrap()), 12, "OS/2 core header");
+    let gray = image::load_from_memory_with_format(&bmp(&mut s, json!({"colorModel": "gray", "depth": 8})), image::ImageFormat::Bmp).unwrap();
+    assert!(gray.to_rgb8().pixels().all(|p| p[0] == p[1] && p[1] == p[2]));
+    for bad in [
+        json!({"depth": 2}),
+        json!({"depth": 24, "rle": true}),
+        json!({"depth": 8, "rle": true, "flipRows": true}),
+        json!({"fileFormat": "os2", "depth": 32}),
+        json!({"fileFormat": "amiga"}),
+        json!({"colorModel": "cmyk"}),
+    ] {
+        let e = s.execute("document.export", &merge(json!({"format": "bmp"}), bad.clone())).unwrap_err();
+        assert!(matches!(e, EngineError::BadParams { .. }), "{bad}: {e}");
+    }
+    let r = s.execute("document.open", &json!({"name": "back.bmp", "dataBase64": vectorcraft_format::base64_encode(&rle)})).unwrap();
+    assert_eq!(r["format"], "bmp");
+}
+
+#[test]
 fn the_formats_are_listed_and_write_one_file_per_artboard() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 30, "height": 20, "artboards": 2})).unwrap();
     let r = s.execute("document.formats", &json!({})).unwrap();
     let find = |id: &str| r["formats"].as_array().unwrap().iter().find(|f| f["id"] == id).unwrap().clone();
-    let tiff = find("tiff");
+    let (tiff, bmp) = (find("tiff"), find("bmp"));
     assert_eq!((tiff["write"].as_bool(), tiff["read"].as_bool()), (Some(true), Some(true)));
-    for (f, keys) in [(&tiff, &["colorModel", "lzw", "byteOrder", "embedIcc", "ppi", "antiAlias"][..])] {
+    assert_eq!((bmp["write"].as_bool(), bmp["read"].as_bool()), (Some(true), Some(true)));
+    for (f, keys) in [
+        (&tiff, &["colorModel", "lzw", "byteOrder", "embedIcc", "ppi", "antiAlias"][..]),
+        (&bmp, &["colorModel", "depth", "fileFormat", "rle", "flipRows", "reduction", "dither"]),
+    ] {
         for k in keys {
             assert!(f["options"].get(*k).is_some(), "{} takes {k}", f["id"]);
         }

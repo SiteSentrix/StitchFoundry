@@ -366,7 +366,10 @@ EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
 Place read `.emf` and `.wmf`; a paste of `image/emf` from a system clipboard service runs `clipboard.importEmf`.
 
-TIFF Options: Export As… with the TIFF format (`file.exportAs {format: "tiff"}`, then the save dialog) opens
-`tiffOptions`: the raster rows of PNG Options (`ppi`, `background`, `antiAlias`), then `colorModel` (`rgb`, `cmyk`,
-`gray`; a CMYK document starts on `cmyk`), `byteOrder` (`little`, `big`), `lzw` and `embedIcc`. `ui.dialog.set` the
-fields and `ui.dialog.confirm` writes the file(s) with `document.export`.
+TIFF and BMP Options: Export As… with the TIFF or BMP format (`file.exportAs {format: "tiff"}`, then
+the save dialog) opens `tiffOptions` or `bmpOptions`: the raster rows of PNG Options (`ppi`,
+`background`, `antiAlias`), then TIFF's `colorModel` (`rgb`, `cmyk`, `gray`; a CMYK document starts on `cmyk`),
+`byteOrder` (`little`, `big`), `lzw` and `embedIcc`; BMP's `colorModel` (`rgb`, `gray`), `fileFormat` (`windows`,
+`os2`), `depth` (1, 4, 8, 16, 24, 32), `reduction` and `dither` (4 and 8 bits), `rle` and `flipRows`. The BMP dialog keeps its choices writable together (OS/2 falls back to 24 bits and turns RLE and flipped
+rows off; RLE turns flipped rows off). `ui.dialog.set` the fields and `ui.dialog.confirm` writes the file(s) with
+`document.export`.

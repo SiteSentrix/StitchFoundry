@@ -175,7 +175,7 @@ pub fn with_text(png: Vec<u8>, entries: &[(&str, Cow<str>)]) -> Vec<u8> {
 
 /// Rows of one-byte pixels packed `bits` per pixel, most significant first (each row starts on a
 /// byte); at 8 bits the pixels as they are.
-fn pack(px: &[u8], w: u32, h: u32, bits: u8) -> Cow<'_, [u8]> {
+pub(super) fn pack(px: &[u8], w: u32, h: u32, bits: u8) -> Cow<'_, [u8]> {
     if bits >= 8 {
         return Cow::Borrowed(px);
     }

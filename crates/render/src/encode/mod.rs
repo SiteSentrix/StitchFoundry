@@ -1,9 +1,10 @@
 //! Raster export: render a document region with [`RasterExportOptions`] (resolution, background,
 //! anti-aliasing) and encode it as PNG ([`png`]: resolution in `pHYs`, Adam7 interlacing), JPEG
 //! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless WebP, or
-//! a palette image ([`quantize`]) as PNG-8 or [`gif`], or [`tiff`] (RGB, CMYK or grey, LZW, either
-//! byte order, the profile).
+//! a palette image ([`quantize`]) as PNG-8 or [`gif`], [`tiff`] (RGB, CMYK or grey, LZW, either byte
+//! order, the profile), [`bmp`] (1–32 bits, RLE) or [`tga`].
 
+pub mod bmp;
 pub mod gif;
 pub mod jpeg;
 pub mod png;
@@ -25,6 +26,7 @@ pub enum RasterFormat {
     Png8,
     Gif,
     Tiff,
+    Bmp,
 }
 
 /// How a raster export renders and encodes.
@@ -41,10 +43,12 @@ pub struct RasterExportOptions {
     pub quality: u8,
     /// JPEG colour model, coding and profile.
     pub jpeg: jpeg::JpegOptions,
-    /// PNG-8 and GIF: the colour reduction.
+    /// PNG-8 and GIF: the colour reduction (also BMP's at 1, 4 and 8 bits).
     pub palette: quantize::PaletteOptions,
     /// TIFF colour model, compression, byte order and profile.
     pub tiff: tiff::TiffOptions,
+    /// BMP layout, depth, compression and row order.
+    pub bmp: bmp::BmpOptions,
 }
 
 impl Default for RasterExportOptions {
@@ -58,6 +62,7 @@ impl Default for RasterExportOptions {
             jpeg: jpeg::JpegOptions::default(),
             palette: quantize::PaletteOptions::default(),
             tiff: tiff::TiffOptions::default(),
+            bmp: bmp::BmpOptions::default(),
         }
     }
 }
@@ -103,6 +108,7 @@ impl RasterExportOptions {
                 }
             }
             RasterFormat::Tiff => tiff::encode(img, self.ppi, &self.tiff),
+            RasterFormat::Bmp => bmp::encode(&img.to_straight(), img.width, img.height, self.ppi, &self.bmp, &self.palette),
         }
     }
 
@@ -178,6 +184,8 @@ fn drawn_bounds(n: &Node) -> Option<Rect> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_bmp;
 #[cfg(test)]
 mod tests_jpeg;
 #[cfg(test)]
