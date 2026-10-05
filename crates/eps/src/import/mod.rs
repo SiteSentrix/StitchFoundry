@@ -24,6 +24,8 @@ mod text;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_fontnames;
 
 use std::sync::Arc;
 
