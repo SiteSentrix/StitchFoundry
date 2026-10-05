@@ -74,6 +74,9 @@ pub struct SavePlan {
     pub name: String,
     /// Suggested folder: the document's own, or the Templates folder for a template.
     pub folder: Option<String>,
+    /// The `modified` param (as `date_param` reads it): the File Info date a Save or Save As to a file
+    /// stamps; `None`: the time it is written.
+    pub modified: Option<Option<i64>>,
 }
 
 impl SavePlan {
@@ -85,12 +88,11 @@ impl SavePlan {
 }
 
 /// File Info's dates for a save to a file: the modified date (and the created date, when it has
-/// none) become now. Not an undo step; the web build, without a clock, leaves them.
-pub fn stamp_save_dates(st: &mut DocState) {
-    let Some(now) = vectorcraft_doc::metadata::now_unix() else { return };
+/// none) become `at`. Not an undo step.
+pub fn stamp_save_dates(st: &mut DocState, at: i64) {
     let d = std::sync::Arc::make_mut(&mut st.doc);
-    d.metadata.created.get_or_insert(now);
-    d.metadata.modified = Some(now);
+    d.metadata.created.get_or_insert(at);
+    d.metadata.modified = Some(at);
 }
 
 /// The Templates folder: the `templatesFolder` preference, else `Documents/VectorCraft Templates`
@@ -173,7 +175,8 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         SaveMode::Template => templates_folder(&s.prefs),
         _ => st.path.as_deref().and_then(parent_folder),
     };
-    Ok(SavePlan { mode, path, format, options, name, folder })
+    let modified = date_param(p, "modified", cmd)?;
+    Ok(SavePlan { mode, path, format, options, name, folder, modified })
 }
 
 /// Does a save in `f` read option `key`? PDF (and a .ai file, a PDF) also reads its General
@@ -228,8 +231,12 @@ fn fidelity_warning(f: &Format) -> Option<String> {
 pub fn save_with(s: &mut Session, plan: SavePlan, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
     let cmd = plan.mode.command();
     let retargets = plan.retargets();
-    if plan.path.is_some() && retargets {
-        stamp_save_dates(s.doc_mut()?);
+    // The web build, without a clock, leaves the dates unless given one.
+    if plan.path.is_some()
+        && retargets
+        && let Some(at) = clock_date(s, "modified", plan.modified)
+    {
+        stamp_save_dates(s.doc_mut()?, at);
     }
     let own = doc_to_save(s.doc()?, plan.format);
     // A native file records its links' paths relative to where it is written.
@@ -339,7 +346,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save Document",
             [],
             None,
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own format), options?: {…the format's options, see file.formatOptions; default: as last saved}, svg?: {…SVG options} (SVG options may also be given flat; an SVG save keeps hidden layers, display:none, unless hiddenLayers is false), modified?: Unix seconds|null (the File Info modified date, and created date when there is none, a save to a file stamps; default now, recorded in the journal so a replay matches; null: leave the dates)} → {path, format, bytes, warnings, linked?: [path…] (images an SVG links to)}. Save writes one artboard, except a .ai file: a PDF-compatible file of every artboard carrying the native document (preserveEditing always on; PDF options flat or in options), which document.open restores exactly. Without a path it writes the document's own file in its own format: a document opened from or saved as SVG/PDF saves as that again (warnings name what the format loses). No path known (never saved, converted from an older version, or another format) → {dataBase64, format, name, folder?, warnings} and the document stays modified",
             has_doc,
             |s, p| save(s, SaveMode::Save, p)
         ),
@@ -348,7 +355,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Save As…",
             ["File"],
             Some("Cmd+Shift+S"),
-            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own), options?, svg?} the document takes on the new path, name and format (except a template, which is always a copy) → {path, format, bytes, warnings}; no path → {dataBase64, format, name, folder?, warnings}",
+            "{path?, format?: vectorcraft|template|pdf|svg|svgz|ai (default: the path's extension, else the document's own), options?, svg?, modified? (as document.save)} the document takes on the new path, name and format (except a template, which is always a copy) → {path, format, bytes, warnings}; no path → {dataBase64, format, name, folder?, warnings}",
             has_doc,
             |s, p| save(s, SaveMode::SaveAs, p)
         ),

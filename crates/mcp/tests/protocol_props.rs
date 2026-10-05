@@ -212,9 +212,11 @@ proptest! {
     #[test]
     fn run_command_sequences_match_local_session(ops in arb_ops(5..40)) {
         let mut srv = server();
-        let mut local = vectorcraft_testkit::fixtures::session_with(612.0, 792.0);
-        // Match the headless default document.
+        // Match the headless default document, dated as it is (File Info dates come from the clock).
         let d_remote = doc_json(&document(&mut srv));
+        let mut local = vectorcraft_engine::Session::new();
+        let created = &d_remote["metadata"]["created"];
+        vectorcraft_testkit::fixtures::exec(&mut local, "file.new", json!({"width": 612, "height": 792, "created": created}));
         let d_local = doc_json(&local.doc().unwrap().doc);
         prop_assume!(d_remote == d_local);
         for op in &ops {

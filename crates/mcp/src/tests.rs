@@ -377,9 +377,17 @@ fn remote_forwards_methods() {
 
 #[test]
 fn remote_connect_fails_fast() {
-    // Bind then drop to get a port that's (almost certainly) closed.
-    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    // A port this test holds, bound but not listening, so connecting to it is refused. (A port
+    // bound and dropped could be taken by another process or test before the connect.)
+    let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
+    held.bind(&std::net::SocketAddr::from(([127, 0, 0, 1], 0)).into()).unwrap();
+    let port = held.local_addr().unwrap().as_socket().unwrap().port();
+    let start = std::time::Instant::now();
     assert!(Remote::connect(&format!("127.0.0.1:{port}")).is_err());
+    assert!(start.elapsed() < std::time::Duration::from_secs(5), "took {:?}", start.elapsed());
+    // Nothing else could listen there meanwhile.
+    assert!(std::net::TcpListener::bind(format!("127.0.0.1:{port}")).is_err());
+    drop(held);
 }
 
 #[test]
