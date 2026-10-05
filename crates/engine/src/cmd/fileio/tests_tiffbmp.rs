@@ -1,4 +1,4 @@
-//! TIFF and BMP export through `document.export`: the options reach the files, impossible
+//! TIFF, BMP and Targa export through `document.export`: the options reach the files, impossible
 //! ones are refused, and the files open again.
 
 use serde_json::{Value, json};
@@ -121,22 +121,39 @@ fn bmp_options_reach_the_file() {
 }
 
 #[test]
+fn targa_depth_reaches_the_file() {
+    let mut s = session();
+    for (depth, alpha) in [(16, 1), (24, 0), (32, 8)] {
+        let tga = export(&mut s, json!({"format": "tga", "depth": depth}));
+        assert_eq!((tga[16], tga[17]), (depth, alpha));
+        assert_eq!(u16::from_le_bytes([tga[12], tga[13]]), 60);
+    }
+    let tga = export(&mut s, json!({"format": "tga"}));
+    assert_eq!(tga[16], 24, "24 bits by default");
+    for bad in [json!({"depth": 8}), json!({"colorModel": "gray"})] {
+        assert!(s.execute("document.export", &merge(json!({"format": "tga"}), bad.clone())).is_err(), "{bad}");
+    }
+}
+
+#[test]
 fn the_formats_are_listed_and_write_one_file_per_artboard() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 30, "height": 20, "artboards": 2})).unwrap();
     let r = s.execute("document.formats", &json!({})).unwrap();
     let find = |id: &str| r["formats"].as_array().unwrap().iter().find(|f| f["id"] == id).unwrap().clone();
-    let (tiff, bmp) = (find("tiff"), find("bmp"));
+    let (tiff, bmp, tga) = (find("tiff"), find("bmp"), find("tga"));
     assert_eq!((tiff["write"].as_bool(), tiff["read"].as_bool()), (Some(true), Some(true)));
-    assert_eq!((bmp["write"].as_bool(), bmp["read"].as_bool()), (Some(true), Some(true)));
+    assert_eq!((bmp["write"].as_bool(), tga["write"].as_bool(), tga["read"].as_bool()), (Some(true), Some(true), Some(false)));
     for (f, keys) in [
         (&tiff, &["colorModel", "lzw", "byteOrder", "embedIcc", "ppi", "antiAlias"][..]),
         (&bmp, &["colorModel", "depth", "fileFormat", "rle", "flipRows", "reduction", "dither"]),
+        (&tga, &["depth", "ppi", "antiAlias", "background"]),
     ] {
         for k in keys {
             assert!(f["options"].get(*k).is_some(), "{} takes {k}", f["id"]);
         }
     }
+    assert_eq!(format_for_name("a.tga").map(|f| f.id), Some("tga"));
     let r = s.execute("document.export", &json!({"format": "tiff", "useArtboards": true})).unwrap();
     let files: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
     assert_eq!(files, ["Untitled-1-Artboard-1.tif", "Untitled-1-Artboard-2.tif"]);

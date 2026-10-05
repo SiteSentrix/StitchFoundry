@@ -74,7 +74,8 @@ fn export_tool_lists_engine_formats_and_options() {
             "dxf",
             "eps",
             "emf",
-            "wmf"
+            "wmf",
+            "tga"
         ])
     );
     for k in ["artboard", "range", "options"] {

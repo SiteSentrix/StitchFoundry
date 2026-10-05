@@ -31,6 +31,8 @@ vello_cpu = { workspace = true, features = ["multithreading"] }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }
+# Decoders the export tests read their files back with.
+image = { workspace = true, features = ["tga"] }
 tiff = "0.11"
 proptest = { workspace = true }
 serde_json = { workspace = true }

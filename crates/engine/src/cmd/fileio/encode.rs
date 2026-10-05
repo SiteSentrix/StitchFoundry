@@ -12,7 +12,7 @@ use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 use vectorcraft_render::encode::tiff::{ByteOrder, TiffOptions};
-use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, bmp};
+use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, bmp, tga};
 
 use super::super::*;
 use super::Format;
@@ -165,7 +165,7 @@ struct RasterOptions {
     lossless: Option<bool>,
     lzw: Option<bool>,
     byte_order: Option<String>,
-    /// BMP bits per pixel.
+    /// BMP and Targa bits per pixel.
     depth: Option<u8>,
     /// BMP layout: `windows` or `os2`.
     file_format: Option<String>,
@@ -227,6 +227,7 @@ impl RasterOptions {
                 top_down: self.flip_rows.unwrap_or(false),
                 gray: color_model == jpeg::ColorModel::Gray,
             },
+            tga: tga::TgaOptions { depth: self.depth.unwrap_or(24) },
         })
     }
 }
@@ -240,13 +241,15 @@ fn bmp_layout(s: &str) -> Option<bool> {
     }
 }
 
-/// Refuse options `format` can't write together: BMP depths and layouts, and colour models (BMP
-/// is RGB or grey).
+/// Refuse options `format` can't write together: BMP and Targa depths and layouts, and colour
+/// models (BMP is RGB or grey, Targa RGB).
 fn check_options(format: RasterFormat, o: &RasterExportOptions) -> Result<()> {
     let model = o.jpeg.color_model;
     let r = match format {
         RasterFormat::Bmp if model == jpeg::ColorModel::Cmyk => Err("BMP files are RGB or grayscale: colorModel rgb or gray".to_string()),
+        RasterFormat::Tga if model != jpeg::ColorModel::Rgb => Err("Targa files are RGB: colorModel rgb".to_string()),
         RasterFormat::Bmp => o.bmp.check(),
+        RasterFormat::Tga => o.tga.check(),
         _ => Ok(()),
     };
     r.map_err(|e| bad(C, e))
@@ -376,7 +379,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });
         }
-        "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" | "bmp" => {
+        "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" | "bmp" | "tga" => {
             let o: RasterOptions = options(f, p)?;
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
@@ -390,6 +393,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
                 "png8" => RasterFormat::Png8,
                 "tiff" => RasterFormat::Tiff,
                 "bmp" => RasterFormat::Bmp,
+                "tga" => RasterFormat::Tga,
                 _ => RasterFormat::WebP,
             };
             check_options(format, &settings)?;

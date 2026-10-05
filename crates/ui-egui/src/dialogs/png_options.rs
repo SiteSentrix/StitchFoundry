@@ -1,7 +1,7 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
 //! map), WebP Options, and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
-//! transparency and matte), and TIFF and BMP Options ([`super::tiff_bmp_tga`]). Fields
+//! transparency and matte), and TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
 

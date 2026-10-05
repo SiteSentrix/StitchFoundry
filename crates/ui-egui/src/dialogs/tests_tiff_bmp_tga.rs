@@ -1,4 +1,4 @@
-//! TIFF and BMP Options through Export As, drawn headlessly.
+//! TIFF, BMP and Targa Options through Export As, drawn headlessly.
 
 use serde_json::json;
 
@@ -60,4 +60,22 @@ fn bmp_options_keep_their_choices_writable() {
     let (path, bmp) = written.borrow()[0].clone();
     assert_eq!(path, "/out/Untitled-1.bmp");
     assert_eq!((&bmp[..2], bmp[28], bmp[30]), (&b"BM"[..], 8, 1), "8-bit RLE8");
+}
+
+#[test]
+fn targa_options_pick_the_depth() {
+    let (mut app, written) = app(1);
+    app.run("file.exportAs", json!({"format": "tga"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("tgaOptions"));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(((spec(&d.kind).heading)(d), d.f64("depth", 0.0)), ("Targa Options".into(), 24.0));
+    assert!(!tiff_bmp_tga::keeps_alpha("tga", d), "24 bits are flattened on white");
+    frame(&mut app);
+    set(&mut app, "depth", json!(32));
+    frame(&mut app);
+    assert!(tiff_bmp_tga::keeps_alpha("tga", app.ui.dialog.as_ref().unwrap()));
+    confirm(&mut app).unwrap();
+    let (path, tga) = written.borrow()[0].clone();
+    assert_eq!((path.as_str(), tga[16], tga[17]), ("/out/Untitled-1.tga", 32, 8));
 }

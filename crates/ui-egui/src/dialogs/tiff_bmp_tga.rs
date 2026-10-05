@@ -1,11 +1,12 @@
 //! The options of TIFF (colour model, byte order, LZW, profile), BMP (colour model, layout, depth,
-//! palette, RLE, row order), after the raster export rows they share with PNG Options
-//! ([`super::png_options`]): the `tiffOptions` and `bmpOptions` dialogs.
+//! palette, RLE, row order) and Targa (depth), after the raster export rows they share with PNG
+//! Options ([`super::png_options`]): the `tiffOptions`, `bmpOptions` and `tgaOptions` dialogs.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_render::encode::bmp::{self, BmpOptions};
 use vectorcraft_render::encode::jpeg::ColorModel;
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
+use vectorcraft_render::encode::tga::{self, TgaOptions};
 use vectorcraft_render::encode::tiff::{ByteOrder, TiffOptions};
 
 use super::form;
@@ -18,8 +19,9 @@ const BMP_MODELS: [&str; 2] = ["rgb", "gray"];
 const BMP_MODEL_LABELS: [&str; 2] = ["RGB", "Grayscale"];
 const LAYOUTS: [&str; 2] = ["windows", "os2"];
 const LAYOUT_LABELS: [&str; 2] = ["Windows", "OS/2"];
-/// Labels of [`bmp::DEPTHS`].
+/// Labels of [`bmp::DEPTHS`] and [`tga::DEPTHS`].
 const BMP_DEPTH_LABELS: [&str; 6] = ["1 bit", "4 bit", "8 bit", "16 bit", "24 bit", "32 bit"];
+const TGA_DEPTH_LABELS: [&str; 3] = ["16 bits/pixel", "24 bits/pixel", "32 bits/pixel"];
 
 type Label<'a> = &'a dyn Fn(&mut egui::Ui, &str) -> egui::Response;
 
@@ -48,6 +50,9 @@ pub(super) fn defaults(id: &str, cmyk: bool, o: &mut Map<String, Value>) {
                 ("dither".into(), json!(p.dither.id())),
             ]);
         }
+        "tga" => {
+            o.insert("depth".into(), json!(TgaOptions::default().depth));
+        }
         _ => {}
     }
 }
@@ -58,6 +63,7 @@ pub(super) fn keeps_alpha(id: &str, d: &Dialog) -> bool {
         "jpg" => false,
         "tiff" => ColorModel::from_id(&d.str("colorModel")).unwrap_or_default() == ColorModel::Rgb,
         "bmp" => d.f64("depth", 24.0) == 32.0,
+        "tga" => d.f64("depth", 24.0) != 24.0,
         _ => true,
     }
 }
@@ -67,6 +73,11 @@ pub(super) fn rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, label: Label) {
     match id {
         "tiff" => tiff_rows(ui, d, label),
         "bmp" => bmp_rows(ui, d, label),
+        "tga" => {
+            label(ui, "Depth:");
+            depth_row(ui, d, "tga-depth", &tga::DEPTHS, &TGA_DEPTH_LABELS, |_| true);
+            ui.end_row();
+        }
         _ => {}
     }
 }

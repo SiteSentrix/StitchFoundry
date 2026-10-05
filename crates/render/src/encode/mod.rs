@@ -9,6 +9,7 @@ pub mod gif;
 pub mod jpeg;
 pub mod png;
 pub mod quantize;
+pub mod tga;
 pub mod tiff;
 
 use vectorcraft_doc::{Document, Node, NodeKind};
@@ -27,6 +28,7 @@ pub enum RasterFormat {
     Gif,
     Tiff,
     Bmp,
+    Tga,
 }
 
 /// How a raster export renders and encodes.
@@ -49,6 +51,8 @@ pub struct RasterExportOptions {
     pub tiff: tiff::TiffOptions,
     /// BMP layout, depth, compression and row order.
     pub bmp: bmp::BmpOptions,
+    /// Targa depth.
+    pub tga: tga::TgaOptions,
 }
 
 impl Default for RasterExportOptions {
@@ -63,6 +67,7 @@ impl Default for RasterExportOptions {
             palette: quantize::PaletteOptions::default(),
             tiff: tiff::TiffOptions::default(),
             bmp: bmp::BmpOptions::default(),
+            tga: tga::TgaOptions::default(),
         }
     }
 }
@@ -109,6 +114,7 @@ impl RasterExportOptions {
             }
             RasterFormat::Tiff => tiff::encode(img, self.ppi, &self.tiff),
             RasterFormat::Bmp => bmp::encode(&img.to_straight(), img.width, img.height, self.ppi, &self.bmp, &self.palette),
+            RasterFormat::Tga => tga::encode(&img.to_straight(), img.width, img.height, &self.tga),
         }
     }
 
@@ -190,5 +196,7 @@ mod tests_bmp;
 mod tests_jpeg;
 #[cfg(test)]
 mod tests_palette;
+#[cfg(test)]
+mod tests_tga;
 #[cfg(test)]
 mod tests_tiff;
