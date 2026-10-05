@@ -1231,9 +1231,14 @@ impl Renderer {
         // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
         // Mode its pixels in greyscale under the frame.
         let outline = f.opts.outline;
-        let pixels = if outline && !f.doc.setup.outline_images { None } else { self.image_pixmap(f.doc, &im.key, outline) };
+        // A linked image's preview is cached apart from the file's pixels, which share its key.
+        let cache_key = match f.doc.images.get(&im.key) {
+            Some(b) if b.is_proxy() => std::borrow::Cow::Owned(format!("{}\u{0}proxy", im.key)),
+            _ => std::borrow::Cow::Borrowed(im.key.as_str()),
+        };
+        let pixels = if outline && !f.doc.setup.outline_images { None } else { self.image_pixmap(f.doc, &im.key, &cache_key, outline) };
         if let Some(pm) = pixels {
-            let pm = if outline { pm } else { self.ink_image(&im.key, &pm, f.ink) };
+            let pm = if outline { pm } else { self.ink_image(&cache_key, &pm, f.ink) };
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
             ctx.set_transform(f.view * im.xf);
@@ -1249,20 +1254,20 @@ impl Renderer {
         }
     }
 
-    /// The decoded pixels of image blob `key` (cached), or a greyscale copy of them.
-    fn image_pixmap(&mut self, doc: &Document, key: &str, grey: bool) -> Option<Arc<Pixmap>> {
-        let colour = match self.images.get(key) {
+    /// The decoded pixels of image blob `key` (cached as `cache_key`), or a greyscale copy of them.
+    fn image_pixmap(&mut self, doc: &Document, key: &str, cache_key: &str, grey: bool) -> Option<Arc<Pixmap>> {
+        let colour = match self.images.get(cache_key) {
             Some(p) => p.clone(),
             None => {
                 let pm = Arc::new(paint::decode_pixmap(&doc.images.get(key)?.bytes)?);
-                self.images.insert(key.to_string(), pm.clone());
+                self.images.insert(cache_key.to_string(), pm.clone());
                 pm
             }
         };
         if !grey {
             return Some(colour);
         }
-        let grey_key = format!("{key}\u{0}grey");
+        let grey_key = format!("{cache_key}\u{0}grey");
         if let Some(p) = self.images.get(&grey_key) {
             return Some(p.clone());
         }

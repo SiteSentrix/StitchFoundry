@@ -253,3 +253,12 @@ agents) opens the `rasterEffectsSettings` dialog. Its fields are what `document.
 `ui.dialog.confirm` runs it with them as one undo step; a bad value keeps the dialog open. Object → Rasterize… opens a
 `command` dialog for `object.rasterize` whose fields (`ppi`, `colorModel`, `background`, `antiAlias`, `clippingMask`,
 `addAround`) start from these settings.
+
+Missing linked files: `app.open` of a document whose linked images' files can't be found (`document.open`'s
+`missingLinks`) opens the `missingLinks` dialog for the first (fields `missing`: `[{name, path, ids}]`, `modified`,
+`applyToAll`, `path`). `ui.dialog.set {field: "path", value}` then `ui.dialog.confirm` replaces it with that file
+(`links.relink`; without `path` a file is picked), and with `applyToAll` the others are looked for by name in the same
+folder; `ui.dialog.set {field: "discard", value: true}` then confirm ignores it (the images keep their preview), with
+`applyToAll` the rest too. The next missing file is asked about after each answer; `ui.dialog.cancel` stops asking.
+Then, with the preference `updateLinks: "askWhenModified"`, modified linked files are offered for update in a
+`confirm` dialog whose `ui.dialog.confirm` runs `links.update`.

@@ -395,7 +395,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
     let id = s.edit("Rasterize", |d, sel| {
         let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
         let key = unique_key(d, "raster");
-        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
+        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         let id = d.alloc_id();
         let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
         let mut node = Node::new(id, NodeKind::Image(ImageObject { key, width: w, height: h, xf, link: None }));
@@ -547,7 +547,7 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     let (png, w, h) = render_png(&tmp, region, scale, &RasterExportOptions::default().render_options(RasterFormat::Png), RasterColorModel::Document)?;
     s.edit("Crop Image", |d, _| {
         let key = unique_key(d, "crop");
-        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
+        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
             n.kind = NodeKind::Image(ImageObject {
                 key,

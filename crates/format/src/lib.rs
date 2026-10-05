@@ -6,12 +6,13 @@
 //!   "document": { …vectorcraft_doc::Document… },
 //!   "images": { "<key>": { "mime": "image/png", "data": "<base64>" } } }
 //! ```
+//! An image only linked images show is saved as its low-resolution preview (`"proxy": true`); the
+//! engine reads the linked file again when the document opens.
 //! It is lossless for everything in the document model and preserves unknown fields under
 //! `document.unknown`. Readers must reject files whose `version` is newer than they support.
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
@@ -46,6 +47,9 @@ pub enum FormatError {
 struct Image {
     mime: String,
     data: String,
+    /// `data` is a linked image's preview ([`ImageBlob::proxy`]), not the file's bytes.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    proxy: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -63,7 +67,18 @@ struct File {
 /// ([`Document::without_edit_modes`]).
 pub fn save(doc: &Document, pretty: bool) -> Vec<u8> {
     let doc = doc.without_edit_modes();
-    let images = doc.images.iter().map(|(k, b)| (k.clone(), Image { mime: b.mime.clone(), data: base64_encode(&b.bytes) })).collect();
+    let linked = doc.linked_only_images();
+    let images = doc
+        .images
+        .iter()
+        .map(|(k, b)| {
+            let image = match b.proxy.as_ref().filter(|_| linked.contains(k)) {
+                Some(p) => Image { mime: vectorcraft_doc::links::PROXY_MIME.into(), data: base64_encode(p), proxy: true },
+                None => Image { mime: b.mime.clone(), data: base64_encode(&b.bytes), proxy: false },
+            };
+            (k.clone(), image)
+        })
+        .collect();
     let f = File {
         format: "vectorcraft".into(),
         version: VERSION,
@@ -95,7 +110,12 @@ pub fn load(bytes: &[u8]) -> Result<Document, FormatError> {
     let mut doc = f.document;
     for (k, img) in f.images {
         let bytes = base64_decode(&img.data).ok_or_else(|| FormatError::BadImage(k.clone()))?;
-        doc.images.insert(k, ImageBlob { mime: img.mime, bytes: Arc::new(bytes) });
+        let mut blob = ImageBlob::new(img.mime, bytes);
+        // Until the linked file is read, the preview stands in for it.
+        if img.proxy {
+            blob.proxy = Some(blob.bytes.clone());
+        }
+        doc.images.insert(k, blob);
     }
     // Saved mid-edit by an older version: drop the opacity-mask editing layer.
     doc.drop_edit_modes();
@@ -177,7 +197,7 @@ mod tests {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         d.insert(Some(l), 0, Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())).unwrap();
-        d.images.insert("k".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![1, 2, 3, 250]) });
+        d.images.insert("k".into(), ImageBlob::new("image/png", vec![1, 2, 3, 250]));
         let bytes = save(&d, true);
         assert!(sniff(&bytes));
         let back = load(&bytes).unwrap();

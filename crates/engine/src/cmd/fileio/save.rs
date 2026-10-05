@@ -20,13 +20,15 @@ pub fn save_format(format: Option<&str>, path: Option<&str>) -> std::result::Res
     }
 }
 
-/// What Save writes for `st` in format `f` (see [`save_format`]) → the encoded file and the
-/// options to remember for the next Save. An SVG save takes the SVG options in `p`, else the ones
-/// the document was last saved with, and keeps hidden layers (hidden) unless they say otherwise.
-pub fn save_encoding(st: &DocState, f: &Format, p: &Value) -> Result<(Encoded, Value)> {
+/// What Save writes for `st` in format `f` (see [`save_format`]) to `path` → the encoded file and
+/// the options to remember for the next Save. An SVG save takes the SVG options in `p`, else the
+/// ones the document was last saved with, and keeps hidden layers (hidden) unless they say
+/// otherwise. A native file records its links' paths relative to `path`.
+pub fn save_encoding(st: &DocState, f: &Format, p: &Value, path: Option<&str>) -> Result<(Encoded, Value)> {
     const C: &str = "document.save";
     if f.id == "vectorcraft" {
-        return Ok((encode_all(&st.doc, f.id, p)?, Value::Null));
+        let relative = path.and_then(|path| crate::cmd::links::with_relative_paths(&st.doc, path));
+        return Ok((encode_all(relative.as_ref().unwrap_or(&st.doc), f.id, p)?, Value::Null));
     }
     let given = super::svg_options(p).map_err(|e| bad(C, e))?;
     let opts = if given.is_empty() { st.save_options.clone() } else { Value::Object(given) };
@@ -56,7 +58,7 @@ pub(super) fn save(s: &mut Session, p: &Value) -> Result<Value> {
         stamp_save_dates(s.doc_mut()?);
     }
     let st = s.doc()?;
-    let (enc, opts) = save_encoding(st, f, p)?;
+    let (enc, opts) = save_encoding(st, f, p, path.as_deref())?;
     let Some(path) = path else {
         // Nowhere to save to (web, agents): hand the bytes back; the document stays modified.
         return write_encoded(None, &default_name(&st.doc, f.extensions[0]), &st.doc, &enc, json!({}));

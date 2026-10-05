@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Open Document",
             [],
             None,
-            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK) → {index, title, format, warnings}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). Templates (native templates, .ait) open as a new untitled document",
+            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK) → {index, title, format, warnings, missingLinks, modifiedLinks, updatedLinks: [{name, path, ids}]}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). Templates (native templates, .ait) open as a new untitled document. Linked images are read from their files (looked for at their path, then relative to the document): missing ones show their saved preview (links.relink), modified ones are read again only with Preferences › Update Links: Automatically (else links.update)",
             always,
             load::open
         ),
@@ -362,6 +362,35 @@ pub(crate) fn write_file(path: &str, bytes: &[u8]) -> Result<()> {
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_dir(path: &str) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
+}
+
+/// A file's size (bytes) and modification time (ms since the Unix epoch, when the file system
+/// keeps one); `None` when there is no file at `path`.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn file_stamp(path: &str) -> Option<(u64, Option<u64>)> {
+    let m = std::fs::metadata(path).ok().filter(std::fs::Metadata::is_file)?;
+    let modified = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
+    Some((m.len(), modified))
+}
+
+/// `path` made absolute against the working directory (as given when absolute already, or when
+/// that fails).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn absolute_path(path: &str) -> String {
+    if std::path::Path::new(path).is_absolute() {
+        return path.to_string();
+    }
+    std::path::absolute(path).map_or_else(|_| path.to_string(), |p| p.to_string_lossy().into_owned())
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn file_stamp(_: &str) -> Option<(u64, Option<u64>)> {
+    None
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn absolute_path(path: &str) -> String {
+    path.to_string()
 }
 
 #[cfg(target_arch = "wasm32")]

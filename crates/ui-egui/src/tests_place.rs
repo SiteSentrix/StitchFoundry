@@ -92,7 +92,7 @@ fn a_dropped_png_is_centred_at_the_pointer() {
     let want = Xf::new(rect, app.view().unwrap()).to_doc(pos);
     let c = n.geometric_bounds().unwrap().center();
     assert!((c.x - want.x).abs() < 1e-6 && (c.y - want.y).abs() < 1e-6, "{c:?} vs {want:?}");
-    assert!(matches!(&n.kind, NodeKind::Image(im) if im.link.as_deref() == Some(path.as_str())), "linked by default");
+    assert!(matches!(&n.kind, NodeKind::Image(im) if im.link.as_ref().map(|l| l.path.as_str()) == Some(path.as_str())), "linked by default");
     assert_eq!(app.session.documents().len(), 1, "placed, not opened");
     // Shift embeds.
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], &[&path], true);

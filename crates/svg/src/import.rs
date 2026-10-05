@@ -770,7 +770,7 @@ impl Importer {
             .and_then(|r| r.into_dimensions().ok())
             .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
         let key = format!("img-{:016x}", fnv1a(bytes));
-        self.doc.images.entry(key.clone()).or_insert_with(|| ImageBlob { mime: mime.into(), bytes: Arc::new(bytes.to_vec()) });
+        self.doc.images.entry(key.clone()).or_insert_with(|| ImageBlob::new(mime, bytes.to_vec()));
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);
         Some(self.named(i.id(), NodeKind::Image(ImageObject { key, width: pw, height: ph, xf, link: None })))
     }

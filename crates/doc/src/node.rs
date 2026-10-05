@@ -200,8 +200,10 @@ pub struct ImageObject {
     pub height: u32,
     /// Maps pixel space (0..w, 0..h) into the document.
     pub xf: Affine,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub link: Option<String>,
+    /// The file a linked image shows (File → Place with Link); `None`: embedded. Files saved
+    /// before links had details hold just the path.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::links::de_link")]
+    pub link: Option<crate::LinkInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

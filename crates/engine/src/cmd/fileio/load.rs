@@ -1,7 +1,6 @@
 //! `document.open`: every readable format into a new document.
 
 use std::io::Cursor;
-use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -132,7 +131,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →
-/// `{index, title, format, warnings}`. `path` is kept for Save only for a native, non-template file.
+/// `{index, title, format, warnings, missingLinks, modifiedLinks, updatedLinks}`. `path` is kept
+/// for Save only for a native, non-template file; the document's linked files are looked for from
+/// it ([`crate::cmd::links::resolve`]).
 pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value> {
     open_bytes_with(s, name, bytes, path, &Value::Null)
 }
@@ -141,6 +142,7 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
     let opts = LoadOptions::from_params("document.open", p)?;
     let Loaded { mut doc, format, warnings } = load_with(name, bytes, &opts)?;
+    let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait file) opens as a new untitled document.
     let template = doc.template || format.id == "ait";
     if template {
@@ -150,7 +152,7 @@ pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<S
     let keep_path = format.id == "vectorcraft" && !template;
     let index = s.add_document(doc, path.filter(|_| keep_path));
     let title = s.documents()[index].title();
-    Ok(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings }))
+    Ok(super::merge(json!({ "index": index, "title": title, "format": format.id, "warnings": warnings }), links.to_json()))
 }
 
 /// A file named by a command's params: `{path}` (read from disk) or `{name, dataBase64}`.
@@ -201,7 +203,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if width == 0 || height == 0 {
         return Err(err("the image is empty"));
     }
-    let blob = ImageBlob { mime: mime.into(), bytes: Arc::new(bytes) };
+    let blob = ImageBlob::new(mime, bytes);
     Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi })
 }
 

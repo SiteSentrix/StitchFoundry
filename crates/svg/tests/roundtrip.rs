@@ -343,7 +343,7 @@ fn image_roundtrip() {
         NodeKind::Image(ImageObject { key: "k".into(), width: 4, height: 2, xf: Affine::translate((10.0, 20.0)) * Affine::scale(10.0), link: None }),
     );
     let mut d = doc_with(vec![n]);
-    d.images.insert("k".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png.clone()) });
+    d.images.insert("k".into(), ImageBlob::new("image/png", png.clone()));
     let s = export(&d, &ExportOptions::default());
     assert!(s.contains("data:image/png;base64,"), "{s}");
     let r = roundtrip(&d);

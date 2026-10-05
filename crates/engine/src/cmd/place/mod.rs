@@ -2,8 +2,8 @@
 //! the clipboard.
 //!
 //! - A raster image becomes one image at 100% of its physical size: its pixels at the resolution
-//!   the file declares ([`fileio::ppi`]; 72 ppi when it declares none), linked to its path with
-//!   `link`.
+//!   the file declares ([`fileio::ppi`]; 72 ppi when it declares none), linked to its file with
+//!   `link` ([`super::links`]).
 //! - An SVG becomes one group of its art.
 //! - A PDF/.ai/.ait page or a native document's artboard becomes one group, clipped to the page
 //!   (`crop: "crop"`; a PDF page's `art`, `trim`, `bleed` or `media` box too) or bounded by its art
@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Appearance, Document, ImageObject, Node, NodeId, NodeKind, Scaling};
+use vectorcraft_doc::{Appearance, Document, ImageObject, LinkInfo, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_pdf::CropTo;
 
@@ -98,8 +98,8 @@ struct Loaded {
     /// The art's natural box (what `at` centres and `rect` fits).
     natural: Rect,
     warnings: Vec<String>,
-    /// The file's path (for Link).
-    path: Option<String>,
+    /// The link to a raster image's file (for Link), when read from a path.
+    link: Option<LinkInfo>,
 }
 
 /// Points per pixel of a raster image at the resolution it declares (72 ppi when none).
@@ -127,12 +127,12 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
         ));
     }
     let crop = opts.crop != CropTo::Bounding;
-    let path = src.path.map(str::to_string);
     if format.raster {
         let img = fileio::raster_image(&src.bytes)?;
         let (sx, sy) = pt_per_px(img.ppi);
         let natural = Rect::new(0.0, 0.0, img.width as f64 * sx, img.height as f64 * sy);
-        return Ok(Loaded { name, format, art: Art::Image(img), natural, warnings: vec![], path });
+        let link = src.path.map(|path| super::links::link_info(path, &src.bytes));
+        return Ok(Loaded { name, format, art: Art::Image(img), natural, warnings: vec![], link });
     }
     let (mut doc, warnings) = match format.id {
         // Only the page placed is read, its artboard the box asked for (Bounding Box: the art's
@@ -142,7 +142,9 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
             fileio::page_document(&src.bytes, page - 1, &o).map_err(|e| bad(cmd, format!("{name}: {e}")))?
         }
         _ => {
-            let l = fileio::load(src.name, &src.bytes)?;
+            let mut l = fileio::load(src.name, &src.bytes)?;
+            // Linked images (a native document's) show their files, found from its folder.
+            super::links::resolve(&mut l.doc, src.path, false);
             (l.doc, l.warnings)
         }
     };
@@ -167,7 +169,7 @@ fn load(p: &Value, cmd: &str) -> Result<Loaded> {
     };
     let natural = clip.or_else(|| nodes.iter().fold(None, |acc, n| vectorcraft_geom::union_opt(acc, n.visual_bounds())));
     let natural = natural.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, format!("`{name}` has no art to place")))?;
-    Ok(Loaded { name, format, art: Art::Vector { src: Box::new(doc), nodes, clip }, natural, warnings, path })
+    Ok(Loaded { name, format, art: Art::Vector { src: Box::new(doc), nodes, clip }, natural, warnings, link: None })
 }
 
 /// A visible, non-template layer.
@@ -191,11 +193,11 @@ fn art_of<'a>(nodes: impl Iterator<Item = &'a Arc<Node>>) -> Vec<Node> {
 }
 
 /// The art as one object of `d` (its resources added), at its natural size and position.
-fn build(d: &mut Document, l: Loaded, link: Option<String>) -> Node {
+fn build(d: &mut Document, l: Loaded, link: Option<LinkInfo>) -> Node {
     let mut node = match l.art {
         Art::Image(img) => {
             let (sx, sy) = pt_per_px(img.ppi);
-            d.images.entry(img.key.clone()).or_insert(img.blob);
+            super::links::store_image(d, &img.key, img.blob, link.is_some());
             let im = ImageObject { key: img.key, width: img.width, height: img.height, xf: Affine::scale_non_uniform(sx, sy), link };
             Node::new(d.alloc_id(), NodeKind::Image(im))
         }
@@ -288,7 +290,7 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let parent = st.insertion_parent();
     let below = st.current_layer().or_else(|| parent.and_then(|p| st.doc.layer_of(p)));
-    let link = loaded.path.take().filter(|_| bool_or(p, "link", true) && loaded.format.raster);
+    let link = loaded.link.take().filter(|_| bool_or(p, "link", true));
     let linked = link.is_some();
     let (name, format, warnings) = (loaded.name.clone(), loaded.format.id, std::mem::take(&mut loaded.warnings));
     let (id, size) = s.edit("Place", |d, sel| {
@@ -462,7 +464,7 @@ fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         "id": id.0,
         "name": n.display_name(),
         "linked": im.link.is_some(),
-        "link": im.link,
+        "link": im.link.as_ref().map(|l| &l.path),
         "colorMode": st.doc.images.get(&im.key).map_or("RGB", |b| color_mode(&b.bytes)),
         "pixelWidth": im.width,
         "pixelHeight": im.height,

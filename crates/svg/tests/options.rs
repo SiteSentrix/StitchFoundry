@@ -3,8 +3,6 @@
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::sync::Arc;
-
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, Document, ImageBlob, ImageObject, Node, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, Point, Rect, shapes};
@@ -55,7 +53,7 @@ fn every_combination_reads_back() {
 /// A document with one embedded image under `key`.
 fn image_doc(key: &str, bytes: Vec<u8>) -> Document {
     let mut d = Document::new(100.0, 100.0);
-    d.images.insert(key.into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(bytes) });
+    d.images.insert(key.into(), ImageBlob::new("image/png", bytes));
     let l = d.layers[0].id;
     let im = ImageObject { key: key.into(), width: 2, height: 2, xf: Affine::IDENTITY, link: None };
     let n = Node::new(d.alloc_id(), NodeKind::Image(im));

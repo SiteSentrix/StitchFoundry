@@ -325,7 +325,7 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
     let png = r.encode_png();
     let (w, h) = (r.width, r.height);
     s.edit("img", |d, sel| {
-        d.images.insert("img1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
+        d.images.insert("img1".into(), ImageBlob::new("image/png", png));
         let id = d.alloc_id();
         let l = d.default_layer();
         d.insert(l, 0, Node::new(id, NodeKind::Image(ImageObject { key: "img1".into(), width: w, height: h, xf, link: None })))?;

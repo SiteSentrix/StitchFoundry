@@ -8,6 +8,7 @@
 pub mod appearance;
 pub mod graph;
 pub mod hit;
+pub mod links;
 pub mod live;
 pub mod marks;
 pub mod metadata;
@@ -46,6 +47,7 @@ pub use appearance::{
 };
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
+pub use links::LinkInfo;
 pub use live::{BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshPoint};
 pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;
@@ -401,6 +403,10 @@ pub struct ImageBlob {
     pub mime: String,
     #[serde(skip)]
     pub bytes: Arc<Vec<u8>>,
+    /// A linked image's low-resolution preview (PNG, see [`links`]): what a save writes when only
+    /// linked images show this blob, and what `bytes` hold while the linked file can't be read.
+    #[serde(skip)]
+    pub proxy: Option<Arc<Vec<u8>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

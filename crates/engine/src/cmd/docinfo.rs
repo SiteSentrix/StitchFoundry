@@ -68,7 +68,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     Some("textObjects")
                 }
                 NodeKind::Image(im) => {
-                    images.insert(im.key.clone(), json!({ "width": im.width, "height": im.height, "linked": im.link.is_some(), "link": im.link }));
+                    images.insert(
+                        im.key.clone(),
+                        json!({ "width": im.width, "height": im.height, "linked": im.link.is_some(), "link": im.link.as_ref().map(|l| &l.path) }),
+                    );
                     Some("images")
                 }
                 NodeKind::SymbolInstance { symbol, .. } => {

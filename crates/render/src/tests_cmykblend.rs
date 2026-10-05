@@ -113,7 +113,7 @@ fn placed_images_are_separated_not_blackened() {
     let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]));
     let mut png = vec![];
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
-    d.images.insert("red".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png) });
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
     let n = Node::new(d.alloc_id(), NodeKind::Image(ImageObject { key: "red".into(), width: 4, height: 4, xf: Affine::IDENTITY, link: None }));
     add(&mut d, n);
     let got = Renderer::new().render_region(&d, d.artboards[0].rect, 1.0, true).pixel(1, 1);
