@@ -62,19 +62,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(4, 6)).stroke(Stroke::new(1.5, t.border)))
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
-            for (gi, group) in ICON_PANEL_GROUPS.iter().enumerate() {
-                if gi > 0 {
-                    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 7.0), Sense::hover());
-                    ui.painter().line_segment([r.left_center() + vec2(4.0, 0.0), r.right_center() - vec2(4.0, 0.0)], Stroke::new(1.0, t.divider));
-                }
-                for id in group.iter() {
-                    let Some((_, label, icon)) = ICON_PANELS.iter().find(|p| p.0 == *id) else { continue };
-                    let open = app.ui.open_panel.as_deref() == Some(*id);
-                    if widgets::icon_button(ui, icon, label, open, 30.0).clicked() {
-                        app.ui.open_panel = if open { None } else { Some(id.to_string()) };
+            // The icons scroll in a window too short for them.
+            widgets::strip_scroll(ui, "icon_column", |ui| {
+                for (gi, group) in ICON_PANEL_GROUPS.iter().enumerate() {
+                    if gi > 0 {
+                        let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 7.0), Sense::hover());
+                        ui.painter().line_segment([r.left_center() + vec2(4.0, 0.0), r.right_center() - vec2(4.0, 0.0)], Stroke::new(1.0, t.divider));
+                    }
+                    for id in group.iter() {
+                        let Some((_, label, icon)) = ICON_PANELS.iter().find(|p| p.0 == *id) else { continue };
+                        let open = app.ui.open_panel.as_deref() == Some(*id);
+                        if widgets::icon_button(ui, icon, label, open, 30.0).clicked() {
+                            app.ui.open_panel = if open { None } else { Some(id.to_string()) };
+                        }
                     }
                 }
-            }
+            });
         });
 }
 
@@ -113,5 +116,36 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     if !open {
         app.ui.open_panel = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+    use crate::toolbar::tests::{wheel, widget_rects};
+
+    #[test]
+    fn the_icon_column_scrolls_in_a_short_window() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut frame = |time: f64, events| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(900.0, 400.0));
+            let input = egui::RawInput { time: Some(time), events, screen_rect: Some(screen), ..Default::default() };
+            ctx.run_ui(input, |ui| show(&mut app, ui)).textures_delta.clear();
+            widget_rects(&ctx, vec2(30.0, 30.0))
+        };
+        let icons = frame(0.0, vec![]);
+        assert!(icons.last().unwrap().bottom() > 400.0, "the last panel icon starts below the window");
+        frame(0.1, wheel(icons[0].center(), 2000.0));
+        let mut icons = vec![];
+        for k in 2..40 {
+            icons = frame(f64::from(k) * 0.1, vec![]);
+        }
+        assert!(icons.last().unwrap().bottom() <= 400.0, "scrolled into view: {:?}", icons.last());
     }
 }
