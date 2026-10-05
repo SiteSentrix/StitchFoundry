@@ -19,7 +19,7 @@ use crate::{
     xml_escape,
 };
 
-type Props = Vec<(&'static str, String)>;
+use crate::css::{self, Props, blend_css, css_string, font_descriptor};
 
 pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
@@ -167,13 +167,6 @@ fn latin1_refs(s: &mut String) {
     *s = o;
 }
 
-/// The weight and italic of the face style `st` asks for: what embedded fonts' `@font-face`
-/// rules and the characters using them say, so each face is told apart (Semibold from Bold).
-fn font_descriptor(st: &CharStyle) -> (u16, bool) {
-    let fs = st.font_style.to_ascii_lowercase();
-    (vectorcraft_text::style_weight(&st.font_style).round().clamp(1.0, 1000.0) as u16, fs.contains("italic") || fs.contains("oblique"))
-}
-
 /// `chars` (sorted) as a CSS `unicode-range` (`U+41-5A,U+61`).
 fn unicode_range(chars: &BTreeSet<char>) -> String {
     let mut runs: Vec<(u32, u32)> = Vec::new();
@@ -185,11 +178,6 @@ fn unicode_range(chars: &BTreeSet<char>) -> String {
     }
     let one = |(a, b): (u32, u32)| if a == b { format!("U+{a:X}") } else { format!("U+{a:X}-{b:X}") };
     runs.into_iter().map(one).collect::<Vec<_>>().join(",")
-}
-
-/// A CSS string.
-fn css_string(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// A CSS declaration block as the literal value of an `<!ENTITY>`: quotes, `%` and markup
@@ -409,29 +397,8 @@ const MASK: &str = "maskUnits=\"userSpaceOnUse\" color-interpolation=\"sRGB\"";
 /// (clipping, not inverted): `noclip`, `invert`.
 pub(crate) const MASK_FLAGS: &str = "data-vectorcraft-mask";
 
-pub(crate) fn blend_css(b: BlendMode) -> &'static str {
-    match b {
-        BlendMode::Normal => "normal",
-        BlendMode::Darken => "darken",
-        BlendMode::Multiply => "multiply",
-        BlendMode::ColorBurn => "color-burn",
-        BlendMode::Lighten => "lighten",
-        BlendMode::Screen => "screen",
-        BlendMode::ColorDodge => "color-dodge",
-        BlendMode::Overlay => "overlay",
-        BlendMode::SoftLight => "soft-light",
-        BlendMode::HardLight => "hard-light",
-        BlendMode::Difference => "difference",
-        BlendMode::Exclusion => "exclusion",
-        BlendMode::Hue => "hue",
-        BlendMode::Saturation => "saturation",
-        BlendMode::Color => "color",
-        BlendMode::Luminosity => "luminosity",
-    }
-}
-
 /// Turn an object name into a valid, readable XML id.
-fn sanitize_id(name: &str) -> String {
+pub(crate) fn sanitize_id(name: &str) -> String {
     let mut s: String = name.trim().chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' }).collect();
     if s.is_empty() || !s.starts_with(|c: char| c.is_alphabetic() || c == '_') {
         s.insert(0, '_');
@@ -531,7 +498,6 @@ impl Writer<'_> {
         if props.is_empty() {
             return String::new();
         }
-        let css = |ps: &[&(&str, String)]| ps.iter().map(|(k, v)| format!("{k}:{v}")).collect::<Vec<_>>().join(";");
         // SVG Tiny has presentation attributes alone.
         let styling = if self.tiny() { Styling::PresentationAttributes } else { self.opts.styling };
         match styling {
@@ -544,15 +510,15 @@ impl Writer<'_> {
                     if self.tiny() {
                         self.warn("SVG Tiny 1.2 has no style sheets: blend modes, isolation and font features are left out");
                     } else {
-                        s.push_str(&format!(" style=\"{}\"", xml_escape(&css(&style))));
+                        s.push_str(&format!(" style=\"{}\"", xml_escape(&css::declarations(style))));
                     }
                 }
                 s
             }
-            Styling::InlineStyle => format!(" style=\"{}\"", xml_escape(&css(&props.iter().collect::<Vec<_>>()))),
-            Styling::StyleEntities => format!(" style=\"&st{};\"", self.class(css(&props.iter().collect::<Vec<_>>()))),
+            Styling::InlineStyle => format!(" style=\"{}\"", xml_escape(&css::declarations(props))),
+            Styling::StyleEntities => format!(" style=\"&st{};\"", self.class(css::declarations(props))),
             Styling::InternalCss => {
-                let i = self.class(css(&props.iter().collect::<Vec<_>>()));
+                let i = self.class(css::declarations(props));
                 format!(" class=\"{}cls-{i}\"", self.id_prefix)
             }
         }
@@ -602,20 +568,6 @@ impl Writer<'_> {
             );
         }
         line(1, "</metadata>");
-    }
-
-    fn node_props(n: &Node) -> Props {
-        let mut p = Props::new();
-        if n.opacity < 1.0 {
-            p.push(("opacity", fmt_num(n.opacity as f64, 3)));
-        }
-        if n.blend != BlendMode::Normal {
-            p.push(("mix-blend-mode", blend_css(n.blend).into()));
-        }
-        if n.isolate {
-            p.push(("isolation", "isolate".into()));
-        }
-        p
     }
 
     fn path_d(&self, p: &PathData, m: Affine) -> String {
@@ -911,12 +863,12 @@ impl Writer<'_> {
                     p.push(("paint-order", "stroke".into()));
                 }
             }
-            p.extend(Self::node_props(n));
+            p.extend(css::transparency(n));
             let a = self.attrs(&p);
             self.line(&format!("<path{id} d=\"{d}\"{a}/>"));
             return;
         }
-        let a = self.attrs(&Self::node_props(n));
+        let a = self.attrs(&css::transparency(n));
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
         for (it, plan) in items.into_iter().zip(plans) {
@@ -1113,7 +1065,7 @@ impl Writer<'_> {
 
     /// Props of a group (or layer): a knockout group is isolated, a hidden layer not displayed.
     fn group_props(&self, n: &Node) -> Props {
-        let mut p = Self::node_props(n);
+        let mut p = css::transparency(n);
         if !n.isolate && n.knocks_out(self.knockout) {
             p.push(("isolation", "isolate".into()));
         }
@@ -1296,7 +1248,7 @@ impl Writer<'_> {
                 };
                 let id = self.id_attr(n);
                 let m = self.matrix(self.xf * im.xf);
-                let a = self.attrs(&Self::node_props(n));
+                let a = self.attrs(&css::transparency(n));
                 self.line(&format!(
                     "<image{id} width=\"{}\" height=\"{}\" transform=\"{m}\" preserveAspectRatio=\"none\"{a} xlink:href=\"{}\"/>",
                     im.width,
@@ -1311,7 +1263,7 @@ impl Writer<'_> {
                     return;
                 }
                 let id = self.id_attr(n);
-                let a = self.attrs(&Self::node_props(n));
+                let a = self.attrs(&css::transparency(n));
                 if let Some(def) = self.symbol_use(sym, n, *xf) {
                     let m = self.xf * *xf;
                     let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
@@ -1551,25 +1503,9 @@ impl Writer<'_> {
     /// and the map from text space to user space, which character gradients resolve against
     /// (as on the canvas).
     fn char_props(&mut self, st: &CharStyle, space: (Rect, Affine)) -> Props {
-        let mut p = Props::new();
-        let fam =
-            if st.font_family.contains(|c: char| c.is_whitespace() || c == ',') { format!("'{}'", st.font_family) } else { st.font_family.clone() };
-        p.push(("font-family", fam));
-        // Vertical scale is the font size; horizontal scale stretches it (`textLength`).
-        p.push(("font-size", self.num(st.size * st.v_scale / 100.0)));
-        let fs = st.font_style.to_ascii_lowercase();
-        let (weight, italic) = font_descriptor(st);
-        if self.embeds_fonts() {
-            // Embedded faces are told apart by their weight.
-            if weight != 400 {
-                p.push(("font-weight", weight.to_string()));
-            }
-        } else if fs.contains("bold") || fs.contains("black") || fs.contains("heavy") {
-            p.push(("font-weight", "bold".into()));
-        }
-        if italic {
-            p.push(("font-style", "italic".into()));
-        }
+        let decimals = self.opts.decimals;
+        let len = |v: f64| fmt_num(v, decimals);
+        let mut p = css::font_props(st, &len, self.embeds_fonts());
         // Character paints resolve in the text's space (`to_user` maps it into user space).
         let (bounds, to_user) = space;
         let saved = std::mem::replace(&mut self.xf, to_user);
@@ -1582,32 +1518,7 @@ impl Writer<'_> {
             self.stroke_props(&layer, layer.width, Some(layer.paint_bounds(bounds)), &mut p);
         }
         self.xf = saved;
-        // Tracking and manual kerning both add space after every character.
-        let spacing = st.tracking + st.kerning.unwrap_or(0.0);
-        if spacing != 0.0 {
-            p.push(("letter-spacing", self.num(spacing / 1000.0 * st.size)));
-        }
-        if st.kerning.is_some() {
-            // Manual kerning replaces the font's pair kerning.
-            p.push(("font-kerning", "none".into()));
-        }
-        if !st.features.is_empty() {
-            let v: Vec<String> = st
-                .features
-                .iter()
-                .map(|t| match t.strip_prefix('-') {
-                    Some(off) => format!("\"{off}\" 0"),
-                    None => format!("\"{t}\" 1"),
-                })
-                .collect();
-            p.push(("font-feature-settings", v.join(", ")));
-        }
-        match (st.underline, st.strikethrough) {
-            (true, true) => p.push(("text-decoration", "underline line-through".into())),
-            (true, false) => p.push(("text-decoration", "underline".into())),
-            (false, true) => p.push(("text-decoration", "line-through".into())),
-            _ => {}
-        }
+        p.extend(css::type_props(st, &len));
         p
     }
 
@@ -1620,7 +1531,7 @@ impl Writer<'_> {
             return chars(self, n);
         }
         let id = self.id_attr(n);
-        let a = self.attrs(&Self::node_props(n));
+        let a = self.attrs(&css::transparency(n));
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
@@ -1657,7 +1568,7 @@ impl Writer<'_> {
             }
         }
         let id = self.id_attr(n);
-        let a = self.attrs(&Self::node_props(n));
+        let a = self.attrs(&css::transparency(n));
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
         // The glyphs stay in text space; the text's transform joins the document's meanwhile.
@@ -1701,7 +1612,7 @@ impl Writer<'_> {
         if let Some((a, _)) = anchor {
             props.push(("text-anchor", a.into()));
         }
-        props.extend(Self::node_props(n));
+        props.extend(css::transparency(n));
         let id = self.id_attr(n);
         let a = self.attrs(&props);
         let m = self.xf * t.xf;
@@ -1857,7 +1768,7 @@ impl Writer<'_> {
             Justify::Right | Justify::JustifyRight => props.push(("text-anchor", "end".into())),
             _ => {}
         }
-        props.extend(Self::node_props(n));
+        props.extend(css::transparency(n));
         let a = self.attrs(&props);
         let offset = fmt_num(start * 100.0, 3);
         let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");

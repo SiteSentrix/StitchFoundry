@@ -9,6 +9,9 @@
 //!   ([`Profile`]), optionally with the fonts type uses embedded as `@font-face` subsets.
 //! * [`import`] / [`import_with_report`] parse SVG with `usvg` and convert its normalized tree into
 //!   document nodes with all transforms baked into the geometry.
+//! * [`css_rules`] writes the CSS web pages style objects with (the CSS Properties panel): shapes'
+//!   paints as backgrounds and borders, type as fonts, shadows as `box-shadow`, each property
+//!   written as SVG export writes it in its style sheets.
 //!
 //! ## Export approximations
 //!
@@ -75,8 +78,11 @@
 //! rotation and style names).
 #![forbid(unsafe_code)]
 
+mod css;
 mod export;
 mod import;
+
+pub use css::{CssOptions, CssRule, CssSheet, CssUnits, css_rules};
 
 use serde::{Deserialize, Serialize};
 

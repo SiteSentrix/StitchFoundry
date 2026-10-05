@@ -1114,6 +1114,8 @@ mod tests_colorthemes;
 #[cfg(test)]
 mod tests_containers;
 #[cfg(test)]
+mod tests_css;
+#[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
 mod tests_distort;
