@@ -460,8 +460,6 @@ impl PdfSettings {
         let d = Self::default();
         let s = &self.security;
         [
-            (self.thumbnails, "page thumbnails are not embedded yet"),
-            (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers && !self.compatibility.has_layers(), "PDF layers need PDF 1.5 or later: every layer is plain page content"),
             (
                 !self.advanced.outline_text && self.advanced.font_subset_percent < 100.0,

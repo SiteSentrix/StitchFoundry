@@ -813,12 +813,16 @@ mod tests {
             frame(&mut app);
             assert!(app.ui.dialog.is_some(), "{s} closed the dialog");
         }
-        // The Summary lists what changed and the warnings for options not applied yet.
+        // The Summary lists what changed and the warnings for options not applied yet (permissions
+        // without a password; thumbnails are embedded).
         set_field(&mut app, "thumbnails", json!(true));
+        set_field(&mut app, "security.printing", json!("low"));
         let p = params(app.ui.dialog.as_ref().unwrap());
         let v = summary_of(&mut app, &egui::Context::default(), &p).unwrap();
-        assert_eq!(v["changed"][0]["option"], "thumbnails");
-        assert!(v["warnings"][0].as_str().unwrap().contains("thumbnails"));
+        let changed: Vec<&str> = v["changed"].as_array().unwrap().iter().map(|c| c["option"].as_str().unwrap()).collect();
+        assert_eq!(changed, ["security.printing", "thumbnails"]);
+        let warnings = v["warnings"].as_array().unwrap();
+        assert!(warnings.len() == 1 && warnings[0].as_str().unwrap().contains("permissions"), "{warnings:?}");
     }
 
     #[test]
@@ -849,9 +853,9 @@ mod tests {
     fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
         let (mut app, written, opened) = app();
         app.run("ui.savePdfDialog", json!({"path": "/tmp/w.pdf"})).unwrap();
-        set_field(&mut app, "thumbnails", json!(true));
+        set_field(&mut app, "security.printing", json!("low"));
         super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.status.contains("1 note(s)") && app.ui.status.contains("thumbnails"), "{}", app.ui.status);
+        assert!(app.ui.status.contains("1 note(s)") && app.ui.status.contains("permissions"), "{}", app.ui.status);
         assert!(opened.borrow().is_empty(), "not opened unless asked");
         app.run("ui.savePdfDialog", json!({"path": "/tmp/bad.pdf"})).unwrap();
         set_field(&mut app, "__allArtboards", json!(false));

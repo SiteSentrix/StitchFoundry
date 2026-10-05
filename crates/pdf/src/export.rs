@@ -42,19 +42,7 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     // Live geometry effects export as their result; raster effects are reported below.
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
-    if doc.artboards.is_empty() {
-        return Err(PdfError::NoArtboards);
-    }
-    let indices: Vec<usize> = match &opts.artboards {
-        Some(v) => v.clone(),
-        None => (0..doc.artboards.len()).collect(),
-    };
-    if indices.is_empty() {
-        return Err(PdfError::NoArtboards);
-    }
-    if let Some(bad) = indices.iter().find(|i| **i >= doc.artboards.len()) {
-        return Err(PdfError::BadArtboard(*bad));
-    }
+    let pages = pages(doc, opts)?;
 
     let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.title.clone()));
     let created_at = opts.created.or_else(vectorcraft_doc::metadata::now_unix);
@@ -78,12 +66,9 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         warnings.push("PDF layers can't be written with a knockout page group: every layer is plain page content".into());
     }
     ex.overprint = set.advanced.overprint == crate::Overprint::Preserve;
-    // Marks and Bleeds: each page is its artboard (the trim box) grown by the bleed, and by the
-    // printer's marks around that.
     let bleed = set.bleed_of(doc);
     let marks = set.marks.printer_marks();
-    for i in indices {
-        let boxes = PageBoxes::new(doc.artboards[i].rect, bleed, &marks);
+    for (i, boxes) in pages {
         let (m, r) = (boxes.media, boxes.bleed);
         let info = if marks.page_info { crate::marks::page_info(doc, &title, i, created_at) } else { String::new() };
         let art = crate::marks::art(doc, &marks, &boxes, bleed, &info);
@@ -108,11 +93,31 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
     w.absorb(ex);
     let (bytes, more) = w.finish()?;
     let bytes = crate::forms::finish(bytes, doc, set, layers, overprinted)?;
-    let bytes = if native.is_some() { crate::editing::seal(bytes)? } else { bytes };
-    let bytes = crate::encrypt::protect(bytes, set)?;
     warnings.extend(more);
+    let bytes = crate::post::finish(bytes, opts, native.is_some(), &mut warnings)?;
     warnings.dedup();
     Ok(ExportReport { bytes, warnings })
+}
+
+/// The artboards `opts` exports, in page order, with the boxes of their pages: Marks and Bleeds
+/// make each page its artboard (the trim box) grown by the bleed, and by the printer's marks
+/// around that.
+fn pages(doc: &Document, opts: &PdfOptions) -> Result<Vec<(usize, PageBoxes)>, PdfError> {
+    let indices: Vec<usize> = match &opts.artboards {
+        Some(v) => v.clone(),
+        None => (0..doc.artboards.len()).collect(),
+    };
+    if doc.artboards.is_empty() || indices.is_empty() {
+        return Err(PdfError::NoArtboards);
+    }
+    let (bleed, marks) = (opts.settings.bleed_of(doc), opts.settings.marks.printer_marks());
+    indices.into_iter().map(|i| Ok((i, PageBoxes::new(doc.artboards.get(i).ok_or(PdfError::BadArtboard(i))?.rect, bleed, &marks)))).collect()
+}
+
+/// What each page of `doc` exported with `opts` shows, in document space (its media box: the
+/// artboard with the bleed and the printer's marks), in page order.
+pub fn page_areas(doc: &Document, opts: &PdfOptions) -> Result<Vec<Rect>, PdfError> {
+    Ok(pages(doc, opts)?.into_iter().map(|(_, b)| b.media).collect())
 }
 
 /// A PDF being written, shared by export and print: the file's configuration and metadata, then

@@ -61,6 +61,21 @@ impl Xref {
         number(entry, 0).map(|(off, _)| off)
     }
 
+    /// The in-use objects: number and offset, in number order.
+    pub fn objects(&self, pdf: &[u8]) -> Vec<(u32, usize)> {
+        (1..u32::try_from(self.count).unwrap_or(u32::MAX)).filter_map(|n| Some((n, self.offset(pdf, n)?))).collect()
+    }
+
+    /// Where the table (`xref`) starts.
+    pub fn at(&self) -> usize {
+        self.at
+    }
+
+    /// Where the trailer dictionary starts (its `<<`).
+    pub fn trailer_at(&self) -> usize {
+        self.trailer.0
+    }
+
     /// The object the trailer's `key` (`b"/Root"`) refers to.
     pub fn trailer_ref(&self, pdf: &[u8], key: &[u8]) -> Option<u32> {
         let dict = pdf.get(self.trailer.0..self.trailer.1)?;

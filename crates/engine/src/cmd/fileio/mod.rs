@@ -911,3 +911,6 @@ mod tests_epsimport;
 
 #[cfg(test)]
 mod tests_pdflayers;
+
+#[cfg(test)]
+mod tests_pdfwebview;

@@ -62,7 +62,7 @@ fn saved_presets_apply_wherever_a_preset_is_named() {
     // document.exportPdf, document.export, serialize and pdfSettings take it.
     let v = s.execute("document.exportPdf", &json!({"preset": "web"})).unwrap();
     assert!(pdf(&v).starts_with(b"%PDF-1.5"), "the preset's compatibility");
-    assert!(v["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("fast web view")), "{v}");
+    assert!(String::from_utf8_lossy(&pdf(&v)).contains("/Linearized 1"), "the preset's fast web view: {v}");
     let v = s.execute("document.export", &json!({"format": "pdf", "preset": "Web"})).unwrap();
     assert!(pdf(&v).starts_with(b"%PDF-1.5"));
     let v = s.execute("document.serialize", &json!({"format": "pdf", "preset": "Web", "compatibility": "1.6"})).unwrap();

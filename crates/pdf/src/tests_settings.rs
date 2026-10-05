@@ -76,8 +76,6 @@ fn checks_refuse_what_the_writer_cant_honour() {
 fn options_not_applied_yet_come_back_as_warnings() {
     assert!(PdfSettings::default().warnings().is_empty());
     for (v, word) in [
-        (json!({"thumbnails": true}), "thumbnails"),
-        (json!({"fastWebView": true}), "fast web view"),
         (json!({"createLayers": true, "compatibility": "1.4"}), "PDF 1.5"),
         (json!({"advanced": {"outlineText": false, "fontSubsetPercent": 35}}), "subset"),
         (json!({"output": {"outputIntent": "No Such Press"}}), "without embedding"),
@@ -103,6 +101,7 @@ fn options_not_applied_yet_come_back_as_warnings() {
         json!({"includeNonPrinting": true}),
         json!({"createLayers": true}),
         json!({"viewAfterSaving": true}),
+        json!({"thumbnails": true, "fastWebView": true}),
         json!({"compression": {"compressText": false}}),
         json!({"compression": {"color": {"compression": "jpeg"}, "mono": {"compression": "ccittG4"}}}),
     ] {
@@ -111,6 +110,7 @@ fn options_not_applied_yet_come_back_as_warnings() {
     let r =
         export_with_report(&doc(), &PdfOptions { settings: settings(json!({"thumbnails": true, "marks": {"trim": true}})), ..Default::default() })
             .unwrap();
-    assert_eq!(r.warnings.len(), 1, "{:?}", r.warnings);
+    // The writer embeds the thumbnails it is given: without them, the one warning says so.
+    assert!(r.warnings.len() == 1 && r.warnings[0].contains("thumbnails need the pages drawn"), "{:?}", r.warnings);
     assert!(r.bytes.starts_with(b"%PDF-1.7"));
 }

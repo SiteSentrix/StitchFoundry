@@ -231,6 +231,9 @@ Images follow the `compression` settings of their kind (`color`, `gray`, or `mon
 with `zip`, `jpeg` (at `quality`; images with transparency stay lossless) or `auto` (JPEGs stay JPEG, the others
 lossless). `none`, `jpeg2000`, CCITT and `runLength` are written as ZIP, with a warning when an image needs them.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
+`thumbnails: true` embeds each page drawn small (106 px on its long side, without the layers the page leaves out) as
+its `/Thumb` image. `fastWebView: true` writes a linearised file (the linearization dictionary first, then the first
+page with hint tables saying where every other page's objects are), which stays linearised when a password encrypts it.
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)

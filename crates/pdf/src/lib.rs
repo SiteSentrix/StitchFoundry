@@ -16,7 +16,9 @@
 //!   printer's marks around it (the media box), drawn in Registration. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
-//!   Editing the native document rides along as an embedded file ([`editing()`]).
+//!   Editing the native document rides along as an embedded file ([`editing()`]). Each page can
+//!   carry a thumbnail ([`Thumbnail`], drawn by the caller), and Fast Web View writes a linearised
+//!   file (still linearised when encrypted).
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
 //!   [`Document`]: one artboard per page, and a layer per page or per optional content group
 //!   (with its visibility, print state and lock; art that is off comes in as a hidden layer),
@@ -49,20 +51,24 @@ mod import_scan;
 mod import_shading;
 mod import_text;
 mod lab_spot;
+mod linearize;
 mod marks;
 mod output;
 mod pages;
 mod patch;
 mod pdfx;
+mod post;
 mod presets;
 mod print;
 mod settings;
+mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{export, export_with_report};
+pub use export::{export, export_with_report, page_areas};
 pub use import::{import, import_with_report};
 pub use pages::{PageInfo, PdfInfo, info, is_postscript};
+pub use post::{THUMBNAIL_SIZE, Thumbnail};
 pub use presets::*;
 pub use print::*;
 pub use settings::*;
@@ -81,6 +87,9 @@ pub struct PdfOptions {
     pub created: Option<i64>,
     /// The native document (`.vectorcraft` bytes) Preserve Editing embeds.
     pub native: Option<Vec<u8>>,
+    /// The pages drawn small, in page order: what Embed Page Thumbnails embeds (the writer
+    /// doesn't draw; [`page_areas`] says what each page shows).
+    pub thumbnails: Vec<Thumbnail>,
 }
 
 impl PdfOptions {
@@ -243,3 +252,5 @@ mod tests_stroke;
 mod tests_strokeout;
 #[cfg(test)]
 mod tests_textstroke;
+#[cfg(test)]
+mod tests_webview;

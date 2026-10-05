@@ -6,7 +6,9 @@
 //! algorithm follows the compatibility ([`Encryption`]): 128-bit RC4 for PDF 1.4 (revision 3) and
 //! 1.5 (revision 4), 128-bit AES for 1.6 (revision 4) and 256-bit AES for 1.7 and 2.0
 //! (revision 6). The random file key, salts and initialisation vectors come from a SHA-256 stream
-//! seeded with the process's random hash keys, the time and the file itself.
+//! seeded with the process's random hash keys, the time and the file itself. A linearised file is
+//! encrypted between its two steps ([`protect_keeping`]): what encrypted it then encrypts the hint
+//! stream written last ([`Cipher`]).
 //!
 //! Reading: [`user_password`] turns the permissions (owner) password of a file encrypted with RC4
 //! or 128-bit AES into its open (user) password, so either password opens it.
@@ -488,7 +490,7 @@ impl<'a> Obj<'a> {
         }
     }
 
-    fn int(&self, key: &[u8]) -> Option<i64> {
+    pub(crate) fn int(&self, key: &[u8]) -> Option<i64> {
         match self.get(key)? {
             Self::Int { value, .. } => Some(*value),
             _ => None,
@@ -861,12 +863,32 @@ pub(crate) fn stream_spans(pdf: &[u8], lx: &mut Lexer<'_>, dict: &Obj<'_>) -> Re
     Ok(Some(((*start, *end), (data, data_end))))
 }
 
+/// What encrypts the streams of a file [`protect_keeping`] encrypted, for those written after it
+/// (the hint stream of a linearised file).
+pub(crate) struct Cipher {
+    h: Handler,
+    rng: Entropy,
+}
+
+impl Cipher {
+    /// `data`, the stream of object `num` (generation 0), encrypted.
+    pub(crate) fn stream(&mut self, num: u32, data: &[u8]) -> Result<Vec<u8>, PdfError> {
+        self.h.encrypt(num, 0, data, &mut self.rng)
+    }
+}
+
 /// Encrypt `pdf` (as the export writes it: one cross-reference table) as `set`'s Security
 /// section says; without a password it comes back as it is.
 pub(crate) fn protect(pdf: Vec<u8>, set: &PdfSettings) -> Result<Vec<u8>, PdfError> {
+    protect_keeping(pdf, set).map(|(pdf, _)| pdf)
+}
+
+/// [`protect`], keeping what encrypted the file (`None` when it isn't encrypted). The objects keep
+/// their order and numbers; the encryption dictionary comes after them, numbered last.
+pub(crate) fn protect_keeping(pdf: Vec<u8>, set: &PdfSettings) -> Result<(Vec<u8>, Option<Cipher>), PdfError> {
     let sec = &set.security;
     if !sec.protected() {
-        return Ok(pdf);
+        return Ok((pdf, None));
     }
     let xref = xref_offset(&pdf).ok_or_else(|| failed("no cross-reference table"))?;
     let (mut objects, trailer) = xref_table(&pdf, xref)?;
@@ -944,7 +966,7 @@ pub(crate) fn protect(pdf: Vec<u8>, set: &PdfSettings) -> Result<Vec<u8>, PdfErr
         out.extend_from_slice(format!("/ID[{}{}]", hex(&id), hex(&id)).as_bytes());
     }
     out.extend_from_slice(format!("/Encrypt {size} 0 R>>\nstartxref\n{table}\n%%EOF").as_bytes());
-    Ok(out)
+    Ok((out, Some(Cipher { h, rng })))
 }
 
 // ---------- reading ----------
