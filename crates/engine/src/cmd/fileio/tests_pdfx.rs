@@ -67,7 +67,7 @@ fn choosing_a_pdfx_standard_sets_its_version_and_turns_off_what_it_forbids() {
     let v = settings(&mut s, json!({"standard": "pdfX4"}));
     assert_eq!((&v["compatibility"], &v["preserveEditing"]), (&json!("1.6"), &json!(false)));
     let v = settings(&mut s, json!({"standard": "pdfX1a", "createLayers": null, "preset": "Press Quality"}));
-    assert_eq!((&v["compatibility"], &v["createLayers"]), (&json!("1.4"), &json!(false)));
+    assert_eq!((&v["compatibility"], &v["createLayers"]), (&json!("1.3"), &json!(false)));
     let v = settings(&mut s, json!({"standard": "pdfX4", "compatibility": "1.5", "createLayers": true}));
     assert_eq!((&v["compatibility"], &v["createLayers"]), (&json!("1.5"), &json!(true)));
     // What is asked for explicitly is checked, not changed.

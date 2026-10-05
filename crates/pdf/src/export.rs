@@ -132,6 +132,8 @@ pub(crate) struct Writer {
     /// Spot colours written with a Lab alternate, gathered from the exporters ([`Self::absorb`]).
     lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
     warnings: Vec<String>,
+    /// A PDF 1.3 file ([`crate::PdfSettings::pdf13`]): flat, without page groups.
+    pdf13: bool,
 }
 
 /// One page as [`Writer::page`] draws it: the art placed in a drawing space ([`Self::place`]),
@@ -171,7 +173,8 @@ impl Writer {
             warnings.push(format!("the CMYK profile {} can't be embedded: CMYK colours are written untagged", out.cmyk_profile()));
         }
         let version = match set.compatibility {
-            Compatibility::Pdf14 => PdfVersion::Pdf14,
+            // PDF 1.3 files are written with the PDF 1.4 settings: flat, they use nothing newer.
+            Compatibility::Pdf13 | Compatibility::Pdf14 => PdfVersion::Pdf14,
             Compatibility::Pdf15 => PdfVersion::Pdf15,
             Compatibility::Pdf16 => PdfVersion::Pdf16,
             Compatibility::Pdf17 => PdfVersion::Pdf17,
@@ -212,7 +215,7 @@ impl Writer {
             meta = meta.creation_date(t);
         }
         pdf.set_metadata(meta);
-        Ok(Self { pdf, cmyk: out.blends_cmyk(cmyk), out: Arc::new(out), lab_spots: vec![], warnings })
+        Ok(Self { pdf, cmyk: out.blends_cmyk(cmyk), out: Arc::new(out), lab_spots: vec![], warnings, pdf13: set.pdf13() })
     }
 
     /// Draw one page: the art of `ex`'s document placed as `sheet` says, then its marks.
@@ -241,10 +244,11 @@ impl Writer {
             s.push_clip_path(clip, &krilla::paint::FillRule::NonZero);
         }
         // Page Isolated Blending / Page Knockout Group: the page content is one group (the PDF
-        // writer has no page group attributes). In CMYK, transparency at the top of a page is put
-        // in a non-isolated group of its own, whose blending space `cmyk_blending` rewrites.
+        // writer has no page group attributes; a flat PDF 1.3 file has none). In CMYK, transparency
+        // at the top of a page is put in a non-isolated group of its own, whose blending space
+        // `cmyk_blending` rewrites.
         let doc = ex.doc;
-        let page_group = doc.page_isolate || doc.page_knockout;
+        let page_group = !self.pdf13 && (doc.page_isolate || doc.page_knockout);
         let cmyk_page_group = self.cmyk && !page_group && ex.shows_transparency();
         if page_group {
             s.push_isolated();
@@ -311,7 +315,7 @@ impl Writer {
         let bytes = if lab { crate::lab_spot::lab_alternates(bytes, &self.lab_spots) } else { bytes };
         let (bytes, more) = self.out.write_catalog(bytes)?;
         self.warnings.extend(more);
-        Ok((crate::pdfx::finish(bytes, self.out.standard)?, self.warnings))
+        Ok((crate::pdfx::finish(bytes, self.out.standard, self.pdf13)?, self.warnings))
     }
 }
 

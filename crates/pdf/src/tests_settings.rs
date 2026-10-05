@@ -36,7 +36,7 @@ fn json_is_camel_case_and_partial_objects_keep_defaults() {
     assert_eq!(s.compression.gray.downsample, Downsample::Bicubic);
     assert_eq!(s.compression.gray.ppi, 300.0);
     assert!(s.compression.compress_text);
-    for bad in [json!({"compatibility": "1.3"}), json!({"standard": "pdfX9"}), json!({"marks": {"trim": "yes"}})] {
+    for bad in [json!({"compatibility": "1.2"}), json!({"standard": "pdfX9"}), json!({"marks": {"trim": "yes"}})] {
         assert!(serde_json::from_value::<PdfSettings>(bad.clone()).is_err(), "{bad}");
     }
 }

@@ -60,7 +60,9 @@ fn export_pdf_writes_the_compatibility_header_and_the_range() {
 fn bad_options_are_refused() {
     let mut s = session(2);
     for p in [
-        json!({"compatibility": "1.3"}),
+        json!({"compatibility": "1.2"}),
+        json!({"compatibility": "1.3", "standard": "pdfA2b"}),
+        json!({"compatibility": "1.3", "flattenerPreset": "Nope"}),
         json!({"compatibility": 1.5}),
         json!({"range": "1-3"}),
         json!({"range": "0"}),

@@ -80,12 +80,12 @@ pub fn builtin_presets() -> Vec<PdfPreset> {
         preset(
             "PDF/X-1a:2001",
             "Print exchange with CMYK and spot colours only: transparency flattened, fonts embedded.",
-            pdf_x(Standard::PdfX1a, Compatibility::Pdf14),
+            pdf_x(Standard::PdfX1a, Compatibility::Pdf13),
         ),
         preset(
             "PDF/X-3:2002",
             "Print exchange allowing colour-managed colours: transparency flattened, fonts embedded.",
-            pdf_x(Standard::PdfX3, Compatibility::Pdf14),
+            pdf_x(Standard::PdfX3, Compatibility::Pdf13),
         ),
         preset(
             "PDF/X-4:2010",

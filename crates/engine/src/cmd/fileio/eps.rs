@@ -135,11 +135,7 @@ fn choice<T>(field: &str, v: Option<String>, read: impl Fn(&str) -> Option<T>, d
 /// The flattener options `p` asks for (`flattenerPreset` and `flattener` over it), built-in
 /// presets and `saved` ones; discarded overprints are dropped from the flattened art too.
 fn flattener(p: &Params, saved: &[super::super::FlattenerPreset]) -> Result<FlattenOptions> {
-    let mut q = json!({ "options": p.flattener.clone().unwrap_or(Value::Null) });
-    if let Some(name) = &p.flattener_preset {
-        q["preset"] = json!(name);
-    }
-    FlattenOptions::from_params_with(&q, saved).map_err(|e| bad(C, format!("EPS flattener: {e}")))
+    FlattenOptions::for_export(p.flattener_preset.as_deref(), p.flattener.as_ref(), saved).map_err(|e| bad(C, format!("EPS flattener: {e}")))
 }
 
 fn params(p: &Value) -> Result<Params> {
@@ -176,7 +172,7 @@ fn parse(p: &Value) -> Result<Settings> {
 /// `saved` it names written out, as the encoder needs it.
 pub fn resolve(p: &Value, saved: &[super::super::FlattenerPreset]) -> std::result::Result<Value, String> {
     let run = || -> Result<Value> {
-        let q = expanded(p, saved)?.unwrap_or_else(|| p.clone());
+        let q = expanded(C, p, saved)?.unwrap_or_else(|| p.clone());
         parse(&q)?;
         Ok(q)
     };
@@ -185,10 +181,10 @@ pub fn resolve(p: &Value, saved: &[super::super::FlattenerPreset]) -> std::resul
 
 /// `p` with a saved flattener preset it names written out as `flattener` options, for the
 /// encoder, which knows only the built-in presets; `None` when `p` names none.
-fn expanded(p: &Value, saved: &[super::super::FlattenerPreset]) -> Result<Option<Value>> {
+fn expanded(cmd: &str, p: &Value, saved: &[super::super::FlattenerPreset]) -> Result<Option<Value>> {
     match str_param(p, "flattenerPreset") {
-        Some(name) if FlattenOptions::preset(name).is_none() => {
-            let o = flattener(&params(p)?, saved)?;
+        Some(name) if !name.trim().is_empty() && FlattenOptions::preset(name).is_none() => {
+            let o = FlattenOptions::for_export(Some(name), p.get("flattener"), saved).map_err(|e| bad(cmd, format!("flattener: {e}")))?;
             let mut q = p.clone();
             q["flattener"] = serde_json::to_value(o).map_err(|e| EngineError::Other(e.to_string()))?;
             if let Some(m) = q.as_object_mut() {
@@ -299,8 +295,8 @@ fn export_eps(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// `p` with a saved flattener preset of the session's written out (see [`expanded`]).
-pub(super) fn with_flattener<'a>(s: &Session, p: Cow<'a, Value>) -> Result<Cow<'a, Value>> {
-    Ok(match expanded(&p, &s.prefs.flattener_presets)? {
+pub(super) fn with_flattener<'a>(s: &Session, cmd: &str, p: Cow<'a, Value>) -> Result<Cow<'a, Value>> {
+    Ok(match expanded(cmd, &p, &s.prefs.flattener_presets)? {
         Some(q) => Cow::Owned(q),
         None => p,
     })

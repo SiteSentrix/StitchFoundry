@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeKind};
-use vectorcraft_pdf::{PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail};
+use vectorcraft_pdf::{Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail};
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
 use super::super::*;
@@ -38,7 +38,12 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         default: "\"none\"",
         description: "none | pdfA2b | pdfX1a | pdfX3 | pdfX4 (choosing one sets the compatibility it allows; see document.exportPdf)",
     },
-    FormatOption { name: "compatibility", ty: "string", default: "\"1.7\"", description: "PDF version: 1.4 | 1.5 | 1.6 | 1.7 | 2.0" },
+    FormatOption {
+        name: "compatibility",
+        ty: "string",
+        default: "\"1.7\"",
+        description: "PDF version: 1.3 (transparency flattened) | 1.4 | 1.5 | 1.6 | 1.7 | 2.0",
+    },
     FormatOption {
         name: "preserveEditing",
         ty: "boolean",
@@ -69,7 +74,7 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         name: "security",
         ty: "object",
         default: "null",
-        description: "passwords and permissions (the file is encrypted: RC4 128-bit at 1.4–1.5, AES-128 at 1.6, AES-256 at 1.7/2.0)",
+        description: "passwords and permissions (the file is encrypted: RC4 40-bit at 1.3, RC4 128-bit at 1.4–1.5, AES-128 at 1.6, AES-256 at 1.7/2.0)",
     },
     FormatOption {
         name: "includeNonPrinting",
@@ -83,6 +88,18 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         default: "false",
         description: "top-level layers as PDF layers (optional content groups with their visibility, print state and lock; PDF 1.5 or later)",
     },
+    FormatOption {
+        name: "flattenerPreset",
+        ty: "string",
+        default: "\"\"",
+        description: "the flattener preset PDF 1.3 files (PDF/X-1a and PDF/X-3 too) flatten transparency with: empty (High Resolution), high, medium, low or a saved one",
+    },
+    FormatOption {
+        name: "flattener",
+        ty: "object",
+        default: "null",
+        description: "flattener options over flattenerPreset (as object.flattenTransparency)",
+    },
 ];
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -92,7 +109,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export PDF",
             [],
             None,
-            "{path?, preset?: \"VectorCraft Default\" (built-in or saved: pdf.preset.list), artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), standard?: none|pdfA2b|pdfX1a (CMYK, grey and spot colours only: colours and images converted to output.destination or the CMYK output intent, untagged; transparency flattened with the High Resolution flattener preset; PDF 1.3)|pdfX3 (colours ICC-tagged; transparency flattened; PDF 1.3)|pdfX4 (transparency and layers kept; colours ICC-tagged; PDF 1.6 at most) (PDF/X: a /GTS_PDFX output intent, by default the CMYK profile in effect, embedded; TrimBox, Trapped, GTS_PDFXVersion, title and dates; fonts embedded or outlined), compatibility?: 1.4|1.5|1.6|1.7 (default)|2.0 (choosing a standard sets the latest it allows: 1.7 for pdfA2b, 1.6 for pdfX4, 1.4 for pdfX1a and pdfX3, written as PDF 1.3), preserveEditing? (on in VectorCraft Default: the native document as an embedded file, which document.open restores; choosing a standard turns it off, a standard refuses it), thumbnails? (each page drawn as a /Thumb image, 106 px on its long side), fastWebView? (a linearised file: the first page shows while the rest downloads; it stays linearised when encrypted), viewAfterSaving? (the app opens the written file), createLayers? (each top-level layer but template layers as a PDF layer, an optional content group: hidden layers off, non-printing ones /PrintState /OFF, locked ones locked; needs 1.5 or later; they reopen as layers; choosing pdfX1a or pdfX3 turns it off; they refuse it), includeNonPrinting? (keep layers whose Print option is off; left out by default unless createLayers), compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength} (black-and-white images), compressText?: true} (images above abovePpi are resampled to ppi; auto keeps JPEGs JPEG, the others lossless; JPEG needs opaque images; none, jpeg2000, CCITT and runLength are written as ZIP with a warning), marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25 (trim marks and targets), offset: 6 (pt from the artboard, at least the bleed)} (printer's marks in [Registration], every plate: trim marks, registration targets mid-side, CMYK/spot/black-tint colour bars on top, page information (title, artboard, date UTC) below), bleed?: {useDocument (the document's bleed, document.setup), top, bottom, left, right} (pt; art in the bleed is kept). Each page: TrimBox = artboard, BleedBox = artboard + bleed, MediaBox = that + the marks' room (art clipped to the BleedBox), output?: {conversion: none (default)|destination (every colour into the destination profile's model, CMYK or RGB, also colours of that model in another profile)|preserveNumbers (only colours of the other model and Lab; those in the destination's model keep their numbers) (grey stays grey; images are converted too, printer's marks are not), destination: profile name (edit.colorSettings lists them; default: the document's profile for its colour mode), profiles: none (device colours)|all|destination|taggedSource (documents assigned a profile: edit.assignProfile) (ICC-based colours: CMYK with the destination or document CMYK profile, RGB as sRGB, grey with the sRGB tone curve; PDF/A always), outputIntent: profile name (embedded as the catalog's /GTS_PDFX output intent; a name that isn't a profile is only named, which pdfX1a and pdfX3 allow only with a registry and pdfX4 refuses; pdfX1a needs a CMYK one), outputCondition, outputConditionId (default: outputIntent), registry, trapped (/Trapped /True; /False when an output intent is written)} (PDF/A files keep their own output intent), advanced?: {fontSubsetPercent: 100 (below 100 is accepted with a warning: fonts are always embedded as subsets), outlineText: true (false: type as real, selectable and searchable text in embedded subset fonts with a ToUnicode map; fonts whose licence forbids embedding, or allows only whole fonts, stay outlines with a warning), overprint: preserve (overprinting fills and strokes set /OP /op true, /OPM 1; white ones knock out with document.setup discardWhiteOverprint)|discard (they knock out)}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; a standard with a PDF version it doesn't allow and a password with a standard are refused, and so is a PDF/X file that would still break its standard (transparency the flattener left, RGB in pdfX1a, a font not embedded). document.export {format: pdf} takes the same options",
+            "{path?, preset?: \"VectorCraft Default\" (built-in or saved: pdf.preset.list), artboard? | artboards?: [i…] | range?: \"1-3, 5\" (1-based; default all, one page each), standard?: none|pdfA2b|pdfX1a (CMYK, grey and spot colours only: colours and images converted to output.destination or the CMYK output intent, untagged; transparency flattened with flattenerPreset; PDF 1.3)|pdfX3 (colours ICC-tagged; transparency flattened; PDF 1.3)|pdfX4 (transparency and layers kept; colours ICC-tagged; PDF 1.6 at most) (PDF/X: a /GTS_PDFX output intent, by default the CMYK profile in effect, embedded; TrimBox, Trapped, GTS_PDFXVersion, title and dates; fonts embedded or outlined), compatibility?: 1.3 (no transparency: it is flattened with flattenerPreset; images keep no see-through pixels)|1.4|1.5|1.6|1.7 (default)|2.0 (choosing a standard sets its version: 1.7 for pdfA2b, 1.6 for pdfX4, 1.3 for pdfX1a and pdfX3, which write 1.4 as 1.3 too; pdfA2b refuses 1.3), preserveEditing? (on in VectorCraft Default: the native document as an embedded file, which document.open restores; choosing a standard turns it off, a standard refuses it), thumbnails? (each page drawn as a /Thumb image, 106 px on its long side), fastWebView? (a linearised file: the first page shows while the rest downloads; it stays linearised when encrypted), viewAfterSaving? (the app opens the written file), createLayers? (each top-level layer but template layers as a PDF layer, an optional content group: hidden layers off, non-printing ones /PrintState /OFF, locked ones locked; needs 1.5 or later; they reopen as layers; choosing pdfX1a or pdfX3 turns it off; they refuse it), includeNonPrinting? (keep layers whose Print option is off; left out by default unless createLayers), flattenerPreset?: \"\" (High Resolution) | high | medium | low | a saved preset (flattener.presets.list): what PDF 1.3 files flatten transparency with, flattener?: {object.flattenTransparency options over it}, compression?: {color?, gray?: {downsample: none|average|subsample|bicubic, ppi: 300, abovePpi: 450, compression: none|zip|jpeg|jpeg2000|auto, quality: minimum|low|medium|high|maximum}, mono?: {downsample, ppi: 1200, abovePpi: 1800, compression: none|ccittG3|ccittG4|zip|runLength} (black-and-white images), compressText?: true} (images above abovePpi are resampled to ppi; auto keeps JPEGs JPEG, the others lossless; JPEG needs opaque images; none, jpeg2000, CCITT and runLength are written as ZIP with a warning), marks?: {trim, registration, colorBars, pageInfo, kind: roman|japanese, weight: 0.25 (trim marks and targets), offset: 6 (pt from the artboard, at least the bleed)} (printer's marks in [Registration], every plate: trim marks, registration targets mid-side, CMYK/spot/black-tint colour bars on top, page information (title, artboard, date UTC) below), bleed?: {useDocument (the document's bleed, document.setup), top, bottom, left, right} (pt; art in the bleed is kept). Each page: TrimBox = artboard, BleedBox = artboard + bleed, MediaBox = that + the marks' room (art clipped to the BleedBox), output?: {conversion: none (default)|destination (every colour into the destination profile's model, CMYK or RGB, also colours of that model in another profile)|preserveNumbers (only colours of the other model and Lab; those in the destination's model keep their numbers) (grey stays grey; images are converted too, printer's marks are not), destination: profile name (edit.colorSettings lists them; default: the document's profile for its colour mode), profiles: none (device colours)|all|destination|taggedSource (documents assigned a profile: edit.assignProfile) (ICC-based colours: CMYK with the destination or document CMYK profile, RGB as sRGB, grey with the sRGB tone curve; PDF/A always), outputIntent: profile name (embedded as the catalog's /GTS_PDFX output intent; a name that isn't a profile is only named, which pdfX1a and pdfX3 allow only with a registry and pdfX4 refuses; pdfX1a needs a CMYK one), outputCondition, outputConditionId (default: outputIntent), registry, trapped (/Trapped /True; /False when an output intent is written)} (PDF/A files keep their own output intent), advanced?: {fontSubsetPercent: 100 (below 100 is accepted with a warning: fonts are always embedded as subsets), outlineText: true (false: type as real, selectable and searchable text in embedded subset fonts with a ToUnicode map; fonts whose licence forbids embedding, or allows only whole fonts, stay outlines with a warning), overprint: preserve (overprinting fills and strokes set /OP /op true, /OPM 1; white ones knock out with document.setup discardWhiteOverprint)|discard (they knock out)}, security?: {openPassword, permissionsPassword, printing: none|low|high, changes: none|pages|forms|comments|any, copy, screenReader, plaintextMetadata}} → {path, bytes, warnings}; no path → {dataBase64, bytes, warnings}. The options apply over the preset (null keeps its value); options accepted but not applied yet come back as warnings; a standard with a PDF version it doesn't allow and a password with a standard are refused, and so is a PDF/X file that would still break its standard (transparency the flattener left, RGB in pdfX1a, a font not embedded) or a PDF 1.3 file with transparency left. document.export {format: pdf} takes the same options",
             has_doc,
             export_pdf
         ),
@@ -198,10 +215,11 @@ pub fn settings(cmd: &str, p: &Value) -> Result<PdfSettings> {
     settings_with(cmd, p, &[])
 }
 
-/// `p` with a saved preset it names written out as options, for the encoders, which know only the
-/// built-in presets. Params naming no preset, or a built-in one, come back as they are.
+/// `p` with the saved presets it names (a PDF preset, a flattener preset: see
+/// [`super::eps::with_flattener`]) written out as options, for the encoders, which know only the
+/// built-in presets. Params naming none come back as they are.
 pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Value>> {
-    match str_param(p, "preset") {
+    let expanded = match str_param(p, "preset") {
         Some(name) if vectorcraft_pdf::builtin_preset(name).is_none() => {
             let set = settings_with(cmd, p, &s.prefs.pdf_presets)?;
             let mut q = p.clone();
@@ -209,10 +227,11 @@ pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a,
             if let Some(o) = q.as_object_mut() {
                 o.remove("preset");
             }
-            Ok(Cow::Owned(q))
+            Cow::Owned(q)
         }
-        _ => Ok(Cow::Borrowed(p)),
-    }
+        _ => Cow::Borrowed(p),
+    };
+    super::eps::with_flattener(s, cmd, expanded)
 }
 
 /// The full export options for `doc`: settings plus the artboards `p` picks (default all).
@@ -249,27 +268,36 @@ pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl
             warnings.push(EDITING_NEEDS_EVERY_ARTBOARD.to_string());
         }
     }
-    let flat = flatten_for(doc, &opts.settings)?;
+    let set = &opts.settings;
+    let flat = flatten_for(cmd, doc, set, p)?;
     if flat.is_some() {
-        warnings.push(format!(
-            "transparency was flattened with the High Resolution flattener preset: {} files have none",
-            opts.settings.standard.label()
-        ));
+        let kind = if set.standard.flattens() { set.standard.label() } else { set.compatibility.label() };
+        warnings.push(format!("transparency is flattened into opaque art and images ({kind} files have none): see the flattener preset"));
     }
     let r = super::super::rasterfx::export_pdf_with_report(flat.as_ref().unwrap_or(doc), &opts).map_err(|e| pdf_error(cmd, e))?;
     warnings.extend(r.warnings);
     Ok((r.bytes, warnings))
 }
 
-/// `doc` with its transparency flattened for a standard whose files have none (PDF/X-1a, PDF/X-3),
-/// with the High Resolution flattener preset; images with see-through pixels count as
-/// transparency. `None` when nothing changes (or the standard keeps transparency).
-fn flatten_for(doc: &Document, set: &PdfSettings) -> Result<Option<Document>> {
-    if !set.standard.flattens() {
+/// The flattener preset of PDF 1.3 files whose `flattenerPreset` is empty.
+pub const DEFAULT_FLATTENER: &str = "High Resolution";
+
+/// `doc` with its transparency flattened for a PDF 1.3 file (asked for, or PDF/X-1a and PDF/X-3,
+/// whose files have none), with `flattenerPreset` (default High Resolution) and `p`'s `flattener`
+/// options over it; images with see-through pixels count as transparency, rasterized areas are
+/// clipped to their regions, and discarded overprints are dropped. `None` when nothing changes (or
+/// the file keeps transparency).
+fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<Option<Document>> {
+    if !set.pdf13() {
         return Ok(None);
     }
-    let mut o = FlattenOptions::preset("high").unwrap_or_default();
+    let name = Some(set.flattener_preset.trim()).filter(|n| !n.is_empty()).unwrap_or(DEFAULT_FLATTENER);
+    let mut o = FlattenOptions::for_export(Some(name), p.get("flattener"), &[]).map_err(|e| bad(cmd, format!("PDF flattener: {e}")))?;
+    o.preserve_overprints &= set.advanced.overprint == Overprint::Preserve;
     o.no_transparency = Some(see_through_images(doc));
+    // Without soft masks a rasterized area can't be a rectangle with see-through pixels around
+    // its art: it is clipped to its regions (opaque inside them).
+    o.clip_complex_regions = true;
     flatten_document(doc, &o)
 }
 

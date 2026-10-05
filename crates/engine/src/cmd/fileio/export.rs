@@ -104,8 +104,7 @@ pub(super) fn without_artboards(p: &Value) -> Value {
 /// `p` with the saved presets it names (PDF, flattener) written out as options, for the encoders,
 /// which know only the built-in ones.
 fn expand_presets<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Value>> {
-    let pdf = super::pdf::expand_preset(s, cmd, p)?;
-    super::eps::with_flattener(s, pdf)
+    super::pdf::expand_preset(s, cmd, p)
 }
 
 /// The document an export of `f` writes: the active one (see [`export_source`]), or for text

@@ -1,10 +1,12 @@
 //! What the export does to the file once it is written, in this order: the pages' thumbnails
 //! (General › Embed page thumbnails), the seal of the editing data, fast web view (a linearised
 //! file, [`crate::linearize`]) and encryption ([`crate::encrypt`]), which a linearised file goes
-//! through between its two steps so that it stays linearised.
+//! through between its two steps so that it stays linearised. Also here: what makes a file say it
+//! is PDF 1.3 ([`declare_pdf13`]), for PDF 1.3 and PDF/X-1a and PDF/X-3 files.
 
 use std::borrow::Cow;
 
+use crate::encrypt::Obj;
 use crate::linearize::{self, Parsed};
 use crate::patch::Patch;
 use crate::{PdfError, PdfOptions, PdfSettings};
@@ -88,4 +90,25 @@ pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &
             crate::encrypt::protect(pdf, set)
         }
     }
+}
+
+/// Make a file written with the PDF 1.4 settings say it is PDF 1.3: its header and the version
+/// its XMP metadata gives, rewritten in place.
+pub(crate) fn declare_pdf13(pdf: &mut [u8]) {
+    if let Some(v) = pdf.get_mut(..8).filter(|h| h.starts_with(b"%PDF-1.4")) {
+        v.copy_from_slice(b"%PDF-1.3");
+    }
+    if let Some(digit) = metadata_version(pdf).and_then(|at| pdf.get_mut(at)) {
+        *digit = b'3';
+    }
+}
+
+/// Where the minor version digit is in the `1.4` of the XMP metadata stream of `pdf`'s catalog.
+fn metadata_version(pdf: &[u8]) -> Option<usize> {
+    const VERSION: &[u8] = b"<pdf:PDFVersion>1.4<";
+    let p = linearize::parse(pdf).ok()?;
+    let Some(&Obj::Ref(n, _)) = p.objects.get(&p.root)?.value.get(b"Metadata") else { return None };
+    let o = p.objects.get(&n)?;
+    let at = crate::lab_spot::find(pdf.get(..o.endobj)?, VERSION, o.value_span.1)?;
+    Some(at + VERSION.len() - 2)
 }

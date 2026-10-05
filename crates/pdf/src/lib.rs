@@ -18,7 +18,8 @@
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
 //!   Editing the native document rides along as an embedded file ([`editing()`]). Each page can
 //!   carry a thumbnail ([`Thumbnail`], drawn by the caller), and Fast Web View writes a linearised
-//!   file (still linearised when encrypted).
+//!   file (still linearised when encrypted). A PDF 1.3 file ([`PdfSettings::pdf13`]) must be flat:
+//!   the app flattens the document first, and the writer refuses transparency that is left.
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
 //!   [`Document`]: one artboard per page, and a layer per page or per optional content group
 //!   (with its visibility, print state and lock; art that is off comes in as a hidden layer),
@@ -234,6 +235,8 @@ mod tests_layers;
 mod tests_marks;
 #[cfg(test)]
 mod tests_output;
+#[cfg(test)]
+mod tests_pdf13;
 #[cfg(test)]
 mod tests_pdfx;
 #[cfg(test)]

@@ -172,7 +172,7 @@ milestones, and honest time-to-parity estimates.
 **Where we are (2026-10-05):** roughly 68–74% of Illustrator's features exist and work, and about 40–55% of
 "a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles and threading, and
-files (SVG, PDF and PDF-compatible `.ai`, EPS, DXF, raster formats, Print, Package). The scores are
+files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats and PSD, Print, Package). The scores are
 self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-05) explains how far to trust them.
 
 **What's missing:**
@@ -187,7 +187,7 @@ self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-0
 advanced type, then hardening and packaging for 1.0. The prioritized list is in
 [Where we're lacking](ROADMAP.md#where-were-lacking-in-priority-order).
 
-**Workspace:** `crates/{geom, color, doc, pathops, text, effects, trace, brush, render, svg, pdf, format, tools, engine, ui-egui, mcp, testkit}`
+**Workspace:** `crates/{geom, color, doc, pathops, text, effects, trace, brush, render, svg, pdf, eps, cad, metafile, format, tools, engine, ui-egui, mcp, testkit}`
 and `apps/{vectorcraft, vectorcraft-cli, vectorcraft-web}`. The egui frontend is its own crate, so
 the UI can be swapped without touching the engine.
 

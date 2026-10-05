@@ -914,3 +914,6 @@ mod tests_pdflayers;
 
 #[cfg(test)]
 mod tests_pdfwebview;
+
+#[cfg(test)]
+mod tests_pdf13;

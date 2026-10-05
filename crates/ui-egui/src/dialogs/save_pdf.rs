@@ -13,6 +13,7 @@ use std::sync::LazyLock;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
+use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::fileio::{SaveMode, pdf};
 use vectorcraft_pdf::{
     Changes, Choice, ColorConversion, Compatibility, Downsample, Encryption, ImageCodec, JpegQuality, MarkKind, MonoCodec, Overprint, PdfSettings,
@@ -331,7 +332,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 "Compression" => compression(ui, d),
                 "Marks and Bleeds" => marks_and_bleeds(app, ui, d),
                 "Output" => output(ui, d),
-                "Advanced" => advanced(ui, d),
+                "Advanced" => advanced(app, ui, d),
                 "Security" => security(ui, d),
                 "Summary" => summary(app, ui, d),
                 _ => general(ui, d, editor),
@@ -369,8 +370,9 @@ pub(super) fn section_list(ui: &mut egui::Ui, d: &mut Dialog, sections: &[&str],
     }
 }
 
-/// What choosing `standard` changes: the compatibility, to the latest version it allows, and off
-/// what files of a standard can't have (editing data, passwords; layers in PDF/X-1a and PDF/X-3).
+/// What choosing `standard` changes: the compatibility, to its version unless it allows the one
+/// chosen, and off what files of a standard can't have (editing data, passwords; layers in PDF/X-1a
+/// and PDF/X-3).
 fn standard_chosen(d: &mut Dialog, standard: Standard) {
     if choice::<Compatibility>(d, "compatibility").is_some_and(|c| !standard.allows(c)) {
         set(d, "compatibility", json!(standard.version().id()));
@@ -604,7 +606,7 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     }
 }
 
-fn advanced(ui: &mut egui::Ui, d: &mut Dialog) {
+fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     heading(ui, "Fonts");
     let outline = get(d, "advanced.outlineText").as_bool() == Some(true);
     row(ui, "Subset fonts below:", |ui| {
@@ -612,10 +614,28 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog) {
         ui.label("of characters used");
     });
     flag(ui, d, "advanced.outlineText", "Convert text to outlines", true);
-    heading(ui, "Overprint");
+    heading(ui, "Overprint and Transparency Flattener");
     row(ui, "Overprint:", |ui| {
         pick::<Overprint>(ui, d, "advanced.overprint", 130.0, |_| true);
     });
+    // PDF 1.3 files (PDF/X-1a and PDF/X-3 ones too) have no transparency: it is flattened.
+    let flat = choice::<Compatibility>(d, "compatibility") == Some(Compatibility::Pdf13)
+        || choice::<Standard>(d, "standard").is_some_and(Standard::flattens);
+    row(ui, "Flattener preset:", |ui| {
+        let presets = app.session.flattener_presets();
+        let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
+        let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
+        // A built-in preset named by id (`high`) shows as its name.
+        let current = FlattenOptions::preset_label(&name.to_ascii_lowercase()).unwrap_or(name).to_string();
+        ui.add_enabled_ui(flat, |ui| {
+            if let Some(n) = widgets::dropdown(ui, "flattenerPreset", &current, &names, 200.0).and_then(|i| names.get(i)) {
+                set(d, "flattenerPreset", json!(n));
+            }
+        });
+    });
+    if !flat {
+        note(ui, "PDF 1.3 files have no transparency: the preset flattens it.");
+    }
 }
 
 /// The password fields (never stored in presets).
@@ -670,7 +690,13 @@ fn security(ui: &mut egui::Ui, d: &mut Dialog) {
         flag(ui, d, "security.screenReader", reader, restrict);
     }
     let compatibility = choice::<Compatibility>(d, "compatibility").unwrap_or_default();
-    flag(ui, d, "security.plaintextMetadata", "Enable plaintext metadata", (open || restrict) && compatibility != Compatibility::Pdf14);
+    flag(
+        ui,
+        d,
+        "security.plaintextMetadata",
+        "Enable plaintext metadata",
+        (open || restrict) && !matches!(compatibility, Compatibility::Pdf13 | Compatibility::Pdf14),
+    );
     ui.add_space(6.0);
     note(ui, &format!("Encryption: {} (set by Compatibility)", Encryption::for_compatibility(compatibility).label()));
 }
@@ -966,7 +992,7 @@ mod tests {
         let d = app.ui.dialog.as_mut().unwrap();
         set(d, "standard", json!(Standard::PdfX1a.id()));
         standard_chosen(d, Standard::PdfX1a);
-        assert_eq!((get(d, "compatibility"), get(d, "createLayers"), get(d, "preserveEditing")), (&json!("1.4"), &json!(false), &json!(false)));
+        assert_eq!((get(d, "compatibility"), get(d, "createLayers"), get(d, "preserveEditing")), (&json!("1.3"), &json!(false), &json!(false)));
         for s in SECTIONS {
             set_field(&mut app, "__section", json!(s));
             frame(&mut app);
@@ -999,5 +1025,24 @@ mod tests {
         let names: Vec<_> = back.layers.iter().filter_map(|l| l.name.clone()).collect();
         // The empty pages of the other artboards come in as page layers.
         assert_eq!(names[..2], ["Layer 1", "Notes"]);
+    }
+
+    #[test]
+    fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
+        let (mut app, written, _) = app();
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/old.pdf", "compatibility": "1.3"})).unwrap();
+        for s in ["Advanced", "Security"] {
+            set_field(&mut app, "__section", json!(s));
+            frame(&mut app);
+        }
+        set_field(&mut app, "flattenerPreset", json!("Low Resolution"));
+        let p = params(app.ui.dialog.as_ref().unwrap());
+        assert_eq!((p["compatibility"].as_str(), p["flattenerPreset"].as_str()), (Some("1.3"), Some("Low Resolution")));
+        super::super::confirm(&mut app).unwrap();
+        assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
+        // A preset keeps the flattener preset.
+        app.run("pdf.preset.save", json!({"name": "Old", "compatibility": "1.3", "flattenerPreset": "Low Resolution"})).unwrap();
+        let saved = app.session.prefs.pdf_presets.iter().find(|p| p.name == "Old").unwrap();
+        assert_eq!((saved.settings.compatibility, saved.settings.flattener_preset.as_str()), (Compatibility::Pdf13, "Low Resolution"));
     }
 }
