@@ -26,7 +26,7 @@ mod settings;
 
 pub use export::{export, export_with_report};
 pub use import::{import, import_with_report};
-pub use pages::{PageInfo, PdfInfo, info};
+pub use pages::{PageInfo, PdfInfo, info, is_postscript};
 pub use settings::*;
 
 use vectorcraft_doc::Document;
@@ -124,6 +124,14 @@ pub enum PdfError {
     WrongPassword,
     #[error("page {0} does not exist (the PDF has {1})")]
     BadPage(usize, usize),
+    #[error(
+        "this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG"
+    )]
+    PostScript,
+    #[error(
+        "the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG"
+    )]
+    PlaceholderOnly,
 }
 
 #[cfg(test)]

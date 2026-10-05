@@ -148,3 +148,11 @@ fn a_page_without_area_gets_the_size_viewers_give_it() {
         assert_eq!((ab.width(), ab.height()), (w, h), "{crop:?}");
     }
 }
+
+#[test]
+fn postscript_is_refused_as_such() {
+    let ps = b"%!PS\n0 0 moveto 10 10 lineto stroke\nshowpage\n";
+    assert_eq!(import(ps).unwrap_err(), PdfError::PostScript);
+    assert_eq!(info(ps, None).unwrap_err(), PdfError::PostScript);
+    assert!(is_postscript(&[0xC5, 0xD0, 0xD3, 0xC6, 0, 0]) && !is_postscript(b"%PDF-1.7"));
+}

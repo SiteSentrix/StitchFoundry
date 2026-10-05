@@ -17,6 +17,8 @@ pub struct PdfPage {
     pub resources: String,
     /// The content stream (operators, uncompressed).
     pub content: String,
+    /// More entries of the page dictionary (`/PieceInfo << … >>`).
+    pub entries: String,
 }
 
 impl PdfPage {
@@ -89,6 +91,9 @@ pub fn pdf_with(pages: &[PdfPage], extra: &[&str], password: Option<&str>) -> Ve
         }
         if p.rotate != 0 {
             let _ = write!(d, " /Rotate {}", p.rotate);
+        }
+        if !p.entries.is_empty() {
+            let _ = write!(d, " {}", p.entries);
         }
         d.push_str(" >>");
         objects.push(d.into_bytes());

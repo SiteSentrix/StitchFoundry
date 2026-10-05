@@ -1,6 +1,7 @@
 //! The pages of a PDF to import: opening with a password, the pages picked, the box each page
 //! is cropped to ([`CropTo`]) and [`info`].
 
+use hayro_syntax::object::Dict;
 use hayro_syntax::page::Page;
 use hayro_syntax::{DecryptionError, LoadPdfError, Pdf};
 use kurbo::{Affine, Rect};
@@ -26,8 +27,16 @@ pub struct PdfInfo {
     pub pages: Vec<PageInfo>,
 }
 
+/// Is this a PostScript file (plain, or an EPS with a binary header) rather than a PDF?
+pub fn is_postscript(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"%!PS") || bytes.starts_with(&[0xC5, 0xD0, 0xD3, 0xC6])
+}
+
 /// Read a PDF, decrypting it with `password` (none: the empty user password).
 pub(crate) fn open(bytes: &[u8], password: Option<&str>) -> Result<Pdf, PdfError> {
+    if is_postscript(bytes) {
+        return Err(PdfError::PostScript);
+    }
     let password = password.unwrap_or_default();
     Pdf::new_with_password(bytes.to_vec(), password).map_err(|e| match e {
         LoadPdfError::Decryption(DecryptionError::PasswordProtected) if password.is_empty() => PdfError::NeedsPassword,
@@ -106,4 +115,13 @@ pub(crate) fn frame(page: &Page<'_>, which: CropTo) -> (Affine, Rect) {
     let b = init.transform_rect_bbox(page_box(page, which));
     let (w, h) = page.render_dimensions();
     (init, if b.is_finite() && b.area() > 0.0 { b } else { Rect::new(0.0, 0.0, w as f64, h as f64) })
+}
+
+/// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?
+/// A file saved without PDF compatibility keeps its art there and shows a placeholder page.
+pub(crate) fn has_private_data(page: &Page<'_>) -> bool {
+    fn walk(d: &Dict<'_>, depth: u32) -> bool {
+        depth < 4 && d.keys().any(|k| k.starts_with(b"AIPrivateData") || d.get::<Dict<'_>>(k.as_ref()).is_some_and(|sub| walk(&sub, depth + 1)))
+    }
+    page.raw().get::<Dict<'_>>(b"PieceInfo").is_some_and(|d| walk(&d, 0))
 }

@@ -198,6 +198,9 @@ and Separation and DeviceN inks become spot swatches the art links to at its tin
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/brochure.pdf","pages":"2-3","cropTo":"trim"}}}
 ```
 
+PostScript files (`.eps`, and `.ai` files saved in older formats or without PDF compatibility) can't be opened yet and
+say so, as does an `.ai` whose PDF part is only a placeholder page.
+
 Drive a tool like a mouse:
 
 ```json

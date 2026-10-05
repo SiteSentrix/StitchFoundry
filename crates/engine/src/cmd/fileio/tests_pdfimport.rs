@@ -146,3 +146,44 @@ fn load_options_read_pages_crop_and_password() {
     assert_eq!((o.pages.as_deref(), o.password), (Some("1-2"), None));
     assert_eq!(LoadOptions::from_params("x", &Value::Null).unwrap(), LoadOptions::default());
 }
+
+#[test]
+fn a_postscript_ai_file_says_it_cannot_be_opened_yet() {
+    let ps = b"%!PS-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 moveto 100 100 lineto stroke\nshowpage\n%%EOF\n";
+    let mut s = Session::new();
+    for name in ["legacy.ai", "art.eps", "named.pdf", "template.ait"] {
+        let e = s.execute("document.open", &json!({"name": name, "dataBase64": b64(ps)})).unwrap_err().to_string();
+        assert!(e.contains(name) && e.contains("PostScript") && e.contains("save it as PDF"), "{name}: {e}");
+    }
+    // An EPS with a binary header too, and the PDF info of either.
+    let mut binary = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    binary.extend_from_slice(&[0; 28]);
+    binary.extend_from_slice(ps);
+    assert!(s.execute("document.open", &json!({"name": "x.eps", "dataBase64": b64(&binary)})).unwrap_err().to_string().contains("PostScript"));
+    assert!(s.execute("document.pdfInfo", &json!({"dataBase64": b64(ps)})).unwrap_err().to_string().contains("PostScript"));
+    assert!(s.active().is_none());
+}
+
+/// A page showing only text, with an editor's private data when `private`.
+fn text_page(private: bool, also: &str) -> PdfPage {
+    PdfPage {
+        resources: "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>".into(),
+        entries: if private { "/PieceInfo << /Editor << /Private << /AIPrivateData1 7 /RoundTripVersion 24 >> >> >>".into() } else { String::new() },
+        ..PdfPage::new(300.0, 100.0, &format!("BT /F1 12 Tf 10 50 Td (Saved without PDF content) Tj ET {also}"))
+    }
+}
+
+#[test]
+fn a_placeholder_only_pdf_part_is_detected() {
+    let mut s = Session::new();
+    let e = open(&mut s, &pdf(&[text_page(true, "")], None), json!({})).unwrap_err().to_string();
+    assert!(e.contains("placeholder page") && e.contains("PDF compatibility"), "{e}");
+    assert!(s.active().is_none());
+    // Text without private data, and private data with art, are ordinary files.
+    open(&mut s, &pdf(&[text_page(false, "")], None), json!({})).unwrap();
+    open(&mut s, &pdf(&[text_page(true, "0 g 0 0 10 10 re f")], None), json!({})).unwrap();
+    // One real page among the pages picked is enough.
+    let two = pdf(&[text_page(true, ""), text_page(true, "0 g 0 0 10 10 re f")], None);
+    assert!(open(&mut s, &two, json!({"pages": "1"})).is_err());
+    open(&mut s, &two, json!({})).unwrap();
+}

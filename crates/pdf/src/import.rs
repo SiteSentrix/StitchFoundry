@@ -22,6 +22,9 @@ use vectorcraft_geom::{FillRule, PathData};
 use crate::import_color::{Colors, Native};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError};
 
+/// The name of the paths text imports as.
+const TEXT_OUTLINES: &str = "<Text Outlines>";
+
 /// Import a PDF (or PDF-compatible `.ai`) with default options.
 pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
     import_with_report(bytes, &ImportOptions::default()).map(|r| r.document)
@@ -59,6 +62,8 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken));
     let cache = InterpreterCache::new();
     let mut x = 0.0;
+    // Every page only a placeholder (text) over private data: the file's art isn't in its PDF part.
+    let mut placeholder = true;
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
         // The chosen box sits at (x, 0); the page draws round it.
@@ -70,6 +75,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         b.begin_page();
         interpret_page(page, &mut ctx, &mut b);
         let children = b.end_page();
+        placeholder &= crate::pages::has_private_data(page) && only_text(&children);
         let mut right = ab.x1;
         if opts.crop == CropTo::Bounding
             && let Some(art) = vectorcraft_doc::live::nodes_bounds(&children)
@@ -90,6 +96,9 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             *c = children;
         }
         doc.layers.push(Arc::new(layer));
+    }
+    if placeholder {
+        return Err(PdfError::PlaceholderOnly);
     }
     for (k, blob) in b.images.drain() {
         doc.images.insert(k, blob);
@@ -114,6 +123,23 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         }
     }
     Ok(ImportReport { document: doc, warnings })
+}
+
+/// Is this art text and nothing else (in groups and clips), with some text?
+fn only_text(nodes: &[Arc<Node>]) -> bool {
+    fn walk(nodes: &[Arc<Node>], text: &mut bool) -> bool {
+        nodes.iter().all(|n| match &n.kind {
+            NodeKind::Path { clipping: true, .. } => true,
+            NodeKind::Path { .. } if n.name.as_deref() == Some(TEXT_OUTLINES) => {
+                *text = true;
+                true
+            }
+            NodeKind::Group { children, .. } => walk(children, text),
+            _ => false,
+        })
+    }
+    let mut text = false;
+    walk(nodes, &mut text) && text
 }
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
@@ -334,7 +360,7 @@ impl<'p> Builder<'p> {
         }
         let id = self.id();
         let mut n = Node::path(id, PathData::from_bezpath(&run.path), ap);
-        n.name = Some("<Text Outlines>".into());
+        n.name = Some(TEXT_OUTLINES.into());
         self.push_node(n);
     }
 
