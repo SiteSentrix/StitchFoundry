@@ -168,6 +168,24 @@ impl DocState {
     pub fn mark_saved_as(&mut self, snapshot: &Arc<Document>) {
         self.saved_doc = snapshot.clone();
     }
+    /// Keep what interaction `it` (taken from this document) changed, as one undo step.
+    pub(crate) fn keep_interaction(&mut self, it: Interaction) {
+        if !Arc::ptr_eq(&it.doc, &self.doc) {
+            self.history.undo.push(HistoryEntry { label: it.label, doc: it.doc, selection: it.selection });
+            self.history.redo.clear();
+            self.revision += 1;
+        }
+    }
+    /// End the interaction in progress, undoing what it changed.
+    pub(crate) fn undo_interaction(&mut self) {
+        if let Some(it) = self.interaction.take() {
+            self.doc = it.doc;
+            self.selection = it.selection;
+            self.active_layer = it.active_layer;
+            self.isolation = it.isolation;
+            self.revision += 1;
+        }
+    }
     pub fn title(&self) -> String {
         let name = self
             .path
@@ -206,6 +224,27 @@ pub const MAX_COORD: f64 = 4.0e6;
 /// (dates from the clock: `cmd::clock_date`); an action leaves them out
 /// ([`Session::journal_for_action`]).
 const REPLAY_ONLY: [(&str, &str); 3] = [("file.new", "created"), ("document.save", "modified"), ("file.saveAs", "modified")];
+
+/// `p`, the params of command `id`, without its [`REPLAY_ONLY`] values (a batch: its steps').
+fn strip_replay_only(id: &str, p: &mut Value) {
+    let strip = |id: &str, p: &mut Value| {
+        if let Value::Object(m) = p {
+            m.retain(|k, _| !REPLAY_ONLY.iter().any(|&(c, key)| c == id && key == k));
+        }
+    };
+    strip(id, p);
+    // Batches don't nest: one level of steps.
+    if id == "command.batch"
+        && let Some(Value::Array(steps)) = p.get_mut("commands")
+    {
+        for step in steps {
+            let id = step.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+            if let Some(p) = step.get_mut("params") {
+                strip(&id, p);
+            }
+        }
+    }
+}
 
 /// Cheap sanity check after an edit: artboards and the objects just touched (the selection) must
 /// have finite, in-range geometry, so saved files always reload and renderers never see NaN/∞.
@@ -587,6 +626,12 @@ pub struct Session {
     /// Parameters the running top-level command resolved from the preferences or the clock, added
     /// to its journal entry so a replay does the same ([`Session::note_journal`]).
     journal_note: serde_json::Map<String, Value>,
+    /// The depth of the command whose values [`Session::note_journal`] keeps: 1 (the top-level
+    /// command), or a step's while a batch runs it ([`Session::execute_step`]).
+    note_depth: u32,
+    /// While `command.batch` runs: the documents its steps closed or replaced (Revert), which an
+    /// error brings back; `None` otherwise.
+    pub(crate) batch_stash: Option<Vec<DocState>>,
 }
 
 impl Default for Session {
@@ -624,6 +669,8 @@ impl Session {
             style_libraries: Default::default(),
             recent_urls: vec![],
             journal_note: Default::default(),
+            note_depth: 1,
+            batch_stash: None,
         }
     }
 
@@ -658,7 +705,11 @@ impl Session {
         let view = self.last_view;
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         let _ = self.apply_actions(acts);
-        let _ = self.cancel_interaction();
+        // A batch leaves its interaction open in the document it leaves, to keep or roll back with
+        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        if self.batch_stash.is_none() {
+            let _ = self.cancel_interaction();
+        }
         self.tool = vectorcraft_tools::create(self.tool.id());
     }
     pub fn set_active(&mut self, index: usize) -> bool {
@@ -729,7 +780,10 @@ impl Session {
         st.save_options = old.save_options.clone();
         st.converted = old.converted;
         st.view = old.view.clone();
-        self.docs[index] = st;
+        let old = std::mem::replace(&mut self.docs[index], st);
+        if let Some(stash) = &mut self.batch_stash {
+            stash.push(old);
+        }
         true
     }
     pub fn close_document(&mut self, index: usize) -> bool {
@@ -737,7 +791,10 @@ impl Session {
             return false;
         }
         self.reset_tool_for_doc_switch();
-        self.docs.remove(index);
+        let old = self.docs.remove(index);
+        if let Some(stash) = &mut self.batch_stash {
+            stash.push(old);
+        }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
         true
     }
@@ -752,6 +809,8 @@ impl Session {
         // be recorded twice and replay differently).
         if self.depth == 0 {
             self.journal_note.clear();
+            self.note_depth = 1;
+            self.batch_stash = None;
         }
         let r = if self.depth == 0 { self.run_guarded(id, |s| (spec.run)(s, params)) } else { self.run_nested(|s| (spec.run)(s, params)) };
         let r = r?;
@@ -766,11 +825,24 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview) unless its params give `key`: a value it resolved from the preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key`: a value it resolved from the
+    /// preferences or the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
-        if self.depth == 1 {
+        if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
         }
+    }
+
+    /// Run `id` as a step of the running command, which journals its steps (`command.batch`):
+    /// → the step's result and its params with what it noted ([`Session::note_journal`]), for the
+    /// step in the running command's journal entry.
+    pub(crate) fn execute_step(&mut self, id: &str, params: &Value) -> Result<(Value, Value)> {
+        let outer = (std::mem::take(&mut self.journal_note), self.note_depth);
+        self.note_depth = self.depth + 1;
+        let r = self.execute(id, params);
+        let noted = self.noted(params);
+        (self.journal_note, self.note_depth) = outer;
+        Ok((r?, noted))
     }
 
     /// The journal from entry `start` on, as an action records it: without the params that only
@@ -781,11 +853,7 @@ impl Session {
             .skip(start)
             .cloned()
             .map(|(id, mut p)| {
-                if let Value::Object(m) = &mut p {
-                    for (_, key) in REPLAY_ONLY.iter().filter(|(c, _)| *c == id) {
-                        m.remove(*key);
-                    }
-                }
+                strip_replay_only(&id, &mut p);
                 (id, p)
             })
             .collect()
@@ -934,17 +1002,11 @@ impl Session {
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
-        if let Some(p) = self.pending_paint.take() {
-            self.remember_paint_now(&p);
-        }
+        self.remember_pending_paint();
         let st = self.doc_mut()?;
-        let Some(it) = st.interaction.take() else { return Ok(()) };
-        let Some(preview) = it.preview else { return Ok(()) };
-        if !Arc::ptr_eq(&it.doc, &st.doc) {
-            st.history.undo.push(HistoryEntry { label: it.label, doc: it.doc, selection: it.selection });
-            st.history.redo.clear();
-            st.revision += 1;
-        }
+        let Some(mut it) = st.interaction.take() else { return Ok(()) };
+        let Some(preview) = it.preview.take() else { return Ok(()) };
+        st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
             let copy = preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
@@ -956,16 +1018,16 @@ impl Session {
         Ok(())
     }
 
+    /// Remember the paint a live preview applied (as its interaction is kept).
+    pub(crate) fn remember_pending_paint(&mut self) {
+        if let Some(p) = self.pending_paint.take() {
+            self.remember_paint_now(&p);
+        }
+    }
+
     pub fn cancel_interaction(&mut self) -> Result<()> {
         self.pending_paint = None;
-        let st = self.doc_mut()?;
-        if let Some(it) = st.interaction.take() {
-            st.doc = it.doc;
-            st.selection = it.selection;
-            st.active_layer = it.active_layer;
-            st.isolation = it.isolation;
-            st.revision += 1;
-        }
+        self.doc_mut()?.undo_interaction();
         Ok(())
     }
 

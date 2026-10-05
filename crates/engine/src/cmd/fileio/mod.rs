@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             screens::export_for_screens
         ),
-        cmd!(query "command.batch", "Batch", [], None, "{label?, commands: [{command, params}]} run several commands as ONE undo step; stops at the first error and rolls back", has_doc, batch::batch),
+        cmd!(query "command.batch", "Batch", [], None, "{label?, commands: [{command, params}]} run several commands as ONE undo step (one in each document they edit: steps may open, switch, close or revert documents); stops at the first error and rolls everything back, documents included", has_doc, batch::batch),
         cmd!(
             query "document.formats",
             "File Formats",

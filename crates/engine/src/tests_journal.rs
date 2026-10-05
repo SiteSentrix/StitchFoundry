@@ -97,3 +97,137 @@ fn a_save_records_its_date_and_replays_it() {
     assert_eq!(r.doc().unwrap().doc.metadata, s.doc().unwrap().doc.metadata);
     assert!(s.journal_for_action(0).iter().all(|(_, p)| p.get("modified").is_none() && p.get("created").is_none()));
 }
+
+/// The document `s` ends on after replaying the journal of `s` in a new session.
+fn replayed(s: &Session) -> Session {
+    let mut r = Session::new();
+    for (id, p) in &s.journal {
+        r.execute(id, p).unwrap();
+    }
+    r
+}
+
+#[test]
+fn a_save_in_a_batch_records_its_date_and_replays_it() {
+    let path = vectorcraft_testkit::temp_dir("journal-batch").join("a.vectorcraft").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": 1_000_000_000})).unwrap();
+    let rect = json!({"x": 10, "y": 10, "width": 50, "height": 40});
+    let steps = json!([{"command": "shape.rectangle", "params": rect}, {"command": "document.save", "params": {"path": path}}]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    let modified = s.doc().unwrap().doc.metadata.modified;
+    assert!(modified.is_some(), "the save in the batch dates the document");
+    // The step's entry records the date it used; steps that take nothing from elsewhere stay as given.
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(id, "command.batch");
+    assert_eq!(p["commands"][0], steps[0]);
+    assert_eq!(p["commands"][1]["params"], json!({"path": path, "modified": modified}));
+    // As if the original run happened at another time: the replay lands on the recorded date.
+    s.journal.last_mut().unwrap().1["commands"][1]["params"]["modified"] = json!(1_234_567_890);
+    let r = replayed(&s);
+    assert_eq!(r.doc().unwrap().doc.metadata.modified, Some(1_234_567_890));
+    assert_eq!(r.doc().unwrap().doc.metadata.created, Some(1_000_000_000));
+    assert_eq!(r.doc().unwrap().doc.node_count(), s.doc().unwrap().doc.node_count());
+    // An action leaves the step's date out, so playing it later dates the document then.
+    let action = s.journal_for_action(0);
+    assert_eq!(action[1].1["commands"][1]["params"], json!({ "path": path }));
+    assert_eq!(action[1].1["commands"][0], steps[0]);
+}
+
+#[test]
+fn a_batch_step_records_what_it_took_from_the_preferences() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.prefs.scale_strokes = true;
+    let steps = json!([
+        {"command": "shape.rectangle", "params": {"x": 10, "y": 10, "width": 50, "height": 40}},
+        {"command": "stroke.set", "params": {"weight": 2}},
+        {"command": "object.scale", "params": {"sx": 300}},
+    ]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    let p = &s.journal.last().unwrap().1;
+    assert_eq!(p["commands"][2]["params"], json!({"sx": 300, "strokes": true, "corners": false}));
+    // Replayed with other preferences, the scale still scales the stroke.
+    let r = replayed(&s);
+    assert!(!r.prefs.scale_strokes);
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc(&r), doc(&s));
+}
+
+/// Every open document of `s`, as JSON.
+fn documents(s: &Session) -> Vec<serde_json::Value> {
+    s.documents().iter().map(|d| serde_json::to_value(&*d.doc).unwrap()).collect()
+}
+
+fn rect_step(x: i32) -> serde_json::Value {
+    json!({"command": "shape.rectangle", "params": {"x": x, "y": 10, "width": 20, "height": 20}})
+}
+
+#[test]
+fn a_batch_that_opens_a_new_document_is_journaled_and_replays() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let steps = json!([rect_step(10), {"command": "file.new", "params": {"width": 300, "height": 200}}, rect_step(50), rect_step(90)]);
+    s.execute("command.batch", &json!({"label": "Two documents", "commands": steps})).unwrap();
+    // The steps before the new document stay in the first one and the rest go in the new one: one
+    // undo step in each, nothing left in progress.
+    assert_eq!(s.documents().len(), 2);
+    assert_eq!(s.active_index(), Some(1));
+    for (st, objects) in s.documents().iter().zip([1, 2]) {
+        assert_eq!(st.doc.node_count(), 1 + objects);
+        assert_eq!(st.history.undo.iter().map(|h| h.label.as_str()).collect::<Vec<_>>(), ["Two documents"]);
+        assert!(st.interaction.is_none());
+    }
+    // The batch is journaled, with the new document's date, and replays to the same documents.
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(id, "command.batch");
+    assert!(p["commands"][1]["params"]["created"].is_i64(), "{p}");
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+    // Undo in the new document takes its part of the batch back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node_count(), 1);
+}
+
+#[test]
+fn a_failed_batch_closes_the_documents_it_opened_and_restores_the_ones_it_closed() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+    let (before, active, journal, next) = (documents(&s), s.active_index(), s.journal.len(), s.peek_untitled());
+    let steps = json!([
+        rect_step(10),
+        {"command": "file.close", "params": {}},
+        rect_step(30),
+        {"command": "file.new", "params": {}},
+        rect_step(50),
+        {"command": "no.such.command", "params": {}},
+    ]);
+    let e = s.execute("command.batch", &json!({ "commands": steps })).unwrap_err();
+    assert!(e.to_string().contains("batch step 5"), "{e}");
+    assert_eq!(documents(&s), before);
+    assert_eq!(s.active_index(), active);
+    assert_eq!(s.journal.len(), journal, "a failed batch isn't journaled");
+    assert_eq!(s.peek_untitled(), next, "the next new document keeps its name");
+    assert!(s.documents().iter().all(|d| d.interaction.is_none()));
+    assert_eq!(s.documents()[1].history.undo.len(), 1, "only the ellipse drawn before the batch");
+}
+
+#[test]
+fn a_failed_batch_brings_back_a_document_it_reverted() {
+    let path = vectorcraft_testkit::temp_dir("journal-batch").join("revert.vectorcraft").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("document.save", &json!({"path": path, "modified": null})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+    let (before, revision) = (documents(&s), s.doc().unwrap().revision);
+    let steps = json!([rect_step(10), {"command": "file.revert", "params": {}}, rect_step(30), {"command": "no.such.command"}]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    assert_eq!(documents(&s), before, "the unsaved ellipse is back");
+    let st = s.doc().unwrap();
+    assert_eq!(st.history.undo.len(), 1);
+    assert!(st.is_dirty() && st.interaction.is_none());
+    assert!(st.revision > revision, "the restored document redraws");
+}
