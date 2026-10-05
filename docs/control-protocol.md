@@ -325,3 +325,8 @@ selected slices. `sliceOptions` (fields `kind`: `image`/`noImage`/`htmlText`, `n
 runs `object.slice.options` on `ui.dialog.confirm`; `divideSlices` (fields `divideRows`, `rows`, `rowMode`:
 `count`/`size`, `rowHeight`, and `divideColumns`, `columns`, `columnMode`, `columnWidth`) runs `object.slice.divide`.
 Read slice options with `slice.list`.
+
+The Slice tools: `ui.pointer` drags with the `slice` tool make a user slice (Shift square, Alt from the centre; one
+undo step). With `sliceSelection` a click selects a slice (Shift toggles), a drag moves the selected slices, a drag on
+a selected user slice's handle resizes it, a double click opens `sliceOptions` and `ui.key` Delete deletes the
+selected slices. Hidden or locked slices (`view.slices.hide`, `view.slices.lock`) can't be picked.

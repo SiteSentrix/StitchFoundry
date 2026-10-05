@@ -369,6 +369,8 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::NotAllowed => C::NotAllowed,
         Cursor::AddStop => C::Copy,
         Cursor::RemoveStop => C::NotAllowed,
+        Cursor::Slice => C::Crosshair,
+        Cursor::SliceSelect => C::Default,
     }
 }
 

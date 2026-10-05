@@ -129,6 +129,51 @@ pub fn specs() -> Vec<CommandSpec> {
             list
         ),
         cmd!("select.object.slices", "Slices", ["Select", "Object"], None, "{} select every user and object slice → {count}", has_doc, select_all),
+        cmd!(
+            "object.slice.create",
+            "Create Slice",
+            [],
+            None,
+            "{x, y, width, height} a user slice over that rectangle, selected (the Slice tool's drag) → {id}",
+            has_doc,
+            create
+        ),
+        cmd!(
+            "object.slice.setRect",
+            "Set Slice Rectangle",
+            [],
+            None,
+            "{id: user slice, x, y, width, height} move or resize a user slice (an object slice follows its object) → {id}",
+            has_doc,
+            set_rect
+        ),
+        cmd!(
+            "object.slice.move",
+            "Move Slices",
+            [],
+            None,
+            "{slices?: [id…] (default: the selected slices), dx, dy} move the slices: user slices move, object slices move their objects → {ids}",
+            has_doc,
+            move_slices
+        ),
+        cmd!(
+            "object.slice.delete",
+            "Delete Slices",
+            [],
+            None,
+            "{slices?: [id…] (default: the selected slices)} delete the user slices and release the object slices (their objects stay) → {count}",
+            has_doc,
+            delete
+        ),
+        cmd!(
+            "object.slice.select",
+            "Select Slices",
+            [],
+            None,
+            "{slices?: [id…] (user slice ids or ids of objects with an object slice; none: deselect the slices), toggle?: bool (Shift: add the unselected ones, drop the selected ones)} select slices as the Slice Selection tool does; the objects are deselected → {selected: [id…]}",
+            has_doc,
+            select
+        ),
     ]
 }
 
@@ -144,6 +189,18 @@ impl Session {
 }
 
 // ---------- targets and params ----------
+
+/// The slices a command acts on: `slices` (ids that must all be slices), else the selected ones.
+fn slice_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
+    let st = s.doc()?;
+    match ids_param(p, "slices") {
+        Some(ids) => match ids.iter().find(|id| !st.doc.is_slice(**id)) {
+            Some(id) => Err(bad(cmd, format!("{id} is not a slice"))),
+            None => Ok(dedup(ids)),
+        },
+        None => Ok(selected_slices(&st.doc, &st.selection)),
+    }
+}
 
 /// The selected slices: those the Slice Selection tool selected and the selected objects that are
 /// object slices.
@@ -564,4 +621,97 @@ fn select_all(s: &mut Session, _: &Value) -> Result<Value> {
     let n = ids.len();
     s.select(|_, sel| sel.set_slices(ids))?;
     Ok(json!({ "count": n }))
+}
+
+// ---------- the Slice and Slice Selection tools ----------
+
+/// `{x, y, width, height}` as a rectangle a slice can have.
+fn rect_param(p: &Value, cmd: &str) -> Result<Rect> {
+    let (x, y) = (f64_req(p, "x", cmd)?, f64_req(p, "y", cmd)?);
+    let r = Rect::new(x, y, x + f64_req(p, "width", cmd)?, y + f64_req(p, "height", cmd)?).abs();
+    if slice_rect_ok(r) { Ok(r) } else { Err(bad(cmd, "the rectangle needs a size and must lie on the canvas")) }
+}
+
+fn create(s: &mut Session, p: &Value) -> Result<Value> {
+    let r = rect_param(p, "object.slice.create")?;
+    let id = s.edit("Slice", |d, sel| {
+        let id = add_slice(d, r, SliceOptions::default());
+        sel.set_slices([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0 }))
+}
+
+fn set_rect(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.slice.setRect";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let r = rect_param(p, C)?;
+    let d = &s.doc()?.doc;
+    if d.slice(id).is_none() {
+        return Err(bad(C, if d.is_slice(id) { format!("{id} is an object slice: it follows its object") } else { format!("{id} is not a slice") }));
+    }
+    s.edit("Resize Slice", |d, _| {
+        if let Some(sl) = d.slice_mut(id) {
+            sl.rect = r;
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "id": id.0 }))
+}
+
+fn move_slices(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.slice.move";
+    let targets = slice_targets(s, p, C)?;
+    let v = vectorcraft_geom::Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
+    if !(v.x.is_finite() && v.y.is_finite()) {
+        return Err(bad(C, "dx and dy must be numbers"));
+    }
+    s.edit("Move Slice", |d, _| {
+        for id in &targets {
+            match d.slice_mut(*id) {
+                Some(sl) if slice_rect_ok(sl.rect + v) => sl.rect = sl.rect + v,
+                Some(_) => return Err(bad(C, "the slice would leave the canvas")),
+                None => {
+                    if let Some(n) = d.node_mut(*id) {
+                        n.transform(vectorcraft_geom::Affine::translate(v), vectorcraft_doc::Scaling::default());
+                    }
+                }
+            }
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "ids": ids_json(&targets) }))
+}
+
+fn delete(s: &mut Session, p: &Value) -> Result<Value> {
+    let targets = slice_targets(s, p, "object.slice.delete")?;
+    if targets.is_empty() {
+        return Ok(json!({ "count": 0 }));
+    }
+    s.edit("Delete Slice", |d, _| {
+        for id in &targets {
+            remove_slice(d, *id);
+        }
+        Ok(())
+    })?;
+    Ok(json!({ "count": targets.len() }))
+}
+
+fn select(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = slice_targets(s, &json!({ "slices": p.get("slices").cloned().unwrap_or(json!([])) }), "object.slice.select")?;
+    let toggle = bool_or(p, "toggle", false);
+    s.select(|_, sel| {
+        let mut now = if toggle { sel.slices.clone() } else { vec![] };
+        for id in ids {
+            match now.iter().position(|x| *x == id) {
+                Some(i) if toggle => {
+                    now.remove(i);
+                }
+                Some(_) => {}
+                None => now.push(id),
+            }
+        }
+        sel.set_slices(now);
+    })?;
+    Ok(json!({ "selected": ids_json(&s.doc()?.selection.slices) }))
 }

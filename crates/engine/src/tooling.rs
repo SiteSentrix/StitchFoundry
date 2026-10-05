@@ -89,6 +89,8 @@ impl Session {
             unit,
             stroke_unit,
             paste_plain_text: self.prefs.paste_text_formatting == "plain",
+            slices_hidden: self.menu.slices_hidden,
+            slices_locked: self.menu.slices_locked,
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {

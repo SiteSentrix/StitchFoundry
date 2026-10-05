@@ -1138,3 +1138,14 @@ the `sliceLineColor` preference, numbered while `showSliceNumbers` is on.
 {"name":"run_command","arguments":{"command":"object.slice.options","params":{"name":"logo","url":"https://example.com","alt":"Logo"}}}
 {"name":"run_command","arguments":{"command":"slice.list","params":{}}}
 ```
+
+The Slice tool (`slice`, Shift+K) and the Slice Selection tool (`sliceSelection`) reduce to commands:
+`object.slice.create {x, y, width, height}` (the Slice tool's drag; it snaps to ruler guides), `object.slice.select
+{slices?, toggle?}`, `object.slice.move {slices?, dx, dy}` (an object slice moves its object),
+`object.slice.setRect {id, x, y, width, height}` (user slices) and `object.slice.delete {slices?}`. Slice ids are user
+slice ids and the ids of objects with an object slice.
+
+```json
+{"name":"run_command","arguments":{"command":"object.slice.create","params":{"x":0,"y":0,"width":200,"height":80}}}
+{"name":"run_command","arguments":{"command":"object.slice.move","params":{"dx":10,"dy":0}}}
+```

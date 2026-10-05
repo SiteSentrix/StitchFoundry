@@ -250,3 +250,80 @@ fn slices_survive_a_native_round_trip() {
     run(&mut s, "edit.duplicate", json!({}));
     assert_eq!(s.doc().unwrap().doc.object_slices().len(), 2);
 }
+
+#[test]
+fn slice_tool_gestures_are_one_undo_step_each() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind as K, ToolKey};
+    let mut s = session();
+    let view = ViewInfo { smart_guides: false, ..Default::default() };
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let gesture = |s: &mut Session, pts: &[(K, f64, f64)]| {
+        for (k, x, y) in pts {
+            s.pointer(&PointerEvent::new(*k, *x, *y), view).unwrap();
+        }
+    };
+    s.select_tool("slice", view).unwrap();
+    let n = undo(&s);
+    gesture(&mut s, &[(K::Down, 10.0, 10.0), (K::Drag, 50.0, 30.0), (K::Drag, 110.0, 60.0), (K::Up, 110.0, 60.0)]);
+    assert_eq!(undo(&s), n + 1);
+    let id = s.doc().unwrap().doc.slices[0].id;
+    assert_eq!(s.doc().unwrap().doc.slices.len(), 1, "the previews left one slice");
+    assert_eq!(rect_of(&mut s, id.0), [10.0, 10.0, 100.0, 50.0]);
+    assert_eq!(s.doc().unwrap().selection.slices, vec![id]);
+
+    // Slice Selection: drag the slice, then its bottom-right handle, then Delete.
+    s.select_tool("sliceSelection", view).unwrap();
+    gesture(&mut s, &[(K::Down, 20.0, 20.0), (K::Drag, 30.0, 40.0), (K::Drag, 40.0, 50.0), (K::Up, 40.0, 50.0)]);
+    assert_eq!(undo(&s), n + 2);
+    assert_eq!(rect_of(&mut s, id.0), [30.0, 40.0, 100.0, 50.0]);
+    gesture(&mut s, &[(K::Down, 130.0, 90.0), (K::Drag, 140.0, 95.0), (K::Drag, 150.0, 100.0), (K::Up, 150.0, 100.0)]);
+    assert_eq!(undo(&s), n + 3);
+    assert_eq!(rect_of(&mut s, id.0), [30.0, 40.0, 120.0, 60.0]);
+    assert!(s.tool_claims_key(ToolKey::Delete, view));
+    s.tool_key(ToolKey::Delete, Mods::default(), view).unwrap();
+    assert!(s.doc().unwrap().doc.slices.is_empty());
+    assert_eq!(undo(&s), n + 4);
+    // Undo walks the gestures back one at a time.
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(rect_of(&mut s, id.0), [30.0, 40.0, 120.0, 60.0]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(rect_of(&mut s, id.0), [30.0, 40.0, 100.0, 50.0]);
+
+    // An object slice moves its object; locked slices stay put.
+    let a = rect(&mut s, 200.0, 200.0, 40.0, 40.0);
+    run(&mut s, "object.slice.make", json!({}));
+    gesture(&mut s, &[(K::Down, 220.0, 220.0), (K::Drag, 230.0, 220.0), (K::Drag, 240.0, 230.0), (K::Up, 240.0, 230.0)]);
+    assert_eq!(s.doc().unwrap().doc.node(NodeId(a)).unwrap().geometric_bounds().unwrap().x0, 220.0);
+    run(&mut s, "view.slices.lock", json!({"locked": true}));
+    let before = undo(&s);
+    gesture(&mut s, &[(K::Down, 250.0, 240.0), (K::Drag, 280.0, 260.0), (K::Up, 280.0, 260.0)]);
+    assert_eq!(undo(&s), before);
+    // The journal replays the gestures as commands.
+    let journal: Vec<String> = s.journal.iter().map(|(c, _)| c.clone()).collect();
+    for c in ["object.slice.create", "object.slice.move", "object.slice.setRect", "object.slice.delete", "object.slice.select"] {
+        assert!(journal.iter().any(|j| j == c), "{c} journaled: {journal:?}");
+    }
+}
+
+#[test]
+fn slice_commands_check_their_params() {
+    let mut s = session();
+    assert!(s.execute("object.slice.create", &json!({"x": 0, "y": 0, "width": 0, "height": 10})).is_err(), "no area");
+    assert!(s.execute("object.slice.create", &json!({"x": 1e9, "y": 0, "width": 10, "height": 10})).is_err(), "off the canvas");
+    let id = run(&mut s, "object.slice.create", json!({"x": 50, "y": 60, "width": -20, "height": 10}))["id"].as_u64().unwrap();
+    assert_eq!(rect_of(&mut s, id), [30.0, 60.0, 20.0, 10.0], "a negative size draws the other way");
+    run(&mut s, "object.slice.setRect", json!({"id": id, "x": 0, "y": 0, "width": 5, "height": 5}));
+    assert_eq!(rect_of(&mut s, id), [0.0, 0.0, 5.0, 5.0]);
+    let a = rect(&mut s, 100.0, 100.0, 10.0, 10.0);
+    run(&mut s, "object.slice.make", json!({}));
+    assert!(
+        s.execute("object.slice.setRect", &json!({"id": a, "x": 0, "y": 0, "width": 5, "height": 5})).is_err(),
+        "object slices follow their object"
+    );
+    assert!(s.execute("object.slice.move", &json!({"slices": [12345], "dx": 1, "dy": 1})).is_err(), "not a slice");
+    assert_eq!(run(&mut s, "object.slice.select", json!({"slices": [id, a]}))["selected"], json!([id, a]));
+    assert_eq!(run(&mut s, "object.slice.select", json!({"slices": [a], "toggle": true}))["selected"], json!([id]));
+    assert_eq!(run(&mut s, "object.slice.delete", json!({"slices": [a]}))["count"], 1);
+    assert!(s.doc().unwrap().doc.node(NodeId(a)).is_some(), "deleting an object slice keeps its object");
+    assert_eq!(run(&mut s, "object.slice.select", json!({}))["selected"], json!([]));
+}

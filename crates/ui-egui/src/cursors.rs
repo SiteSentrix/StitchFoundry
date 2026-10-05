@@ -118,6 +118,21 @@ fn stop_badge(p: &Painter, o: Pos2, add: bool) {
     }
 }
 
+/// A slice badge: a small rectangle cut by a line, at `b` (its top left).
+fn slice_badge(p: &Painter, b: Pos2) {
+    let pts = vec![b, b + vec2(8.0, 0.0), b + vec2(8.0, 6.0), b + vec2(0.0, 6.0)];
+    poly(p, pts, HALO, INK);
+    line(p, b + vec2(4.0, 0.0), b + vec2(4.0, 6.0));
+}
+
+/// The Slice tool: a crosshair with a blade below right of the hotspot.
+fn slice(p: &Painter, o: Pos2) {
+    crosshair(p, o);
+    let b = o + vec2(7.0, 7.0);
+    poly(p, vec![b, b + vec2(9.0, 4.0), b + vec2(10.0, 7.0), b + vec2(3.0, 6.0)], HALO, INK);
+    line(p, b + vec2(8.0, 6.0), b + vec2(12.0, 12.0));
+}
+
 fn ibeam(p: &Painter, o: Pos2) {
     line(p, o + vec2(0.0, -8.0), o + vec2(0.0, 8.0));
     line(p, o + vec2(-3.0, -8.0), o + vec2(3.0, -8.0));
@@ -150,6 +165,11 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
         Cursor::Text => ibeam(painter, p),
         Cursor::AddStop => stop_badge(painter, p, true),
         Cursor::RemoveStop => stop_badge(painter, p, false),
+        Cursor::Slice => slice(painter, p),
+        Cursor::SliceSelect => {
+            arrow(painter, p, false);
+            slice_badge(painter, p + vec2(11.0, 14.0));
+        }
         _ => return false,
     }
     let _ = pos2;
