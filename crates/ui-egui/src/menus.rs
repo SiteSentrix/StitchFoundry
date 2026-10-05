@@ -485,6 +485,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{…document.exportForWeb settings} write the HTML page and its images to a temporary folder and open the page in the default browser (desktop) → {path}",
     ),
+    (
+        "file.exportSelection",
+        "Export Selection…",
+        "",
+        "{multiple?: true} collect the selected objects as assets (assets.add: one per object; false: one of them all) and open Export for Screens on its Assets tab with them checked → {assets: [asset id…]}; document.exportSelection exports the selection in one go instead",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -871,6 +877,13 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.saveForWeb" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::save_for_web::open(app),
         "file.saveForWeb" => crate::dialogs::save_for_web::save(app, p.clone()),
         "file.saveForWeb.browser" => crate::dialogs::save_for_web::browser_preview(app, p),
+        // File → Export Selection…: the selection becomes assets, shown checked on Export for
+        // Screens' Assets tab.
+        "file.exportSelection" => app.run("assets.add", json!({ "multiple": p.get("multiple").and_then(Value::as_bool).unwrap_or(true) })).map(|r| {
+            let ids: Vec<u64> = r["assets"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+            crate::dialogs::open_export_for_screens_assets(app, Some(&ids));
+            json!({ "assets": ids })
+        }),
         _ => return None,
     };
     Some(r)
@@ -1106,6 +1119,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
+        "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         _ => true,
     }
 }
@@ -1169,7 +1183,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Save for Web (Legacy)…", "file.saveForWeb"),
                     ],
                 ),
-                c("Export Selection…", "document.exportSelection"),
+                c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
                 sub("Scripts", vec![todos("Other Script…", "Cmd+F12")]),

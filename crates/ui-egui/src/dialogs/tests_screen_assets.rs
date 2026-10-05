@@ -1,5 +1,5 @@
-//! Export for Screens' Assets tab, drawn headlessly: the checked assets, the OK label, desktop
-//! folders and web downloads.
+//! Export for Screens' Assets tab and File → Export Selection…, drawn headlessly: collecting the
+//! selection, the checked assets, the OK label, desktop folders and web downloads.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -46,6 +46,46 @@ fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
 }
 
 #[test]
+fn export_selection_collects_the_selection_and_opens_the_assets_tab() {
+    let (mut app, log, _) = app(true);
+    assert!(crate::menus::enabled(&app, "file.exportSelection"));
+    let r = app.run("file.exportSelection", json!({})).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.len(), 2, "one asset per object");
+    let ids: Vec<Value> = list.iter().map(|a| a["id"].clone()).collect();
+    assert_eq!(r["assets"], json!(ids));
+    assert_eq!(kind(&app), Some(export_for_screens::KIND));
+    assert_eq!((field(&app, "tab"), field(&app, "assets")), (json!("assets"), json!(ids)));
+    // Collecting the same art again opens on the same assets.
+    super::cancel(&mut app);
+    app.run("file.exportSelection", json!({})).unwrap();
+    assert_eq!(assets(&mut app).len(), 2);
+    assert_eq!(field(&app, "assets"), json!(ids));
+    let text = painted_text(&mut app, |app, ui| super::show(app, ui.ctx()));
+    assert!(text.contains("Asset 1") && text.contains("Asset 2") && text.contains("Select All"), "{text}");
+    // The web downloads both as one zip.
+    let r = confirm(&mut app).unwrap();
+    assert_eq!(r["files"], json!(["Asset-1.png", "Asset-2.png"]));
+    assert_eq!(log.borrow().len(), 1);
+    assert!(app.ui.dialog.is_none());
+    // Nothing selected: Export Selection is off; document.exportSelection still exports in one go.
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(!crate::menus::enabled(&app, "file.exportSelection"));
+    app.run("select.set", json!({"ids": [list[0]["nodes"][0]]})).unwrap();
+    assert!(app.session.execute("document.exportSelection", &json!({"format": "png"})).unwrap()["dataBase64"].is_string());
+}
+
+#[test]
+fn export_selection_as_one_asset() {
+    let (mut app, _, ids) = app(true);
+    app.run("file.exportSelection", json!({"multiple": false})).unwrap();
+    let list = assets(&mut app);
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0]["nodes"], json!(ids));
+    assert_eq!(field(&app, "assets"), json!([list[0]["id"]]));
+}
+
+#[test]
 fn the_assets_tab_exports_the_checked_assets_into_the_folder() {
     let (mut app, log, _) = app(false);
     app.run("assets.add", json!({})).unwrap();
@@ -89,6 +129,7 @@ fn the_menus_reach_asset_export() {
     let (mut app, _, _) = app(false);
     let entries = crate::menus::menu_entries(&app);
     let find = |cmd: &str, label: &str| entries.iter().find(|e| e.command.as_deref() == Some(cmd) && e.label == label).map(|e| e.path.clone());
+    assert_eq!(find("file.exportSelection", "Export Selection…"), Some(vec!["File".to_string()]));
     assert_eq!(find("assets.add", "As Single Asset"), Some(vec!["Object".to_string(), "Collect for Export".to_string()]));
     assert_eq!(find("assets.add", "As Multiple Assets"), Some(vec!["Object".to_string(), "Collect for Export".to_string()]));
     let window = entries.iter().find(|e| e.label == "Asset Export").unwrap();

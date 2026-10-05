@@ -1415,7 +1415,8 @@ defaults); presets and remembered settings are preferences.
 
 ## Asset Export
 
-Assets are pieces of art collected for export on their own (Window › Asset Export, Object › Collect for Export).
+Assets are pieces of art collected for export on their own (Window › Asset Export, Object › Collect for Export, File ›
+Export Selection…).
 `assets.add {ids?, multiple?}` collects the selected objects (or `ids`): one asset per object, or with
 `multiple: false` one asset of them all, named after the object or `Asset 1`, `Asset 2`…; art already collected keeps
 its asset. Assets name their objects, so they follow edits: moving the art moves the crop, and deleting it
