@@ -6,8 +6,9 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, Unit};
 use vectorcraft_geom::Affine;
 
+use super::clipboard::SwatchChoices;
 use super::*;
-use crate::{EngineError, inspect};
+use crate::{Clipboard, EngineError, inspect};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -38,15 +39,51 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("edit.redo", "Redo", ["Edit"], Some("Cmd+Shift+Z"), "{}", can_redo, redo),
         cmd!("edit.cut", "Cut", ["Edit"], Some("Cmd+X"), "{}", has_selection, cut),
         cmd!("edit.copy", "Copy", ["Edit"], Some("Cmd+C"), "{}", has_selection, copy),
-        cmd!("edit.paste", "Paste", ["Edit"], Some("Cmd+V"), "{dx?, dy?}", has_clipboard, |s, p| paste(s, p, PasteMode::Offset)),
-        cmd!("edit.pasteInFront", "Paste in Front", ["Edit"], Some("Cmd+F"), "{}", has_clipboard, |s, p| paste(s, p, PasteMode::Front)),
-        cmd!("edit.pasteInBack", "Paste in Back", ["Edit"], Some("Cmd+B"), "{}", has_clipboard, |s, p| paste(s, p, PasteMode::Back)),
-        cmd!("edit.pasteInPlace", "Paste in Place", ["Edit"], Some("Cmd+Shift+V"), "{}", has_clipboard, |s, p| paste(s, p, PasteMode::InPlace)),
-        cmd!("edit.pasteOnAllArtboards", "Paste on All Artboards", ["Edit"], Some("Cmd+Alt+Shift+V"), "{}", has_clipboard, |s, p| paste(
-            s,
-            p,
-            PasteMode::AllArtboards
-        )),
+        cmd!(
+            "edit.paste",
+            "Paste",
+            ["Edit"],
+            Some("Cmd+V"),
+            "{dx?, dy?, swatchConflict?} paste offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"} → {ids, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
+            has_clipboard,
+            |s, p| paste(s, p, PasteMode::Offset)
+        ),
+        cmd!(
+            "edit.pasteInFront",
+            "Paste in Front",
+            ["Edit"],
+            Some("Cmd+F"),
+            "{swatchConflict?} paste in place just above the top selected object (resources as edit.paste) → {ids, added, merged, renamed}",
+            has_clipboard,
+            |s, p| paste(s, p, PasteMode::Front)
+        ),
+        cmd!(
+            "edit.pasteInBack",
+            "Paste in Back",
+            ["Edit"],
+            Some("Cmd+B"),
+            "{swatchConflict?} paste in place just below the bottom selected object (resources as edit.paste) → {ids, added, merged, renamed}",
+            has_clipboard,
+            |s, p| paste(s, p, PasteMode::Back)
+        ),
+        cmd!(
+            "edit.pasteInPlace",
+            "Paste in Place",
+            ["Edit"],
+            Some("Cmd+Shift+V"),
+            "{swatchConflict?} paste where the objects were copied (resources as edit.paste) → {ids, added, merged, renamed}",
+            has_clipboard,
+            |s, p| paste(s, p, PasteMode::InPlace)
+        ),
+        cmd!(
+            "edit.pasteOnAllArtboards",
+            "Paste on All Artboards",
+            ["Edit"],
+            Some("Cmd+Alt+Shift+V"),
+            "{swatchConflict?} paste a copy on every artboard (resources as edit.paste) → {ids, added, merged, renamed}",
+            has_clipboard,
+            |s, p| paste(s, p, PasteMode::AllArtboards)
+        ),
         cmd!("edit.clear", "Clear", ["Edit"], Some("Delete"), "{ids?}", has_selection, clear),
         cmd!("edit.duplicate", "Duplicate", [], None, "{dx?, dy?} duplicate the selection in place (offset optional)", has_selection, duplicate),
     ]
@@ -141,11 +178,8 @@ pub(crate) fn roots_of(doc: &Document, ids: Vec<NodeId>) -> Vec<NodeId> {
 
 fn copy(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
-    let st = s.doc()?;
-    let nodes: Vec<Node> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).collect();
-    let n = nodes.len();
-    s.clipboard = nodes;
-    Ok(json!({ "copied": n }))
+    s.clipboard = Clipboard::copy(s.doc()?, &roots);
+    Ok(json!({ "copied": s.clipboard.nodes.len() }))
 }
 
 fn cut(s: &mut Session, p: &Value) -> Result<Value> {
@@ -175,6 +209,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum PasteMode {
     Offset,
     Front,
@@ -183,57 +218,75 @@ enum PasteMode {
     AllArtboards,
 }
 
+impl PasteMode {
+    fn label(self) -> &'static str {
+        match self {
+            PasteMode::Front => "Paste in Front",
+            PasteMode::Back => "Paste in Back",
+            PasteMode::InPlace => "Paste in Place",
+            PasteMode::AllArtboards => "Paste on All Artboards",
+            PasteMode::Offset => "Paste",
+        }
+    }
+}
+
 fn paste(s: &mut Session, p: &Value, mode: PasteMode) -> Result<Value> {
-    let clip = s.clipboard.clone();
+    let choices = SwatchChoices::parse(mode.label(), p)?;
+    // Taken out of the session for the edit (and put back whatever happens).
+    let clip = std::mem::take(&mut s.clipboard);
+    let r = paste_clip(s, p, mode, &clip, &choices);
+    s.clipboard = clip;
+    r
+}
+
+fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, choices: &SwatchChoices) -> Result<Value> {
     let off = s.prefs.paste_offset;
     let st = s.doc()?;
+    let same_doc = clip.source_doc == Some(st.uid);
     let parent = st.insertion_parent();
     // Front/back: relative to the selection (top-most / bottom-most selected object).
     let anchor = match mode {
         PasteMode::Front | PasteMode::Back => {
             let order = st.selection.in_paint_order(&st.doc);
-            let a = if matches!(mode, PasteMode::Front) { order.last() } else { order.first() };
+            let a = if mode == PasteMode::Front { order.last() } else { order.first() };
             a.and_then(|id| st.doc.position(*id))
         }
         _ => None,
     };
-    let artboards: Vec<vectorcraft_geom::Rect> = st.doc.artboards.iter().map(|a| a.rect).collect();
-    let dx = f64_or(p, "dx", off);
-    let dy = f64_or(p, "dy", off);
-    let label = match mode {
-        PasteMode::Front => "Paste in Front",
-        PasteMode::Back => "Paste in Back",
-        PasteMode::InPlace => "Paste in Place",
-        PasteMode::AllArtboards => "Paste on All Artboards",
-        PasteMode::Offset => "Paste",
+    let placements: Vec<Affine> = match mode {
+        PasteMode::Offset => vec![Affine::translate((f64_or(p, "dx", off), f64_or(p, "dy", off)))],
+        PasteMode::AllArtboards => {
+            let src = st.doc.artboards.first().map(|a| a.rect.origin()).unwrap_or_default();
+            st.doc.artboards.iter().map(|a| Affine::translate(a.rect.origin() - src)).collect()
+        }
+        _ => vec![Affine::IDENTITY],
     };
-    let ids = s.edit(label, |d, sel| {
+    let (ids, imported) = s.edit(mode.label(), |d, sel| {
+        let imported = clip.import_into(d, choices, same_doc);
         let mut new_ids = vec![];
-        let placements: Vec<Affine> = match mode {
-            PasteMode::Offset => vec![Affine::translate((dx, dy))],
-            PasteMode::AllArtboards => {
-                let src = d.artboards.first().map(|a| a.rect.origin()).unwrap_or_default();
-                artboards.iter().map(|r| Affine::translate(r.origin() - src)).collect()
-            }
-            _ => vec![Affine::IDENTITY],
-        };
         for xf in placements {
-            for (k, n) in clip.iter().enumerate() {
+            for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
+                imported.apply(&mut c);
                 if xf != Affine::IDENTITY {
                     c.transform(xf, false);
                 }
                 let (par, idx) = match anchor {
-                    Some((par, i, _)) => (par, if matches!(mode, PasteMode::Front) { i + 1 + k } else { i + k }),
+                    Some((par, i, _)) => (par, if mode == PasteMode::Front { i + 1 + k } else { i + k }),
                     None => (parent, usize::MAX),
                 };
                 new_ids.push(d.insert(par, idx, c)?);
             }
         }
         sel.set(new_ids.iter().copied());
-        Ok(new_ids)
+        Ok((new_ids, imported))
     })?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(json!({
+        "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(),
+        "added": imported.added,
+        "merged": imported.merged,
+        "renamed": imported.renamed,
+    }))
 }
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {

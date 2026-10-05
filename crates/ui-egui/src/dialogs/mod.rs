@@ -41,6 +41,7 @@ pub mod save_swatch_library;
 mod shapes;
 pub mod spot_colors;
 pub(crate) mod svg_options;
+pub mod swatch_conflict;
 pub mod swatch_options;
 pub mod tile_edge_color;
 mod tools;
@@ -188,6 +189,7 @@ registry! {
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions"] => png_options::SPEC,
     ExportAs: ["exportAs"] => export_as::SPEC,
     ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
+    SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

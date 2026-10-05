@@ -34,6 +34,8 @@ pub mod widgets;
 pub mod workspaces;
 
 #[cfg(test)]
+mod tests_clipboard;
+#[cfg(test)]
 mod tests_docsetup;
 #[cfg(test)]
 mod tests_labels;
@@ -260,6 +262,9 @@ impl VectorcraftApp {
         }
         if id.starts_with("edit.paste") {
             self.adopt_system_clipboard();
+            if let Some(r) = dialogs::swatch_conflict::ask(self, id, &params) {
+                return r;
+            }
         }
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") && self.session.prefs.copy_as_svg {

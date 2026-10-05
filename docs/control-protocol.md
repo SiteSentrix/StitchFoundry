@@ -226,3 +226,10 @@ Video, Art & Illustration, Branding, Social), `advanced` (Advanced Options open)
 changing a field afterwards makes the settings custom (`preset` becomes ""). More Settings is the `newDocumentMore`
 dialog over the same fields (its Profile is `category`). `ui.dialog.confirm` runs `file.new` with the fields (with
 `previewMode: "pixel"` the app turns Pixel Preview on); on an error the dialog stays open.
+
+Swatch Conflict: through the app, when the pasted objects' global or spot swatches conflict with the document's
+(see `clipboard.conflicts`) and the params have no `swatchConflict`, every Paste command opens the `swatchConflict`
+dialog instead and answers `{dialog: "swatchConflict"}`. Fields: `conflicts` (`[{name, document, clipboard,
+spot}]`), `index` (the conflict asked about), `choice` (`merge` or `add`), `applyToAll` and `choices` (the answers so
+far). `ui.dialog.confirm` records the answer and asks about the next conflict (with `applyToAll`, answers the rest
+the same); the last one runs the paste with `swatchConflict`. `ui.dialog.cancel` pastes nothing.

@@ -142,7 +142,7 @@ fn placing_a_pdf_page_asks_for_the_page_and_crop_box() {
     frame(&mut app);
     set(&mut app, "page", json!(2));
     set(&mut app, "cropTo", json!("art"));
-    let clipboard = app.session.clipboard.len();
+    let clipboard = app.session.clipboard.clone();
     let undo = app.session.doc().unwrap().history.undo.len();
     confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
@@ -150,7 +150,7 @@ fn placing_a_pdf_page_asks_for_the_page_and_crop_box() {
     assert!(clip, "clipped to the art box");
     assert_eq!((b.width(), b.height()), (50.0, 60.0));
     assert_eq!(b.center(), vectorcraft_geom::Point::new(100.0, 120.0), "where `at` asked");
-    assert_eq!(app.session.clipboard.len(), clipboard, "the clipboard is untouched");
+    assert_eq!(app.session.clipboard, clipboard, "the clipboard is untouched");
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
     // With a page, no dialog; Bounding Box places the art itself.
     place(&mut app, &bytes, json!({"page": 3, "crop": "bounding"})).unwrap();
