@@ -153,3 +153,81 @@ fn a_batch_step_records_what_it_took_from_the_preferences() {
     let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
     assert_eq!(doc(&r), doc(&s));
 }
+
+/// Every open document of `s`, as JSON.
+fn documents(s: &Session) -> Vec<serde_json::Value> {
+    s.documents().iter().map(|d| serde_json::to_value(&*d.doc).unwrap()).collect()
+}
+
+fn rect_step(x: i32) -> serde_json::Value {
+    json!({"command": "shape.rectangle", "params": {"x": x, "y": 10, "width": 20, "height": 20}})
+}
+
+#[test]
+fn a_batch_that_opens_a_new_document_is_journaled_and_replays() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    let steps = json!([rect_step(10), {"command": "file.new", "params": {"width": 300, "height": 200}}, rect_step(50), rect_step(90)]);
+    s.execute("command.batch", &json!({"label": "Two documents", "commands": steps})).unwrap();
+    // The steps before the new document stay in the first one and the rest go in the new one: one
+    // undo step in each, nothing left in progress.
+    assert_eq!(s.documents().len(), 2);
+    assert_eq!(s.active_index(), Some(1));
+    for (st, objects) in s.documents().iter().zip([1, 2]) {
+        assert_eq!(st.doc.node_count(), 1 + objects);
+        assert_eq!(st.history.undo.iter().map(|h| h.label.as_str()).collect::<Vec<_>>(), ["Two documents"]);
+        assert!(st.interaction.is_none());
+    }
+    // The batch is journaled, with the new document's date, and replays to the same documents.
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!(id, "command.batch");
+    assert!(p["commands"][1]["params"]["created"].is_i64(), "{p}");
+    let r = replayed(&s);
+    assert_eq!(documents(&r), documents(&s));
+    assert_eq!(r.active_index(), s.active_index());
+    // Undo in the new document takes its part of the batch back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.node_count(), 1);
+}
+
+#[test]
+fn a_failed_batch_closes_the_documents_it_opened_and_restores_the_ones_it_closed() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+    let (before, active, journal, next) = (documents(&s), s.active_index(), s.journal.len(), s.peek_untitled());
+    let steps = json!([
+        rect_step(10),
+        {"command": "file.close", "params": {}},
+        rect_step(30),
+        {"command": "file.new", "params": {}},
+        rect_step(50),
+        {"command": "no.such.command", "params": {}},
+    ]);
+    let e = s.execute("command.batch", &json!({ "commands": steps })).unwrap_err();
+    assert!(e.to_string().contains("batch step 5"), "{e}");
+    assert_eq!(documents(&s), before);
+    assert_eq!(s.active_index(), active);
+    assert_eq!(s.journal.len(), journal, "a failed batch isn't journaled");
+    assert_eq!(s.peek_untitled(), next, "the next new document keeps its name");
+    assert!(s.documents().iter().all(|d| d.interaction.is_none()));
+    assert_eq!(s.documents()[1].history.undo.len(), 1, "only the ellipse drawn before the batch");
+}
+
+#[test]
+fn a_failed_batch_brings_back_a_document_it_reverted() {
+    let path = vectorcraft_testkit::temp_dir("journal-batch").join("revert.vectorcraft").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"created": null})).unwrap();
+    s.execute("document.save", &json!({"path": path, "modified": null})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap();
+    let (before, revision) = (documents(&s), s.doc().unwrap().revision);
+    let steps = json!([rect_step(10), {"command": "file.revert", "params": {}}, rect_step(30), {"command": "no.such.command"}]);
+    assert!(s.execute("command.batch", &json!({ "commands": steps })).is_err());
+    assert_eq!(documents(&s), before, "the unsaved ellipse is back");
+    let st = s.doc().unwrap();
+    assert_eq!(st.history.undo.len(), 1);
+    assert!(st.is_dirty() && st.interaction.is_none());
+    assert!(st.revision > revision, "the restored document redraws");
+}

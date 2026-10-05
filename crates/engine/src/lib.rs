@@ -168,6 +168,24 @@ impl DocState {
     pub fn mark_saved_as(&mut self, snapshot: &Arc<Document>) {
         self.saved_doc = snapshot.clone();
     }
+    /// Keep what interaction `it` (taken from this document) changed, as one undo step.
+    pub(crate) fn keep_interaction(&mut self, it: Interaction) {
+        if !Arc::ptr_eq(&it.doc, &self.doc) {
+            self.history.undo.push(HistoryEntry { label: it.label, doc: it.doc, selection: it.selection });
+            self.history.redo.clear();
+            self.revision += 1;
+        }
+    }
+    /// End the interaction in progress, undoing what it changed.
+    pub(crate) fn undo_interaction(&mut self) {
+        if let Some(it) = self.interaction.take() {
+            self.doc = it.doc;
+            self.selection = it.selection;
+            self.active_layer = it.active_layer;
+            self.isolation = it.isolation;
+            self.revision += 1;
+        }
+    }
     pub fn title(&self) -> String {
         let name = self
             .path
@@ -611,6 +629,9 @@ pub struct Session {
     /// The depth of the command whose values [`Session::note_journal`] keeps: 1 (the top-level
     /// command), or a step's while a batch runs it ([`Session::execute_step`]).
     note_depth: u32,
+    /// While `command.batch` runs: the documents its steps closed or replaced (Revert), which an
+    /// error brings back; `None` otherwise.
+    pub(crate) batch_stash: Option<Vec<DocState>>,
 }
 
 impl Default for Session {
@@ -649,6 +670,7 @@ impl Session {
             recent_urls: vec![],
             journal_note: Default::default(),
             note_depth: 1,
+            batch_stash: None,
         }
     }
 
@@ -683,7 +705,11 @@ impl Session {
         let view = self.last_view;
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         let _ = self.apply_actions(acts);
-        let _ = self.cancel_interaction();
+        // A batch leaves its interaction open in the document it leaves, to keep or roll back with
+        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        if self.batch_stash.is_none() {
+            let _ = self.cancel_interaction();
+        }
         self.tool = vectorcraft_tools::create(self.tool.id());
     }
     pub fn set_active(&mut self, index: usize) -> bool {
@@ -754,7 +780,10 @@ impl Session {
         st.save_options = old.save_options.clone();
         st.converted = old.converted;
         st.view = old.view.clone();
-        self.docs[index] = st;
+        let old = std::mem::replace(&mut self.docs[index], st);
+        if let Some(stash) = &mut self.batch_stash {
+            stash.push(old);
+        }
         true
     }
     pub fn close_document(&mut self, index: usize) -> bool {
@@ -762,7 +791,10 @@ impl Session {
             return false;
         }
         self.reset_tool_for_doc_switch();
-        self.docs.remove(index);
+        let old = self.docs.remove(index);
+        if let Some(stash) = &mut self.batch_stash {
+            stash.push(old);
+        }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
         true
     }
@@ -778,6 +810,7 @@ impl Session {
         if self.depth == 0 {
             self.journal_note.clear();
             self.note_depth = 1;
+            self.batch_stash = None;
         }
         let r = if self.depth == 0 { self.run_guarded(id, |s| (spec.run)(s, params)) } else { self.run_nested(|s| (spec.run)(s, params)) };
         let r = r?;
@@ -969,17 +1002,11 @@ impl Session {
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
-        if let Some(p) = self.pending_paint.take() {
-            self.remember_paint_now(&p);
-        }
+        self.remember_pending_paint();
         let st = self.doc_mut()?;
-        let Some(it) = st.interaction.take() else { return Ok(()) };
-        let Some(preview) = it.preview else { return Ok(()) };
-        if !Arc::ptr_eq(&it.doc, &st.doc) {
-            st.history.undo.push(HistoryEntry { label: it.label, doc: it.doc, selection: it.selection });
-            st.history.redo.clear();
-            st.revision += 1;
-        }
+        let Some(mut it) = st.interaction.take() else { return Ok(()) };
+        let Some(preview) = it.preview.take() else { return Ok(()) };
+        st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
             let copy = preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
@@ -991,16 +1018,16 @@ impl Session {
         Ok(())
     }
 
+    /// Remember the paint a live preview applied (as its interaction is kept).
+    pub(crate) fn remember_pending_paint(&mut self) {
+        if let Some(p) = self.pending_paint.take() {
+            self.remember_paint_now(&p);
+        }
+    }
+
     pub fn cancel_interaction(&mut self) -> Result<()> {
         self.pending_paint = None;
-        let st = self.doc_mut()?;
-        if let Some(it) = st.interaction.take() {
-            st.doc = it.doc;
-            st.selection = it.selection;
-            st.active_layer = it.active_layer;
-            st.isolation = it.isolation;
-            st.revision += 1;
-        }
+        self.doc_mut()?.undo_interaction();
         Ok(())
     }
 
