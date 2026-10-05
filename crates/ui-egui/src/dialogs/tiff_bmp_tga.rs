@@ -64,6 +64,8 @@ pub(super) fn keeps_alpha(id: &str, d: &Dialog) -> bool {
         "tiff" => ColorModel::from_id(&d.str("colorModel")).unwrap_or_default() == ColorModel::Rgb,
         "bmp" => d.f64("depth", 24.0) == 32.0,
         "tga" => d.f64("depth", 24.0) != 24.0,
+        // A flat PSD is flattened; its layers keep transparency.
+        "psd" => d.bool("layers"),
         _ => true,
     }
 }

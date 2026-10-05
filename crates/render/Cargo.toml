@@ -34,5 +34,7 @@ vectorcraft-testkit = { workspace = true }
 # Decoders the export tests read their files back with.
 image = { workspace = true, features = ["tga"] }
 tiff = "0.11"
+# Reads the PSD exports back (MIT OR Apache-2.0).
+psd = "0.3"
 proptest = { workspace = true }
 serde_json = { workspace = true }

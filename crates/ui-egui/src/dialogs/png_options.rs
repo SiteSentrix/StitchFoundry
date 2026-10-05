@@ -1,7 +1,8 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
 //! map), WebP Options, and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
-//! transparency and matte), and TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]). Fields
+//! transparency and matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
+//! ([`super::psd_options`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
 
@@ -12,7 +13,7 @@ use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, ColorModel, Method};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 
-use super::{DialogSpec, form, tiff_bmp_tga};
+use super::{DialogSpec, form, psd_options, tiff_bmp_tga};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
@@ -69,7 +70,7 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
     let mut o = Map::new();
     o.insert("background".into(), json!(if white { "white" } else { "transparent" }));
     o.insert("antiAlias".into(), json!(AntiAlias::default().id()));
-    // A CMYK document exports CMYK JPEGs and TIFFs by default.
+    // A CMYK document exports CMYK JPEGs, TIFFs and PSDs by default.
     let cmyk = app.session.active().is_some_and(|st| st.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
     match f.id {
         "png" => {
@@ -99,6 +100,7 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
                 ("interlaced".into(), json!(false)),
             ]);
         }
+        "psd" => psd_options::defaults(cmyk, &mut o),
         id => tiff_bmp_tga::defaults(id, cmyk, &mut o),
     }
     o
@@ -205,6 +207,7 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
             label(ui, "Lossless (lossy WebP isn't available yet)");
             ui.end_row();
         }
+        "psd" => psd_options::rows(ui, d, &label),
         id => tiff_bmp_tga::rows(ui, d, id, &label),
     }
 }

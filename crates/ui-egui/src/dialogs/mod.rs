@@ -41,6 +41,7 @@ pub mod pdf_presets;
 pub mod place;
 pub mod placement_options;
 mod png_options;
+mod psd_options;
 pub mod raster_effects;
 pub mod recolor;
 mod recovery;
@@ -234,6 +235,7 @@ registry! {
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
+    PsdOptions: ["psdOptions"] => png_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -362,3 +364,6 @@ mod tests_tiff_bmp_tga;
 
 #[cfg(test)]
 mod tests_save_for_web;
+
+#[cfg(test)]
+mod tests_psd;

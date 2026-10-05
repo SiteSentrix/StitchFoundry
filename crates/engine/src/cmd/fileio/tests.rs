@@ -174,7 +174,8 @@ fn formats_query_lists_readers_writers_and_options() {
             "eps",
             "emf",
             "wmf",
-            "tga"
+            "tga",
+            "psd"
         ]
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
