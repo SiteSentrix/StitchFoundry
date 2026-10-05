@@ -69,7 +69,46 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
     v
 }
 
+/// Keys that paste with Cmd, or alone. (Shift+Insert is left out: Ctrl+Insert copies.)
+const PASTE_KEYS: [Key; 2] = [Key::V, Key::Paste];
+
+/// Keyboard pastes of something other than text. egui swallows a paste chord's key press and
+/// sends a Paste event only when the clipboard holds text, so a paste key released without its
+/// press (or a Paste event) reported was a paste of a bitmap or a PDF.
+#[derive(Default)]
+pub(crate) struct PasteChord {
+    /// Paste keys whose press was reported (typed, not pasting).
+    pressed: Vec<Key>,
+    /// A Paste event came since the last paste key was released.
+    pasted: bool,
+}
+
+impl PasteChord {
+    /// Follow one frame's `events` → whether they hold a paste egui sent no event for.
+    fn textless_paste(&mut self, events: &[egui::Event]) -> bool {
+        let mut fire = false;
+        for e in events {
+            match e {
+                egui::Event::Paste(_) => self.pasted = true,
+                // A release that comes while the window is away is never seen.
+                egui::Event::WindowFocused(false) => *self = Self::default(),
+                egui::Event::Key { key, pressed: true, .. } if PASTE_KEYS.contains(key) && !self.pressed.contains(key) => self.pressed.push(*key),
+                egui::Event::Key { key, pressed: false, .. } if PASTE_KEYS.contains(key) => match self.pressed.iter().position(|k| k == key) {
+                    Some(i) => {
+                        self.pressed.swap_remove(i);
+                    }
+                    None => fire |= !std::mem::take(&mut self.pasted),
+                },
+                _ => {}
+            }
+        }
+        fire
+    }
+}
+
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    // Followed before anything returns, so a key typed in a field isn't taken for a paste.
+    let textless_paste = ctx.input(|i| app.paste_chord.textless_paste(&i.events));
     if app.ui.dialog.is_some() || app.ui.palette_open {
         if crate::shortcut_editor::is_recording(app) {
             return;
@@ -139,6 +178,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             false
         })
     });
+    // Only the system clipboard service reads what isn't text (the native menu has its own Paste).
+    if textless_paste && app.services.system_clipboard.is_some() && !app.native_shortcuts.contains("edit.paste") {
+        clip.push(("edit.paste", None));
+    }
     for (id, text) in clip {
         app.clipboard_in = text;
         crate::menus::invoke(app, id, json!({}));

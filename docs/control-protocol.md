@@ -244,8 +244,9 @@ far). `ui.dialog.confirm` records the answer and asks about the next conflict (w
 the same); the last one runs the paste with `swatchConflict`. `ui.dialog.cancel` pastes nothing.
 
 Paste placement: through the app, `edit.paste` and `edit.pasteWithoutFormatting` without `center`, `dx` or `dy`
-paste at the centre of the view. The Paste menu items are enabled while the system clipboard holds SVG, even with
-nothing copied in the app (looked at up to four times a second; `ui.menu.list` shows it). The Layers panel menu (≡ on
+paste at the centre of the view. The Paste menu items are enabled while the system clipboard holds something to
+paste (SVG, PDF, text or a bitmap on the desktop; SVG on the web), even with nothing copied in the app (looked at up
+to four times a second; `ui.menu.list` shows it). The Layers panel menu (≡ on
 the dock's tab strip while Layers shows) lists the layer commands and Paste Remembers Layers
 (`layer.pasteRemembersLayers`, checked when on).
 
@@ -276,3 +277,9 @@ Text Import Options: placing a `.txt` file through the app (`file.place` with a 
 dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,
 `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces`, `spaces`). `ui.dialog.confirm` places the file as area
 type with those options (`file.place {text: {…}}`).
+
+System clipboard formats: through the desktop app, `edit.copy` and `edit.cut` publish what `clipboard.flavours`
+lists to the system clipboard, and every Paste command first loads what another app copied (`clipboard.importSvg`,
+`importPdf`, `importText` or `importImage`, centred in the view); an import error answers the Paste with that error
+and pastes nothing. Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
+Paste event for it).

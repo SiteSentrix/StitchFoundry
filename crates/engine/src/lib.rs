@@ -910,6 +910,8 @@ mod tests_clip;
 #[cfg(test)]
 mod tests_clipboard;
 #[cfg(test)]
+mod tests_clipflavours;
+#[cfg(test)]
 mod tests_clippaint;
 #[cfg(test)]
 mod tests_cmdsplit;

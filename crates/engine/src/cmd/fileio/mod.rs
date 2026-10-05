@@ -26,7 +26,7 @@ mod svg;
 use serde_json::{Value, json};
 
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
-pub(crate) use encode::{anti_alias, background};
+pub(crate) use encode::{anti_alias, background, with_single_artboard};
 use load::err;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, raster_image};

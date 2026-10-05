@@ -19,8 +19,12 @@ log = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rfd = { workspace = true }
-arboard = { workspace = true }
+arboard = { workspace = true, features = ["image-data"] }
+image = { workspace = true }
 webbrowser = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+clipboard-win = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = { version = "0.21", default-features = false }

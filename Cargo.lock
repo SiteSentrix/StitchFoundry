@@ -4047,8 +4047,10 @@ name = "vectorcraft"
 version = "0.1.1"
 dependencies = [
  "arboard",
+ "clipboard-win",
  "eframe",
  "egui",
+ "image",
  "log",
  "muda",
  "rfd",

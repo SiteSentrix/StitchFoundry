@@ -6,8 +6,10 @@
 //! System clipboard: the copied objects as SVG markup (what other apps paste), and SVG markup from
 //! other apps turned into clipboard objects (pasted with the Paste commands). The UI owns the
 //! platform clipboard; these commands only convert. Within VectorCraft the internal clipboard stays
-//! lossless (live effects, masks, symbols); SVG is the outside format.
+//! lossless (live effects, masks, symbols); SVG is the outside format, with PNG, PDF and plain
+//! text besides it (see `flavours`).
 
+mod flavours;
 mod resources;
 
 use std::collections::BTreeMap;
@@ -17,15 +19,16 @@ use serde_json::{Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::Swatch;
 use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, PatternDef, Symbol, TextStyleDef};
-use vectorcraft_geom::{Affine, Rect};
+use vectorcraft_geom::Rect;
 
+pub use flavours::{BITMAP, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT};
 pub(crate) use resources::SwatchChoices;
 
 use super::*;
 use crate::DocState;
 
 pub fn specs() -> Vec<CommandSpec> {
-    vec![
+    let mut v = vec![
         cmd!(query "clipboard.exportSvg", "Clipboard as SVG", [], None, "{} → {svg} the copied objects as standalone SVG (null when the clipboard is empty)", always, export_svg),
         cmd!(
             query "clipboard.importSvg",
@@ -45,7 +48,9 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             conflicts
         ),
-    ]
+    ];
+    v.extend(flavours::specs());
+    v
 }
 
 /// Is `text` SVG markup (as other apps put on the clipboard)?
@@ -184,23 +189,11 @@ fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
         (None, None) => return Err(bad(C, "give svg, or dataBase64 of an SVG or SVGZ file")),
     };
     let src = vectorcraft_svg::import(&svg).map_err(|e| bad(C, e.to_string()))?;
-    let mut clip = Clipboard::from_document(&src);
+    let clip = Clipboard::from_document(&src);
     if clip.is_empty() {
         return Err(bad(C, "the SVG has no drawable objects"));
     }
-    let center = match point_param(p, "center") {
-        Some(c) => c,
-        None => s.doc()?.doc.artboards.first().map(|a| a.rect.center()).unwrap_or_default(),
-    };
-    if let Some(b) = clip.bounds() {
-        let xf = Affine::translate(center - b.center());
-        for n in &mut clip.nodes {
-            n.transform(xf, false);
-        }
-    }
-    let count = clip.nodes.len();
-    s.clipboard = clip;
-    Ok(json!({ "count": count }))
+    Ok(json!({ "count": s.load_clipboard(clip, p)? }))
 }
 
 fn conflicts(s: &mut Session, _: &Value) -> Result<Value> {

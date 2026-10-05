@@ -181,7 +181,11 @@ fn use_artboards(p: &Value) -> Result<Option<bool>> {
 
 /// A copy of `doc` with one artboard, `rect` (exports of the art's or the selection's bounds).
 pub(super) fn single_artboard(doc: &Document, rect: Rect, name: &str) -> Document {
-    let mut d = doc.clone();
+    with_single_artboard(doc.clone(), rect, name)
+}
+
+/// `d` with one artboard, `rect`.
+pub(crate) fn with_single_artboard(mut d: Document, rect: Rect, name: &str) -> Document {
     d.artboards = vec![Artboard { id: 1, name: name.into(), rect, show_center_mark: false, show_cross_hairs: false }];
     d
 }

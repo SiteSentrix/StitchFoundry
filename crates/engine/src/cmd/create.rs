@@ -400,6 +400,20 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let x = f64_req(p, "x", "text.create")?;
     let y = f64_req(p, "y", "text.create")?;
     let text = str_param(p, "text").unwrap_or("");
+    let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p));
+    if let Some(a) = p.get("area") {
+        let w = f64_or(a, "width", 200.0);
+        let h = f64_or(a, "height", 100.0);
+        t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, h)) };
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    t.cached_bounds = Some(lay.bounds);
+    add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)
+}
+
+/// The character style new type gets: `size`, `font`, `style` and `color` from `p`, else the
+/// defaults, filled with the current fill unless that is None or white (black then).
+pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     let mut style = CharStyle::default();
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
         style.size = sz.clamp(0.1, 1296.0);
@@ -415,13 +429,5 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
         None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
     };
-    let mut t = TextObject::point(Point::new(x, y), text, style);
-    if let Some(a) = p.get("area") {
-        let w = f64_or(a, "width", 200.0);
-        let h = f64_or(a, "height", 100.0);
-        t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, h)) };
-    }
-    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
-    t.cached_bounds = Some(lay.bounds);
-    add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)
+    style
 }

@@ -365,9 +365,9 @@ impl Tool for TypeTool {
             s
         };
         self.clicks = (None, 0);
-        // Pasting what we copied keeps its formatting.
+        // Pasting what we copied keeps its formatting (unless pasted text is kept plain).
         let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();
-        if s.len() > 1 && s == clip {
+        if s.len() > 1 && s == clip && !cx.paste_plain_text {
             let runs = self.clipboard.clone();
             return self.replace(cx, "", Some(runs));
         }

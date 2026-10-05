@@ -206,6 +206,9 @@ pub struct ToolContext<'a> {
     pub unit: Unit,
     /// Units ▸ Stroke: the unit measurement labels show stroke widths in.
     pub stroke_unit: Unit,
+    /// Clipboard Handling → When pasting text: Keep Plain Text. Text pasted while typing takes
+    /// the style at the caret, even the text the Type tool copied with its formatting.
+    pub paste_plain_text: bool,
 }
 
 impl ToolContext<'_> {
@@ -405,6 +408,7 @@ pub(crate) mod testutil {
             preview_bounds: false,
             unit: Unit::Points,
             stroke_unit: Unit::Points,
+            paste_plain_text: false,
         }
     }
 }

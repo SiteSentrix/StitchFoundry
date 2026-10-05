@@ -976,3 +976,33 @@ in `document.exportPdf`, `document.pdfSettings`, `document.export`/`serialize` w
 {"name":"run_command","arguments":{"command":"pdf.preset.save","params":{"name":"Web","preset":"Smallest File Size","compatibility":"1.5"}}}
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"preset":"Web","path":"/tmp/web.pdf"}}}
 ```
+
+## Clipboard formats
+
+Besides SVG, Copy offers other apps PNG and PDF of the copied objects, and their text when they are all type.
+`clipboard.flavours` lists what Copy offers for the current clipboard, best first, by the Clipboard Handling
+preferences: `text/plain` (the text of a type-only copy, else the SVG markup with `copyAsSvg`), `image/svg+xml`
+(`copyAsSvg`), `application/pdf` (`copyAsPdf`) and `image/png` (always; PDF and PNG need objects with an
+area). Each one has a query command:
+`clipboard.exportSvg`, `clipboard.exportText` (null unless every copied object is type), `clipboard.exportPdf`
+(a one-page PDF, the page the objects' visual bounds) and `clipboard.exportPng {scale?}` (cropped to the objects,
+transparent around them).
+
+What other apps copied goes into the clipboard with `clipboard.importSvg`, `clipboard.importPdf {dataBase64, page?,
+password?}` (the page's objects), `clipboard.importImage {dataBase64, mime?}` (an embedded image at 100% of its
+physical size) or `clipboard.importText {text}` (point text in the default type style), each centred on `center`
+(default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
+Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
+copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). Pasting what VectorCraft copied
+keeps the lossless internal clipboard. Windows carries every format both ways; macOS and Linux carry one format
+(the text, else the PNG) and paste text and bitmaps. On the web only SVG text goes through the system clipboard.
+
+The `pasteTextFormatting` preference (`keep` or `plain`): with `plain`, text the Type tool copied pastes into type
+without its formatting, taking the style at the caret.
+
+```json
+{"name":"run_command","arguments":{"command":"clipboard.flavours","params":{}}}
+{"name":"run_command","arguments":{"command":"clipboard.exportPng","params":{"scale":2}}}
+{"name":"run_command","arguments":{"command":"clipboard.importImage","params":{"dataBase64":"iVBORw0KGgo…","center":[300,200]}}}
+{"name":"run_command","arguments":{"command":"edit.paste","params":{"center":[300,200]}}}
+```
