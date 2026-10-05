@@ -1,16 +1,37 @@
 //! File → Export → Export for Screens: artboards (thumbnails and checkboxes), scale/format rows,
-//! destination folder and file-name prefix.
+//! the destination folder (typed or picked; the web downloads instead) and file-name prefix.
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::fileio;
 
 use super::DialogSpec;
-use crate::VectorcraftApp;
 use crate::state::Dialog;
 use crate::theme::Tokens;
+use crate::{VectorcraftApp, io, widgets};
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Export for Screens".into(), body, confirm, ok: Some("Export Artboard"), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| "Export for Screens".into(),
+    body,
+    confirm,
+    ok: Some("Export Artboard"),
+    ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Export Artboard" }),
+    ..DialogSpec::FORM
+};
 
+/// `Dialog::kind` of this dialog.
+pub const KIND: &str = "exportForScreens";
+
+/// Open the dialog: every artboard, PNG at 1x and 2x, into the Desktop (else the home folder).
+pub fn open(app: &mut VectorcraftApp) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    app.ui.dialog = Some(Dialog::new(
+        KIND,
+        json!({"boards": vec![true; n], "formats": [{"format": "png", "scale": 1, "suffix": ""}, {"format": "png", "scale": 2, "suffix": "@2x"}], "folder": fileio::export_folder().unwrap_or_default(), "prefix": ""}),
+    ));
+}
+
+/// Export the checked artboards (the web: no folder, one ZIP for several files); the dialog stays
+/// open when the export fails.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let boards: Vec<usize> = d
         .fields
@@ -18,12 +39,21 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         .and_then(Value::as_array)
         .map(|a| a.iter().enumerate().filter(|(_, b)| b.as_bool() == Some(true)).map(|(i, _)| i).collect())
         .unwrap_or_default();
-    let params = json!({"folder": d.str("folder"), "artboards": boards, "formats": d.fields.get("formats").cloned().unwrap_or(json!([])), "prefix": d.str("prefix")});
-    app.ui.dialog = None;
-    let r = app.run("document.exportForScreens", params);
-    if let Ok(v) = &r {
-        let n = v["files"].as_array().map(|a| a.len()).unwrap_or(0);
-        app.status(format!("Exported {n} file(s) to {}", d.str("folder")));
+    let formats = d.fields.get("formats").cloned().unwrap_or(json!([]));
+    let files = boards.len() * formats.as_array().map_or(0, Vec::len);
+    let mut params = json!({"artboards": boards, "formats": formats, "prefix": d.str("prefix")});
+    if io::is_web(app) {
+        params["zip"] = json!(files > 1);
+    } else {
+        let folder = d.str("folder");
+        if folder.trim().is_empty() {
+            return Err("choose a folder to export to".into());
+        }
+        params["folder"] = json!(folder.trim());
+    }
+    let r = io::export_for_screens(app, params);
+    if r.is_ok() {
+        app.ui.dialog = None;
     }
     r
 }
@@ -77,9 +107,22 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             ui.set_width(330.0);
             ui.label(egui::RichText::new("Export to").color(t.text));
-            let mut folder = d.str("folder");
-            if ui.add(egui::TextEdit::singleline(&mut folder).desired_width(320.0)).changed() {
-                d.fields.insert("folder".into(), json!(folder));
+            if io::is_web(app) {
+                widgets::dim_label(ui, "Your browser downloads the files (several as one .zip).");
+            } else {
+                let pick = app.services.pick_folder.is_some();
+                ui.horizontal(|ui| {
+                    let mut folder = d.str("folder");
+                    if ui.add(egui::TextEdit::singleline(&mut folder).desired_width(if pick { 290.0 } else { 320.0 })).changed() {
+                        d.fields.insert("folder".into(), json!(folder));
+                    }
+                    if pick
+                        && widgets::icon_button(ui, "folder-open", "Choose a folder", false, 26.0).clicked()
+                        && let Some(f) = app.services.pick_folder.as_mut().and_then(|pick| pick())
+                    {
+                        d.fields.insert("folder".into(), json!(f));
+                    }
+                });
             }
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Formats").color(t.text));

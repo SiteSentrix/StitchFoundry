@@ -4,7 +4,9 @@
 //! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, raster images).
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
-//! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
+//! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForOffice`.
+//! - `screens`: Export for Screens (`document.exportForScreens`); `zip`
+//!   packs its files as one download.
 //! - `save`: `document.save`, Save As / a Copy / as Template, New from Template, Revert and the
 //!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
@@ -26,8 +28,10 @@ mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
 mod save;
+mod screens;
 mod svg;
 mod text;
+mod zip;
 
 use serde_json::{Value, json};
 
@@ -42,7 +46,8 @@ pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_byt
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
 pub use save::{
-    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, templates_folder,
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, export_folder, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates,
+    templates_folder,
 };
 pub use svg::options_map as svg_options;
 /// Atomic file writes (a temporary file renamed over the target: a failed write never damages the
@@ -96,9 +101,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export for Screens",
             ["File", "Export"],
             None,
-            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|gif|png8|svg|svgz|pdf, scale?: 1 (raster only), ppi?: (raster: wins over scale, scale = ppi / 72), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes), …the format's options (antiAlias, background…)}], prefix?, antiAlias?: none|art|type (raster rows without their own)} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
+            "{folder?, zip?: false (one store-only .zip of every file: no folder → {name, dataBase64, bytes, files: [name…]}; with a folder it is written there → {path, bytes, files}), artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|gif|png8|svg|svgz|pdf, scale?: 1 (raster only), ppi?: (raster: wins over scale, scale = ppi / 72), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes), …the format's options (antiAlias, background…)}], prefix?, antiAlias?: none|art|type (raster rows without their own)} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
             has_doc,
-            export::export_for_screens
+            screens::export_for_screens
         ),
         cmd!(query "command.batch", "Batch", [], None, "{label?, commands: [{command, params}]} run several commands as ONE undo step; stops at the first error and rolls back", has_doc, batch::batch),
         cmd!(
@@ -675,6 +680,8 @@ mod tests_jpeg;
 #[cfg(test)]
 mod tests_palette;
 
+#[cfg(test)]
+mod tests_screens;
 #[cfg(test)]
 mod tests_text;
 

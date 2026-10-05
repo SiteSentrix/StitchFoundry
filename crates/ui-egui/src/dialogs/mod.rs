@@ -67,6 +67,7 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub use export_as::open as open_export_as;
+pub use export_for_screens::open as open_export_for_screens;
 pub use new_document::{open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
@@ -97,6 +98,9 @@ pub(crate) struct DialogSpec {
     pub max_width: Option<f32>,
     /// The body runs a live preview interaction that Cancel rolls back.
     pub preview: bool,
+    /// The OK button's label when it depends on the app (Export for Screens' "Download" on the
+    /// web); `ok` when none. Only with an `ok`.
+    pub ok_label: Option<fn(&VectorcraftApp) -> &'static str>,
 }
 
 impl DialogSpec {
@@ -117,6 +121,7 @@ impl DialogSpec {
         min_width: 320.0,
         max_width: None,
         preview: false,
+        ok_label: None,
     };
 
     /// A dialog that draws its own window and confirms through its module.
@@ -285,7 +290,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // all the height left in the window, so the window could never shrink to its content.
             let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
             ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if let Some(label) = spec.ok
+                if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
                     && widgets::primary_button(ui, label).clicked()
                 {
                     ok = true;
@@ -328,3 +333,5 @@ mod tests_raster_formats;
 
 #[cfg(test)]
 mod tests_dxf;
+#[cfg(test)]
+mod tests_screens;

@@ -111,7 +111,7 @@ pub(crate) fn write_to(services: &mut Services, path: &str, bytes: &[u8]) -> Res
 }
 
 /// The web saves by downloading: no save panel, no folders.
-fn is_web(app: &VectorcraftApp) -> bool {
+pub(crate) fn is_web(app: &VectorcraftApp) -> bool {
     app.services.download.is_some()
 }
 
@@ -505,6 +505,36 @@ pub(crate) fn reveal_path(app: &mut VectorcraftApp, path: &str) -> Result<(), St
 /// Open `path` (a file or a folder) in the system's default app for it (desktop).
 pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
     app.services.open_file.as_mut().ok_or("no app to open files here")?(path)
+}
+
+/// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
+/// without one the web downloads them (the ZIP, or each file) and the other frontends get them
+/// back as base64.
+pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let folder = params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
+    let r = app.run("document.exportForScreens", params)?;
+    let count = r["files"].as_array().map_or(0, Vec::len);
+    // Files that came back as bytes: (name, base64).
+    let returned: Vec<(&str, &str)> = match r["dataBase64"].as_str() {
+        Some(zip) => vec![(r["name"].as_str().unwrap_or("Export.zip"), zip)],
+        None => {
+            r["files"].as_array().into_iter().flatten().filter_map(|f| Some((f.get("name")?.as_str()?, f.get("dataBase64")?.as_str()?))).collect()
+        }
+    };
+    if returned.is_empty() {
+        app.status(format!("Exported {count} file(s) to {folder}"));
+    } else if let Some(download) = app.services.download.as_mut() {
+        for (name, data) in &returned {
+            let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;
+            download(name, &bytes);
+        }
+        let what = match returned.as_slice() {
+            [(name, _)] => (*name).to_string(),
+            files => format!("{} files", files.len()),
+        };
+        app.status(format!("Downloaded {what}"));
+    }
+    Ok(r)
 }
 
 /// Place a file's bytes (no path, so embedded) centred in the view: `file.place`.
