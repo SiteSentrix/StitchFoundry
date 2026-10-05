@@ -197,7 +197,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fnames: Vec<&str> = fams.iter().map(String::as_str).collect();
     ui.horizontal(|ui| {
         if let Some(i) = widgets::dropdown(ui, "gl-family", &family, &fnames, (w * 0.6).max(80.0)) {
-            let st = db.styles(fnames[i]).into_iter().next().unwrap_or_else(|| "Regular".into());
+            let st = db.face(fnames[i], "Regular").map_or_else(|| "Regular".into(), |f| f.style.clone());
             set_pstate(ui.ctx(), "gl-font", Some((fnames[i].to_string(), st)));
         }
         let styles = db.styles(&family);

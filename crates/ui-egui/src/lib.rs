@@ -296,6 +296,8 @@ const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
     pub fn new(mut session: Session, services: Services) -> Self {
+        // The font menus and the first file opened need the installed fonts: catalog them now.
+        vectorcraft_text::FontDb::global().scan_in_background();
         if let Some(store) = &services.recovery_store {
             session.recovery.set_store(store.clone());
         }

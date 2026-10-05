@@ -20,7 +20,7 @@ mod shape;
 pub mod thread;
 
 pub use features::OtFeatures;
-pub use fontdb::{FALLBACK_FAMILY, FontDb, FontFace, style_weight};
+pub use fontdb::{FALLBACK_FAMILY, FontDb, FontFace, style_weight, system_font_dirs};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
 pub use vectorcraft_doc::TextObject;
@@ -365,5 +365,7 @@ mod tests_embed;
 mod tests_scripts;
 #[cfg(test)]
 mod tests_snap;
+#[cfg(test)]
+mod tests_sysfonts;
 #[cfg(test)]
 mod tests_typo;

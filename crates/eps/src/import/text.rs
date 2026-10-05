@@ -223,7 +223,9 @@ impl Interp<'_> {
         if !(size.is_finite() && size > 1e-3 && size < 1e5) {
             return ps_err("undefinedresult", "a font size");
         }
-        let (font_family, font_style) = family_style(&name);
+        let (family, font_style) = family_style(&name);
+        // The available family's own spelling: `MicrosoftYaHei` is Microsoft YaHei, not "Microsoft Ya Hei".
+        let font_family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
         let text: String = s.iter().map(|b| char::from(*b)).filter(|c| !c.is_control()).collect();
         let fill = if self.g.paint.is_none() { Paint::solid(vectorcraft_color::Color::BLACK) } else { self.g.paint.clone() };
         let style = CharStyle { font_family, font_style, size, fill, stroke: Paint::None, ..CharStyle::default() };

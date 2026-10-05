@@ -3,8 +3,10 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+/// The bundled fonts only: what these tests measure doesn't change with the fonts installed.
 fn db() -> &'static FontDb {
-    FontDb::global()
+    static DB: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();
+    DB.get_or_init(|| FontDb::with_font_dirs(vec![]))
 }
 
 fn style(size: f64) -> CharStyle {
