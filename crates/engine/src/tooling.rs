@@ -164,8 +164,28 @@ impl Session {
         self.tool.set_option(key, v);
     }
 
+    /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):
+    /// the Type tool stops editing text that is no longer selected. Only while it edits text.
+    pub(crate) fn after_command(&mut self) {
+        if self.in_tool_actions || !self.tool.wants_text() {
+            return;
+        }
+        let acts = self.with_tool_cx(self.last_view, |t, cx| t.after_command(cx));
+        // The command itself succeeded: a failure here only leaves the edit as it was.
+        if let Err(e) = self.apply_actions(acts) {
+            log::warn!("ending the text edit: {e}");
+        }
+    }
+
     /// Apply tool actions. Errors from previews are reported but keep the interaction alive.
     pub fn apply_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
+        let outer = std::mem::replace(&mut self.in_tool_actions, true);
+        let r = self.apply_tool_actions(acts);
+        self.in_tool_actions = outer;
+        r
+    }
+
+    fn apply_tool_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
         let mut ui = vec![];
         for a in acts {
             match a {

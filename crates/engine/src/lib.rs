@@ -668,6 +668,9 @@ pub struct Session {
     pub(crate) batch_stash: Option<Vec<DocState>>,
     /// Where Data Recovery keeps its copies ([`cmd::recovery`]).
     pub recovery: cmd::recovery::Recovery,
+    /// While the active tool's actions run: their commands aren't "a command from outside the
+    /// tool" ([`Session::after_command`]).
+    pub(crate) in_tool_actions: bool,
 }
 
 impl Default for Session {
@@ -708,6 +711,7 @@ impl Session {
             note_depth: 1,
             batch_stash: None,
             recovery: Default::default(),
+            in_tool_actions: false,
         }
     }
 
@@ -860,6 +864,9 @@ impl Session {
         if spec.journal && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
             let p = self.noted(params);
             self.journal.push((id.to_string(), p));
+        }
+        if self.depth == 0 {
+            self.after_command();
         }
         Ok(r)
     }
@@ -1137,6 +1144,8 @@ mod tests_draw2;
 mod tests_editcolors;
 #[cfg(test)]
 mod tests_effectedit;
+#[cfg(test)]
+mod tests_emptytype;
 #[cfg(test)]
 mod tests_expand;
 #[cfg(test)]

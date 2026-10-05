@@ -58,6 +58,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             fit_headline
         ),
+        cmd!(
+            "text.discardEmpty",
+            "Discard Empty Type",
+            [],
+            None,
+            "{id} remove text object `id` if it has no characters (what the Type tool does with point type it placed when editing ends). When nothing but that text changed since the step that created it, the steps since are dropped instead, leaving no trace in the history → {removed}",
+            has_doc,
+            discard_empty
+        ),
     ]
 }
 
@@ -448,4 +457,32 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "tracking": applied}))
+}
+
+fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.discardEmpty";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    if edit::runs_len(&text_ref(s, id)?.runs) > 0 {
+        return Ok(json!({"removed": false}));
+    }
+    // The newest step whose document lacks the text created it: when the document now is that one
+    // plus the text (and its id), roll back to it without a trace.
+    let st = s.doc_mut()?;
+    if st.interaction.is_none()
+        && let Some(k) = st.history.undo.iter().rposition(|e| e.doc.node(id).is_none())
+        && let Some(created) = st.history.undo.get(k)
+    {
+        let mut now = (*st.doc).clone();
+        let mut before = (*created.doc).clone();
+        before.alloc_id();
+        if now.remove(id).is_ok() && now == before {
+            st.doc = created.doc.clone();
+            st.history.undo.truncate(k);
+            st.selection.prune(&st.doc);
+            st.revision += 1;
+            return Ok(json!({"removed": true}));
+        }
+    }
+    s.edit("Discard Empty Type", |d, _| d.remove(id).map(|_| ()).map_err(|_| EngineError::NoNode(id)))?;
+    Ok(json!({"removed": true}))
 }

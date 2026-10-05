@@ -337,6 +337,11 @@ pub trait Tool: Send {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
+    /// A command from outside the tool ran (a menu, a panel, an agent): finish work it ended (the
+    /// Type tool stops editing text the command took out of the selection).
+    fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
 }
 
 /// Create a tool by id. Unknown or not-yet-implemented tools fall back to a no-op tool that keeps the id.
