@@ -1,9 +1,10 @@
-//! Copy and paste between documents: resources and swatch conflicts (M4.22).
+//! Copy and paste between documents (resources, swatch conflicts) and paste placement (M4.22,
+//! M4.23).
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Document, Node, NodeKind};
-use vectorcraft_geom::Rect;
+use vectorcraft_geom::{Point, Rect};
 
 use super::*;
 
@@ -490,4 +491,108 @@ fn a_failed_batch_puts_the_clipboard_back() {
     ]);
     assert!(s.execute("command.batch", &json!({"commands": steps})).is_err());
     assert_eq!(s.clipboard.nodes.len(), 1);
+}
+
+// ---------- M4.23: placement ----------
+
+#[test]
+fn paste_centres_on_the_given_point() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 40.0, 20.0);
+    copy(&mut s, &[r]);
+    let v = s.execute("edit.paste", &json!({"center": [300, 200]})).unwrap();
+    let b = doc(&s).bounds_of(&ids_of(&v), false).unwrap();
+    assert!((b.center() - Point::new(300.0, 200.0)).hypot() < 1e-9, "{b:?}");
+    // Without a centre, the offset applies.
+    let v = s.execute("edit.paste", &json!({"dx": 5, "dy": 7})).unwrap();
+    assert_eq!(doc(&s).bounds_of(&ids_of(&v), false).unwrap().origin(), Point::new(5.0, 7.0));
+}
+
+#[test]
+fn front_and_back_without_a_selection_use_the_current_layers_ends() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a, b]);
+    let layer = |s: &Session| doc(s).layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>();
+    s.execute("select.none", &json!({})).unwrap();
+    let back = ids_of(&s.execute("edit.pasteInBack", &json!({})).unwrap());
+    assert_eq!(&layer(&s)[..2], &back[..], "pasted at the bottom (index 0), in order");
+    s.execute("select.none", &json!({})).unwrap();
+    let front = ids_of(&s.execute("edit.pasteInFront", &json!({})).unwrap());
+    let l = layer(&s);
+    assert_eq!(&l[l.len() - 2..], &front[..], "pasted on top, in order");
+    // With a selection: right above / below it.
+    sel(&mut s, &[a]);
+    let above = ids_of(&s.execute("edit.pasteInFront", &json!({})).unwrap());
+    let l = layer(&s);
+    let i = l.iter().position(|id| *id == a).unwrap();
+    assert_eq!(&l[i + 1..i + 3], &above[..]);
+    sel(&mut s, &[a]);
+    let below = ids_of(&s.execute("edit.pasteInBack", &json!({})).unwrap());
+    let l = layer(&s);
+    let i = l.iter().position(|id| *id == a).unwrap();
+    assert_eq!(&l[i - 2..i], &below[..]);
+}
+
+#[test]
+fn paste_on_all_artboards_keeps_the_offset_to_the_source_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<Rect> = doc(&s).artboards.iter().map(|a| a.rect).collect();
+    // On artboard 2, 10 pt right and 15 pt down from its corner.
+    let r = rect(&mut s, boards[1].x0 + 10.0, boards[1].y0 + 15.0, 20.0, 20.0);
+    copy(&mut s, &[r]);
+    assert_eq!(s.clipboard.source_artboard, Some(boards[1]));
+    let ids = ids_of(&s.execute("edit.pasteOnAllArtboards", &json!({})).unwrap());
+    assert_eq!(ids.len(), 3);
+    for (id, b) in ids.iter().zip(&boards) {
+        assert_eq!(doc(&s).bounds_of(&[*id], false).unwrap().origin(), Point::new(b.x0 + 10.0, b.y0 + 15.0));
+    }
+}
+
+#[test]
+fn paste_remembers_layers_restores_the_source_layers() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let art = id_of(&s.execute("layer.new", &json!({"name": "Art"})).unwrap());
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a, b]);
+    assert_eq!(s.clipboard.source_layers, [Some("Layer 1".to_string()), Some("Art".to_string())]);
+    let other = id_of(&s.execute("layer.new", &json!({"name": "Other"})).unwrap());
+    assert_eq!(s.execute("layer.pasteRemembersLayers", &json!({})).unwrap()["on"], true);
+    assert!(doc(&s).paste_remembers_layers);
+    assert_eq!(s.execute("document.inspect", &json!({})).unwrap()["pasteRemembersLayers"], true);
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let parents: Vec<_> = ids.iter().map(|id| doc(&s).parent_of(*id)).collect();
+    assert_eq!(parents, [Some(first), Some(art)]);
+    // In a document without those layers they are made.
+    new_doc(&mut s);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let names: Vec<_> = ids.iter().map(|id| doc(&s).node(doc(&s).parent_of(*id).unwrap()).unwrap().name.clone().unwrap()).collect();
+    assert_eq!(names, ["Layer 1", "Art"]);
+    assert_eq!(doc(&s).layers.len(), 2, "Layer 1 exists; Art is new");
+    // The option is an undoable document setting.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!doc(&s).paste_remembers_layers);
+    // Off: everything goes to the current layer.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(s.execute("layer.pasteRemembersLayers", &json!({"on": false})).unwrap()["on"], false);
+    s.execute("layer.setCurrent", &json!({"id": other.0})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert!(ids.iter().all(|id| doc(&s).parent_of(*id) == Some(other)));
+}
+
+#[test]
+fn paste_remembers_layers_survives_save_and_old_files_load_without_it() {
+    let mut s = session();
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let bytes = vectorcraft_format::save(doc(&s), false);
+    assert!(vectorcraft_format::load(&bytes).unwrap().paste_remembers_layers);
+    let v: Value = serde_json::from_slice(&vectorcraft_format::save(&Document::new(10.0, 10.0), false)).unwrap();
+    assert!(v.get("paste_remembers_layers").is_none(), "off is not written");
+    assert!(!vectorcraft_format::load(v.to_string().as_bytes()).unwrap().paste_remembers_layers);
 }

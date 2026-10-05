@@ -1,5 +1,6 @@
 //! File (document-level) and Edit commands, plus document queries.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -44,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Edit"],
             Some("Cmd+V"),
-            "{dx?, dy?, swatchConflict?} paste offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"} → {ids, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
+            "{center?: [x, y], dx?, dy?, swatchConflict?} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers they came from (by name; made when missing) → {ids, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Offset)
         ),
@@ -53,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Front",
             ["Edit"],
             Some("Cmd+F"),
-            "{swatchConflict?} paste in place just above the top selected object (resources as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Front)
         ),
@@ -62,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Back",
             ["Edit"],
             Some("Cmd+B"),
-            "{swatchConflict?} paste in place just below the bottom selected object (resources as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Back)
         ),
@@ -71,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Place",
             ["Edit"],
             Some("Cmd+Shift+V"),
-            "{swatchConflict?} paste where the objects were copied (resources as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?} paste where the objects were copied (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::InPlace)
         ),
@@ -80,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste on All Artboards",
             ["Edit"],
             Some("Cmd+Alt+Shift+V"),
-            "{swatchConflict?} paste a copy on every artboard (resources as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?} paste a copy on every artboard at the offset the objects had to the artboard they were copied from (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::AllArtboards)
         ),
@@ -244,7 +245,10 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
     let st = s.doc()?;
     let same_doc = clip.source_doc == Some(st.uid);
     let parent = st.insertion_parent();
-    // Front/back: relative to the selection (top-most / bottom-most selected object).
+    // Paste Remembers Layers (not while isolating a group: pastes stay in it).
+    let remember = st.doc.paste_remembers_layers && parent.is_some_and(|p| st.doc.node(p).is_some_and(Node::is_layer));
+    // Front/back: relative to the selection (top-most / bottom-most selected object); with
+    // nothing selected, the top / bottom of the current layer.
     let anchor = match mode {
         PasteMode::Front | PasteMode::Back => {
             let order = st.selection.in_paint_order(&st.doc);
@@ -254,15 +258,21 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         _ => None,
     };
     let placements: Vec<Affine> = match mode {
-        PasteMode::Offset => vec![Affine::translate((f64_or(p, "dx", off), f64_or(p, "dy", off)))],
+        PasteMode::Offset => vec![match point_param(p, "center") {
+            Some(c) => clip.bounds().map_or(Affine::IDENTITY, |b| Affine::translate(c - b.center())),
+            None => Affine::translate((f64_or(p, "dx", off), f64_or(p, "dy", off))),
+        }],
         PasteMode::AllArtboards => {
-            let src = st.doc.artboards.first().map(|a| a.rect.origin()).unwrap_or_default();
+            let src = clip.source_artboard.or_else(|| st.doc.artboards.first().map(|a| a.rect)).map(|r| r.origin()).unwrap_or_default();
             st.doc.artboards.iter().map(|a| Affine::translate(a.rect.origin() - src)).collect()
         }
         _ => vec![Affine::IDENTITY],
     };
     let (ids, imported) = s.edit(mode.label(), |d, sel| {
         let imported = clip.import_into(d, choices, same_doc);
+        let mut layers: BTreeMap<&str, NodeId> = BTreeMap::new();
+        // Objects pasted into each parent so far (keeps their order in front and back pastes).
+        let mut placed: BTreeMap<Option<NodeId>, usize> = BTreeMap::new();
         let mut new_ids = vec![];
         for xf in placements {
             for (k, n) in clip.nodes.iter().enumerate() {
@@ -271,10 +281,22 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                 if xf != Affine::IDENTITY {
                     c.transform(xf, false);
                 }
-                let (par, idx) = match anchor {
-                    Some((par, i, _)) => (par, if mode == PasteMode::Front { i + 1 + k } else { i + k }),
-                    None => (parent, usize::MAX),
+                let layer = match clip.source_layers.get(k) {
+                    Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
+                    _ => None,
                 };
+                let (par, idx) = match (anchor, layer) {
+                    // Next to the anchor, unless the object goes back to another layer.
+                    (Some((par, i, _)), l) if l.is_none() || l == par => {
+                        let k = placed.get(&par).copied().unwrap_or(0);
+                        (par, if mode == PasteMode::Front { i + 1 + k } else { i + k })
+                    }
+                    (_, l) => {
+                        let par = l.or(parent);
+                        (par, if mode == PasteMode::Back { placed.get(&par).copied().unwrap_or(0) } else { usize::MAX })
+                    }
+                };
+                *placed.entry(par).or_default() += 1;
                 new_ids.push(d.insert(par, idx, c)?);
             }
         }
@@ -287,6 +309,19 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         "merged": imported.merged,
         "renamed": imported.renamed,
     }))
+}
+
+/// The first unlocked layer or sublayer called `name` (topmost first), or a new top layer.
+fn layer_named(d: &mut Document, name: &str) -> NodeId {
+    let mut found = None;
+    for l in d.layers.iter().rev() {
+        l.walk(&mut |n| {
+            if found.is_none() && n.is_layer() && !n.locked && n.name.as_deref() == Some(name) {
+                found = Some(n.id);
+            }
+        });
+    }
+    found.unwrap_or_else(|| d.add_layer(Some(name)))
 }
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {

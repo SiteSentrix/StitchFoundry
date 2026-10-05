@@ -899,7 +899,8 @@ pub fn shortcut_of(id: &str) -> Option<&'static str> {
 /// Is a command currently enabled?
 pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     if let Some(c) = vectorcraft_engine::find_command(id) {
-        return (c.enabled)(&app.session).is_ok();
+        // SVG on the system clipboard can be pasted with an empty internal clipboard.
+        return (c.enabled)(&app.session).is_ok() || app.system_svg && id.starts_with("edit.paste");
     }
     match id {
         "file.save"

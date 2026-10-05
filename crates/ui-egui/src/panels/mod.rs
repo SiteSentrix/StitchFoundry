@@ -135,6 +135,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         flattener_preview::ID => flattener_preview::menu(app, ui),
         "attributes" => attributes::menu(app, ui),
         "colorThemes" => color_themes::menu(app, ui),
+        "layers" => layers::menu(app, ui),
         _ => {
             ui.add_enabled(false, egui::Button::new("No options").frame(false));
         }

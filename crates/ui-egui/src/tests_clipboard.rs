@@ -1,11 +1,13 @@
-//! Paste in the app: the Swatch Conflict dialog.
+//! Paste in the app: the Swatch Conflict dialog, pasting at the view centre, the Paste menu items
+//! enabled by SVG on the system clipboard, and the Layers panel's Paste Remembers Layers.
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
+use vectorcraft_geom::Point;
 
-use crate::{VectorcraftApp, dialogs};
+use crate::{Services, VectorcraftApp, dialogs, menus};
 
 fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
     app.run(id, p).unwrap_or_else(|e| panic!("{id}: {e}"))
@@ -100,4 +102,77 @@ fn apply_to_all_answers_the_rest_and_cancel_pastes_nothing() {
     let v = run(&mut app, "edit.pasteInPlace", json!({"swatchConflict": "merge"}));
     assert_eq!(v["merged"], 2);
     assert!(app.ui.dialog.is_none());
+}
+
+#[test]
+fn paste_goes_to_the_centre_of_the_view() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": 400, "height": 300}));
+    let r = rect(&mut app);
+    copy(&mut app, r);
+    let v = app.view_mut().unwrap();
+    (v.center, v.fitted) = (Point::new(250.0, 180.0), true);
+    let ids: Vec<NodeId> = run(&mut app, "edit.paste", json!({}))["ids"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect();
+    let b = app.session.active().unwrap().doc.bounds_of(&ids, true).unwrap();
+    assert!((b.center() - Point::new(250.0, 180.0)).hypot() < 1e-6, "{b:?}");
+}
+
+const SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><rect width="5" height="5"/><circle cx="15" cy="5" r="5"/></svg>"##;
+
+/// An app whose system clipboard holds `text`, with a document, after one frame.
+fn with_system_clipboard(text: &'static str) -> VectorcraftApp {
+    let services = Services { clipboard_read: Some(Box::new(move || Some(text.to_string()))), ..Default::default() };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    assert!(!menus::enabled(&app, "edit.paste"), "not checked before a frame");
+    let ctx = egui::Context::default();
+    ctx.run_ui(Default::default(), |ui| app.logic(ui.ctx())).textures_delta.clear();
+    app
+}
+
+#[test]
+fn paste_menu_items_are_enabled_by_svg_on_the_system_clipboard() {
+    let mut app = with_system_clipboard(SVG);
+    assert!(app.session.clipboard.is_empty());
+    for id in ["edit.paste", "edit.pasteInFront", "edit.pasteInBack", "edit.pasteInPlace", "edit.pasteOnAllArtboards", "edit.pasteWithoutFormatting"]
+    {
+        assert!(menus::enabled(&app, id), "{id}");
+    }
+    let entry = menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("edit.paste")).unwrap();
+    assert!(entry.enabled);
+    // Choosing it pastes the SVG's objects.
+    menus::invoke(&mut app, "edit.paste", json!({}));
+    assert_eq!(objects(&app).len(), 2);
+    // Plain text is not something to paste.
+    let app = with_system_clipboard("plain text");
+    assert!(!menus::enabled(&app, "edit.paste"));
+}
+
+#[test]
+fn the_layers_panel_menu_toggles_paste_remembers_layers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::panels::layers::menu(app, ui));
+        out.textures_delta.clear();
+        let mut texts = vec![];
+        for c in &out.shapes {
+            if let egui::Shape::Text(t) = &c.shape {
+                texts.push((t.galley.text().to_string(), t.visual_bounding_rect()));
+            }
+        }
+        texts
+    };
+    let item = |texts: &[(String, egui::Rect)]| texts.iter().find(|(t, _)| t.ends_with("Paste Remembers Layers")).cloned().unwrap();
+    let (label, r) = item(&frame(&mut app, vec![]));
+    assert!(!label.starts_with('✓'));
+    let button =
+        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for e in [egui::Event::PointerMoved(r.center()), button(true), button(false)] {
+        frame(&mut app, vec![e]);
+    }
+    assert!(app.session.active().unwrap().doc.paste_remembers_layers);
+    assert!(item(&frame(&mut app, vec![])).0.starts_with('✓'), "checked");
 }

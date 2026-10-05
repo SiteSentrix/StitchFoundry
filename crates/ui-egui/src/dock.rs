@@ -41,7 +41,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 x = r.right();
             }
-            icons::paint(ui, "menu", egui::Rect::from_center_size(strip.right_center() - vec2(14.0, 0.0), vec2(14.0, 14.0)), t.text_dim);
+            let menu_id = match app.ui.dock_tab {
+                DockTab::Properties => "properties",
+                DockTab::Layers => "layers",
+                DockTab::Libraries => "libraries",
+            };
+            panels::panel_menu(app, ui, menu_id, egui::Rect::from_center_size(strip.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)));
             egui::Frame::NONE.inner_margin(egui::Margin { left: 12, right: 10, top: 10, bottom: 8 }).show(ui, |ui| match app.ui.dock_tab {
                 DockTab::Properties => {
                     egui::ScrollArea::vertical().id_salt("props").auto_shrink([false, false]).show(ui, |ui| panels::properties::show(app, ui));

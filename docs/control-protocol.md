@@ -233,3 +233,9 @@ dialog instead and answers `{dialog: "swatchConflict"}`. Fields: `conflicts` (`[
 spot}]`), `index` (the conflict asked about), `choice` (`merge` or `add`), `applyToAll` and `choices` (the answers so
 far). `ui.dialog.confirm` records the answer and asks about the next conflict (with `applyToAll`, answers the rest
 the same); the last one runs the paste with `swatchConflict`. `ui.dialog.cancel` pastes nothing.
+
+Paste placement: through the app, `edit.paste` and `edit.pasteWithoutFormatting` without `center`, `dx` or `dy`
+paste at the centre of the view. The Paste menu items are enabled while the system clipboard holds SVG, even with
+nothing copied in the app (looked at up to four times a second; `ui.menu.list` shows it). The Layers panel menu (≡ on
+the dock's tab strip while Layers shows) lists the layer commands and Paste Remembers Layers
+(`layer.pasteRemembersLayers`, checked when on).

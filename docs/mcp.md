@@ -881,7 +881,14 @@ them, and `swatchConflict` answers: `"merge"` (the default: the objects take the
 pasted swatch comes in renamed) or one answer per name. Pasting back into the document the objects came from uses
 its resources as they are now and raises no conflict.
 
+Placement: `edit.paste {center}` centres the objects on a point (the app passes the view centre), else offsets them
+by `dx`/`dy` (the Paste Offset preference). With nothing selected, `edit.pasteInFront` / `edit.pasteInBack` put them
+on top / at the bottom of the current layer. `edit.pasteOnAllArtboards` keeps their offset to the artboard they were
+copied from. `layer.pasteRemembersLayers {on?}` (a document option, `document.inspect` → `pasteRemembersLayers`)
+pastes objects back into the layers they came from, by name, making missing ones.
+
 ```json
 {"name":"run_command","arguments":{"command":"clipboard.conflicts","params":{}}}
-{"name":"run_command","arguments":{"command":"edit.paste","params":{"swatchConflict":{"Brand":"add"}}}}
+{"name":"run_command","arguments":{"command":"edit.paste","params":{"center":[300,200],"swatchConflict":{"Brand":"add"}}}}
+{"name":"run_command","arguments":{"command":"layer.pasteRemembersLayers","params":{"on":true}}}
 ```

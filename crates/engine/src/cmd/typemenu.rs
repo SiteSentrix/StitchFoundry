@@ -97,7 +97,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),

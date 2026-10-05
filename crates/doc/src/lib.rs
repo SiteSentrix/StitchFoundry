@@ -472,6 +472,10 @@ pub struct Document {
     /// File → Document Setup (bleed, transparency grid, paper, type options).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub setup: DocSetup,
+    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers (by name)
+    /// they were copied from instead of the current layer.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paste_remembers_layers: bool,
 }
 
 fn ppi72() -> f64 {
@@ -528,6 +532,7 @@ impl Document {
             page_knockout: false,
             spot_use_lab: true,
             setup: DocSetup::default(),
+            paste_remembers_layers: false,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
