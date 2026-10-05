@@ -1,5 +1,6 @@
 # Builds and tests the workspace on FreeBSD, inside a FreeBSD VM on a Linux runner
 # (GitHub has no FreeBSD runners). GPU tests skip themselves when the VM has no adapter.
+# The `package` job checks packaging/freebsd/package.sh (the release job runs it for real).
 name: FreeBSD
 
 on:
@@ -11,6 +12,8 @@ on:
       - Cargo.lock
       - "**/Cargo.toml"
       - .github/workflows/freebsd.yml
+      - packaging/freebsd/**
+      - packaging/env.sh
   workflow_dispatch:
 
 concurrency:
@@ -28,7 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build and test in a FreeBSD VM
-        uses: vmactions/freebsd-vm@v1
+        # v1.5.9, pinned by commit.
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc
         with:
           release: "14.3"
           usesh: true
@@ -36,10 +40,45 @@ jobs:
           # Nothing to bring back; copying the target dir out of the VM fails on large builds.
           copyback: false
           prepare: |
-            pkg install -y curl pkgconf cmake python3 libxkbcommon wayland libX11 libXcursor libXrandr libXi libxcb mesa-libs vulkan-loader gtk3 fontconfig freetype2 alsa-lib
-            curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+            pkg install -y bash curl git pkgconf cmake python3 libxkbcommon wayland libX11 libXcursor libXrandr libXi libxcb mesa-libs vulkan-loader gtk3 fontconfig freetype2 alsa-lib
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
           run: |
             . "$HOME/.cargo/env"
+            # The checkout copied into the VM belongs to another user.
+            git config --global --add safe.directory "$PWD"
             rustc --version
-            CARGO_PROFILE_DEV_DEBUG=0 cargo build --workspace --all-targets --locked
-            CARGO_PROFILE_DEV_DEBUG=0 cargo test --workspace --locked
+            # Linking many test binaries at once can run the VM out of memory.
+            export CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_BUILD_JOBS=4
+            cargo build --workspace --all-targets --locked
+            cargo test --workspace --locked
+
+  package:
+    name: FreeBSD 14 (package)
+    # The release build takes a while: only for PRs that touch FreeBSD packaging (or dependencies)
+    # and on demand, not on every push to main.
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package in a FreeBSD VM
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc
+        with:
+          release: "14.3"
+          usesh: true
+          mem: 12288
+          prepare: |
+            pkg install -y bash curl git pkgconf cmake python3 libxkbcommon wayland libX11 libXcursor libXrandr libXi libxcb mesa-libs vulkan-loader gtk3 fontconfig freetype2 alsa-lib
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          run: |
+            . "$HOME/.cargo/env"
+            git config --global --add safe.directory "$PWD"
+            # Build outside the checkout so only dist/ is copied back out of the VM.
+            export CARGO_TARGET_DIR=/var/tmp/vectorcraft-target CARGO_BUILD_JOBS=4
+            bash packaging/freebsd/package.sh
+            tar -tzf dist/release/vectorcraft-*-freebsd-x86_64.tar.gz | grep -E '/bin/vectorcraft$|/bin/vectorcraft-cli$|/share/applications/|/share/icons/hicolor/|/share/doc/vectorcraft/NOTICE'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freebsd-package
+          path: dist/release/*
+          if-no-files-found: error
