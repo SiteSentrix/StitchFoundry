@@ -47,7 +47,8 @@ use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 pub use bake::{StrokeArt, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
 pub use clip::clip_outline;
 pub use group::{
-    OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, pathfinder_children,
+    OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, paints,
+    pathfinder_children,
 };
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use raster::{RasterFx, outset, raster_effects};

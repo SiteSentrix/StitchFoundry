@@ -144,7 +144,7 @@ fn is_container(n: &Node) -> bool {
 }
 
 /// Does `item` paint anything?
-pub(crate) fn paints(item: &AppearanceItem) -> bool {
+pub fn paints(item: &AppearanceItem) -> bool {
     item.visible()
         && !item.paint().is_none()
         && match item {

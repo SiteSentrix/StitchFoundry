@@ -95,7 +95,16 @@ pub fn export_with_report(doc: &Document, opts: &PdfOptions) -> Result<ExportRep
         warnings.push("Preserve editing needs the native document, which wasn't given: the PDF reopens as plain artwork".into());
     }
 
-    let mut ex = Exporter { doc, warnings: vec![], images: HashMap::new(), brushes: None, knockout: doc.page_knockout, lab_spots: vec![] };
+    let mut ex = Exporter {
+        doc,
+        warnings: vec![],
+        images: HashMap::new(),
+        brushes: None,
+        knockout: doc.page_knockout,
+        lab_spots: vec![],
+        interpolate: set.standard != Standard::PdfA2b,
+        compression: &set.compression,
+    };
     // CMYK documents blend in CMYK, as on screen: their groups' blending space is rewritten (see
     // `cmyk_blending`), and transparency at the top of a page is put in a non-isolated group of
     // its own (the PDF writer has no page group attributes).
@@ -219,7 +228,14 @@ struct Exporter<'a> {
     knockout: bool,
     /// Spot colours written with a Lab alternate ([`crate::lab_spot`]): colorant name, Lab values.
     lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
+    /// Images may ask viewers to smooth them (not in PDF/A).
+    interpolate: bool,
+    /// How images are resampled and compressed.
+    compression: &'a crate::CompressionSettings,
 }
+
+/// Most pixels along a side of a freeform gradient's image (its colour field is smooth).
+const MAX_FIELD_PX: f64 = 512.0;
 
 fn xf(a: Affine) -> Transform {
     let c = a.as_coeffs();
@@ -391,9 +407,9 @@ impl Exporter<'_> {
         Some(out)
     }
 
-    /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect.
-    /// Warn when `effects` has a raster effect: the app renders them to images before export
-    /// (`vectorcraft_engine::export_pdf`), so the ones still here (on `what`) can't be written.
+    /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect: the
+    /// app renders them to images before export (`vectorcraft_engine::export_pdf`), so the ones
+    /// still here (on `what`) can't be written.
     fn warn_raster(&mut self, effects: &[vectorcraft_doc::Effect], what: impl FnOnce() -> String) {
         if effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
             self.warn(format!("raster effects (shadows, glows, blur, feather) on {} are left out of the PDF", what()));
@@ -484,6 +500,8 @@ impl Exporter<'_> {
                             .into(),
                         )
                     }
+                    // Painted areas get an image of the field ([`Self::area`]); elsewhere (gradient
+                    // slices) the average colour stands in.
                     GradientKind::Freeform => {
                         self.warn("freeform gradients are exported as their average colour");
                         let n = g.gradient.stops.len().max(1) as f32;
@@ -498,8 +516,9 @@ impl Exporter<'_> {
                     }
                 }
             }
+            // Patterns paint through [`Self::area`]: only a missing one gets here.
             Paint::Pattern { .. } => {
-                self.warn("pattern strokes (and missing patterns) are exported as mid-grey");
+                self.warn("missing patterns are exported as mid-grey");
                 Some(rgb::Color::new(128, 128, 128).into())
             }
         }
@@ -685,22 +704,7 @@ impl Exporter<'_> {
                         continue;
                     }
                     self.warn_raster(&fl.effects, || "fills".into());
-                    // Pattern fills: the tile instances covering the shape, clipped to it.
-                    let doc = self.doc;
-                    if let Paint::Pattern { pattern, xf } = &fl.paint
-                        && let Some(def) = doc.pattern(pattern)
-                    {
-                        s.push_clip_path(&path, &rule(r));
-                        if fl.opacity < 1.0 {
-                            s.push_opacity(norm(fl.opacity));
-                        }
-                        for inst in def.instances_in(*xf, bounds) {
-                            self.node(s, &inst, bounds, true);
-                        }
-                        if fl.opacity < 1.0 {
-                            s.pop();
-                        }
-                        s.pop();
+                    if self.area(s, &path, rule(r), &fl.paint, (fl.opacity, fl.blend), bounds, bounds) {
                         continue;
                     }
                     let Some(paint) = self.paint(&fl.paint, bounds) else { continue };
@@ -728,11 +732,102 @@ impl Exporter<'_> {
         s.set_stroke(None);
     }
 
+    /// Is `p` a paint PDF has no paint for, which [`Self::area`] draws as art: a pattern swatch or
+    /// a freeform gradient?
+    fn area_paint(&self, p: &Paint) -> bool {
+        match p {
+            Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),
+            Paint::Gradient(g) => g.gradient.kind == GradientKind::Freeform,
+            _ => false,
+        }
+    }
+
+    /// Paint the area `clip` (filled by `rule`; bounds `area`) with `p` at `transparency` (opacity,
+    /// blend mode) when it is an [area paint](Self::area_paint): a pattern's tile instances
+    /// covering it, or an image of a freeform gradient placed on `bounds` (the painted object's
+    /// box, as on the canvas), clipped to it. False (nothing drawn) for other paints.
+    #[allow(clippy::too_many_arguments)]
+    fn area(
+        &mut self,
+        s: &mut Surface,
+        clip: &Path,
+        rule: krilla::paint::FillRule,
+        p: &Paint,
+        transparency: (f32, BlendMode),
+        bounds: Rect,
+        area: Rect,
+    ) -> bool {
+        if !self.area_paint(p) {
+            return false;
+        }
+        let (opacity, mode) = transparency;
+        let mut pushes = 0;
+        if mode != BlendMode::Normal {
+            s.push_blend_mode(blend(mode));
+            pushes += 1;
+        }
+        s.push_clip_path(clip, &rule);
+        pushes += 1;
+        if opacity < 1.0 {
+            s.push_opacity(norm(opacity));
+            pushes += 1;
+        }
+        let doc = self.doc;
+        match p {
+            Paint::Pattern { pattern, xf } => {
+                for inst in doc.pattern(pattern).map(|def| def.instances_in(*xf, area)).unwrap_or_default() {
+                    self.node(s, &inst, area, true);
+                }
+            }
+            Paint::Gradient(g) => self.field_image(s, g, bounds, area),
+            _ => {}
+        }
+        for _ in 0..pushes {
+            s.pop();
+        }
+        true
+    }
+
+    /// Draw freeform gradient `g`, placed on `bounds`, as an image of its colour field over `area`,
+    /// sampled at the document's raster effects resolution (at most [`MAX_FIELD_PX`] a side).
+    fn field_image(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect) {
+        use vectorcraft_color::freeform::{painted_box, spread_scale};
+        let Some(b) = painted_box(bounds) else { return };
+        let area = area.abs();
+        let long = area.width().max(area.height());
+        if !(long > 1e-9 && long.is_finite()) {
+            return;
+        }
+        let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
+        let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
+        let (cols, rows) = (along(area.width()), along(area.height()));
+        let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
+        let rgba: Vec<u8> = field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
+        let (Some(img), Some(size)) =
+            (crate::images::from_rgba(&rgba, cols.into(), rows.into(), self.interpolate), Size::from_wh(area.width() as f32, area.height() as f32))
+        else {
+            return;
+        };
+        s.push_transform(&xf(Affine::translate(area.origin().to_vec2())));
+        s.draw_image(img, size);
+        s.pop();
+    }
+
     /// Paint stroke `st` of the shape `bp` (`path`), whose geometric bounds `bounds` place its
     /// unplaced gradients.
     #[allow(clippy::too_many_arguments)]
     fn stroke(&mut self, s: &mut Surface, bp: &BezPath, path: &Path, r: FillRule, st: &StrokeLayer, page: Rect, bounds: Rect) {
         if !stroke::is_plain(st) && self.brush_art(s, bp, st, page) {
+            return;
+        }
+        if self.area_paint(&st.paint) {
+            // The area the stroke paints (dashes, caps, joins, profile, arrowheads, alignment), as
+            // Outline Stroke makes it, painted with the pattern's tiles or the freeform's image.
+            let region = stroke::outline_region(&vectorcraft_geom::PathData::from_bezpath(bp), r, st).to_bezpath();
+            if let Some(clip) = to_path(&region) {
+                let area = region.bounding_box();
+                self.area(s, &clip, krilla::paint::FillRule::NonZero, &st.paint, (st.opacity, st.blend), st.paint_bounds(bounds), area);
+            }
             return;
         }
         let Some(paint) = self.paint(&st.paint, st.paint_bounds(bounds)) else { return };
@@ -881,7 +976,10 @@ impl Exporter<'_> {
                 bp.extend(g.outline.iter());
             }
             let Some(path) = to_path(&bp) else { continue };
-            if let Some(paint) = self.paint(&run.style.fill, layout.bounds) {
+            let opaque = (1.0, BlendMode::Normal);
+            if !self.area(s, &path, krilla::paint::FillRule::NonZero, &run.style.fill, opaque, layout.bounds, bp.bounding_box())
+                && let Some(paint) = self.paint(&run.style.fill, layout.bounds)
+            {
                 s.set_stroke(None);
                 s.set_fill(Some(Fill { paint, opacity: NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
                 s.draw_path(&path);
@@ -906,7 +1004,9 @@ impl Exporter<'_> {
         for item in items {
             match item {
                 AppearanceItem::Fill(fl) if fl.visible => {
-                    if let Some(paint) = self.paint(&fl.paint, tb) {
+                    if !self.area(s, path, krilla::paint::FillRule::NonZero, &fl.paint, (fl.opacity, fl.blend), tb, bp.bounding_box())
+                        && let Some(paint) = self.paint(&fl.paint, tb)
+                    {
                         s.set_stroke(None);
                         s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: krilla::paint::FillRule::NonZero }));
                         s.draw_path(path);
@@ -920,37 +1020,58 @@ impl Exporter<'_> {
         s.set_stroke(None);
     }
 
-    fn load_image(&mut self, key: &str) -> Option<Image> {
-        if let Some(i) = self.images.get(key) {
+    /// Image `key` placed `size` points wide and high, resampled and compressed as the Compression
+    /// settings say ([`crate::images::recode`]); cached by key (and size when images are
+    /// resampled).
+    fn load_image(&mut self, key: &str, size: (f64, f64)) -> Option<Image> {
+        let c = self.compression;
+        let sized = [c.color.downsample, c.gray.downsample, c.mono.downsample].iter().any(|d| *d != crate::Downsample::None);
+        let cache = if sized { format!("{key}\u{0}{:.3}x{:.3}", size.0, size.1) } else { key.to_string() };
+        if let Some(i) = self.images.get(&cache) {
             return i.clone();
         }
-        let img = self.doc.images.get(key).and_then(|blob| {
-            let bytes = blob.bytes.as_ref().clone();
-            let direct = match blob.mime.as_str() {
-                "image/png" => Image::from_png(bytes.clone().into(), true).ok(),
-                "image/jpeg" | "image/jpg" => Image::from_jpeg(bytes.clone().into(), true).ok(),
-                "image/gif" => Image::from_gif(bytes.clone().into(), true).ok(),
-                "image/webp" => Image::from_webp(bytes.clone().into(), true).ok(),
-                _ => None,
-            };
-            direct.or_else(|| {
-                let rgba = image::load_from_memory(&bytes).ok()?.to_rgba8();
-                let (w, h) = rgba.dimensions();
-                Some(Image::from_rgba8(rgba.into_raw(), w, h))
-            })
+        let interpolate = self.interpolate;
+        let doc = self.doc;
+        let img = doc.images.get(key).and_then(|blob| {
+            let r = crate::images::recode(&blob.bytes, size, c, interpolate);
+            if let Some(w) = r.warning {
+                self.warn(w);
+            }
+            r.image.or_else(|| embed(blob, interpolate))
         });
         if img.is_none() {
             self.warn(format!("image '{key}' could not be decoded and was skipped"));
         }
-        self.images.insert(key.to_string(), img.clone());
+        self.images.insert(cache, img.clone());
         img
     }
 
     fn image(&mut self, s: &mut Surface, im: &vectorcraft_doc::ImageObject) {
-        let Some(img) = self.load_image(&im.key) else { return };
+        // The size it is placed at: its pixel grid's sides through its transform.
+        let [a, b, c, d, ..] = im.xf.as_coeffs();
+        let size = (im.width as f64 * a.hypot(b), im.height as f64 * c.hypot(d));
+        let Some(img) = self.load_image(&im.key, size) else { return };
         let Some(size) = Size::from_wh(im.width.max(1) as f32, im.height.max(1) as f32) else { return };
         s.push_transform(&xf(im.xf));
         s.draw_image(img, size);
         s.pop();
     }
+}
+
+/// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
+/// other formats decoded.
+fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool) -> Option<Image> {
+    let bytes = blob.bytes.as_ref().clone();
+    let direct = match blob.mime.as_str() {
+        "image/png" => Image::from_png(bytes.clone().into(), interpolate).ok(),
+        "image/jpeg" | "image/jpg" => Image::from_jpeg(bytes.clone().into(), interpolate).ok(),
+        "image/gif" => Image::from_gif(bytes.clone().into(), interpolate).ok(),
+        "image/webp" => Image::from_webp(bytes.clone().into(), interpolate).ok(),
+        _ => None,
+    };
+    direct.or_else(|| {
+        let rgba = image::load_from_memory(&bytes).ok()?.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        Some(Image::from_rgba8(rgba.into_raw(), w, h))
+    })
 }

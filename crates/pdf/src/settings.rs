@@ -433,17 +433,12 @@ impl PdfSettings {
     /// Options that are accepted but not applied by the writer yet, one warning each.
     pub fn warnings(&self) -> Vec<String> {
         let d = Self::default();
-        let c = &self.compression;
         let o = &self.output;
         let s = &self.security;
         [
             (self.thumbnails, "page thumbnails are not embedded yet"),
             (self.fast_web_view, "fast web view (a linearised file) is not written yet"),
             (self.create_layers, "PDF layers are not written yet: every layer is plain page content"),
-            (
-                c.color != d.compression.color || c.gray != d.compression.gray || c.mono != d.compression.mono,
-                "image downsampling and compression settings are not applied yet: images are embedded unchanged",
-            ),
             (self.marks.any(), "printer's marks are not drawn yet"),
             (!self.bleed.use_document && self.bleed.values().iter().any(|v| *v > 0.0), "bleed is not added yet: each page is its artboard"),
             (o.conversion != ColorConversion::None, "colour conversion is not applied yet: colours are written as they are"),

@@ -87,6 +87,15 @@ pub fn spread_scale(b: Rect) -> f64 {
     b.width().abs().max(b.height().abs()) / 2.0
 }
 
+/// The box a freeform gradient painted over `bounds` is placed on: `bounds` with positive sides, a
+/// side without length getting a sliver (so a grid over it maps back invertibly). `None` for an
+/// empty or non-finite box.
+pub fn painted_box(bounds: Rect) -> Option<Rect> {
+    let b = bounds.abs();
+    let side = b.width().max(b.height());
+    (side > 1e-9 && side.is_finite()).then(|| Rect::from_center_size(b.center(), (b.width().max(side * 1e-3), b.height().max(side * 1e-3))))
+}
+
 /// Where a point lies nearest on a line (see [`Freeform::nearest_on_lines`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineHit {
@@ -371,6 +380,16 @@ impl Piece {
 }
 
 impl Field {
+    /// Samples at the centres of a `cols` × `rows` grid of cells over `b`, row by row: RGB and
+    /// opacity (as [`Self::sample`]).
+    pub fn grid(&self, b: Rect, cols: u16, rows: u16) -> impl Iterator<Item = ([f32; 3], f32)> + '_ {
+        let (cw, ch) = (b.width() / cols as f64, b.height() / rows as f64);
+        (0..rows as usize * cols as usize).map(move |k| {
+            let (i, j) = (k % cols as usize, k / cols as usize);
+            self.sample(Point::new(b.x0 + (i as f64 + 0.5) * cw, b.y0 + (j as f64 + 0.5) * ch))
+        })
+    }
+
     /// Display RGB and opacity at `p`.
     pub fn sample(&self, p: Point) -> ([f32; 3], f32) {
         // (weight sum, weighted rgba) inside discs, and blending by distance outside them.

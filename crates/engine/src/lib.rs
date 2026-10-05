@@ -1073,7 +1073,11 @@ mod tests_pathops;
 #[cfg(test)]
 mod tests_pattern;
 #[cfg(test)]
+mod tests_pdffidelity;
+#[cfg(test)]
 mod tests_pdfpresets;
+#[cfg(test)]
+mod tests_pdfraster;
 #[cfg(test)]
 mod tests_place;
 #[cfg(test)]

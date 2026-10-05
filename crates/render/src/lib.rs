@@ -36,6 +36,12 @@ pub use pattern::render_pattern_swatch;
 pub use vectorcraft_effects as effects;
 pub use vello_cpu;
 
+/// Bounds of everything `n` paints, as the renderer culls it: its members, strokes, brush art and
+/// geometry effects, and the shadows and glows of it and its members.
+pub fn painted_bounds(n: &Node) -> Option<Rect> {
+    brush_fx::cull_bounds(n)
+}
+
 /// Largest raster an export may ask [`Renderer::render_region`] for, per side. The CPU rasteriser
 /// addresses at most `u16::MAX` pixels per side (and panics at that edge).
 pub const MAX_RASTER_SIDE: u32 = 32_768;
