@@ -1172,6 +1172,8 @@ mod tests_flatten;
 #[cfg(test)]
 mod tests_focal;
 #[cfg(test)]
+mod tests_fontlist;
+#[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
 mod tests_gradient;

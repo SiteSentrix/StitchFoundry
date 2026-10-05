@@ -2223,25 +2223,35 @@ fn insert_items(list: &[(&'static str, &'static str)]) -> Vec<Item> {
     list.iter().map(|(l, c)| cp(l, "type.insert", json!({ "char": c }))).collect()
 }
 
-/// Type → Font: one item per installed family (labels interned once so the per-frame menu build
-/// doesn't allocate forever).
+/// Type → Font: one item per available family, the installed fonts included. Built again only when
+/// the fonts change (the menu tree is built every frame); labels are interned once each, so
+/// rebuilding doesn't allocate forever.
 fn font_items() -> Vec<Item> {
-    static NAMES: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
-    let fams = vectorcraft_text::FontDb::global().families();
-    let Ok(mut names) = NAMES.lock() else { return vec![] };
-    fams.iter()
-        .map(|f| {
-            let label: &'static str = match names.iter().find(|n| **n == f.as_str()) {
-                Some(n) => n,
-                None => {
-                    let n: &'static str = Box::leak(f.clone().into_boxed_str());
-                    names.push(n);
-                    n
-                }
-            };
-            cp(label, "text.setStyle", json!({ "font": label }))
-        })
-        .collect()
+    static NAMES: std::sync::Mutex<std::collections::BTreeSet<&'static str>> = std::sync::Mutex::new(std::collections::BTreeSet::new());
+    static ITEMS: std::sync::Mutex<(u64, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, Vec::new()));
+    let db = vectorcraft_text::FontDb::global();
+    // Read first: fonts that load meanwhile make the next frame build the list again.
+    let generation = db.generation();
+    let fams = db.family_list();
+    let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
+    if items.0 != generation {
+        let list = fams
+            .iter()
+            .map(|f| {
+                let label: &'static str = match names.get(f.as_str()) {
+                    Some(n) => n,
+                    None => {
+                        let n: &'static str = Box::leak(f.clone().into_boxed_str());
+                        names.insert(n);
+                        n
+                    }
+                };
+                cp(label, "text.setStyle", json!({ "font": label }))
+            })
+            .collect();
+        *items = (generation, list);
+    }
+    items.1.clone()
 }
 
 /// The Effect menu, built from the effects catalogue (vector effects), plus raster effects.

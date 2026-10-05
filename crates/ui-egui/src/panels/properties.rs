@@ -382,10 +382,8 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let s = tx.first_style();
     section_header(ui, "Character");
-    let fams = vectorcraft_text::FontDb::global().families();
-    let names: Vec<&str> = fams.iter().map(String::as_str).collect();
-    if let Some(i) = widgets::dropdown(ui, "font", &s.font_family, &names, ui.available_width() - 4.0) {
-        app.run("text.setStyle", json!({"font": names[i]})).ok();
+    if let Some(f) = widgets::font_dropdown(ui, "font", &s.font_family, ui.available_width() - 4.0) {
+        app.run("text.setStyle", json!({ "font": f })).ok();
     }
     ui.horizontal(|ui| {
         dim_label(ui, "Size");

@@ -240,11 +240,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         super::empty_state(ui, "type", "No text selected", "Select a text object to edit its character attributes.");
         return;
     };
-    let fams = vectorcraft_text::FontDb::global().families();
-    let names: Vec<&str> = fams.iter().map(String::as_str).collect();
     let w = ui.available_width();
-    if let Some(i) = widgets::dropdown(ui, "ch-font", &s.font_family, &names, w - 4.0) {
-        style(app, json!({"font": names[i]}));
+    if let Some(f) = widgets::font_dropdown(ui, "ch-font", &s.font_family, w - 4.0) {
+        style(app, json!({ "font": f }));
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
     let snames: Vec<&str> = styles.iter().map(String::as_str).collect();
@@ -403,10 +401,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         menu_item(ui, l, false, l == "Fractional Widths");
     }
     ui.separator();
+    // The installed fonts are always listed; this picks up fonts installed since the app started.
     #[cfg(not(target_arch = "wasm32"))]
-    if menu_item(ui, "Show System Fonts", true, vectorcraft_text::FontDb::global().families().len() > 4) {
-        let n = vectorcraft_text::FontDb::global().load_system_fonts();
-        app.ui.status = format!("{n} system font faces available");
+    if menu_item(ui, "Refresh Font List", true, false)
+        && let Ok(r) = app.run("text.rescanFonts", json!({}))
+    {
+        app.status(format!("{} font families available", r["families"]));
     }
     if menu_item(ui, "Reset Panel", has, false) {
         style(app, json!({"tracking": 0, "leading": "auto"}));
