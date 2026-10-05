@@ -2,7 +2,9 @@
 //! over the inks below instead of knocking them out ([`crate::FillLayer::overprint`]).
 //! Edit → Edit Colors → Overprint Black sets it on black fills and strokes ([`OverprintBlack`]).
 
-use vectorcraft_color::{Color, Paint};
+use std::sync::Arc;
+
+use vectorcraft_color::{BlendMode, Color, Paint};
 
 use crate::{Document, Node, NodeId, NodeKind};
 
@@ -89,6 +91,40 @@ impl Node {
     /// Whether any fill or stroke of this subtree overprints (characters' aside).
     pub fn has_overprint(&self) -> bool {
         self.appearance.items.iter().any(|i| i.overprint()) || self.children().is_some_and(|c| c.iter().any(|c| c.has_overprint()))
+    }
+}
+
+/// Draw the overprinting fills and strokes of `a`'s subtree with Multiply (those with a blend
+/// mode of their own keep it), copying only the nodes on the way to them: on screen and on a
+/// printed plate this approximates their inks printing over the inks below. With `discard_white`
+/// (Document Setup → Discard White Overprint) white fills and strokes knock out instead.
+pub fn multiply_overprints(a: &mut Arc<Node>, discard_white: bool) {
+    if !a.has_overprint() {
+        return;
+    }
+    let n = Arc::make_mut(a);
+    let multiplies =
+        |overprint: bool, blend: BlendMode, paint: &Paint| overprint && blend == BlendMode::Normal && !(discard_white && is_white(paint));
+    for it in &mut n.appearance.items {
+        match it {
+            crate::AppearanceItem::Fill(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
+            crate::AppearanceItem::Stroke(l) if multiplies(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Multiply,
+            _ => {}
+        }
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        multiply_overprints(c, discard_white);
+    }
+}
+
+/// A solid paint of paper white (no ink in any colour model).
+fn is_white(p: &Paint) -> bool {
+    let Paint::Solid { color, .. } = p else { return false };
+    match *color {
+        Color::Rgb { r, g, b } => r.min(g).min(b) >= 1.0,
+        Color::Cmyk { c, m, y, k } => c.max(m).max(y).max(k) <= 0.0,
+        Color::Gray { k } => k <= 0.0,
+        Color::Lab { l, a, b } => l >= 100.0 && a == 0.0 && b == 0.0,
     }
 }
 

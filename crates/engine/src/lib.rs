@@ -1168,6 +1168,8 @@ mod tests_prefs;
 #[cfg(test)]
 mod tests_previewbounds;
 #[cfg(test)]
+mod tests_print;
+#[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]
 mod tests_rastersettings;

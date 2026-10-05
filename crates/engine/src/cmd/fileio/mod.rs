@@ -662,7 +662,7 @@ fn default_name(doc: &vectorcraft_doc::Document, ext: &str) -> String {
 }
 
 /// Write `bytes` to `path` → `{path, bytes, …extra}`; with no path → `{dataBase64, bytes, …extra}`.
-fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) -> Result<Value> {
+pub(crate) fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) -> Result<Value> {
     let out = match path {
         Some(path) => {
             write_file(path, bytes)?;

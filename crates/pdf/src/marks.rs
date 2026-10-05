@@ -8,7 +8,7 @@ use vectorcraft_doc::setup::MAX_BLEED;
 use vectorcraft_doc::{Document, Node, NodeId};
 use vectorcraft_geom::Rect;
 
-use crate::{MarkKind, MarkSettings, PdfSettings};
+use crate::{BleedSettings, MarkKind, MarkSettings, PdfSettings};
 
 impl MarkSettings {
     /// These settings as the shared mark geometry.
@@ -33,7 +33,15 @@ impl PdfSettings {
     /// Setup; one read from a file is kept to 0–[`MAX_BLEED`]) with Use Document Bleed, else the
     /// settings' own.
     pub fn bleed_of(&self, doc: &Document) -> [f64; 4] {
-        if self.bleed.use_document { doc.setup.bleed.map(|b| if b.is_finite() { b.clamp(0.0, MAX_BLEED) } else { 0.0 }) } else { self.bleed.values() }
+        self.bleed.of(doc)
+    }
+}
+
+impl BleedSettings {
+    /// The bleed of `doc`'s pages, `[top, bottom, left, right]` in points: the document's with
+    /// [`Self::use_document`] (kept to 0–[`MAX_BLEED`]), else these values.
+    pub fn of(&self, doc: &Document) -> [f64; 4] {
+        if self.use_document { doc.setup.bleed.map(|b| if b.is_finite() { b.clamp(0.0, MAX_BLEED) } else { 0.0 }) } else { self.values() }
     }
 }
 
@@ -59,9 +67,17 @@ impl PageBoxes {
 /// The page information printed under the marks: the file's title, the artboard (its name and
 /// number) and the date and time of the export (UTC).
 pub(crate) fn page_info(doc: &Document, title: &str, artboard: usize, created: Option<i64>) -> String {
+    page_info_of(doc, title, Some(artboard), created)
+}
+
+/// [`page_info`] of a page that may show no artboard (print with artboards ignored).
+pub(crate) fn page_info_of(doc: &Document, title: &str, artboard: Option<usize>, created: Option<i64>) -> String {
     let title = if title.trim().is_empty() { "Untitled" } else { title.trim() };
-    let name = doc.artboards.get(artboard).map_or("", |a| a.name.as_str());
-    let mut info = format!("{title}  ·  {name} ({} of {})", artboard + 1, doc.artboards.len());
+    let mut info = title.to_string();
+    if let Some(i) = artboard {
+        let name = doc.artboards.get(i).map_or("", |a| a.name.as_str());
+        info.push_str(&format!("  ·  {name} ({} of {})", i + 1, doc.artboards.len()));
+    }
     if let Some(t) = created {
         let [y, mo, d, h, mi, _] = vectorcraft_doc::metadata::civil(t);
         info.push_str(&format!("  ·  {y:04}-{mo:02}-{d:02} {h:02}:{mi:02} UTC"));

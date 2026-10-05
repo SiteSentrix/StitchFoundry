@@ -8,6 +8,7 @@
 pub mod appearance;
 pub mod graph;
 pub mod hit;
+pub mod inks;
 pub mod links;
 pub mod live;
 pub mod marks;
@@ -17,6 +18,7 @@ pub mod overprint;
 pub mod pattern;
 mod pixels;
 pub mod profiles;
+pub mod range;
 pub mod rastersettings;
 mod reach;
 pub mod selection;
@@ -520,6 +522,10 @@ pub struct Document {
     /// them (on, the default); off, auto slices cover the art and the slices.
     #[serde(default = "yes", skip_serializing_if = "skip::is_true")]
     pub slices_clip_to_artboard: bool,
+    /// File → Print: the print settings saved with the document (`vectorcraft_pdf::PrintSettings`
+    /// as JSON: the print engine sits above this crate); `None` until they are set up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub print_setup: Option<serde_json::Value>,
 }
 
 fn ppi72() -> f64 {
@@ -585,6 +591,7 @@ impl Document {
             extra: Default::default(),
             slices: vec![],
             slices_clip_to_artboard: true,
+            print_setup: None,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));

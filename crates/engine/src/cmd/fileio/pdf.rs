@@ -109,7 +109,7 @@ pub fn preset_settings(cmd: &str, p: &Value, saved: &[PdfPreset]) -> Result<PdfS
 
 /// Merge `over` into `base`: objects key by key (recursively), `null` keeps the base (the
 /// preset's value), anything else replaces.
-fn merge(base: &mut Value, over: &Value) {
+pub(crate) fn merge(base: &mut Value, over: &Value) {
     match (base, over) {
         (Value::Object(b), Value::Object(o)) => {
             for (k, v) in o.iter().filter(|(_, v)| !v.is_null()) {
@@ -121,7 +121,7 @@ fn merge(base: &mut Value, over: &Value) {
 }
 
 /// A writer error as an engine error: bad settings are bad params of `cmd`.
-fn pdf_error(cmd: &str, e: PdfError) -> EngineError {
+pub(crate) fn pdf_error(cmd: &str, e: PdfError) -> EngineError {
     match e {
         PdfError::BadSetting(_) | PdfError::Unsupported(_) => bad(cmd, e.to_string()),
         e => EngineError::Other(e.to_string()),

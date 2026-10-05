@@ -386,7 +386,7 @@ impl Default for SecuritySettings {
 }
 
 /// `v` lies in `lo..=hi` (and is a number).
-fn within(name: &str, v: f64, lo: f64, hi: f64, unit: &str) -> Result<(), PdfError> {
+pub(crate) fn within(name: &str, v: f64, lo: f64, hi: f64, unit: &str) -> Result<(), PdfError> {
     if (lo..=hi).contains(&v) { Ok(()) } else { Err(PdfError::BadSetting(format!("{name} must be {lo}–{hi}{unit} (got {v})"))) }
 }
 
@@ -420,11 +420,8 @@ impl PdfSettings {
             within(&format!("compression.{name}.ppi"), img.0, 9.0, 2400.0, " ppi")?;
             within(&format!("compression.{name}.abovePpi"), img.1, 9.0, 2400.0, " ppi")?;
         }
-        within("marks.weight", self.marks.weight, 0.05, 2.0, " pt")?;
-        within("marks.offset", self.marks.offset, 0.0, 72.0, " pt")?;
-        for (side, v) in ["top", "bottom", "left", "right"].iter().zip(self.bleed.values()) {
-            within(&format!("bleed.{side}"), v, 0.0, 72.0, " pt")?;
-        }
+        self.marks.check()?;
+        self.bleed.check()?;
         within("advanced.fontSubsetPercent", self.advanced.font_subset_percent, 0.0, 100.0, "%")
     }
 
@@ -467,5 +464,23 @@ impl PdfSettings {
         .filter(|(on, _)| *on)
         .map(|(_, w)| w.to_string())
         .collect()
+    }
+}
+
+impl MarkSettings {
+    /// Refuse a weight or offset out of range (PDF export and print).
+    pub(crate) fn check(&self) -> Result<(), PdfError> {
+        within("marks.weight", self.weight, 0.05, 2.0, " pt")?;
+        within("marks.offset", self.offset, 0.0, 72.0, " pt")
+    }
+}
+
+impl BleedSettings {
+    /// Refuse a side out of range (PDF export and print).
+    pub(crate) fn check(&self) -> Result<(), PdfError> {
+        for (side, v) in ["top", "bottom", "left", "right"].iter().zip(self.values()) {
+            within(&format!("bleed.{side}"), v, 0.0, 72.0, " pt")?;
+        }
+        Ok(())
     }
 }
