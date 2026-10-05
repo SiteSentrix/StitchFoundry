@@ -1029,3 +1029,30 @@ without its formatting, taking the style at the caret.
 {"name":"run_command","arguments":{"command":"clipboard.importImage","params":{"dataBase64":"iVBORw0KGgo…","center":[300,200]}}}
 {"name":"run_command","arguments":{"command":"edit.paste","params":{"center":[300,200]}}}
 ```
+
+## DXF export
+
+`document.exportDxf` (also `document.export` / `export` with format `dxf`) writes a CAD drawing, ASCII DXF R12 to 2018
+(`version`: `R12`, `R13`, `R14`, `2000`, `2004`, `2007`, `2010`, `2013`, `2018`; default `2018`). Each layer becomes a
+DXF layer (hidden layers switched off, locked ones locked, non-printing ones not plotted; template layers left out),
+straight paths become polylines, curved ones cubic splines through every anchor, fills solid hatches (R12 has none:
+their outlines), strokes lines with their lineweight and a linetype per dash pattern, and placed images image entities
+linked to PNG or JPEG files (`rasterFormat`) written next to the drawing (`linked` in the result). Coordinates are y up
+from the bottom-left corner of the first artboard (or `artboard`), in drawing units: `scale` units per `unit` (default
+1 mm = 1 unit, which sets `$INSUNITS`); `scaleLineweights` scales the lineweights with them. `colors` is `8`, `16` or
+`256` indexed colours, or `true` (default; true colour with the nearest index, DXF 2004 and later). `preserve:
+"appearance"` (default) writes type as glyph outlines and the strokes a CAD line can't draw (inside or outside,
+width profiles, arrowheads) as filled outlines; `"editability"` keeps type as text and every stroke a line.
+`alterPaths` writes every stroke as its filled outline, `outlineText` outlines type, `selectedOnly` writes only the
+selected objects in their layers (every export takes it), and `useArtboards: true` writes one drawing per chosen
+artboard holding the art over it. What DXF can't hold (gradients and patterns as one colour, blending, opacity masks,
+raster effects, clipping) comes back in `warnings`.
+
+DWG can't be written (no openly licensed writer exists): `document.formats` lists it under `unsupported` with that
+hint, and exporting to it answers with the hint to export DXF. PICT files are not supported either and say so when
+opened.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportDxf","params":{"path":"/tmp/plan.dxf","version":"2013","unit":"mm","scale":10,"preserve":"editability"}}}
+{"name":"export","arguments":{"path":"/tmp/plan.dxf","options":{"useArtboards":true,"colors":256}}}
+```

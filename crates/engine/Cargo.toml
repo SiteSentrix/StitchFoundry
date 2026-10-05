@@ -21,6 +21,7 @@ vectorcraft-trace = { workspace = true }
 vectorcraft-svg = { workspace = true }
 vectorcraft-format = { workspace = true }
 vectorcraft-pdf = { workspace = true }
+vectorcraft-cad = { workspace = true }
 image = { workspace = true }
 flate2 = { workspace = true }
 kurbo = { workspace = true }

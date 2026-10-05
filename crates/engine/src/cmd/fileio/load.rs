@@ -114,7 +114,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if vectorcraft_pdf::is_postscript(bytes) {
         return Err(err(format!("can't open `{}`: {}", file_name(name), vectorcraft_pdf::PdfError::PostScript)));
     }
-    let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")))?;
+    let format = detect(name, bytes).ok_or_else(|| match super::unsupported(&super::extension(name)) {
+        Some(u) => err(format!("can't open `{}`: {}", file_name(name), u.hint)),
+        None => err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")),
+    })?;
     let title = file_name(name);
     let mut converted = false;
     let (mut doc, warnings, restored) = match format.id {

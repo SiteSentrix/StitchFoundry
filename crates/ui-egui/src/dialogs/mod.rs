@@ -15,6 +15,7 @@ mod color_picker;
 mod command;
 pub mod confirm;
 mod document_setup;
+pub mod dxf_options;
 mod effect;
 pub mod expand;
 mod export_as;
@@ -207,6 +208,7 @@ registry! {
     SaveOptions: [save_options::KIND] => save_options::SPEC,
     TextExport: [text_export::KIND] => text_export::SPEC,
     OfficeExport: [office_export::KIND] => office_export::SPEC,
+    DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -314,3 +316,6 @@ mod tests_export;
 mod tests_import_pdf;
 #[cfg(test)]
 mod tests_raster_formats;
+
+#[cfg(test)]
+mod tests_dxf;

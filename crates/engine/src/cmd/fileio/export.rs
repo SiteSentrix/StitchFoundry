@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+
+use crate::DocState;
 
 use super::super::*;
 use super::encode::single_artboard;
@@ -48,6 +50,40 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
+/// The document an export of `st` writes: the whole document, or with `selectedOnly` just the
+/// selected objects, each in its layers and groups (a clipping group keeps its clipping path).
+pub fn export_source<'a>(st: &'a DocState, p: &Value) -> Result<Cow<'a, Document>> {
+    if !bool_or(p, "selectedOnly", false) {
+        return Ok(Cow::Borrowed(&*st.doc));
+    }
+    let keep: HashSet<NodeId> = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc)).into_iter().collect();
+    if keep.is_empty() {
+        return Err(bad("document.export", "select something to export (or turn off selectedOnly)"));
+    }
+    let mut d = Document::clone(&st.doc);
+    d.layers = st.doc.layers.iter().filter_map(|l| selected_part(l, &keep)).map(Arc::new).collect();
+    Ok(Cow::Owned(d))
+}
+
+/// `n` with only the parts in `keep` (whole, with everything inside them), `None` when none is.
+fn selected_part(n: &Node, keep: &HashSet<NodeId>) -> Option<Node> {
+    if keep.contains(&n.id) {
+        return Some(n.clone());
+    }
+    let children = n.children()?;
+    let mut kept: Vec<Arc<Node>> = children.iter().filter_map(|c| selected_part(c, keep).map(Arc::new)).collect();
+    if kept.is_empty() {
+        return None;
+    }
+    let clip = matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. });
+    if let Some(first) = children.first().filter(|f| clip && kept.first().is_none_or(|k| k.id != f.id)) {
+        kept.insert(0, first.clone());
+    }
+    let mut out = n.clone();
+    *out.children_mut()? = kept;
+    Some(out)
+}
+
 /// `p` without its artboard choice, also inside its SVG options (for documents made of one
 /// synthetic artboard, and for callers that pick the artboard themselves).
 pub(super) fn without_artboards(p: &Value) -> Value {
@@ -62,13 +98,13 @@ pub(super) fn without_artboards(p: &Value) -> Value {
     q
 }
 
-/// The document an export of `f` writes: the active one, or for text with `selectionOnly` the
-/// selected objects alone.
+/// The document an export of `f` writes: the active one (see [`export_source`]), or for text
+/// with `selectionOnly` the selected objects alone.
 fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Cow<'a, Document>> {
     if f.id == "txt" && bool_or(p, "selectionOnly", false) {
         return Ok(Cow::Owned(selection(s, cmd)?.0));
     }
-    Ok(Cow::Borrowed(&s.doc()?.doc))
+    export_source(s.doc()?, p)
 }
 
 /// The selected objects (not on template layers) alone on one layer, with one artboard: their
@@ -117,7 +153,7 @@ fn screen_format(row: &Value) -> Result<ScreenFormat> {
         return Err(bad(C, "each format is an object {format, scale?, suffix?}"));
     }
     let format = writable(C, Some(str_param(row, "format").unwrap_or("png")), None)?;
-    if matches!(format.id, "vectorcraft" | "template") {
+    if matches!(format.id, "vectorcraft" | "template" | "dxf") {
         return Err(bad(C, "Export for Screens writes png, jpg, webp, gif, png8, svg, svgz or pdf"));
     }
     // Vector formats have no pixel size: scale doesn't apply and adds no @Nx suffix (not even one

@@ -224,9 +224,9 @@ pub(crate) fn anti_alias(id: &str) -> std::result::Result<AntiAlias, String> {
     AntiAlias::from_id(id).ok_or_else(|| format!("antiAlias `{id}`: none, art or type"))
 }
 
-/// The `useArtboards` param of a PDF or raster export (SVG has its own): `true` writes every
+/// The `useArtboards` param of a PDF, DXF or raster export (SVG has its own): `true` writes every
 /// chosen artboard (default all), `false` the bounds of the visible art instead, absent one
-/// artboard (raster) or the chosen pages (PDF).
+/// artboard (raster, DXF) or the chosen pages (PDF).
 fn use_artboards(p: &Value) -> Result<Option<bool>> {
     match p.get("useArtboards") {
         None | Some(Value::Null) => Ok(None),
@@ -293,7 +293,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     // SVG reads its own `useArtboards` (an SVG option).
-    let use_artboards = if f.raster || f.id == "pdf" { use_artboards(p)? } else { None };
+    let use_artboards = if f.raster || matches!(f.id, "pdf" | "dxf") { use_artboards(p)? } else { None };
     if use_artboards == Some(false) {
         let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
         let mut q = super::export::without_artboards(p);
@@ -312,6 +312,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
         }
         "txt" => super::text::encode(doc, p)?,
         "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
+        "dxf" => return super::dxf::encode(doc, p, use_artboards),
         "pdf" => {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });

@@ -55,6 +55,8 @@ pub const TABLE: &[(&str, Class)] = &[
     ("cli", Class::Exempt),
     ("web", Class::Exempt),
     ("xtask", Class::Exempt),
+    // Crates added later (append-only).
+    ("cad", Class::Layer(3)),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).

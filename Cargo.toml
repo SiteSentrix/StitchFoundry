@@ -29,6 +29,7 @@ vectorcraft-engine = { path = "crates/engine" }
 vectorcraft-ui-egui = { path = "crates/ui-egui" }
 vectorcraft-mcp = { path = "crates/mcp" }
 vectorcraft-testkit = { path = "crates/testkit" }
+vectorcraft-cad = { path = "crates/cad" }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }

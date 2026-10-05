@@ -48,7 +48,7 @@ pub(super) fn set(app: &mut VectorcraftApp, field: &str, value: serde_json::Valu
     app.ui.dialog.as_mut().expect("a dialog is open").fields.insert(field.into(), value);
 }
 
-fn names(w: &Written) -> Vec<String> {
+pub(super) fn names(w: &Written) -> Vec<String> {
     w.borrow().iter().map(|(p, _)| p.clone()).collect()
 }
 

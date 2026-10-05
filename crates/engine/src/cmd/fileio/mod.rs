@@ -9,11 +9,13 @@
 //!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
 //! - `pdfimport`: the PDF pages, box and password `document.open` and Place read, `document.pdfInfo`.
+//! - `dxf`: DXF export options, `document.exportDxf`, and the formats that can't be written (DWG, PICT).
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
 
 mod batch;
+pub mod dxf;
 mod encode;
 mod export;
 mod imagemap;
@@ -28,8 +30,10 @@ mod text;
 
 use serde_json::{Value, json};
 
+pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
+pub use export::export_source;
 use load::err;
 pub(crate) use load::source;
 pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_template, raster_image};
@@ -56,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Serialize Document",
             [],
             None,
-            "{format?: vectorcraft (default)|template|svg|svgz|pdf|png|jpg|webp|gif|png8|txt, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
+            "{format?: vectorcraft (default)|template|svg|svgz|pdf|png|jpg|webp|gif|png8|txt|dxf, …the format's options (see document.formats; SVG ones also as svg: {…}), selectedOnly?: false (the selected objects alone, in their layers)} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
             has_doc,
             export::serialize
         ),
@@ -65,7 +69,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|svgz|pdf|png|jpg|webp|gif|png8|txt|vectorcraft|template (default: from the path's extension, else png; png8 writes an indexed .png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), jpg: quality?: 90 (0–100), colorModel?: rgb|cmyk|gray, method?: baseline|optimized|progressive, scans?: 3 (3–5, progressive), embedIcc?: true, imageMap?: none|client|server (an HTML or NCSA map of the objects with a URL, written as <stem>.html / <stem>.map), gif/png8: colors?: 256 (2–256), reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray, dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, transparency?: true, matte?: white|\"#rrggbb\"|none, interlaced?, webp: lossless?: true (lossy WebP isn't available yet: written lossless, with a warning), txt: the stories in stacking order (back to front; a thread once), encoding?: utf8|utf16 (with a byte order mark), lineEndings?: lf|crlf, selectionOnly?: false; SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images, image maps)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|png|jpg|webp|gif|png8|txt|dxf|vectorcraft|template (default: from the path's extension, else png; png8 writes an indexed .png), selectedOnly?: false (the selected objects alone, in their layers), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), jpg: quality?: 90 (0–100), colorModel?: rgb|cmyk|gray, method?: baseline|optimized|progressive, scans?: 3 (3–5, progressive), embedIcc?: true, imageMap?: none|client|server (an HTML or NCSA map of the objects with a URL, written as <stem>.html / <stem>.map), gif/png8: colors?: 256 (2–256), reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray, dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, transparency?: true, matte?: white|\"#rrggbb\"|none, interlaced?, webp: lossless?: true (lossy WebP isn't available yet: written lossless, with a warning), txt: the stories in stacking order (back to front; a thread once), encoding?: utf8|utf16 (with a byte order mark), lineEndings?: lf|crlf, selectionOnly?: false; SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf, …the DXF options of document.exportDxf (useArtboards: one drawing per artboard)} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images, image maps)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -93,7 +97,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "File Formats",
             [],
             None,
-            "{} → {formats: [{id, label, extensions, mime, read, write, raster, options: {name: {type, default, description}}}], readable: [id…], writable: [id…], openExtensions: [ext…]}",
+            "{} → {formats: [{id, label, extensions, mime, read, write, raster, options: {name: {type, default, description}}}], readable: [id…], writable: [id…], openExtensions: [ext…], unsupported: [{id, label, extensions, hint}] (formats asked for that can be neither opened nor written, such as DWG and PICT, with what to use instead)}",
             always,
             formats
         ),
@@ -391,6 +395,7 @@ pub const FORMATS: &[Format] = &[
     },
     Format { id: "png8", label: "PNG-8", extensions: &["png"], mime: "image/png", read: false, write: true, raster: true, options: PALETTE_OPTIONS },
     Format { id: "txt", label: "Text", extensions: TEXT_EXTS, mime: "text/plain", read: false, write: true, raster: false, options: text::OPTIONS },
+    Format { id: "dxf", label: "DXF", extensions: &["dxf"], mime: "image/vnd.dxf", read: false, write: true, raster: false, options: dxf::OPTIONS },
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -447,9 +452,11 @@ pub fn format_for_name(name: &str) -> Option<&'static Format> {
 
 /// The format to write: `format` (an id or extension), else the path's extension, else PNG.
 pub fn writable_format(format_param: Option<&str>, path: Option<&str>) -> std::result::Result<&'static Format, String> {
+    // Formats that can't be written say what to use instead.
+    let unknown = |what: String, key: &str| unsupported(key).map_or(what, |u| u.hint.to_string());
     let f = match (format_param, path.map(extension).filter(|e| !e.is_empty())) {
-        (Some(f), _) => format(f).ok_or_else(|| format!("unknown format `{f}` (see document.formats)"))?,
-        (None, Some(e)) => format(&e).ok_or_else(|| format!("unknown extension `.{e}`: pass `format` (see document.formats)"))?,
+        (Some(f), _) => format(f).ok_or_else(|| unknown(format!("unknown format `{f}` (see document.formats)"), f))?,
+        (None, Some(e)) => format(&e).ok_or_else(|| unknown(format!("unknown extension `.{e}`: pass `format` (see document.formats)"), &e))?,
         (None, None) => format("png").ok_or("no PNG encoder")?,
     };
     if f.write { Ok(f) } else { Err(format!("{} files can be opened but not written (see document.formats)", f.label)) }
@@ -467,6 +474,7 @@ fn formats(_: &mut Session, _: &Value) -> Result<Value> {
         "readable": ids(|f| f.read),
         "writable": ids(|f| f.write),
         "openExtensions": OPEN_EXTS,
+        "unsupported": UNSUPPORTED.iter().map(Unsupported::to_json).collect::<Vec<_>>(),
     }))
 }
 
@@ -645,3 +653,6 @@ mod tests_palette;
 
 #[cfg(test)]
 mod tests_text;
+
+#[cfg(test)]
+mod tests_dxf;
