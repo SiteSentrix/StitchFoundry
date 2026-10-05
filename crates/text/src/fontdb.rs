@@ -259,7 +259,7 @@ fn file_face_names(path: &Path) -> Vec<(String, String)> {
     // A collection lists where each face's table directory starts.
     let starts: Vec<u32> = if head.starts_with(b"ttcf") {
         let n = be32(&head, 8).unwrap_or(0).min(MAX_FACES) as usize;
-        read_at(12, n * 4).map(|b| b.chunks_exact(4).filter_map(|c| be32(c, 0)).collect()).unwrap_or_default()
+        read_at(12, n * 4).map(|b| b.as_chunks::<4>().0.iter().map(|c| u32::from_be_bytes(*c)).collect()).unwrap_or_default()
     } else {
         vec![0]
     };
@@ -269,7 +269,7 @@ fn file_face_names(path: &Path) -> Vec<(String, String)> {
             let dir = read_at(start.into(), 12)?;
             let tables = u16::from_be_bytes(dir.get(4..6)?.try_into().ok()?) as usize;
             let records = read_at(u64::from(start) + 12, tables * 16)?;
-            let rec = records.chunks_exact(16).find(|r| r.starts_with(b"name"))?;
+            let rec: &[u8] = records.as_chunks::<16>().0.iter().find(|r| r.starts_with(b"name"))?;
             let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?);
             if len > MAX_NAME_TABLE {
                 return None;
