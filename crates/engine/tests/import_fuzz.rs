@@ -2,7 +2,8 @@
 //! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
 //! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
-//! bitmaps, PDF and text pasted from other apps.
+//! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
+//! of every kind with random contents) opened, placed or pasted.
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -989,5 +990,118 @@ proptest! {
         }
         bytes.truncate(cut.max(8));
         survive_dxf("mutated dxf", &bytes, cut % 2 == 0)?;
+    }
+}
+
+// ---------- Windows metafiles: opened, placed and pasted ----------
+
+/// The rich document as EMF and as WMF.
+fn metafile_samples() -> &'static [Vec<u8>] {
+    static SAMPLES: std::sync::OnceLock<Vec<Vec<u8>>> = std::sync::OnceLock::new();
+    SAMPLES.get_or_init(|| {
+        let mut s = rich_session();
+        ["emf", "wmf"]
+            .iter()
+            .map(|f| {
+                let r = s.execute("document.export", &json!({ "format": f })).unwrap();
+                vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+            })
+            .collect()
+    })
+}
+
+/// An EMF of a 100 × 100 mm frame on a device of 10 pixels a millimetre holding `records`.
+fn emf_of(records: &[(u32, Vec<u8>)]) -> Vec<u8> {
+    let mut b: Vec<u8> = vec![];
+    let mut head = vec![0u8; 108];
+    head[..4].copy_from_slice(&1u32.to_le_bytes());
+    head[4..8].copy_from_slice(&108u32.to_le_bytes());
+    for (at, v) in [(32, 10_000i32), (36, 10_000), (72, 1000), (76, 1000), (80, 100), (84, 100), (100, 100_000), (104, 100_000)] {
+        head[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    }
+    head[40..44].copy_from_slice(b" EMF");
+    b.extend(head);
+    for (kind, body) in records {
+        let mut body = body.clone();
+        body.resize(body.len().div_ceil(4) * 4, 0);
+        b.extend(kind.to_le_bytes());
+        b.extend((8 + body.len() as u32).to_le_bytes());
+        b.extend(body);
+    }
+    b.extend([14, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0]);
+    b
+}
+
+/// A placeable WMF of a 1 × 1 inch box holding `records`.
+fn wmf_of(records: &[(u16, Vec<u8>)]) -> Vec<u8> {
+    let mut b: Vec<u8> = vec![0xD7, 0xCD, 0xC6, 0x9A, 0, 0, 0, 0, 0, 0, 0xA0, 0x05, 0xA0, 0x05, 0xA0, 0x05, 0, 0, 0, 0];
+    let sum = b.chunks_exact(2).fold(0u16, |a, w| a ^ u16::from_le_bytes([w[0], w[1]]));
+    b.extend(sum.to_le_bytes());
+    b.extend([1, 0, 9, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    for (function, body) in records {
+        let mut body = body.clone();
+        body.resize(body.len().div_ceil(2) * 2, 0);
+        b.extend((3 + body.len() as u32 / 2).to_le_bytes());
+        b.extend(function.to_le_bytes());
+        b.extend(body);
+    }
+    b.extend([3, 0, 0, 0, 0, 0]);
+    b
+}
+
+/// Open the bytes as `name`, and place them: neither may panic.
+fn survive_metafile(what: &str, name: &str, bytes: &[u8]) -> Result<(), TestCaseError> {
+    survive(what, || vectorcraft_engine::cmd::fileio::load(name, bytes).ok().map(|l| l.doc))?;
+    let r = catch_quiet(|| {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let _ = s.execute("file.place", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)}));
+    });
+    prop_assert!(r.is_ok(), "{what}: placing panicked: {:?}", r.err());
+    Ok(())
+}
+
+/// A record body: random bytes, or small numbers (coordinates, counts and offsets that land).
+fn arb_body() -> impl Strategy<Value = Vec<u8>> {
+    prop_oneof![
+        prop::collection::vec(any::<u8>(), 0..96),
+        prop::collection::vec(prop_oneof![Just(0i32), Just(1), Just(-1), 0i32..200, Just(i32::MAX), Just(i32::MIN)], 0..24)
+            .prop_map(|v| v.iter().flat_map(|x| x.to_le_bytes()).collect()),
+    ]
+}
+
+/// WMF record functions VectorCraft reads, and one it doesn't.
+const WMF_FUNCTIONS: [u16; 33] = [
+    0x0324, 0x0325, 0x0538, 0x041B, 0x0418, 0x061C, 0x0817, 0x081A, 0x0830, 0x0416, 0x0415, 0x02FA, 0x02FC, 0x02FB, 0x012D, 0x01F0, 0x0521, 0x0A32,
+    0x0F43, 0x0B41, 0x0940, 0x061D, 0x0213, 0x0214, 0x001E, 0x0127, 0x0106, 0x0209, 0x012E, 0x00F7, 0x01F9, 0x0142, 0x0999,
+];
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn mutated_metafiles_never_panic(which in 0usize..2, cut in 0usize..200_000, edits in prop::collection::vec((0usize..200_000, any::<u8>()), 0..16)) {
+        let mut bytes = metafile_samples()[which].clone();
+        let n = bytes.len();
+        for &(at, b) in &edits {
+            bytes[at % n] = b;
+        }
+        bytes.truncate(cut.max(8));
+        survive_metafile("mutated metafile", ["x.emf", "x.wmf"][which], &bytes)?;
+    }
+
+    #[test]
+    fn random_emf_records_never_panic(records in prop::collection::vec((0u32..124, arb_body()), 0..32)) {
+        survive_metafile("EMF records", "x.emf", &emf_of(&records))?;
+    }
+
+    #[test]
+    fn random_wmf_records_never_panic(records in prop::collection::vec((prop::sample::select(WMF_FUNCTIONS.to_vec()), arb_body()), 0..32)) {
+        survive_metafile("WMF records", "x.wmf", &wmf_of(&records))?;
+    }
+
+    #[test]
+    fn pasted_metafiles_never_panic(which in 0usize..2, cut in 0usize..200_000, edits in prop::collection::vec((0usize..200_000, any::<u8>()), 0..12)) {
+        paste_from_elsewhere("clipboard.importEmf", json!({"dataBase64": mutated_b64(metafile_samples()[which].clone(), cut, &edits)}))?;
     }
 }

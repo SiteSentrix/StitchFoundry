@@ -363,4 +363,5 @@ native files `version` and `preview`. A bad range keeps the dialog open; `ui.dia
 artboards' files.
 
 EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or `"wmf"`); they have no options
-dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards).
+dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
+Place read `.emf` and `.wmf`; a paste of `image/emf` from a system clipboard service runs `clipboard.importEmf`.

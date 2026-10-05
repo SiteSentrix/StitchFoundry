@@ -14,7 +14,7 @@ use crate::{Services, SystemClipboard, VectorcraftApp, menus};
 
 /// The fake clipboard's contents: what the app wrote, or what "another app" copied.
 #[derive(Default)]
-struct Board {
+pub(super) struct Board {
     flavours: Vec<Flavour>,
     ours: bool,
 }
@@ -46,7 +46,7 @@ impl SystemClipboard for Fake {
 }
 
 /// An app with a document and a fake system clipboard, the view centred on (250, 180).
-fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
+pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
     let board = Rc::new(RefCell::new(Board::default()));
     let services = Services { system_clipboard: Some(Box::new(Fake(board.clone()))), ..Default::default() };
     let mut app = VectorcraftApp::new(Session::new(), services);
@@ -57,12 +57,12 @@ fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 }
 
 /// Another app copies `flavours`.
-fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
+pub(super) fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
     *board.borrow_mut() = Board { flavours, ours: false };
 }
 
-fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
+pub(super) fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
     app.run(id, p).unwrap_or_else(|e| panic!("{id}: {e}"))
 }
 
@@ -78,7 +78,7 @@ fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
 }
 
 /// The objects the last paste selected.
-fn pasted(app: &VectorcraftApp) -> Vec<Node> {
+pub(super) fn pasted(app: &VectorcraftApp) -> Vec<Node> {
     let st = app.session.active().unwrap();
     st.selection.objects.iter().map(|id| st.doc.node(*id).unwrap().clone()).collect()
 }
@@ -88,7 +88,7 @@ fn count(app: &VectorcraftApp) -> usize {
 }
 
 /// A 4 × 2 px blue PNG.
-fn blue_png() -> Vec<u8> {
+pub(super) fn blue_png() -> Vec<u8> {
     let img = image::RgbaImage::from_pixel(4, 2, image::Rgba([0, 0, 255, 255]));
     let mut png = vec![];
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();

@@ -1,7 +1,8 @@
-//! EMF and WMF export through the commands: one artboard or each, raster effects as images, and
-//! the format lists.
+//! EMF and WMF through the commands: export of one artboard or each, raster effects as images,
+//! open, place, paste, and the format lists.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::NodeKind;
 
 use super::*;
 
@@ -95,15 +96,65 @@ fn raster_effects_are_written_as_images() {
 }
 
 #[test]
+fn metafiles_open_and_place() {
+    let mut s = two_boards();
+    let emf = b64(&s.execute("document.export", &json!({"format": "emf"})).unwrap());
+    let wmf = b64(&s.execute("document.export", &json!({"format": "wmf"})).unwrap());
+    for (name, bytes) in [("pic.emf", &emf), ("pic.wmf", &wmf)] {
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap();
+        assert_eq!(r["format"], &name[4..]);
+        assert_eq!(r["warnings"], json!([]));
+        let st = s.doc().unwrap();
+        let ab = st.doc.artboards[0].rect;
+        assert!((ab.width() - 100.0).abs() < 0.05 && (ab.height() - 100.0).abs() < 0.05, "{ab:?}");
+        let fill = st.doc.layers[0].children().unwrap().iter().find(|n| matches!(n.kind, NodeKind::Path { .. })).unwrap().clone();
+        let b = fill.geometric_bounds().unwrap();
+        assert!((b.x0 - 10.0).abs() < 0.05 && (b.width() - 30.0).abs() < 0.05, "{b:?}");
+        // Save can't write the file back: the document has no path.
+        assert!(s.doc().unwrap().path.is_none());
+    }
+    // Placed: one group clipped to the picture's frame, named after the file.
+    let mut s = session(300.0, 300.0, 1);
+    let r = s.execute("file.place", &json!({"name": "pic.emf", "dataBase64": vectorcraft_format::base64_encode(&emf), "at": [150, 150]})).unwrap();
+    assert_eq!(r["format"], "emf");
+    assert!((r["width"].as_f64().unwrap() - 100.0).abs() < 0.05);
+    let st = s.doc().unwrap();
+    let placed = st.doc.layers[0].children().unwrap().last().unwrap().clone();
+    assert_eq!(placed.name.as_deref(), Some("pic.emf"));
+    assert!(matches!(placed.kind, NodeKind::Group { clip: true, .. }));
+    let ext = fileio::PLACE_EXTS;
+    assert!(ext.contains(&"emf") && ext.contains(&"wmf") && OPEN_EXTS.contains(&"emf") && OPEN_EXTS.contains(&"wmf"));
+}
+
+#[test]
 fn formats_list_emf_and_wmf() {
     let mut s = Session::new();
     let r = s.execute("document.formats", &json!({})).unwrap();
-    let ids: Vec<&str> = r["writable"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
-    assert!(ids.contains(&"emf") && ids.contains(&"wmf"), "{ids:?}");
+    for k in ["readable", "writable"] {
+        let ids: Vec<&str> = r[k].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(ids.contains(&"emf") && ids.contains(&"wmf"), "{k}: {ids:?}");
+    }
     let emf = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "emf").unwrap();
     assert_eq!(emf["mime"], "image/emf");
     assert!(emf["options"]["useArtboards"].is_object());
+    assert!(open_filters().any(|(label, ext)| label == "EMF" && ext == ["emf"]));
+    assert!(place_filters().any(|(label, ext)| label == "WMF" && ext == ["wmf"]));
     // Export for Screens writes the screen formats only.
     let mut s = two_boards();
     assert!(s.execute("document.exportForScreens", &json!({"formats": [{"format": "emf"}]})).is_err());
+}
+
+#[test]
+fn a_pasted_metafile_becomes_objects() {
+    let mut src = two_boards();
+    let emf = b64(&src.execute("document.export", &json!({"format": "emf"})).unwrap());
+    let mut s = session(300.0, 300.0, 1);
+    let r = s.execute("clipboard.importEmf", &json!({"dataBase64": vectorcraft_format::base64_encode(&emf), "center": [150, 150]})).unwrap();
+    assert_eq!(r["count"], 1);
+    s.execute("edit.paste", &json!({"center": [150, 150]})).unwrap();
+    let pasted = s.doc().unwrap().doc.layers[0].children().unwrap().clone();
+    assert_eq!(pasted.len(), 1);
+    let b = pasted[0].geometric_bounds().unwrap();
+    assert!((b.center().x - 150.0).abs() < 0.05 && (b.width() - 30.0).abs() < 0.05, "{b:?}");
+    assert!(s.execute("clipboard.importEmf", &json!({"dataBase64": vectorcraft_format::base64_encode(b"%PDF-1.7")})).is_err());
 }

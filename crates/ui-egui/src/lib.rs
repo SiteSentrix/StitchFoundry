@@ -69,6 +69,8 @@ mod tests_svgsave;
 #[cfg(test)]
 mod tests_sysclip;
 #[cfg(test)]
+mod tests_sysclip_emf;
+#[cfg(test)]
 mod tests_transparencygrid;
 
 use std::sync::mpsc::{Receiver, Sender};

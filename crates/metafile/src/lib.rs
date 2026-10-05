@@ -1,4 +1,4 @@
-//! Windows metafiles: hand-written EMF and WMF writers.
+//! Windows metafiles: hand-written EMF and WMF writers and readers.
 //!
 //! [`export`] writes the visible art over one region of a document (an artboard) as a metafile:
 //!
@@ -13,14 +13,20 @@
 //!   lines or gradients, so clipped art is written whole, images over white, dashes as separate
 //!   lines and gradients and patterns as one colour (each loss comes back as a warning).
 //!
-//! - `bytes`: little-endian writing.
-//! - `dib`: device-independent bitmaps.
+//! [`import`] reads either format back into a document of one artboard (the picture's frame) and
+//! one layer: paths with fills and strokes, clipping, images and text. Records it doesn't read are
+//! skipped, with one warning.
+//!
+//! - `bytes`: little-endian writing and bounds-checked reading.
+//! - `dib`: device-independent bitmaps, both ways.
 //! - `scene`: the document walk both writers share.
 //! - `emf`, `wmf`: the writers.
+//! - `import`: the reader.
 
 mod bytes;
 mod dib;
 mod emf;
+mod import;
 mod scene;
 mod wmf;
 
@@ -84,5 +90,23 @@ pub fn export(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String
     Ok(Output { bytes, warnings })
 }
 
+/// A metafile read into a document.
+#[derive(Clone, Debug)]
+pub struct Imported {
+    pub document: Document,
+    pub kind: Kind,
+    /// What was approximated or skipped.
+    pub warnings: Vec<String>,
+}
+
+/// Read an EMF or WMF file (with or without a placeable header) into a document whose one
+/// artboard is the picture's frame.
+pub fn import(bytes: &[u8]) -> Result<Imported, String> {
+    import::import(bytes)
+}
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tests_import;

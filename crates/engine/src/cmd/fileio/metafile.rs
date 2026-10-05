@@ -1,6 +1,7 @@
-//! EMF and WMF export (`vectorcraft_metafile`): `document.export {format: emf|wmf}` and Export As
-//! (one picture of an artboard, or one per artboard with Use Artboards; raster effects as images,
-//! rendered at the document's raster effects resolution).
+//! EMF and WMF for every path that writes or reads Windows metafiles (`vectorcraft_metafile`):
+//! `document.export {format: emf|wmf}` and Export As (one picture of an artboard, or one per
+//! artboard with Use Artboards; raster effects as images, rendered at the document's raster
+//! effects resolution), `document.open` and File → Place (one artboard, the picture's frame).
 
 use serde_json::Value;
 use vectorcraft_doc::Document;
@@ -42,4 +43,10 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kin
         return Err(bad(C, "the document has no artboard"));
     }
     Ok(enc)
+}
+
+/// A metafile's document and the import's warnings.
+pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
+    let i = vectorcraft_metafile::import(bytes).map_err(super::err)?;
+    Ok((i.document, i.warnings))
 }

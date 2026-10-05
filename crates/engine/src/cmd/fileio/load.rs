@@ -62,6 +62,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_cad::is_dxf(bytes) {
         return format("dxf");
     }
+    if let Some(kind) = vectorcraft_metafile::sniff(bytes) {
+        return format(kind.id());
+    }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
@@ -157,6 +160,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         "dxf" => {
             let (doc, warnings) = super::dxfimport::import(bytes, &opts.dxf)?;
+            (doc, warnings, false)
+        }
+        "emf" | "wmf" => {
+            let (doc, warnings) = super::metafile::import(bytes)?;
             (doc, warnings, false)
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),

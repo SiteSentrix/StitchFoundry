@@ -1351,7 +1351,15 @@ WMF flattens curves into polygons in 16-bit units behind a placeable header (144
 over about 22 inches); it has no clipping, transparency or gradients, so clipped art is written whole, images over
 white and gradients and patterns as one colour. What a format leaves out comes back in `warnings`.
 
+`document.open` and `file.place` read `.emf` and `.wmf` (placeable or not) into one artboard, the picture's frame, and
+one layer: paths with their fills and strokes (pens become strokes with caps, joins and dashes), clipping groups,
+images and point type in the font the file names. Records VectorCraft doesn't read (EMF+ drawing among them) are
+skipped with one warning. `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard
+for `edit.paste`; the app pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's
+clipboard service offers it (the Windows desktop service doesn't read metafiles yet).
+
 ```json
 {"name":"export","arguments":{"path":"/tmp/logo.emf"}}
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"wmf","useArtboards":true,"path":"/tmp/icons.wmf"}}}
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/chart.emf","at":[300,200]}}}
 ```
