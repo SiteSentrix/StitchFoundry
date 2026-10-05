@@ -29,6 +29,7 @@ pub mod flattener_presets;
 mod form;
 mod gradient_stop;
 pub mod graphic_style_options;
+pub mod halftone;
 pub mod import_pdf;
 pub mod missing_links;
 pub mod new_color_group;
@@ -247,6 +248,7 @@ registry! {
     PrintPreset: [print::PRESET_KIND] => print::PRESET_SPEC,
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
+    VectorHalftone: [halftone::KIND] => halftone::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

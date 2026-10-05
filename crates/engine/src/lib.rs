@@ -1178,6 +1178,8 @@ mod tests_gradient;
 #[cfg(test)]
 mod tests_gradpanel;
 #[cfg(test)]
+mod tests_halftone;
+#[cfg(test)]
 mod tests_journal;
 #[cfg(test)]
 mod tests_knockout;

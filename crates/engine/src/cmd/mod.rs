@@ -27,6 +27,7 @@ mod fonts;
 pub(crate) mod freeform;
 pub(crate) mod gradient;
 pub(crate) mod graph;
+mod halftone;
 pub mod help;
 mod layer;
 pub mod links;
@@ -248,6 +249,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(printtiling::specs());
         v.extend(plugin::specs());
         v.extend(cut::specs());
+        v.extend(halftone::specs());
         v
     })
 }

@@ -1,4 +1,5 @@
-//! The colour adjustment effect dialogs (Effect → Color Adjustments) in the menus.
+//! The colour adjustment effect dialogs (Effect → Color Adjustments) and Object → Vector Halftone
+//! in the menus.
 
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -17,7 +18,7 @@ fn dialog_text(app: &mut VectorcraftApp) -> String {
 }
 
 #[test]
-fn the_effect_menu_lists_the_adjustments() {
+fn the_effect_menu_lists_the_adjustments_and_the_object_menu_the_halftone() {
     let tree = menus::menu_tree();
     let items = |menu: &str| format!("{:?}", tree.iter().find(|(t, _)| *t == menu).unwrap().1);
     let effect = items("Effect");
@@ -25,6 +26,7 @@ fn the_effect_menu_lists_the_adjustments() {
     {
         assert!(effect.contains(label), "{label}");
     }
+    assert!(items("Object").contains("Vector Halftone…"));
 }
 
 #[test]
@@ -96,4 +98,31 @@ fn dragging_on_the_curves_graph_adds_and_moves_a_point() {
     assert_eq!(pts.len(), 4, "{points}");
     let (x, y) = pts[1];
     assert!((x - 0.25).abs() < 0.01 && (y - 0.6).abs() < 0.01, "{points}");
+}
+
+#[test]
+fn the_halftone_menu_item_opens_a_previewing_dialog() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+    let id = app.session.active().unwrap().selection.objects[0];
+    menus::invoke(&mut app, "object.vectorHalftone", json!({}));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::halftone::KIND));
+    // Agents open it the same way.
+    app.ui.dialog = None;
+    app.run("ui.menuDialog", json!({"command": "object.vectorHalftone"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::halftone::KIND));
+    let text = dialog_text(&mut app);
+    for s in ["Vector Halftone", "Shape", "Circle", "Frequency", "Angle", "Screens", "Mono", "Color", "Clip to Art", "Keep Original"] {
+        assert!(text.lines().any(|l| l == s), "{s} in {text}");
+    }
+    assert!(app.session.in_interaction(), "the preview runs");
+    assert!(app.session.active().unwrap().doc.node(id).is_none(), "the preview shows the halftone in place of the art");
+    app.ui.dialog.as_mut().unwrap().fields.insert("mode".into(), json!("cmyk"));
+    assert!(!dialog_text(&mut app).lines().any(|l| l == "Color"), "CMYK screens have their own inks");
+    let undo = app.session.doc().unwrap().history.undo.len();
+    dialogs::confirm(&mut app).unwrap();
+    assert!(!app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.node(st.selection.objects[0]).unwrap().name.as_deref(), Some("Vector Halftone"));
 }

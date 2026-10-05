@@ -1704,3 +1704,12 @@ each colour keeping its colour model: `adjust.brightnessContrast`, `adjust.curve
 one fill or stroke; they stay editable (`effect.setParams`), export with the adjusted colours (an adjusted image as a
 recoloured copy) and become permanent with `effect.expandAppearance`. Patterns and the shadows and glows of raster
 effects keep their colours.
+
+## Vector halftone
+
+`object.vectorHalftone` turns the selection into vector dots, lines or shapes sized by its
+tone (mono, or CMYK screens multiplied over each other), clipped to the art's outline by default:
+
+```json
+{"name":"run_command","arguments":{"command":"object.vectorHalftone","params":{"shape":"circle","frequency":25,"angle":45,"mode":"cmyk"}}}
+```
