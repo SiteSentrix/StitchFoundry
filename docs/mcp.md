@@ -1382,3 +1382,33 @@ on white. TIFF and BMP files open again; `document.formats` lists every option.
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"bmp","depth":8,"rle":true}}}
 {"name":"export","arguments":{"path":"/tmp/sprite.tga","options":{"depth":32}}}
 ```
+
+## Save for Web
+
+File → Export → Save for Web (Legacy) writes optimised web images: `document.exportForWeb {format: gif|jpg|png8|png24,
+…}` renders the artboard (`clipToArtboard`, the default; `artboard` picks one) or the visible art and the slices, at
+`width`, `height` or `percent`, and encodes it with the format's settings: for GIF and PNG-8 `reduction`, `colors`,
+`dither`, `ditherAmount`, `transparency`, `matte`, `interlaced`, `webSnap`, `lossy` (GIF) and `colorTable {locked,
+transparent, webShift, sort}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
+`transparency`, `matte` and `interlaced`. `metadata` (none, copyright, contact, all) writes File Info as PNG text or a
+GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. With slices (`slice.list`) each image slice becomes
+`images/<slice name>.<ext>` (`slices: selected` writes the selected ones, `none` one image); `output: html` adds
+`<stem>.html` placing them, with each slice's URL, target, alt text and status message, and No Image / HTML Text cells.
+Without `path` the files come back as `{name, dataBase64}`.
+
+`document.exportForWeb.preview` returns what Save writes for the same settings without writing it: `bytes` (the exact
+file size), `seconds` to download at `kbps` (default 56.6), the size, and for palette formats the colour table
+(`colors: [{color, source, transparent, locked, webShifted, webSafe}]`). The colour table's lists name colours by
+`source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
+previews one slice; `image: true` adds the file.
+
+Presets: `webExport.presets.list` (built-in ones, then saved ones), `webExport.presets.save {name, newName?, …settings}`,
+`webExport.presets.delete {name}`; any name works as `preset` in the other commands (its settings, then the keys
+given). `webExport.settings {…}` remembers the settings the dialog opens on (`{}` reads them, `reset: true` restores the
+defaults); presets and remembered settings are preferences.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"gif","colors":32,"dither":"none"}}}
+{"name":"run_command","arguments":{"command":"document.exportForWeb","params":{"path":"/tmp/web/page.html","format":"png8","output":"html"}}}
+{"name":"run_command","arguments":{"command":"webExport.presets.save","params":{"name":"Banner","format":"jpg","quality":70}}}
+```

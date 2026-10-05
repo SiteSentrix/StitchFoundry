@@ -25,7 +25,7 @@ pub mod dxfimport;
 mod encode;
 pub mod eps;
 mod export;
-mod imagemap;
+pub(crate) mod imagemap;
 mod load;
 mod metafile;
 mod native;

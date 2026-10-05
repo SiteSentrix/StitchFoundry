@@ -145,6 +145,13 @@ pub struct Indexed {
 
 /// Reduce straight-alpha RGBA pixels (`width`×`height`) to a palette.
 pub fn quantize(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions) -> Indexed {
+    quantize_locked(rgba, width, height, o, &[])
+}
+
+/// [`quantize`], keeping the `locked` colours in a reduced palette (the colour table's locked
+/// colours: reducing the colours further never drops them). Art with few enough colours keeps
+/// them all anyway; locked colours no pixel ends up using are left out.
+pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions, locked: &[[u8; 3]]) -> Indexed {
     let px = rgba.as_chunks::<4>().0;
     let clear = |p: &[u8; 4]| o.transparency && p[3] < 128;
     let gray = matches!(o.reduction, Reduction::Gray | Reduction::BlackWhite);
@@ -162,15 +169,29 @@ pub fn quantize(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions) -> Ind
     let has_clear = px.iter().any(clear);
     let k = (o.colors.clamp(2, 256) as usize - usize::from(has_clear)).max(1);
     let opaque = || colors.iter().zip(px).filter(|(_, p)| !clear(p)).map(|(c, _)| *c);
+    // Locked colours take their slots first (at least one is left for the reduction).
+    let mut lock: Vec<[u8; 3]> = Vec::with_capacity(locked.len().min(k));
+    for c in locked {
+        if lock.len() + 1 < k && !lock.contains(c) {
+            lock.push(*c);
+        }
+    }
+    let free = k - lock.len();
     let (mut palette, exact) = match o.reduction {
         Reduction::BlackWhite => (vec![[0; 3], [255; 3]], false),
-        Reduction::Gray => ((0..k).map(|i| [(i * 255 / (k - 1).max(1)) as u8; 3]).collect(), false),
-        Reduction::Web => (web(opaque(), k), false),
+        Reduction::Gray => ((0..free).map(|i| [(i * 255 / (free - 1).max(1)) as u8; 3]).collect(), false),
+        Reduction::Web => (web(opaque(), free), false),
         r => match distinct(opaque(), k) {
             Some(exact) => (exact, true),
-            None => (median_cut(opaque(), k, r), false),
+            None => (median_cut(opaque(), free, r), false),
         },
     };
+    if !exact && !lock.is_empty() {
+        palette.retain(|c| !lock.contains(c));
+        lock.append(&mut palette);
+        lock.truncate(k);
+        palette = lock;
+    }
     if palette.is_empty() {
         palette.push(matte);
     }
@@ -221,7 +242,7 @@ fn distinct(colors: impl Iterator<Item = [u8; 3]>, k: usize) -> Option<Vec<[u8; 
 }
 
 /// A web-safe colour: each channel a multiple of 51.
-fn web_safe(c: [u8; 3]) -> [u8; 3] {
+pub fn web_safe(c: [u8; 3]) -> [u8; 3] {
     c.map(|v| ((v as u32 + 25) / 51 * 51) as u8)
 }
 

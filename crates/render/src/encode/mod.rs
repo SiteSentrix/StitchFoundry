@@ -2,7 +2,8 @@
 //! anti-aliasing) and encode it as PNG ([`png`]: resolution in `pHYs`, Adam7 interlacing), JPEG
 //! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless WebP, or
 //! a palette image ([`quantize`]) as PNG-8 or [`gif`], [`tiff`] (RGB, CMYK or grey, LZW, either byte
-//! order, the profile), [`bmp`] (1–32 bits, RLE) or [`tga`].
+//! order, the profile), [`bmp`] (1–32 bits, RLE) or [`tga`]; [`web`] adds what Save for Web optimises
+//! further (web snap, colour table edits, lossy GIF, comments).
 
 pub mod bmp;
 pub mod gif;
@@ -11,6 +12,7 @@ pub mod png;
 pub mod quantize;
 pub mod tga;
 pub mod tiff;
+pub mod web;
 
 use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::Rect;
@@ -200,3 +202,5 @@ mod tests_palette;
 mod tests_tga;
 #[cfg(test)]
 mod tests_tiff;
+#[cfg(test)]
+mod tests_web;

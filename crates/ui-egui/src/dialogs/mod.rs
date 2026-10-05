@@ -46,6 +46,7 @@ pub mod recolor;
 mod recovery;
 pub mod saturate;
 mod save_changes;
+pub mod save_for_web;
 pub(crate) mod save_options;
 mod save_pdf;
 pub mod save_style_library;
@@ -229,6 +230,7 @@ registry! {
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
+    SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -352,3 +354,6 @@ mod tests_metafile;
 
 #[cfg(test)]
 mod tests_tiff_bmp_tga;
+
+#[cfg(test)]
+mod tests_save_for_web;

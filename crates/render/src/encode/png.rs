@@ -135,38 +135,54 @@ fn write(pixels: &[u8], width: u32, height: u32, layout: Layout, extra: &[(&[u8;
     Ok(out)
 }
 
+/// The signature and the IHDR chunk (length, type, 13 data bytes, CRC), which comes first.
+const HEADER: usize = 8 + 12 + 13;
+
 /// `png` (a PNG file) with a text chunk per `(keyword, text)` right after its header: `tEXt`, or
 /// uncompressed `iTXt` (UTF-8) for text beyond Latin-1. Keywords are 1–79 printable ASCII
 /// characters (others are skipped). Unchanged when it doesn't start with a PNG header.
 pub fn with_text(png: Vec<u8>, entries: &[(&str, Cow<str>)]) -> Vec<u8> {
-    // The signature and the IHDR chunk (length, type, 13 data bytes, CRC), which comes first.
-    const HEADER: usize = 8 + 12 + 13;
-    if entries.is_empty() || !png.starts_with(SIGNATURE) || png.get(12..16) != Some(b"IHDR".as_slice()) || png.len() < HEADER {
+    let chunks: Vec<([u8; 4], Vec<u8>)> = entries
+        .iter()
+        .filter(|(keyword, _)| !keyword.is_empty() && keyword.len() <= 79 && keyword.bytes().all(|b| (32..=126).contains(&b)))
+        .map(|(keyword, text)| {
+            let mut data = keyword.as_bytes().to_vec();
+            data.push(0);
+            let latin1: Option<Vec<u8>> = text.chars().map(|c| u8::try_from(u32::from(c)).ok()).collect();
+            match latin1 {
+                Some(bytes) => {
+                    data.extend(bytes);
+                    (*b"tEXt", data)
+                }
+                None => {
+                    // Uncompressed, no language tag, no translated keyword.
+                    data.extend_from_slice(&[0, 0, 0, 0]);
+                    data.extend_from_slice(text.as_bytes());
+                    (*b"iTXt", data)
+                }
+            }
+        })
+        .collect();
+    with_chunks(png, &chunks)
+}
+
+/// `png` marked as sRGB (an `sRGB` chunk, perceptual intent) right after its header, so browsers
+/// show its colours as they are. Unchanged when it doesn't start with a PNG header.
+pub fn with_srgb(png: Vec<u8>) -> Vec<u8> {
+    with_chunks(png, &[(*b"sRGB", vec![0])])
+}
+
+/// `png` with `chunks` (type, data) right after its header; chunks too large for a PNG are
+/// skipped. Unchanged when there are none or it doesn't start with a PNG header.
+fn with_chunks(png: Vec<u8>, chunks: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
+    if chunks.is_empty() || !png.starts_with(SIGNATURE) || png.get(12..16) != Some(b"IHDR".as_slice()) || png.len() < HEADER {
         return png;
     }
-    let mut out = Vec::with_capacity(png.len() + entries.iter().map(|(k, v)| k.len() + v.len() + 20).sum::<usize>());
+    let mut out = Vec::with_capacity(png.len() + chunks.iter().map(|(_, d)| d.len() + 12).sum::<usize>());
     out.extend_from_slice(&png[..HEADER]);
-    for (keyword, text) in entries {
-        if keyword.is_empty() || keyword.len() > 79 || !keyword.bytes().all(|b| (32..=126).contains(&b)) {
-            continue;
-        }
-        let mut data = keyword.as_bytes().to_vec();
-        data.push(0);
-        let latin1: Option<Vec<u8>> = text.chars().map(|c| u8::try_from(u32::from(c)).ok()).collect();
-        let ty = match latin1 {
-            Some(bytes) => {
-                data.extend(bytes);
-                b"tEXt"
-            }
-            None => {
-                // Uncompressed, no language tag, no translated keyword.
-                data.extend_from_slice(&[0, 0, 0, 0]);
-                data.extend_from_slice(text.as_bytes());
-                b"iTXt"
-            }
-        };
+    for (ty, data) in chunks {
         if u32::try_from(data.len()).is_ok() {
-            chunk(&mut out, ty, &data);
+            chunk(&mut out, ty, data);
         }
     }
     out.extend_from_slice(&png[HEADER..]);
