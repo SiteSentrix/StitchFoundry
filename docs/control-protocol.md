@@ -295,3 +295,12 @@ system file manager (desktop only; answers `{path}`), and `file.newFromTemplate`
 in the Templates folder (preference `templatesFolder`). Older native files open as "<name> [Converted]" (preference
 `appendConverted`), so their Save asks for a new `.vectorcraft` name. Native files reopen at the view they were saved
 with.
+
+DXF Options: Export As… with the DXF format (`file.exportAs {format: "dxf"}`, then the save dialog), or
+`ui.dxfOptionsDialog {path?, …document.exportDxf options}` for agents, opens the `dxfOptions` dialog. Its fields are
+`document.export` params: `version`, `unit` (a unit name such as `Millimeters`), `scale`, `scaleLineweights`, `colors`
+(`8`, `16`, `256`, `true`), `rasterFormat` (`png`, `jpeg`), `preserve` (`appearance`, `editability`), `selectedOnly`,
+`alterPaths`, `outlineText`, plus `path` and the artboard choice. `ui.dialog.confirm` checks them (a bad value, or
+Export Selected Art Only with nothing selected, keeps the dialog open), remembers them for the next DXF Options and
+writes the file (asking for a path when there is none). Export As also lists DWG, greyed out: setting its `format` to
+`dwg` shows, and on confirm answers, the hint to export DXF instead.

@@ -4090,6 +4090,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-cad"
+version = "0.1.1"
+dependencies = [
+ "image",
+ "kurbo 0.13.1",
+ "serde_json",
+ "vectorcraft-brush",
+ "vectorcraft-color",
+ "vectorcraft-doc",
+ "vectorcraft-effects",
+ "vectorcraft-geom",
+ "vectorcraft-pathops",
+ "vectorcraft-text",
+]
+
+[[package]]
 name = "vectorcraft-cli"
 version = "0.1.1"
 dependencies = [
@@ -4157,6 +4173,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "vectorcraft-brush",
+ "vectorcraft-cad",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-format",
@@ -4362,6 +4379,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "vectorcraft-cad",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-effects",

@@ -222,6 +222,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(place::specs());
         v.extend(links::specs());
         v.extend(pdfcmds::specs());
+        v.extend(fileio::dxf::specs());
         v
     })
 }

@@ -317,12 +317,17 @@ pub fn recent_files(app: &VectorcraftApp) -> &[String] {
 }
 
 /// Export the active document in `format` (default: the path's extension, else PNG) with the
-/// `document.export` options in `params` (artboard, range, useArtboards, ppi, SVG options…):
-/// every file it writes (one per artboard, linked images) goes next to `path`. The document keeps
-/// its path. → `{path, warnings, files?}` (`files`: every file when there are several).
+/// `document.export` options in `params` (artboard, range, useArtboards, selectedOnly, ppi, SVG
+/// options…): every file it writes (one per artboard, linked images) goes next to `path`. The
+/// document keeps its path. → `{path, warnings, files?}` (`files`: every file when there are
+/// several).
 pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<String>, params: &Value) -> Result<Value, String> {
     let f = fileio::writable_format(format, path.as_deref())?;
-    let doc = app.session.active().ok_or("no document")?.doc.clone();
+    let st = app.session.active().ok_or("no document")?;
+    let doc = match fileio::export_source(st, params).map_err(|e| e.to_string())? {
+        std::borrow::Cow::Borrowed(_) => st.doc.clone(),
+        std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
+    };
     let path = target_path(app, path, f.extensions[0])?;
     // An SVG given a .svgz name is written compressed.
     let f = match fileio::format_for_name(&path) {

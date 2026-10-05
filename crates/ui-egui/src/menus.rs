@@ -425,6 +425,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.openRecent29", "Open Recent File 29", "", "{}"),
     ("file.openRecent30", "Open Recent File 30", "", "{}"),
     ("file.reveal", "Show in Folder", "", "{} show the document's file in the system file manager (desktop) → {path}"),
+    (
+        "ui.dxfOptionsDialog",
+        "DXF Options Dialog",
+        "",
+        "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -793,6 +799,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         // Save for Office Documents…: its dialog; with options, pick the file (or write `path`).
         "document.exportForOffice" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::office_export::open(app),
         "document.exportForOffice" => io::save_command_output(app, id, "png", p.clone()).map(|path| json!({ "path": path })),
+        "ui.dxfOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
+        "ui.dxfOptionsDialog" => {
+            crate::dialogs::dxf_options::open(app, p);
+            Ok(Value::Null)
+        }
         _ => return None,
     };
     Some(r)
@@ -1019,6 +1030,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.expandDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.spotColors" => app.session.active().is_some(),
         "ui.menuDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.dxfOptionsDialog" => app.session.active().is_some(),
         _ => true,
     }
 }

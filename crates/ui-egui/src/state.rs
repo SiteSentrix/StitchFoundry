@@ -285,6 +285,9 @@ pub struct UiState {
     /// dialog is open.
     #[serde(skip)]
     pub dialog_file: Option<std::sync::Arc<crate::dialogs::import_pdf::DialogFile>>,
+    /// The DXF Options chosen last (`document.exportDxf` options; null: never used).
+    #[serde(default)]
+    pub dxf_options: Value,
 }
 
 impl UiState {
@@ -343,6 +346,7 @@ impl Default for UiState {
             svg_options: Value::Null,
             place_link: true,
             dialog_file: None,
+            dxf_options: Value::Null,
         }
     }
 }
