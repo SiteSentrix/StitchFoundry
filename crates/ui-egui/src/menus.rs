@@ -13,6 +13,7 @@ use crate::VectorcraftApp;
 use crate::io;
 use crate::state::{DockTab, ICON_PANELS, next_zoom};
 use crate::theme::{self, Brightness, Tokens};
+use crate::widgets;
 
 #[derive(Clone, Debug)]
 pub enum Item {
@@ -110,6 +111,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
+    ("app.home", "Home", "", "{} shows the Home screen (new file presets, Open) over the open documents; choosing a document tab returns to it"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
@@ -546,6 +548,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     let r = match id {
         "file.newDialog" => {
             crate::dialogs::open_new_document(app);
+            Ok(Value::Null)
+        }
+        "app.home" => {
+            app.ui.home = Some(home_key(app));
             Ok(Value::Null)
         }
         "file.open" => match s("path") {
@@ -1860,10 +1866,13 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     end
 }
 
-/// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt.
+/// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt;
+/// it scrolls when it is taller than the window.
 fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
-    ui.set_min_width(230.0);
-    render_items(app, ui, items, clicked);
+    widgets::menu_scroll(ui, |ui| {
+        ui.set_min_width(230.0);
+        render_items(app, ui, items, clicked);
+    });
 }
 
 fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
@@ -1878,8 +1887,10 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             }
             Item::Sub(label, children) => {
                 ui.menu_button(*label, |ui| {
-                    ui.set_min_width(200.0);
-                    render_items(app, ui, children, clicked);
+                    widgets::menu_scroll(ui, |ui| {
+                        ui.set_min_width(200.0);
+                        render_items(app, ui, children, clicked);
+                    });
                 });
             }
             Item::Todo(label, sc) => {
@@ -1911,6 +1922,12 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             }
         }
     }
+}
+
+/// What the Home screen remembers when it opens (`app.home`): the active document and the
+/// document count. When either changes, the Home screen gives way to the document.
+pub(crate) fn home_key(app: &VectorcraftApp) -> (Option<u64>, usize) {
+    (app.session.active().map(|d| d.uid), app.session.documents().len())
 }
 
 fn label_of(it: &Item) -> &'static str {
@@ -2427,5 +2444,37 @@ mod tests {
         }
         let w = ctx.memory(|m| m.area_rect(id)).unwrap().width();
         assert!((230.0..340.0).contains(&w), "File menu is {w} pt wide");
+    }
+
+    #[test]
+    fn long_menus_scroll_inside_a_short_window() {
+        // The Window menu is taller than a 600 pt window: it stops above the bottom edge and
+        // scrolls instead of running off screen.
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let tree = menu_tree();
+        let (_, window) = tree.iter().find(|(t, _)| *t == "Window").unwrap();
+        let id = egui::Id::new("test-long-menu");
+        let rect = |height: f32| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
+            for _ in 0..3 {
+                let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+                let mut out = ctx.run_ui(input, |ui| {
+                    egui::Area::new(id).fixed_pos(egui::pos2(300.0, 30.0)).show(ui.ctx(), |ui| {
+                        egui::containers::menu::menu_style(ui.style_mut());
+                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| menu_body(&app, ui, window, &mut None));
+                    });
+                });
+                out.textures_delta.clear();
+            }
+            ctx.memory(|m| m.area_rect(id)).unwrap()
+        };
+        let short = rect(600.0);
+        assert!(short.bottom() <= 600.0, "Window menu ends at {} in a 600 pt window", short.bottom());
+        // With room to spare it shows whole, taller than the short window allowed.
+        let tall = rect(3000.0);
+        assert!(tall.height() > short.height() + 100.0, "{} vs {}", tall.height(), short.height());
+        assert!(tall.bottom() < 3000.0);
     }
 }

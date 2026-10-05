@@ -870,12 +870,14 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     for (g, items) in groups {
         ui.menu_button(g, |ui| {
-            for (id, label) in items {
-                if ui.button(format!("{label}…")).clicked() {
-                    app.run("effect.dialog", json!({"effect": id})).ok();
-                    ui.close();
+            crate::widgets::menu_scroll(ui, |ui| {
+                for (id, label) in items {
+                    if ui.button(format!("{label}…")).clicked() {
+                        app.run("effect.dialog", json!({"effect": id})).ok();
+                        ui.close();
+                    }
                 }
-            }
+            });
         });
     }
 }

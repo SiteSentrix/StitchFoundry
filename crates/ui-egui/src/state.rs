@@ -298,6 +298,11 @@ pub struct UiState {
     /// never used).
     #[serde(default)]
     pub dxf_import: Value,
+    /// The Home screen is shown over the open documents (`app.home`): the active document's uid
+    /// and the document count when it opened. Choosing a tab, or a document opening, closing or
+    /// becoming active, leaves it.
+    #[serde(skip)]
+    pub home: Option<(Option<u64>, usize)>,
 }
 
 impl UiState {
@@ -359,6 +364,7 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             dxf_import: Value::Null,
+            home: None,
         }
     }
 }
