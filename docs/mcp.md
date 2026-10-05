@@ -456,7 +456,7 @@ fills and strokes above it paint over the members (characters), those below unde
 objects themselves (a group's own stack; layers through `ids`) or, with `target: "contents"`, the objects inside the
 groups and layers. `appearance.targetContents` selects a group's members (double-clicking the Contents row).
 SVG and PDF export bake a group's own fills, strokes and geometry effects into paths; its raster effects stay a
-filter on the whole group.
+filter on the whole group in SVG and become an image of the whole group in PDF.
 
 ```json
 {"name":"run_command","arguments":{"command":"appearance.addFill","params":{"ids":[7]}}}
@@ -937,7 +937,10 @@ export or Expand Appearance renders them: `resolution` (ppi, also New Document's
 (off: hard edges), `clippingMask` (the white stays under the art only), `addAround` (points of room around the art)
 and `preserveSpotColors` (stored). They are also the defaults of `object.rasterize`, whose params override them (its
 `clippingMask` puts the image in a clip group with the art's outline). No params reports them; any of them changes them
-in one undo step.
+in one undo step. PDF export renders the raster effects of every kind of object this way (paths, groups, layers, type,
+images, symbol instances, live objects, and those in opacity masks, symbols and pattern tiles): shadows and outer glows
+go in an image under the untouched vector art, other effects replace the object with its image, and a path whose
+fills or strokes carry effects is written as one piece per fill and stroke, so only the affected ones become images.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}

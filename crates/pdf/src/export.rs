@@ -391,9 +391,9 @@ impl Exporter<'_> {
         Some(out)
     }
 
-    /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect.
-    /// Warn when `effects` has a raster effect: the app renders them to images before export
-    /// (`vectorcraft_engine::export_pdf`), so the ones still here (on `what`) can't be written.
+    /// Warn when `effects` (an object's, a fill's or a stroke's) has a visible raster effect: the
+    /// app renders them to images before export (`vectorcraft_engine::export_pdf`), so the ones
+    /// still here (on `what`) can't be written.
     fn warn_raster(&mut self, effects: &[vectorcraft_doc::Effect], what: impl FnOnce() -> String) {
         if effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id)) {
             self.warn(format!("raster effects (shadows, glows, blur, feather) on {} are left out of the PDF", what()));

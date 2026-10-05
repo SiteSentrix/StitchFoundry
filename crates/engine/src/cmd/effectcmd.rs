@@ -13,6 +13,7 @@ use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
 use super::appearance::{ItemTarget, appearance_targets, index_param, item_target, item_target_at};
+use super::rasterfx;
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -287,69 +288,17 @@ fn is_container(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
 }
 
-/// Remove the raster effects of `n` (its own and its fills' and strokes') and, with `members`, of
-/// everything inside it.
-fn strip_raster(n: &mut Node, members: bool) {
-    let keep = |e: &Effect| !effects::is_raster(&e.id);
-    n.appearance.effects.retain(keep);
-    for it in &mut n.appearance.items {
-        it.effects_mut().retain(keep);
-    }
-    if members {
-        for c in n.children_mut().into_iter().flatten() {
-            strip_raster(Arc::make_mut(c), true);
-        }
-    }
-}
-
 /// The raster effects of `n` (its own, its fills' and strokes') as an embedded image rendered at
 /// the document's raster effects resolution, with whether they all paint below it (shadows and
 /// outer glows: the image then holds just them). A group's or layer's image leaves out its
-/// members' raster effects when those are expanded with them. `None` when it has none.
+/// members' raster effects, which are expanded with them. `None` when it has none.
 fn raster_image(d: &mut Document, n: &Node) -> Option<(Node, bool)> {
-    let fx: Vec<effects::RasterFx> = std::iter::once(&n.appearance.effects)
-        .chain(n.appearance.items.iter().map(|i| i.effects()))
-        .flat_map(|e| effects::raster_effects(e))
-        .collect();
+    let fx = rasterfx::raster_fx(n);
     if fx.is_empty() {
         return None;
     }
     let below = fx.iter().all(effects::RasterFx::is_below);
-    // Its transparency stays on the expanded object.
-    let mut whole = n.clone();
-    (whole.opacity, whole.blend, whole.mask) = (1.0, Default::default(), None);
-    if below && is_container(&whole) {
-        for c in whole.children_mut().into_iter().flatten() {
-            strip_raster(Arc::make_mut(c), true);
-        }
-    }
-    let bare = below.then(|| {
-        let mut b = whole.clone();
-        strip_raster(&mut b, false);
-        b
-    });
-    let scale = super::rasterfx::effects_scale(d);
-    let image = super::rasterfx::effect_image(d, &whole, bare.as_ref(), scale)?;
-    Some((image, below))
-}
-
-/// `m` (an expanded object) with `image` of its shadows and outer glows painted below its art: the
-/// image goes first in a group or layer (after a layer's clipping path), anything else is grouped
-/// with it under its id, name and transparency.
-fn put_below(d: &mut Document, m: &mut Node, image: Node) {
-    match &mut m.kind {
-        NodeKind::Group { children, clip: false } => children.insert(0, Arc::new(image)),
-        NodeKind::Layer { children, clip, .. } => children.insert(usize::from(*clip).min(children.len()), Arc::new(image)),
-        _ => {
-            let mut inner = m.clone();
-            inner.id = d.alloc_id();
-            (inner.name, inner.opacity, inner.blend, inner.isolate, inner.mask) = (None, 1.0, Default::default(), false, None);
-            inner.knockout = Default::default();
-            inner.knockout_shape = false;
-            m.appearance = Default::default();
-            m.kind = NodeKind::Group { children: vec![Arc::new(image), Arc::new(inner)], clip: false };
-        }
-    }
+    Some((rasterfx::raster_image(d, n, below, true)?, below))
 }
 
 /// Give the members of `m`, art evaluated from the object of the same id (its pieces share that
@@ -395,23 +344,13 @@ fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush
     }
     let image = raster_image(d, &n);
     let mut v = n.clone();
-    strip_raster(&mut v, false);
+    rasterfx::strip_raster(&mut v, false);
     let mut stroke_art =
         |d: &mut Document, path: &PathData, rule: FillRule, st: &StrokeLayer| super::pathops::outlined_stroke(d, brushes, path, rule, st);
     let expanded = match image {
         // Blur, feather and inner glow change the object itself: it becomes the image (a layer
         // keeps it as its only member).
-        Some((image, false)) => Some(if n.is_layer() {
-            let mut m = v;
-            m.appearance = Default::default();
-            m.set_clips(false);
-            if let Some(ch) = m.children_mut() {
-                *ch = vec![Arc::new(image)];
-            }
-            m
-        } else {
-            Node { kind: image.kind, appearance: Default::default(), ..v }
-        }),
+        Some((image, false)) => Some(rasterfx::replace_with_image(v, image)),
         image => {
             let m = if container {
                 // A group's or layer's own fills and strokes become art among its members.
@@ -435,7 +374,7 @@ fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush
             match image {
                 Some((image, _)) => {
                     let mut m = m.unwrap_or(v);
-                    put_below(d, &mut m, image);
+                    rasterfx::put_below(d, &mut m, image);
                     Some(m)
                 }
                 None => m,

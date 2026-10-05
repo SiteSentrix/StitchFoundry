@@ -158,10 +158,13 @@ fn pdf_settings_summarise_changes_and_warnings() {
     s.execute("select.all", &json!({})).unwrap();
     s.execute("object.group", &json!({})).unwrap();
     let g = s.doc().unwrap().selection.objects[0].0;
+    // Raster effects are written as images: nothing to report.
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [g]})).unwrap();
+    assert_eq!(s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap()["warnings"], json!([]));
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     assert_eq!(s.execute("document.pdfSettings", &json!({})).unwrap()["warnings"], json!([]));
     let full = s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap();
-    assert!(warnings(&full).iter().any(|w| w.contains("group objects")), "{}", full["warnings"]);
+    assert!(warnings(&full).iter().any(|w| w.contains("knockout groups")), "{}", full["warnings"]);
 }
 
 #[test]
