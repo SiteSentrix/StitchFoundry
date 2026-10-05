@@ -354,6 +354,16 @@ impl Tool for TypeTool {
         if s.is_empty() {
             return vec![];
         }
+        // Use Typographer's Quotes (Document Setup): a typed straight quote becomes the document's
+        // opening or closing quote, by the character before it.
+        let setup = &cx.doc.setup;
+        let s = if setup.typographers_quotes && matches!(s.as_str(), "\"" | "'") {
+            let text = self.plain(cx);
+            let mut prev = text.get(..self.caret.min(self.anchor)).and_then(|b| b.chars().next_back());
+            setup.quotes.apply(&s, &mut prev)
+        } else {
+            s
+        };
         self.clicks = (None, 0);
         // Pasting what we copied keeps its formatting.
         let clip: String = self.clipboard.iter().map(|r| r.text.as_str()).collect();

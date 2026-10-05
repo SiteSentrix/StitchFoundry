@@ -147,20 +147,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let doc = st.doc.clone();
     let mask_view = st.shown_mask();
 
-    // Pasteboard, artboard shadows and paper.
+    // Pasteboard, artboard shadows and paper (Document Setup: the transparency grid's look, the
+    // simulated paper colour; a white Background Contents hides the grid).
     painter.rect_filled(rect, 0.0, t.pasteboard);
     if app.ui.view.artboards && !app.ui.view.outline {
+        let setup = &doc.setup;
+        let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
+        let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
         for ab in &doc.artboards {
-            let r = xf.rect_to_screen(ab.rect);
             let q = xf.quad(ab.rect);
             // Hard 2 pt drop shadow, right and bottom (measured: #4d4d4d then #565656 on #606060).
             let shift = |d: f32| q.iter().map(|p| *p + vec2(d, d)).collect::<Vec<_>>();
             painter.add(Shape::convex_polygon(shift(2.0), Color32::from_black_alpha(26), Stroke::NONE));
             painter.add(Shape::convex_polygon(shift(1.0), Color32::from_black_alpha(52), Stroke::NONE));
-            if st.transparency_grid && xf.rot == 0.0 {
-                checker(&painter, r);
-            } else {
-                painter.add(Shape::convex_polygon(q, Color32::WHITE, Stroke::NONE));
+            match &grid {
+                Some((tex, cell)) => checker(&painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
+                None => {
+                    painter.add(Shape::convex_polygon(q, paper, Stroke::NONE));
+                }
             }
         }
     } else if app.ui.view.outline {
@@ -219,6 +223,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 [r, g, b]
             }),
             mask_view,
+            highlight_substitutions: true,
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
@@ -254,6 +259,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let r = xf.rect_to_screen(ab.rect);
         let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
         painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(if i == active_ab { 1.0 } else { 0.6 }, c)));
+        // The bleed (Document Setup) as a red outline around the artboard.
+        if doc.setup.has_bleed() {
+            painter.add(Shape::closed_line(xf.quad(doc.setup.bleed_rect(ab.rect)), Stroke::new(1.0, t.bleed)));
+        }
         if app.session.tool_id() == "artboard" || doc.artboards.len() > 1 {
             painter.text(
                 r.left_top() - vec2(0.0, 4.0),
@@ -534,18 +543,38 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_e
     }
 }
 
-fn checker(p: &egui::Painter, r: egui::Rect) {
-    p.rect_filled(r, 0.0, Color32::WHITE);
-    let s = 8.0;
-    let clip = p.with_clip_rect(r.intersect(p.clip_rect()));
-    let (nx, ny) = (((r.width() / s).ceil() as i32).min(400), ((r.height() / s).ceil() as i32).min(400));
-    for y in 0..ny {
-        for x in 0..nx {
-            if (x + y) % 2 == 1 {
-                clip.rect_filled(egui::Rect::from_min_size(r.min + vec2(x as f32 * s, y as f32 * s), vec2(s, s)), 0.0, Color32::from_gray(204));
-            }
-        }
+/// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), cached per
+/// look, and its cell size in screen points.
+fn checker_texture(ctx: &egui::Context, setup: &vectorcraft_doc::DocSetup) -> (egui::TextureHandle, f32) {
+    let colors = setup.grid_colors.map(|c| crate::panels::c32(&c));
+    let id = egui::Id::new("transparency-grid-tile");
+    let cached = ctx.data(|d| d.get_temp::<([Color32; 2], egui::TextureHandle)>(id)).filter(|(c, _)| *c == colors);
+    let tex = cached.map(|(_, t)| t).unwrap_or_else(|| {
+        let [a, b] = colors;
+        let img = egui::ColorImage::new([2, 2], vec![a, b, b, a]);
+        let opts = egui::TextureOptions { wrap_mode: egui::TextureWrapMode::Repeat, ..egui::TextureOptions::NEAREST };
+        let t = ctx.load_texture(TRANSPARENCY_GRID, img, opts);
+        ctx.data_mut(|d| d.insert_temp(id, (colors, t.clone())));
+        t
+    });
+    (tex, setup.grid_size.cell())
+}
+
+/// Name of the transparency grid's texture.
+pub(crate) const TRANSPARENCY_GRID: &str = "transparency grid";
+
+/// The transparency grid over the artboard `ab` (screen corners `quad`): one textured quad whose
+/// cells stay `cell` screen points at every zoom and turn with a rotated view.
+fn checker(p: &egui::Painter, quad: &[Pos2], ab: Rect, zoom: f64, tex: egui::TextureId, cell: f32) {
+    let mut mesh = egui::Mesh::with_texture(tex);
+    // Two cells per texture repeat.
+    let per = (2.0 * cell as f64 / zoom).max(1e-9);
+    let (u, v) = ((ab.width() / per) as f32, (ab.height() / per) as f32);
+    for (pos, uv) in quad.iter().zip([pos2(0.0, 0.0), pos2(u, 0.0), pos2(u, v), pos2(0.0, v)]) {
+        mesh.vertices.push(egui::epaint::Vertex { pos: *pos, uv, color: Color32::WHITE });
     }
+    mesh.indices.extend([0, 1, 2, 0, 2, 3]);
+    p.add(Shape::mesh(mesh));
 }
 
 fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32) {

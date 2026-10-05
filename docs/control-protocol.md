@@ -204,3 +204,11 @@ length preferences in `preferences`) show in the General unit (the active docume
 document). Through `ui.dialog.set` a number is in points and a string may carry its unit (`"10 mm"`; a bare number in a
 string is points). The `preferences` dialog's `unitsGeneral` starts as the active document's units, and OK sets them.
 `newDocument` has `units` (a unit label; print presets start in `unitsGeneral`, screen presets in Pixels).
+
+Document Setup: File → Document Setup… (`file.documentSetup`, Cmd+Alt+P) opens the `documentSetup` dialog. Its fields
+are what `document.setup` reports (`units`, `bleed` [top, bottom, left, right] in pt, `outlineImages`,
+`highlightSubstitutedFonts`, `highlightSubstitutedGlyphs`, `gridSize`, `gridColors`, `simulatePaper`, `flattenerPreset`,
+`discardWhiteOverprint`, `language`, `quotes`, `typographersQuotes`, `superscript`, `subscript`, `smallCapsSize`,
+`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency` or `Type`) and `bleedLinked`.
+`ui.dialog.confirm` runs `document.setup` with them as one undo step; a bad value answers with an error and the dialog
+stays open.

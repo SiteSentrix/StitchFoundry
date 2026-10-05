@@ -33,6 +33,8 @@ pub mod widgets;
 pub mod workspaces;
 
 #[cfg(test)]
+mod tests_docsetup;
+#[cfg(test)]
 mod tests_labels;
 #[cfg(test)]
 mod tests_overprint;

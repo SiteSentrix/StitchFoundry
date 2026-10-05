@@ -779,3 +779,16 @@ a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `C
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
 ```
+
+## Document Setup
+
+`document.setup` with no params reports the document setup: units, the bleed ([top, bottom, left, right] in pt, drawn
+as a red outline around each artboard), the transparency grid (size and two colours; the first is also the simulated
+paper colour), the flattener preset and Discard White Overprint (Overprint Preview keeps white overprints visible while
+it is on), the type options (language and its quotes, Use Typographer's Quotes for typed quotes, superscript, subscript
+and small caps proportions, SVG text export) and the background contents (white: raster exports are white behind the
+art). Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
+
+```json
+{"name":"run_command","arguments":{"command":"document.setup","params":{"gridColors":"Blue","gridSize":"large","language":"German","bleed":9}}}
+```

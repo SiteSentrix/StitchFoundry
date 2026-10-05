@@ -464,11 +464,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "file.exportForScreens" => app.run("document.exportForScreens", p.clone()),
         "file.export.png" => io::export(app, Some("png"), s("path"), p).map(|p| json!({"path": p})),
-        "file.documentSetup" => {
-            let units = app.session.active().map(|d| d.doc.units.label()).unwrap_or("Points");
-            app.ui.dialog = Some(crate::state::Dialog::new("documentSetup", json!({"units": units})));
-            Ok(Value::Null)
-        }
+        "file.documentSetup" => crate::dialogs::open_document_setup(app),
         "edit.preferences" => {
             crate::prefs_dialog::open(app, s("category").as_deref());
             Ok(Value::Null)

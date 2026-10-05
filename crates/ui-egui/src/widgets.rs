@@ -1197,3 +1197,32 @@ pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: O
     });
     out
 }
+
+/// A row of text tabs, the current one underlined in the accent colour (New Document's
+/// categories, Document Setup's sections). Returns the clicked tab's index.
+pub fn tab_bar(ui: &mut Ui, tabs: &[&str], current: usize) -> Option<usize> {
+    let t = Tokens::get(ui.ctx());
+    let mut clicked = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 18.0;
+        for (i, tab) in tabs.iter().enumerate() {
+            let sel = i == current;
+            let font = if sel { theme::semibold(13.0) } else { egui::FontId::proportional(13.0) };
+            let galley = ui.painter().layout_no_wrap(tab.to_string(), font, t.text);
+            let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x, 30.0), Sense::click());
+            let color = if sel || resp.hovered() { t.text_strong } else { t.text_dim };
+            ui.painter().galley(pos2(rect.left(), rect.center().y - galley.size().y / 2.0 - 2.0), galley, color);
+            if sel {
+                ui.painter().rect_filled(
+                    Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom()),
+                    CornerRadius::same(1),
+                    t.accent,
+                );
+            }
+            if resp.clicked() {
+                clicked = Some(i);
+            }
+        }
+    });
+    clicked
+}

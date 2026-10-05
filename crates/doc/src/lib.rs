@@ -16,6 +16,7 @@ pub mod pattern;
 mod pixels;
 mod reach;
 pub mod selection;
+pub mod setup;
 pub mod style_libs;
 pub mod swatches;
 pub mod text;
@@ -50,10 +51,11 @@ pub use node::{ImageMap, ObjectAttributes};
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use selection::{AnchorRef, Selection};
+pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use style_libs::StyleLibrary;
 pub use text::{
-    AreaOptions, CharStyle, FirstBaseline, Justify, ParaStyle, PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
-    WrapShape,
+    AreaOptions, CharPosition, CharStyle, FirstBaseline, Justify, ParaStyle, PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind, TextObject,
+    TextRun, TextStyleDef, TextWrap, WrapShape,
 };
 pub use vectorcraft_color as color;
 pub use vectorcraft_geom as geom;
@@ -467,6 +469,9 @@ pub struct Document {
     /// ([`Document::linked_color`]).
     #[serde(default = "yes", skip_serializing_if = "skip::is_true")]
     pub spot_use_lab: bool,
+    /// File → Document Setup (bleed, transparency grid, paper, type options).
+    #[serde(default, skip_serializing_if = "skip::is_default")]
+    pub setup: DocSetup,
 }
 
 fn ppi72() -> f64 {
@@ -522,6 +527,7 @@ impl Document {
             page_isolate: false,
             page_knockout: false,
             spot_use_lab: true,
+            setup: DocSetup::default(),
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
@@ -917,6 +923,43 @@ mod tests {
         assert_ne!(copy.id, g);
         let ids: Vec<NodeId> = copy.children().unwrap().iter().map(|c| c.id).collect();
         assert!(!ids.contains(&a) && !ids.contains(&b));
+    }
+
+    #[test]
+    fn setup_round_trips_and_old_files_load() {
+        let (mut d, _, _) = doc_with_rects();
+        // A document without a setup writes no `setup` key (old readers and files stay unchanged).
+        assert!(!serde_json::to_string(&d).unwrap().contains("\"setup\""));
+        d.setup.bleed = [9.0, 9.0, 0.0, 18.0];
+        d.setup.grid_size = GridSize::Large;
+        d.setup.typographers_quotes = false;
+        d.setup.quotes = setup::language_quotes("German").unwrap();
+        d.setup.flattener_preset = Some("High Resolution".into());
+        d.setup.background = Background::White;
+        d.setup.export_text = ExportText::Appearance;
+        let back: Document = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(back.setup, d.setup);
+        // Files written before Document Setup existed load with the defaults.
+        let mut v = serde_json::to_value(&d).unwrap();
+        v.as_object_mut().unwrap().remove("setup");
+        let old: Document = serde_json::from_value(v).unwrap();
+        assert_eq!(old.setup, DocSetup::default());
+    }
+
+    #[test]
+    fn char_position_round_trips() {
+        let st = CharStyle {
+            position: CharPosition::Subscript(ScriptMetrics { size: 50.0, position: 20.0 }),
+            small_caps: Some(75.0),
+            ..CharStyle::default()
+        };
+        let v = serde_json::to_value(&st).unwrap();
+        assert_eq!(v["position"], serde_json::json!({"kind": "subscript", "size": 50.0, "position": 20.0}));
+        assert_eq!(serde_json::from_value::<CharStyle>(v).unwrap(), st);
+        let plain = serde_json::to_value(CharStyle::default()).unwrap();
+        assert!(plain.get("position").is_none() && plain.get("small_caps").is_none());
+        let (scale, shift) = CharPosition::Subscript(ScriptMetrics::DEFAULT).scale_shift(10.0);
+        assert!((scale - 0.583).abs() < 1e-9 && (shift + 3.33).abs() < 1e-9);
     }
 
     #[test]

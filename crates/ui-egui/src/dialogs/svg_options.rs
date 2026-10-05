@@ -72,6 +72,10 @@ fn first_use() -> Map<String, Value> {
 /// the document was last saved with). `path`: where a save goes.
 pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
     let mut fields = first_use();
+    // Fonts start from Document Setup → Type → Export.
+    if app.session.active().is_some_and(|st| st.doc.setup.export_text == vectorcraft_doc::ExportText::Appearance) {
+        fields.insert("outlineText".into(), json!(true));
+    }
     let saved = app.session.active().map(|st| st.save_options.clone()).filter(|_| mode != Mode::Export);
     for last in [&app.ui.svg_options].into_iter().chain(saved.as_ref()) {
         if let Some(o) = last.as_object() {

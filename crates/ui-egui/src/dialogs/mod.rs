@@ -47,6 +47,7 @@ pub mod width_point;
 use serde_json::{Value, json};
 
 pub use color_picker::open as open_color_picker;
+pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub use new_document::open as open_new_document;
 pub use save_pdf::open as open_save_pdf;

@@ -176,7 +176,9 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             let scale = o.scale.unwrap_or(1.0).clamp(0.01, 64.0);
             check_format_size(f, region.width() * scale, region.height() * scale)?;
             vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
-            let img = vectorcraft_render::Renderer::new().render_region(doc, region, scale, f.id == "jpg");
+            // JPEG has no alpha; New Document → Background Contents: White fills the artboard too.
+            let white = f.id == "jpg" || doc.setup.background == vectorcraft_doc::Background::White;
+            let img = vectorcraft_render::Renderer::new().render_region(doc, region, scale, white);
             match f.id {
                 "png" => img.to_png(),
                 "webp" => img.to_webp(),

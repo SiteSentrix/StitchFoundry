@@ -114,9 +114,10 @@ pub(crate) fn shape_range(
         }
         let Some(primary) = db.face(&st.font_family, &st.font_style) else { continue };
         let pmap = primary.skrifa().map(|f| f.charmap());
-        // Split into segments by font coverage.
-        let mut seg_start = a;
-        let mut seg_face = primary.clone();
+        // Synthesized Small Caps shape lowercase letters separately (as smaller capitals).
+        let small_caps = st.small_caps.is_some() && !st.all_caps;
+        // Split into segments by font coverage (and case, for Small Caps).
+        let mut seg = Segment { range: a..a, run: ri, st, face: primary.clone(), small: false };
         let mut cache: Vec<(char, Arc<FontFace>)> = Vec::new();
         for (i, c) in text[a..b].char_indices() {
             let i = a + i;
@@ -130,47 +131,67 @@ pub(crate) fn shape_range(
                 cache.push((c, f.clone()));
                 f
             };
+            let small = small_caps && c.is_lowercase();
             // Combining marks stay with their base.
-            if face.id() != seg_face.id() && !is_mark(c) {
-                if i > seg_start {
-                    shape_segment(text, seg_start..i, ri, st, &seg_face, feats, out);
+            if (face.id() != seg.face.id() || small != seg.small) && !is_mark(c) {
+                if i > seg.range.start {
+                    seg.range.end = i;
+                    shape_segment(text, &seg, feats, out);
                 }
-                seg_start = i;
-                seg_face = face;
+                seg = Segment { range: i..i, face, small, ..seg };
             }
         }
-        if b > seg_start {
-            shape_segment(text, seg_start..b, ri, st, &seg_face, feats, out);
+        if b > seg.range.start {
+            seg.range.end = b;
+            shape_segment(text, &seg, feats, out);
         }
     }
+}
+
+/// A piece of one run shaped in one go: one face and, for Small Caps, one case.
+struct Segment<'a> {
+    range: Range<usize>,
+    run: usize,
+    st: &'a CharStyle,
+    face: Arc<FontFace>,
+    /// Lowercase letters drawn as synthesized small capitals.
+    small: bool,
 }
 
 fn is_mark(c: char) -> bool {
     matches!(c as u32, 0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F | 0x200D | 0xFE00..=0xFE0F)
 }
 
-fn shape_segment(text: &str, range: Range<usize>, run: usize, st: &CharStyle, face: &Arc<FontFace>, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
-    let seg = &text[range.clone()];
-    let size = st.size.max(0.0);
+fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
+    let Segment { range, run, st, face, small } = seg;
+    let (range, run, small) = (range.clone(), *run, *small);
+    let text_seg = &text[range.clone()];
+    let full = st.size.max(0.0);
+    // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
+    let (pos_scale, pos_shift) = st.position.scale_shift(full);
+    let small_scale = if small { st.small_caps.unwrap_or(100.0) / 100.0 } else { 1.0 };
+    let size = full * pos_scale * small_scale;
     let k = size / face.upem;
+    let km = full / face.upem;
     let hs = st.h_scale / 100.0;
     let vs = st.v_scale / 100.0;
     let tracking = st.tracking / 1000.0 * size;
     let manual_kern = st.kerning.map(|v| v / 1000.0 * size).unwrap_or(0.0);
-    let ascent = face.ascent * k * vs;
-    let descent = face.descent * k * vs;
+    let ascent = face.ascent * km * vs;
+    let descent = face.descent * km * vs;
     let leading = st.effective_leading();
-    let cap = face.cap_height * k * vs;
-    let xh = face.x_height * k * vs;
+    let cap = face.cap_height * km * vs;
+    let xh = face.x_height * km * vs;
+    let upper = st.all_caps || small;
     let first_char = |byte: usize| text[byte..].chars().next().unwrap_or(' ');
 
-    let mut raw: Vec<(u32, u32, i32, i32, i32)> = Vec::with_capacity(seg.len()); // gid, cluster, xadv, xoff, yoff
+    let mut raw: Vec<(u32, u32, i32, i32, i32)> = Vec::with_capacity(text_seg.len()); // gid, cluster, xadv, xoff, yoff
     let shaped = face.hb().map(|hb| {
         let shaper = face.shaper.shaper(&hb).build();
         let mut buf = UnicodeBuffer::new();
-        for (i, c) in seg.char_indices() {
+        for (i, c) in text_seg.char_indices() {
             let cl = (range.start + i) as u32;
-            if st.all_caps {
+            if upper {
                 for u in c.to_uppercase() {
                     buf.add(u, cl);
                 }
@@ -191,9 +212,9 @@ fn shape_segment(text: &str, range: Range<usize>, run: usize, st: &CharStyle, fa
         if let Some(f) = face.skrifa() {
             let cmap = f.charmap();
             let gm = f.glyph_metrics(Size::unscaled(), LocationRef::default());
-            for (i, c) in seg.char_indices() {
+            for (i, c) in text_seg.char_indices() {
                 let cl = (range.start + i) as u32;
-                let chars: Vec<char> = if st.all_caps { c.to_uppercase().collect() } else { vec![c] };
+                let chars: Vec<char> = if upper { c.to_uppercase().collect() } else { vec![c] };
                 for u in chars {
                     let g = cmap.map(u).unwrap_or_default();
                     let adv = gm.advance_width(g).unwrap_or(face.upem as f32 * 0.5);
@@ -226,7 +247,7 @@ fn shape_segment(text: &str, range: Range<usize>, run: usize, st: &CharStyle, fa
             dy: -(yo as f64) * k * vs,
             sx: k * hs,
             sy: k * vs,
-            bshift: st.baseline_shift,
+            bshift: st.baseline_shift + pos_shift,
             rotation: st.rotation,
             ascent,
             descent,

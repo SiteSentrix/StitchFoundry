@@ -87,6 +87,8 @@ pub struct RenderOptions {
     /// View Opacity Mask (Alt-click the mask thumbnail): instead of the artwork, show this object's
     /// opacity mask alone as its coverage in greyscale (white = opaque, black = transparent).
     pub mask_view: Option<NodeId>,
+    /// Screen view: highlight substituted fonts and glyphs as Document Setup asks.
+    pub highlight_substitutions: bool,
 }
 
 impl Default for RenderOptions {
@@ -103,6 +105,7 @@ impl Default for RenderOptions {
             skip_templates: false,
             tile_edge: vectorcraft_doc::LAYER_COLORS[0].1,
             mask_view: None,
+            highlight_substitutions: false,
         }
     }
 }
@@ -1102,6 +1105,18 @@ impl Renderer {
         if let Some(all) = &all {
             self.draw_text_items(ctx, f, n, below, all, tb);
         }
+        if f.opts.highlight_substitutions {
+            let setup = &f.doc.setup;
+            for (on, path) in [(setup.highlight_substituted_fonts, &g.substituted_fonts), (setup.highlight_substituted_glyphs, &g.substituted_glyphs)]
+            {
+                if on && !path.elements().is_empty() {
+                    ctx.set_transform(xf);
+                    ctx.set_fill_rule(peniko::Fill::NonZero);
+                    ctx.set_paint(SUBSTITUTED);
+                    ctx.fill_path(path);
+                }
+            }
+        }
         for (i, run) in t.runs.iter().enumerate() {
             let Some(path) = g.runs.get(i) else { continue };
             if path.elements().is_empty() {
@@ -1159,30 +1174,53 @@ impl Renderer {
 
     fn draw_image(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject) {
         let rect = Rect::new(0.0, 0.0, im.width as f64, im.height as f64);
-        if f.opts.outline {
+        // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
+        // Mode its pixels in greyscale under the frame.
+        let outline = f.opts.outline;
+        let pixels = if outline && !f.doc.setup.outline_images { None } else { self.image_pixmap(f.doc, &im.key, outline) };
+        if let Some(pm) = pixels {
+            let pm = if outline { pm } else { self.ink_image(&im.key, &pm, f.ink) };
+            let sx = im.width as f64 / pm.width().max(1) as f64;
+            let sy = im.height as f64 / pm.height().max(1) as f64;
+            ctx.set_transform(f.view * im.xf);
+            ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler: peniko::ImageSampler::default() });
+            ctx.set_paint_transform(Affine::scale_non_uniform(sx, sy));
+            ctx.fill_rect(&rect);
+            ctx.reset_paint_transform();
+        }
+        if outline {
             let mut p = rect.to_path(0.1);
             p.apply_affine(im.xf);
             self.hairline(ctx, f, &p, [0, 0, 0, 255]);
-            return;
         }
-        let pm = match self.images.get(&im.key) {
+    }
+
+    /// The decoded pixels of image blob `key` (cached), or a greyscale copy of them.
+    fn image_pixmap(&mut self, doc: &Document, key: &str, grey: bool) -> Option<Arc<Pixmap>> {
+        let colour = match self.images.get(key) {
             Some(p) => p.clone(),
             None => {
-                let Some(blob) = f.doc.images.get(&im.key) else { return };
-                let Some(pm) = paint::decode_pixmap(&blob.bytes) else { return };
-                let pm = Arc::new(pm);
-                self.images.insert(im.key.clone(), pm.clone());
+                let pm = Arc::new(paint::decode_pixmap(&doc.images.get(key)?.bytes)?);
+                self.images.insert(key.to_string(), pm.clone());
                 pm
             }
         };
-        let pm = self.ink_image(&im.key, &pm, f.ink);
-        let sx = im.width as f64 / pm.width().max(1) as f64;
-        let sy = im.height as f64 / pm.height().max(1) as f64;
-        ctx.set_transform(f.view * im.xf);
-        ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler: peniko::ImageSampler::default() });
-        ctx.set_paint_transform(Affine::scale_non_uniform(sx, sy));
-        ctx.fill_rect(&rect);
-        ctx.reset_paint_transform();
+        if !grey {
+            return Some(colour);
+        }
+        let grey_key = format!("{key}\u{0}grey");
+        if let Some(p) = self.images.get(&grey_key) {
+            return Some(p.clone());
+        }
+        let mut pm = (*colour).clone();
+        for px in pm.data_mut() {
+            // The luma of premultiplied components is the premultiplied luma.
+            let l = (0.2126 * px.r as f32 + 0.7152 * px.g as f32 + 0.0722 * px.b as f32 + 0.5) as u8;
+            (px.r, px.g, px.b) = (l, l, l);
+        }
+        let pm = Arc::new(pm);
+        self.images.insert(grey_key, pm.clone());
+        Some(pm)
     }
 }
 
@@ -1261,20 +1299,44 @@ struct TextGeom {
     runs: Vec<BezPath>,
     all: BezPath,
     bounds: Rect,
+    /// The boxes of characters whose font is missing (drawn in a substitute), and of glyphs the
+    /// font lacks (drawn from a fallback font): Document Setup's substitution highlights.
+    substituted_fonts: BezPath,
+    substituted_glyphs: BezPath,
 }
 
 fn text_geom(t: &TextObject) -> TextGeom {
-    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let db = vectorcraft_text::FontDb::global();
+    let layout = vectorcraft_text::layout(db, t);
     let mut runs = vec![BezPath::new(); t.runs.len()];
     let mut all = BezPath::new();
+    // Per run: is its family missing, and the face its glyphs should come from.
+    let faces: Vec<(bool, Option<u32>)> =
+        t.runs.iter().map(|r| (!db.has_family(&r.style.font_family), db.face(&r.style.font_family, &r.style.font_style).map(|f| f.id()))).collect();
+    let (mut substituted_fonts, mut substituted_glyphs) = (BezPath::new(), BezPath::new());
     for g in &layout.glyphs {
         if let Some(r) = runs.get_mut(g.run) {
             r.extend(g.outline.iter());
         }
         all.extend(g.outline.iter());
+        let Some(&(missing, face)) = faces.get(g.run) else { continue };
+        let target = if missing {
+            &mut substituted_fonts
+        } else if face.is_some_and(|f| f != g.font_id) {
+            &mut substituted_glyphs
+        } else {
+            continue;
+        };
+        let Some(line) = layout.lines.get(g.line) else { continue };
+        let mut cell = Rect::new(g.origin.x, g.origin.y - line.ascent, g.origin.x + g.advance, g.origin.y + line.descent).to_path(0.1);
+        cell.apply_affine(Affine::rotate_about(g.angle, g.origin));
+        target.extend(cell.iter());
     }
-    TextGeom { runs, all, bounds: layout.bounds }
+    TextGeom { runs, all, bounds: layout.bounds, substituted_fonts, substituted_glyphs }
 }
+
+/// Document Setup's highlight behind substituted fonts and glyphs (screen only).
+const SUBSTITUTED: peniko::Color = peniko::Color::from_rgba8(255, 120, 190, 110);
 
 fn rects_overlap(a: Rect, b: Rect) -> bool {
     a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1
@@ -1340,6 +1402,8 @@ mod tests_isolation;
 mod tests_knockout;
 #[cfg(test)]
 mod tests_objectfx;
+#[cfg(test)]
+mod tests_setup;
 #[cfg(test)]
 mod tests_strokegradient;
 #[cfg(test)]
