@@ -11,16 +11,19 @@
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
 //!   [`Document`]: one artboard and one layer per page, paths with fill/stroke, clip groups,
 //!   transparency groups, axial/radial shadings → gradients, images (JPEG passthrough, others
-//!   re-encoded as PNG) and text as glyph outlines.
+//!   re-encoded as PNG) and text as glyph outlines. [`ImportOptions`] pick the pages, the box each
+//!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
 #![forbid(unsafe_code)]
 
 mod export;
 mod import;
 mod lab_spot;
+mod pages;
 mod settings;
 
 pub use export::{export, export_with_report};
 pub use import::{import, import_with_report};
+pub use pages::{PageInfo, PdfInfo, info};
 pub use settings::*;
 
 use vectorcraft_doc::Document;
@@ -49,16 +52,37 @@ impl PdfOptions {
 /// Import options.
 #[derive(Clone, Debug)]
 pub struct ImportOptions {
-    /// Import at most this many pages (from the first); `None` = all pages.
+    /// Import at most this many pages (of those picked); `None` = all of them.
     pub max_pages: Option<usize>,
     /// Horizontal gap in points between the artboards created for consecutive pages.
     pub artboard_gap: f64,
+    /// 0-based pages to import, in this order; `None` = every page.
+    pub pages: Option<Vec<usize>>,
+    /// The page box each artboard gets.
+    pub crop: CropTo,
+    /// The (user) password of an encrypted PDF.
+    pub password: Option<String>,
 }
 
 impl Default for ImportOptions {
     fn default() -> Self {
-        Self { max_pages: None, artboard_gap: 36.0 }
+        Self { max_pages: None, artboard_gap: 36.0, pages: None, crop: CropTo::default(), password: None }
     }
+}
+
+settings::choice! {
+    /// The page box an imported or placed page is cropped to: its artboard (or placed frame).
+    CropTo {
+        /// The bounds of the page's art.
+        Bounding = "bounding", "Bounding Box";
+        Art = "art", "Art";
+        /// The visible page area (what viewers show).
+        Crop = "crop", "Crop";
+        Trim = "trim", "Trim";
+        Bleed = "bleed", "Bleed";
+        /// The whole sheet.
+        Media = "media", "Media";
+    } default Crop
 }
 
 /// Result of an import with non-fatal warnings (unsupported features, skipped content).
@@ -91,6 +115,12 @@ pub enum PdfError {
     NoPages,
     #[error("invalid PDF setting: {0}")]
     BadSetting(String),
+    #[error("the PDF is password-protected: give its password")]
+    NeedsPassword,
+    #[error("the PDF password is wrong")]
+    WrongPassword,
+    #[error("page {0} does not exist (the PDF has {1})")]
+    BadPage(usize, usize),
 }
 
 #[cfg(test)]
@@ -107,6 +137,8 @@ mod tests_dashalign;
 mod tests_focal;
 #[cfg(test)]
 mod tests_fx;
+#[cfg(test)]
+mod tests_import_options;
 #[cfg(test)]
 mod tests_settings;
 #[cfg(test)]

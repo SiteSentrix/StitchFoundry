@@ -10,7 +10,6 @@ use hayro_interpret::{
     ClipPath, Context, Device, GlyphDrawMode, Image, ImageData, InterpreterCache, InterpreterSettings, InterpreterWarning, LumaData, PathDrawMode,
     SoftMask, StrokeProps, interpret_page,
 };
-use hayro_syntax::Pdf;
 use hayro_syntax::object::Name;
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
@@ -20,7 +19,7 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::{ImportOptions, ImportReport, PdfError};
+use crate::{CropTo, ImportOptions, ImportReport, PdfError};
 
 /// Import a PDF (or PDF-compatible `.ai`) with default options.
 pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
@@ -29,12 +28,9 @@ pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
 
 /// Import a PDF, returning the document plus warnings about content that was approximated or skipped.
 pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, PdfError> {
-    let pdf = Pdf::new(bytes.to_vec()).map_err(|e| PdfError::Parse(format!("{e:?}")))?;
+    let pdf = crate::pages::open(bytes, opts.password.as_deref())?;
     let pages = pdf.pages();
-    let n = opts.max_pages.map_or(pages.len(), |m| m.min(pages.len()));
-    if n == 0 {
-        return Err(PdfError::NoPages);
-    }
+    let picked = crate::pages::picked(opts, pages.len())?;
 
     let sink: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink2 = sink.clone();
@@ -61,11 +57,25 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     let mut b = Builder::new(doc.peek_next_id());
     let cache = InterpreterCache::new();
     let mut x = 0.0;
-    for (i, page) in pages.iter().take(n).enumerate() {
-        let (w, h) = page.render_dimensions();
-        let (w, h) = (w as f64, h as f64);
-        let ab = Rect::new(x, 0.0, x + w, h);
-        x += w + opts.artboard_gap;
+    for (i, &number) in picked.iter().enumerate() {
+        let Some(page) = pages.get(number) else { continue };
+        // The chosen box sits at (x, 0); the page draws round it.
+        let (init, frame) = crate::pages::frame(page, opts.crop);
+        let mut ab = Rect::new(x, 0.0, x + frame.width(), frame.height());
+        let xf = Affine::translate((x - frame.x0, -frame.y0)) * init;
+        let mut ctx = Context::new(xf, ab, &cache, pdf.xref(), settings.clone());
+        b.page = ab;
+        b.begin_page();
+        interpret_page(page, &mut ctx, &mut b);
+        let children = b.end_page();
+        let mut right = ab.x1;
+        if opts.crop == CropTo::Bounding
+            && let Some(art) = vectorcraft_doc::live::nodes_bounds(&children)
+        {
+            right = right.max(art.x1);
+            ab = art;
+        }
+        x = right + opts.artboard_gap;
         doc.artboards.push(Artboard {
             id: i as u32 + 1,
             name: format!("Artboard {}", i + 1),
@@ -73,13 +83,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             show_center_mark: false,
             show_cross_hairs: false,
         });
-        let init = Affine::translate((ab.x0, ab.y0)) * Affine::new(page.initial_transform(true).as_coeffs());
-        let mut ctx = Context::new(init, ab, &cache, pdf.xref(), settings.clone());
-        b.page = ab;
-        b.begin_page();
-        interpret_page(page, &mut ctx, &mut b);
-        let children = b.end_page();
-        let mut layer = Node::layer(b.id(), &format!("Page {}", i + 1), LayerColor::Preset((i % 27) as u8));
+        let mut layer = Node::layer(b.id(), &format!("Page {}", number + 1), LayerColor::Preset((i % 27) as u8));
         if let NodeKind::Layer { children: c, .. } = &mut layer.kind {
             *c = children;
         }
@@ -353,7 +357,8 @@ impl Builder {
                 self.warn("an image could not be decoded and was skipped");
                 return;
             };
-            let k = format!("pdf-image-{}", self.image_keys.len() + 1);
+            // Content keys: placing this page into another document merges its images safely.
+            let k = blob.content_key();
             self.images.insert(k.clone(), blob);
             self.image_keys.insert(key, (k.clone(), w, h));
             (k, w, h)

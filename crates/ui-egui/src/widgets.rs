@@ -1247,3 +1247,19 @@ pub fn orientation_button(ui: &mut Ui, landscape: bool, selected: bool, tip: &st
     ui.painter().add(egui::Shape::line(corner.to_vec(), Stroke::new(1.2, if selected { t.panel } else { color })));
     resp.on_hover_text(tip).clicked()
 }
+
+/// `region` of `doc` rendered on white, its longest side `px` pixels, as a texture named `name`
+/// (artboard and page thumbnails).
+pub fn region_texture(
+    ctx: &egui::Context,
+    renderer: &mut vectorcraft_render::Renderer,
+    name: &str,
+    doc: &vectorcraft_doc::Document,
+    region: vectorcraft_geom::Rect,
+    px: f64,
+) -> egui::TextureHandle {
+    let scale = px / region.width().max(region.height()).max(1.0);
+    let img = renderer.render_region(doc, region, scale, true);
+    let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+    ctx.load_texture(name, color, egui::TextureOptions::LINEAR)
+}

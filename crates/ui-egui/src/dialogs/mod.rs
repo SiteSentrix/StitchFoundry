@@ -25,6 +25,7 @@ pub mod flattener_presets;
 mod form;
 mod gradient_stop;
 pub mod graphic_style_options;
+pub mod import_pdf;
 pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
@@ -186,6 +187,7 @@ registry! {
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions"] => png_options::SPEC,
     ExportAs: ["exportAs"] => export_as::SPEC,
+    ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -216,7 +218,10 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     about::show(app, ctx);
-    let Some(mut d) = app.ui.dialog.clone() else { return };
+    let Some(mut d) = app.ui.dialog.clone() else {
+        app.ui.dialog_file = None;
+        return;
+    };
     let spec = spec(&d.kind);
     if let Some(window) = spec.window {
         return window(app, ctx);
@@ -286,3 +291,5 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 mod tests;
 #[cfg(test)]
 mod tests_export;
+#[cfg(test)]
+mod tests_import_pdf;

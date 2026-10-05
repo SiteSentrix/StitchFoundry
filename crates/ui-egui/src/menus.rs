@@ -62,7 +62,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.place",
         "Place…",
         "Cmd+Shift+P",
-        "{path? | paths?} no file: pick files, then the Place dialog (Link, Template, Replace); paths: that dialog for them; path (or name+dataBase64, …file.place params): file.place, centred in the view",
+        "{path? | paths?} no file: pick files, then the Place dialog (Link, Template, Replace); paths: that dialog for them; path (or name+dataBase64, …file.place params): file.place, centred in the view (a PDF with several pages or a password and no page opens the Place PDF dialog first)",
     ),
     ("file.openRecent1", "Open Recent File 1", "", "{}"),
     ("file.openRecent2", "Open Recent File 2", "", "{}"),

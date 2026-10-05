@@ -328,6 +328,58 @@ proptest! {
     }
 }
 
+/// A page box with junk in it: inverted, empty, huge, NaN or outside the media box.
+fn arb_box() -> impl Strategy<Value = Option<[f64; 4]>> {
+    prop_oneof![
+        Just(None),
+        Just(Some([10.0, 10.0, 90.0, 90.0])),
+        Just(Some([90.0, 90.0, 10.0, 10.0])),
+        Just(Some([0.0, 0.0, 0.0, 0.0])),
+        Just(Some([-1e308, -1e308, 1e308, 1e308])),
+        Just(Some([f64::NAN, 0.0, 50.0, f64::INFINITY])),
+        Just(Some([200.0, 200.0, 300.0, 300.0])),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Every page box, rotation, page pick, password and Crop To, through `document.open` and
+    /// `document.pdfInfo` (with a thumbnail).
+    #[test]
+    fn pdf_import_options_never_panic(
+        boxes in prop::collection::vec(arb_box(), 5),
+        rotate in prop::sample::select(vec![0, 90, 180, 270, 45, -90, 1_000_000_000]),
+        encrypt in any::<bool>(),
+        password in prop::sample::select(vec!["", "pw", "wrong", "\u{0}\u{ff}"]),
+        pages in prop::sample::select(vec!["1", "2", "1-2", "2-1", "0", "-", "1-", "all", "1,1,2", "99999999999999999999"]),
+        crop in prop::sample::select(vec!["bounding", "art", "crop", "trim", "bleed", "media", "nope"]),
+    ) {
+        use vectorcraft_testkit::pdf::{PdfPage, pdf};
+        let page = PdfPage {
+            media: boxes[0].unwrap_or([0.0, 0.0, 100.0, 100.0]),
+            crop: boxes[1],
+            bleed: boxes[2],
+            trim: boxes[3],
+            art: boxes[4],
+            rotate,
+            ..PdfPage::new(0.0, 0.0, "0 0 1 rg 20 20 50 50 re f")
+        };
+        let bytes = pdf(&[page.clone(), page], encrypt.then_some("pw"));
+        let b64 = vectorcraft_format::base64_encode(&bytes);
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let p = json!({"name": "x.pdf", "dataBase64": b64, "pages": pages, "cropTo": crop, "password": password, "thumbnail": 1, "thumbnailSize": 64});
+            let _ = s.execute("document.pdfInfo", &p);
+            if s.execute("document.open", &p).is_ok() {
+                let d = (*s.doc().unwrap().doc).clone();
+                survive("pdf options", || Some(d)).unwrap();
+            }
+        });
+        r.map_err(|msg| TestCaseError::fail(format!("{pages} {crop} {rotate}: panicked: {msg}")))?;
+    }
+}
+
 // ---------- library files ----------
 
 /// The `data` of a library file `cmd` writes for the rich document.

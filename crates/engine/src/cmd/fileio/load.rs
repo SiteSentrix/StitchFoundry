@@ -8,6 +8,7 @@ use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
 
 use super::super::*;
+use super::pdfimport::LoadOptions;
 use super::{Format, format, format_for_name, read_file};
 use crate::EngineError;
 
@@ -30,7 +31,7 @@ pub struct RasterImage {
     pub ppi: Option<(f64, f64)>,
 }
 
-fn err(e: impl std::fmt::Display) -> EngineError {
+pub(super) fn err(e: impl std::fmt::Display) -> EngineError {
     EngineError::Other(e.to_string())
 }
 
@@ -74,6 +75,11 @@ pub const EDITING_DAMAGED: &str = "this SVG's editing data can't be read: it ope
 
 /// Read a file of any readable format (`name`: its file name or path, for the extension and title).
 pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
+    load_with(name, bytes, &LoadOptions::default())
+}
+
+/// [`load`] with `document.open` options (the PDF pages, box and password).
+pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded> {
     let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{name}`: not a format VectorCraft reads (see document.formats)")))?;
     let title = file_name(name);
     let mut warnings = vec![];
@@ -102,9 +108,9 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
             }
         }
         "pdf" | "ai" | "ait" => {
-            let r = vectorcraft_pdf::import_with_report(bytes, &vectorcraft_pdf::ImportOptions::default()).map_err(err)?;
-            warnings = r.warnings;
-            r.document
+            let (d, w) = super::pdfimport::import(bytes, opts)?;
+            warnings = w;
+            d
         }
         _ if format.raster => raster_doc(&title, bytes)?,
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
@@ -120,7 +126,13 @@ pub fn load(name: &str, bytes: &[u8]) -> Result<Loaded> {
 /// Open a file's bytes as the new active document (what `document.open` does) →
 /// `{index, title, format, warnings}`. `path` is kept for Save only for a native, non-template file.
 pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value> {
-    let Loaded { mut doc, format, warnings } = load(name, bytes)?;
+    open_bytes_with(s, name, bytes, path, &Value::Null)
+}
+
+/// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
+pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
+    let opts = LoadOptions::from_params("document.open", p)?;
+    let Loaded { mut doc, format, warnings } = load_with(name, bytes, &opts)?;
     // A template (saved by Save as Template, or an .ait file) opens as a new untitled document.
     let template = doc.template || format.id == "ait";
     if template {
@@ -155,7 +167,7 @@ pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
 
 pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
     let src = source(p, "document.open")?;
-    open_bytes(s, src.name, &src.bytes, src.path.map(str::to_string))
+    open_bytes_with(s, src.name, &src.bytes, src.path.map(str::to_string), p)
 }
 
 /// Decode an image's header (and, for formats stored as PNG, its pixels).

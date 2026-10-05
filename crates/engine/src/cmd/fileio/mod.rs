@@ -7,6 +7,7 @@
 //! - `export`: `document.export` / `serialize` / `exportSelection` / `exportForScreens`.
 //! - `save`: `document.save`, `file.saveAsTemplate`.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
+//! - `pdfimport`: the PDF pages, box and password `document.open` and Place read, `document.pdfInfo`.
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
@@ -16,6 +17,7 @@ mod encode;
 mod export;
 mod load;
 pub mod pdf;
+mod pdfimport;
 pub mod ppi;
 mod save;
 mod svg;
@@ -24,8 +26,10 @@ use serde_json::{Value, json};
 
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background};
+use load::err;
 pub(crate) use load::source;
-pub use load::{Loaded, RasterImage, detect, file_name, load, open_bytes, raster_image};
+pub use load::{Loaded, RasterImage, detect, file_name, load, load_with, open_bytes, open_bytes_with, raster_image};
+pub use pdfimport::{LoadOptions, page_document};
 pub use save::{save_encoding, save_format};
 pub use svg::options_map as svg_options;
 
@@ -39,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Open Document",
             [],
             None,
-            "{path} or {name, dataBase64} → {index, title, format, warnings}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). Templates (native templates, .ait) open as a new untitled document",
+            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo) → {index, title, format, warnings}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). Templates (native templates, .ait) open as a new untitled document",
             always,
             load::open
         ),
@@ -106,6 +110,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} → {formats: [{id, label, extensions, mime, read, write, raster, options: {name: {type, default, description}}}], readable: [id…], writable: [id…], openExtensions: [ext…]}",
             always,
             formats
+        ),
+        cmd!(
+            query "document.pdfInfo",
+            "PDF Info",
+            [],
+            None,
+            "{path} or {name?, dataBase64}, password?, thumbnail?: page (1-based), thumbnailSize?: 160 (px, longest side), cropTo?: crop (the thumbnail's box) → {pages, needsPassword, wrongPassword?, pageInfo: [{width, height (pt, as shown), rotation, boxes: {media, crop, bleed, trim, art: [x0, y0, x1, y1] (PDF space, pt)}}], thumbnail?: PNG dataBase64}; an encrypted PDF without its password → {pages: 0, needsPassword: true}",
+            always,
+            pdfimport::pdf_info
         ),
     ]
 }
@@ -454,6 +467,8 @@ fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) -> Result<Val
 mod tests;
 #[cfg(test)]
 mod tests_pdf;
+#[cfg(test)]
+mod tests_pdfimport;
 #[cfg(test)]
 mod tests_svg;
 #[cfg(test)]

@@ -26,7 +26,16 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
         return load(app, p).map(|_| ());
     }
-    let r = fileio::open_bytes(&mut app.session, name, bytes, path).map_err(|e| e.to_string())?;
+    // A PDF with several pages or a password asks first (the Import PDF dialog).
+    if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None) {
+        return Ok(());
+    }
+    open_document(app, name, bytes, path, &Value::Null)
+}
+
+/// Open a document through the engine loader with the `document.open` options in `p`.
+pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<(), String> {
+    let r = fileio::open_bytes_with(&mut app.session, name, bytes, path, p).map_err(|e| e.to_string())?;
     app.sync_views();
     if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
         app.status(format!("Opened with {} note(s): {}", w.len(), w[0].as_str().unwrap_or_default()));

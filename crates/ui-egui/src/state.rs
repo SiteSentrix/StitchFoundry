@@ -266,6 +266,10 @@ pub struct UiState {
     /// File → Place: Link is on (the Place dialog remembers it).
     #[serde(default = "yes")]
     pub place_link: bool,
+    /// The file the open dialog reads, kept out of its JSON fields (Import PDF); dropped when no
+    /// dialog is open.
+    #[serde(skip)]
+    pub dialog_file: Option<std::sync::Arc<crate::dialogs::import_pdf::DialogFile>>,
 }
 
 impl UiState {
@@ -323,6 +327,7 @@ impl Default for UiState {
             color_guide_limit: String::new(),
             svg_options: Value::Null,
             place_link: true,
+            dialog_file: None,
         }
     }
 }

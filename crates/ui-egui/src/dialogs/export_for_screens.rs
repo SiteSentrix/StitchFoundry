@@ -145,10 +145,7 @@ fn artboard_thumb(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize) -> Op
     }
     let doc = st.doc.clone();
     let r = doc.artboards.get(i)?.rect;
-    let scale = 92.0 / r.width().max(r.height()).max(1.0);
-    let img = app.canvas.renderer.render_region(&doc, r, scale, true);
-    let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
-    let tex = ctx.load_texture(format!("ab-thumb-{i}"), color, egui::TextureOptions::LINEAR);
+    let tex = crate::widgets::region_texture(ctx, &mut app.canvas.renderer, &format!("ab-thumb-{i}"), &doc, r, 92.0);
     ctx.data_mut(|d| d.insert_temp(key, tex.clone()));
     Some(tex)
 }

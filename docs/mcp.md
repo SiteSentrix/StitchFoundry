@@ -185,6 +185,16 @@ documents every field). `document.exportPdf` and `export` (format `pdf`, the opt
 options accepted but not applied yet, and features approximated or left out. PDF/X, passwords and PDF/A-2b at 2.0 are refused.
 `document.pdfSettings` lists the options that differ from the defaults and the warnings without writing a file.
 
+Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
+`cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)
+and `password` for an encrypted file. `document.pdfInfo` reads a file without opening it: the page count, each page's
+size and boxes, `needsPassword`, and with `thumbnail: n` a PNG of page n:
+
+```json
+{"name":"run_command","arguments":{"command":"document.pdfInfo","params":{"path":"/tmp/brochure.pdf","thumbnail":2,"cropTo":"trim"}}}
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/brochure.pdf","pages":"2-3","cropTo":"trim"}}}
+```
+
 Drive a tool like a mouse:
 
 ```json

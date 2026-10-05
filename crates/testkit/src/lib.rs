@@ -9,6 +9,7 @@
 //!   (`.vectorcraft`, SVG, `document.inspect`).
 //! - [`raster`]: rendering helpers and image comparison with a perceptual tolerance.
 //! - [`geom`]: geometry assertions (approximate equality, curve sampling, Hausdorff distance).
+//! - [`pdf`]: hand-written PDF files (page boxes, colour spaces, encryption) for import tests.
 //!
 //! This crate may only be used as a dev-dependency (enforced by `cargo xtask layers`).
 // Test support only (a dev-dependency of every crate that uses it): a failed setup or assertion
@@ -20,6 +21,7 @@
 pub mod fixtures;
 pub mod geom;
 pub mod invariants;
+pub mod pdf;
 pub mod raster;
 pub mod strategies;
 
