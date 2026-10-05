@@ -117,7 +117,9 @@ fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn undo(s: &mut Session, _: &Value) -> Result<Value> {
-    s.cancel_interaction()?;
+    // What is still in progress (typing, a drag) is the step to undo: keep it first, so Undo takes
+    // back only that and Redo brings it back, instead of dropping it and undoing the step before.
+    s.commit_interaction()?;
     let st = s.doc_mut()?;
     let e = st.history.undo.pop().ok_or_else(|| EngineError::Other("nothing to undo".into()))?;
     let label = e.label.clone();

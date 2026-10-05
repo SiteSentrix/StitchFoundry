@@ -120,6 +120,44 @@ fn type_tool_typing_is_one_undo_step() {
 }
 
 #[test]
+fn undo_while_typing_takes_back_only_the_typing_and_redo_returns_it() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abc", v).unwrap();
+    key(&mut s, ToolKey::Left, Mods::default());
+    key(&mut s, ToolKey::Right, Mods::default());
+    s.tool_text("def", v).unwrap();
+    assert!(s.in_interaction(), "still typing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abc", "only the typing in progress is undone");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abcdef", "and Redo brings it back");
+    // Typing on after an undo starts a new session from the restored text.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.tool_text("!", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abc!");
+}
+
+#[test]
+fn undo_during_a_drag_takes_back_only_the_drag() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.select_tool("selection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 125.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 225.0, 125.0), v).unwrap();
+    assert!(s.in_interaction(), "dragging");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let b = doc.bounds_of(&[id], false).expect("the rectangle is still there");
+    assert_eq!(b.x0, 100.0, "back where it was: {b:?}");
+}
+
+#[test]
 fn type_tool_selection_replace_and_delete() {
     let mut s = session();
     let v = ViewInfo::default();
