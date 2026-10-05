@@ -46,6 +46,8 @@ mod tests_clipboard;
 #[cfg(test)]
 mod tests_docsetup;
 #[cfg(test)]
+mod tests_home;
+#[cfg(test)]
 mod tests_labels;
 #[cfg(test)]
 mod tests_nativeoptions;

@@ -127,7 +127,11 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let full = ui.available_rect_before_wrap();
-    if app.session.active().is_none() {
+    // A document that opened, closed or became active since Home was chosen replaces it.
+    if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
+        app.ui.home = None;
+    }
+    if app.session.active().is_none() || app.ui.home.is_some() {
         home(app, ui, full);
         return;
     }

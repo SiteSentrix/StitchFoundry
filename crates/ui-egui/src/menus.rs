@@ -111,6 +111,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
+    ("app.home", "Home", "", "{} shows the Home screen (new file presets, Open) over the open documents; choosing a document tab returns to it"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
@@ -547,6 +548,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     let r = match id {
         "file.newDialog" => {
             crate::dialogs::open_new_document(app);
+            Ok(Value::Null)
+        }
+        "app.home" => {
+            app.ui.home = Some(home_key(app));
             Ok(Value::Null)
         }
         "file.open" => match s("path") {
@@ -1917,6 +1922,12 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             }
         }
     }
+}
+
+/// What the Home screen remembers when it opens (`app.home`): the active document and the
+/// document count. When either changes, the Home screen gives way to the document.
+pub(crate) fn home_key(app: &VectorcraftApp) -> (Option<u64>, usize) {
+    (app.session.active().map(|d| d.uid), app.session.documents().len())
 }
 
 fn label_of(it: &Item) -> &'static str {

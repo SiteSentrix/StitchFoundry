@@ -27,8 +27,9 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
             crate::brand::paint_mark(ui, r);
             ui.add_space(4.0);
-            if widgets::icon_button(ui, "house", "Home", false, 24.0).clicked() {
-                crate::dialogs::open_new_document(app);
+            let on_home = app.ui.home.is_some() || app.session.active().is_none();
+            if widgets::icon_button(ui, "house", "Home", on_home, 24.0).clicked() {
+                app.run("app.home", json!({})).ok();
             }
             ui.add_space(2.0);
             let menus_end = if app.native_menu {
@@ -237,7 +238,8 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     for (i, d) in app.session.documents().iter().enumerate() {
         let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
         let title = tab_title(d, zoom, app.ui.view.outline);
-        let is_active = Some(i) == active;
+        // On the Home screen no tab is the current one.
+        let is_active = Some(i) == active && app.ui.home.is_none();
         let galley = ui.painter().layout_no_wrap(title, theme::semibold(12.5), if is_active { t.text_strong } else { t.text_dim });
         let w = galley.size().x + 50.0;
         let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
@@ -265,6 +267,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.status(e);
         }
     } else if let Some(i) = activate {
+        app.ui.home = None;
         app.session.set_active(i);
     }
     // Isolation mode breadcrumb bar.
