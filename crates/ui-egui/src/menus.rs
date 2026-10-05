@@ -2383,14 +2383,13 @@ mod tests {
         fn walk(items: &[Item], bad: &mut Vec<String>) {
             for it in items {
                 match it {
-                    Item::Cmd(_, id, _) => {
+                    Item::Cmd(_, id, _)
                         if vectorcraft_engine::find_command(id).is_none()
                             && !UI_COMMANDS.iter().any(|c| c.0 == *id)
                             && !id.starts_with("object.path.")
-                            && *id != "type.createOutlines"
-                        {
-                            bad.push(id.to_string());
-                        }
+                            && *id != "type.createOutlines" =>
+                    {
+                        bad.push(id.to_string());
                     }
                     Item::Sub(_, ch) => walk(ch, bad),
                     _ => {}
