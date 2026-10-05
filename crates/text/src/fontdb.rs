@@ -675,6 +675,13 @@ impl FontDb {
         None
     }
 
+    /// A face that covers `c`, for text drawn outside the canvas (the app's own UI): the loaded
+    /// fonts first, then (native) an installed one, loaded on demand. Characters no font covers
+    /// are remembered, so they are looked for once.
+    pub fn face_covering(&self, c: char) -> Option<Arc<FontFace>> {
+        self.fallback_for(c, 0)
+    }
+
     fn loaded_fallback(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {
         let faces = self.read_faces();
         let mut order: Vec<&Arc<FontFace>> = faces.iter().filter(|f| f.id != exclude).collect();

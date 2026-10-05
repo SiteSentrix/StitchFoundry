@@ -33,6 +33,7 @@ pub mod sysclip;
 pub mod theme;
 pub mod titlebar;
 pub mod toolbar;
+mod ui_fonts;
 pub mod unsaved;
 pub mod widgets;
 pub mod workspaces;
@@ -257,6 +258,8 @@ pub struct VectorcraftApp {
     pub synthetic: Vec<egui::Event>,
     styled: bool,
     fonts_ready: bool,
+    /// Installed fonts added to the UI's for characters its own fonts lack (CJK names…).
+    ui_fonts: ui_fonts::UiFonts,
     frame: u64,
     last_time: f64,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
@@ -336,6 +339,7 @@ impl VectorcraftApp {
             synthetic: vec![],
             styled: false,
             fonts_ready: false,
+            ui_fonts: Default::default(),
             frame: 0,
             last_time: 0.0,
             canvas_rect: None,
@@ -791,6 +795,7 @@ impl VectorcraftApp {
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
         }
+        self.ui_fonts.frame(&ctx);
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }
