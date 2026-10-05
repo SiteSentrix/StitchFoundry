@@ -727,7 +727,9 @@ fn paste_from_elsewhere(cmd: &str, p: Value) -> Result<(), TestCaseError> {
         let mut s = vectorcraft_engine::Session::new();
         s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         if s.execute(cmd, &p).is_ok() {
-            s.execute("edit.paste", &json!({"center": [50, 50]})).unwrap();
+            // Paste may refuse what it was given, e.g. a damaged PDF whose art spans more than the
+            // canvas ("result would exceed the canvas"): an error is a fine outcome, a panic isn't.
+            let _ = s.execute("edit.paste", &json!({"center": [50, 50]}));
         }
     });
     prop_assert!(r.is_ok(), "{cmd}: panicked: {:?}", r.err());
