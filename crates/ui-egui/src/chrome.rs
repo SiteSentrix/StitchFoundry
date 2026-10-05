@@ -1,5 +1,7 @@
 //! Window chrome: application bar (menus), Control bar, document tabs, status bar.
 
+use std::borrow::Cow;
+
 use egui::{CornerRadius, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
@@ -400,15 +402,16 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
 }
 
-/// Contextual hint for the active tool: segments of (text, bold).
-fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
-    match tool {
+/// Contextual hint for the active tool: segments of (text, bold). Keys in bold segments are
+/// written as shortcuts are ("Alt+Click"); [`hint_segments`] names them for the platform.
+fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
+    Some(match tool {
         "selection" => &[
             ("Click", true),
             (" the object to select  |  ", false),
             ("Shift+Click", true),
             (" to select multiple objects  |  ", false),
-            ("Option+Drag", true),
+            ("Alt+Drag", true),
             (" the object to duplicate", false),
         ],
         "directSelection" => &[
@@ -450,7 +453,7 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             (" to draw  |  ", false),
             ("Shift+Drag", true),
             (" to constrain proportions  |  ", false),
-            ("Option+Drag", true),
+            ("Alt+Drag", true),
             (" from center  |  ", false),
             ("Click", true),
             (" for exact size", false),
@@ -460,14 +463,14 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             (" to set the reference point  |  ", false),
             ("Drag", true),
             (" to transform  |  ", false),
-            ("Option+Click", true),
+            ("Alt+Click", true),
             (" for exact values", false),
         ],
         "hand" => &[("Drag", true), (" to pan the view", false)],
         "zoom" => &[
             ("Click", true),
             (" to zoom in  |  ", false),
-            ("Option+Click", true),
+            ("Alt+Click", true),
             (" to zoom out  |  ", false),
             ("Drag", true),
             (" to zoom into an area", false),
@@ -482,8 +485,25 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
         ],
         "gradient" => &[("Drag", true), (" across a selected object to set the gradient direction", false)],
         "artboard" => &[("Click", true), (" to select an artboard  |  ", false), ("Drag", true), (" on the canvas to create one", false)],
-        _ => &[("Press ", false), ("Cmd+Shift+/", true), (" to search every command", false)],
-    }
+        _ => return None,
+    })
+}
+
+/// The hint bar's segments for `tool`, with keys named as the menus name them (Alt and Ctrl on
+/// Windows and Linux, ⌥ and ⌘ on macOS). Tools without a hint point to Search Commands.
+fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
+    let search;
+    let segments = match hint_for(tool) {
+        Some(s) => s,
+        None => {
+            search = match menus::shortcut_of("help.commandPalette") {
+                Some(sc) => [("Press ", false), (sc, true), (" to search every command", false)],
+                None => [("Use ", false), ("Help › Search Commands…", true), (" to search every command", false)],
+            };
+            &search
+        }
+    };
+    segments.iter().map(|&(text, bold)| (if bold { Cow::Owned(menus::pretty_shortcut(text)) } else { Cow::Borrowed(text) }, bold)).collect()
 }
 
 pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -498,9 +518,9 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", theme::semibold(11.0), t.text);
                 ui.add_space(6.0);
                 let mut job = egui::text::LayoutJob::default();
-                for (txt, bold) in hint_for(app.session.tool_id()) {
-                    let font = if *bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
-                    job.append(txt, 0.0, egui::TextFormat { font_id: font, color: if *bold { t.text_strong } else { t.text }, ..Default::default() });
+                for (txt, bold) in hint_segments(app.session.tool_id()) {
+                    let font = if bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
+                    job.append(&txt, 0.0, egui::TextFormat { font_id: font, color: if bold { t.text_strong } else { t.text }, ..Default::default() });
                 }
                 ui.label(job);
             });
@@ -511,6 +531,26 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use serde_json::json;
     use vectorcraft_engine::Session;
+
+    #[test]
+    fn hints_name_keys_as_the_menus_do() {
+        let text = |tool: &str| super::hint_segments(tool).into_iter().map(|(s, _)| s).collect::<String>();
+        for tool in vectorcraft_tools::catalog::all_tools().map(|t| t.id) {
+            let hint = text(tool);
+            assert!(!hint.contains("Option"), "{tool}: {hint}");
+            assert!(cfg!(target_os = "macos") || !hint.contains("Cmd"), "{tool}: {hint}");
+        }
+        let pretty = crate::menus::pretty_shortcut;
+        assert!(text("selection").contains(&pretty("Alt+Drag")));
+        assert!(text("rectangle").contains(&pretty("Alt+Drag")));
+        assert!(text("zoom").contains(&pretty("Alt+Click")));
+        assert!(text("rotate").contains(&pretty("Alt+Click")));
+        assert!(text("eyedropper").contains(&pretty("Alt+Click")));
+        assert!(text("paintbrush").contains(&pretty("Cmd+Shift+/")), "the Search Commands shortcut");
+        if !cfg!(target_os = "macos") {
+            assert!(text("zoom").contains("Alt+Click") && text("paintbrush").contains("Ctrl+Shift+/"));
+        }
+    }
 
     #[test]
     fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
