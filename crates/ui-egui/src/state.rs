@@ -289,6 +289,9 @@ pub struct UiState {
     /// The DXF Options chosen last (`document.exportDxf` options; null: never used).
     #[serde(default)]
     pub dxf_options: Value,
+    /// The EPS Options chosen last (`document.exportEps` options; null: never used).
+    #[serde(default)]
+    pub eps_options: Value,
 }
 
 impl UiState {
@@ -348,6 +351,7 @@ impl Default for UiState {
             place_link: true,
             dialog_file: None,
             dxf_options: Value::Null,
+            eps_options: Value::Null,
         }
     }
 }

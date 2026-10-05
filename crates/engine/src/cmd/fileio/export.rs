@@ -15,7 +15,7 @@ use super::{ARTBOARD_PARAMS, Format, default_name, encode, encode_all, merge, wr
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
-    let expanded = super::pdf::expand_preset(s, "document.serialize", p)?;
+    let expanded = expand_presets(s, "document.serialize", p)?;
     let p = &*expanded;
     let doc = &*source(s, f, p, "document.serialize")?;
     let enc = encode_all(doc, f.id, p)?;
@@ -46,7 +46,7 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path");
     let f = writable("document.export", str_param(p, "format"), path)?;
-    let expanded = super::pdf::expand_preset(s, "document.export", p)?;
+    let expanded = expand_presets(s, "document.export", p)?;
     let p = &*expanded;
     let doc = &*source(s, f, p, "document.export")?;
     let enc = encode_all(doc, f.id, p)?;
@@ -101,6 +101,13 @@ pub(super) fn without_artboards(p: &Value) -> Value {
     q
 }
 
+/// `p` with the saved presets it names (PDF, flattener) written out as options, for the encoders,
+/// which know only the built-in ones.
+fn expand_presets<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Value>> {
+    let pdf = super::pdf::expand_preset(s, cmd, p)?;
+    super::eps::with_flattener(s, pdf)
+}
+
 /// The document an export of `f` writes: the active one (see [`export_source`]), or for text
 /// with `selectionOnly` the selected objects alone.
 fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<Cow<'a, Document>> {
@@ -135,7 +142,7 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportSelection";
     let path = str_param(p, "path");
     let f = writable(C, str_param(p, "format"), path)?;
-    let expanded = super::pdf::expand_preset(s, C, p)?;
+    let expanded = expand_presets(s, C, p)?;
     let p = &*expanded;
     let (d, bounds) = selection(s, C)?;
     let bytes = encode(&d, f.id, &without_artboards(p))?;
