@@ -1,9 +1,9 @@
-//! File → Place: the file picked, a line about what it is, and the Place options row (Link,
-//! Template, Replace). OK places it centred in the view, or in place of the selected object
-//! ([`crate::place::confirm`]).
+//! File → Place: the files picked, one line each about what they are, and the Place options row
+//! (Link, Template, Replace). OK places one file centred in the view (or in place of the selected
+//! object) or loads the place cursor with several ([`crate::place::confirm`]).
 //!
-//! Fields: `files` (`[{path} | {name}]`), `link`, `template`, `replace`, and `__replace` (one
-//! selected object: Replace applies), `__info` (a line per file).
+//! Fields: `files` (`[{path} | {name}]`), `link`, `template`, `replace`, and `__replace` (one file
+//! and one selected object: Replace applies), `__info` (a line per file).
 
 use serde_json::{Value, json};
 
@@ -61,6 +61,10 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
     });
+    if files.len() > 1 {
+        ui.add_space(4.0);
+        widgets::dim_label(ui, "Click to place each file at 100%, or drag to size it; arrow keys switch files, Esc skips one.");
+    }
     ui.add_space(10.0);
     // The options row.
     ui.horizontal(|ui| {

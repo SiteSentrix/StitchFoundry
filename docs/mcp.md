@@ -815,9 +815,13 @@ unless `link: false`), an SVG as one group, a PDF/.ai page or a native document'
 clipped group, with the images, symbols, patterns and swatches it uses. `at` centres it, `rect` fits it, `replace`
 swaps the selected object (keeping its place and transform), `template` puts it on a new template layer.
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
-effective ppi.
+effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
+with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
+`press_key` (Left/Right/Up/Down cycle, Escape discards the current file).
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
 {"name":"run_command","arguments":{"command":"file.place","params":{"name":"logo.svg","dataBase64":"PHN2Zy…","rect":[0,0,100,100]}}}
+{"name":"run_command","arguments":{"command":"file.place.queue","params":{"paths":["/tmp/a.png","/tmp/b.pdf"]}}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":40,"y":40},{"kind":"up","x":40,"y":40}]}}
 ```

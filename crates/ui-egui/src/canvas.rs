@@ -303,6 +303,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let overlays = app.session.overlays(view_info);
         draw_overlays(&painter, &xf, &overlays, &t);
     }
+    crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
 
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         rulers(ui, full, &xf, app.hover_doc, app.session.general_unit(), &t);
@@ -324,6 +325,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if let Some(p) = app.hover_doc {
             let c = app.session.cursor(p, mods(m, space), view_info);
             let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("tool-cursor")));
+            // The loaded place cursor carries the file's thumbnail.
+            if app.session.tool_id() == "place"
+                && let Some(hp) = ui.input(|i| i.pointer.hover_pos())
+            {
+                crate::place::paint_cursor(app, ui.ctx(), &painter, hp);
+            }
             // Caps Lock gives precise (crosshair) cursors, like Illustrator; env opt-out for system cursors.
             let custom = std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none();
             match ui.input(|i| i.pointer.hover_pos()) {
@@ -530,7 +537,13 @@ fn drag_art_out(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, p: Pos
 
 /// Send a pointer event to the active tool and act on UI requests (dialogs, tool switches).
 pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_engine::ViewInfo) {
-    match app.session.pointer(ev, view) {
+    let r = app.session.pointer(ev, view);
+    apply_requests(app, r);
+}
+
+/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error.
+pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Vec<vectorcraft_engine::UiRequest>>) {
+    match r {
         Ok(reqs) => {
             for r in reqs {
                 match r {

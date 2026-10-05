@@ -1,4 +1,5 @@
-//! File → Place over MCP, headless: `file.place` through `run_command`.
+//! File → Place over MCP, headless: `file.place` through `run_command`, and the place cursor driven
+//! by pointer gestures and keys.
 
 use serde_json::{Value, json};
 
@@ -37,4 +38,21 @@ fn headless_run_command_file_place() {
     let sel = h.session.doc().unwrap().selection.objects.clone();
     assert_eq!(sel.len(), 1);
     assert_eq!(sel[0].0, r["ids"][0].as_u64().unwrap());
+}
+
+#[test]
+fn headless_place_cursor_places_on_clicks_and_esc_ends_it() {
+    let (mut h, png) = setup();
+    let files = json!([{"name": "a.png", "dataBase64": png}, {"name": "b.png", "dataBase64": png}, {"name": "c.png", "dataBase64": png}]);
+    let r = text(&call_tool(&mut h, "run_command", &json!({"command": "file.place.queue", "params": {"files": files}})));
+    assert_eq!(r["count"], 3);
+    assert_eq!(h.session.tool_id(), "place");
+    let click = |x: f64| json!({"events": [{"kind": "down", "x": x, "y": 10}, {"kind": "up", "x": x, "y": 10}]});
+    text(&call_tool(&mut h, "pointer_gesture", &click(10.0)));
+    text(&call_tool(&mut h, "pointer_gesture", &click(60.0)));
+    assert_eq!(images(&h), 2);
+    let r = text(&call_tool(&mut h, "press_key", &json!({"key": "Escape"})));
+    assert_eq!(r["handledBy"], "tool");
+    assert_eq!(h.session.tool_id(), "selection", "the last file discarded: back to the previous tool");
+    assert_eq!(images(&h), 2);
 }

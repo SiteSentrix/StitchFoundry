@@ -1,10 +1,15 @@
-//! File → Place in the app: the Place dialog and the Control bar's image details.
+//! File → Place in the app: the Place dialog, files dropped on the window, the loaded place
+//! cursor and the Control bar's image details.
 
+use std::sync::Arc;
+
+use egui::{Pos2, Shape, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
+use crate::canvas::Xf;
 
 /// A `w`×`h` red PNG declaring `ppi`.
 fn png(w: u32, h: u32, ppi: f64) -> Vec<u8> {
@@ -37,11 +42,117 @@ fn place_picked(app: &mut VectorcraftApp, path: &str) {
     app.run("file.place", json!({})).unwrap();
 }
 
+#[derive(Debug)]
+struct Dropped(std::path::PathBuf);
+
+impl egui::DroppedFile for Dropped {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
+
+/// One headless frame of the whole window (800×600) with `events` and `dropped` files.
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, mut events: Vec<egui::Event>, dropped: &[&str], shift: bool) {
+    events.push(egui::Event::ModifiersChanged(egui::Modifiers { shift, ..Default::default() }));
+    let raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+        events,
+        dropped_files: dropped.iter().map(|p| Arc::new(Dropped(p.into())) as egui::DroppedFileHandle).collect(),
+        ..Default::default()
+    };
+    let mut out = ctx.run_ui(raw, |ui| {
+        app.logic(ui.ctx());
+        app.ui(ui);
+    });
+    out.textures_delta.clear();
+}
+
 fn selected_image(app: &VectorcraftApp) -> vectorcraft_doc::Node {
     let st = app.session.active().unwrap();
     let n = st.doc.node(st.selection.objects[0]).unwrap().clone();
     assert!(matches!(n.kind, NodeKind::Image(_)), "{:?}", n.kind);
     n
+}
+
+#[test]
+fn a_dropped_png_is_centred_at_the_pointer() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    // Two frames: fonts, then the canvas lays out.
+    frame(&mut app, &ctx, vec![], &[], false);
+    frame(&mut app, &ctx, vec![], &[], false);
+    let rect = app.canvas_rect.expect("the canvas is laid out");
+    let pos = rect.center() + vec2(60.0, -40.0);
+    let path = temp_file("drop.png", &png(20, 10, 72.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], &[&path], false);
+    let n = selected_image(&app);
+    let want = Xf::new(rect, app.view().unwrap()).to_doc(pos);
+    let c = n.geometric_bounds().unwrap().center();
+    assert!((c.x - want.x).abs() < 1e-6 && (c.y - want.y).abs() < 1e-6, "{c:?} vs {want:?}");
+    assert!(matches!(&n.kind, NodeKind::Image(im) if im.link.as_deref() == Some(path.as_str())), "linked by default");
+    assert_eq!(app.session.documents().len(), 1, "placed, not opened");
+    // Shift embeds.
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], &[&path], true);
+    assert!(matches!(&selected_image(&app).kind, NodeKind::Image(im) if im.link.is_none()));
+}
+
+#[test]
+fn files_dropped_off_the_canvas_or_with_no_document_open_and_are_recent() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    let path = temp_file("open-me.png", &png(8, 8, 72.0));
+    frame(&mut app, &ctx, vec![], &[], false);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(400.0, 300.0))], &[&path], false);
+    assert_eq!(app.session.documents().len(), 1, "no document: the drop opens");
+    assert_eq!(app.ui.recent_files.first(), Some(&path));
+    // Over the tab bar (above the canvas): opened too.
+    frame(&mut app, &ctx, vec![], &[], false);
+    let top = app.canvas_rect.unwrap().top();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(300.0, top - 10.0))], &[&path], false);
+    assert_eq!(app.session.documents().len(), 2);
+}
+
+#[test]
+fn the_place_dialog_lists_the_files_and_loads_the_cursor_with_several() {
+    let mut app = app();
+    let a = temp_file("a.png", &png(300, 150, 300.0));
+    let b = temp_file("b.png", &png(10, 10, 72.0));
+    app.run("file.place", json!({"paths": [a, b]})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("the Place dialog");
+    assert_eq!(d.kind, crate::dialogs::place::KIND);
+    assert!(d.bool("link") && !d.bool("__replace"), "Link on; Replace needs one file and one selected object");
+    assert_eq!(d.fields["__info"][0], "300 × 150 px, 300 ppi, RGB (72 pt × 36 pt)");
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    for label in ["Place", "a.png", "b.png", "Link", "Template", "Replace", "Cancel"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_id(), "place");
+    assert_eq!(app.session.tool_options()["count"], 2);
+    // The cursor carries the current file's thumbnail and the number of files.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut shapes = vec![];
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::place::paint_cursor(&mut app, ui.ctx(), ui.painter(), Pos2::new(50.0, 50.0)));
+        out.textures_delta.clear();
+        shapes = out.shapes;
+    }
+    let mut text = String::new();
+    let mut textured = false;
+    for s in shapes {
+        match s.shape {
+            Shape::Text(t) => text.push_str(t.galley.text()),
+            Shape::Mesh(m) => textured |= m.texture_id != egui::TextureId::default(),
+            _ => {}
+        }
+    }
+    assert!(textured, "the thumbnail");
+    assert_eq!(text, "2", "the badge");
 }
 
 #[test]

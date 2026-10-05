@@ -10,7 +10,8 @@
 //!
 //! The art lands centred on `at`, fitted into `rect`, or (Replace) where the replaced object was,
 //! with its transform; Template puts it on a new template layer. The images, symbols, patterns and
-//! swatches it uses join the document ([`adopt`]).
+//! swatches it uses join the document ([`adopt`]). `file.place.queue` loads the place cursor (the
+//! `place` tool) with several files, which emits one `file.place` per click or drag.
 
 mod adopt;
 
@@ -26,6 +27,9 @@ use super::*;
 use crate::{EngineError, MAX_COORD};
 
 const PLACE: &str = "file.place";
+const QUEUE: &str = "file.place.queue";
+/// The most files one `file.place.queue` loads.
+const MAX_QUEUE: usize = 100;
 /// The longest thumbnail side `thumbnail` may ask for (px).
 const MAX_THUMBNAIL: f64 = 512.0;
 
@@ -57,6 +61,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id?} an image object (default: the one selected) → {id, name, linked, link, colorMode: RGB|Grayscale|CMYK, pixelWidth, pixelHeight, ppi: [x, y] at its placed size, width, height}",
             has_doc,
             image_info
+        ),
+        cmd!(
+            query "file.place.queue",
+            "Load Place Cursor",
+            [],
+            None,
+            "{paths?: [path…], files?: [{name, dataBase64}…], link?, template?, page?, crop?, thumbnail?: px} load the place cursor (the `place` tool) with up to 100 files (as file.place reads them): a click places the current file at 100% with its top-left corner there, a drag places it at the dragged size (aspect kept), ←/→ and ↑/↓ cycle the files, Esc discards the current one; each placement is a file.place, and the previous tool returns after the last → {count, files: [{name, format, width, height, thumbnailBase64?}], skipped: [{name, error}]}",
+            has_doc,
+            queue
         ),
     ]
 }
@@ -309,6 +322,66 @@ fn template_layer(d: &mut Document, below: Option<NodeId>, name: &str) -> Result
         }
     }
     Ok(id)
+}
+
+// ---------- file.place.queue ----------
+
+/// The files `file.place.queue` names, as `file.place` params.
+fn queued_files(p: &Value) -> Result<Vec<Value>> {
+    let list = |k: &str| p.get(k).and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+    let mut out = vec![];
+    for v in list("paths") {
+        let path = v.as_str().ok_or_else(|| bad(QUEUE, "paths must be strings"))?;
+        out.push(json!({ "path": path }));
+    }
+    for f in list("files") {
+        let (Some(name), Some(data)) = (str_param(f, "name"), str_param(f, "dataBase64")) else {
+            return Err(bad(QUEUE, "files must be {name, dataBase64}"));
+        };
+        out.push(json!({ "name": name, "dataBase64": data }));
+    }
+    match out.len() {
+        0 => Err(bad(QUEUE, "give paths or files")),
+        n if n > MAX_QUEUE => Err(bad(QUEUE, format!("at most {MAX_QUEUE} files"))),
+        _ => Ok(out),
+    }
+}
+
+fn queue(s: &mut Session, p: &Value) -> Result<Value> {
+    let thumbnail = p.get("thumbnail").and_then(Value::as_f64);
+    let (mut entries, mut files, mut skipped) = (vec![], vec![], vec![]);
+    for mut q in queued_files(p)? {
+        for k in ["link", "template", "page", "crop"] {
+            if let Some(v) = p.get(k) {
+                q[k] = v.clone();
+            }
+        }
+        match load(&q, QUEUE) {
+            Ok(l) => {
+                let (w, h) = (l.natural.width(), l.natural.height());
+                let mut f = json!({ "name": l.name, "format": l.format.id, "width": w, "height": h });
+                entries.push(json!({ "params": q, "name": l.name, "width": w, "height": h }));
+                if let Some(px) = thumbnail {
+                    f["thumbnailBase64"] = json!(thumbnail_png(l, px)?);
+                }
+                files.push(f);
+            }
+            Err(e) => {
+                let name = str_param(&q, "path").or(str_param(&q, "name")).map(fileio::file_name).unwrap_or_default();
+                skipped.push(json!({ "name": name, "error": e.to_string() }));
+            }
+        }
+    }
+    if entries.is_empty() {
+        let why = skipped.first().and_then(|e| e["error"].as_str()).unwrap_or("nothing to place");
+        return Err(bad(QUEUE, why));
+    }
+    // Reloading the cursor keeps the tool to return to.
+    let prev = Some(s.tool_id()).filter(|t| *t != "place");
+    let view = s.last_view;
+    s.select_tool("place", view)?;
+    s.set_tool_option("queue", &json!({ "entries": entries, "prev": prev }));
+    Ok(json!({ "count": files.len(), "files": files, "skipped": skipped }))
 }
 
 // ---------- queries ----------

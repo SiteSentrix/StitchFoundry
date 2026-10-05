@@ -1,4 +1,5 @@
-//! File → Place (`file.place`, `file.place.info`, `image.info`).
+//! File → Place (`file.place`, `file.place.info`, `image.info`) and the place cursor
+//! (`file.place.queue` and the `place` tool).
 
 use std::sync::Arc;
 
@@ -6,6 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 use vectorcraft_geom::Rect;
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use super::*;
 
@@ -262,6 +264,37 @@ fn info_reports_size_resolution_colour_mode_and_link() {
 }
 
 #[test]
+fn a_queue_of_3_with_click_drag_and_esc_places_2() {
+    let mut s = session();
+    let view = ViewInfo::default();
+    let files: Vec<Value> = ["a.png", "b.png", "c.png"].iter().map(|n| file(n, &png(40, 20, [9, 9, 9, 255], None))).collect();
+    let r = s.execute("file.place.queue", &json!({"files": files, "thumbnail": 8})).unwrap();
+    assert_eq!(r["count"], 3);
+    assert!(r["files"][0]["thumbnailBase64"].is_string());
+    assert_eq!(s.tool_id(), "place");
+    assert_eq!(s.tool_options()["name"], "a.png");
+    let ev = |kind, x, y| PointerEvent::new(kind, x, y);
+    // Click: 100% with its top-left corner at the click.
+    s.pointer(&ev(PointerKind::Down, 10.0, 10.0), view).unwrap();
+    s.pointer(&ev(PointerKind::Up, 10.0, 10.0), view).unwrap();
+    let a = s.doc().unwrap().selection.objects[0];
+    assert_eq!(s.doc().unwrap().doc.node(a).unwrap().geometric_bounds(), Some(Rect::new(10.0, 10.0, 50.0, 30.0)));
+    // Drag: the dragged size, aspect kept.
+    s.pointer(&ev(PointerKind::Down, 100.0, 100.0), view).unwrap();
+    s.pointer(&ev(PointerKind::Drag, 180.0, 110.0), view).unwrap();
+    s.pointer(&ev(PointerKind::Up, 180.0, 110.0), view).unwrap();
+    let b = s.doc().unwrap().selection.objects[0];
+    assert_eq!(s.doc().unwrap().doc.node(b).unwrap().name.as_deref(), Some("b.png"));
+    assert_eq!(s.doc().unwrap().doc.node(b).unwrap().geometric_bounds(), Some(Rect::new(100.0, 100.0, 180.0, 140.0)));
+    // Esc discards the last one and asks for the previous tool back.
+    assert!(s.tool_claims_key(ToolKey::Escape, view));
+    let reqs = s.tool_key(ToolKey::Escape, Mods::default(), view).unwrap();
+    assert_eq!(reqs, vec![UiRequest::SwitchTool("selection".into())]);
+    assert_eq!(top_children(&s).len(), 2);
+    assert_eq!(s.doc().unwrap().history.undo.len(), 2, "one undo step per placement");
+}
+
+#[test]
 fn bad_place_params_are_errors() {
     let mut s = session();
     let ok = vectorcraft_format::base64_encode(&png(2, 2, [0; 4], None));
@@ -277,5 +310,8 @@ fn bad_place_params_are_errors() {
     ] {
         assert!(s.execute("file.place", &p).is_err(), "{p}");
     }
+    assert!(s.execute("file.place.queue", &json!({})).is_err());
+    assert!(s.execute("file.place.queue", &json!({"files": [{"name": "notes.txt", "dataBase64": ""}]})).is_err());
+    assert_eq!(s.tool_id(), "selection", "a failed queue leaves the tool alone");
     assert!(top_children(&s).is_empty());
 }

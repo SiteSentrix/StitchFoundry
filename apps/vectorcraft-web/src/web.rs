@@ -1,14 +1,20 @@
 //! The browser shell: web `Services`, drag-and-drop, and the eframe web runner.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
-use vectorcraft_ui_egui::place::{PlaceArrival, PlaceInbox};
+use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
 
 type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// Where the pointer was over the canvas during the last file drag (CSS px from its top-left) and
+/// whether Shift was held: where dropped files land.
+type DragPos = Rc<Cell<Option<(f32, f32, bool)>>>;
 
 const CANVAS_ID: &str = "vectorcraft_canvas";
 const LOADING_ID: &str = "vectorcraft_loading";
@@ -24,6 +30,7 @@ pub fn start() {
             log::error!("missing <canvas id=\"{CANVAS_ID}\">");
             return;
         };
+        let drag = track_drag(&canvas);
         let mut options = eframe::WebOptions::default();
         if query().contains("webgl")
             && let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup
@@ -39,8 +46,9 @@ pub fn start() {
                         log::info!("vectorcraft-web: wgpu backend {:?}", rs.adapter.get_info().backend);
                     }
                     let inbox: Inbox = Arc::default();
-                    let app = VectorcraftApp::new(Session::new(), services(inbox.clone(), Arc::default(), cc.egui_ctx.clone()));
-                    Ok(Box::new(WebShell { app, inbox }))
+                    let place_inbox: PlaceInbox = Arc::default();
+                    let app = VectorcraftApp::new(Session::new(), services(inbox.clone(), place_inbox.clone(), cc.egui_ctx.clone()));
+                    Ok(Box::new(WebShell { app, inbox, place_inbox, drag }))
                 }),
             )
             .await;
@@ -57,29 +65,58 @@ fn query() -> String {
     web_sys::window().and_then(|w| w.location().search().ok()).unwrap_or_default()
 }
 
+/// Follow file drags over the canvas: drag events carry the pointer position, which egui doesn't
+/// get during a drag.
+fn track_drag(canvas: &web_sys::HtmlCanvasElement) -> DragPos {
+    let pos = DragPos::default();
+    let p = pos.clone();
+    let on_drag = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::DragEvent)>::new(move |e: web_sys::DragEvent| {
+        p.set(Some((e.offset_x() as f32, e.offset_y() as f32, e.shift_key())));
+    });
+    for kind in ["dragover", "drop"] {
+        if let Err(e) = canvas.add_event_listener_with_callback(kind, on_drag.as_ref().unchecked_ref()) {
+            log::error!("couldn't follow {kind} events: {e:?}");
+        }
+    }
+    // The listener lives as long as the page.
+    on_drag.forget();
+    pos
+}
+
 /// Wraps the app to read dropped files asynchronously (browsers can't read them synchronously)
-/// and feed them through the inbox.
+/// and feed them through the inboxes: placed where they were dropped on the canvas, else opened.
 struct WebShell {
     app: VectorcraftApp,
     inbox: Inbox,
+    place_inbox: PlaceInbox,
+    drag: DragPos,
 }
 
 impl eframe::App for WebShell {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
-        for f in dropped {
-            let inbox = self.inbox.clone();
-            let ctx = ctx.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
-                match f.bytes_async().await {
-                    Ok(bytes) => {
-                        inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes));
-                        ctx.request_repaint();
+        if !dropped.is_empty() {
+            let at = self.drag.take();
+            let z = ctx.zoom_factor();
+            let target = self.app.drop_target(at.map(|(x, y, _)| egui::pos2(x / z, y / z)), at.is_some_and(|a| a.2));
+            for f in dropped {
+                let (inbox, place_inbox, ctx) = (self.inbox.clone(), self.place_inbox.clone(), ctx.clone());
+                wasm_bindgen_futures::spawn_local(async move {
+                    let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
+                    match f.bytes_async().await {
+                        Ok(bytes) => {
+                            match target {
+                                DropTarget::Place { at, embed } => {
+                                    place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: Some((at, embed)) })
+                                }
+                                DropTarget::Open => inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes)),
+                            }
+                            ctx.request_repaint();
+                        }
+                        Err(e) => log::error!("couldn't read dropped file {name}: {e}"),
                     }
-                    Err(e) => log::error!("couldn't read dropped file {name}: {e}"),
-                }
-            });
+                });
+            }
         }
         self.app.logic(ctx);
     }
@@ -98,17 +135,20 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context) -> Servic
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
     Services {
-        // File → Place…: the picked file goes to the Place dialog.
+        // File → Place…: the picked files go to the Place dialog.
         place_async: Some(Box::new(move || {
             let inbox = picked.clone();
             let ctx = place_ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let dialog = fileio::place_filters().fold(rfd::AsyncFileDialog::new().set_title("Place"), |d, (name, exts)| d.add_filter(name, exts));
-                let Some(file) = dialog.pick_file().await else {
+                let Some(files) = dialog.pick_files().await else {
                     return;
                 };
-                let bytes = file.read().await;
-                inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name: file.file_name(), bytes });
+                let mut arrived = vec![];
+                for f in files {
+                    arrived.push(PlaceArrival { name: f.file_name(), bytes: f.read().await, drop: None });
+                }
+                inbox.lock().unwrap_or_else(|e| e.into_inner()).extend(arrived);
                 ctx.request_repaint();
             });
         })),

@@ -1,30 +1,56 @@
-//! File → Place in the app: picking the file, the Place dialog's options and the Control bar's
-//! image details. The engine places (`file.place`); this gathers the file and options.
+//! File → Place in the app: picking the files, the Place dialog's options, files dropped on the
+//! window, the loaded place cursor and the Control bar's image details. The engine places
+//! (`file.place`, `file.place.queue`); this gathers the files and options.
 
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_geom::Point;
 
-use crate::VectorcraftApp;
-use crate::theme::Tokens;
+use crate::theme::{self, Tokens};
+use crate::{VectorcraftApp, io};
 
-/// A file to place that arrived asynchronously (web): picked for File → Place.
+/// The loaded place cursor's thumbnail size (px on the longer side).
+const THUMB: u32 = 64;
+/// Where the thumbnail sits from the pointer (points).
+const THUMB_OFFSET: egui::Vec2 = egui::vec2(14.0, 14.0);
+
+/// A file to place that arrived asynchronously (web): picked for File → Place (`drop: None`), or
+/// dropped on the canvas at a point, embedded or not.
 pub struct PlaceArrival {
     pub name: String,
     pub bytes: Vec<u8>,
+    pub drop: Option<(Point, bool)>,
 }
 
 pub type PlaceInbox = Arc<Mutex<Vec<PlaceArrival>>>;
+
+/// Where files dropped on the window go.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DropTarget {
+    /// The active document's canvas at `at` (document coordinates); `embed` when Shift is held.
+    Place { at: Point, embed: bool },
+    /// Opened as documents: no document is open, or the drop missed the canvas (the tab bar).
+    Open,
+}
 
 /// The app's Place state (not saved with the preferences).
 #[derive(Default)]
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
     picked: Vec<(String, Vec<u8>)>,
+    /// The loaded cursor's thumbnails by file name: decoded when the cursor is loaded, uploaded
+    /// when first drawn.
+    thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
     info: Option<((u64, u64, u64), Value)>,
+}
+
+enum Thumb {
+    Decoded(egui::ColorImage),
+    Uploaded(egui::TextureHandle),
 }
 
 /// Run engine command `id` itself (past the UI's handling of the same id); an error shows in the
@@ -41,10 +67,19 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 // ---------- File → Place… ----------
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
-/// in the view unless `at`, `rect` or `replace` say otherwise; without, pick the file first.
+/// in the view unless `at`, `rect` or `replace` say otherwise; with `paths`, the Place dialog for
+/// them; with neither, pick the files first.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if p.get("path").is_none() && p.get("dataBase64").is_none() {
-        return pick(app).map(|_| Value::Null);
+        let files: Vec<Value> = match p.get("paths").and_then(Value::as_array) {
+            Some(a) => a.iter().filter_map(Value::as_str).map(|path| json!({ "path": path })).collect(),
+            None => return pick(app).map(|_| Value::Null),
+        };
+        if files.is_empty() {
+            return Err("paths: give at least one file".into());
+        }
+        open_dialog(app, files);
+        return Ok(Value::Null);
     }
     let mut p = p.clone();
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
@@ -55,14 +90,21 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     engine(app, "file.place", &p)
 }
 
-/// Pick the file to place: the Place dialog opens with it (on the web once it arrives).
+/// Pick files to place: the Place dialog opens with them (on the web once they arrive).
 fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
     if let Some(f) = app.services.place_async.as_mut() {
         f();
         return Ok(());
     }
-    let path = app.services.pick_open.as_mut().and_then(|f| f()).ok_or("cancelled")?;
-    open_dialog(app, vec![json!({ "path": path })]);
+    let paths = match (app.services.pick_open_multi.as_mut(), app.services.pick_open.as_mut()) {
+        (Some(f), _) => f(),
+        (None, Some(f)) => f().into_iter().collect(),
+        (None, None) => vec![],
+    };
+    if paths.is_empty() {
+        return Err("cancelled".into());
+    }
+    open_dialog(app, paths.into_iter().map(|path| json!({ "path": path })).collect());
     Ok(())
 }
 
@@ -118,36 +160,169 @@ fn fmt_ppi(v: f64) -> String {
     s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
 }
 
-/// Place (the dialog's OK): the file is placed centred in the view (or replaces the selection).
+/// Place (the dialog's OK): one file is placed centred in the view (or replaces the selection);
+/// several load the place cursor.
 pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Value, String> {
     let files: Vec<Value> = d.fields.get("files").and_then(Value::as_array).cloned().unwrap_or_default();
-    let Some(mut p) = files.first().and_then(|f| source(app, f)) else { return Err("no file to place".into()) };
-    let link = d.bool("link");
+    let sources: Vec<Value> = files.iter().filter_map(|f| source(app, f)).collect();
+    if sources.is_empty() {
+        return Err("no files to place".into());
+    }
+    let (link, template) = (d.bool("link"), d.bool("template"));
     app.ui.place_link = link;
     app.ui.dialog = None;
-    p["link"] = json!(link);
-    p["template"] = json!(d.bool("template"));
-    if d.bool("replace") && d.bool("__replace") {
-        p["replace"] = json!(true);
-    }
-    let r = run(app, &p);
+    let r = match &sources[..] {
+        [one] => {
+            let mut p = one.clone();
+            p["link"] = json!(link);
+            p["template"] = json!(template);
+            if d.bool("replace") && d.bool("__replace") {
+                p["replace"] = json!(true);
+            }
+            run(app, &p)
+        }
+        many => {
+            let paths: Vec<&Value> = many.iter().filter_map(|s| s.get("path")).collect();
+            let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
+            queue(app, &json!({ "paths": paths, "files": files, "link": link, "template": template }))
+        }
+    };
     app.place.picked.clear();
     r
 }
 
-/// Files picked for File → Place that arrived (web): the Place dialog for them.
+// ---------- the place cursor ----------
+
+/// `file.place.queue` with thumbnails for the cursor (unless `thumbnail` is given).
+pub fn queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let mut p = p.clone();
+    if p.get("thumbnail").is_none() {
+        p["thumbnail"] = json!(THUMB);
+    }
+    let r = engine(app, "file.place.queue", &p)?;
+    app.place.thumbs = r["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|f| {
+            let png = vectorcraft_format::base64_decode(f["thumbnailBase64"].as_str()?)?;
+            let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()?.to_rgba8();
+            let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
+            Some((f["name"].as_str()?.to_string(), Thumb::Decoded(color)))
+        })
+        .collect();
+    Ok(r)
+}
+
+/// The loaded place cursor at `pos`: the current file's thumbnail with the number of files loaded.
+pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egui::Painter, pos: egui::Pos2) {
+    let opts = app.session.tool_options();
+    let count = opts["count"].as_u64().unwrap_or(0);
+    let name = opts["name"].as_str().unwrap_or_default();
+    let t = Tokens::get(ctx);
+    let tex = app.place.thumbs.iter_mut().find(|(n, _)| n == name).map(|(n, th)| {
+        if let Thumb::Decoded(img) = th {
+            *th = Thumb::Uploaded(ctx.load_texture(format!("place-thumb-{n}"), std::mem::take(img), egui::TextureOptions::LINEAR));
+        }
+        match th {
+            Thumb::Uploaded(tex) => Some((tex.id(), tex.size_vec2())),
+            Thumb::Decoded(_) => None,
+        }
+    });
+    let (id, size) = tex.flatten().unzip();
+    let size = size.unwrap_or(egui::vec2(THUMB as f32, THUMB as f32 * 0.75));
+    let k = THUMB as f32 / size.x.max(size.y).max(1.0);
+    let r = egui::Rect::from_min_size(pos + THUMB_OFFSET, size * k);
+    painter.rect_filled(r.expand(1.0), 0.0, t.panel);
+    match id {
+        Some(id) => {
+            painter.image(id, r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::from_white_alpha(200));
+        }
+        None => {
+            painter.text(r.center(), egui::Align2::CENTER_CENTER, name, theme::semibold(10.0), t.text_dim);
+        }
+    }
+    painter.rect_stroke(r.expand(1.0), 0.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Outside);
+    if count > 1 {
+        // The badge: how many files are loaded.
+        let c = r.right_top() + egui::vec2(-2.0, 2.0);
+        painter.circle_filled(c, 9.0, t.accent);
+        painter.text(c, egui::Align2::CENTER_CENTER, count.to_string(), theme::semibold(10.5), egui::Color32::WHITE);
+    }
+}
+
+// ---------- drops ----------
+
+impl VectorcraftApp {
+    /// Where files dropped with the pointer at `pos` (screen points; `None` when the platform
+    /// doesn't tell) go: onto the canvas of the open document (Shift embeds them), else opened. An
+    /// unknown position counts as the middle of the view.
+    pub fn drop_target(&self, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
+        let (Some(rect), Some(v)) = (self.canvas_rect.filter(|_| self.session.active().is_some()), self.view()) else { return DropTarget::Open };
+        match pos {
+            Some(p) if !rect.contains(p) => DropTarget::Open,
+            Some(p) => DropTarget::Place { at: crate::canvas::Xf::new(rect, v).to_doc(p), embed: shift },
+            None => DropTarget::Place { at: v.center, embed: shift },
+        }
+    }
+}
+
+/// Files dropped on the window (`(name, path, bytes)`): placed on the canvas or opened (and added
+/// to Open Recent Files), as `target` says.
+pub fn drop_files(app: &mut VectorcraftApp, files: Vec<(String, Option<String>, Vec<u8>)>, target: DropTarget) {
+    for (name, path, bytes) in files {
+        let r = match target {
+            DropTarget::Place { at, embed } => {
+                let mut p = match &path {
+                    Some(path) => json!({ "path": path }),
+                    None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes) }),
+                };
+                p["at"] = json!([at.x, at.y]);
+                p["link"] = json!(!embed);
+                run(app, &p).map(|_| ())
+            }
+            DropTarget::Open => io::open_bytes(app, &name, &bytes, path.clone()).map(|_| {
+                if let Some(path) = &path {
+                    io::note_recent(app, path);
+                }
+            }),
+        };
+        if let Err(e) = r {
+            app.status(format!("Couldn't {} {name}: {e}", if target == DropTarget::Open { "open" } else { "place" }));
+        }
+    }
+}
+
+/// Files that arrived to be placed (web): drops go where they were dropped, picked files to the
+/// Place dialog.
 pub fn drain(app: &mut VectorcraftApp) {
     let arrived: Vec<PlaceArrival> =
         app.services.place_inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default();
     let mut picked = vec![];
     for a in arrived {
-        picked.push(json!({ "name": a.name }));
-        app.place.picked.retain(|(n, _)| *n != a.name);
-        app.place.picked.push((a.name, a.bytes));
+        match a.drop {
+            Some((at, embed)) => drop_files(app, vec![(a.name, None, a.bytes)], DropTarget::Place { at, embed }),
+            None => {
+                picked.push(json!({ "name": a.name }));
+                app.place.picked.retain(|(n, _)| *n != a.name);
+                app.place.picked.push((a.name, a.bytes));
+            }
+        }
     }
     if !picked.is_empty() {
         open_dialog(app, picked);
     }
+}
+
+/// Files dragged over the window: the canvas is outlined where they would be placed.
+pub fn paint_drop_highlight(app: &VectorcraftApp, ctx: &egui::Context, painter: &egui::Painter, rect: egui::Rect) {
+    let hovering = ctx.input(|i| !i.raw.hovered_files.is_empty());
+    if !hovering || matches!(app.drop_target(ctx.input(|i| i.pointer.latest_pos()), false), DropTarget::Open) {
+        return;
+    }
+    let t = Tokens::get(ctx);
+    painter.rect_filled(rect, 0.0, t.accent.gamma_multiply(0.08));
+    painter.rect_stroke(rect.shrink(1.5), 0.0, egui::Stroke::new(3.0, t.accent), egui::StrokeKind::Inside);
 }
 
 // ---------- the Control bar ----------

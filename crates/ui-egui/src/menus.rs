@@ -62,7 +62,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.place",
         "Place…",
         "Cmd+Shift+P",
-        "{path?} no file: pick one, then the Place dialog (Link, Template, Replace); path (or name+dataBase64, …file.place params): file.place, centred in the view",
+        "{path? | paths?} no file: pick files, then the Place dialog (Link, Template, Replace); paths: that dialog for them; path (or name+dataBase64, …file.place params): file.place, centred in the view",
     ),
     ("file.openRecent1", "Open Recent File 1", "", "{}"),
     ("file.openRecent2", "Open Recent File 2", "", "{}"),
@@ -440,6 +440,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "file.recentFiles" => Ok(json!(app.ui.recent_files)),
         "file.place" => crate::place::run(app, p),
+        "file.place.queue" => crate::place::queue(app, p),
         "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::svg_options::open(app, crate::dialogs::svg_options::Mode::Export, None);
             Ok(Value::Null)
