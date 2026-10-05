@@ -117,9 +117,7 @@ impl Selection {
     }
     /// Top-level ordering: selected ids sorted by paint order (bottom first).
     pub fn in_paint_order(&self, doc: &Document) -> Vec<NodeId> {
-        let mut v: Vec<(Vec<usize>, NodeId)> = self.objects.iter().filter_map(|id| doc.index_path(*id).map(|p| (p, *id))).collect();
-        v.sort();
-        v.into_iter().map(|(_, id)| id).collect()
+        doc.paint_order(self.objects.iter().copied())
     }
 }
 

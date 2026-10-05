@@ -1412,3 +1412,24 @@ defaults); presets and remembered settings are preferences.
 {"name":"run_command","arguments":{"command":"document.exportForWeb","params":{"path":"/tmp/web/page.html","format":"png8","output":"html"}}}
 {"name":"run_command","arguments":{"command":"webExport.presets.save","params":{"name":"Banner","format":"jpg","quality":70}}}
 ```
+
+## Asset Export
+
+Assets are pieces of art collected for export on their own (Window › Asset Export, Object › Collect for Export).
+`assets.add {ids?, multiple?}` collects the selected objects (or `ids`): one asset per object, or with
+`multiple: false` one asset of them all, named after the object or `Asset 1`, `Asset 2`…; art already collected keeps
+its asset. Assets name their objects, so they follow edits: moving the art moves the crop, and deleting it
+removes it from its asset (an asset left with nothing goes). `assets.list` gives each asset's id, name, objects and
+crop (`bounds`); `assets.rename {asset, name}` and `assets.remove {assets}` are undo steps.
+
+`assets.export {assets?, folder?, zip?}` writes each asset's art alone, cropped to it and named after it, in every
+format row of the document's export settings, the ones Export for Screens remembers (`document.exportSettings`); any
+`formats`, `preset`, `settings`, `prefix` or `subfolders` given win for that export. `assets.settings.set` changes
+those shared settings (not an undo step). `document.exportForScreens {assets: [id…]}` does the same with its own params
+(the dialog's Assets tab).
+
+```json
+{"name":"run_command","arguments":{"command":"assets.add","params":{"multiple":true}}}
+{"name":"run_command","arguments":{"command":"assets.settings.set","params":{"formats":[{"format":"png","scale":"1x"},{"format":"png","scale":"2x"},{"format":"svg"}]}}}
+{"name":"run_command","arguments":{"command":"assets.export","params":{"zip":true}}}
+```

@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod appearance;
+pub mod assets;
 pub mod graph;
 pub mod hit;
 pub mod inks;
@@ -49,6 +50,7 @@ pub use appearance::{
     Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, ProfilePreset, SavedProfile, StrokeAlign,
     StrokeLayer, WidthProfile,
 };
+pub use assets::ExportAsset;
 pub use graph::{GraphKind, GraphSpec};
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
@@ -526,6 +528,10 @@ pub struct Document {
     /// as JSON: the print engine sits above this crate); `None` until they are set up.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub print_setup: Option<serde_json::Value>,
+    /// Window → Asset Export: art collected for export ([`ExportAsset`]), in panel order. Their
+    /// export settings are Export for Screens' ([`Document::export_settings`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets: Vec<ExportAsset>,
 }
 
 fn ppi72() -> f64 {
@@ -592,6 +598,7 @@ impl Document {
             slices: vec![],
             slices_clip_to_artboard: true,
             print_setup: None,
+            assets: vec![],
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
@@ -614,6 +621,7 @@ impl Document {
             l.walk(&mut |n| max = max.max(n.id.0));
         }
         max = self.slices.iter().fold(max, |m, s| m.max(s.id.0));
+        max = self.assets.iter().fold(max, |m, a| m.max(a.id));
         self.next_id = self.next_id.max(max + 1);
     }
 

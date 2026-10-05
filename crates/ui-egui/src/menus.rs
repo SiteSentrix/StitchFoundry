@@ -1458,6 +1458,13 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     ],
                 ),
                 sub("Graph", vec![c("Type…", "graph.setType"), c("Data…", "graph.setData"), todo("Design…"), todo("Column…"), todo("Marker…")]),
+                sub(
+                    "Collect for Export",
+                    vec![
+                        cp("As Single Asset", "assets.add", json!({"multiple": false})),
+                        cp("As Multiple Assets", "assets.add", json!({"multiple": true})),
+                    ],
+                ),
             ],
         ),
         (
@@ -1690,7 +1697,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 panel("Align", "align"),
                 panel("Appearance", "appearance"),
                 panel("Artboards", "artboards"),
-                todo("Asset Export"),
+                panel("Asset Export", crate::panels::asset_export::ID),
                 panel("Attributes", "attributes"),
                 panel("Brushes", "brushes"),
                 panel("Color", "color"),

@@ -523,9 +523,14 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written.
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    export_files(app, "document.exportForScreens", params)
+}
+
+/// [`export_for_screens`] through command `id` (`document.exportForScreens` or `assets.export`).
+pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) -> Result<Value, String> {
     let open_location = params.get("openLocation").and_then(Value::as_bool).unwrap_or(false);
     let folder = params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
-    let r = app.run("document.exportForScreens", params)?;
+    let r = app.run(id, params)?;
     let count = r["files"].as_array().map_or(0, Vec::len);
     // Files that came back as bytes: (name, base64).
     let returned: Vec<(&str, &str)> = match r["dataBase64"].as_str() {

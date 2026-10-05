@@ -73,6 +73,9 @@ pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub use export_as::open as open_export_as;
 pub use export_for_screens::open as open_export_for_screens;
+pub(crate) use export_for_screens::{
+    KIND as EXPORT_FOR_SCREENS, formats as screen_formats, open_assets as open_export_for_screens_assets, saved_rows as screen_saved_rows,
+};
 pub use new_document::{open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
 pub use save_pdf::{open as open_save_pdf, open_preset as open_pdf_preset};
@@ -343,6 +346,8 @@ mod tests_raster_formats;
 
 #[cfg(test)]
 mod tests_dxf;
+#[cfg(test)]
+mod tests_screen_assets;
 #[cfg(test)]
 mod tests_screens;
 
