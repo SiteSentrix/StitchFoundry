@@ -17,6 +17,7 @@ pub mod confirm;
 mod document_setup;
 mod effect;
 pub mod expand;
+mod export_as;
 mod export_for_screens;
 pub mod eyedropper;
 pub mod flatten;
@@ -51,6 +52,7 @@ use serde_json::{Value, json};
 pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
+pub use export_as::open as open_export_as;
 pub use new_document::{open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
 pub use save_pdf::open as open_save_pdf;
@@ -183,6 +185,7 @@ registry! {
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions"] => png_options::SPEC,
+    ExportAs: ["exportAs"] => export_as::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

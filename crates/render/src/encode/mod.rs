@@ -4,10 +4,10 @@
 
 pub mod png;
 
-use vectorcraft_doc::Document;
+use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::Rect;
 
-use crate::{AntiAlias, RenderOptions, Rendered, Renderer};
+use crate::{AntiAlias, RenderOptions, Rendered, Renderer, fx};
 
 /// A raster file format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -107,6 +107,26 @@ pub(crate) fn webp(img: &Rendered) -> Result<Vec<u8>, String> {
     image::ImageEncoder::write_image(enc, &img.to_straight(), img.width, img.height, image::ExtendedColorType::Rgba8)
         .map_err(|e| format!("WebP encoding failed: {e}"))?;
     Ok(buf)
+}
+
+/// Bounds of the art an export draws: visible objects off template layers (guides left out),
+/// with their strokes and live effects. `None` when nothing would be drawn.
+pub fn art_bounds(doc: &Document) -> Option<Rect> {
+    doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, drawn_bounds(l)))
+}
+
+fn drawn_bounds(n: &Node) -> Option<Rect> {
+    if !n.visible {
+        return None;
+    }
+    match &n.kind {
+        NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => None,
+        NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false } => {
+            children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, drawn_bounds(c)))
+        }
+        _ if fx::has_fx(n) => fx::visual_bounds(n),
+        _ => n.visual_bounds(),
+    }
 }
 
 #[cfg(test)]

@@ -157,7 +157,12 @@ Draw, look, export:
 {"name":"screenshot","arguments":{"scale":0.5}}
 {"name":"export","arguments":{"path":"/tmp/art.svg"}}
 {"name":"export","arguments":{"path":"/tmp/art.png","options":{"ppi":144,"background":"white","antiAlias":"type"}}}
+{"name":"export","arguments":{"path":"/tmp/icon.png","range":"1-3","options":{"useArtboards":true}}}
 ```
+
+Export As goes through `options` too: for PNG, JPEG and WebP `useArtboards: true` writes one file per artboard (all,
+or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF keeps them as pages of one file; an
+SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art.
 
 Raster exports take more options in `options`: `ppi` (72, 150, 300…; stored in the file), `background`
 (`transparent`, `white`, `black` or `"#rrggbb"`), `antiAlias` (`none`, `art`, `type`: text snapped to pixels) and,

@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 
 use super::super::*;
+use super::encode::single_artboard;
 use super::{
     ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, default_name, encode, encode_all, merge, writable, write_encoded,
     write_file, write_or_return,
@@ -44,7 +45,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// `p` without its artboard choice, also inside its SVG options (for documents made of one
 /// synthetic artboard, and for callers that pick the artboard themselves).
-fn without_artboards(p: &Value) -> Value {
+pub(super) fn without_artboards(p: &Value) -> Value {
     let strip = |o: &mut serde_json::Map<String, Value>| ARTBOARD_PARAMS.iter().for_each(|k| _ = o.remove(*k));
     let mut q = p.clone();
     if let Some(o) = q.as_object_mut() {
@@ -69,16 +70,12 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
     let nodes: Vec<Arc<Node>> = ids.into_iter().filter(|id| !on_template(*id)).filter_map(|id| st.doc.node(id).cloned().map(Arc::new)).collect();
     let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b)).ok_or_else(|| bad(C, "select something to export"))?;
-    let mut d = (*st.doc).clone();
+    let mut d = single_artboard(&st.doc, bounds, "Selection");
     let mut layer = Node::layer(d.alloc_id(), "Selection", vectorcraft_doc::LayerColor::Preset(0));
     if let Some(ch) = layer.children_mut() {
         *ch = nodes;
     }
     d.layers = vec![Arc::new(layer)];
-    let mut ab = d.artboards.first().cloned().ok_or_else(|| bad(C, "the document has no artboard"))?;
-    ab.rect = bounds;
-    ab.name = "Selection".into();
-    d.artboards = vec![ab];
     let bytes = encode(&d, f.id, &without_artboards(p))?;
     write_or_return(path, &bytes, json!({ "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
 }

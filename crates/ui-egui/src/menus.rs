@@ -376,6 +376,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{path?, preset?, range?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks)",
     ),
+    (
+        "file.exportAs",
+        "Export As…",
+        "",
+        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -445,7 +451,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::svg_options::open(app, crate::dialogs::svg_options::Mode::Export, None);
             Ok(Value::Null)
         }
-        "file.export.svg" => io::export(app, Some("svg"), s("path"), p).map(|p| json!({"path": p})),
+        "file.export.svg" => io::export(app, Some("svg"), s("path"), p),
         "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
             let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
@@ -464,7 +470,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::open_raster_options(app, f, params);
             Ok(Value::Null)
         }),
-        "file.export.png" => io::export(app, Some("png"), s("path"), p).map(|p| json!({"path": p})),
+        "file.export.png" => io::export(app, Some("png"), s("path"), p),
         "file.documentSetup" => crate::dialogs::open_document_setup(app),
         "edit.preferences" => {
             crate::prefs_dialog::open(app, s("category").as_deref());
@@ -742,6 +748,11 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
+        "file.exportAs" if s("path").is_none() => {
+            crate::dialogs::open_export_as(app, s("format").as_deref(), p);
+            Ok(Value::Null)
+        }
+        "file.exportAs" => io::export(app, s("format").as_deref(), s("path"), p),
         _ => return None,
     };
     Some(r)
@@ -897,6 +908,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         | "file.place"
         | "file.export.svg"
         | "file.export.png"
+        | "file.exportAs"
         | "file.exportForScreens"
         | "file.documentSetup"
         | "view.zoomIn"
@@ -976,6 +988,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "Export",
                     vec![
                         c("Export for Screens…", "file.exportForScreens"),
+                        c("Export As…", "file.exportAs"),
                         c("Export As SVG…", "file.export.svg"),
                         c("Export As PNG…", "file.export.png"),
                         todos("Save for Web (Legacy)…", "Cmd+Alt+Shift+S"),

@@ -304,7 +304,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
         "app.save" => wrap(app.run("file.save", if p.is_object() { p.clone() } else { json!({}) })),
         "app.export" => match s("path") {
-            Some(path) => wrap(crate::io::export(app, s("format"), Some(path.to_string()), p).map(|p| json!({"path": p}))),
+            Some(path) => wrap(crate::io::export(app, s("format"), Some(path.to_string()), p)),
             // No save dialog for an agent: the bytes come back, as in headless mode.
             None => wrap(app.run("document.export", p.clone())),
         },

@@ -171,3 +171,21 @@ fn anti_alias_none_is_the_same_on_every_thread_count() {
     let worst = st.pixels.iter().zip(&mt.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
     assert!(worst <= 4, "max channel difference {worst}");
 }
+
+#[test]
+fn art_bounds_cover_visible_art_only() {
+    let mut d = circle_doc();
+    let l = d.layers[0].id;
+    let hidden = {
+        let id = d.alloc_id();
+        let mut n =
+            Node::path(id, shapes::rectangle(Rect::new(100.0, 100.0, 120.0, 120.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+        n.visible = false;
+        n
+    };
+    d.insert(Some(l), 1, hidden).unwrap();
+    let b = art_bounds(&d).unwrap();
+    assert!((b.x0 - 5.3).abs() < 1e-6 && (b.x1 - 31.1).abs() < 1e-6 && (b.y1 - 26.2).abs() < 1e-6, "{b:?}");
+    let empty = Document::new(10.0, 10.0);
+    assert_eq!(art_bounds(&empty), None);
+}

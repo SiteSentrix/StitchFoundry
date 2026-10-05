@@ -54,9 +54,20 @@ pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
     app.ui.dialog = Some(Dialog::new(&kind(f), params));
 }
 
-/// The size in points of the region an export covers: the chosen artboard.
+/// The size in points of the one region an export covers (`None` when it writes several
+/// artboards): the chosen artboard, or the bounds of the visible art.
 fn export_size(doc: &vectorcraft_doc::Document, p: &Value) -> Option<(f64, f64)> {
-    let r = doc.artboards.get(ArtboardPick::deserialize(p).ok()?.one(doc.artboards.len()).ok()?)?.rect;
+    let pick = ArtboardPick::deserialize(p).ok()?;
+    let n = doc.artboards.len();
+    let r = match p["useArtboards"].as_bool() {
+        Some(false) => vectorcraft_render::encode::art_bounds(doc)?,
+        Some(true) => match pick.resolve(n).ok()?.as_deref() {
+            Some([i]) => doc.artboards.get(*i)?.rect,
+            None if n == 1 => doc.artboards[0].rect,
+            _ => return None,
+        },
+        None => doc.artboards.get(pick.one(n).ok()?)?.rect,
+    };
     Some((r.width(), r.height()))
 }
 
@@ -147,5 +158,5 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (format, path) = (d.str("format"), d.str("path"));
     app.ui.dialog = None;
-    io::export(app, Some(&format), Some(path), &form::params(d)).map(|path| json!({"path": path}))
+    io::export(app, Some(&format), Some(path), &form::params(d))
 }

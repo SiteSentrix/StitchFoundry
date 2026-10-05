@@ -80,11 +80,13 @@ pub(crate) fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &
 }
 
 /// Write every file of an export (one per artboard, linked images) for the destination `path`.
-fn write_encoded(app: &mut VectorcraftApp, doc: &vectorcraft_doc::Document, path: &str, enc: &fileio::Encoded) -> Result<(), String> {
-    for (p, bytes) in enc.named(doc, path) {
-        write_out(app, &p, bytes)?;
+/// → the export's own files (without the linked images).
+fn write_encoded(app: &mut VectorcraftApp, doc: &vectorcraft_doc::Document, path: &str, enc: &fileio::Encoded) -> Result<Vec<String>, String> {
+    let named = enc.named(doc, path);
+    for (p, bytes) in &named {
+        write_out(app, p, bytes)?;
     }
-    Ok(())
+    Ok(named.into_iter().take(enc.files.len()).map(|(p, _)| p).collect())
 }
 
 fn format_param(p: &Value) -> Option<&str> {
@@ -142,9 +144,10 @@ pub fn note_recent(app: &mut VectorcraftApp, path: &str) {
 }
 
 /// Export the active document in `format` (default: the path's extension, else PNG) with the
-/// `document.export` options in `params` (artboard, range, scale, SVG options…): every file it
-/// writes (an SVG per artboard, linked images) goes next to `path`. The document keeps its path.
-pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<String>, params: &Value) -> Result<String, String> {
+/// `document.export` options in `params` (artboard, range, useArtboards, ppi, SVG options…):
+/// every file it writes (one per artboard, linked images) goes next to `path`. The document keeps
+/// its path. → `{path, warnings, files?}` (`files`: every file when there are several).
+pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<String>, params: &Value) -> Result<Value, String> {
     let f = fileio::writable_format(format, path.as_deref())?;
     let doc = app.session.active().ok_or("no document")?.doc.clone();
     let path = target_path(app, path, f.extensions[0])?;
@@ -154,9 +157,20 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         _ => f,
     };
     let enc = fileio::encode_all(&doc, f.id, params).map_err(|e| e.to_string())?;
-    write_encoded(app, &doc, &path, &enc)?;
-    app.status(format!("Exported {path}"));
-    Ok(path)
+    let files = write_encoded(app, &doc, &path, &enc)?;
+    let what = match files.as_slice() {
+        [one] => one.clone(),
+        _ => format!("{} files", files.len()),
+    };
+    app.status(match enc.warnings.first() {
+        Some(first) => format!("Exported {what} with {} note(s): {first}", enc.warnings.len()),
+        None => format!("Exported {what}"),
+    });
+    let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
+    if files.len() > 1 {
+        out["files"] = json!(files);
+    }
+    Ok(out)
 }
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path

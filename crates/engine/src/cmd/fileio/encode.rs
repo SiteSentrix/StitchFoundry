@@ -4,7 +4,8 @@
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use vectorcraft_doc::Document;
+use vectorcraft_doc::{Artboard, Document};
+use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
@@ -167,6 +168,24 @@ pub(crate) fn anti_alias(id: &str) -> std::result::Result<AntiAlias, String> {
     AntiAlias::from_id(id).ok_or_else(|| format!("antiAlias `{id}`: none, art or type"))
 }
 
+/// The `useArtboards` param of a PDF or raster export (SVG has its own): `true` writes every
+/// chosen artboard (default all), `false` the bounds of the visible art instead, absent one
+/// artboard (raster) or the chosen pages (PDF).
+fn use_artboards(p: &Value) -> Result<Option<bool>> {
+    match p.get("useArtboards") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(v) => Err(bad(C, format!("useArtboards must be true or false, not {v}"))),
+    }
+}
+
+/// A copy of `doc` with one artboard, `rect` (exports of the art's or the selection's bounds).
+pub(super) fn single_artboard(doc: &Document, rect: Rect, name: &str) -> Document {
+    let mut d = doc.clone();
+    d.artboards = vec![Artboard { id: 1, name: name.into(), rect, show_center_mark: false, show_cross_hairs: false }];
+    d
+}
+
 fn boards<T>(r: std::result::Result<T, String>) -> Result<T> {
     r.map_err(|e| bad(C, e))
 }
@@ -213,6 +232,16 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     let f = super::writable(C, Some(format), None)?;
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
+    // SVG reads its own `useArtboards` (an SVG option).
+    let use_artboards = if f.raster || f.id == "pdf" { use_artboards(p)? } else { None };
+    if use_artboards == Some(false) {
+        let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
+        let mut q = super::export::without_artboards(p);
+        if let Some(o) = q.as_object_mut() {
+            o.remove("useArtboards");
+        }
+        return encode_all(&single_artboard(doc, bounds, "Art"), f.id, &q);
+    }
     let bytes = match f.id {
         "vectorcraft" => vectorcraft_format::save_file(doc),
         "svg" | "svgz" => return super::svg::encode(doc, p, f.id == "svgz").map_err(|e| bad(C, e)),
@@ -222,20 +251,33 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
         }
         "png" | "jpg" | "webp" => {
             let o: RasterOptions = options(f, p)?;
-            let region = doc.artboards[boards(o.boards.one(n))?].rect;
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
             let page = (doc.setup.background == vectorcraft_doc::Background::White).then_some([255; 3]);
             let settings = o.settings(page)?;
             let scale = settings.scale();
-            check_format_size(f, region.width() * scale, region.height() * scale)?;
-            vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
             let format = match f.id {
                 "png" => RasterFormat::Png,
                 "jpg" => RasterFormat::Jpeg,
                 _ => RasterFormat::WebP,
             };
-            vectorcraft_render::Renderer::new().export_region(doc, region, format, &settings).map_err(EngineError::Other)?
+            // Use Artboards: one file per chosen artboard (default all); else the one chosen.
+            let chosen = match use_artboards {
+                Some(true) => boards(o.boards.resolve(n))?.unwrap_or_else(|| (0..n).collect()),
+                _ => vec![boards(o.boards.one(n))?],
+            };
+            let mut enc = Encoded::default();
+            let mut renderer = vectorcraft_render::Renderer::new();
+            for b in chosen {
+                let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
+                check_format_size(f, region.width() * scale, region.height() * scale)?;
+                vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
+                enc.files.push((Some(b), renderer.export_region(doc, region, format, &settings).map_err(EngineError::Other)?));
+            }
+            if enc.files.is_empty() {
+                return Err(bad(C, "the document has no artboard"));
+            }
+            return Ok(enc);
         }
         _ => return Err(bad(C, format!("no encoder for {} yet", f.label))),
     };
