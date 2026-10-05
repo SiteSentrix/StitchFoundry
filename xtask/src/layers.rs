@@ -58,6 +58,7 @@ pub const TABLE: &[(&str, Class)] = &[
     // Crates added later (append-only).
     ("cad", Class::Layer(3)),
     ("eps", Class::Layer(3)),
+    ("metafile", Class::Layer(3)),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).

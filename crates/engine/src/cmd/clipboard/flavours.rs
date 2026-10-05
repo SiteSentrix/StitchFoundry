@@ -1,5 +1,5 @@
 //! Clipboard flavours: what Copy offers other apps besides SVG (PNG, PDF and plain text) and what
-//! Paste takes from them (bitmaps, plain text and PDF).
+//! Paste takes from them (bitmaps, plain text, PDF and Windows metafiles).
 //!
 //! The UI owns the platform clipboard (`Services::system_clipboard` in the egui frontend): on Copy
 //! it publishes [`Session::clipboard_flavours`]; before a Paste it turns what another app put on
@@ -24,9 +24,12 @@ pub const PDF: &str = "application/pdf";
 pub const PNG: &str = "image/png";
 /// Any bitmap (PNG, BMP…), in what Paste asks the system clipboard for.
 pub const BITMAP: &str = "image/*";
+/// An EMF (or WMF) picture: what Windows apps copy as vector art (the system clipboard reads it
+/// where the platform offers it).
+pub const EMF: &str = "image/emf";
 /// What Paste reads from other apps, best first: vector art before text, text before bitmaps
 /// (word processors offer a picture of copied text too).
-pub const PASTE_ORDER: [&str; 4] = [SVG, PDF, TEXT, BITMAP];
+pub const PASTE_ORDER: [&str; 5] = [SVG, PDF, EMF, TEXT, BITMAP];
 
 /// One representation of the clipboard's contents.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,6 +107,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{dataBase64, page?: 1, password? (an encrypted PDF), center?: [x, y]} replace the clipboard with the objects of one PDF page (with the images, patterns and swatches they use), centred on `center` (default: the first artboard) → {count, warnings}; then run edit.paste",
             has_doc,
             import_pdf
+        ),
+        cmd!(
+            query "clipboard.importEmf",
+            "Load Metafile into Clipboard",
+            [],
+            None,
+            "{dataBase64 (EMF or WMF bytes), center?: [x, y]} replace the clipboard with the picture's objects (paths, clipping groups, images, point type; the images they use), centred on `center` (default: the first artboard) → {count, warnings}; records VectorCraft doesn't read are skipped with one warning; then run edit.paste",
+            has_doc,
+            import_emf
         ),
     ]
 }
@@ -275,6 +287,21 @@ fn import_text(s: &mut Session, p: &Value) -> Result<Value> {
     let n = Node::new(NodeId(1), NodeKind::Text(Box::new(t)));
     let count = s.load_clipboard(Clipboard { nodes: vec![n], ..Default::default() }, p)?;
     Ok(json!({ "count": count }))
+}
+
+fn import_emf(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "clipboard.importEmf";
+    let bytes = data_param(p, C)?;
+    if vectorcraft_metafile::sniff(&bytes).is_none() {
+        return Err(bad(C, "the data isn't an EMF or WMF picture"));
+    }
+    let loaded = fileio::load("Clipboard.emf", &bytes).map_err(|e| bad(C, e.to_string()))?;
+    let clip = Clipboard::from_document(&loaded.doc);
+    if clip.is_empty() {
+        return Err(bad(C, "the picture has no objects"));
+    }
+    let count = s.load_clipboard(clip, p)?;
+    Ok(json!({ "count": count, "warnings": loaded.warnings }))
 }
 
 fn import_pdf(s: &mut Session, p: &Value) -> Result<Value> {
