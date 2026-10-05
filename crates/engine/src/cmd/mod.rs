@@ -380,6 +380,25 @@ pub(crate) fn parse_range(s: &str, count: usize) -> std::result::Result<Vec<usiz
     Ok(out)
 }
 
+/// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
+/// [`clock_date`]), `Some(None)` for null (no date), else `Some(Some(seconds))`.
+pub(crate) fn date_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Option<i64>>> {
+    match p.get(key) {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(v) => v.as_i64().map(|t| Some(Some(t))).ok_or_else(|| bad(cmd, format!("{key} must be Unix seconds (an integer) or null"))),
+    }
+}
+
+/// The date a command stamps: `given` (see [`date_param`]), else now (none on the web, which has
+/// no clock). It joins the running command's journal entry as `key`, so a replay of the journal
+/// gives the same date whenever it runs (an action leaves it out: [`crate::Session::journal_for_action`]).
+pub(crate) fn clock_date(s: &mut Session, key: &str, given: Option<Option<i64>>) -> Option<i64> {
+    let t = given.unwrap_or_else(vectorcraft_doc::metadata::now_unix);
+    s.note_journal(key, serde_json::json!(t));
+    t
+}
+
 /// The Transparency panel's state ([`Session::transparency_info`]).
 pub use opacitymask::TransparencyInfo;
 

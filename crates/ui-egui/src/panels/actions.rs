@@ -97,7 +97,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         if widgets::icon_button(ui, "square", "Stop Playing/Recording", false, 24.0).clicked()
             && let Some((set, name, start)) = app.ui.recording.take()
         {
-            let steps: Vec<(String, Value)> = app.session.journal.iter().skip(start).cloned().collect();
+            let steps = app.session.journal_for_action(start);
             if let Some(s) = app.ui.action_sets.get_mut(set) {
                 s.actions.push(Action { name, steps });
             }

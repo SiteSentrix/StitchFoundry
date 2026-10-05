@@ -920,7 +920,10 @@ ISO 8601 UTC. Pass any of the editable keys to change them in one undo step (`nu
 list or a comma-separated string and keeps each word once); bad values are refused. PDF export writes the title,
 author, description and keywords to the document info and XMP, PNG export writes them (with the copyright and
 creation date) as text chunks, and SVG export writes the description as `<desc>` and, with the `metadata` option,
-all of it as Dublin Core.
+all of it as Dublin Core. `file.new {created}` and a save to a file (`document.save` or `file.saveAs` with
+`{path, modified}`) use the given date (Unix seconds, or `null` for none) instead of now. Their journal entries always
+record the date they used, so replaying the journal makes the same document whenever it runs (an action recorded in
+the Actions panel leaves the date out: playing it later dates the document then).
 
 ```json
 {"name":"run_command","arguments":{"command":"file.info","params":{"author":"Ada","keywords":"poster, fair","rating":4,"copyrightStatus":"copyrighted","copyrightNotice":"© 2026 Ada"}}}

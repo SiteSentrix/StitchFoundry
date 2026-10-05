@@ -23,10 +23,14 @@ pub fn id_of(v: &Value) -> NodeId {
     NodeId(v["id"].as_u64().unwrap_or_else(|| panic!("no id in {v}")))
 }
 
-/// A session with one new `w`×`h` document.
+/// The created date (Unix seconds) of every fixture document: File Info dates come from the clock
+/// otherwise, and documents made a second apart would not compare equal.
+pub const CREATED: i64 = 1_767_225_600;
+
+/// A session with one new `w`×`h` document, dated [`CREATED`].
 pub fn session_with(w: f64, h: f64) -> Session {
     let mut s = Session::new();
-    exec(&mut s, "file.new", json!({"width": w, "height": h}));
+    exec(&mut s, "file.new", json!({"width": w, "height": h, "created": CREATED}));
     s
 }
 

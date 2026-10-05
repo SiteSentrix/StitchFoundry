@@ -197,6 +197,11 @@ impl DocState {
 /// Coordinates beyond this (points) are rejected: ~1,400 m, far past Illustrator's large canvas.
 pub const MAX_COORD: f64 = 4.0e6;
 
+/// `(command, param)` pairs the journal records only so a replay reproduces the original run
+/// (dates from the clock: `cmd::clock_date`); an action leaves them out
+/// ([`Session::journal_for_action`]).
+const REPLAY_ONLY: [(&str, &str); 3] = [("file.new", "created"), ("document.save", "modified"), ("file.saveAs", "modified")];
+
 /// Cheap sanity check after an edit: artboards and the objects just touched (the selection) must
 /// have finite, in-range geometry, so saved files always reload and renderers never see NaN/∞.
 fn doc_sane(d: &Document, sel: &Selection) -> bool {
@@ -570,8 +575,8 @@ pub struct Session {
     pub style_libraries: cmd::stylelib::Libraries,
     /// URLs recently given in the Attributes panel (`attributes.set {url}`), newest first; not saved.
     pub recent_urls: Vec<String>,
-    /// Parameters the running top-level command resolved from the preferences, added to its
-    /// journal entry so a replay does the same ([`Session::note_journal`]).
+    /// Parameters the running top-level command resolved from the preferences or the clock, added
+    /// to its journal entry so a replay does the same ([`Session::note_journal`]).
     journal_note: serde_json::Map<String, Value>,
 }
 
@@ -748,11 +753,29 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview) unless its params give `key`: a value it resolved from the preferences.
+    /// preview) unless its params give `key`: a value it resolved from the preferences or the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
         if self.depth == 1 {
             self.journal_note.insert(key.to_string(), value);
         }
+    }
+
+    /// The journal from entry `start` on, as an action records it: without the params that only
+    /// pin a replay to the original run ([`REPLAY_ONLY`]), so playing the action later acts now.
+    pub fn journal_for_action(&self, start: usize) -> Vec<(String, Value)> {
+        self.journal
+            .iter()
+            .skip(start)
+            .cloned()
+            .map(|(id, mut p)| {
+                if let Value::Object(m) = &mut p {
+                    for (_, key) in REPLAY_ONLY.iter().filter(|(c, _)| *c == id) {
+                        m.remove(*key);
+                    }
+                }
+                (id, p)
+            })
+            .collect()
     }
 
     /// `params` with the noted values added (see [`Session::note_journal`]).
@@ -1011,6 +1034,8 @@ mod tests_freeform;
 mod tests_gradient;
 #[cfg(test)]
 mod tests_gradpanel;
+#[cfg(test)]
+mod tests_journal;
 #[cfg(test)]
 mod tests_knockout;
 #[cfg(test)]
