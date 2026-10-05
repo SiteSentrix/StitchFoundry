@@ -4244,6 +4244,7 @@ name = "vectorcraft-render"
 version = "0.1.1"
 dependencies = [
  "flate2",
+ "gif",
  "image",
  "jpeg-encoder",
  "log",

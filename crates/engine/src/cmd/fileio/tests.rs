@@ -154,7 +154,7 @@ fn formats_query_lists_readers_writers_and_options() {
     let mut s = Session::new();
     let r = s.execute("document.formats", &json!({})).unwrap();
     let ids = |k: &str| r[k].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect::<Vec<_>>();
-    assert_eq!(ids("writable"), ["vectorcraft", "svg", "svgz", "pdf", "png", "jpg", "webp", "template"]);
+    assert_eq!(ids("writable"), ["vectorcraft", "svg", "svgz", "pdf", "png", "jpg", "gif", "webp", "template", "png8"]);
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
     assert_eq!(png["options"]["scale"]["default"], 1);

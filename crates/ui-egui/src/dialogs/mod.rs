@@ -192,7 +192,7 @@ registry! {
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
-    RasterOptions: ["pngOptions", "jpgOptions", "webpOptions"] => png_options::SPEC,
+    RasterOptions: ["pngOptions", "jpgOptions", "webpOptions", "gifOptions", "png8Options"] => png_options::SPEC,
     ExportAs: ["exportAs"] => export_as::SPEC,
     ImportPdf: [import_pdf::KIND] => import_pdf::SPEC,
     SwatchConflict: [swatch_conflict::KIND] => swatch_conflict::SPEC,

@@ -10,6 +10,7 @@ use vectorcraft_doc::{Artboard, Document};
 use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
+use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::super::*;
@@ -144,6 +145,12 @@ struct RasterOptions {
     scans: Option<u8>,
     embed_icc: Option<bool>,
     image_map: Option<String>,
+    colors: Option<u16>,
+    reduction: Option<String>,
+    dither: Option<String>,
+    dither_amount: Option<u8>,
+    transparency: Option<bool>,
+    matte: Option<Value>,
 }
 
 impl RasterOptions {
@@ -168,6 +175,22 @@ impl RasterOptions {
                 method: parse(self.method.as_deref(), jpeg::Method::from_id, "method", "baseline, optimized or progressive")?,
                 scans: self.scans.unwrap_or(3).clamp(*jpeg::SCANS.start(), *jpeg::SCANS.end()),
                 embed_icc: self.embed_icc.unwrap_or(true),
+            },
+            palette: PaletteOptions {
+                colors: self.colors.unwrap_or(256).clamp(2, 256),
+                reduction: parse(
+                    self.reduction.as_deref(),
+                    Reduction::from_id,
+                    "reduction",
+                    "perceptual, selective, adaptive, web, blackWhite or gray",
+                )?,
+                dither: parse(self.dither.as_deref(), Dither::from_id, "dither", "none, diffusion, pattern or noise")?,
+                dither_amount: self.dither_amount.unwrap_or(100).min(100),
+                transparency: self.transparency.unwrap_or(true),
+                matte: match &self.matte {
+                    Some(v) => background(v).map_err(|e| bad(C, format!("matte: {e}")))?,
+                    None => Some([255; 3]),
+                },
             },
         })
     }
@@ -291,7 +314,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
             return Ok(Encoded { warnings, ..Encoded::one(bytes) });
         }
-        "png" | "jpg" | "webp" => {
+        "png" | "jpg" | "webp" | "gif" | "png8" => {
             let o: RasterOptions = options(f, p)?;
             // New Document → Background Contents: White makes the export opaque, unless `background`
             // says otherwise (JPEG has no alpha: white either way).
@@ -301,6 +324,8 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
             let format = match f.id {
                 "png" => RasterFormat::Png,
                 "jpg" => RasterFormat::Jpeg,
+                "gif" => RasterFormat::Gif,
+                "png8" => RasterFormat::Png8,
                 _ => RasterFormat::WebP,
             };
             // Use Artboards: one file per chosen artboard (default all); else the one chosen.
@@ -322,7 +347,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
                 enc.maps.extend(imagemap::build(doc, region, scale, map, enc.files.len()));
                 let bytes = renderer.export_region(doc, region, format, &settings).map_err(EngineError::Other)?;
                 // File Info as PNG text chunks.
-                let bytes = if format == RasterFormat::Png {
+                let bytes = if matches!(format, RasterFormat::Png | RasterFormat::Png8) {
                     vectorcraft_render::encode::png::with_text(bytes, &doc.metadata.png_text(&doc.title))
                 } else {
                     bytes

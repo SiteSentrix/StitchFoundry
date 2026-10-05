@@ -1,4 +1,4 @@
-//! The options of the raster formats beyond PNG, drawn headlessly: JPEG.
+//! The options of the raster formats beyond PNG, drawn headlessly: JPEG, PNG-8 and GIF.
 
 use serde_json::json;
 
@@ -41,4 +41,39 @@ fn jpeg_options_pick_the_colour_model_method_and_profile() {
     app.run("file.exportAs", json!({"format": "jpg"})).unwrap();
     confirm(&mut app).unwrap();
     assert_eq!(app.ui.dialog.as_ref().unwrap().str("colorModel"), "cmyk");
+}
+
+#[test]
+fn palette_options_reduce_the_colours() {
+    let (mut app, written) = app(1);
+    app.run("file.exportAs", json!({"format": "gif"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("gifOptions"));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((spec(&d.kind).heading)(d), "GIF Options");
+    assert_eq!(
+        (d.str("reduction"), d.f64("colors", 0.0), d.str("dither"), d.bool("transparency"), d.str("matte")),
+        ("selective".into(), 256.0, "diffusion".into(), true, "white".into())
+    );
+    frame(&mut app);
+    set(&mut app, "colors", json!(4));
+    set(&mut app, "dither", json!("pattern"));
+    set(&mut app, "matte", json!("#336699"));
+    set(&mut app, "interlaced", json!(true));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let (path, gif) = written.borrow()[0].clone();
+    assert_eq!(path, "/out/Untitled-1.gif");
+    assert_eq!(&gif[..6], b"GIF89a");
+    assert_eq!(gif[10] & 0x07, 1, "a global colour table of 4 entries");
+
+    app.run("file.exportAs", json!({"format": "png8"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("png8Options"));
+    set(&mut app, "reduction", json!("gray"));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let (path, png) = written.borrow()[1].clone();
+    assert_eq!(path, "/out/Untitled-1.png");
+    assert_eq!(png[25], 3, "indexed");
 }

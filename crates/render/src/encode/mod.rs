@@ -1,9 +1,12 @@
 //! Raster export: render a document region with [`RasterExportOptions`] (resolution, background,
 //! anti-aliasing) and encode it as PNG ([`png`]: resolution in `pHYs`, Adam7 interlacing), JPEG
-//! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile) or lossless WebP.
+//! ([`jpeg`]: RGB, CMYK or grey, progressive, resolution and colour profile), lossless WebP, or
+//! a palette image ([`quantize`]) as PNG-8 or [`gif`].
 
+pub mod gif;
 pub mod jpeg;
 pub mod png;
+pub mod quantize;
 
 use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::Rect;
@@ -16,6 +19,9 @@ pub enum RasterFormat {
     Png,
     Jpeg,
     WebP,
+    /// Indexed PNG: a palette of up to 256 colours.
+    Png8,
+    Gif,
 }
 
 /// How a raster export renders and encodes.
@@ -26,17 +32,27 @@ pub struct RasterExportOptions {
     /// Opaque background colour (RGB); `None` = transparent (JPEG has no alpha: white).
     pub background: Option<[u8; 3]>,
     pub anti_alias: AntiAlias,
-    /// PNG: Adam7 interlacing.
+    /// PNG, PNG-8: Adam7 interlacing; GIF: interlaced rows.
     pub interlaced: bool,
     /// JPEG quality 0–100.
     pub quality: u8,
     /// JPEG colour model, coding and profile.
     pub jpeg: jpeg::JpegOptions,
+    /// PNG-8 and GIF: the colour reduction.
+    pub palette: quantize::PaletteOptions,
 }
 
 impl Default for RasterExportOptions {
     fn default() -> Self {
-        Self { ppi: 72.0, background: None, anti_alias: AntiAlias::Art, interlaced: false, quality: 90, jpeg: jpeg::JpegOptions::default() }
+        Self {
+            ppi: 72.0,
+            background: None,
+            anti_alias: AntiAlias::Art,
+            interlaced: false,
+            quality: 90,
+            jpeg: jpeg::JpegOptions::default(),
+            palette: quantize::PaletteOptions::default(),
+        }
     }
 }
 
@@ -73,6 +89,13 @@ impl RasterExportOptions {
                 jpeg::encode(&px, img.width, img.height, self.quality, Some(self.ppi), &self.jpeg)
             }
             RasterFormat::WebP => webp(img),
+            RasterFormat::Png8 | RasterFormat::Gif => {
+                let ix = quantize::quantize(&img.to_straight(), img.width, img.height, &self.palette);
+                match format {
+                    RasterFormat::Gif => gif::encode(&ix, self.interlaced),
+                    _ => png::encode_indexed(&ix, &png::PngOptions { ppi: Some(self.ppi), interlaced: self.interlaced }),
+                }
+            }
         }
     }
 }
@@ -132,3 +155,5 @@ fn drawn_bounds(n: &Node) -> Option<Rect> {
 mod tests;
 #[cfg(test)]
 mod tests_jpeg;
+#[cfg(test)]
+mod tests_palette;

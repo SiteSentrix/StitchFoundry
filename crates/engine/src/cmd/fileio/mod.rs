@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Serialize Document",
             [],
             None,
-            "{format?: vectorcraft (default)|template|svg|svgz|pdf|png|jpg|webp, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
+            "{format?: vectorcraft (default)|template|svg|svgz|pdf|png|jpg|webp|gif|png8, …the format's options (see document.formats; SVG ones also as svg: {…})} → {text, warnings} for svg, else {dataBase64, warnings}; an SVG of several artboards also gives files: [{name, text}], linked images linked: [{name, dataBase64}]",
             has_doc,
             export::serialize
         ),
@@ -64,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Document",
             [],
             None,
-            "{path?, format?: svg|svgz|pdf|png|jpg|webp|vectorcraft|template (default: from the path's extension, else png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), jpg: quality?: 90 (0–100), colorModel?: rgb|cmyk|gray, method?: baseline|optimized|progressive, scans?: 3 (3–5, progressive), embedIcc?: true, imageMap?: none|client|server (an HTML or NCSA map of the objects with a URL, written as <stem>.html / <stem>.map); SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images, image maps)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
+            "{path?, format?: svg|svgz|pdf|png|jpg|webp|gif|png8|vectorcraft|template (default: from the path's extension, else png; png8 writes an indexed .png), artboard?: 0, artboards?: [i…], range?: \"1-3, 5\" | \"all\" (1-based; PDF writes one page per artboard, default all; SVG writes one file per artboard, {stem}-{artboard}.svg; raster formats write one artboard), useArtboards?: true (raster: one file per chosen artboard, default all, {stem}-{artboard}.{ext}; pdf: every page) | false (pdf/raster: the bounds of the visible art; SVG has it as an SVG option), raster: ppi?: 72 (pixels per inch, stored in the file; wins over scale), scale?: 1 (pixels per point), background?: transparent|white|black|\"#rrggbb\" (jpg: white when transparent), antiAlias?: none|art (default)|type (text snapped to pixels), interlaced?: false (png, Adam7), jpg: quality?: 90 (0–100), colorModel?: rgb|cmyk|gray, method?: baseline|optimized|progressive, scans?: 3 (3–5, progressive), embedIcc?: true, imageMap?: none|client|server (an HTML or NCSA map of the objects with a URL, written as <stem>.html / <stem>.map), gif/png8: colors?: 256 (2–256), reduction?: perceptual|selective (default)|adaptive|web|blackWhite|gray, dither?: none|diffusion (default)|pattern|noise, ditherAmount?: 100, transparency?: true, matte?: white|\"#rrggbb\"|none, interlaced?; SVG options flat or as svg: {styling, outlineText, images, objectIds, decimals, minify, responsive, useArtboards, preserveEditing, metadata, fewerTspans, hiddenLayers} (see document.formats), …the PDF options of document.exportPdf} → {path, format, bytes, warnings, files?: [path…] (several), linked?: [path…] (linked images, image maps)}; no path → {dataBase64, format, bytes, warnings, files?: [{name, dataBase64}], linked?: [{name, dataBase64}]}. Never changes the document's path",
             has_doc,
             export::export
         ),
@@ -82,7 +82,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export for Screens",
             ["File", "Export"],
             None,
-            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|svg|svgz|pdf, scale?: 1 (raster only), ppi?: (raster: wins over scale, scale = ppi / 72), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes), …the format's options (antiAlias, background…)}], prefix?, antiAlias?: none|art|type (raster rows without their own)} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
+            "{folder?, artboards?: [index…] | range?: \"1-3\" (default all), formats?: [{format: png|jpg|webp|gif|png8|svg|svgz|pdf, scale?: 1 (raster only), ppi?: (raster: wins over scale, scale = ppi / 72), suffix?: \"@2x\" (raster default: @{scale}x when scale ≠ 1; vector formats drop @Nx suffixes), …the format's options (antiAlias, background…)}], prefix?, antiAlias?: none|art|type (raster rows without their own)} one file per artboard and format (a PDF holds its artboard alone; artboards with the same name, in any case, get -2, -3…; an unnamed one is Artboard-N) → {files: [path…]}; no folder → {files: [{name, dataBase64}]}",
             has_doc,
             export::export_for_screens
         ),
@@ -236,6 +236,52 @@ const IMAGE_MAP: FormatOption = FormatOption {
     description: "none, client (an HTML page with <map>, <stem>.html) or server (an NCSA <stem>.map): the areas of objects with a URL and an Image Map shape (attributes.set)",
 };
 
+const COLORS: FormatOption =
+    FormatOption { name: "colors", ty: "integer", default: "256", description: "most palette entries, 2–256 (the transparent one included)" };
+const REDUCTION: FormatOption = FormatOption {
+    name: "reduction",
+    ty: "string",
+    default: "\"selective\"",
+    description: "the palette: perceptual, selective (also keeps rarer colours, snaps near web colours), adaptive (most used), web (web-safe), blackWhite or gray; art with that many colours or fewer keeps them exactly",
+};
+const DITHER: FormatOption = FormatOption {
+    name: "dither",
+    ty: "string",
+    default: "\"diffusion\"",
+    description: "none, diffusion (Floyd–Steinberg), pattern (8×8 ordered) or noise",
+};
+const DITHER_AMOUNT: FormatOption = FormatOption { name: "ditherAmount", ty: "integer", default: "100", description: "dither strength 0–100" };
+const TRANSPARENCY: FormatOption = FormatOption {
+    name: "transparency",
+    ty: "boolean",
+    default: "true",
+    description: "pixels under half opacity become one transparent entry (false: everything is blended over the matte)",
+};
+const MATTE: FormatOption = FormatOption {
+    name: "matte",
+    ty: "string",
+    default: "\"white\"",
+    description: "the colour partly transparent edges are blended over (\"#rrggbb\", white, black), or none (they keep their colour)",
+};
+/// The options of the palette formats (PNG-8, GIF).
+const PALETTE_OPTIONS: &[FormatOption] = &[
+    ARTBOARD,
+    ARTBOARDS,
+    RANGE,
+    USE_ARTBOARDS,
+    PPI,
+    SCALE,
+    BACKGROUND,
+    ANTI_ALIAS,
+    INTERLACED,
+    COLORS,
+    REDUCTION,
+    DITHER,
+    DITHER_AMOUNT,
+    TRANSPARENCY,
+    MATTE,
+];
+
 /// A format `document.open` reads but nothing writes yet.
 const fn reader(id: &'static str, label: &'static str, extensions: &'static [&'static str], mime: &'static str, raster: bool) -> Format {
     Format { id, label, extensions, mime, read: true, write: false, raster, options: &[] }
@@ -302,7 +348,7 @@ pub const FORMATS: &[Format] = &[
             IMAGE_MAP,
         ],
     },
-    reader("gif", "GIF", &["gif"], "image/gif", true),
+    Format { id: "gif", label: "GIF", extensions: &["gif"], mime: "image/gif", read: true, write: true, raster: true, options: PALETTE_OPTIONS },
     Format {
         id: "webp",
         label: "WebP",
@@ -325,6 +371,7 @@ pub const FORMATS: &[Format] = &[
         raster: false,
         options: &[],
     },
+    Format { id: "png8", label: "PNG-8", extensions: &["png"], mime: "image/png", read: false, write: true, raster: true, options: PALETTE_OPTIONS },
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -573,3 +620,6 @@ mod tests_exportas;
 
 #[cfg(test)]
 mod tests_jpeg;
+
+#[cfg(test)]
+mod tests_palette;
