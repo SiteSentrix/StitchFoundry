@@ -32,7 +32,7 @@ use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect};
 use vectorcraft_text::{FontDb, TextLayout};
 
 use super::css::{Styles, XNode};
-use super::{DEFAULT_FONT_SIZE, PT_PER_IN, href};
+use super::{DEFAULT_FONT_SIZE, PT_PER_IN, href, vector_effect};
 use crate::xml_escape;
 
 const SVG_NS: &str = "http://www.w3.org/2000/svg";
@@ -123,6 +123,8 @@ pub(super) struct PendingText {
     pub servers: Vec<(Option<usize>, Option<usize>)>,
     /// Number of `url(#…)` paints (the placeholder paths after the main one, in order).
     pub paints: usize,
+    /// `vector-effect="non-scaling-stroke"`: the character strokes keep their width on screen.
+    pub non_scaling: bool,
     /// The placeholder rectangle in the element's user space.
     marker: Rect,
 }
@@ -602,7 +604,8 @@ impl Ctx {
         let b = if paints.is_empty() { obj.bounds() } else { Some(obj.xf.transform_rect_bbox(measure(&obj).bounds)) }.unwrap_or_default();
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
         let name = t.attribute("id").unwrap_or("").to_string();
-        Some((PendingText { name, obj, servers, paints: paints.len(), marker }, paints))
+        let non_scaling = vector_effect::is_non_scaling(&self.css, t);
+        Some((PendingText { name, obj, servers, paints: paints.len(), non_scaling, marker }, paints))
     }
 }
 
