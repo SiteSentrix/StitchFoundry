@@ -12,7 +12,7 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2, shapes};
 
-use crate::SvgError;
+use crate::{SvgError, fnv1a};
 use css::XNode;
 use text::TextSlots;
 
@@ -33,7 +33,16 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
     let (kx, ky) = units.k;
     let mut doc = Document::new(size.width() as f64 * kx, size.height() as f64 * ky);
     doc.units = units.unit;
-    let mut im = Importer { doc, warnings, mask_flags: mask_flags(&xml), links, slots, patterns: HashMap::new() };
+    let mut im = Importer {
+        doc,
+        warnings,
+        mask_flags: mask_flags(&xml),
+        links,
+        slots,
+        patterns: HashMap::new(),
+        midpoints: midpoint_stops(&xml),
+        labels: labels(&xml),
+    };
 
     // usvg wraps everything in an id-less group carrying the viewBox transform when needed.
     let mut top = tree.root();
@@ -69,7 +78,8 @@ pub(crate) fn import(svg: &str) -> Result<(Document, Vec<String>), SvgError> {
             children.extend(im.children(g, base * aff(g.transform())));
             let id = im.doc.alloc_id();
             let preset = (im.doc.layers.len() % vectorcraft_doc::LAYER_COLORS.len()) as u8;
-            let mut l = Node::layer(id, g.id(), LayerColor::Preset(preset));
+            let name = im.name_of(g.id()).to_string();
+            let mut l = Node::layer(id, &name, LayerColor::Preset(preset));
             if let Some(ch) = l.children_mut() {
                 *ch = children;
             }
@@ -140,6 +150,43 @@ struct Importer {
     slots: TextSlots,
     /// Pattern swatch made for each usvg pattern.
     patterns: HashMap<usize, String>,
+    /// Midpoint stops by gradient id (see [`midpoint_stops`]).
+    midpoints: HashMap<String, Vec<Option<f32>>>,
+    /// Object names by element id (see [`labels`]).
+    labels: HashMap<String, String>,
+}
+
+/// The stops our export added for midpoints (`data-vc-midpoint`), by gradient id: for each stop,
+/// the midpoint it stands for.
+fn midpoint_stops(xml: &roxmltree::Document) -> HashMap<String, Vec<Option<f32>>> {
+    xml.descendants()
+        .filter(|n| matches!(n.tag_name().name(), "linearGradient" | "radialGradient"))
+        .filter_map(|g| {
+            let id = g.attribute("id")?;
+            let marks: Vec<Option<f32>> = g
+                .children()
+                .filter(|c| c.tag_name().name() == "stop")
+                .map(|c| c.attribute("data-vc-midpoint").and_then(|v| v.parse().ok()))
+                .collect();
+            marks.iter().any(Option::is_some).then(|| (id.to_string(), marks))
+        })
+        .collect()
+}
+
+/// A gradient's stops, with the midpoint stops `marks` names folded back into the midpoints of
+/// the stops before them.
+fn gradient_stops(g: &usvg::BaseGradient, marks: Option<&[Option<f32>]>) -> Vec<GradientStop> {
+    let marks = marks.filter(|m| m.len() == g.stops().len());
+    let mut out: Vec<GradientStop> = Vec::with_capacity(g.stops().len());
+    for (i, s) in g.stops().iter().enumerate() {
+        if let (Some(mid), Some(prev)) = (marks.and_then(|m| m.get(i).copied().flatten()), out.last_mut()) {
+            prev.midpoint = mid.clamp(0.0, 1.0);
+            continue;
+        }
+        let c = s.color();
+        out.push(GradientStop { opacity: s.opacity().get(), ..GradientStop::new(s.offset().get(), Color::rgb8(c.red, c.green, c.blue)) });
+    }
+    out
 }
 
 /// The options [`crate::export::MASK_FLAGS`] records on exported `<mask>` elements, by mask id:
@@ -211,6 +258,24 @@ fn link(n: &mut Node, url: &str) {
     }
 }
 
+/// The names apps keep beside element ids, by id: `data-name`, `inkscape:label`, `serif:id` or
+/// `aria-label` (the first one present).
+fn labels(xml: &roxmltree::Document) -> HashMap<String, String> {
+    const INKSCAPE: &str = "http://www.inkscape.org/namespaces/inkscape";
+    const SERIF: &str = "http://www.serif.com/";
+    xml.descendants()
+        .filter_map(|n| {
+            let id = n.attribute("id").filter(|id| !id.is_empty())?;
+            let name = n
+                .attribute("data-name")
+                .or_else(|| n.attribute((INKSCAPE, "label")))
+                .or_else(|| n.attribute((SERIF, "id")))
+                .or_else(|| n.attribute("aria-label"))?;
+            Some((id.to_string(), name.to_string()))
+        })
+        .collect()
+}
+
 fn aff(t: usvg::Transform) -> Affine {
     Affine::new([t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64])
 }
@@ -257,15 +322,6 @@ fn bezpath(p: &usvg::tiny_skia_path::Path, m: Affine) -> BezPath {
     bp
 }
 
-fn fnv1a(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
-    for b in bytes {
-        h ^= *b as u64;
-        h = h.wrapping_mul(0x100000001b3);
-    }
-    h
-}
-
 fn rule(r: usvg::FillRule) -> FillRule {
     match r {
         usvg::FillRule::NonZero => FillRule::NonZero,
@@ -294,11 +350,21 @@ impl Importer {
         }
     }
 
+    /// A gradient's stops, midpoints restored.
+    fn stops(&self, g: &usvg::BaseGradient) -> Vec<GradientStop> {
+        gradient_stops(g, self.midpoints.get(g.id()).map(Vec::as_slice))
+    }
+
+    /// The object name for an element id: its label (see [`labels`]), else the id itself.
+    fn name_of<'a>(&'a self, id: &'a str) -> &'a str {
+        self.labels.get(id).map_or(id, String::as_str)
+    }
+
     fn named(&mut self, id: &str, kind: NodeKind) -> Node {
         let nid = self.doc.alloc_id();
         let mut n = Node::new(nid, kind);
         if !id.is_empty() {
-            n.name = Some(id.to_string());
+            n.name = Some(self.name_of(id).to_string());
         }
         n
     }
@@ -482,15 +548,6 @@ impl Importer {
     }
 
     fn paint(&mut self, p: &usvg::Paint, m: Affine) -> Paint {
-        let stops = |g: &usvg::BaseGradient| {
-            g.stops()
-                .iter()
-                .map(|s| {
-                    let c = s.color();
-                    GradientStop { opacity: s.opacity().get(), ..GradientStop::new(s.offset().get(), Color::rgb8(c.red, c.green, c.blue)) }
-                })
-                .collect::<Vec<_>>()
-        };
         let gp = |kind, stops, geom: GradientGeom| {
             Paint::Gradient(Box::new(GradientPaint {
                 gradient: Gradient { kind, stops },
@@ -513,7 +570,7 @@ impl Importer {
                     focal: None,
                 };
                 geom.transform(m * aff(lg.transform()), GradientKind::Linear);
-                gp(GradientKind::Linear, stops(lg), geom)
+                gp(GradientKind::Linear, self.stops(lg), geom)
             }
             usvg::Paint::RadialGradient(rg) => {
                 if rg.spread_method() != usvg::SpreadMethod::Pad {
@@ -527,7 +584,7 @@ impl Importer {
                 // A focal point outside the circle is pulled inside it.
                 geom.set_focal(Some(Point::new(rg.fx() as f64, rg.fy() as f64)));
                 geom.transform(m * aff(rg.transform()), GradientKind::Radial);
-                gp(GradientKind::Radial, stops(rg), geom)
+                gp(GradientKind::Radial, self.stops(rg), geom)
             }
             usvg::Paint::Pattern(pt) => self.pattern(pt, m),
         }

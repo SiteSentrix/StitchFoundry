@@ -48,9 +48,14 @@ use Item::Sep;
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.open", "Open…", "Cmd+O", "{path?}"),
-    ("file.save", "Save", "Cmd+S", "{path?}"),
-    ("file.saveAs", "Save As…", "Cmd+Shift+S", "{path?}"),
-    ("file.saveCopy", "Save a Copy…", "Cmd+Alt+S", "{path?}"),
+    ("file.save", "Save", "Cmd+S", "{path?, svg?: {…SVG options}} (a document saved as .svg saves as SVG again, with the same options)"),
+    (
+        "file.saveAs",
+        "Save As…",
+        "Cmd+Shift+S",
+        "{path?, svg?: {…SVG options}} .vectorcraft, or .svg/.svgz (such a path without svg options opens SVG Options)",
+    ),
+    ("file.saveCopy", "Save a Copy…", "Cmd+Alt+S", "{path?, svg?: {…SVG options}} like Save As, but the document keeps its path"),
     ("file.newFromTemplate", "New from Template…", "Cmd+Shift+N", "{path?} open a template as a new untitled document"),
     ("file.revert", "Revert", "F12", "{}"),
     ("file.place", "Place…", "Cmd+Shift+P", "{path?}"),
@@ -87,7 +92,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("file.clearRecent", "Clear Recent Files", "", "{}"),
     ("type.findFont", "Find Font…", "", "{} open the Find Font dialog (engine: text.fonts / text.replaceFont / select.font)"),
     ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
-    ("file.export.svg", "Export As SVG…", "", "{path?, artboard?, outlineText?} (document.export options)"),
+    (
+        "file.export.svg",
+        "Export As SVG…",
+        "",
+        "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
+    ),
     ("file.export.png", "Export As PNG…", "", "{path?, scale?: 1, artboard?} (document.export options)"),
     ("file.exportForScreens", "Export for Screens…", "Cmd+Alt+E", "{} opens the dialog; with params = document.exportForScreens"),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
@@ -385,8 +395,8 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(path) => io::open_path(app, &path).map(|_| Value::Null),
             None => io::open_dialog(app).map(|_| Value::Null),
         },
-        "file.save" => io::save(app, s("path"), false).map(|p| json!({"path": p})),
-        "file.saveAs" | "file.saveCopy" => io::save(app, s("path"), true).map(|p| json!({"path": p})),
+        "file.save" => io::save(app, s("path"), false, p).map(|p| json!({"path": p})),
+        "file.saveAs" | "file.saveCopy" => io::save_as(app, id == "file.saveCopy", p),
         "document.exportSelection" => {
             io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
         }
@@ -437,6 +447,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 }
                 None => Err("cancelled".into()),
             }
+        }
+        "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
+            crate::dialogs::svg_options::open(app, crate::dialogs::svg_options::Mode::Export, None);
+            Ok(Value::Null)
         }
         "file.export.svg" => io::export(app, Some("svg"), s("path"), p).map(|p| json!({"path": p})),
         "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {

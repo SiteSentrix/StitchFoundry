@@ -111,6 +111,9 @@ pub struct DocState {
     pub mask_view: Option<NodeId>,
     /// View → Show Transparency Grid, per document (view state: not saved, not undoable).
     pub transparency_grid: bool,
+    /// The SVG options this document was last saved with as SVG (Save reuses them; JSON as in
+    /// `document.save {svg}`, null when none).
+    pub save_options: Value,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -134,6 +137,7 @@ impl DocState {
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             mask_view: None,
             transparency_grid: false,
+            save_options: Value::Null,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).

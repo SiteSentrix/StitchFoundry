@@ -71,7 +71,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let i = i.ok_or("no such document")?;
     if !d.bool("discard") {
         app.session.set_active(i);
-        io::save(app, None, false)?;
+        io::save(app, None, false, &Value::Null)?;
     }
     close_now(app, i)?;
     match d.str("then").as_str() {

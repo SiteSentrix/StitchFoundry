@@ -10,22 +10,25 @@ use vectorcraft_doc::{CharStyle, Justify};
 use vectorcraft_effects::stroke::{self, Written, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
 
-use crate::{ExportOptions, Styling, base64_encode, fmt_num, xml_escape};
+use crate::{EDITING_NS, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Styling, base64_encode, fmt_num, fnv1a, xml_escape};
 
 type Props = Vec<(&'static str, String)>;
 
-/// One laid-out line of area type: baseline anchor (text space) and its pieces of each run.
-struct AreaLine<'t> {
-    x: f64,
-    y: f64,
-    pieces: Vec<(usize, &'t str)>,
-    hyphenated: bool,
-}
-
-pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<String>) {
+pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
+    if opts.object_ids != ObjectIds::Unique {
+        return write(doc, opts, native, "");
+    }
+    // Unique ids: every id and class name gets a prefix hashed from the output written without
+    // one, so the same document always gets the same ids and different ones never share any.
+    let plain = write(doc, opts, native, "");
+    let prefix = format!("u{:010x}-", fnv1a(plain.svg.as_bytes()) & 0xff_ffff_ffff);
+    write(doc, opts, native, &prefix)
+}
+
+fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix: &str) -> Output {
     let rect = opts
         .artboard
         .and_then(|i| doc.artboards.get(i))
@@ -44,12 +47,15 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<Strin
         names: HashMap::new(),
         depth: 1,
         patterns: HashMap::new(),
+        gradients: HashMap::new(),
         pattern_nest: 0,
         brushes: None,
         knockout: doc.page_knockout,
         anonymous: false,
         knockout_filter: None,
         warnings: vec![],
+        id_prefix,
+        linked: Vec::new(),
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -70,20 +76,28 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<Strin
     if !opts.minify {
         out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     }
+    if opts.styling == Styling::StyleEntities && !w.classes.is_empty() {
+        out.push_str("<!DOCTYPE svg [");
+        for (i, c) in w.classes.iter().enumerate() {
+            out.push_str(&format!("{nl}{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)));
+        }
+        out.push_str(&format!("{nl}]>{nl}"));
+    }
     let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
     out.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
     if !opts.responsive {
         out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
     }
     out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
-    if !w.defs.is_empty() || !w.classes.is_empty() {
+    let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();
+    if !w.defs.is_empty() || css {
         out.push_str(&w.indent(1));
         out.push_str(&format!("<defs>{nl}"));
-        if !w.classes.is_empty() {
+        if css {
             out.push_str(&w.indent(2));
             out.push_str("<style>");
             for (i, c) in w.classes.iter().enumerate() {
-                out.push_str(&format!("{nl}{}.cls-{}{{{}}}", w.indent(3), i + 1, xml_escape(c)));
+                out.push_str(&format!("{nl}{}.{id_prefix}cls-{}{{{}}}", w.indent(3), i + 1, xml_escape(c)));
             }
             out.push_str(&format!("{nl}{}</style>{nl}", w.indent(2)));
         }
@@ -95,10 +109,37 @@ pub(crate) fn export(doc: &Document, opts: &ExportOptions) -> (String, Vec<Strin
         out.push_str(&w.indent(1));
         out.push_str(&format!("<title>{}</title>{nl}", xml_escape(&doc.title)));
     }
+    w.metadata(&mut out, native);
     out.push_str(&w.body);
     out.push_str("</svg>");
     out.push_str(nl);
-    (out, w.warnings)
+    Output { svg: out, linked: w.linked, warnings: w.warnings }
+}
+
+/// A CSS declaration block as the literal value of an `<!ENTITY>`: quotes, `%` and markup
+/// characters become references that still read as themselves inside the `style` attribute.
+fn entity_value(decl: &str) -> String {
+    let mut o = String::with_capacity(decl.len());
+    for c in decl.chars() {
+        match c {
+            '"' => o.push_str("&#34;"),
+            '%' => o.push_str("&#37;"),
+            // Doubly escaped: the entity's replacement text is parsed again where it is used.
+            '&' => o.push_str("&#38;#38;"),
+            '<' => o.push_str("&#38;#60;"),
+            _ => o.push(c),
+        }
+    }
+    o
+}
+
+/// The usual file extension of an image MIME type.
+fn image_ext(mime: &str) -> &str {
+    match mime {
+        "image/jpeg" => "jpg",
+        "image/svg+xml" => "svg",
+        m => m.strip_prefix("image/").filter(|e| !e.is_empty() && e.chars().all(|c| c.is_ascii_alphanumeric())).unwrap_or("bin"),
+    }
 }
 
 struct Writer<'a> {
@@ -115,6 +156,8 @@ struct Writer<'a> {
     depth: usize,
     /// `<pattern>` def ids by pattern name + placement.
     patterns: HashMap<String, String>,
+    /// Gradient def ids by content (everything but the id).
+    gradients: HashMap<String, String>,
     pattern_nest: u32,
     /// Whether the group being written is a knockout group (what its neutral children inherit).
     knockout: bool,
@@ -126,6 +169,10 @@ struct Writer<'a> {
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Features written approximately (once each).
     warnings: Vec<String>,
+    /// Prepended to every id and class name ([`ObjectIds::Unique`]).
+    id_prefix: &'a str,
+    /// Image files the SVG links to ([`ImageMode::Link`]).
+    linked: Vec<LinkedImage>,
 }
 
 /// How one stroke is written.
@@ -200,16 +247,29 @@ impl Writer<'_> {
     fn fresh_id(&mut self, prefix: &str) -> String {
         let mut i = 1;
         loop {
-            let id = format!("{prefix}-{i}");
+            let id = format!("{}{prefix}-{i}", self.id_prefix);
             if self.used_ids.insert(id.clone()) {
                 return id;
             }
             i += 1;
         }
     }
+    /// `base` (with the unique prefix) if free, else `base-2`, `base-3`…
+    fn unique_id(&mut self, base: &str) -> String {
+        let base = format!("{}{base}", self.id_prefix);
+        let mut cand = base.clone();
+        for i in 2.. {
+            if self.used_ids.insert(cand.clone()) {
+                break;
+            }
+            cand = format!("{base}-{i}");
+        }
+        cand
+    }
+
     /// Reserve ids for every named object up front so generated def ids never collide with them.
     fn assign_name_ids(&mut self) {
-        if !self.opts.object_ids {
+        if self.opts.object_ids == ObjectIds::Minimal {
             return;
         }
         let mut named: Vec<(NodeId, String)> = Vec::new();
@@ -219,20 +279,21 @@ impl Writer<'_> {
             }
         });
         for (id, base) in named {
-            let mut cand = base.clone();
-            let mut i = 2;
-            while !self.used_ids.insert(cand.clone()) {
-                cand = format!("{base}-{i}");
-                i += 1;
-            }
+            let cand = self.unique_id(&base);
             self.names.insert(id, cand);
         }
     }
+    /// ` id="…"` for a named object, plus ` data-name="…"` with the name itself when the id had to
+    /// differ from it (spaces, punctuation, duplicates, the unique prefix).
     fn id_attr(&self, n: &Node) -> String {
         if self.anonymous {
             return String::new();
         }
-        self.names.get(&n.id).map(|id| format!(" id=\"{}\"", xml_escape(id))).unwrap_or_default()
+        let Some(id) = self.names.get(&n.id) else { return String::new() };
+        match n.name.as_deref() {
+            Some(name) if name != id => format!(" id=\"{}\" data-name=\"{}\"", xml_escape(id), xml_escape(name)),
+            _ => format!(" id=\"{}\"", xml_escape(id)),
+        }
     }
     fn matrix(&self, m: Affine) -> String {
         let c = m.as_coeffs();
@@ -249,7 +310,7 @@ impl Writer<'_> {
             Styling::PresentationAttributes => {
                 // CSS-only properties go in a style attribute.
                 let (style, attrs): (Vec<_>, Vec<_>) =
-                    props.iter().partition(|(k, _)| matches!(*k, "mix-blend-mode" | "isolation" | "font-feature-settings"));
+                    props.iter().partition(|(k, _)| matches!(*k, "mix-blend-mode" | "isolation" | "font-feature-settings" | "font-kerning"));
                 let mut s: String = attrs.iter().map(|(k, v)| format!(" {k}=\"{}\"", xml_escape(v))).collect();
                 if !style.is_empty() {
                     s.push_str(&format!(" style=\"{}\"", xml_escape(&css(&style))));
@@ -257,18 +318,53 @@ impl Writer<'_> {
                 s
             }
             Styling::InlineStyle => format!(" style=\"{}\"", xml_escape(&css(&props.iter().collect::<Vec<_>>()))),
+            Styling::StyleEntities => format!(" style=\"&st{};\"", self.class(css(&props.iter().collect::<Vec<_>>()))),
             Styling::InternalCss => {
-                let decl = css(&props.iter().collect::<Vec<_>>());
-                let i = match self.classes.iter().position(|c| *c == decl) {
-                    Some(i) => i,
-                    None => {
-                        self.classes.push(decl);
-                        self.classes.len() - 1
-                    }
-                };
-                format!(" class=\"cls-{}\"", i + 1)
+                let i = self.class(css(&props.iter().collect::<Vec<_>>()));
+                format!(" class=\"{}cls-{i}\"", self.id_prefix)
             }
         }
+    }
+
+    /// The 1-based number of a distinct declaration block (a CSS class or a style entity).
+    fn class(&mut self, decl: String) -> usize {
+        match self.classes.iter().position(|c| *c == decl) {
+            Some(i) => i + 1,
+            None => {
+                self.classes.push(decl);
+                self.classes.len()
+            }
+        }
+    }
+
+    /// `<metadata>`: the Dublin Core title and format ([`ExportOptions::metadata`]) and the native
+    /// document ([`ExportOptions::preserve_editing`]).
+    fn metadata(&self, out: &mut String, native: Option<&[u8]>) {
+        let native = native.filter(|_| self.opts.preserve_editing);
+        if !self.opts.metadata && native.is_none() {
+            return;
+        }
+        let nl = if self.opts.minify { "" } else { "\n" };
+        let mut line = |depth: usize, s: &str| {
+            out.push_str(&self.indent(depth));
+            out.push_str(s);
+            out.push_str(nl);
+        };
+        line(1, "<metadata>");
+        if self.opts.metadata {
+            line(2, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">");
+            line(3, "<rdf:Description rdf:about=\"\">");
+            line(4, "<dc:format>image/svg+xml</dc:format>");
+            if !self.doc.title.is_empty() {
+                line(4, &format!("<dc:title>{}</dc:title>", xml_escape(&self.doc.title)));
+            }
+            line(3, "</rdf:Description>");
+            line(2, "</rdf:RDF>");
+        }
+        if let Some(bytes) = native {
+            line(2, &format!("<vectorcraft:document xmlns:vectorcraft=\"{EDITING_NS}\">{}</vectorcraft:document>", base64_encode(bytes)));
+        }
+        line(1, "</metadata>");
     }
 
     fn node_props(n: &Node) -> Props {
@@ -319,6 +415,8 @@ impl Writer<'_> {
         s
     }
 
+    /// A fill or stroke value. Gradients resolve unset geometry against `bounds` (the space
+    /// [`Self::xf`] maps into user space, as the renderer does).
     fn paint(&mut self, p: &Paint, bounds: Option<Rect>) -> String {
         match p {
             Paint::None => "none".into(),
@@ -372,63 +470,57 @@ impl Writer<'_> {
         Some(id)
     }
 
+    /// The id of a `<linearGradient>`/`<radialGradient>` def for `g` resolved against `bounds`.
+    /// Identical gradients share one def; a gradient from a swatch takes the swatch's name as its
+    /// id. A midpoint other than halfway is written as an extra stop marked `data-vc-midpoint`
+    /// (what import turns back into a midpoint).
     fn gradient_def(&mut self, g: &GradientPaint, bounds: Rect) -> String {
         let mut geom = g.resolve(bounds);
         geom.transform(self.xf, g.gradient.kind);
         let (s, e) = (geom.start, geom.end);
-        let head = match g.gradient.kind {
+        // An off-centre focal point: `fx`/`fy`, in the gradient's own (unsquashed) space.
+        let focal = |w: &Self, f: Point| format!(" fx=\"{}\" fy=\"{}\"", w.num(f.x), w.num(f.y));
+        let (tag, prefix, attrs) = match g.gradient.kind {
             GradientKind::Radial => {
-                let id = self.fresh_id("radial-gradient");
-                let r = (e - s).hypot();
-                // An off-centre focal point: `fx`/`fy`, in the gradient's own (unsquashed) space.
-                let focal = |f: Point| format!(" fx=\"{}\" fy=\"{}\"", self.num(f.x), self.num(f.y));
-                if (geom.aspect - 1.0).abs() < 1e-9 {
-                    (
-                        id.clone(),
-                        format!(
-                            "<radialGradient id=\"{id}\" cx=\"{}\" cy=\"{}\" r=\"{}\"{} gradientUnits=\"userSpaceOnUse\">",
-                            self.num(s.x),
-                            self.num(s.y),
-                            self.num(r),
-                            geom.focal.map(focal).unwrap_or_default()
-                        ),
-                        "radialGradient",
-                    )
+                let r = self.num((e - s).hypot());
+                let attrs = if (geom.aspect - 1.0).abs() < 1e-9 {
+                    let f = geom.focal.map(|f| focal(self, f)).unwrap_or_default();
+                    format!(" cx=\"{}\" cy=\"{}\" r=\"{r}\"{f}", self.num(s.x), self.num(s.y))
                 } else {
                     let v = e - s;
                     let m = Affine::translate(s.to_vec2()) * Affine::rotate(v.y.atan2(v.x)) * Affine::scale_non_uniform(1.0, geom.aspect);
-                    (
-                        id.clone(),
-                        format!(
-                            "<radialGradient id=\"{id}\" cx=\"0\" cy=\"0\" r=\"{}\"{} gradientTransform=\"{}\" gradientUnits=\"userSpaceOnUse\">",
-                            self.num(r),
-                            geom.focal.map(|f| focal(m.inverse() * f)).unwrap_or_default(),
-                            self.matrix(m)
-                        ),
-                        "radialGradient",
-                    )
-                }
+                    let f = geom.focal.map(|f| focal(self, m.inverse() * f)).unwrap_or_default();
+                    format!(" cx=\"0\" cy=\"0\" r=\"{r}\"{f} gradientTransform=\"{}\"", self.matrix(m))
+                };
+                ("radialGradient", "radial-gradient", attrs)
             }
-            GradientKind::Linear | GradientKind::Freeform => {
-                let id = self.fresh_id("linear-gradient");
-                (
-                    id.clone(),
-                    format!(
-                        "<linearGradient id=\"{id}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" gradientUnits=\"userSpaceOnUse\">",
-                        self.num(s.x),
-                        self.num(s.y),
-                        self.num(e.x),
-                        self.num(e.y)
-                    ),
-                    "linearGradient",
-                )
-            }
+            GradientKind::Linear | GradientKind::Freeform => (
+                "linearGradient",
+                "linear-gradient",
+                format!(" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"", self.num(s.x), self.num(s.y), self.num(e.x), self.num(e.y)),
+            ),
         };
-        let (id, open, tag) = head;
-        self.def(1, &open);
-        for (off, c, o) in g.gradient.expanded_stops() {
-            let op = if o < 1.0 { format!(" stop-opacity=\"{}\"", fmt_num(o as f64, 3)) } else { String::new() };
-            self.def(2, &format!("<stop offset=\"{}\" stop-color=\"{}\"{op}/>", fmt_num(off as f64, 4), c.to_hex()));
+        let stops: Vec<String> = g
+            .gradient
+            .expanded()
+            .map(|(offset, c, o, mid)| {
+                let op = if o < 1.0 { format!(" stop-opacity=\"{}\"", fmt_num(o as f64, 3)) } else { String::new() };
+                let mid = mid.map(|m| format!(" data-vc-midpoint=\"{}\"", fmt_num(m as f64, 4))).unwrap_or_default();
+                format!("<stop offset=\"{}\" stop-color=\"{}\"{op}{mid}/>", fmt_num(offset as f64, 4), c.to_hex())
+            })
+            .collect();
+        let key = format!("{tag}{attrs}{}", stops.concat());
+        if let Some(id) = self.gradients.get(&key) {
+            return id.clone();
+        }
+        let id = match &g.swatch {
+            Some(name) => self.unique_id(&sanitize_id(name)),
+            None => self.fresh_id(prefix),
+        };
+        self.gradients.insert(key, id.clone());
+        self.def(1, &format!("<{tag} id=\"{id}\"{attrs} gradientUnits=\"userSpaceOnUse\">"));
+        for stop in &stops {
+            self.def(2, stop);
         }
         self.def(1, &format!("</{tag}>"));
         id
@@ -912,8 +1004,18 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
-                let href = match self.doc.images.get(&im.key) {
-                    Some(b) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
+                let link = self.opts.images == ImageMode::Link;
+                let href = match (im.link.as_ref().filter(|_| link), self.doc.images.get(&im.key)) {
+                    (Some(l), _) => l.clone(),
+                    (None, Some(b)) if !b.bytes.is_empty() && link => {
+                        // Named after the bytes: image keys ("raster-1"…) repeat across documents.
+                        let name = format!("{}.{}", b.content_key(), image_ext(&b.mime));
+                        if !self.linked.iter().any(|l| l.name == name) {
+                            self.linked.push(LinkedImage { name: name.clone(), bytes: b.bytes.clone() });
+                        }
+                        name
+                    }
+                    (None, Some(b)) if !b.bytes.is_empty() => format!("data:{};base64,{}", b.mime, base64_encode(&b.bytes)),
                     _ => match &im.link {
                         Some(l) => l.clone(),
                         None => return,
@@ -1034,12 +1136,16 @@ impl Writer<'_> {
         }
     }
 
-    fn char_props(&mut self, st: &CharStyle) -> Props {
+    /// The `<text>`/`<tspan>` properties of a character style. `space`: the text's layout bounds
+    /// and the map from text space to user space, which character gradients resolve against
+    /// (as on the canvas).
+    fn char_props(&mut self, st: &CharStyle, space: (Rect, Affine)) -> Props {
         let mut p = Props::new();
         let fam =
             if st.font_family.contains(|c: char| c.is_whitespace() || c == ',') { format!("'{}'", st.font_family) } else { st.font_family.clone() };
         p.push(("font-family", fam));
-        p.push(("font-size", self.num(st.size)));
+        // Vertical scale is the font size; horizontal scale stretches it (`textLength`).
+        p.push(("font-size", self.num(st.size * st.v_scale / 100.0)));
         let fs = st.font_style.to_ascii_lowercase();
         if fs.contains("bold") || fs.contains("black") || fs.contains("heavy") {
             p.push(("font-weight", "bold".into()));
@@ -1047,22 +1153,26 @@ impl Writer<'_> {
         if fs.contains("italic") || fs.contains("oblique") {
             p.push(("font-style", "italic".into()));
         }
-        let fill = match &st.fill {
-            Paint::Gradient(g) => g.gradient.stops.first().map(|s| s.color.to_hex()).unwrap_or_else(|| "none".into()),
-            p => self.paint(p, None),
-        };
+        // Character paints resolve in the text's space (`to_user` maps it into user space).
+        let (bounds, to_user) = space;
+        let saved = std::mem::replace(&mut self.xf, to_user);
+        let fill = self.paint(&st.fill, Some(bounds));
         p.push(("fill", fill));
         if st.has_stroke() {
-            // Weight, cap, join, miter limit and dashes as for object strokes (a gradient: its
-            // first colour, as for the fill).
-            let mut layer = st.stroke_layer();
-            if let Paint::Gradient(g) = &layer.paint {
-                layer.paint = g.gradient.stops.first().map_or(Paint::None, |s| Paint::solid(s.color));
-            }
-            self.stroke_props(&layer, layer.width, None, &mut p);
+            // Weight, cap, join, miter limit and dashes as for object strokes; a gradient spans
+            // the text grown by half the weight, as on the canvas.
+            let layer = st.stroke_layer();
+            self.stroke_props(&layer, layer.width, Some(layer.paint_bounds(bounds)), &mut p);
         }
-        if st.tracking != 0.0 {
-            p.push(("letter-spacing", self.num(st.tracking / 1000.0 * st.size)));
+        self.xf = saved;
+        // Tracking and manual kerning both add space after every character.
+        let spacing = st.tracking + st.kerning.unwrap_or(0.0);
+        if spacing != 0.0 {
+            p.push(("letter-spacing", self.num(spacing / 1000.0 * st.size)));
+        }
+        if st.kerning.is_some() {
+            // Manual kerning replaces the font's pair kerning.
+            p.push(("font-kerning", "none".into()));
         }
         if !st.features.is_empty() {
             let v: Vec<String> = st
@@ -1118,7 +1228,8 @@ impl Writer<'_> {
         self.line("</g>");
     }
 
-    /// Text as glyph outlines: one compound path per run, painted like the run.
+    /// Text as glyph outlines: one compound path per run, painted like the run (gradients span
+    /// the whole text, as on the canvas).
     fn text_outlines(&mut self, n: &Node, t: &TextObject) {
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         let mut runs: Vec<(usize, kurbo::BezPath)> = vec![];
@@ -1132,34 +1243,127 @@ impl Writer<'_> {
         let a = self.attrs(&Self::node_props(n));
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
-        for (r, mut bp) in runs {
+        // The glyphs stay in text space; the text's transform joins the document's meanwhile.
+        let saved = self.xf;
+        self.xf = saved * t.xf;
+        for (r, bp) in runs {
             let Some(run) = t.runs.get(r) else { continue };
-            bp.apply_affine(t.xf);
             let pd = PathData::from_bezpath(&bp);
             // An unnamed id: the pieces carry no id attribute (the group has it).
             let glyphs = Node::path(NodeId(u64::MAX), pd.clone(), run.style.appearance());
             let d = self.path_d(&pd, self.xf);
-            self.shape(&glyphs, &d, &[&pd], FillRule::NonZero, pd.bounds());
+            self.shape(&glyphs, &d, &[&pd], FillRule::NonZero, Some(lay.bounds));
         }
+        self.xf = saved;
         self.depth -= 1;
         self.line("</g>");
     }
 
+    /// Point and area type, every laid-out line at its own position: wraps, indents, tabs and
+    /// spacing come out as on the canvas. Centred and right-aligned lines are anchored
+    /// (`text-anchor`) at their centre or right end, so they stay aligned in a viewer whose font
+    /// differs; other lines are placed where each style run (and, justified, each word) starts.
     fn text(&mut self, n: &Node, t: &TextObject) {
-        let first = t.first_style();
-        let lead = first.effective_leading();
+        if let TextKind::OnPath { path, start } = &t.kind {
+            return self.text_on_path(n, t, path, *start);
+        }
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let lines = text_lines(t, &lay, self.opts.fewer_tspans);
+        // A tab starts a new chunk at its stop: only lines without tabs can be anchored.
+        let anchor = match t.para.justify {
+            Justify::Center => Some(("middle", 0.5)),
+            Justify::Right => Some(("end", 1.0)),
+            _ => None,
+        }
+        .filter(|_| !lines.iter().flatten().any(|s| s.brk));
+        // The <text> element's user space is text space.
+        let space = (lay.bounds, Affine::IDENTITY);
+        let base = TextBase { props: self.char_props(&t.first_style(), space), space, anchored: anchor.is_some() };
+        let mut props = base.props.clone();
+        if let Some((a, _)) = anchor {
+            props.push(("text-anchor", a.into()));
+        }
+        props.extend(Self::node_props(n));
         let id = self.id_attr(n);
-        let (m, on_path) = match &t.kind {
-            // Area type lines are positioned in text space (see `area_lines`).
-            TextKind::Point | TextKind::Area { .. } => (self.xf * t.xf, None),
-            TextKind::OnPath { path, start } => {
-                let pid = self.fresh_id("text-path");
-                let d = self.path_d(path, self.xf * t.xf);
-                self.def(1, &format!("<path id=\"{pid}\" d=\"{d}\"/>"));
-                (Affine::IDENTITY, Some((pid, *start)))
-            }
+        let a = self.attrs(&props);
+        let m = self.xf * t.xf;
+        let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
+        let starts: Vec<Option<(f64, f64)>> = lines.iter().map(|l| line_start(l, anchor.map(|a| a.1))).collect();
+        // The `<text>` carries the first line's position too, so readers that place text by its
+        // own x/y start where the first line does.
+        let at = match starts.iter().flatten().next() {
+            Some((x, y)) => format!(" x=\"{}\" y=\"{}\"", self.num(*x), self.num(*y)),
+            None => String::new(),
         };
-        let mut props = self.char_props(&first);
+        let mut s = format!("<text{id}{tr}{at} xml:space=\"preserve\"{a}>");
+        for (line, start) in lines.iter().zip(starts) {
+            if let Some(start) = start {
+                self.text_line(&mut s, t, line, start, &base);
+            }
+        }
+        s.push_str("</text>");
+        self.line(&s);
+    }
+
+    /// One line of laid-out text starting at `start`. Default: a positioned `<tspan>` per segment
+    /// (only the first of an anchored line). Fewer tspans: one positioned `<tspan>` per line with
+    /// the style changes nested in it, positioned again only after tabs and justified word spaces.
+    /// Baseline shifts are relative (`dy`), undone by the next segment that isn't shifted.
+    fn text_line(&mut self, s: &mut String, t: &TextObject, line: &[Segment], start: (f64, f64), base: &TextBase) {
+        let fewer = self.opts.fewer_tspans;
+        if fewer {
+            s.push_str(&format!("<tspan x=\"{}\" y=\"{}\">", self.num(start.0), self.num(start.1)));
+        }
+        let mut place = !fewer;
+        let mut first = true;
+        // The baseline shift the current text position carries.
+        let mut shift = 0.0;
+        for seg in line {
+            let Some(st) = t.runs.get(seg.run).map(|r| &r.style) else { continue };
+            let mut attrs = String::new();
+            if place {
+                let (x, y) = if first { start } else { (seg.x, seg.y) };
+                attrs.push_str(&format!(" x=\"{}\" y=\"{}\"", self.num(x), self.num(y)));
+                shift = 0.0;
+            }
+            first = false;
+            if st.baseline_shift != shift {
+                attrs.push_str(&format!(" dy=\"{}\"", self.num(shift - st.baseline_shift)));
+                shift = st.baseline_shift;
+            }
+            // After a tab or a justified word space the next segment is placed.
+            place = seg.brk || (!fewer && !base.anchored);
+            if (st.h_scale - st.v_scale).abs() > 1e-9 {
+                attrs.push_str(&format!(" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\"", self.num(seg.advance)));
+            }
+            if st.rotation != 0.0 {
+                attrs.push_str(&format!(" rotate=\"{}\"", self.num(-st.rotation)));
+            }
+            let diff = run_diff(&base.props, self.char_props(st, base.space));
+            attrs.push_str(&self.attrs(&diff));
+            let text = xml_escape(&seg.text);
+            if attrs.is_empty() && fewer {
+                s.push_str(&text);
+            } else {
+                s.push_str(&format!("<tspan{attrs}>{text}</tspan>"));
+            }
+        }
+        if fewer {
+            s.push_str("</tspan>");
+        }
+    }
+
+    /// Type on a path: a `<textPath>` along the path (a def).
+    fn text_on_path(&mut self, n: &Node, t: &TextObject, path: &PathData, start: f64) {
+        let id = self.id_attr(n);
+        let pid = self.fresh_id("text-path");
+        let d = self.path_d(path, self.xf * t.xf);
+        self.def(1, &format!("<path id=\"{pid}\" d=\"{d}\"/>"));
+        // The <text> element's user space is the document's; gradients span the laid-out text.
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let space = (lay.bounds, self.xf * t.xf);
+        let base = self.char_props(&t.first_style(), space);
+        let mut props = base.clone();
         match t.para.justify {
             Justify::Center | Justify::JustifyCenter => props.push(("text-anchor", "middle".into())),
             Justify::Right | Justify::JustifyRight => props.push(("text-anchor", "end".into())),
@@ -1167,99 +1371,15 @@ impl Writer<'_> {
         }
         props.extend(Self::node_props(n));
         let a = self.attrs(&props);
-        let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
-        // Area type: laid-out lines (the `<text>` carries the first line's position too, so readers
-        // that place text by its own x/y start where the first line does).
-        let lines = matches!(t.kind, TextKind::Area { .. }).then(|| self.area_lines(t));
-        let at = match lines.as_ref().and_then(|l| l.first()) {
-            Some(l) => format!(" x=\"{}\" y=\"{}\"", self.num(l.x), self.num(l.y)),
-            None => String::new(),
-        };
-        let mut s = format!("<text{id}{tr}{at} xml:space=\"preserve\"{a}>");
-        if let Some((pid, start)) = &on_path {
-            s.push_str(&format!("<textPath xlink:href=\"#{pid}\" startOffset=\"{}%\">", fmt_num(start * 100.0, 3)));
+        let offset = fmt_num(start * 100.0, 3);
+        let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
+        for run in &t.runs {
+            let diff = run_diff(&base, self.char_props(&run.style, space));
+            let a = self.attrs(&diff);
+            s.push_str(&format!("<tspan{a}>{}</tspan>", xml_escape(&run.text.replace('\n', " "))));
         }
-        let base = self.char_props(&first);
-        if let Some(lines) = lines {
-            for l in lines {
-                let last = l.pieces.len() - 1;
-                for (k, (ri, text)) in l.pieces.into_iter().enumerate() {
-                    let pos = if k == 0 { format!(" x=\"{}\" y=\"{}\"", self.num(l.x), self.num(l.y)) } else { String::new() };
-                    let diff = run_diff(&base, self.char_props(&t.runs[ri].style));
-                    let a = self.attrs(&diff);
-                    let hy = if k == last && l.hyphenated { "-" } else { "" };
-                    s.push_str(&format!("<tspan{pos}{a}>{}{hy}</tspan>", xml_escape(text)));
-                }
-            }
-        } else {
-            let mut line = 0usize;
-            let mut pending = false;
-            for run in &t.runs {
-                let diff = run_diff(&base, self.char_props(&run.style));
-                for (i, piece) in run.text.split('\n').enumerate() {
-                    if i > 0 {
-                        line += 1;
-                        pending = true;
-                    }
-                    if piece.is_empty() {
-                        continue;
-                    }
-                    let pos = if pending && on_path.is_none() { format!(" x=\"0\" y=\"{}\"", self.num(line as f64 * lead)) } else { String::new() };
-                    pending = false;
-                    let a = self.attrs(&diff);
-                    s.push_str(&format!("<tspan{pos}{a}>{}</tspan>", xml_escape(piece)));
-                }
-            }
-        }
-        if on_path.is_some() {
-            s.push_str("</textPath>");
-        }
-        s.push_str("</text>");
+        s.push_str("</textPath></text>");
         self.line(&s);
-    }
-
-    /// Area type as laid out. Soft line breaks are only known to the layout, so each laid-out line
-    /// is placed at its baseline (text space), at its left edge, centre or right edge to match the
-    /// `text-anchor` of the paragraph alignment.
-    fn area_lines<'t>(&self, t: &'t TextObject) -> Vec<AreaLine<'t>> {
-        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-        let mut offsets = Vec::with_capacity(t.runs.len());
-        let mut off = 0;
-        for r in &t.runs {
-            offsets.push(off);
-            off += r.text.len();
-        }
-        let mut out = vec![];
-        for l in &lay.lines {
-            // Run pieces of this line (the paragraph's `\n` is outside `start..end`).
-            let mut pieces: Vec<(usize, &str)> = vec![];
-            for (ri, (r, &o)) in t.runs.iter().zip(&offsets).enumerate() {
-                let (a, b) = (l.start.max(o), l.end.min(o + r.text.len()));
-                if a < b {
-                    pieces.push((ri, &r.text[a - o..b - o]));
-                }
-            }
-            // Spaces where the line wrapped don't belong to the line.
-            while let Some((_, p)) = pieces.last_mut() {
-                *p = p.trim_end();
-                if !p.is_empty() {
-                    break;
-                }
-                pieces.pop();
-            }
-            if pieces.is_empty() {
-                continue;
-            }
-            let x = match t.para.justify {
-                Justify::Center | Justify::JustifyCenter => (l.x0 + l.x1) / 2.0,
-                Justify::Right | Justify::JustifyRight => l.x1,
-                _ => l.x0,
-            };
-            // A hyphenated break: the layout adds the hyphen as a glyph with no source text.
-            let hyphenated = l.glyph_end > l.glyph_start && lay.glyphs.get(l.glyph_end - 1).is_some_and(|g| g.len == 0);
-            out.push(AreaLine { x, y: l.baseline, pieces, hyphenated });
-        }
-        out
     }
 }
 
@@ -1282,6 +1402,7 @@ fn initial_value(k: &str) -> Option<&'static str> {
         "stroke-linejoin" => "miter",
         "stroke-miterlimit" => "4",
         "stroke-dashoffset" | "letter-spacing" => "0",
+        "font-kerning" => "auto",
         _ => return None,
     })
 }
@@ -1289,4 +1410,88 @@ fn initial_value(k: &str) -> Option<&'static str> {
 /// Any visible raster effect (shadow, glow, blur, feather) in `effects`?
 fn has_raster(effects: &[vectorcraft_doc::Effect]) -> bool {
     effects.iter().any(|e| e.visible && vectorcraft_effects::is_raster(&e.id))
+}
+
+/// What the lines of one `<text>` share.
+struct TextBase {
+    /// The `<text>` element's character properties, which each `<tspan>` differs from.
+    props: Props,
+    /// The text's layout bounds and the map from text space to user space (character paints).
+    space: (Rect, Affine),
+    /// Lines anchored at their centre or right end (`text-anchor`), positioned once each.
+    anchored: bool,
+}
+
+/// Characters of one style on one line, written as one `<tspan>`.
+struct Segment {
+    /// Index into `TextObject::runs`.
+    run: usize,
+    /// Where the segment starts (text space; `y` is the baseline).
+    x: f64,
+    y: f64,
+    text: String,
+    /// The laid-out width (tracking and justification included).
+    advance: f64,
+    /// The next segment needs its own position (after a tab, or a word space of a justified line).
+    brk: bool,
+}
+
+/// The laid-out lines of `t` as segments: a new segment at every style change, after tabs and,
+/// on justified lines, after each word space (unless `fewer`). The text comes from the clusters
+/// the layout placed: soft hyphens draw nothing, a line broken by hyphenation ends in `-`, all
+/// caps are upper case.
+fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Vec<Segment>> {
+    let plain = t.plain_text();
+    let split_words = !fewer && !matches!(t.para.justify, Justify::Left | Justify::Center | Justify::Right);
+    let mut lines = Vec::with_capacity(lay.lines.len());
+    for line in &lay.lines {
+        let mut segs: Vec<Segment> = Vec::new();
+        let mut cluster = None;
+        let source = |g: &vectorcraft_text::PositionedGlyph| if g.len == 0 { "-" } else { plain.get(g.byte..g.byte + g.len).unwrap_or("") };
+        let mut glyphs = lay.glyphs.get(line.glyph_start..line.glyph_end).unwrap_or_default();
+        // Spaces where the line wrapped (it doesn't end its paragraph) don't belong to the line.
+        if plain.get(line.end..).is_some_and(|rest| !rest.is_empty() && !rest.starts_with('\n')) {
+            while let Some((_, rest)) = glyphs.split_last().filter(|(g, _)| source(g).chars().all(|c| c.is_whitespace() && c != '\t')) {
+                glyphs = rest;
+            }
+        }
+        for g in glyphs {
+            let Some(run) = t.runs.get(g.run) else { continue };
+            if g.len > 0 && cluster == Some(g.byte) {
+                // Another glyph of the same cluster.
+                if let Some(last) = segs.last_mut() {
+                    last.advance += g.advance;
+                }
+                continue;
+            }
+            cluster = Some(g.byte);
+            let src: String = source(g).chars().filter(|c| *c != '\u{ad}').collect();
+            let piece = if run.style.all_caps { src.to_uppercase() } else { src };
+            let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace));
+            match segs.last_mut() {
+                Some(last) if last.run == g.run && !last.brk => {
+                    last.text.push_str(&piece);
+                    last.advance += g.advance;
+                    last.brk = brk;
+                }
+                _ => segs.push(Segment { run: g.run, x: g.origin.x, y: g.origin.y, text: piece, advance: g.advance, brk }),
+            }
+        }
+        segs.retain(|s| !s.text.is_empty());
+        if !segs.is_empty() {
+            lines.push(segs);
+        }
+    }
+    lines
+}
+
+/// Where a line of segments starts: its first segment's origin or, `anchor`ed (0.5: centre, 1:
+/// right end), that point of its width. `None` for an empty line.
+fn line_start(line: &[Segment], anchor: Option<f64>) -> Option<(f64, f64)> {
+    let (first, last) = (line.first()?, line.last()?);
+    let x = match anchor {
+        Some(f) => first.x + f * (last.x + last.advance - first.x),
+        None => first.x,
+    };
+    Some((x, first.y))
 }

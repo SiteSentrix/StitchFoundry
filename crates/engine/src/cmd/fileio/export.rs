@@ -8,30 +8,49 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 
 use super::super::*;
-use super::{ARTBOARD_PARAMS, ArtboardPick, Format, create_dir, encode, encode_with_warnings, writable, write_file, write_or_return};
+use super::{
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, default_name, encode, encode_all, merge, writable, write_encoded,
+    write_file, write_or_return,
+};
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
-    let (bytes, warnings) = encode_with_warnings(&s.doc()?.doc, f.id, p)?;
-    if f.id == "svg" {
-        return Ok(json!({ "text": String::from_utf8_lossy(&bytes), "warnings": warnings }));
+    let doc = &s.doc()?.doc;
+    let enc = encode_all(doc, f.id, p)?;
+    let files = enc.named(doc, &default_name(doc, f.extensions[0]));
+    let (main, linked) = files.split_at(enc.files.len());
+    // Text formats come back as text.
+    let data = |bytes: &[u8]| match f.id {
+        "svg" => json!({ "text": String::from_utf8_lossy(bytes) }),
+        _ => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }),
+    };
+    let mut out = merge(data(main.first().map_or(&[][..], |m| m.1)), json!({ "warnings": enc.warnings }));
+    if main.len() > 1 {
+        out["files"] = main.iter().map(|(name, bytes)| merge(json!({ "name": name }), data(bytes))).collect();
     }
-    Ok(json!({ "dataBase64": vectorcraft_format::base64_encode(&bytes), "warnings": warnings }))
+    if !linked.is_empty() {
+        out["linked"] = linked.iter().map(|(name, bytes)| json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) })).collect();
+    }
+    Ok(out)
 }
 
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let path = str_param(p, "path");
     let f = writable("document.export", str_param(p, "format"), path)?;
-    let (bytes, warnings) = encode_with_warnings(&s.doc()?.doc, f.id, p)?;
-    write_or_return(path, &bytes, json!({ "format": f.id, "warnings": warnings }))
+    let doc = &s.doc()?.doc;
+    let enc = encode_all(doc, f.id, p)?;
+    write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
-/// `p` without its artboard choice (for documents made of one synthetic artboard).
+/// `p` without its artboard choice, also inside its SVG options (for documents made of one
+/// synthetic artboard, and for callers that pick the artboard themselves).
 fn without_artboards(p: &Value) -> Value {
+    let strip = |o: &mut serde_json::Map<String, Value>| ARTBOARD_PARAMS.iter().for_each(|k| _ = o.remove(*k));
     let mut q = p.clone();
     if let Some(o) = q.as_object_mut() {
-        for k in ARTBOARD_PARAMS {
-            o.remove(k);
+        strip(o);
+        if let Some(svg) = o.get_mut("svg").and_then(Value::as_object_mut) {
+            strip(svg);
         }
     }
     q
@@ -79,7 +98,7 @@ fn screen_format(row: &Value) -> Result<ScreenFormat> {
     }
     let format = writable(C, Some(str_param(row, "format").unwrap_or("png")), None)?;
     if format.id == "vectorcraft" {
-        return Err(bad(C, "Export for Screens writes png, jpg, webp, svg or pdf"));
+        return Err(bad(C, "Export for Screens writes png, jpg, webp, svg, svgz or pdf"));
     }
     // Vector formats have no pixel size: scale doesn't apply and adds no @Nx suffix (not even one
     // left over from a raster row switched to SVG or PDF).
@@ -119,22 +138,9 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(dir) = folder {
         create_dir(dir)?;
     }
-    // Names are compared without case: `Icon` and `icon` are one file on most desktop file systems.
-    let mut names = HashSet::new();
     let mut written = HashSet::new();
     let mut files = vec![];
-    for b in boards {
-        let mut base: String = doc.artboards[b].name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
-        if base.is_empty() {
-            base = format!("Artboard-{}", b + 1);
-        }
-        let mut name = base.clone();
-        for i in 2.. {
-            if names.insert(name.to_lowercase()) {
-                break;
-            }
-            name = format!("{base}-{i}");
-        }
+    for (b, name) in boards.iter().copied().zip(artboard_file_names(&doc, &boards)) {
         for sf in &formats {
             let file = format!("{prefix}{name}{}.{}", sf.suffix, sf.format.extensions[0]);
             if !written.insert(file.to_lowercase()) {

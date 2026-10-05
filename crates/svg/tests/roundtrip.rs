@@ -8,7 +8,7 @@ use vectorcraft_doc::{
     StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
-use vectorcraft_svg::{ExportOptions, Styling, export, import, import_with_report};
+use vectorcraft_svg::{ExportOptions, ObjectIds, Styling, export, import, import_with_report};
 
 fn doc_with(nodes: Vec<Node>) -> Document {
     let mut d = Document::new(200.0, 200.0);
@@ -91,10 +91,11 @@ fn groups_and_names_roundtrip() {
     assert!(s.contains("id=\"My_Group\"") && s.contains("id=\"Box_B\"") && s.contains("id=\"Layer_1\""), "{s}");
     let r = roundtrip(&d);
     assert_eq!(r.node_count(), d.node_count());
-    assert_eq!(r.layers[0].name.as_deref(), Some("Layer_1"));
+    // data-name carries the names back exactly.
+    assert_eq!(r.layers[0].name.as_deref(), Some("Layer 1"));
     let a = art(&r);
     assert!(matches!(a[0].kind, NodeKind::Group { clip: false, .. }));
-    assert_eq!(a[0].name.as_deref(), Some("My_Group"));
+    assert_eq!(a[0].name.as_deref(), Some("My Group"));
     assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 30.0, 10.0), 0.01));
 }
 
@@ -400,7 +401,7 @@ fn text_on_path_roundtrip() {
 
 #[test]
 fn styling_modes_roundtrip() {
-    for styling in [Styling::PresentationAttributes, Styling::InlineStyle, Styling::InternalCss] {
+    for styling in [Styling::PresentationAttributes, Styling::InlineStyle, Styling::StyleEntities, Styling::InternalCss] {
         let mut d = Document::new(200.0, 200.0);
         let a = rect_node(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0), Appearance::basic(solid("#abcdef"), solid("#010203"), 2.0));
         let b = rect_node(&mut d, Rect::new(20.0, 0.0, 30.0, 10.0), Appearance::basic(solid("#abcdef"), solid("#010203"), 2.0));
@@ -412,6 +413,10 @@ fn styling_modes_roundtrip() {
         match styling {
             Styling::PresentationAttributes => assert!(s.contains("fill=\"#abcdef\"")),
             Styling::InlineStyle => assert!(s.contains("style=\"fill:#abcdef")),
+            Styling::StyleEntities => {
+                assert!(s.contains("<!DOCTYPE svg [") && s.contains("<!ENTITY st1 \"fill:#abcdef") && s.contains("style=\"&st1;\""), "{s}");
+                assert_eq!(s.matches("<!ENTITY").count(), 2, "{s}");
+            }
             Styling::InternalCss => {
                 assert!(s.contains("<style>") && s.contains("class=\"cls-1\""));
                 assert_eq!(s.matches(".cls-").count(), 2, "{s}");
@@ -445,7 +450,7 @@ fn options_decimals_minify_responsive_artboard() {
     // All art bounds: the rectangle and half its 1 pt stroke (right-angle miters stay inside).
     let s = export(&d, &ExportOptions { artboard: None, ..Default::default() });
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");
-    let s = export(&d, &ExportOptions { object_ids: false, ..Default::default() });
+    let s = export(&d, &ExportOptions { object_ids: ObjectIds::Minimal, ..Default::default() });
     assert!(!s.contains("id=\"Layer_1\""));
 }
 
@@ -760,8 +765,8 @@ fn full_document_roundtrip_is_stable() {
     let d = doc_with(vec![g]);
     let s1 = export(&d, &ExportOptions::default());
     let r = import(&s1).unwrap();
-    let s2 = export(&r, &ExportOptions { object_ids: false, ..Default::default() });
-    let s1b = export(&d, &ExportOptions { object_ids: false, ..Default::default() });
+    let s2 = export(&r, &ExportOptions { object_ids: ObjectIds::Minimal, ..Default::default() });
+    let s1b = export(&d, &ExportOptions { object_ids: ObjectIds::Minimal, ..Default::default() });
     let strip = |s: &str| s.lines().filter(|l| !l.contains("<title>")).collect::<Vec<_>>().join("\n");
     assert_eq!(strip(&s1b), strip(&s2));
     let _ = PathData::default();
