@@ -61,7 +61,7 @@ const UI_KEYS: [&str; 5] = ["mode", "path", "showCode", "allArtboards", "range"]
 /// The options a first SVG Options dialog starts from: the engine's defaults with Internal CSS
 /// and Responsive on (as the reference app's Export As starts). Hidden layers are left to the
 /// command (Save keeps them, Export leaves them out).
-fn first_use() -> Map<String, Value> {
+pub(super) fn first_use() -> Map<String, Value> {
     let mut m = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
     m.remove("hiddenLayers");
     m.insert("styling".into(), json!("css"));
@@ -158,12 +158,35 @@ fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, enabled: boo
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    option_fields(ui, d, false);
+    if Mode::of(d) == Mode::Export {
+        artboards(app, ui, d);
+    } else {
+        check(ui, d, "preserveEditing", "Preserve Editing Capabilities", true);
+    }
+    ui.add_space(10.0);
+    let show = d.bool("showCode");
+    if widgets::secondary_button(ui, if show { "Hide Code" } else { "Show Code" }).clicked() {
+        d.fields.insert("showCode".into(), json!(!show));
+    }
+    if show {
+        ui.add_space(6.0);
+        code_view(app, ui, d);
+    }
+    false
+}
+
+/// The SVG options: styling, fonts, images, object ids, decimals, minify, responsive, `<tspan>`s
+/// and metadata. `screens` (Export for Screens' Format Settings) leaves out Images: a linked
+/// image is another file.
+pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     let t = Tokens::get(ui.ctx());
-    let mode = Mode::of(d);
     egui::Grid::new("svg-options").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         choice(ui, d, "styling", "Styling:", &STYLING);
         choice(ui, d, "outlineText", "Font:", &FONTS);
-        choice(ui, d, "images", "Images:", &IMAGES);
+        if !screens {
+            choice(ui, d, "images", "Images:", &IMAGES);
+        }
         choice(ui, d, "objectIds", "Object IDs:", &OBJECT_IDS);
         ui.label(egui::RichText::new("Decimal:").color(t.text_dim));
         let decimals = d.f64("decimals", 3.0);
@@ -181,21 +204,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     });
     check(ui, d, "fewerTspans", "Fewer <tspan> Elements", !d.bool("outlineText"));
     check(ui, d, "metadata", "Include Metadata", true);
-    if mode == Mode::Export {
-        artboards(app, ui, d);
-    } else {
-        check(ui, d, "preserveEditing", "Preserve Editing Capabilities", true);
-    }
-    ui.add_space(10.0);
-    let show = d.bool("showCode");
-    if widgets::secondary_button(ui, if show { "Hide Code" } else { "Show Code" }).clicked() {
-        d.fields.insert("showCode".into(), json!(!show));
-    }
-    if show {
-        ui.add_space(6.0);
-        code_view(app, ui, d);
-    }
-    false
 }
 
 /// Use Artboards: all of them or a range; off = the bounds of all art.

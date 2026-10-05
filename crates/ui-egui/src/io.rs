@@ -509,8 +509,9 @@ pub(crate) fn open_in_app(app: &mut VectorcraftApp, path: &str) -> Result<(), St
 
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
-/// back as base64.
+/// back as base64. With `openLocation`, the file manager shows the first file written.
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    let open_location = params.get("openLocation").and_then(Value::as_bool).unwrap_or(false);
     let folder = params.get("folder").and_then(Value::as_str).unwrap_or_default().to_string();
     let r = app.run("document.exportForScreens", params)?;
     let count = r["files"].as_array().map_or(0, Vec::len);
@@ -522,7 +523,15 @@ pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Val
         }
     };
     if returned.is_empty() {
-        app.status(format!("Exported {count} file(s) to {folder}"));
+        let first = r["path"].as_str().or_else(|| r["files"][0].as_str());
+        let mut status = format!("Exported {count} file(s) to {folder}");
+        if open_location
+            && let Some(first) = first
+            && let Err(e) = reveal_path(app, first)
+        {
+            status = format!("{status} ({e})");
+        }
+        app.status(status);
     } else if let Some(download) = app.services.download.as_mut() {
         for (name, data) in &returned {
             let bytes = vectorcraft_format::base64_decode(data).ok_or("the export returned unreadable data")?;

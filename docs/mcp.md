@@ -1175,3 +1175,21 @@ slice ids and the ids of objects with an object slice.
 {"name":"run_command","arguments":{"command":"object.slice.create","params":{"x":0,"y":0,"width":200,"height":80}}}
 {"name":"run_command","arguments":{"command":"object.slice.move","params":{"dx":10,"dy":0}}}
 ```
+
+## Export for Screens
+
+`document.exportForScreens` writes every chosen artboard (`range`, `artboards`; default all) in every format row
+into `folder`, or returns the files as `dataBase64` without one; `zip: true` packs them into one store-only `.zip`.
+A row is `{format, scale?}` where `scale` is a factor (`2`, `"2x"`), a pixel width (`"100w"` or `width: 100`), a
+height (`"100h"`) or a resolution (`"72ppi"`); raster rows name their files `@2x`, `@100w`… unless `suffix` says
+otherwise. `fullDocument` writes one file per row instead (a PDF of every artboard, other formats the bounds of all
+art), `includeBleed` grows each artboard by the document's bleed, `subfolders` puts each row's files in a sub-folder
+(its size or format, or its own `folder`), `preset: "mobile"` or `"density"` (Android-style ldpi…xxxhdpi
+sub-folders) replaces the rows, and `settings: {png: {…}, jpg: {…}, svg: {…}, pdf: {preset}}` gives every row of a
+format its options. The document remembers the last params: `document.exportSettings`.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportForScreens","params":{"preset":"density","zip":true}}}
+{"name":"run_command","arguments":{"command":"document.exportForScreens","params":{"range":"1-2","formats":[{"format":"png","scale":"512w"},{"format":"jpg","quality":80,"scale":"2x"},{"format":"svg"}],"settings":{"png":{"background":"white"}}}}}
+{"name":"run_command","arguments":{"command":"document.exportSettings","params":{}}}
+```

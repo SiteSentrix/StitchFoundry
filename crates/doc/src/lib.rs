@@ -505,6 +505,10 @@ pub struct Document {
     /// kept them in `unknown`, see [`Document::migrate_color_profiles`]).
     #[serde(default, skip_serializing_if = "ColorProfiles::is_empty")]
     pub color_profiles: ColorProfiles,
+    /// File → Export for Screens: the settings it last exported with (`document.exportForScreens`
+    /// params), so the dialog reopens on them.
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub export_settings: serde_json::Map<String, serde_json::Value>,
     /// Top-level keys this version doesn't know (written by a newer one), kept so saving doesn't
     /// lose them. Separate from [`Document::unknown`], which holds foreign data by design.
     #[serde(flatten)]
@@ -577,6 +581,7 @@ impl Document {
             raster_effects: RasterEffectsSettings::default(),
             last_view: None,
             color_profiles: ColorProfiles::default(),
+            export_settings: Default::default(),
             extra: Default::default(),
             slices: vec![],
             slices_clip_to_artboard: true,

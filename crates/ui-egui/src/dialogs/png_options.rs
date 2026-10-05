@@ -5,7 +5,7 @@
 //! choice…); `__`-prefixed ones are the dialog's.
 
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format};
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, ColorModel, Method};
@@ -51,49 +51,56 @@ fn format_of(d: &Dialog) -> Option<&'static Format> {
 /// choice) are `params`.
 pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
     let size = app.session.active().and_then(|st| export_size(&st.doc, &params));
-    // The document's background (New Document → Background Contents) is the default; JPEG has no alpha.
-    let white = f.id == "jpg" || app.session.active().is_some_and(|st| st.doc.setup.background == vectorcraft_doc::Background::White);
     if let Some(o) = params.as_object_mut() {
         o.insert("ppi".into(), json!(72));
-        o.insert("background".into(), json!(if white { "white" } else { "transparent" }));
-        o.insert("antiAlias".into(), json!(AntiAlias::default().id()));
-        match f.id {
-            "png" => {
-                o.insert("interlaced".into(), json!(false));
-            }
-            "jpg" => {
-                // A CMYK document exports CMYK by default.
-                let cmyk = app.session.active().is_some_and(|st| st.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
-                let model = if cmyk { ColorModel::Cmyk } else { ColorModel::Rgb };
-                let defaults = jpeg::JpegOptions::default();
-                o.extend([
-                    ("quality".into(), json!(90)),
-                    ("colorModel".into(), json!(model.id())),
-                    ("method".into(), json!(defaults.method.id())),
-                    ("scans".into(), json!(defaults.scans)),
-                    ("embedIcc".into(), json!(defaults.embed_icc)),
-                    ("imageMap".into(), json!(IMAGE_MAPS[0])),
-                ]);
-            }
-            "gif" | "png8" => {
-                let p = PaletteOptions::default();
-                o.extend([
-                    ("reduction".into(), json!(p.reduction.id())),
-                    ("colors".into(), json!(p.colors)),
-                    ("dither".into(), json!(p.dither.id())),
-                    ("ditherAmount".into(), json!(p.dither_amount)),
-                    ("transparency".into(), json!(p.transparency)),
-                    ("matte".into(), json!(MATTES[1])),
-                    ("interlaced".into(), json!(false)),
-                ]);
-            }
-            _ => {}
-        }
+        o.extend(defaults(app, f));
         if let Some((w, h)) = size {
             o.insert("__size".into(), json!([w, h]));
         }
     }
     app.ui.dialog = Some(Dialog::new(&kind(f), params));
+}
+
+/// The options raster format `f` starts with (after the resolution): the document's background
+/// (New Document → Background Contents; JPEG has no alpha), anti-aliasing and the format's own.
+pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
+    let white = f.id == "jpg" || app.session.active().is_some_and(|st| st.doc.setup.background == vectorcraft_doc::Background::White);
+    let mut o = Map::new();
+    o.insert("background".into(), json!(if white { "white" } else { "transparent" }));
+    o.insert("antiAlias".into(), json!(AntiAlias::default().id()));
+    match f.id {
+        "png" => {
+            o.insert("interlaced".into(), json!(false));
+        }
+        "jpg" => {
+            // A CMYK document exports CMYK by default.
+            let cmyk = app.session.active().is_some_and(|st| st.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
+            let model = if cmyk { ColorModel::Cmyk } else { ColorModel::Rgb };
+            let defaults = jpeg::JpegOptions::default();
+            o.extend([
+                ("quality".into(), json!(90)),
+                ("colorModel".into(), json!(model.id())),
+                ("method".into(), json!(defaults.method.id())),
+                ("scans".into(), json!(defaults.scans)),
+                ("embedIcc".into(), json!(defaults.embed_icc)),
+                ("imageMap".into(), json!(IMAGE_MAPS[0])),
+            ]);
+        }
+        "gif" | "png8" => {
+            let p = PaletteOptions::default();
+            o.extend([
+                ("reduction".into(), json!(p.reduction.id())),
+                ("colors".into(), json!(p.colors)),
+                ("dither".into(), json!(p.dither.id())),
+                ("ditherAmount".into(), json!(p.dither_amount)),
+                ("transparency".into(), json!(p.transparency)),
+                ("matte".into(), json!(MATTES[1])),
+                ("interlaced".into(), json!(false)),
+            ]);
+        }
+        _ => {}
+    }
+    o
 }
 
 /// The size in points of the one region an export covers (`None` when it writes several
@@ -140,50 +147,13 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
         ui.end_row();
 
-        label(ui, "Background Color:");
-        let bg = d.str("background");
-        let choice = BACKGROUNDS.iter().position(|v| bg.eq_ignore_ascii_case(v)).unwrap_or(3);
-        // JPEG has no transparency: its list starts at White.
-        let first = usize::from(id == "jpg");
-        ui.horizontal(|ui| {
-            if let Some(i) = widgets::dropdown(ui, "ro-bg", BACKGROUND_LABELS[choice], &BACKGROUND_LABELS[first..], 150.0) {
-                let value = BACKGROUNDS.get(i + first).copied().unwrap_or("#808080");
-                d.fields.insert("background".into(), json!(value));
-            }
-            if choice == 3 {
-                color_button(ui, d, "background");
-            }
-        });
-        ui.end_row();
-
-        label(ui, "Anti-aliasing:");
-        let aa = AntiAlias::from_id(&d.str("antiAlias")).unwrap_or_default();
-        if let Some(i) = widgets::dropdown(ui, "ro-aa", aa.label(), &AntiAlias::ALL.map(AntiAlias::label), 150.0) {
-            d.fields.insert("antiAlias".into(), json!(AntiAlias::ALL[i].id()));
-        }
-        ui.end_row();
-
-        match id {
-            "png" => {
-                ui.label("");
-                form::check(ui, d, "interlaced", "Interlaced");
-                ui.end_row();
-            }
-            "jpg" => jpeg_rows(ui, d, &label),
-            "gif" | "png8" => palette_rows(ui, d, &label),
-            "webp" => {
-                ui.label("");
-                label(ui, "Lossless (lossy WebP isn't available yet)");
-                ui.end_row();
-            }
-            _ => {}
-        }
+        option_rows(ui, d, id, false);
 
         if let Some([w, h]) =
             d.fields.get("__size").and_then(Value::as_array).map(|a| [0, 1].map(|i| a.get(i).and_then(Value::as_f64).unwrap_or(0.0)))
         {
             label(ui, "Size:");
-            let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), ppi / 72.0);
+            let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), d.f64("ppi", 72.0) / 72.0);
             ui.label(egui::RichText::new(format!("{pw} × {ph} px")).color(t.text));
             ui.end_row();
         }
@@ -191,13 +161,76 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// The JPEG Options rows: colour model, quality (0–10, stored ×10), method and scans, profile and
-/// image map.
-fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
+/// The grid rows of raster format `id`'s options after the resolution: background, anti-aliasing
+/// and the format's own. `screens` (Export for Screens' Format Settings) leaves out what its rows
+/// choose (JPEG quality) and what writes other files (image maps).
+pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: bool) {
+    let t = Tokens::get(ui.ctx());
+    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).color(t.text_dim));
+    label(ui, "Background Color:");
+    let bg = d.str("background");
+    let choice = BACKGROUNDS.iter().position(|v| bg.eq_ignore_ascii_case(v)).unwrap_or(3);
+    // JPEG has no transparency: its list starts at White.
+    let first = usize::from(id == "jpg");
+    ui.horizontal(|ui| {
+        if let Some(i) = widgets::dropdown(ui, "ro-bg", BACKGROUND_LABELS[choice], &BACKGROUND_LABELS[first..], 150.0) {
+            let value = BACKGROUNDS.get(i + first).copied().unwrap_or("#808080");
+            d.fields.insert("background".into(), json!(value));
+        }
+        if choice == 3 {
+            color_button(ui, d, "background");
+        }
+    });
+    ui.end_row();
+
+    label(ui, "Anti-aliasing:");
+    let aa = AntiAlias::from_id(&d.str("antiAlias")).unwrap_or_default();
+    if let Some(i) = widgets::dropdown(ui, "ro-aa", aa.label(), &AntiAlias::ALL.map(AntiAlias::label), 150.0) {
+        d.fields.insert("antiAlias".into(), json!(AntiAlias::ALL[i].id()));
+    }
+    ui.end_row();
+
+    match id {
+        "png" => {
+            ui.label("");
+            form::check(ui, d, "interlaced", "Interlaced");
+            ui.end_row();
+        }
+        "jpg" => jpeg_rows(ui, d, &label, screens),
+        "gif" | "png8" => palette_rows(ui, d, &label),
+        "webp" => {
+            ui.label("");
+            label(ui, "Lossless (lossy WebP isn't available yet)");
+            ui.end_row();
+        }
+        _ => {}
+    }
+}
+
+/// The JPEG Options rows: colour model, quality, method and scans, profile and image map (not
+/// quality and image map for Export for Screens).
+fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response, screens: bool) {
     label(ui, "Color Model:");
     choice(ui, d, "colorModel", &ColorModel::ALL.map(ColorModel::id), &ColorModel::ALL.map(ColorModel::label));
     ui.end_row();
 
+    if !screens {
+        quality_row(ui, d, label);
+    }
+    method_row(ui, d, label);
+    if !screens {
+        label(ui, "Image Map:");
+        choice(ui, d, "imageMap", &IMAGE_MAPS, &IMAGE_MAP_LABELS);
+        ui.end_row();
+    }
+
+    ui.label("");
+    form::check(ui, d, "embedIcc", "Embed ICC Profile");
+    ui.end_row();
+}
+
+/// JPEG quality on the dialog's 0–10 scale (stored ×10).
+fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
     label(ui, "Quality:");
     let mut q = (d.f64("quality", 90.0) / 10.0).round().clamp(0.0, 10.0) as u8;
     ui.horizontal(|ui| {
@@ -207,7 +240,10 @@ fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &s
         label(ui, QUALITY_BANDS[q as usize]);
     });
     ui.end_row();
+}
 
+/// The JPEG method, and its scans when progressive.
+fn method_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
     label(ui, "Method:");
     ui.horizontal(|ui| {
         choice(ui, d, "method", &Method::ALL.map(Method::id), &Method::ALL.map(Method::label));
@@ -219,14 +255,6 @@ fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &s
             }
         }
     });
-    ui.end_row();
-
-    label(ui, "Image Map:");
-    choice(ui, d, "imageMap", &IMAGE_MAPS, &IMAGE_MAP_LABELS);
-    ui.end_row();
-
-    ui.label("");
-    form::check(ui, d, "embedIcc", "Embed ICC Profile");
     ui.end_row();
 }
 
