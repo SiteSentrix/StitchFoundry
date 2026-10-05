@@ -273,6 +273,8 @@ fn arb_pdf_op() -> impl Strategy<Value = String> {
         Just("/Im0".to_string()),
         Just("/GS0".to_string()),
         Just("/DeviceRGB".to_string()),
+        Just("/CS0".to_string()),
+        Just("/DeviceCMYK".to_string()),
         Just("/Pattern".to_string()),
         Just("(Hi)".to_string()),
         Just("<00ff>".to_string()),
@@ -290,6 +292,12 @@ fn arb_resources() -> impl Strategy<Value = String> {
         "<< /Shading << /Sh0 << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [0 0 0 0 0 -5] /Function << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [] /N -1 >> >> >> >>".to_string(),
         "<< /XObject << /Im0 << /Type /XObject /Subtype /Image /Width 4294967295 /Height 0 /BitsPerComponent 8 /ColorSpace /DeviceRGB /Length 3 >> >> >>".to_string(),
         "<< /Pattern << /P0 << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 0 0] /XStep 0 /YStep -0 /Resources << >> >> >> >>".to_string(),
+        // Ink colour spaces with junk names, alternates and tint transforms (spot swatch import).
+        "<< /ColorSpace << /CS0 [/Separation /All /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [1 1 1 1] /N 1 >>] >> >>".to_string(),
+        "<< /ColorSpace << /CS0 [/Separation /#00 /Lab << /FunctionType 2 /Domain [0 1] /C0 [1e308] /C1 [NaN 5] /N -1 >>] >> >>".to_string(),
+        "<< /ColorSpace << /CS0 [/DeviceN [] /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>] >> >>".to_string(),
+        "<< /ColorSpace << /CS0 [/DeviceN [/A /None /Cyan /All] [/ICCBased << /N 4 >>] << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>] >> >>".to_string(),
+        "<< /Shading << /Sh0 << /ShadingType 2 /ColorSpace [/Separation /Ink /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 0 0] /N 1 >>] /Coords [0 0 100 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> >> >> >>".to_string(),
     ])
 }
 

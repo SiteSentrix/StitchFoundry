@@ -188,7 +188,10 @@ options accepted but not applied yet, and features approximated or left out. PDF
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
 `cropTo` (`bounding` (the art's bounds), `art`, `crop` (default), `trim`, `bleed`, `media`: the box each artboard gets)
 and `password` for an encrypted file. `document.pdfInfo` reads a file without opening it: the page count, each page's
-size and boxes, `needsPassword`, and with `thumbnail: n` a PNG of page n:
+size and boxes, `needsPassword`, and with `thumbnail: n` a PNG of page n. Imported colours keep their model:
+DeviceCMYK and CMYK ICC colours stay CMYK (a file painted mostly in CMYK opens as a CMYK document), DeviceGray is Gray,
+and Separation and DeviceN inks become spot swatches the art links to at its tint (gradient stops too).
+`colorMode: "rgb" | "cmyk"` opens any file in that mode instead, its colours converted as `file.documentColorMode` does:
 
 ```json
 {"name":"run_command","arguments":{"command":"document.pdfInfo","params":{"path":"/tmp/brochure.pdf","thumbnail":2,"cropTo":"trim"}}}

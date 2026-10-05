@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Open Document",
             [],
             None,
-            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo) → {index, title, format, warnings}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). Templates (native templates, .ait) open as a new untitled document",
+            "{path} or {name, dataBase64}, PDF/.ai: pages?: \"2-3, 5\" (1-based, default all; one artboard and layer each) | page?: n, cropTo?: bounding|art|crop (default)|trim|bleed|media (the box each artboard gets; bounding: the art's bounds), password? (encrypted PDFs; see document.pdfInfo), colorMode?: rgb|cmyk (the mode the document opens in, its colours converted as file.documentColorMode does; default: the file's — a PDF keeps CMYK, Gray and spot inks (spot swatches at a tint) and opens in CMYK when painted mostly in CMYK) → {index, title, format, warnings}; any readable format (see document.formats): .vectorcraft/.drawcraft, .svg/.svgz, .pdf/.ai, .ait, PNG/JPEG/GIF/WebP/TIFF/BMP (an image opens as a document of its pixel size). Templates (native templates, .ait) open as a new untitled document",
             always,
             load::open
         ),
@@ -467,6 +467,8 @@ fn write_or_return(path: Option<&str>, bytes: &[u8], extra: Value) -> Result<Val
 mod tests;
 #[cfg(test)]
 mod tests_pdf;
+#[cfg(test)]
+mod tests_pdfcolor;
 #[cfg(test)]
 mod tests_pdfimport;
 #[cfg(test)]

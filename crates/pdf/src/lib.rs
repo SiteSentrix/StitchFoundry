@@ -11,12 +11,15 @@
 //! - [`import`] reads PDF (and PDF-compatible `.ai`) pages with `hayro-interpret` into a
 //!   [`Document`]: one artboard and one layer per page, paths with fill/stroke, clip groups,
 //!   transparency groups, axial/radial shadings → gradients, images (JPEG passthrough, others
-//!   re-encoded as PNG) and text as glyph outlines. [`ImportOptions`] pick the pages, the box each
+//!   re-encoded as PNG) and text as glyph outlines. Colours keep their model: CMYK, Gray, and spot
+//!   inks (Separation, DeviceN) as spot swatches at a tint; a file painted mostly in CMYK opens as a
+//!   CMYK document. [`ImportOptions`] pick the pages, the box each
 //!   artboard gets ([`CropTo`]) and the password; [`info`] lists the pages and their boxes.
 #![forbid(unsafe_code)]
 
 mod export;
 mod import;
+mod import_color;
 mod lab_spot;
 mod pages;
 mod settings;
@@ -137,6 +140,8 @@ mod tests_dashalign;
 mod tests_focal;
 #[cfg(test)]
 mod tests_fx;
+#[cfg(test)]
+mod tests_import_color;
 #[cfg(test)]
 mod tests_import_options;
 #[cfg(test)]

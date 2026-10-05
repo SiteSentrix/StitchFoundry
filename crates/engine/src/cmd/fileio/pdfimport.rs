@@ -3,13 +3,14 @@
 //! boxes, a thumbnail) for the Import PDF dialog.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::Document;
+use vectorcraft_doc::{ColorMode, Document};
 use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError};
 
 use super::super::*;
 use super::{err, source};
 
-/// The `document.open` options besides the file. PDF only for now; other formats ignore them.
+/// The `document.open` options besides the file. The PDF ones (pages, box, password) are ignored
+/// by other formats.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LoadOptions {
     /// 1-based pages to import, such as `"2-3, 5"`; `None` = every page.
@@ -18,11 +19,14 @@ pub struct LoadOptions {
     pub crop: CropTo,
     /// The password of an encrypted PDF.
     pub password: Option<String>,
+    /// The colour mode the document opens in, its colours converted as Document Color Mode does
+    /// (default: the file's; a PDF painted mostly in CMYK opens in CMYK).
+    pub color_mode: Option<ColorMode>,
 }
 
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
-    /// `pages` isn't given), `cropTo` (or `crop`) and `password`.
+    /// `pages` isn't given), `cropTo` (or `crop`), `password` and `colorMode` (`rgb` | `cmyk`).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
             None => None,
@@ -41,7 +45,13 @@ impl LoadOptions {
                 .ok_or_else(|| bad(cmd, format!("cropTo must be one of {}", CropTo::IDS.join(", "))))?,
         };
         let password = str_param(p, "password").filter(|s| !s.is_empty()).map(str::to_string);
-        Ok(Self { pages, crop, password })
+        let color_mode = match str_param(p, "colorMode").map(str::to_ascii_lowercase).as_deref() {
+            None => None,
+            Some("rgb") => Some(ColorMode::Rgb),
+            Some("cmyk") => Some(ColorMode::Cmyk),
+            Some(m) => return Err(bad(cmd, format!("colorMode must be rgb or cmyk, not `{m}`"))),
+        };
+        Ok(Self { pages, crop, password, color_mode })
     }
 
     /// The PDF import options: `pages` resolved against the file's page count.

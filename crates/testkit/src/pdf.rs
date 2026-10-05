@@ -52,6 +52,17 @@ fn rect(r: [f64; 4]) -> String {
 /// A PDF of `pages`; with a `password` it is encrypted and opens only with it (its owner password
 /// is the same followed by `-owner`).
 pub fn pdf(pages: &[PdfPage], password: Option<&str>) -> Vec<u8> {
+    pdf_with(pages, &[], password)
+}
+
+/// The object number of the first `extra` object of [`pdf_with`] for a file of `pages` pages.
+pub fn first_extra(pages: usize) -> usize {
+    3 + 2 * pages
+}
+
+/// [`pdf`] with `extra` objects (written as given, not encrypted: streams such as functions and
+/// ICC profiles that resources refer to by number, from [`first_extra`] on).
+pub fn pdf_with(pages: &[PdfPage], extra: &[&str], password: Option<&str>) -> Vec<u8> {
     let id = md5(b"vectorcraft test file");
     // (O, U, file key) of the standard security handler, revision 2, permissions -4.
     let crypt = password.map(|pw| {
@@ -96,6 +107,7 @@ pub fn pdf(pages: &[PdfPage], password: Option<&str>) -> Vec<u8> {
         s.extend_from_slice(b"\nendstream");
         objects.push(s);
     }
+    objects.extend(extra.iter().map(|o| o.as_bytes().to_vec()));
     if let Some((o, u, _)) = &crypt {
         objects.push(format!("<< /Filter /Standard /V 1 /R 2 /O <{}> /U <{}> /P -4 >>", hex(o), hex(u)).into_bytes());
     }

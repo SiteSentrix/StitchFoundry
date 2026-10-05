@@ -14,11 +14,12 @@ use hayro_syntax::object::Name;
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Artboard, Dash, Document, FillLayer, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind,
-    StrokeLayer,
+    Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, Node, NodeId,
+    NodeKind, StrokeLayer,
 };
 use vectorcraft_geom::{FillRule, PathData};
 
+use crate::import_color::{Colors, Native};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError};
 
 /// Import a PDF (or PDF-compatible `.ai`) with default options.
@@ -54,7 +55,8 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     doc.title = "Imported PDF".into();
     doc.artboards.clear();
     doc.layers.clear();
-    let mut b = Builder::new(doc.peek_next_id());
+    let taken = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken));
     let cache = InterpreterCache::new();
     let mut x = 0.0;
     for (i, &number) in picked.iter().enumerate() {
@@ -91,6 +93,15 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     }
     for (k, blob) in b.images.drain() {
         doc.images.insert(k, blob);
+    }
+    // A file painted mostly in CMYK opens as a CMYK document (with CMYK default swatches).
+    if b.colors.cmyk_document() {
+        doc.color_mode = ColorMode::Cmyk;
+        (doc.swatches, doc.swatch_groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+    }
+    doc.swatches.extend(b.colors.swatches());
+    if b.colors.mixed {
+        b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
     doc.fix_next_id();
 
@@ -135,7 +146,8 @@ struct GlyphRun {
     scale: f64,
 }
 
-struct Builder {
+struct Builder<'p> {
+    colors: Colors<'p>,
     next: u64,
     stack: Vec<Frame>,
     blend: BlendMode,
@@ -203,9 +215,10 @@ fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
 }
 
-impl Builder {
-    fn new(next: u64) -> Self {
+impl<'p> Builder<'p> {
+    fn new(next: u64, colors: Colors<'p>) -> Self {
         Self {
+            colors,
             next,
             stack: vec![],
             blend: BlendMode::Normal,
@@ -331,10 +344,11 @@ impl Builder {
         match p {
             hayro_interpret::Paint::Color(c) => {
                 let [r, g, b, a] = c.to_rgba().components();
-                (Paint::solid(Color::rgb(round3(r), round3(g), round3(b))), a)
+                let paint = self.colors.solid(c).map_or_else(|| Paint::solid(Color::rgb(round3(r), round3(g), round3(b))), Native::paint);
+                (paint, a)
             }
             hayro_interpret::Paint::Pattern(pat) => match pat.as_ref() {
-                Pattern::Shading(sp) => match shading_gradient(sp) {
+                Pattern::Shading(sp) => match shading_gradient(sp, &mut self.colors) {
                     Some(g) => (Paint::Gradient(Box::new(g)), sp.opacity),
                     None => {
                         self.warn("mesh/function shadings are imported as a flat colour");
@@ -368,17 +382,19 @@ impl Builder {
     }
 }
 
-/// Axial/radial shading → gradient paint (stops sampled from the shading function).
-fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern) -> Option<GradientPaint> {
+/// Axial/radial shading → gradient paint (stops sampled from the shading function, in the
+/// shading's own colour model).
+fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern, colors: &mut Colors<'_>) -> Option<GradientPaint> {
     let ShadingType::RadialAxial { coords, domain, function, axial, .. } = sp.shading.shading_type.as_ref() else {
         return None;
     };
     let m = sp.matrix;
     let cs = &sp.shading.color_space;
+    let at = |t: f32| function.eval(&smallvec::smallvec![domain[0] + (domain[1] - domain[0]) * t]);
+    let space = colors.shading_space(cs, at(0.0)?.len());
+    // RGB to decide which samples are stops; the stops keep the shading's model.
     let sample = |t: f32| -> Option<(Color, f32)> {
-        let x = domain[0] + (domain[1] - domain[0]) * t;
-        let v = function.eval(&smallvec::smallvec![x])?;
-        let [r, g, b, a] = cs.to_rgba(&v, 1.0, false).components();
+        let [r, g, b, a] = cs.to_rgba(&at(t)?, 1.0, false).components();
         Some((Color::rgb(round3(r), round3(g), round3(b)), a))
     };
     // Sample densely, then drop samples that linear interpolation reproduces.
@@ -400,9 +416,13 @@ fn shading_gradient(sp: &hayro_interpret::pattern::ShadingPattern) -> Option<Gra
         }
     }
     keep.push(N);
-    let stop_at = |t: f32, offset: f32| -> GradientStop {
-        let (color, _) = sample(t).unwrap_or((Color::BLACK, 1.0));
-        GradientStop::new(offset, color)
+    let mut stop_at = |t: f32, offset: f32| -> GradientStop {
+        let (rgb, _) = sample(t).unwrap_or((Color::BLACK, 1.0));
+        match at(t).and_then(|v| colors.native(space, &v)) {
+            Some(Native { color, link: Some((name, tint)) }) => GradientStop { swatch: Some(name), tint, ..GradientStop::new(offset, color) },
+            Some(Native { color, link: None }) => GradientStop::new(offset, color),
+            None => GradientStop::new(offset, rgb),
+        }
     };
     let c = |x: f32, y: f32| m * Point::new(x as f64, y as f64);
     let (kind, geom, stops) = if *axial {
@@ -443,7 +463,7 @@ fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {
     }
 }
 
-impl<'a> Device<'a> for Builder {
+impl<'a> Device<'a> for Builder<'_> {
     fn set_soft_mask(&mut self, mask: Option<SoftMask<'a>>) {
         if mask.is_some() {
             self.warn("soft masks are not imported (content drawn unmasked)");

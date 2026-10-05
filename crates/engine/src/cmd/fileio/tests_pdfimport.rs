@@ -140,7 +140,7 @@ fn file_place_crops_a_pdf_page_to_any_box_and_takes_its_password() {
 #[test]
 fn load_options_read_pages_crop_and_password() {
     let o = LoadOptions::from_params("x", &json!({"page": 3, "crop": "trim", "password": "p"})).unwrap();
-    assert_eq!(o, LoadOptions { pages: Some("3".into()), crop: vectorcraft_pdf::CropTo::Trim, password: Some("p".into()) });
+    assert_eq!(o, LoadOptions { pages: Some("3".into()), crop: vectorcraft_pdf::CropTo::Trim, password: Some("p".into()), ..Default::default() });
     // `pages` wins over `page`; an empty password is none.
     let o = LoadOptions::from_params("x", &json!({"pages": "1-2", "page": 3, "password": ""})).unwrap();
     assert_eq!((o.pages.as_deref(), o.password), (Some("1-2"), None));
