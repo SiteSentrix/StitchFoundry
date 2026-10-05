@@ -36,13 +36,19 @@
 //!   unit of the root `width` (pixels when it has none).
 //! * `<mask>` imports as a luminance opacity mask; a mask we exported keeps its options and art
 //!   (its `data-vectorcraft-mask="noclip invert"` lists the options that differ from clipping and
-//!   not inverted). Filters are ignored (reported as warnings); nested clip paths use the outer
-//!   clip only.
+//!   not inverted). Nested clip paths use the outer clip only.
+//! * Filters that are a Gaussian blur, a drop shadow (`feDropShadow` or the usual chains of offset,
+//!   blur, flood or colour matrix, composite and merge), a glow or a feather (as we export them)
+//!   become those live effects; other filters are ignored (reported as warnings).
 //! * `<pattern>` becomes a pattern swatch (its content clipped to the tile) painted with the
 //!   pattern's placement.
+//! * `<symbol>` with `<use>` becomes a symbol and its instances. A `<use>` that shows the symbol
+//!   differently (inherited paint, a viewport that cuts it) or that the canvas would paint
+//!   differently (see the export's symbol rules) becomes plain art, as do `<use>`s of other
+//!   elements.
 //! * A `<g id>` layer (top-level, or inside one) that isn't displayed (`display: none`) comes back
 //!   as a hidden layer or group, unless a `<use>` refers to it. Other undisplayed elements are left
-//!   out. `<use>` instances (and `<symbol>`s) become plain art.
+//!   out.
 //! * Text lines after the first start at the first line's x; text in a clip path is ignored;
 //!   absolute positions inside type on a path are ignored; vertical text sets every glyph sideways.
 //!

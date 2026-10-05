@@ -19,6 +19,8 @@ kurbo = { workspace = true }
 usvg = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
+# Live effect params read from filters.
+serde_json = { workspace = true }
 # SVGZ (gzip, pure-Rust backend: builds for wasm).
 flate2 = { workspace = true }
 image = { workspace = true }
@@ -30,4 +32,3 @@ resvg = { version = "0.45", default-features = false }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }
 image = { workspace = true }
-serde_json = { workspace = true }

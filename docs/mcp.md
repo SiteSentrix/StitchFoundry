@@ -149,6 +149,13 @@ of the file, so Save asks for a new name instead of writing it back.
 `file.documentColorMode {mode, convert?, intent?}` switches the document colour mode, converting its colours
 through the colour settings (`object.convertDocumentColorMode` is an alias kept for older scripts).
 
+SVG import keeps what the canvas edits live. `<pattern>` becomes a pattern swatch. A `<symbol>` with `<use>` becomes a
+symbol (named after its `data-name`, else its id) with an instance per `<use>`; a `<use>` that shows it differently
+(paint inherited from the `<use>`, a viewport that cuts the art) or that the canvas would draw otherwise (a scaled
+symbol with strokes) stays art. `feGaussianBlur`, `feDropShadow` and the usual shadow chains (offset, blur, flood or
+colour matrix, composite, merge) become Gaussian Blur, Drop Shadow, Outer Glow, Inner Glow and Feather effects; other
+filters are listed in `warnings`.
+
 ## Resources
 
 | URI | Content |

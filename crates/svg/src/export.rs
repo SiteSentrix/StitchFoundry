@@ -204,7 +204,7 @@ struct SymbolDef {
 /// canvas transforms the art's geometry alone: stroke weights, effects, patterns and unlinked
 /// masks stay put).
 #[derive(Clone, Copy)]
-struct Reuse {
+pub(crate) struct Reuse {
     /// Translations (no pattern paints or unlinked masks).
     moves: bool,
     /// Rotations and reflections (nor effects or brushes).
@@ -227,7 +227,7 @@ impl Reuse {
     const NONE: Self = Self { moves: false, turns: false, scales: false };
 
     /// What a def of symbol art `art` stands for.
-    fn of(doc: &Document, art: &Node) -> Self {
+    pub(crate) fn of(doc: &Document, art: &Node) -> Self {
         let mut r = Self { moves: true, turns: true, scales: true };
         r.scan(doc, art, 0);
         r
@@ -277,7 +277,7 @@ impl Reuse {
     }
 
     /// Can the def stand for an instance with transform `xf`?
-    fn allows(self, xf: Affine) -> bool {
+    pub(crate) fn allows(self, xf: Affine) -> bool {
         const EPS: f64 = 1e-9;
         let [a, b, c, d, _, _] = xf.as_coeffs();
         if (a - 1.0).abs() < EPS && b.abs() < EPS && c.abs() < EPS && (d - 1.0).abs() < EPS {
@@ -1250,7 +1250,9 @@ impl Writer<'_> {
         let art = self.detached(3, |w| w.node(&sym.art));
         self.symbol_nest -= 1;
         (self.xf, self.instance_xf, self.knockout, self.names, self.anonymous) = saved;
-        self.def(1, &format!("<symbol id=\"{id}\" overflow=\"visible\">"));
+        // The symbol's name, when the id had to differ from it, comes back on import.
+        let name = if id == sym.name { String::new() } else { format!(" data-name=\"{}\"", xml_escape(&sym.name)) };
+        self.def(1, &format!("<symbol id=\"{id}\"{name} overflow=\"visible\">"));
         self.defs.push_str(&art);
         self.def(1, "</symbol>");
         if let Some(def) = self.symbols.get_mut(&sym.name) {
@@ -1326,7 +1328,16 @@ impl Writer<'_> {
                 ),
                 RasterFx::GaussianBlur { radius } => format!("<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"{}\"/>", sd(*radius)),
             };
-            self.def(1, &format!("<filter id=\"{fid}\"{region_attr} color-interpolation-filters=\"sRGB\">{body}</filter>"));
+            // Filters composite normally: a shadow's or glow's other blend mode is recorded for import.
+            let mode = match f {
+                RasterFx::DropShadow { mode, .. } | RasterFx::OuterGlow { mode, .. } | RasterFx::InnerGlow { mode, .. }
+                    if *mode != BlendMode::Normal =>
+                {
+                    format!(" {}=\"{}\"", crate::import::BLEND, blend_css(*mode))
+                }
+                _ => String::new(),
+            };
+            self.def(1, &format!("<filter id=\"{fid}\"{region_attr}{mode} color-interpolation-filters=\"sRGB\">{body}</filter>"));
             self.line(&format!("<g filter=\"url(#{fid})\">"));
             self.depth += 1;
         }

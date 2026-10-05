@@ -78,7 +78,10 @@ fn an_svg_edited_elsewhere_opens_as_plain_svg_with_a_warning() {
     let r = open(&mut s, "edited.svg", &edited);
     assert_eq!(r["warnings"][0], load::EDITING_STALE, "{r}");
     let d = &s.doc().unwrap().doc;
-    assert!(d.symbols.is_empty() && d.patterns.iter().all(|p| p.name != "Dots"), "plain import: no symbols, no named pattern");
+    // (SVG import keeps symbols since M4.41, so the roughen's result tells the plain import.)
+    let mut effects = 0;
+    d.walk(|n| effects += n.appearance.effects.len());
+    assert!(effects == 0 && d.patterns.iter().all(|p| p.name != "Dots"), "plain import: the roughen as its result, no named pattern");
     // Unreadable editing data (the hash only covers the markup around it) falls back too.
     let damaged = text.replacen("<![CDATA[", "<![CDATA[!!", 1);
     let r = open(&mut s, "damaged.svg", &damaged);
