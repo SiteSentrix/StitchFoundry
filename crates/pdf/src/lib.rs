@@ -4,8 +4,9 @@
 //!   caps/joins/miter/dashes, inside/outside alignment as clips, non-zero/even-odd; arrowheads,
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
-//!   clip groups, linear/radial gradients (shadings), embedded images and text as outlined glyph
-//!   paths. Hidden objects, guides and template layers are skipped. [`PdfSettings`] is the Save PDF
+//!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
+//!   freeform gradients as images (clipped to what they paint), embedded images and text as
+//!   outlined glyph paths. Hidden objects, guides and template layers are skipped. [`PdfSettings`] is the Save PDF
 //!   dialog's model (standard, compatibility, General, Compression, Marks and Bleeds, Output,
 //!   Advanced, Security); options the writer doesn't apply yet come back as warnings. With Preserve
 //!   Editing the native document rides along as an embedded file ([`editing()`]).
@@ -22,6 +23,7 @@
 
 mod editing;
 mod export;
+mod images;
 mod import;
 mod import_color;
 mod lab_spot;
@@ -173,3 +175,5 @@ mod tests_settings;
 mod tests_stroke;
 #[cfg(test)]
 mod tests_strokeout;
+#[cfg(test)]
+mod tests_textstroke;

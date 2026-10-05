@@ -107,16 +107,21 @@ fn options_not_applied_yet_and_document_features_warn() {
     let w = warnings(&export(&mut s, json!({"thumbnails": true, "marks": {"trim": true}})));
     assert_eq!(w.len(), 2, "{w:?}");
     assert!(w.iter().any(|w| w.contains("thumbnails")) && w.iter().any(|w| w.contains("marks")));
-    // A pattern stroke is approximated: its warning comes back from every PDF path.
+    // A pattern stroke is written as its tiles clipped to the stroke: nothing to report.
     let tile = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [tile]})).unwrap();
     s.execute("object.pattern.make", &json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
     s.execute("object.pattern.done", &json!({})).unwrap();
     let frame = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
     s.execute("paint.setStroke", &json!({"ids": [frame], "swatch": "Dots"})).unwrap();
-    let pattern = |w: Vec<String>| w.iter().any(|w| w.contains("pattern strokes"));
-    assert!(pattern(warnings(&export(&mut s, json!({})))));
-    assert!(pattern(warnings(&s.execute("document.export", &as_export(&json!({}))).unwrap())));
+    assert_eq!(warnings(&export(&mut s, json!({}))).len(), 0);
+    // A knockout group is approximated: its warning comes back from every PDF path.
+    s.execute("select.set", &json!({"ids": [frame]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
+    let knockout = |w: Vec<String>| w.iter().any(|w| w.contains("knockout groups"));
+    assert!(knockout(warnings(&export(&mut s, json!({})))));
+    assert!(knockout(warnings(&s.execute("document.export", &as_export(&json!({}))).unwrap())));
     // Other formats have none.
     assert!(warnings(&s.execute("document.export", &json!({"format": "png"})).unwrap()).is_empty());
 }

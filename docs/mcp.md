@@ -193,6 +193,9 @@ PDF files take the Save PDF dialog's options: `preset`, `standard`, `compatibili
 `compression`, `marks`, `bleed`, `output`, `advanced` and `security` sections (`list_commands` with filter `exportPdf`
 documents every field). `document.exportPdf` and `export` (format `pdf`, the options in `options`) return `warnings`:
 options accepted but not applied yet, and features approximated or left out. PDF/X, passwords and PDF/A-2b at 2.0 are refused.
+Pattern fills and strokes are written as their tiles clipped to the area they paint (a stroke's outline, with its
+dashes, caps, profile, arrowheads and alignment), and freeform gradients as an image of their colour field at the
+document's raster effects resolution, clipped the same way.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
 
 Opening a PDF (or `.ai`) imports every page as an artboard and layer; `document.open` takes `pages` ("2-3, 5", 1-based),
