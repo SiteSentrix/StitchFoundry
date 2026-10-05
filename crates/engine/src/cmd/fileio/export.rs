@@ -125,15 +125,22 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
     // On a template layer or sublayer, at any depth.
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
-    let nodes: Vec<Arc<Node>> = ids.into_iter().filter(|id| !on_template(*id)).filter_map(|id| st.doc.node(id).cloned().map(Arc::new)).collect();
-    let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b)).ok_or_else(|| bad(cmd, "select something to export"))?;
-    let mut d = single_artboard(&st.doc, bounds, "Selection");
-    let mut layer = Node::layer(d.alloc_id(), "Selection", vectorcraft_doc::LayerColor::Preset(0));
+    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !on_template(*id)).collect();
+    isolated(&st.doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))
+}
+
+/// Objects `ids` of `doc` alone on one layer (in that order, back to front), with one artboard
+/// named `name`: their visual bounds (`None` when they have none).
+pub(super) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Document, vectorcraft_geom::Rect)> {
+    let nodes: Vec<Arc<Node>> = ids.iter().filter_map(|id| doc.node(*id).cloned().map(Arc::new)).collect();
+    let bounds = nodes.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))?;
+    let mut d = single_artboard(doc, bounds, name);
+    let mut layer = Node::layer(d.alloc_id(), name, vectorcraft_doc::LayerColor::Preset(0));
     if let Some(ch) = layer.children_mut() {
         *ch = nodes;
     }
     d.layers = vec![Arc::new(layer)];
-    Ok((d, bounds))
+    Some((d, bounds))
 }
 
 /// File → Export Selection: the selected objects alone, cropped to their visual bounds. Objects on

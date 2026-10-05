@@ -957,6 +957,10 @@ impl Session {
                 if !st.doc.text_threads.is_empty() {
                     cmd::threads::reflow(&before, Arc::make_mut(&mut st.doc));
                 }
+                // Asset Export: assets let go of deleted art.
+                if !st.doc.assets.is_empty() {
+                    Arc::make_mut(&mut st.doc).prune_assets();
+                }
                 if doc_sane(&st.doc, &st.selection) {
                     Ok(v)
                 } else {
@@ -1077,6 +1081,8 @@ impl Session {
 mod tests;
 #[cfg(test)]
 mod tests_appearance;
+#[cfg(test)]
+mod tests_assets;
 #[cfg(test)]
 mod tests_attributes;
 #[cfg(test)]

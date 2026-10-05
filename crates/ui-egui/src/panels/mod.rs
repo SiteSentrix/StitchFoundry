@@ -7,6 +7,7 @@ pub mod actions;
 pub mod align;
 pub mod appearance;
 pub mod artboards;
+pub mod asset_export;
 pub mod attributes;
 pub mod brushes;
 pub mod character;
@@ -96,6 +97,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "attributes" => attributes::show(app, ui),
         "colorThemes" => color_themes::show(app, ui),
         links::ID => links::show(app, ui),
+        asset_export::ID => asset_export::show(app, ui),
         _ => {
             dim_label(ui, "This panel is on the roadmap (see the parity plan).");
         }
@@ -139,6 +141,7 @@ pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         "colorThemes" => color_themes::menu(app, ui),
         "layers" => layers::menu(app, ui),
         links::ID => links::menu(app, ui),
+        asset_export::ID => asset_export::menu(app, ui),
         _ => {
             ui.add_enabled(false, egui::Button::new("No options").frame(false));
         }
@@ -444,6 +447,8 @@ mod tests {
 }
 #[cfg(test)]
 mod tests_appearance;
+#[cfg(test)]
+mod tests_asset_export;
 #[cfg(test)]
 mod tests_effectedit;
 #[cfg(test)]

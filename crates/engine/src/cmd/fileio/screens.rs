@@ -1,7 +1,8 @@
 //! File → Export → Export for Screens (`document.exportForScreens`): the chosen artboards (or the
-//! whole document) in every format row at each row's size, into a folder and its sub-folders, or
-//! returned for download (each file, or one ZIP); the presets the dialog offers; and the settings
-//! the document remembers (`document.exportSettings`).
+//! whole document, or the chosen assets of the Asset Export panel) in every format row at each
+//! row's size, into a folder and its sub-folders, or returned for download (each file, or one ZIP);
+//! the presets the dialog offers; and the settings the document remembers
+//! (`document.exportSettings`), which the Asset Export panel shares ([`SHARED_KEYS`]).
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,8 +14,8 @@ use vectorcraft_geom::Rect;
 
 use super::super::*;
 use super::encode::single_artboard;
-use super::export::without_artboards;
-use super::{ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode, writable, write_file};
+use super::export::{isolated, without_artboards};
+use super::{ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, encode, unique_file_names, writable, write_file};
 
 const C: &str = "document.exportForScreens";
 
@@ -219,6 +220,10 @@ impl Row {
     }
 }
 
+/// The settings the Asset Export panel shares with the dialog: what is exported, not which art
+/// or where to.
+pub(crate) const SHARED_KEYS: [&str; 6] = ["formats", "preset", "settings", "prefix", "subfolders", "antiAlias"];
+
 /// What `document.exportForScreens` reads besides the formats.
 #[derive(Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -232,6 +237,45 @@ struct ScreenParams {
     subfolders: bool,
     preset: Option<String>,
     prefix: Option<String>,
+    /// Asset ids (Asset Export) to write instead of artboards.
+    assets: Option<Vec<u64>>,
+}
+
+impl ScreenParams {
+    fn of(p: &Value) -> Result<Self> {
+        if p.is_object() { Self::deserialize(p).map_err(|e| bad(C, e.to_string())) } else { Ok(Self::default()) }
+    }
+}
+
+/// The format rows `p` asks for (`formats`, else `preset`'s, else one PNG at 1x), each with the
+/// format's `settings` and the top-level `antiAlias`.
+fn rows_of(s: &Session, p: &Value, preset: Option<&str>) -> Result<Vec<Row>> {
+    let settings = p.get("settings").cloned().unwrap_or(Value::Null);
+    let rows: Vec<Value> = match (preset, p.get("formats")) {
+        (Some(_), Some(f)) if !f.is_null() => return Err(bad(C, "give formats or a preset, not both")),
+        (Some(id), _) => preset_rows(id).ok_or_else(|| bad(C, format!("preset `{id}`: mobile or density")))?,
+        (None, Some(Value::Array(rows))) => rows.clone(),
+        (None, None | Some(Value::Null)) => vec![json!({})],
+        (None, Some(v)) => return Err(bad(C, format!("formats must be an array of rows, not {v}"))),
+    };
+    let mut rows: Vec<Row> = rows.iter().map(|r| Row::parse(s, r, &settings)).collect::<Result<_>>()?;
+    if rows.is_empty() {
+        return Err(bad(C, "no formats to export"));
+    }
+    // A top-level anti-aliasing mode applies to every row that doesn't name its own.
+    if let Some(aa) = p.get("antiAlias") {
+        for r in &mut rows {
+            if let Some(m) = r.options.as_object_mut() {
+                m.entry("antiAlias").or_insert_with(|| aa.clone());
+            }
+        }
+    }
+    Ok(rows)
+}
+
+/// Check the export settings in `p` (formats, preset, settings…) as an export would read them.
+pub(crate) fn check_settings(s: &Session, p: &Value) -> Result<()> {
+    rows_of(s, p, ScreenParams::of(p)?.preset.as_deref()).map(|_| ())
 }
 
 /// The file names (and bytes) an export wrote, or the files it returns.
@@ -272,31 +316,23 @@ impl Output {
     }
 }
 
-/// File → Export for Screens: every chosen artboard in every format row, one file each (a PDF holds
-/// its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard, else the
-/// bounds of all art). Artboards that share a name get `-2`, `-3`… instead of overwriting. The
-/// params are remembered in the document (`document.exportSettings`).
+/// File → Export for Screens: [`export`], with the params remembered in the document
+/// (`document.exportSettings`).
 pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
-    let o: ScreenParams = if p.is_object() { ScreenParams::deserialize(p).map_err(|e| bad(C, e.to_string()))? } else { ScreenParams::default() };
-    let settings = p.get("settings").cloned().unwrap_or(Value::Null);
-    let rows: Vec<Value> = match (o.preset.as_deref(), p.get("formats")) {
-        (Some(_), Some(f)) if !f.is_null() => return Err(bad(C, "give formats or a preset, not both")),
-        (Some(id), _) => preset_rows(id).ok_or_else(|| bad(C, format!("preset `{id}`: mobile or density")))?,
-        (None, Some(Value::Array(rows))) => rows.clone(),
-        (None, None | Some(Value::Null)) => vec![json!({})],
-        (None, Some(v)) => return Err(bad(C, format!("formats must be an array of rows, not {v}"))),
-    };
-    let mut rows: Vec<Row> = rows.iter().map(|r| Row::parse(s, r, &settings)).collect::<Result<_>>()?;
-    if rows.is_empty() {
-        return Err(bad(C, "no formats to export"));
-    }
-    // A top-level anti-aliasing mode applies to every row that doesn't name its own.
-    if let Some(aa) = p.get("antiAlias") {
-        for r in &mut rows {
-            if let Some(m) = r.options.as_object_mut() {
-                m.entry("antiAlias").or_insert_with(|| aa.clone());
-            }
-        }
+    let r = export(s, p)?;
+    remember(s, p);
+    Ok(r)
+}
+
+/// Every chosen artboard in every format row, one file each (a PDF holds its artboard alone), or
+/// with `fullDocument` one file per row (a PDF of every artboard, else the bounds of all art), or
+/// with `assets` each asset's art alone, cropped to it. Artboards (assets) that share a name get
+/// `-2`, `-3`… instead of overwriting.
+pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
+    let o = ScreenParams::of(p)?;
+    let rows = rows_of(s, p, o.preset.as_deref())?;
+    if o.full_document && o.assets.is_some() {
+        return Err(bad(C, "give assets or fullDocument, not both"));
     }
     let subfolders = o.subfolders || o.preset.is_some();
     // A prefix names files, not folders.
@@ -347,6 +383,24 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
             };
             out.put(folder, o.zip, name, bytes)?;
         }
+    } else if let Some(ids) = &o.assets {
+        let assets =
+            ids.iter().map(|id| doc.asset(*id).ok_or_else(|| bad(C, format!("no asset {id} (see assets.list)")))).collect::<Result<Vec<_>>>()?;
+        if assets.is_empty() {
+            return Err(bad(C, "no assets to export"));
+        }
+        for (a, stem) in assets.iter().zip(unique_file_names(assets.iter().map(|a| (a.name.as_str(), "Asset".to_string())))) {
+            let (d, bounds) = isolated(&doc, &doc.paint_order(a.nodes.iter().copied()), &a.name)
+                .ok_or_else(|| bad(C, format!("asset `{}` has no art to export", a.name)))?;
+            for r in &rows {
+                let name = name_of(r, &stem);
+                if !out.claim(&name) {
+                    continue;
+                }
+                let bytes = encode(&d, r.format.id, &r.options_for(bounds, Some(0))?)?;
+                out.put(folder, o.zip, name, bytes)?;
+            }
+        }
     } else {
         let n = doc.artboards.len();
         let boards = o.boards.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect());
@@ -365,7 +419,6 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    remember(s, p);
     let names: Vec<&str> = out.kept.iter().map(|(n, _)| n.as_str()).collect();
     if o.zip {
         let zip = super::zip::store(&out.kept).map_err(|e| bad(C, e))?;
@@ -387,17 +440,26 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
     })
 }
 
-/// Keep the params of a successful export in the document (without `zip`, a delivery detail), so
-/// the dialog reopens on them. Not an undo step; the document has changed only if they differ.
+/// Keep the params of a successful export in the document (without `zip`, a delivery detail, and
+/// `assets`, a choice of art), so the dialog reopens on them.
 fn remember(s: &mut Session, p: &Value) {
     let Some(o) = p.as_object() else { return };
     let mut settings = o.clone();
     settings.remove("zip");
-    let Ok(st) = s.doc_mut() else { return };
+    settings.remove("assets");
+    // Only after a successful export, which had a document.
+    let _ = store_settings(s, settings);
+}
+
+/// Make `settings` the document's export settings. Not an undo step (like the settings of any
+/// export); the document has changed only if they differ.
+pub(crate) fn store_settings(s: &mut Session, settings: Map<String, Value>) -> Result<()> {
+    let st = s.doc_mut()?;
     if st.doc.export_settings != settings {
         Arc::make_mut(&mut st.doc).export_settings = settings;
         st.revision += 1;
     }
+    Ok(())
 }
 
 /// `document.exportSettings`: the Export for Screens settings the document last exported with.
