@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, Unit};
-use vectorcraft_geom::{Affine, Vec2};
+use vectorcraft_geom::Affine;
 
 use super::*;
 use crate::{EngineError, inspect};
@@ -16,9 +16,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "New…",
             ["File"],
             Some("Cmd+N"),
-            "{width?: pt=612, height?: pt=792, units?: \"Points\"|\"Inches\"|\"Millimeters\"|\"Pixels\"… (default: prefs unitsGeneral), title?, artboards?: n, colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK)}",
+            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792, units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both)} → {index, previewMode}; the size is remembered in file.newPresets' Recent",
             always,
-            file_new
+            super::newdoc::file_new
         ),
         cmd!("file.close", "Close", ["File"], Some("Cmd+W"), "{index?}", has_doc, file_close),
         cmd!("document.activate", "Activate Document", [], None, "{index}", always, doc_activate),
@@ -52,37 +52,6 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
-    let w = f64_or(p, "width", 612.0);
-    let h = f64_or(p, "height", 792.0);
-    if !(w > 0.0 && h > 0.0) || w > 16383.0 * 10.0 || h > 16383.0 * 10.0 {
-        return Err(bad("file.new", "width/height must be positive and within the canvas"));
-    }
-    let mode = match str_param(p, "colorMode") {
-        Some(m) if m.eq_ignore_ascii_case("cmyk") => vectorcraft_doc::ColorMode::Cmyk,
-        _ => vectorcraft_doc::ColorMode::Rgb,
-    };
-    let mut d = Document::new_with_mode(w, h, mode);
-    d.title = str_param(p, "title").map(str::to_string).unwrap_or_else(|| s.next_untitled());
-    d.units = match str_param(p, "units") {
-        Some(u) => Unit::named(u).ok_or_else(|| bad("file.new", format!("unknown units `{u}`")))?,
-        None => s.default_units(),
-    };
-    let n = p.get("artboards").and_then(Value::as_u64).unwrap_or(1).clamp(1, 1000) as usize;
-    for i in 1..n {
-        let r = vectorcraft_geom::Rect::new(0.0, 0.0, w, h) + Vec2::new(i as f64 * (w + 20.0), 0.0);
-        d.artboards.push(vectorcraft_doc::Artboard {
-            id: (i + 1) as u32,
-            name: format!("Artboard {}", i + 1),
-            rect: r,
-            show_center_mark: false,
-            show_cross_hairs: false,
-        });
-    }
-    let i = s.add_document(d, None);
-    Ok(json!({ "index": i }))
-}
-
 fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
     let i = p.get("index").and_then(Value::as_u64).map(|v| v as usize).or(s.active_index()).ok_or(EngineError::NoDocument)?;
     if !s.close_document(i) {
@@ -102,6 +71,7 @@ fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(serde_json::to_value(n).unwrap_or(Value::Null))
 }
 
+/// Document Setup's units (also `document.setup {units}`).
 fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
     let u = str_param(p, "units").and_then(Unit::named).ok_or_else(|| bad("document.setUnits", "unknown units"))?;
     s.set_document_units(u)?;

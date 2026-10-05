@@ -1053,31 +1053,14 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     ui.add_space(28.0);
     ui.label(egui::RichText::new("Quickly start a new file").font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
-    // (name, width, height in points, in pixels); print sizes show in Preferences ▸ Units ▸ General.
-    let presets: [(&str, f64, f64, bool); 6] = [
-        ("Letter", 612.0, 792.0, false),
-        ("A4", 595.28, 841.89, false),
-        ("Web 1920", 1920.0, 1080.0, true),
-        ("Mobile", 390.0, 844.0, true),
-        ("Postcard", 432.0, 288.0, false),
-        ("Square", 1080.0, 1080.0, true),
-    ];
-    let print = app.session.default_units();
+    // A few of New Document's presets (`file.newPresets`), as its cards.
+    let presets = ["Letter", "A4", "Web 1920×1080", "Phone 390×844", "Postcard", "Social Square Post 1080×1080"];
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(14.0, 14.0);
-        for (name, w, h, pixels) in presets {
-            let unit = if pixels { Unit::Pixels } else { print };
-            let size = format!("{} × {}", unit.number(w), unit.format(h));
-            let (r, resp) = ui.allocate_exact_size(vec2(120.0, 132.0), Sense::click());
-            ui.painter().rect_filled(r, CornerRadius::same(8), if resp.hovered() { t.hover } else { t.panel });
-            let s = (70.0 / w.max(h)) as f32;
-            let pr = egui::Rect::from_center_size(r.center_top() + vec2(0.0, 50.0), vec2(w as f32 * s, h as f32 * s));
-            ui.painter().rect_filled(pr.translate(vec2(2.0, 2.0)), 0.0, Color32::from_black_alpha(80));
-            ui.painter().rect_filled(pr, 0.0, Color32::WHITE);
-            ui.painter().text(r.center_bottom() - vec2(0.0, 30.0), egui::Align2::CENTER_CENTER, name, theme::semibold(12.5), t.text);
-            ui.painter().text(r.center_bottom() - vec2(0.0, 14.0), egui::Align2::CENTER_CENTER, size, egui::FontId::proportional(11.0), t.text_dim);
-            if resp.clicked() {
-                app.run("file.new", json!({"width": w, "height": h, "units": unit.label()})).ok();
+        let cards: Vec<_> = presets.iter().filter_map(|name| vectorcraft_engine::cmd::newdoc::find(&app.session, name)).collect();
+        for s in cards {
+            if crate::dialogs::preset_card(ui, &s, false).clicked() {
+                app.run("file.new", json!({ "preset": s.name })).ok();
             }
         }
     });

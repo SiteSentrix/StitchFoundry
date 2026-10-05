@@ -322,3 +322,9 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
         d.fields.insert("bleed".into(), json!(b));
     }
 }
+
+/// A small grey caption above a field (New Document's details column).
+pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new(text).size(11.0).color(t.text_dim));
+}

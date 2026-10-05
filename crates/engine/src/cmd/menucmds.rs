@@ -679,27 +679,9 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Rearrange Artboards", |d, _| {
         let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
         let Some(first) = rects.first().copied() else { return Ok(()) };
-        let n = rects.len();
-        let rows = n.div_ceil(cols);
-        // Grid cell (row, col) of artboard i.
-        let cell = |i: usize| if by_col { (i % rows, i / rows) } else { (i / cols, i % cols) };
-        let mut col_w = vec![0.0f64; cols];
-        let mut row_h = vec![0.0f64; rows];
-        for (i, r) in rects.iter().enumerate() {
-            let (ro, co) = cell(i);
-            col_w[co] = col_w[co].max(r.width());
-            row_h[ro] = row_h[ro].max(r.height());
-        }
-        let x_of = |c: usize| first.x0 + col_w[..c].iter().map(|w| w + spacing).sum::<f64>();
-        let y_of = |r: usize| first.y0 + row_h[..r].iter().map(|h| h + spacing).sum::<f64>();
-        let deltas: Vec<Vec2> = rects
-            .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                let (ro, co) = cell(i);
-                Point::new(x_of(co), y_of(ro)) - r.origin()
-            })
-            .collect();
+        let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
+        let origins = super::newdoc::grid_origins(&sizes, first.origin(), cols, spacing, by_col, false);
+        let deltas: Vec<Vec2> = rects.iter().zip(origins).map(|(r, o)| o - r.origin()).collect();
         if move_art {
             let tops: Vec<(NodeId, Point)> = d
                 .layers

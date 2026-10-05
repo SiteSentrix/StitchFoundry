@@ -356,6 +356,13 @@ pub struct Prefs {
     /// dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row and resetting keeps it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub color_themes: Vec<cmd::colortheme::ColorTheme>,
+    /// New Document → Saved: the user's document presets (`file.newPresets.save`). A local
+    /// library, not a Preferences dialog field: resetting the preferences keeps it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub new_doc_presets: Vec<cmd::newdoc::DocSettings>,
+    /// New Document → Recent: the settings of the last documents made (newest first).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub recent_new_docs: Vec<cmd::newdoc::DocSettings>,
 }
 
 impl Default for Prefs {
@@ -479,6 +486,8 @@ impl Default for Prefs {
             japanese_crop_marks: false,
             new_art_basic: true,
             color_themes: vec![],
+            new_doc_presets: vec![],
+            recent_new_docs: vec![],
         }
     }
 }
@@ -615,6 +624,10 @@ impl Session {
         } else {
             false
         }
+    }
+    /// The name [`Session::next_untitled`] gives next (New Document's Name field).
+    pub fn peek_untitled(&self) -> String {
+        format!("Untitled-{}", self.untitled_counter + 1)
     }
     pub fn next_untitled(&mut self) -> String {
         self.untitled_counter += 1;
@@ -952,6 +965,8 @@ mod tests_maskview;
 mod tests_menucmds;
 #[cfg(test)]
 mod tests_newart;
+#[cfg(test)]
+mod tests_newdoc;
 #[cfg(test)]
 mod tests_objexpand;
 #[cfg(test)]

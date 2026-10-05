@@ -792,3 +792,17 @@ art). Pass any of these keys to change them in one undo step; `document.setUnits
 ```json
 {"name":"run_command","arguments":{"command":"document.setup","params":{"gridColors":"Blue","gridSize":"large","language":"German","bleed":9}}}
 ```
+
+## New Document
+
+`file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
+(points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
+spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` and `previewMode`.
+`file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
+kept in the preferences by `file.newPresets.save` and removed by `file.newPresets.delete`). A listed preset can be
+passed straight back to `file.new`. Print presets and sizes without `units` start in `unitsGeneral`; screen presets
+(mobile, web, video, social) in Pixels.
+
+```json
+{"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
+```
