@@ -218,8 +218,13 @@ fn enveloped_type_exports_distorted_in_every_format() {
     let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Envelope", "size": 48})).unwrap());
     sel(&mut s, &[t]);
     s.execute("object.envelope.makeWithWarp", &json!({"style": "arch", "bend": 0})).unwrap();
-    let export =
-        |s: &mut Session, format: &str| s.execute("document.export", &json!({"format": format})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    // The export's bytes without its time stamps (EPS and PDF date their files to the second).
+    let export = |s: &mut Session, format: &str| -> Vec<u8> {
+        let data = s.execute("document.export", &json!({"format": format})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+        let bytes = vectorcraft_format::base64_decode(&data).unwrap();
+        let dated = |line: &&[u8]| line.windows(12).any(|w| w == b"CreationDate") || line.windows(7).any(|w| w == b"ModDate");
+        bytes.split(|b| *b == b'\n').filter(|l| !dated(l)).flat_map(|l| l.iter().copied().chain([b'\n'])).collect()
+    };
     for format in ["svg", "pdf", "eps", "emf", "dxf"] {
         s.execute("object.envelope.options", &json!({"bend": 0})).unwrap();
         let flat = export(&mut s, format);
@@ -227,7 +232,7 @@ fn enveloped_type_exports_distorted_in_every_format() {
         s.execute("object.envelope.options", &json!({"bend": 80})).unwrap();
         assert_ne!(export(&mut s, format), flat, "{format}: the bend shows in the export");
     }
-    let svg = String::from_utf8(vectorcraft_format::base64_decode(&export(&mut s, "svg")).unwrap()).unwrap();
+    let svg = String::from_utf8(export(&mut s, "svg")).unwrap();
     assert!(!svg.contains("<text"), "type in an envelope exports as its distorted outlines");
 }
 
