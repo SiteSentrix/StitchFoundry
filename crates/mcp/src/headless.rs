@@ -73,6 +73,7 @@ fn tool_key(name: &str) -> Option<ToolKey> {
         "[" | "bracketleft" | "openbracket" => ToolKey::BracketLeft,
         "]" | "bracketright" | "closebracket" => ToolKey::BracketRight,
         "tab" => ToolKey::Tab,
+        k if k.len() == 1 => ToolKey::Digit(k.parse().ok()?),
         _ => return None,
     })
 }

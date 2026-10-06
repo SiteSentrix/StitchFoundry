@@ -8,12 +8,12 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind, WidthProfile};
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Affine, Homography, Point};
 use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sample};
-use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
+use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
 use vectorcraft_tools::distort::{arap, collect_points, mesh_for, warp_node_with};
 
-use super::edit::selected_roots;
+use super::edit::{duplicate_in, selected_roots};
 use super::*;
 use crate::EngineError;
 
@@ -124,7 +124,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move in Perspective",
             [],
             None,
-            "{ids?, from: [x,y], to: [x,y], plane?} slide objects within their plane (unattached objects attach to `plane`/the active plane first)",
+            "{ids?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does)} slide objects within their plane (unattached objects attach to `plane`/the active plane first); Transform Again repeats it",
             has_doc,
             persp_move
         ),
@@ -136,6 +136,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{command: shape.* id, params, plane?} run a shape command and attach the result to the plane",
             has_doc,
             persp_draw
+        ),
+        cmd!(
+            "perspective.transform",
+            "Transform in Perspective",
+            [],
+            None,
+            "{ids?, matrix: [a,b,c,d,e,f] (affine map in plane coordinates, points: u along the plane, v up or away), depth?: pt to move along the plane's normal (default 0), copy?: bool, plane?} transform objects within their own planes (Perspective Selection tool handles; unattached objects attach to `plane`/the active plane first); Transform Again repeats it → {ids}",
+            has_doc,
+            persp_transform
+        ),
+        cmd!(
+            "perspective.nudge",
+            "Nudge in Perspective",
+            [],
+            None,
+            "{dx, dy: arrow direction (-1, 0 or 1), big?: bool (×10), copy?: bool} move the selection in perspective by the keyboard increment, as the arrow keys do with the Perspective Selection tool → {ids}",
+            has_selection,
+            persp_nudge
         ),
     ]
 }
@@ -523,6 +541,7 @@ fn attach_in(d: &mut Document, g: &mut PerspectiveGrid, id: NodeId, plane: Plane
     let b = d.node(id).ok_or(EngineError::NoNode(id))?.geometric_bounds().ok_or_else(|| EngineError::Other("the object has no geometry".into()))?;
     let m = g.attach_map(plane, b).ok_or_else(|| EngineError::Other("the object is beyond the plane's horizon".into()))?;
     warp_checked(d, id, &m)?;
+    persp::set_attachment(d.node_mut(id).ok_or(EngineError::NoNode(id))?, plane, 0.0);
     g.attached.insert(id.0.to_string(), plane);
     Ok(())
 }
@@ -547,6 +566,9 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Release with Perspective", |d, _| {
         for id in &ids {
             g.attached.remove(&id.0.to_string());
+            if let Some(n) = d.node_mut(*id) {
+                n.perspective = None;
+            }
         }
         store_grid(d, &g);
         Ok(())
@@ -554,30 +576,161 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// One object's share of a perspective edit: the page map for an object on `plane` at `depth`, and
+/// the depth it ends at.
+type PerspStep<'a> = &'a dyn Fn(&PerspectiveGrid, Plane, f64) -> Result<(Homography, f64)>;
+
+/// Where an object is in perspective: its plane and depth.
+type Attached = (Plane, f64);
+
+fn beyond_horizon() -> EngineError {
+    EngineError::Other("the pointer is beyond the plane's horizon".into())
+}
+
+/// Edit objects in perspective (one undo step `label`): with `copy` their duplicates (which stay
+/// attached), each mapped by `step` for its own plane and depth; objects not in perspective attach
+/// to `fallback` first. → the edited objects and where the first one was (plane, depth).
+fn persp_edit(
+    s: &mut Session,
+    label: &str,
+    ids: &[NodeId],
+    fallback: Option<Plane>,
+    copy: bool,
+    step: PerspStep,
+) -> Result<(Vec<NodeId>, Option<Attached>)> {
+    if ids.is_empty() {
+        return Err(EngineError::Other("select the objects to transform in perspective".into()));
+    }
+    let mut g = grid_of(&s.doc()?.doc);
+    s.edit(label, |d, sel| {
+        g.adopt_stored_attachments(d);
+        let targets = if copy { duplicate_in(d, sel, ids, Affine::IDENTITY)? } else { ids.to_vec() };
+        let mut first = None;
+        for id in &targets {
+            let (plane, depth) = match g.attachment_of(d, *id) {
+                Some(a) => a,
+                None => {
+                    let pl = fallback.ok_or_else(|| EngineError::Other("the object isn't on a perspective plane".into()))?;
+                    attach_in(d, &mut g, *id, pl)?;
+                    (pl, 0.0)
+                }
+            };
+            first.get_or_insert((plane, depth));
+            let (h, depth) = step(&g, plane, depth)?;
+            warp_checked(d, *id, &|q| h.apply(q))?;
+            persp::set_attachment(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, plane, depth);
+        }
+        store_grid(d, &g);
+        Ok((targets, first))
+    })
+}
+
+/// Remember `again` (`perspective.transform` params) for Object › Transform › Transform Again, once
+/// the drag that made it is committed.
+fn record_again(s: &mut Session, again: Value) -> Result<()> {
+    let st = s.doc_mut()?;
+    match &mut st.interaction {
+        Some(it) => it.perspective_again = Some(again),
+        None => st.last_perspective = Some(again),
+    }
+    Ok(())
+}
+
+fn ids_json(ids: &[NodeId]) -> Value {
+    json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
+}
+
+/// A plane-space affine map as `perspective.transform`'s `matrix` param.
+fn matrix_json(m: Affine) -> Value {
+    json!(m.as_coeffs())
+}
+
 fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "perspective.move";
     let ids = roots(s, p)?;
     let from = point_param(p, "from").ok_or_else(|| bad(C, "missing from"))?;
     let to = point_param(p, "to").ok_or_else(|| bad(C, "missing to"))?;
-    let mut g = grid_of(&s.doc()?.doc);
-    let fallback = plane_param(&g, p, C).ok();
-    s.edit("Move in Perspective", |d, _| {
-        for id in &ids {
-            let plane = match g.attached_plane(*id) {
-                Some(pl) => pl,
-                None => {
-                    let pl = fallback.ok_or_else(|| EngineError::Other("the object isn't on a perspective plane".into()))?;
-                    attach_in(d, &mut g, *id, pl)?;
-                    pl
-                }
-            };
-            let m = g.move_map(plane, from, to).ok_or_else(|| EngineError::Other("the pointer is beyond the plane's horizon".into()))?;
-            warp_checked(d, *id, &m)?;
+    if ![from.x, from.y, to.x, to.y].iter().all(|v| v.is_finite()) {
+        return Err(bad(C, "from and to must be finite"));
+    }
+    let fallback = plane_param(&grid_of(&s.doc()?.doc), p, C).ok();
+    let (perp, copy) = (bool_or(p, "perpendicular", false), bool_or(p, "copy", false));
+    // In-plane: the plane-space offset under the pointer; perpendicular: the depth it reaches.
+    let step = |g: &PerspectiveGrid, pl: Plane, depth: f64| -> Result<(Homography, f64)> {
+        if perp {
+            let to_depth = g.depth_at(pl, depth, from, to).ok_or_else(beyond_horizon)?;
+            Ok((g.transform_map(pl, depth, Affine::IDENTITY, to_depth - depth).ok_or_else(beyond_horizon)?, to_depth))
+        } else {
+            let dv = g.plane_delta(pl, depth, from, to).ok_or_else(beyond_horizon)?;
+            Ok((g.transform_map(pl, depth, Affine::translate(dv), 0.0).ok_or_else(beyond_horizon)?, depth))
         }
-        store_grid(d, &g);
-        Ok(())
-    })?;
-    ok()
+    };
+    let label = if copy { "Copy in Perspective" } else { "Move in Perspective" };
+    let (targets, first) = persp_edit(s, label, &ids, fallback, copy, &step)?;
+    // Transform Again repeats the first object's move.
+    if let Some((pl, depth)) = first {
+        let g = grid_of(&s.doc()?.doc);
+        let again = match perp {
+            true => g.depth_at(pl, depth, from, to).map(|d| json!({"matrix": matrix_json(Affine::IDENTITY), "depth": d - depth, "copy": copy})),
+            false => g.plane_delta(pl, depth, from, to).map(|dv| json!({"matrix": matrix_json(Affine::translate(dv)), "copy": copy})),
+        };
+        if let Some(a) = again {
+            record_again(s, a)?;
+        }
+    }
+    Ok(ids_json(&targets))
+}
+
+fn persp_transform(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "perspective.transform";
+    let m = matrix_param(p, "matrix").ok_or_else(|| bad(C, "missing matrix [a,b,c,d,e,f]"))?;
+    let dz = f64_or(p, "depth", 0.0);
+    if !m.as_coeffs().iter().all(|v| v.is_finite()) || m.determinant().abs() < 1e-12 || !dz.is_finite() {
+        return Err(bad(C, "matrix must be finite and invertible, depth finite"));
+    }
+    let ids = roots(s, p)?;
+    let fallback = plane_param(&grid_of(&s.doc()?.doc), p, C).ok();
+    let copy = bool_or(p, "copy", false);
+    let step = |g: &PerspectiveGrid, pl: Plane, depth: f64| -> Result<(Homography, f64)> {
+        let to = depth + dz;
+        if to.abs() > persp::MAX_DEPTH {
+            return Err(EngineError::Other("the objects would leave the grid".into()));
+        }
+        Ok((g.transform_map(pl, depth, m, dz).ok_or_else(beyond_horizon)?, to))
+    };
+    let (targets, _) = persp_edit(s, if copy { "Copy in Perspective" } else { "Transform in Perspective" }, &ids, fallback, copy, &step)?;
+    record_again(s, json!({"matrix": matrix_json(m), "depth": dz, "copy": copy}))?;
+    Ok(ids_json(&targets))
+}
+
+/// Object › Transform › Transform Again after a perspective move or scale: the same plane-space
+/// transform on the selection.
+pub(crate) fn transform_again(s: &mut Session, again: &Value) -> Result<Value> {
+    let mut p = again.clone();
+    if let Some(o) = p.as_object_mut() {
+        o.remove("ids");
+    }
+    persp_transform(s, &p)
+}
+
+fn persp_nudge(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "perspective.nudge";
+    let (dx, dy) = (f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
+    if !(dx.is_finite() && dy.is_finite()) || (dx == 0.0 && dy == 0.0) {
+        return Err(bad(C, "dx and dy give the arrow's direction"));
+    }
+    let k = s.prefs.keyboard_increment * if bool_or(p, "big", false) { 10.0 } else { 1.0 };
+    let ids = selected_roots(s)?;
+    // The step is measured on the page at the centre of the selection's perspective box.
+    let st = s.doc()?;
+    let g = grid_of(&st.doc);
+    let (plane, depth, rect) = g.plane_bounds(&st.doc, &ids).ok_or_else(|| EngineError::Other("the selection isn't in perspective".into()))?;
+    let from = g.homography_at(plane, depth).and_then(|h| h.apply(rect.center())).ok_or_else(beyond_horizon)?;
+    let to = from + vectorcraft_geom::Vec2::new(dx.clamp(-1.0, 1.0), dy.clamp(-1.0, 1.0)) * k;
+    persp_move(
+        s,
+        &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "from": [from.x, from.y], "to": [to.x, to.y], "copy": bool_or(p, "copy", false)}),
+    )
 }
 
 fn persp_draw(s: &mut Session, p: &Value) -> Result<Value> {

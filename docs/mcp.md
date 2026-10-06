@@ -57,7 +57,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. |
-| `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool. |
+| `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool). |
 | `type_text` | `{text}` | Remote only. |
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
 | `open_panel` | `{panel}` | Remote only. |
@@ -1831,4 +1831,22 @@ preferences, and a grid whose fields are a preset's is named after it (`name`).
 ```json
 {"name":"run_command","arguments":{"command":"perspective.grid.preset","params":{"name":"[2P-Low View]"}}}
 {"name":"run_command","arguments":{"command":"perspective.presets.save","params":{"name":"Street","units":"feet","scale":[1,48],"gridline":1}}}
+```
+
+## Perspective Selection
+
+Objects in perspective keep their attachment themselves (`perspective` on the object: `plane` and `depth`, the
+distance along the plane's normal), so copies, duplicates and pastes stay attached. With the
+`perspectiveSelection` tool, a drag moves the selection within its plane (`perspective.move`; Alt copies), the
+bounding-box handles scale it in plane space (`perspective.transform`; Shift keeps proportions, Alt scales about the
+centre), and `press_key` `5` during a drag switches the move to perpendicular to the plane (press again to switch
+back). The arrow keys nudge a selection in perspective by the keyboard increment (`perspective.nudge`; Shift ×10, Alt
+copies). Object › Transform › Transform Again repeats the last perspective move or scale in plane space.
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"perspectiveSelection","events":[{"kind":"down","x":480,"y":410},{"kind":"drag","x":470,"y":405}]}}
+{"name":"press_key","arguments":{"key":"5"}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"up","x":470,"y":405}]}}
+{"name":"run_command","arguments":{"command":"perspective.transform","params":{"matrix":[1.5,0,0,1.5,0,0],"copy":true}}}
+{"name":"run_command","arguments":{"command":"object.transformAgain","params":{}}}
 ```

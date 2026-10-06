@@ -343,6 +343,9 @@ pub struct Node {
     /// [`crate::orient`]); Reset Bounding Box sets it back to 0.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub bbox_angle: f64,
+    /// Object › Perspective: the perspective grid plane the object is attached to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub perspective: Option<Box<crate::PerspectiveAttachment>>,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -392,6 +395,7 @@ impl Node {
             attrs: None,
             slice: None,
             bbox_angle: 0.0,
+            perspective: None,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {

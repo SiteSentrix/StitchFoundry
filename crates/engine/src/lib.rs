@@ -81,6 +81,9 @@ pub struct Interaction {
     /// Per-document state restored on cancel (current layer, isolation).
     pub active_layer: Option<NodeId>,
     pub isolation: Option<NodeId>,
+    /// The perspective transform the previews make (`perspective.transform` params): Transform
+    /// Again repeats it once the drag is committed.
+    pub perspective_again: Option<Value>,
 }
 
 /// Per-document editing state.
@@ -131,6 +134,9 @@ pub struct DocState {
     pub recovery: Option<cmd::recovery::RecoveryCopy>,
     /// View → Show Print Tiling, per document (view state: not saved, not undoable).
     pub print_tiling: bool,
+    /// Transform Again after a perspective move or scale (Perspective Selection tool): the
+    /// `perspective.transform` params it repeats. `None` once an ordinary transform follows.
+    pub last_perspective: Option<Value>,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -163,6 +169,7 @@ impl DocState {
             recovered: false,
             recovery: None,
             print_tiling: false,
+            last_perspective: None,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -1052,6 +1059,7 @@ impl Session {
             preview: None,
             active_layer: st.active_layer,
             isolation: st.isolation,
+            perspective_again: None,
         });
         Ok(())
     }
@@ -1080,13 +1088,18 @@ impl Session {
         let st = self.doc_mut()?;
         let Some(mut it) = st.interaction.take() else { return Ok(()) };
         let Some(preview) = it.preview.take() else { return Ok(()) };
+        let perspective_again = it.perspective_again.take();
         st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
             let copy = preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
             if let Some(m) = m {
                 st.last_transform = Some((m, copy));
+                st.last_perspective = None;
             }
+        }
+        if perspective_again.is_some() {
+            st.last_perspective = perspective_again;
         }
         self.journal.push(preview);
         Ok(())
@@ -1255,6 +1268,8 @@ mod tests_pdfmarks;
 mod tests_pdfpresets;
 #[cfg(test)]
 mod tests_pdfraster;
+#[cfg(test)]
+mod tests_persp_select;
 #[cfg(test)]
 mod tests_perspgrid;
 #[cfg(test)]

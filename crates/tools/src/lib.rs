@@ -115,6 +115,9 @@ pub enum ToolKey {
     Tab,
     Home,
     End,
+    /// A digit key 0–9 (5 while dragging with the Perspective Selection tool moves perpendicular
+    /// to the plane).
+    Digit(u8),
 }
 
 /// What a tool asks the engine to do.

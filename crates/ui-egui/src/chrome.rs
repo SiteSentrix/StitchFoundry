@@ -526,6 +526,16 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             ("Shift", true),
             (" keeps its proportions)", false),
         ],
+        "perspectiveSelection" => &[
+            ("Drag", true),
+            (" to move in perspective  |  ", false),
+            ("Alt+Drag", true),
+            (" to copy  |  ", false),
+            ("5", true),
+            (" while dragging to move perpendicular to the plane  |  ", false),
+            ("Drag a handle", true),
+            (" to scale in perspective", false),
+        ],
         _ => return None,
     })
 }
@@ -587,6 +597,7 @@ mod tests {
         assert!(text("zoom").contains(&pretty("Alt+Click")));
         assert!(text("rotate").contains(&pretty("Alt+Click")));
         assert!(text("eyedropper").contains(&pretty("Alt+Click")));
+        assert!(text("perspectiveSelection").contains(&pretty("Alt+Drag")) && text("perspectiveSelection").contains("perpendicular"));
         assert!(text("paintbrush").contains(&pretty("Cmd+Shift+/")), "the Search Commands shortcut");
         if !cfg!(target_os = "macos") {
             assert!(text("zoom").contains("Alt+Click") && text("paintbrush").contains("Ctrl+Shift+/"));

@@ -220,6 +220,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let _ = app.session.tool_key(tk, Mods::default(), view);
             }
         }
+        // Digits (5 while dragging with the Perspective Selection tool), once per press.
+        let digits: Vec<u8> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Key { key, pressed: true, repeat: false, .. } => digit_of(*key),
+                    _ => None,
+                })
+                .collect()
+        });
+        for d in digits {
+            let _ = app.session.tool_key(ToolKey::Digit(d), Mods::default(), view);
+        }
         return;
     }
     // Keys the active tool claims ahead of their shortcuts (the Gradient tool's selected stop:
@@ -295,6 +308,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             app.select_tool(t);
         }
     }
+}
+
+/// The digit a number-row or keypad key types.
+fn digit_of(k: Key) -> Option<u8> {
+    const DIGITS: [Key; 10] = [Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
+    DIGITS.iter().position(|d| *d == k).map(|i| i as u8)
 }
 
 #[cfg(test)]
@@ -376,6 +395,29 @@ mod tests {
         assert_eq!(zoom(&mut app), before, "left to the system menu");
         frame(&mut app, vec![press(Key::Plus, Modifiers::COMMAND)]);
         assert!(zoom(&mut app) > before);
+    }
+
+    #[test]
+    fn digit_keys_reach_a_dragging_tool_once_per_press() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        app.session.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 450, "y": 380, "width": 60, "height": 60})).unwrap()["id"].clone();
+        app.session.execute("perspective.attach", &json!({"ids": [id], "plane": "right"})).unwrap();
+        app.select_tool("perspectiveSelection");
+        let v = app.view_info();
+        let c =
+            app.session.doc().unwrap().doc.node(vectorcraft_engine::doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().center();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, c.x, c.y), v).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, c.x + 30.0, c.y), v).unwrap();
+        let key = |repeat| egui::Event::Key { key: Key::Num5, physical_key: None, pressed: true, repeat, modifiers: Modifiers::NONE };
+        // A held key repeats: only its first press toggles.
+        frame(&mut app, vec![key(false), key(true)]);
+        let preview = app.session.doc().unwrap().interaction.as_ref().unwrap().preview.clone().unwrap();
+        assert_eq!((preview.0.as_str(), &preview.1["perpendicular"]), ("perspective.move", &json!(true)));
+        assert_eq!(digit_of(Key::Num0), Some(0));
+        assert_eq!(digit_of(Key::A), None);
     }
 
     #[test]
