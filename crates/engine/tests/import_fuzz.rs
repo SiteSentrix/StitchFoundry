@@ -1097,7 +1097,7 @@ fn emf_of(records: &[(u32, Vec<u8>)]) -> Vec<u8> {
 /// A placeable WMF of a 1 × 1 inch box holding `records`.
 fn wmf_of(records: &[(u16, Vec<u8>)]) -> Vec<u8> {
     let mut b: Vec<u8> = vec![0xD7, 0xCD, 0xC6, 0x9A, 0, 0, 0, 0, 0, 0, 0xA0, 0x05, 0xA0, 0x05, 0xA0, 0x05, 0, 0, 0, 0];
-    let sum = b.chunks_exact(2).fold(0u16, |a, w| a ^ u16::from_le_bytes([w[0], w[1]]));
+    let sum = b.as_chunks::<2>().0.iter().fold(0u16, |a, w| a ^ u16::from_le_bytes(*w));
     b.extend(sum.to_le_bytes());
     b.extend([1, 0, 9, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     for (function, body) in records {

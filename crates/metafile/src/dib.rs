@@ -92,7 +92,7 @@ pub(crate) fn rgb24(img: &Rgba, opacity: f32) -> (Vec<u8>, Vec<u8>) {
         // Bottom-up: the first stored row is the image's last.
         let Some(at) = (img.height as usize).checked_sub(y + 1).map(|r| r * row) else { continue };
         let Some(dst) = bits.get_mut(at..at + img.width as usize * 3) else { continue };
-        for (d, p) in dst.chunks_exact_mut(3).zip(src.as_chunks::<4>().0) {
+        for (d, p) in dst.as_chunks_mut::<3>().0.iter_mut().zip(src.as_chunks::<4>().0) {
             let a = (f32::from(p[3]) * opacity.clamp(0.0, 1.0)).round() as u32;
             d.copy_from_slice(&[over(p[2], a), over(p[1], a), over(p[0], a)]);
         }
@@ -107,7 +107,7 @@ pub(crate) fn bgra32(img: &Rgba, opacity: f32) -> (Vec<u8>, Vec<u8>) {
     for (y, src) in img.pixels.chunks_exact(row.max(1)).enumerate() {
         let Some(at) = (img.height as usize).checked_sub(y + 1).map(|r| r * row) else { continue };
         let Some(dst) = bits.get_mut(at..at + row) else { continue };
-        for (d, p) in dst.chunks_exact_mut(4).zip(src.as_chunks::<4>().0) {
+        for (d, p) in dst.as_chunks_mut::<4>().0.iter_mut().zip(src.as_chunks::<4>().0) {
             let a = (f32::from(p[3]) * opacity.clamp(0.0, 1.0)).round() as u32;
             let pre = |c: u8| ((u32::from(c) * a + 127) / 255) as u8;
             d.copy_from_slice(&[pre(p[2]), pre(p[1]), pre(p[0]), a as u8]);

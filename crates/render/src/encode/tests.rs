@@ -166,7 +166,7 @@ fn anti_alias_none_is_the_same_on_every_thread_count() {
     };
     let (st, mt) = (render(0), render(3));
     for img in [&st, &mt] {
-        assert!(img.to_straight().chunks_exact(4).all(|p| p[3] == 0 || p[3] == 255), "hard edges");
+        assert!(img.to_straight().as_chunks::<4>().0.iter().all(|p| p[3] == 0 || p[3] == 255), "hard edges");
     }
     let worst = st.pixels.iter().zip(&mt.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
     assert!(worst <= 4, "max channel difference {worst}");
