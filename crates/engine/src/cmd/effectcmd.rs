@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow) → {ids, index, item}",
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step) → {ids, index, item, grouped?}",
             has_doc,
             apply
         ),
@@ -130,6 +130,15 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
+    if let Some(loose) = loose_for_pathfinder(s, p, id)? {
+        let gid = s.edit(&label, |d, sel| {
+            let gid = super::object::group_nodes(d, &loose)?;
+            d.node_mut(gid).ok_or(EngineError::NoNode(gid))?.appearance.effects.push(effect.clone());
+            sel.set([gid]);
+            Ok(gid)
+        })?;
+        return Ok(json!({ "ids": [gid.0], "index": 0, "item": null, "grouped": true }));
+    }
     let item = item_target(s, p, C)?;
     let mut index = 0;
     let ids = edit_effects(s, p, item, C, &label, "Apply Effect: select objects", |fx| {
@@ -141,6 +150,19 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let first = ids.first().and_then(|id| s.doc().ok()?.doc.node(*id));
     let landed = first.and_then(|n| item.effects_item(&n.appearance, C).ok().flatten());
     Ok(json!({ "ids": ids_json(&ids), "index": index, "item": landed }))
+}
+
+/// The selected objects a Pathfinder effect should group before it applies: it combines the
+/// contents of a group or layer, so on several loose objects (none a group) it would do nothing.
+/// `None` when the effect isn't one, objects are named (`ids`) or another target is asked for.
+fn loose_for_pathfinder(s: &Session, p: &Value, id: &str) -> Result<Option<Vec<NodeId>>> {
+    if !effects::is_pathfinder(id) || ["ids", "id", "item", "target"].iter().any(|k| p.get(k).is_some()) {
+        return Ok(None);
+    }
+    let roots = super::appearance::subject_roots(s)?;
+    let d = &s.doc()?.doc;
+    let grouped = roots.iter().any(|r| d.node(*r).is_some_and(|n| matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })));
+    Ok((roots.len() >= 2 && !grouped).then_some(roots))
 }
 
 fn list(s: &mut Session, p: &Value) -> Result<Value> {
@@ -505,6 +527,34 @@ mod tests {
         assert!(matches!(n.kind, NodeKind::Compound { .. }));
         let b = n.geometric_bounds().unwrap();
         assert!((b.x1 - 320.0).abs() < 1e-6, "{b:?}");
+    }
+
+    #[test]
+    fn pathfinder_effect_on_loose_objects_groups_them_first() {
+        let (mut s, a) = session_with_rect();
+        let b = NodeId(s.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        let r = s.execute("effect.apply", &json!({"effect": "pathfinder.add"})).unwrap();
+        assert_eq!(r["grouped"], true);
+        let g = NodeId(r["ids"][0].as_u64().unwrap());
+        let gn = node(&s, g);
+        assert_eq!(gn.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), [a, b], "stacking order kept");
+        assert!(vectorcraft_render::effects::has_pathfinder(&gn));
+        assert_eq!(s.doc().unwrap().selection.objects, [g]);
+        // Live: one united shape, so expanding leaves a single path.
+        s.execute("effect.expandAppearance", &json!({})).unwrap();
+        assert_eq!(node(&s, g).children().unwrap().len(), 1);
+        // Grouping and applying are one undo step.
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        assert!(d.node(g).is_none());
+        assert!(d.node(a).is_some_and(|n| n.appearance.effects.is_empty()) && d.parent_of(a) == d.parent_of(b));
+        // A selection holding a group applies to each object as before; so does a single object.
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        let r = s.execute("effect.apply", &json!({"effect": "pathfinder.add"})).unwrap();
+        assert!(r.get("grouped").is_none());
+        assert_eq!(node(&s, a).appearance.effects.len(), 1);
     }
 
     #[test]
