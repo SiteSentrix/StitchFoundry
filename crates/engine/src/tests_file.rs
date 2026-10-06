@@ -233,3 +233,30 @@ fn raster_export_too_large_is_an_error_not_a_crash() {
     assert!(std::fs::read(&path).unwrap().starts_with(b"\x89PNG"));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Japanese file and folder names save, open, export and title documents as typed: the native
+/// format, SVG, PNG and PDF, in a folder with a Japanese name too.
+#[test]
+fn japanese_file_names_save_open_and_export() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap();
+    s.execute("text.create", &json!({"x": 10, "y": 80, "text": "日本語のテキスト"})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-日本語フォルダ-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("運動会カード（最終版）・2024.vectorcraft");
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    assert!(path.exists());
+    assert_eq!(s.doc().unwrap().title(), "運動会カード（最終版）・2024.vectorcraft", "the tab names the file as typed");
+    s.execute("document.open", &json!({"path": path.to_string_lossy()})).unwrap();
+    let d = s.doc().unwrap();
+    assert_eq!(d.path.as_deref(), Some(path.to_string_lossy().as_ref()));
+    let mut found = false;
+    d.doc.walk(|n| found |= matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if t.plain_text() == "日本語のテキスト"));
+    assert!(found, "the Japanese text comes back");
+    for (format, name) in [("svg", "書き出し.svg"), ("png", "書き出し.png"), ("pdf", "書き出し.pdf")] {
+        let out = dir.join(name);
+        s.execute("document.export", &json!({"format": format, "path": out.to_string_lossy()})).unwrap();
+        assert!(std::fs::metadata(&out).is_ok_and(|m| m.len() > 0), "{name}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
