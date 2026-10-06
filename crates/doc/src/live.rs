@@ -94,6 +94,81 @@ pub enum EnvelopeKind {
     TopObject { path: PathData },
 }
 
+/// Envelope Options → Preserve Shape Using: how a distorted raster keeps the envelope's shape.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreserveShape {
+    #[default]
+    ClippingMask,
+    Transparency,
+}
+
+impl PreserveShape {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::ClippingMask => "clippingMask",
+            Self::Transparency => "transparency",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "clippingMask" => Some(Self::ClippingMask),
+            "transparency" => Some(Self::Transparency),
+            _ => None,
+        }
+    }
+}
+
+/// Envelope Options besides Fidelity. `Default` is what envelopes saved before these options
+/// existed do (their appearance applies after the distortion); new envelopes start from
+/// [`EnvelopeOptions::NEW`], as in the reference app.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EnvelopeOptions {
+    /// Rasters: Anti-Alias.
+    pub anti_alias: bool,
+    /// Rasters: Preserve Shape Using.
+    pub preserve_shape: PreserveShape,
+    /// Distort Appearance: strokes and live effects are applied before the distortion, so they
+    /// bend with the art (off: they apply to the distorted paths).
+    pub distort_appearance: bool,
+    /// Distort Linear Gradients (with Distort Appearance): placed gradients bend with the art.
+    pub distort_linear_gradients: bool,
+    /// Distort Pattern Fills (with Distort Appearance): pattern tiles bend with the art.
+    pub distort_pattern_fills: bool,
+}
+
+impl Default for EnvelopeOptions {
+    fn default() -> Self {
+        Self {
+            anti_alias: true,
+            preserve_shape: PreserveShape::ClippingMask,
+            distort_appearance: false,
+            distort_linear_gradients: false,
+            distort_pattern_fills: false,
+        }
+    }
+}
+
+impl EnvelopeOptions {
+    /// The options a new envelope gets (the reference app's defaults).
+    pub const NEW: Self = Self {
+        anti_alias: true,
+        preserve_shape: PreserveShape::ClippingMask,
+        distort_appearance: true,
+        distort_linear_gradients: false,
+        distort_pattern_fills: false,
+    };
+    /// Do gradients bend with the art?
+    pub fn gradients(&self) -> bool {
+        self.distort_appearance && self.distort_linear_gradients
+    }
+    /// Do pattern tiles bend with the art?
+    pub fn patterns(&self) -> bool {
+        self.distort_appearance && self.distort_pattern_fills
+    }
+}
+
 /// Handle slots of a [`MeshPoint`]: towards the next column, previous column, next row, previous row.
 pub const H_RIGHT: usize = 0;
 pub const H_LEFT: usize = 1;
@@ -1392,6 +1467,16 @@ pub fn envelope_expand(content: &[Arc<Node>], kind: &EnvelopeKind, fidelity: f64
     content.iter().map(|c| map_node(c, &*f, piece, outline)).collect()
 }
 
+/// The surface an envelope maps `content` onto, sampled on a `rows`×`cols` grid as a mesh whose
+/// handles follow the surface and whose points are `color`: Release gives it back as the
+/// envelope's shape and Reset with Mesh starts from it. `None` when the content has no bounds.
+pub fn envelope_surface(content: &[Arc<Node>], kind: &EnvelopeKind, rows: u32, cols: u32, color: Color) -> Option<GradientMesh> {
+    let src = nodes_bounds(content)?;
+    let f = envelope_mapper(kind, src);
+    let at = |u: f64, v: f64| f(Point::new(src.x0 + u * src.width(), src.y0 + v * src.height()));
+    Some(GradientMesh::from_surface(rows, cols, &at, &|_, _| color))
+}
+
 /// Envelope bounds (the image of the content box, sampled).
 pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind) -> Option<Rect> {
     match kind {
@@ -1467,6 +1552,7 @@ pub fn expanded_group(n: &Node, outline: Outliner) -> Node {
     g.isolate = n.isolate;
     g.knockout = n.knockout;
     g.knockout_shape = n.knockout_shape;
+    g.mask = n.mask.clone();
     g
 }
 

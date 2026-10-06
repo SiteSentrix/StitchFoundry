@@ -363,3 +363,47 @@ fn recovery_commands_with_a_damaged_store_and_junk_params() {
         }
     }
 }
+
+/// Envelope Distort's commands on warp, mesh and top-object envelopes (selected, and with their
+/// content selected in Edit Contents) with `{}` and junk params: never a panic, an open
+/// interaction or a broken tree.
+#[test]
+fn envelope_commands_with_junk_params_on_envelopes() {
+    let path = safe_path();
+    let makes: [(&str, Value); 3] = [
+        ("object.envelope.makeWithWarp", json!({"style": "twist", "bend": 80})),
+        ("object.envelope.makeWithMesh", json!({"rows": 2, "cols": 3})),
+        ("object.envelope.makeWithTopObject", json!({})),
+    ];
+    let mut failures = vec![];
+    for (make, mp) in &makes {
+        for editing in [false, true] {
+            let ids: Vec<&str> =
+                command_specs().iter().map(|c| c.id).filter(|id| id.starts_with("object.envelope.") || id.starts_with("object.mesh.")).collect();
+            for id in ids {
+                let spec = command_specs().iter().find(|c| c.id == id).unwrap();
+                for p in std::iter::once(json!({})).chain(junk_params(spec.params, &path)) {
+                    let mut s = Fixture::Multi.session();
+                    if s.execute(make, mp).is_err() {
+                        failures.push(format!("{make} failed on the Multi fixture"));
+                        continue;
+                    }
+                    if editing {
+                        let _ = s.execute("object.envelope.editContents", &json!({"editing": true}));
+                    }
+                    let r = catch_quiet(|| s.execute(id, &p));
+                    if r.is_err() {
+                        failures.push(format!("PANIC {id} {p} [{make}, editing {editing}]"));
+                    } else if s.in_interaction() {
+                        failures.push(format!("{id} {p} [{make}]: left an interaction open"));
+                    } else if let Err(e) = check_session(&s) {
+                        failures.push(format!("{id} {p} [{make}]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    failures.sort();
+    failures.dedup();
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.iter().take(40).cloned().collect::<Vec<_>>().join("\n"));
+}

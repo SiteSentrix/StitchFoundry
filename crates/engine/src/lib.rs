@@ -683,6 +683,9 @@ pub struct Session {
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
+    /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
+    /// (`None`: the reference app's defaults, fidelity 50); not saved.
+    pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
 }
 
 impl Default for Session {
@@ -724,6 +727,7 @@ impl Session {
             batch_stash: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            envelope_defaults: None,
         }
     }
 
@@ -1163,6 +1167,8 @@ mod tests_editcolors;
 mod tests_effectedit;
 #[cfg(test)]
 mod tests_emptytype;
+#[cfg(test)]
+mod tests_envelope;
 #[cfg(test)]
 mod tests_expand;
 #[cfg(test)]

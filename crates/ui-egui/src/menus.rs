@@ -366,7 +366,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.menuDialog",
         "Menu Dialog",
         "",
-        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid|object.vectorHalftone} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates)",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid|object.vectorHalftone|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, envelopeWarp, envelopeMesh, envelopeOptions; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
     ),
     (
         "ui.widthPointEdit",
@@ -891,12 +891,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.expandDialog" => crate::dialogs::expand::open(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
-        "ui.menuDialog" => match s("command").as_deref().and_then(menu_dialog) {
-            Some((kind, fields)) => {
-                app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
-                Ok(Value::Null)
-            }
-            None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
+        "ui.menuDialog" => match s("command").as_deref() {
+            Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
+            c => match c.and_then(menu_dialog) {
+                Some((kind, fields)) => {
+                    app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+                    Ok(Value::Null)
+                }
+                None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
+            },
         },
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
@@ -1078,6 +1081,17 @@ fn hidden_when_disabled(id: &str) -> bool {
         || id.starts_with("file.openRecent")
         || id.starts_with(crate::panels::swatches::USER_SLOT)
         || id.starts_with(crate::panels::graphic_styles::USER_SLOT)
+}
+
+/// Menu items another item stands in for right now: Envelope Distort's Reset with Warp and Reset
+/// with Mesh take the place of Make with Warp and Make with Mesh while an envelope is selected.
+fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
+    let reset = match id {
+        "object.envelope.makeWithWarp" | "object.envelope.makeWithMesh" => false,
+        "object.envelope.resetWithWarp" | "object.envelope.resetWithMesh" => true,
+        _ => return false,
+    };
+    enabled(app, "object.envelope.release") != reset
 }
 
 /// File → Open Recent Files slots (Preferences → File Handling shows 0–30 of them).
@@ -1500,16 +1514,15 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 sub(
                     "Envelope Distort",
                     vec![
-                        cp(
-                            "Make with Warp…",
-                            "object.envelope.makeWithWarp",
-                            json!({"style": "arc", "bend": 50, "h": 0, "v": 0, "horizontal": true}),
-                        ),
-                        cp("Make with Mesh…", "object.envelope.makeWithMesh", json!({"rows": 4, "cols": 4})),
+                        // While an envelope is selected, Reset takes Make's place (`swapped_out`).
+                        c("Make with Warp…", "object.envelope.makeWithWarp"),
+                        c("Reset with Warp…", "object.envelope.resetWithWarp"),
+                        c("Make with Mesh…", "object.envelope.makeWithMesh"),
+                        c("Reset with Mesh…", "object.envelope.resetWithMesh"),
                         c("Make with Top Object", "object.envelope.makeWithTopObject"),
                         Sep,
                         c("Release", "object.envelope.release"),
-                        cp("Envelope Options…", "object.envelope.options", json!({"fidelity": 50})),
+                        c("Envelope Options…", "object.envelope.options"),
                         c("Expand", "object.envelope.expand"),
                         Sep,
                         c("Edit Contents", "object.envelope.editContents"),
@@ -1936,7 +1949,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             Item::Cmd(label, id, p) => {
                 let en = enabled(app, id);
                 // Unused saved-view and recent-file slots are hidden (only the real ones are listed).
-                if !en && hidden_when_disabled(id) {
+                if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
                     continue;
                 }
                 let label = dynamic_label(app, id, label);
@@ -2006,6 +2019,13 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         && p.as_object().is_none_or(|o| o.is_empty())
     {
         app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+        return;
+    }
+    // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
+    if crate::dialogs::envelope::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::envelope::open(app, id) {
+            app.status(e);
+        }
         return;
     }
     // Repeat Options: a dialog with the selected repeat's current values.
@@ -2146,7 +2166,7 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     fn walk(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
         for it in items {
             match it {
-                Item::Cmd(_, id, _) if hidden_when_disabled(id) && !enabled(app, id) => {}
+                Item::Cmd(_, id, _) if (hidden_when_disabled(id) && !enabled(app, id)) || swapped_out(app, id) => {}
                 Item::Cmd(l, id, p) => out.push(MenuEntry {
                     path: path.clone(),
                     label: dynamic_label(app, id, l),

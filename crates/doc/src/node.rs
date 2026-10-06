@@ -272,6 +272,9 @@ pub enum NodeKind {
         /// Edit Contents mode (the content, not the envelope, is edited).
         #[serde(default)]
         editing: bool,
+        /// Envelope Options besides Fidelity.
+        #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+        options: crate::live::EnvelopeOptions,
     },
     /// Gradient mesh.
     Mesh(GradientMesh),

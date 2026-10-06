@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::live::{self, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, GradientMesh, MeshAppearance, Spine};
+use vectorcraft_doc::live::{
+    self, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, EnvelopeOptions, GradientMesh, MeshAppearance, PreserveShape, Spine,
+};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Affine, PathData, Point};
 
@@ -89,7 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Warp…",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+Shift+W"),
-            "{ids?, style?: arc|arcLower|…|twist (arc), bend?: % (50), h?: %, v?: %, horizontal?: bool (true)} envelope the selected objects with a warp → {id}",
+            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected) → {id}",
             has_selection,
             env_make_warp
         ),
@@ -98,7 +100,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Mesh…",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+M"),
-            "{ids?, rows?: n (4), cols?: n (4)} envelope the selected objects with a point mesh → {id}",
+            "{ids?, rows?: 1..50 (4), cols?: 1..50 (4)} envelope the selected objects with a mesh of rows × cols patches → {id}",
             has_selection,
             env_make_mesh
         ),
@@ -112,11 +114,38 @@ pub fn specs() -> Vec<CommandSpec> {
             env_make_top
         ),
         cmd!(
+            "object.envelope.resetWithWarp",
+            "Reset with Warp…",
+            ["Object", "Envelope Distort"],
+            None,
+            "{style?, bend?, h?, v?, horizontal? | orientation? (as makeWithWarp; unset: the envelope's current warp, else arc 50 %)} make the selected envelopes warp envelopes, keeping their content",
+            has_envelope,
+            env_reset_warp
+        ),
+        cmd!(
+            "object.envelope.resetWithMesh",
+            "Reset with Mesh…",
+            ["Object", "Envelope Distort"],
+            None,
+            "{rows?: 1..50, cols?: 1..50 (unset: a mesh envelope's own, else 4), maintainShape?: bool (true: the mesh follows the current envelope shape; false: a flat grid over the content)} make the selected envelopes mesh envelopes, keeping their content",
+            has_envelope,
+            env_reset_mesh
+        ),
+        cmd!(
+            query "object.envelope.info",
+            "Envelope Info",
+            [],
+            None,
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, editing}",
+            has_doc,
+            env_info
+        ),
+        cmd!(
             "object.envelope.release",
             "Release",
             ["Object", "Envelope Distort"],
             None,
-            "{} release the selected envelopes → {ids}",
+            "{} release the selected envelopes into their content and their shape (a grey gradient mesh for warp and mesh envelopes, the path for a top-object envelope; the content keeps the envelope's opacity, blend mode and opacity mask) → {ids}",
             has_envelope,
             env_release
         ),
@@ -125,8 +154,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Options…",
             ["Object", "Envelope Distort"],
             None,
-            "{fidelity?: 0..100, style?, bend?, h?, v?, horizontal?} set envelope options (warp params for warp envelopes)",
-            has_envelope,
+            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance), style?, bend?, h?, v?, horizontal? (warp envelopes)} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
+            has_doc,
             env_options
         ),
         cmd!(
@@ -134,7 +163,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand",
             ["Object", "Envelope Distort"],
             None,
-            "{} replace the selected envelopes by their distorted content → {ids}",
+            "{} replace the selected envelopes by groups of their distorted content (type outlined), keeping name, opacity, blend mode, isolation, knockout and opacity mask → {ids}",
             has_envelope,
             env_expand
         ),
@@ -526,8 +555,23 @@ fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<Envelop
     Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal })
 }
 
-fn envelope(id: NodeId, content: Vec<Arc<Node>>, kind: EnvelopeKind) -> Node {
-    Node::new(id, NodeKind::Envelope { content, kind, fidelity: live::default_fidelity(), editing: false })
+/// The options and fidelity new envelopes get (Envelope Options with no envelope selected).
+fn envelope_defaults(s: &Session) -> (EnvelopeOptions, f64) {
+    s.envelope_defaults.unwrap_or((EnvelopeOptions::NEW, live::default_fidelity()))
+}
+
+fn envelope(id: NodeId, content: Vec<Arc<Node>>, kind: EnvelopeKind, (options, fidelity): (EnvelopeOptions, f64)) -> Node {
+    Node::new(id, NodeKind::Envelope { content, kind, fidelity, editing: false, options })
+}
+
+/// `rows` and `cols` (or `columns`), 1..50 each, defaulting to `default`.
+fn rows_cols(p: &Value, cmd: &str, default: (u32, u32)) -> Result<(u32, u32)> {
+    let rows = f64_or(p, "rows", default.0 as f64);
+    let cols = f64_or(p, "cols", f64_or(p, "columns", default.1 as f64));
+    if !(1.0..=50.0).contains(&rows) || !(1.0..=50.0).contains(&cols) {
+        return Err(bad(cmd, "rows and cols must be 1..50"));
+    }
+    Ok((rows as u32, cols as u32))
 }
 
 fn env_make_warp(s: &mut Session, p: &Value) -> Result<Value> {
@@ -536,26 +580,30 @@ fn env_make_warp(s: &mut Session, p: &Value) -> Result<Value> {
     if roots.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
-    let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind)))?;
+    let defaults = envelope_defaults(s);
+    let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind, defaults)))?;
     Ok(json!({ "id": id.0 }))
+}
+
+/// A mesh envelope of `rows`×`cols` patches over `content`: following the surface of `shape` (an
+/// envelope's current kind), or a flat grid over the content's bounds.
+fn mesh_kind(content: &[Arc<Node>], shape: Option<&EnvelopeKind>, rows: u32, cols: u32) -> Option<EnvelopeKind> {
+    let points = match shape {
+        Some(k) => live::envelope_surface(content, k, rows, cols, Color::BLACK)?.points.into_iter().map(|m| m.p).collect(),
+        None => live::grid_points(live::nodes_bounds(content)?, rows, cols),
+    };
+    Some(EnvelopeKind::Mesh { rows, cols, points })
 }
 
 fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.makeWithMesh";
-    let rows = f64_or(p, "rows", 4.0);
-    let cols = f64_or(p, "cols", f64_or(p, "columns", 4.0));
-    if !(1.0..=50.0).contains(&rows) || !(1.0..=50.0).contains(&cols) {
-        return Err(bad(C, "rows and cols must be 1..50"));
-    }
+    let (rows, cols) = rows_cols(p, C, (4, 4))?;
     let roots = roots_param(s, p)?;
     let st = s.doc()?;
-    let src = roots
-        .iter()
-        .filter_map(|id| st.doc.node(*id))
-        .fold(None, |a, n| vectorcraft_geom::union_opt(a, n.geometric_bounds()))
-        .ok_or_else(|| bad(C, "selection has no bounds"))?;
-    let kind = EnvelopeKind::Mesh { rows: rows as u32, cols: cols as u32, points: live::grid_points(src, rows as u32, cols as u32) };
-    let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind)))?;
+    let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).map(Arc::new).collect();
+    let kind = mesh_kind(&nodes, None, rows, cols).ok_or_else(|| bad(C, "selection has no bounds"))?;
+    let defaults = envelope_defaults(s);
+    let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind, defaults)))?;
     Ok(json!({ "id": id.0 }))
 }
 
@@ -579,12 +627,143 @@ fn env_make_top(s: &mut Session, p: &Value) -> Result<Value> {
     let Some((&top, content)) = roots.split_last() else { return Err(bad(C, "select the content and a path on top")) };
     let content = content.to_vec();
     let path = s.doc()?.doc.node(top).and_then(outline_of).filter(|p| p.bounds().is_some()).ok_or_else(|| bad(C, "the top object must be a path"))?;
+    let defaults = envelope_defaults(s);
     let id = s.edit("Make Envelope", |d, sel| {
-        let id = wrap(d, sel, &content, |id, content| envelope(id, content, EnvelopeKind::TopObject { path }))?;
+        let id = wrap(d, sel, &content, |id, content| envelope(id, content, EnvelopeKind::TopObject { path }, defaults))?;
         d.remove(top)?;
         Ok(id)
     })?;
     Ok(json!({ "id": id.0 }))
+}
+
+/// The kind `f` makes of each selected envelope (from its content and its current kind).
+fn reshaped(s: &Session, f: impl Fn(&[Arc<Node>], &EnvelopeKind) -> Result<EnvelopeKind>) -> Result<Vec<(NodeId, EnvelopeKind)>> {
+    let doc = &s.doc()?.doc;
+    let mut out = vec![];
+    for e in selected_of(s, is_envelope) {
+        if let Some(NodeKind::Envelope { content, kind, .. }) = doc.node(e).map(|n| &n.kind) {
+            out.push((e, f(content, kind)?));
+        }
+    }
+    Ok(out)
+}
+
+/// Give each envelope of `kinds` its new kind (as one undo step `label`).
+fn set_kinds(s: &mut Session, label: &str, kinds: Vec<(NodeId, EnvelopeKind)>) -> Result<Value> {
+    s.edit(label, |d, _| {
+        for (e, k) in kinds {
+            if let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(e).map(|n| &mut n.kind) {
+                *kind = k;
+            }
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
+fn env_reset_warp(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.envelope.resetWithWarp";
+    let kinds = reshaped(s, |_, k| warp_kind(p, C, Some(k)))?;
+    set_kinds(s, "Reset with Warp", kinds)
+}
+
+fn env_reset_mesh(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.envelope.resetWithMesh";
+    let maintain = bool_or(p, "maintainShape", true);
+    let kinds = reshaped(s, |content, kind| {
+        let own = match kind {
+            EnvelopeKind::Mesh { rows, cols, .. } => (*rows, *cols),
+            _ => (4, 4),
+        };
+        let (rows, cols) = rows_cols(p, C, own)?;
+        mesh_kind(content, maintain.then_some(kind), rows, cols).ok_or_else(|| bad(C, "the envelope's content has no bounds"))
+    })?;
+    set_kinds(s, "Reset with Mesh", kinds)
+}
+
+/// `v` with an envelope's options and fidelity added.
+fn options_json(mut v: Value, o: &EnvelopeOptions, fidelity: f64) -> Value {
+    v["fidelity"] = json!(fidelity);
+    v["antiAlias"] = json!(o.anti_alias);
+    v["preserveShape"] = json!(o.preserve_shape.id());
+    v["distortAppearance"] = json!(o.distort_appearance);
+    v["distortLinearGradients"] = json!(o.distort_linear_gradients);
+    v["distortPatternFills"] = json!(o.distort_pattern_fills);
+    v
+}
+
+/// `cur` with the options `p` sets.
+fn options_param(p: &Value, cmd: &str, cur: EnvelopeOptions) -> Result<EnvelopeOptions> {
+    let preserve_shape = match str_param(p, "preserveShape") {
+        Some(v) => PreserveShape::parse(v).ok_or_else(|| bad(cmd, "preserveShape must be clippingMask|transparency"))?,
+        None => cur.preserve_shape,
+    };
+    Ok(EnvelopeOptions {
+        anti_alias: bool_or(p, "antiAlias", cur.anti_alias),
+        preserve_shape,
+        distort_appearance: bool_or(p, "distortAppearance", cur.distort_appearance),
+        distort_linear_gradients: bool_or(p, "distortLinearGradients", cur.distort_linear_gradients),
+        distort_pattern_fills: bool_or(p, "distortPatternFills", cur.distort_pattern_fills),
+    })
+}
+
+fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
+    let doc = &s.doc()?.doc;
+    let env = selected_of(s, is_envelope).into_iter().find_map(|e| Some((e, &doc.node(e)?.kind)));
+    let Some((id, NodeKind::Envelope { kind, fidelity, editing, options, .. })) = env else {
+        let (options, fidelity) = envelope_defaults(s);
+        return Ok(options_json(json!({ "id": null }), &options, fidelity));
+    };
+    let v = match kind {
+        EnvelopeKind::Warp { style, bend, h, v, horizontal } => {
+            json!({"type": "warp", "style": style, "bend": bend, "h": h, "v": v, "horizontal": horizontal})
+        }
+        EnvelopeKind::Mesh { rows, cols, .. } => json!({"type": "mesh", "rows": rows, "cols": cols}),
+        EnvelopeKind::TopObject { .. } => json!({"type": "topObject"}),
+    };
+    let mut v = options_json(v, options, *fidelity);
+    v["id"] = json!(id.0);
+    v["editing"] = json!(editing);
+    Ok(v)
+}
+
+/// What Release gives back as an envelope's shape: a top object's path, or the surface of a warp
+/// or mesh envelope as a gradient mesh, painted grey (id 0).
+fn envelope_shape(content: &[Arc<Node>], kind: &EnvelopeKind) -> Option<Node> {
+    let grey = Color::gray(0.25);
+    let (rows, cols) = match kind {
+        EnvelopeKind::TopObject { path } => {
+            return Some(Node::path(NodeId(0), path.clone(), Appearance::basic(Paint::solid(grey), Paint::None, 0.0)));
+        }
+        EnvelopeKind::Mesh { rows, cols, .. } => (*rows, *cols),
+        EnvelopeKind::Warp { .. } => (4, 4),
+    };
+    live::envelope_surface(content, kind, rows, cols, grey).map(|m| Node::new(NodeId(0), NodeKind::Mesh(m)))
+}
+
+/// Released content keeps envelope `env`'s opacity, blend mode, isolation, knockout and opacity
+/// mask: a single object without its own takes them, else a new group around the content does.
+fn carry_transparency(d: &mut Document, env: &Node, mut nodes: Vec<Node>) -> Vec<Node> {
+    if env.has_default_transparency() {
+        return nodes;
+    }
+    let carry = |n: &mut Node| {
+        n.opacity = env.opacity;
+        n.blend = env.blend;
+        n.isolate = env.isolate;
+        n.knockout = env.knockout;
+        n.knockout_shape = env.knockout_shape;
+        n.mask = env.mask.clone();
+    };
+    if let [one] = nodes.as_mut_slice()
+        && one.has_default_transparency()
+    {
+        carry(one);
+        return nodes;
+    }
+    let mut g = Node::group(d.alloc_id(), nodes.into_iter().map(Arc::new).collect());
+    carry(&mut g);
+    vec![g]
 }
 
 fn env_release(s: &mut Session, _: &Value) -> Result<Value> {
@@ -594,15 +773,10 @@ fn env_release(s: &mut Session, _: &Value) -> Result<Value> {
         for e in &envs {
             let Some(n) = d.node(*e).cloned() else { continue };
             let NodeKind::Envelope { content, kind, .. } = &n.kind else { continue };
-            let mut nodes: Vec<Node> = content.iter().map(|c| (**c).clone()).collect();
-            // The envelope shape comes back as a grey path above the content.
-            let shape = match kind {
-                EnvelopeKind::TopObject { path } => Some(path.clone()),
-                EnvelopeKind::Mesh { .. } | EnvelopeKind::Warp { .. } => None,
-            };
-            if let Some(path) = shape {
-                let id = d.alloc_id();
-                nodes.push(Node::path(id, path, Appearance::basic(Paint::solid(Color::gray(0.25)), Paint::None, 0.0)));
+            let mut nodes = carry_transparency(d, &n, content.iter().map(|c| (**c).clone()).collect());
+            if let Some(mut shape) = envelope_shape(content, kind) {
+                shape.id = d.alloc_id();
+                nodes.push(shape);
             }
             out.extend(replace_with(d, *e, nodes)?);
         }
@@ -614,28 +788,33 @@ fn env_release(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn env_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.options";
-    let envs = selected_of(s, is_envelope);
     let fid = p.get("fidelity").and_then(Value::as_f64);
     if fid.is_some_and(|f| !(0.0..=100.0).contains(&f)) {
         return Err(bad(C, "fidelity must be 0..100"));
     }
-    // Validate warp params up front.
+    let envs = selected_of(s, is_envelope);
+    if envs.is_empty() {
+        // No envelope selected: the options new envelopes get.
+        let (o, f) = envelope_defaults(s);
+        s.envelope_defaults = Some((options_param(p, C, o)?, fid.unwrap_or(f)));
+        return ok();
+    }
+    // Validate everything up front.
     let doc = &s.doc()?.doc;
-    let mut kinds = vec![];
+    let mut updates = vec![];
     for e in &envs {
-        if let Some(NodeKind::Envelope { kind: k @ EnvelopeKind::Warp { .. }, .. }) = doc.node(*e).map(|n| &n.kind) {
-            kinds.push((*e, warp_kind(p, C, Some(k))?));
+        if let Some(NodeKind::Envelope { kind, options, fidelity, .. }) = doc.node(*e).map(|n| &n.kind) {
+            let kind = match kind {
+                EnvelopeKind::Warp { .. } => warp_kind(p, C, Some(kind))?,
+                k => k.clone(),
+            };
+            updates.push((*e, kind, options_param(p, C, *options)?, fid.unwrap_or(*fidelity)));
         }
     }
     s.edit("Envelope Options", |d, _| {
-        for e in &envs {
-            if let Some(NodeKind::Envelope { fidelity, kind, .. }) = d.node_mut(*e).map(|n| &mut n.kind) {
-                if let Some(f) = fid {
-                    *fidelity = f;
-                }
-                if let Some((_, k)) = kinds.iter().find(|(id, _)| id == e) {
-                    *kind = k.clone();
-                }
+        for (e, k, o, f) in updates {
+            if let Some(NodeKind::Envelope { kind, options, fidelity, .. }) = d.node_mut(e).map(|n| &mut n.kind) {
+                (*kind, *options, *fidelity) = (k, o, f);
             }
         }
         Ok(())
@@ -643,21 +822,49 @@ fn env_options(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// Replace envelope `id` by a group of its distorted content (type outlined) with its id, name,
+/// transparency and opacity mask; the generated pieces get ids of their own.
+fn expand_envelope(d: &mut Document, id: NodeId) -> Result<()> {
+    let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let hook: &dyn Fn(&Node) -> Option<Node> = &vectorcraft_render::effects::outline_text;
+    let mut g = live::expanded_group(&n, Some(hook));
+    fix_ids(d, &mut g);
+    // Outlined type repeats its object's id on its pieces.
+    vectorcraft_render::effects::fresh_ids(d, &mut g, &mut Default::default());
+    *d.node_mut(id).ok_or(EngineError::NoNode(id))? = g;
+    Ok(())
+}
+
+/// Object → Expand: every envelope in `root`'s subtree (itself included) expanded
+/// ([`expand_envelope`]; envelopes inside envelopes go with them). Returns how many.
+pub(super) fn expand_envelopes_under(d: &mut Document, root: NodeId) -> Result<usize> {
+    fn collect(n: &Node, out: &mut Vec<NodeId>) {
+        if is_envelope(n) {
+            out.push(n.id);
+        } else {
+            for c in n.children().into_iter().flatten() {
+                collect(c, out);
+            }
+        }
+    }
+    let mut envs = vec![];
+    if let Some(n) = d.node(root) {
+        collect(n, &mut envs);
+    }
+    for e in &envs {
+        expand_envelope(d, *e)?;
+    }
+    Ok(envs.len())
+}
+
 fn env_expand(s: &mut Session, _: &Value) -> Result<Value> {
     let envs = selected_of(s, is_envelope);
     let ids = s.edit("Expand Envelope", |d, sel| {
-        let mut out = vec![];
         for e in &envs {
-            let Some(n) = d.node(*e).cloned() else { continue };
-            let children = vectorcraft_render::expand_live(&n).into_iter().map(Arc::new).collect();
-            let mut g = Node::new(n.id, NodeKind::Group { children, clip: false });
-            g.opacity = n.opacity;
-            g.blend = n.blend;
-            fix_ids(d, &mut g);
-            out.extend(replace_with(d, *e, vec![g])?);
+            expand_envelope(d, *e)?;
         }
-        sel.set(out.iter().copied());
-        Ok(out)
+        sel.set(envs.iter().copied());
+        Ok(envs.clone())
     })?;
     Ok(ids_json(&ids))
 }
@@ -705,18 +912,14 @@ fn env_set_mesh_point(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.create";
-    let rows = f64_or(p, "rows", 4.0);
-    let cols = f64_or(p, "cols", f64_or(p, "columns", 4.0));
-    if !(1.0..=50.0).contains(&rows) || !(1.0..=50.0).contains(&cols) {
-        return Err(bad(C, "rows and cols must be 1..50"));
-    }
+    let (rows, cols) = rows_cols(p, C, (4, 4))?;
     let app = match str_param(p, "appearance") {
         Some(a) => MeshAppearance::parse(a).ok_or_else(|| bad(C, "appearance must be flat|center|edge"))?,
         None => MeshAppearance::Flat,
     };
     let highlight = f64_or(p, "highlight", 100.0).clamp(0.0, 100.0);
     let at = point_param(p, "at");
-    let (rows, cols) = if at.is_some() { (1, 1) } else { (rows as u32, cols as u32) };
+    let (rows, cols) = if at.is_some() { (1, 1) } else { (rows, cols) };
     let roots = roots_param(s, p)?;
     let (ids, index) = s.edit("Create Gradient Mesh", |d, sel| {
         let mut out = vec![];
