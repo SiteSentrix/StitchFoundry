@@ -87,9 +87,12 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some((_, label, _)) = ICON_PANELS.iter().find(|p| p.0 == id) else { return };
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
-    let x = screen.right() - ICON_COL - 300.0 - 262.0;
+    // Pinned by its right edge, 6 points left of the icon column: a panel wider than its 256
+    // points grows towards the canvas rather than over the panel icons.
+    let right = screen.right() - ICON_COL - 300.0 - 6.0;
     let mut open = true;
-    egui::Area::new(egui::Id::new("icon-panel")).order(egui::Order::Foreground).fixed_pos(egui::pos2(x, 110.0)).show(ctx, |ui| {
+    let area = egui::Area::new(egui::Id::new("icon-panel")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP);
+    area.fixed_pos(egui::pos2(right, 110.0)).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).corner_radius(CornerRadius::same(4)).inner_margin(egui::Margin::ZERO).show(ui, |ui| {
             ui.set_width(256.0);
             let (strip, _) = ui.allocate_exact_size(vec2(256.0, 26.0), Sense::hover());
@@ -126,6 +129,33 @@ mod tests {
 
     use super::*;
     use crate::toolbar::tests::{wheel, widget_rects};
+
+    #[test]
+    fn every_flyout_stays_left_of_the_icon_column() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap()["id"].clone();
+        app.run("select.set", json!({ "ids": [id] })).unwrap();
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1600.0, 1200.0));
+        // Where the icon column begins: the flyout must stay left of it.
+        let column = screen.right() - ICON_COL - 300.0;
+        let mut too_wide = vec![];
+        for (panel, _, _) in crate::state::ICON_PANELS {
+            app.ui.open_panel = Some(panel.to_string());
+            // Two frames: the first lays the panel out, the second places the settled area.
+            for _ in 0..2 {
+                let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+                ctx.run_ui(input, |ui| floating_panel(&mut app, ui.ctx())).textures_delta.clear();
+            }
+            let rect = ctx.memory(|m| m.area_rect(egui::Id::new("icon-panel"))).unwrap();
+            if rect.right() > column {
+                too_wide.push(format!("{panel}: {:.0} past the column", rect.right() - column));
+            }
+        }
+        assert!(too_wide.is_empty(), "flyouts reaching over the icon column: {too_wide:?}");
+    }
 
     #[test]
     fn the_icon_column_scrolls_in_a_short_window() {
