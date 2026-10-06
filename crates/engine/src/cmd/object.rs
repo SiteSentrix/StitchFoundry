@@ -219,6 +219,7 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     let st = s.doc_mut()?;
     if st.interaction.is_none() {
         st.last_transform = Some((xf, copy));
+        st.last_perspective = None;
     }
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
@@ -299,6 +300,9 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn transform_again(s: &mut Session, _: &Value) -> Result<Value> {
+    if let Some(again) = s.doc()?.last_perspective.clone() {
+        return super::distortcmds::transform_again(s, &again);
+    }
     let (m, copy) = s.doc()?.last_transform.ok_or_else(|| EngineError::Other("no previous transform".into()))?;
     let ids = selected_roots(s)?;
     apply_transform(s, "Transform Again", ids, m, &json!({ "copy": copy }))
