@@ -229,6 +229,52 @@ fn vertical_tools_preserve_their_ids_and_create_vertical_text() {
 }
 
 #[test]
+fn ime_ranges_convert_characters_to_bytes() {
+    assert_eq!(char_range_to_bytes("ががく", 1..3), Some(3..9));
+    assert_eq!(char_range_to_bytes("ががく", 3..3), Some(9..9));
+    assert_eq!(char_range_to_bytes("a雅b", 1..2), Some(1..4));
+    assert_eq!(char_range_to_bytes("ががく", 2..4), None, "past the end");
+    #[allow(clippy::reversed_empty_ranges)]
+    let backwards = 2..1;
+    assert_eq!(char_range_to_bytes("ががく", backwards), None, "backwards");
+}
+
+#[test]
+fn marked_text_is_underlined_with_the_converting_clause_thick() {
+    let (mut d, id, mut tool) = editing("曲");
+    let snap = d.clone();
+    let (sel, p) = (Selection::default(), paint());
+    tool.caret = 3;
+    tool.anchor = 3;
+    let acts = tool.ime_preedit(&cx(&d, &sel, &p), "雅楽演奏", Some(2..4));
+    apply(&mut d, &snap, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
+    assert_eq!(t.plain_text(), "曲雅楽演奏");
+    assert_eq!(tool.preedit, Some(Preedit { range: 3..15, active: Some(6..12) }));
+    let widths: Vec<f32> = tool
+        .overlays(&cx(&d, &sel, &p))
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Path { width, .. } => Some(*width),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(widths, vec![1.0, 2.5], "a thin underline, then the thick one under 演奏");
+    // The candidate window follows the converting clause.
+    let (top, _) = tool.ime_caret(&cx(&d, &sel, &p)).unwrap();
+    let lay = vectorcraft_text::layout(FontDb::global(), t);
+    let (at, _) = vectorcraft_text::caret_position(&lay, 9);
+    assert!((top - t.xf * at).hypot() < 1e-6);
+    // Keys wait for the IME; a commit replaces the marked text.
+    assert!(key(&mut tool, &d, ToolKey::Backspace, Mods::default()).is_empty());
+    let acts = tool.text_input(&cx(&d, &sel, &p), "雅楽演奏会");
+    apply(&mut d, &snap, &acts);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
+    assert_eq!(t.plain_text(), "曲雅楽演奏会");
+    assert!(!tool.composing());
+}
+
+#[test]
 fn arrows_follow_the_columns_of_vertical_type() {
     let (mut d, id) = doc_with_text("§§§\n§§§");
     if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {

@@ -214,6 +214,24 @@ impl Session {
         self.tool.wants_text()
     }
 
+    /// IME marked text for the active tool (see `Tool::ime_preedit`; `active_chars` counts
+    /// characters).
+    pub fn tool_preedit(&mut self, text: &str, active_chars: Option<std::ops::Range<usize>>, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        let acts = self.with_tool_cx(view, |t, cx| t.ime_preedit(cx, text, active_chars));
+        self.take_tool_panic()?;
+        self.apply_actions(acts)
+    }
+
+    /// Is the active tool showing uncommitted IME text?
+    pub fn tool_composing(&self) -> bool {
+        self.tool.composing()
+    }
+
+    /// The caret line (document space) the IME candidate window follows.
+    pub fn tool_ime_caret(&mut self, view: ViewInfo) -> Option<(Point, Point)> {
+        self.with_tool_cx(view, |t, cx| t.ime_caret(cx))
+    }
+
     pub fn tool_busy(&self) -> bool {
         self.tool.busy()
     }

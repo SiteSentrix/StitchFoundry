@@ -11,6 +11,7 @@ mod edit;
 mod fit;
 mod offset;
 mod pathfinder;
+mod planar;
 
 pub use boolean::{BoolOp, DEFAULT_PRECISION, area, boolean, boolean_n, normalize, try_boolean, try_normalize, unite_all};
 pub use edit::{
@@ -18,6 +19,7 @@ pub use edit::{
 };
 pub use offset::{Cap, Join, offset_path, outline_stroke, stroke_region};
 pub use pathfinder::{PathfinderOp, Region, Shape, merge_regions, pathfinder, region_at, regions};
+pub use planar::{interior_point, live_paint};
 
 /// Errors from fallible operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]

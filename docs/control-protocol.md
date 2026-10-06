@@ -10,6 +10,7 @@
 | `document.inspect` | | layer tree, selection, history, paint defaults |
 | `ui.inspect` | | tool, UI state, view, canvas rect, window size, perf, background saves and exports still running |
 | `ui.menu.list` / `ui.menu.invoke` | `{command, params}` | the full menu tree / invoke an item |
+| `ui.contextMenu.list` | | the canvas context menu for the current selection, flattened like `ui.menu.list` (`path` holds its submenus). `ui.click {x, y, button: "right"}` on the canvas opens it, after selecting the object there unless it is already selected |
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
 | `ui.pointer` | `{events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen", mods?}]}` | drive the active tool exactly like the mouse |
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |

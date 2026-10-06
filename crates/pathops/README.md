@@ -1,6 +1,6 @@
 # vectorcraft-pathops
 
-Path operations for VectorCraft: booleans, the Pathfinder panel, Shape Builder regions, offset path, outline stroke, simplify and the other Object → Path commands. Everything takes and returns `vectorcraft_geom::PathData`.
+Path operations for VectorCraft: booleans, the Pathfinder panel, Shape Builder regions, Live Paint planar maps, offset path, outline stroke, simplify and the other Object → Path commands. Everything takes and returns `vectorcraft_geom::PathData`.
 
 ## Booleans (curve-preserving)
 
@@ -48,6 +48,15 @@ Each result takes its key as follows:
 | Merge | Joins touching visible parts that share a key; each connected component becomes one shape |
 | Crop | Keeps the visible parts of the lower objects inside the front-most object |
 | Outline | Returns open edge paths, split at every junction; coincident edges are de-duplicated, and each keeps the front-most key |
+
+## Live Paint
+
+```rust
+pub fn live_paint(shapes: &[Shape] /* back → front */) -> (Vec<Region>, Vec<Shape>); // (faces, edges)
+pub fn interior_point(path: &PathData) -> Option<Point>;
+```
+
+Unlike `regions`, which splits the filled areas of closed shapes, `live_paint` treats every path as an edge, open paths included. Three crossing lines enclose a triangle, a line across a rectangle splits it in two, and an area enclosed by paths becomes a face even when nothing fills it. Each face lists the inputs whose fill covers it; the list is empty for an area that is only enclosed by paths. Each edge is a piece of a path, split wherever another path meets it, and keeps the key of the front-most input it lies on.
 
 ## Offset / stroke
 

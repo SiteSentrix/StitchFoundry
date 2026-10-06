@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fonts in Document",
             [],
             None,
-            "{selectionOnly?} → [{family, style, runs, objects, missing}] sorted by name",
+            "{selectionOnly?} → [{family, style, runs, objects, missing, status: exact|substitute|missing, resolved: {family, style}, missingGlyphs}] sorted by name. A font is found by any of its names (ヒラギノ角ゴシック = Hiragino Sans) among the loaded and installed fonts; substitute: the family is there but not the style (resolved names the stand-in); missing: the family is unknown (the fallback family stands in); missingGlyphs: characters of its text the resolved font lacks (drawn by a fallback font)",
             has_doc,
             fonts
         ),
@@ -26,7 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Font",
             [],
             None,
-            "{from: {family, style?}, to: {family, style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style) → {runs}",
+            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style) → {runs}",
             has_doc,
             replace
         ),
@@ -96,12 +96,12 @@ fn fonts(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = scope(s, bool_or(p, "selectionOnly", false))?;
     let d = &s.doc()?.doc;
     let db = vectorcraft_text::FontDb::global();
-    let families = db.families();
-    let mut found: BTreeMap<(String, String), (usize, Vec<NodeId>)> = BTreeMap::new();
+    let mut found: BTreeMap<(String, String), (usize, Vec<NodeId>, String)> = BTreeMap::new();
     for id in ids {
         for r in text(d, id).map(|t| t.runs.as_slice()).unwrap_or_default() {
             let e = found.entry((r.style.font_family.clone(), r.style.font_style.clone())).or_default();
             e.0 += 1;
+            e.2.push_str(&r.text);
             if !e.1.contains(&id) {
                 e.1.push(id);
             }
@@ -109,10 +109,20 @@ fn fonts(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let list: Vec<Value> = found
         .into_iter()
-        .map(|((family, style), (runs, objects))| {
-            let have_family = families.iter().any(|f| f.eq_ignore_ascii_case(&family));
-            let missing = !have_family || !db.styles(&family).iter().any(|st| st.eq_ignore_ascii_case(&style));
-            json!({ "family": family, "style": style, "runs": runs, "objects": objects.len(), "missing": missing })
+        .map(|((family, style), (runs, objects, chars))| {
+            let resolved = db.resolve(&family, &style);
+            let status = resolved.as_ref().map(|(_, m)| *m).unwrap_or(vectorcraft_text::FontMatch::Missing);
+            let mut lacking: Vec<char> = chars.chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect();
+            lacking.sort_unstable();
+            lacking.dedup();
+            lacking.retain(|c| !resolved.as_ref().is_some_and(|(f, _)| f.covers(*c)));
+            json!({
+                "family": family, "style": style, "runs": runs, "objects": objects.len(),
+                "missing": status == vectorcraft_text::FontMatch::Missing,
+                "status": status.as_str(),
+                "resolved": resolved.as_ref().map(|(f, _)| json!({ "family": f.family, "style": f.style })),
+                "missingGlyphs": lacking.len(),
+            })
         })
         .collect();
     Ok(json!(list))
@@ -130,9 +140,11 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let (ff, fs) = font_param(p, "from", C)?;
     let (tf, ts) = font_param(p, "to", C)?;
     let db = vectorcraft_text::FontDb::global();
-    if !db.families().iter().any(|f| f.eq_ignore_ascii_case(&tf)) {
-        return Err(bad(C, format!("font family `{tf}` is not available")));
-    }
+    // Any name of the family (ヒラギノ角ゴシック) is stored as its own name (Hiragino Sans).
+    let tf = match db.resolve(&tf, ts.as_deref().unwrap_or("Regular")) {
+        Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => f.family.clone(),
+        _ => return Err(bad(C, format!("font family `{tf}` is not available"))),
+    };
     let ids = scope(s, bool_or(p, "selectionOnly", false))?;
     let matches = |st: &vectorcraft_doc::CharStyle| {
         st.font_family.eq_ignore_ascii_case(&ff) && fs.as_ref().is_none_or(|x| st.font_style.eq_ignore_ascii_case(x))
@@ -260,6 +272,39 @@ mod tests {
 #[cfg(test)]
 mod open_tests {
     use super::*;
+
+    #[test]
+    fn list_says_how_each_font_resolved() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        for (text, font, style) in
+            [("Exact", "Source Sans 3", "Semibold"), ("Closest", "Source Sans 3", "Black"), ("Gone", "No Such Font Family", "Regular")]
+        {
+            s.execute("text.create", &json!({"x": 10, "y": 20, "text": text, "font": font, "style": style})).unwrap();
+        }
+        let list = s.execute("text.fonts", &json!({})).unwrap();
+        let rows: Vec<(String, String, String, String)> = list
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| {
+                (
+                    f["style"].as_str().unwrap().into(),
+                    f["status"].as_str().unwrap().into(),
+                    f["resolved"]["family"].as_str().unwrap().into(),
+                    f["resolved"]["style"].as_str().unwrap().into(),
+                )
+            })
+            .collect();
+        let row = |style: &str| rows.iter().find(|r| r.0 == style).cloned().unwrap();
+        assert_eq!(row("Semibold").1, "exact");
+        assert_eq!(row("Black").1, "substitute", "{rows:?}");
+        assert_eq!(row("Black").2, "Source Sans 3");
+        assert_eq!((row("Regular").1.as_str(), row("Regular").2.as_str()), ("missing", vectorcraft_text::FALLBACK_FAMILY));
+        s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Ab 雅楽", "font": "Inter"})).unwrap();
+        let inter = s.execute("text.fonts", &json!({})).unwrap().as_array().unwrap().iter().find(|f| f["family"] == "Inter").cloned().unwrap();
+        assert_eq!(inter["missingGlyphs"], 2, "雅 and 楽 come from a fallback font: {inter}");
+    }
 
     #[test]
     fn opened_documents_have_exact_text_bounds() {

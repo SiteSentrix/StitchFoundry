@@ -158,6 +158,98 @@ fn undo_during_a_drag_takes_back_only_the_drag() {
 }
 
 #[test]
+fn ime_composition_shows_in_place_and_commits_as_one_step() {
+    // Romaji → kana → conversion → commit, as the macOS Japanese IME sends it.
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    let created = undo_labels(&s).len();
+    s.tool_text("曲:", v).unwrap();
+    for (t, r) in [("g", 1..1), ("が", 1..1), ("がg", 2..2), ("ががく", 3..3)] {
+        s.tool_preedit(t, Some(r), v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), format!("曲:{t}"), "marked text lays out in place");
+        assert!(s.tool_composing());
+    }
+    // Conversion: the active clause is the whole word.
+    s.tool_preedit("雅楽", Some(0..2), v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "曲:雅楽");
+    assert_eq!(s.tool_options()["composing"], json!(true));
+    // macOS clears the marked text, then commits.
+    s.tool_preedit("", None, v).unwrap();
+    s.tool_text("雅楽", v).unwrap();
+    assert!(!s.tool_composing());
+    assert_eq!(obj(&s, id).plain_text(), "曲:雅楽");
+    assert_eq!(s.tool_options()["caret"], json!("曲:雅楽".len()));
+    // Typing goes on after the commit, in the same session.
+    s.tool_text("。", v).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert_eq!(obj(&s, id).plain_text(), "曲:雅楽。");
+    assert_eq!(undo_labels(&s).len(), created + 1, "one undo step for the session");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "");
+}
+
+#[test]
+fn ime_cancel_leaves_no_undo_step_and_keeps_the_text() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let id = text(&mut s, "雅楽");
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let (a, b) = vectorcraft_text::caret_position(&lay, "雅楽".len());
+    let p = t.xf * a.midpoint(b);
+    click(&mut s, p.x - 0.1, p.y);
+    assert!(s.tool_wants_text());
+    s.set_tool_option("select", &json!({"start": 6, "end": 6}));
+    let before = undo_labels(&s).len();
+    s.tool_preedit("えんそう", Some(4..4), v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "雅楽えんそう");
+    // Escape in the IME: the marked text goes, nothing else changes.
+    s.tool_preedit("", None, v).unwrap();
+    assert!(!s.tool_composing());
+    assert!(!s.in_interaction(), "a cancelled composition leaves no typing session");
+    assert_eq!(obj(&s, id).plain_text(), "雅楽");
+    assert_eq!(undo_labels(&s).len(), before);
+    // A stray clear (no composition) never deletes the selection.
+    s.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    s.tool_preedit("", None, v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "雅楽");
+    // A composition over a selection replaces it.
+    s.tool_preedit("が", Some(1..1), v).unwrap();
+    s.tool_preedit("", None, v).unwrap();
+    s.tool_text("我", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "我楽");
+}
+
+#[test]
+fn clicking_away_keeps_marked_text_as_typed_and_undo_mid_composition_is_safe() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_preedit("しょうこ", Some(4..4), v).unwrap();
+    // Keys belong to the IME while it composes.
+    key(&mut s, ToolKey::Backspace, Mods::default());
+    assert_eq!(obj(&s, id).plain_text(), "しょうこ");
+    click(&mut s, 600.0, 500.0);
+    assert!(!s.tool_composing());
+    assert_eq!(obj(&s, id).plain_text(), "しょうこ", "the marked text stays, committed");
+    // The UI holds Undo back while composing; if it comes anyway, the session is committed first.
+    click(&mut s, 50.0, 50.0);
+    let id2 = s.doc().unwrap().selection.objects[0];
+    s.tool_preedit("ひちりき", Some(4..4), v).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.tool_composing());
+    assert_eq!(obj(&s, id2).plain_text(), "");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id2).plain_text(), "ひちりき");
+}
+
+#[test]
 fn type_tool_selection_replace_and_delete() {
     let mut s = session();
     let v = ViewInfo::default();

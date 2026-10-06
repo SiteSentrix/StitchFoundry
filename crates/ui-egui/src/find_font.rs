@@ -58,15 +58,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.set_width(ui.available_width());
                 egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
                     for (i, f) in list.iter().enumerate() {
-                        let missing = f["missing"] == true;
-                        let label = format!(
-                            "{} {}{}  ({})",
-                            f["family"].as_str().unwrap_or(""),
-                            f["style"].as_str().unwrap_or(""),
-                            if missing { "  — missing" } else { "" },
-                            f["runs"]
-                        );
-                        let text = egui::RichText::new(label).color(if missing { egui::Color32::from_rgb(230, 90, 90) } else { t.text });
+                        let (note, color) = font_note(f);
+                        let label = format!("{} {}{note}  ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"]);
+                        let text = egui::RichText::new(label).color(color.unwrap_or(t.text));
                         if ui.selectable_label(i == sel, text).clicked() {
                             d.fields.insert("selected".into(), json!(i));
                         }
@@ -126,6 +120,22 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
+/// What a Find Font row says after the font's name (`text.fonts` row): a missing family, a style
+/// standing in for another, characters the font lacks; and the colour to flag it with.
+fn font_note(f: &Value) -> (String, Option<egui::Color32>) {
+    let lacking = f["missingGlyphs"].as_u64().unwrap_or(0);
+    let glyphs = if lacking > 0 { format!("  — {lacking} characters from another font") } else { String::new() };
+    match f["status"].as_str() {
+        Some("missing") => (format!("  — missing{glyphs}"), Some(egui::Color32::from_rgb(230, 90, 90))),
+        Some("substitute") => {
+            let used = f["resolved"]["style"].as_str().unwrap_or("");
+            (format!("  — substituted by {used}{glyphs}"), Some(egui::Color32::from_rgb(220, 160, 60)))
+        }
+        _ if lacking > 0 => (glyphs, Some(egui::Color32::from_rgb(220, 160, 60))),
+        _ => (String::new(), None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,5 +155,15 @@ mod tests {
         assert_eq!(from["missing"], true);
         change(&mut app, &d, &from, true).unwrap();
         assert_eq!(fonts(&mut app)[0]["family"], "Source Sans 3");
+    }
+
+    #[test]
+    fn rows_flag_missing_fonts_substituted_styles_and_lacking_characters() {
+        let row = |status: &str, glyphs: u64| json!({"status": status, "resolved": {"style": "W4"}, "missingGlyphs": glyphs});
+        assert_eq!(font_note(&row("exact", 0)), (String::new(), None));
+        assert!(font_note(&row("missing", 0)).0.contains("missing"));
+        assert!(font_note(&row("substitute", 0)).0.contains("substituted by W4"));
+        let (note, color) = font_note(&row("exact", 2));
+        assert!(note.contains("2 characters") && color.is_some());
     }
 }
