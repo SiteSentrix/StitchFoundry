@@ -1764,3 +1764,31 @@ the viewing angle, so the vanishing points sit at `x − distance/tan(angle)` an
 {"name":"run_command","arguments":{"command":"perspective.grid.get","params":{}}}
 {"name":"run_command","arguments":{"command":"perspective.grid.define","params":{"units":"inches","gridline":0.5,"angle":30,"distance":6,"horizonHeight":3}}}
 ```
+
+## Envelopes
+
+Object → Envelope Distort wraps the selection in a live envelope: `object.envelope.makeWithWarp` (`style`: arc,
+arcLower, arcUpper, arch, bulge, shellLower, shellUpper, flag, wave, fish, rise, fisheye, inflate, squeeze or twist;
+`bend`, `h` and `v` in % from -100 to 100; `horizontal` or `orientation`), `object.envelope.makeWithMesh` (`rows`,
+`cols`: 1–50) and `object.envelope.makeWithTopObject` (the topmost selected path becomes the envelope).
+`object.envelope.info` reads the selected envelope's settings (`type`, the warp's or mesh's values, `fidelity` and
+the options, `editing`), or with no envelope selected the options new envelopes get. With an envelope selected,
+`object.envelope.resetWithWarp` and `object.envelope.resetWithMesh` (`rows`, `cols`, `maintainShape`: true keeps
+the current shape) switch its kind and keep its content. `object.envelope.options` sets `fidelity` and the options
+(`antiAlias`, `preserveShape`: clippingMask or transparency, `distortAppearance`, `distortLinearGradients`,
+`distortPatternFills`; the last two need `distortAppearance`); with no envelope selected it sets them for new
+envelopes. New envelopes start with Distort Appearance on, as in the reference app; envelopes saved before these
+options existed keep their old look (appearance applied after the distortion).
+
+`object.envelope.release` gives back the content and the envelope's shape (a grey gradient mesh for warp and mesh
+envelopes, the path for a top-object envelope); the content keeps the envelope's opacity, blend mode and opacity mask
+(a group around it carries them when there are several objects). `object.envelope.expand`, and `object.expand` with
+`object` on, replace envelopes by groups of their distorted content that keep the name, transparency, knockout and
+opacity mask.
+
+```json
+{"name":"run_command","arguments":{"command":"object.envelope.makeWithWarp","params":{"style":"arch","bend":40}}}
+{"name":"run_command","arguments":{"command":"object.envelope.resetWithMesh","params":{"rows":3,"cols":3,"maintainShape":true}}}
+{"name":"run_command","arguments":{"command":"object.envelope.options","params":{"fidelity":80,"distortAppearance":true,"distortLinearGradients":true}}}
+{"name":"run_command","arguments":{"command":"object.envelope.info","params":{}}}
+```

@@ -455,3 +455,13 @@ dialog prefilled from the grid. Its fields are those of `perspective.grid.define
 `gridline`, `angle`, `distance`, `horizonHeight`, `thirdVp`, `leftColor`, `rightColor`, `groundColor`, `opacity`;
 lengths in `units`, so setting `units` converts them). `ui.dialog.confirm` runs `perspective.grid.define`; a refused
 value keeps the dialog open.
+
+Object → Envelope Distort's dialogs open through their menu items or `ui.menuDialog {command}`. Make with Warp…
+(`object.envelope.makeWithWarp`) opens `envelopeWarp` (fields `style`, `horizontal`, `bend`, `h`, `v`, `preview`, and
+`reset`); while an envelope is selected the menu shows Reset with Warp… instead, and the same item, shortcut or
+`object.envelope.resetWithWarp` opens it with `reset: true` and the envelope's values. Make with Mesh… / Reset with
+Mesh… open `envelopeMesh` (`rows`, `cols`, `reset`, and `maintainShape` when resetting). Envelope Options…
+(`object.envelope.options`) opens `envelopeOptions` (`antiAlias`, `preserveShape`, `fidelity`, `distortAppearance`,
+`distortLinearGradients`, `distortPatternFills`) with the selected envelope's values, or with nothing selected the
+defaults for new envelopes. They preview live while an envelope is involved, and `ui.dialog.confirm` keeps the result
+as one undo step.

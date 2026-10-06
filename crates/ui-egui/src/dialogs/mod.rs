@@ -18,6 +18,7 @@ mod document_setup;
 pub mod dxf_import;
 pub mod dxf_options;
 mod effect;
+pub mod envelope;
 pub mod eps_options;
 pub mod expand;
 mod export_as;
@@ -251,6 +252,7 @@ registry! {
     Plugin: [plugin::KIND] => plugin::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
+    Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
