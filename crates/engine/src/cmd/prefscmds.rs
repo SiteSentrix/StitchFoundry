@@ -320,6 +320,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("appendConverted", "File Handling", "Files", "Mark Older Files as [Converted] When Opened", bool),
     // Native saves (`document.save {compress}`)
     p!("useCompression", "File Handling", "Files", "Use Compression", bool),
+    // The W/H link of the Transform panel, the Properties panel and the Control bar
+    p!("constrainProportions", "General", "Transform Panel", "Constrain Width and Height Proportions", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {
@@ -327,10 +329,11 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 }
 
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
-/// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`). `prefs.get`
+/// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`) and the
+/// Perspective Grid Options (`perspective.widget.options`). `prefs.get`
 /// and `prefs.set` take them by key (a partial object updates what it names) and `prefs.reset`
 /// without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper"];
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -338,6 +341,15 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         "eyedropper" => {
             let cur: super::EyedropperOptions = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
+        }
+        "perspectiveWidget" => {
+            let mut merged = current.clone();
+            if let (Some(o), Some(p)) = (merged.as_object_mut(), v.as_object()) {
+                o.extend(p.clone());
+            }
+            serde_json::from_value::<vectorcraft_tools::distort::perspective::widget::WidgetOptions>(merged)
+                .map(|o| json!(o))
+                .map_err(|e| e.to_string())
         }
         _ => Err(format!("unknown preference `{key}`")),
     }
@@ -453,6 +465,8 @@ impl Session {
                 st.revision += 1;
             }
         }
+        // Plug-ins in a newly set Additional Plug-ins Folder are installed.
+        super::plugin::sync_prefs(self);
     }
 }
 

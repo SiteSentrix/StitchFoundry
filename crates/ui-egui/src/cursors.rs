@@ -133,11 +133,53 @@ fn slice(p: &Painter, o: Pos2) {
     line(p, b + vec2(8.0, 6.0), b + vec2(12.0, 12.0));
 }
 
+/// The Width tool: the hollow arrow with a stroke that swells in the middle (a width point),
+/// plus a badge: `+` over a stroke (a drag adds a point), a bar across the swell over a width point
+/// (a drag moves or widens it).
+fn width(p: &Painter, o: Pos2, badge: &str) {
+    arrow(p, o, true);
+    let b = o + vec2(11.0, 18.0);
+    let top: Vec<Pos2> = (0..=8)
+        .map(|i| {
+            let t = i as f32 / 8.0;
+            b + vec2(12.0 * t, -3.5 * (std::f32::consts::PI * t).sin())
+        })
+        .collect();
+    let mut lens = top.clone();
+    lens.extend(top.iter().rev().map(|q| pos2(q.x, 2.0 * b.y - q.y)));
+    p.add(Shape::closed_line(lens.clone(), Stroke::new(3.0, HALO)));
+    p.add(Shape::closed_line(lens, Stroke::new(1.2, INK)));
+    match badge {
+        "+" => {
+            let c = b + vec2(16.0, -6.0);
+            line(p, c - vec2(3.0, 0.0), c + vec2(3.0, 0.0));
+            line(p, c - vec2(0.0, 3.0), c + vec2(0.0, 3.0));
+        }
+        "point" => line(p, b + vec2(6.0, -6.0), b + vec2(6.0, 6.0)),
+        _ => {}
+    }
+}
+
 fn ibeam(p: &Painter, o: Pos2) {
     line(p, o + vec2(0.0, -8.0), o + vec2(0.0, 8.0));
     line(p, o + vec2(-3.0, -8.0), o + vec2(3.0, -8.0));
     line(p, o + vec2(-3.0, 8.0), o + vec2(3.0, 8.0));
     line(p, o + vec2(-2.0, 3.0), o + vec2(2.0, 3.0));
+}
+
+/// The Blend tool: a crosshair with a square below right of the hotspot, hollow away from art,
+/// filled over an object; over an anchor point a ringed dot (the blend starts there).
+fn blend(p: &Painter, o: Pos2, badge: Cursor) {
+    crosshair(p, o);
+    let b = o + vec2(9.0, 9.0);
+    if badge == Cursor::BlendAnchor {
+        p.circle_stroke(b + vec2(3.5, 3.5), 3.5, Stroke::new(3.0, HALO));
+        p.circle_stroke(b + vec2(3.5, 3.5), 3.5, Stroke::new(1.2, INK));
+        p.circle_filled(b + vec2(3.5, 3.5), 1.4, INK);
+        return;
+    }
+    let fill = if badge == Cursor::BlendObject { INK } else { HALO };
+    poly(p, vec![b, b + vec2(7.0, 0.0), b + vec2(7.0, 7.0), b + vec2(0.0, 7.0)], fill, INK);
 }
 
 /// Paint cursor `c` at `p` on the given (foreground) painter. Returns false for cursors that should
@@ -170,6 +212,10 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
             arrow(painter, p, false);
             slice_badge(painter, p + vec2(11.0, 14.0));
         }
+        Cursor::Width => width(painter, p, ""),
+        Cursor::WidthAdd => width(painter, p, "+"),
+        Cursor::WidthPoint => width(painter, p, "point"),
+        Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor => blend(painter, p, c),
         _ => return false,
     }
     let _ = pos2;

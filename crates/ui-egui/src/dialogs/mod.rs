@@ -9,6 +9,7 @@
 mod about;
 mod all_tools;
 mod artboard_options;
+pub mod blend_options;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -18,6 +19,7 @@ mod document_setup;
 pub mod dxf_import;
 pub mod dxf_options;
 mod effect;
+pub mod envelope;
 pub mod eps_options;
 pub mod expand;
 mod export_as;
@@ -29,7 +31,9 @@ pub mod flattener_presets;
 mod form;
 mod gradient_stop;
 pub mod graphic_style_options;
+pub mod halftone;
 pub mod import_pdf;
+pub mod liquify;
 pub mod missing_links;
 pub mod new_color_group;
 mod new_document;
@@ -38,8 +42,13 @@ pub mod office_export;
 pub mod package;
 mod path_ops;
 pub mod pdf_presets;
+pub mod perspective_grid;
+pub mod perspective_options;
+pub mod perspective_plane;
+pub mod perspective_presets;
 pub mod place;
 pub mod placement_options;
+pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
@@ -89,6 +98,10 @@ use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
 
 type DialogResult = Result<Value, String>;
+
+/// The shared dialog frame's inner margin, and the least room it leaves at the window's edges.
+const MARGIN: i8 = 22;
+const EDGE_GAP: f32 = 8.0;
 
 /// How a dialog draws and applies itself. Specs start from [`DialogSpec::FORM`] and override what
 /// differs.
@@ -241,6 +254,15 @@ registry! {
     Print: [print::KIND] => print::SPEC,
     PrintPreset: [print::PRESET_KIND] => print::PRESET_SPEC,
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
+    Plugin: [plugin::KIND] => plugin::SPEC,
+    VectorHalftone: [halftone::KIND] => halftone::SPEC,
+    PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
+    Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
+    LiquifyOptions: [liquify::KIND] => liquify::SPEC,
+    PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
+    PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
+    BlendOptions: [blend_options::KIND] => blend_options::SPEC,
+    PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -296,12 +318,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .resizable(false)
         .title_bar(false)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0])
-        .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(22)))
+        .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(MARGIN)))
         .show(ctx, |ui| {
-            ui.set_min_width(spec.min_width);
-            if let Some(w) = spec.max_width {
-                ui.set_max_width(w);
-            }
+            // Never wider than the window (a large UI scale in a small window): the text wraps.
+            let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
+            ui.set_min_width(spec.min_width.min(room));
+            ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
             ui.label(egui::RichText::new(heading.as_str()).font(theme::semibold(16.0)).color(t.text));
             ui.add_space(12.0);
             cancel = (spec.body)(app, ui, &mut d);
@@ -381,3 +403,9 @@ mod tests_print_presets;
 
 #[cfg(test)]
 mod tests_print_advanced;
+
+#[cfg(test)]
+mod tests_scale;
+
+#[cfg(test)]
+mod tests_perspective;

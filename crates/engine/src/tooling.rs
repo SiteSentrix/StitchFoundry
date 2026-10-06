@@ -1,10 +1,11 @@
 //! Hosting the active tool: pointer/key events → actions → commands.
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 use vectorcraft_geom::Point;
-use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, ToolContext, ToolKey};
+use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
+use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
 
-use crate::{EngineError, Result, Session};
+use crate::{EngineError, Prefs, Result, Session};
 
 /// View state the tools need from the frontend.
 #[derive(Clone, Copy, Debug)]
@@ -20,6 +21,8 @@ pub struct ViewInfo {
     pub snap_to_point: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
+    /// The document window (none headless): screen-fixed widgets sit in it.
+    pub screen: Option<vectorcraft_tools::ScreenFrame>,
 }
 
 impl Default for ViewInfo {
@@ -33,6 +36,7 @@ impl Default for ViewInfo {
             snap_to_pixel: false,
             snap_to_point: true,
             corner_widgets: true,
+            screen: None,
         }
     }
 }
@@ -42,6 +46,9 @@ impl Default for ViewInfo {
 pub enum UiRequest {
     Dialog(String, Value),
     SwitchTool(String),
+    /// A message for the status bar: the `warning` of a command the tool ran (Liquify skipping
+    /// type under the brush).
+    Status(String),
 }
 
 impl Session {
@@ -56,8 +63,48 @@ impl Session {
         }
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         self.apply_actions(acts)?;
-        self.tool = vectorcraft_tools::create(id);
+        self.keep_tool_settings();
+        self.tool = self.make_tool(id);
         Ok(())
+    }
+
+    /// A fresh `id` tool with the options it keeps ([`settings`]): its last values, from this
+    /// session or a saved one.
+    pub(crate) fn make_tool(&self, id: &str) -> Box<dyn Tool> {
+        let mut t = vectorcraft_tools::create(id);
+        Self::restore_tool_settings(&self.prefs, t.as_mut());
+        t
+    }
+
+    /// Give `t` the persistent options stored for it in `prefs`.
+    fn restore_tool_settings(prefs: &Prefs, t: &mut dyn Tool) {
+        for (store, keys) in settings::stores(t.id()) {
+            let Some(saved) = prefs.tool_settings.get(store) else { continue };
+            for k in keys {
+                if let Some(v) = saved.get(*k) {
+                    t.set_option(k, v);
+                }
+            }
+        }
+    }
+
+    /// Store the persistent options of `t` in `prefs` (so they are saved with them too).
+    fn store_tool_settings(prefs: &mut Prefs, t: &dyn Tool) {
+        let opts = t.options();
+        for (store, keys) in settings::stores(t.id()) {
+            let saved = prefs.tool_settings.entry(store.to_string()).or_default();
+            for k in keys {
+                if let Some(v) = opts.get(*k) {
+                    saved.insert(k.to_string(), v.clone());
+                }
+            }
+        }
+    }
+
+    /// Keep the active tool's persistent options for the next time it, or a tool sharing them, is
+    /// made.
+    pub(crate) fn keep_tool_settings(&mut self) {
+        Self::store_tool_settings(&mut self.prefs, self.tool.as_ref());
     }
 
     pub(crate) fn with_tool_cx<R>(&mut self, view: ViewInfo, f: impl FnOnce(&mut dyn vectorcraft_tools::Tool, &ToolContext) -> R) -> R
@@ -91,6 +138,8 @@ impl Session {
             paste_plain_text: self.prefs.paste_text_formatting == "plain",
             slices_hidden: self.menu.slices_hidden,
             slices_locked: self.menu.slices_locked,
+            screen: view.screen,
+            plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -98,7 +147,7 @@ impl Session {
             Err(msg) => {
                 // A bug in the tool: start it afresh and drop its half-done drag.
                 let id = self.tool.id();
-                self.tool = vectorcraft_tools::create(id);
+                self.tool = self.make_tool(id);
                 let _ = self.cancel_interaction();
                 self.tool_panic = Some(EngineError::Internal { cmd: format!("tool `{id}`"), msg });
                 R::default()
@@ -114,12 +163,41 @@ impl Session {
     /// Feed a pointer event to the active tool. Returns requests for the UI.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
         self.last_view = view;
+        // The Plane Switching Widget takes its clicks whatever the tool.
+        if let Some(r) = self.plane_widget_pointer(ev, view) {
+            return r;
+        }
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
+        self.take_tool_panic()?;
+        // A gesture may change options (Alt-drag sizes a Liquify brush): keep them.
+        if ev.kind == PointerKind::Up {
+            self.keep_tool_settings();
+        }
+        self.apply_actions(acts)
+    }
+
+    /// Time passed while the pointer button is held (`dt` seconds; see [`Tool::tick`]): the
+    /// desktop app ticks every frame of a press, agents with `holdMs` on a pointer event.
+    pub fn tool_tick(&mut self, dt: f64, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if !self.tool.wants_ticks() {
+            return Ok(vec![]);
+        }
+        let acts = self.with_tool_cx(view, |t, cx| t.tick(cx, dt));
         self.take_tool_panic()?;
         self.apply_actions(acts)
     }
 
+    /// Does the active tool want [`Session::tool_tick`]s now?
+    pub fn tool_wants_ticks(&self) -> bool {
+        self.tool.wants_ticks()
+    }
+
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        // 1–4 pick the active perspective plane while the grid is shown.
+        if let Some(plane) = self.plane_key(key) {
+            self.execute("perspective.plane.set", &serde_json::json!({ "plane": plane.id() }))?;
+            return Ok(vec![]);
+        }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
         self.apply_actions(acts)
@@ -142,13 +220,15 @@ impl Session {
 
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
-        self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
+        self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
         let mut v = self.with_tool_cx(view, |t, cx| t.overlays(cx));
         if let Some(d) = self.active() {
-            v.splice(0..0, vectorcraft_tools::distort::perspective::grid_overlays(&d.doc, 1.0 / view.zoom.max(1e-9), self.tool.id()));
+            let w = self.prefs.perspective_widget;
+            let place = w.show.then_some(WidgetPlace { screen: view.screen.as_ref(), corner: w.position });
+            v.splice(0..0, vectorcraft_tools::distort::perspective::grid_overlays_in(&d.doc, 1.0 / view.zoom.max(1e-9), self.tool.id(), place));
         }
         v
     }
@@ -162,21 +242,94 @@ impl Session {
     }
     pub fn set_tool_option(&mut self, key: &str, v: &Value) {
         self.tool.set_option(key, v);
+        self.keep_tool_settings();
+    }
+
+    /// The options of tool `id`: the active tool's, or those it would have if chosen now.
+    pub fn tool_options_of(&self, id: &str) -> Value {
+        if id == self.tool.id() { self.tool.options() } else { self.make_tool(id).options() }
+    }
+
+    /// Set options of tool `id` (default: the active tool). Another tool's persistent options are
+    /// stored for when it is chosen, and the active tool takes those it shares with it (the
+    /// Liquify tools' Global Brush Dimensions). Returns the tool's options.
+    pub fn set_tool_options(&mut self, id: Option<&str>, values: &Map<String, Value>) -> Value {
+        let active = id.is_none_or(|id| id == self.tool.id());
+        let mut other = (!active).then(|| self.make_tool(id.unwrap_or_default()));
+        let t = other.as_deref_mut().unwrap_or(self.tool.as_mut());
+        for (k, v) in values {
+            t.set_option(k, v);
+        }
+        Self::store_tool_settings(&mut self.prefs, t);
+        let out = t.options();
+        if other.is_some() {
+            Self::restore_tool_settings(&self.prefs, self.tool.as_mut());
+        }
+        out
+    }
+
+    /// `tool.setOption {tool?, key?, value?, values?}` (a command of the desktop app and of the
+    /// headless host): set one option (`key`, `value`) or several (`values`) of `tool` (default:
+    /// the active tool) → its options.
+    pub fn set_tool_option_cmd(&mut self, p: &Value) -> std::result::Result<Value, String> {
+        let tool = p.get("tool").and_then(Value::as_str);
+        if let Some(t) = tool
+            && vectorcraft_tools::tool_info(t).is_none()
+        {
+            return Err(format!("unknown tool `{t}`"));
+        }
+        let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
+        if let Some(k) = p.get("key").and_then(Value::as_str) {
+            values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
+        }
+        Ok(self.set_tool_options(tool, &values))
+    }
+
+    /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):
+    /// the Type tool stops editing text that is no longer selected. Only while it edits text.
+    pub(crate) fn after_command(&mut self) {
+        if self.in_tool_actions || !self.tool.wants_text() {
+            return;
+        }
+        let acts = self.with_tool_cx(self.last_view, |t, cx| t.after_command(cx));
+        // The command itself succeeded: a failure here only leaves the edit as it was.
+        if let Err(e) = self.apply_actions(acts) {
+            log::warn!("ending the text edit: {e}");
+        }
     }
 
     /// Apply tool actions. Errors from previews are reported but keep the interaction alive.
     pub fn apply_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
+        let outer = std::mem::replace(&mut self.in_tool_actions, true);
+        let r = self.apply_tool_actions(acts);
+        self.in_tool_actions = outer;
+        r
+    }
+
+    fn apply_tool_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
         let mut ui = vec![];
         for a in acts {
             match a {
                 Action::Begin(label) => self.begin_interaction(&label)?,
-                Action::Preview(cmd, p) => {
-                    if let Err(e) = self.preview(&cmd, &p) {
-                        log::warn!("preview {cmd}: {e}");
+                Action::Preview(cmd, p) => match self.preview(&cmd, &p) {
+                    Ok(v) => {
+                        if let Some(w) = v.get("warning").and_then(Value::as_str)
+                            && !ui.iter().any(|r| matches!(r, UiRequest::Status(s) if s == w))
+                        {
+                            ui.push(UiRequest::Status(w.to_string()));
+                        }
                     }
+                    Err(e) => log::warn!("preview {cmd}: {e}"),
+                },
+                // The drag is over: the dabs of a Liquify stroke have no further use.
+                Action::Commit => {
+                    self.liquify_stroke = None;
+                    self.commit_interaction()?
                 }
-                Action::Commit => self.commit_interaction()?,
-                Action::Cancel => self.cancel_interaction()?,
+                Action::Cancel => {
+                    self.liquify_stroke = None;
+                    self.cancel_interaction()?
+                }
                 Action::Exec(cmd, p) => {
                     self.execute(&cmd, &p)?;
                 }

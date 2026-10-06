@@ -11,6 +11,7 @@ pub mod colormgmt;
 pub mod colortheme;
 mod create;
 mod css;
+mod cut;
 pub(crate) mod distortcmds;
 mod docinfo;
 mod docmenu;
@@ -26,6 +27,7 @@ mod fonts;
 pub(crate) mod freeform;
 pub(crate) mod gradient;
 pub(crate) mod graph;
+mod halftone;
 pub mod help;
 mod layer;
 pub mod links;
@@ -44,7 +46,9 @@ mod path;
 mod pathops;
 mod patterncmds;
 pub mod pdfcmds;
+pub mod perspgrid;
 mod place;
+pub mod plugin;
 pub mod prefscmds;
 pub mod print;
 pub(crate) mod printadvanced;
@@ -244,6 +248,10 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(css::specs());
         v.extend(printpresets::specs());
         v.extend(printtiling::specs());
+        v.extend(plugin::specs());
+        v.extend(cut::specs());
+        v.extend(halftone::specs());
+        v.extend(perspgrid::specs());
         v
     })
 }

@@ -92,6 +92,22 @@ fn temp_tool_id() -> egui::Id {
     egui::Id::new("canvas-temp-tool")
 }
 
+/// The pen pressure (0..1) of the press in progress: the force of this frame's pen or touch
+/// input, else the last one seen since the press (`pressed`: a new press, whose mouse has none
+/// until a pen reports it). A mouse presses fully (1).
+fn pen_pressure(ui: &Ui, pressed: bool) -> f32 {
+    let id = egui::Id::new("canvas-pressure");
+    let force = ui.input(|i| {
+        i.events.iter().rev().find_map(|e| match e {
+            egui::Event::Touch { force: Some(f), .. } if f.is_finite() => Some(f.clamp(0.0, 1.0)),
+            _ => None,
+        })
+    });
+    let p = force.or_else(|| if pressed { None } else { ui.data(|d| d.get_temp::<f32>(id)) }).unwrap_or(1.0);
+    ui.data_mut(|d| d.insert_temp(id, p));
+    p
+}
+
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
@@ -127,7 +143,11 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let full = ui.available_rect_before_wrap();
-    if app.session.active().is_none() {
+    // A document that opened, closed or became active since Home was chosen replaces it.
+    if app.ui.home.is_some_and(|k| k != crate::menus::home_key(app)) {
+        app.ui.home = None;
+    }
+    if app.session.active().is_none() || app.ui.home.is_some() {
         home(app, ui, full);
         return;
     }
@@ -374,6 +394,9 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::RemoveStop => C::NotAllowed,
         Cursor::Slice => C::Crosshair,
         Cursor::SliceSelect => C::Default,
+        Cursor::Width | Cursor::WidthAdd => C::Crosshair,
+        Cursor::WidthPoint => C::Move,
+        Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor => C::Crosshair,
     }
 }
 
@@ -432,7 +455,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 app.select_tool("selection");
                 kind = Drag::TempSelect;
             }
-            let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+            let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, true) };
             dispatch(app, &ev, view);
             kind
         };
@@ -469,8 +492,15 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
                 Drag::Tool | Drag::TempSelect => {
                     if pointer.delta() != egui::Vec2::ZERO {
-                        let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+                        let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
+                    }
+                    // Time held (Twirl, Pucker and Bloat keep applying); a stalled frame counts
+                    // a quarter second at most.
+                    if app.session.tool_wants_ticks() {
+                        let dt = f64::from(ui.input(|i| i.unstable_dt).min(0.25));
+                        let r = app.session.tool_tick(dt, view);
+                        apply_requests(app, r);
                     }
                 }
             }
@@ -495,7 +525,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
                 Drag::Tool | Drag::TempSelect | Drag::Art { .. } => {
                     if !matches!(d, Drag::Art { .. }) {
-                        let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+                        let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
                     }
                     if matches!(d, Drag::TempSelect | Drag::Art { temp: true })
@@ -558,6 +588,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                 match r {
                     vectorcraft_engine::UiRequest::Dialog(kind, p) => crate::dialogs::open_tool_dialog(app, &kind, p),
                     vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
+                    vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                 }
             }
         }
@@ -754,16 +785,34 @@ fn c32(rgb: [u8; 3]) -> Color32 {
 /// Outline of a node for highlighting (paths, compound children, text/image bounds).
 fn node_outline(n: &Node) -> BezPath {
     let mut bp = BezPath::new();
-    n.walk(&mut |c| match &c.kind {
+    walk_drawn(n, &mut |c| match &c.kind {
         NodeKind::Path { path, .. } => bp.extend(path.to_bezpath()),
         NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
             if let Some(b) = c.geometric_bounds() {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
             }
         }
+        // An envelope shows its mesh (or top object), not its content.
+        NodeKind::Envelope { .. } => {
+            if let Some((lines, _)) = vectorcraft_doc::live::envelope_overlay(c) {
+                bp.extend(lines.to_bezpath());
+            }
+        }
         _ => {}
     });
     bp
+}
+
+/// [`Node::walk`] over what a selection highlight shows: an envelope's content is left out (the
+/// envelope shows its mesh instead).
+fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
+    f(n);
+    if matches!(n.kind, NodeKind::Envelope { .. }) {
+        return;
+    }
+    for c in n.children().into_iter().flatten() {
+        walk_drawn(c, f);
+    }
 }
 
 /// The topmost editable object under document point `p` at `zoom` (3 px tolerance).
@@ -992,7 +1041,13 @@ fn print_tiling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
 /// The print tiling's lines: a neutral grey that reads on the paper and on the pasteboard.
 const PRINT_TILING: Color32 = Color32::from_gray(96);
 
-fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    // The Selection tool's bounding box (rotated with the objects after a rotation).
+    let show_box = app.session.tool_id() == "selection"
+        && app.ui.view.bounding_box
+        && app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
+    let bbox = if show_box { app.selection_box() } else { None };
+    let app = &*app;
     let Some(st) = app.session.active() else { return };
     let tool = app.session.tool_id();
     let direct = matches!(tool, "directSelection" | "pen" | "addAnchor" | "deleteAnchor" | "anchorPoint" | "curvature");
@@ -1002,8 +1057,14 @@ fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         let partial = st.selection.partial(*id);
         // Path outlines.
         stroke_path(p, &node_outline(n), xf, Stroke::new(1.0, color));
-        // Anchors (and handles for selected anchors in direct mode).
-        n.walk(&mut |c| {
+        // Anchors (and handles for selected anchors in direct mode); a mesh envelope's points.
+        walk_drawn(n, &mut |c| {
+            if let Some((_, Some(grid))) = vectorcraft_doc::live::envelope_overlay(c) {
+                for q in &grid.points {
+                    anchor_square(p, xf.to_screen(q.p), color, false, if direct { 5.0 } else { 4.0 });
+                }
+                return;
+            }
             let NodeKind::Path { path, .. } = &c.kind else { return };
             for (si, ai, a) in path.anchors() {
                 let sel = match partial {
@@ -1044,6 +1105,20 @@ fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             p.circle_filled(o, 2.5, color);
         }
     }
+    // The spine of each selected blend (or of the blend a selected key object belongs to).
+    let mut spines = vec![];
+    for id in &st.selection.objects {
+        let is_blend = |b: &vectorcraft_doc::NodeId| st.doc.node(*b).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }));
+        let Some(b) = [Some(*id), st.doc.parent_of(*id)].into_iter().flatten().find(is_blend).filter(|b| !spines.contains(b)) else { continue };
+        spines.push(b);
+        let Some(NodeKind::Blend { children, spec }) = st.doc.node(b).map(|n| &n.kind) else { continue };
+        let Some((path, _)) = vectorcraft_doc::live::blend_spine(children, spec) else { continue };
+        let color = c32(st.doc.layer_color(b));
+        stroke_path(p, &path.to_bezpath(), xf, Stroke::new(1.0, color));
+        for (_, _, a) in path.anchors() {
+            anchor_square(p, xf.to_screen(a.p), color, false, if direct { 5.0 } else { 4.0 });
+        }
+    }
     // Live Corners widgets (Selection / Direct Selection on a single live rectangle).
     if matches!(tool, "selection" | "directSelection")
         && app.ui.view.corner_widgets
@@ -1057,12 +1132,11 @@ fn selection_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         }
     }
     // Bounding box with handles (Selection tool).
-    if tool == "selection" && app.ui.view.bounding_box && !st.selection.is_empty() && st.selection.anchors.is_empty() {
-        let Some(b) = app.session.transform_bounds(&st.selection.objects) else { return };
+    if let Some(b) = bbox {
         let color = c32(st.doc.layer_color(st.selection.objects[0]));
-        p.add(Shape::closed_line(xf.quad(b), Stroke::new(1.0, color)));
+        p.add(Shape::closed_line(b.corners().iter().map(|q| xf.to_screen(*q)).collect(), Stroke::new(1.0, color)));
         for h in vectorcraft_tools::bbox::Handle::ALL {
-            let c = xf.to_screen(h.pos(b));
+            let c = xf.to_screen(b.to_doc() * h.pos(b.rect));
             let hr = egui::Rect::from_center_size(c, vec2(6.0, 6.0));
             p.rect_filled(hr, 0.0, Color32::WHITE);
             p.rect_stroke(hr, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
@@ -1117,6 +1191,10 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
                 let r = egui::Rect::from_min_size(sp, galley.size() + vec2(12.0, 8.0));
                 p.rect_filled(r, CornerRadius::same(3), t.measure_bg);
                 p.galley(sp + vec2(6.0, 4.0), galley, Color32::WHITE);
+            }
+            Overlay::GridLine { a, b, color } => {
+                let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
+                p.line_segment([xf.to_screen(*a), xf.to_screen(*b)], Stroke::new(1.0, c));
             }
             Overlay::Swatch { p: pt, color, selected } => {
                 // A white disc under the colour shows its opacity; a dark rim keeps it readable on

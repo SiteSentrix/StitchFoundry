@@ -25,6 +25,7 @@ mod files;
 mod fx;
 mod spread;
 mod text;
+mod vector_effect;
 
 pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
     let (svg, found) = prepass(svg, opts);
@@ -62,6 +63,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         symbols: HashMap::new(),
         blends: fx::blends(&xml),
         files,
+        non_scaling: found.non_scaling,
+        screen: (kx * ky).sqrt(),
     };
     if im.files.nested_text() {
         im.warn("text inside an SVG image isn't imported".into());
@@ -191,6 +194,11 @@ struct Importer {
     blends: HashMap<String, String>,
     /// The files `<image>` elements link to.
     files: files::Files,
+    /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
+    non_scaling: HashSet<String>,
+    /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
+    /// stroke's width is measured in.
+    screen: f64,
 }
 
 /// A `<symbol>` made a symbol: its name, its art with no object ids (what each `<use>` has to show
@@ -296,6 +304,8 @@ struct Found {
     uses: HashMap<String, String>,
     /// The files `<image>` elements link to.
     files: files::Files,
+    /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
+    non_scaling: HashSet<String>,
     warnings: Vec<String>,
 }
 
@@ -361,11 +371,12 @@ impl Edits {
 ///   ([`MADE_UP_ID`]…), recorded with its URL or symbol;
 /// * undisplayed objects (`display: none`, as Save writes hidden layers) are shown and recorded,
 ///   to come back hidden; one something links to (a `<use>` template) stays as it is;
+/// * shapes with a non-scaling stroke get an id when they have none, recorded ([`vector_effect`]);
 /// * linked files are read ([`files`]).
 fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
-    if !["<a", "display", "<use", ":use", "<image", ":image"].iter().any(|t| svg.contains(t)) {
+    if !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING].iter().any(|t| svg.contains(t)) {
         return (svg.into(), found);
     }
     let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
@@ -384,8 +395,15 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
             found.uses.insert(edits.id(svg, u), sym.to_string());
         }
     }
-    if svg.contains("display") {
-        hidden_objects(svg, &xml, &mut edits, &mut found.hidden);
+    let (display, non_scaling) = (svg.contains("display"), svg.contains(vector_effect::NON_SCALING));
+    if display || non_scaling {
+        let css = css::Styles::new(&xml);
+        if display {
+            hidden_objects(svg, &xml, &css, &mut edits, &mut found.hidden);
+        }
+        if non_scaling {
+            vector_effect::find(svg, &xml, &css, &mut edits, &mut found.non_scaling, &mut found.warnings);
+        }
     }
     found.files = files::Files::read(svg, &xml, opts, &mut edits, &mut found.warnings);
     (edits.apply(svg), found)
@@ -395,8 +413,7 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
 const OBJECTS: &[&str] = &["g", "a", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "image", "text", "use"];
 
 /// Show the undisplayed objects outside `<defs>` (and the like) for usvg, recording their ids.
-fn hidden_objects(svg: &str, xml: &roxmltree::Document, edits: &mut Edits, ids: &mut HashSet<String>) {
-    let css = css::Styles::new(xml);
+fn hidden_objects(svg: &str, xml: &roxmltree::Document, css: &css::Styles, edits: &mut Edits, ids: &mut HashSet<String>) {
     let linked: HashSet<&str> = xml.descendants().filter_map(href).filter_map(|h| h.strip_prefix('#')).collect();
     let mut todo: Vec<XNode> = xml.root_element().children().filter(XNode::is_element).collect();
     while let Some(n) = todo.pop() {
@@ -659,19 +676,18 @@ impl Importer {
         if !matches!(kids.get(main), Some(usvg::Node::Path(p)) if p.is_visible()) {
             return Some(vec![]);
         }
-        let text::PendingText { name, mut obj, servers, paints, .. } = self.slots.texts.get(i)?.clone();
+        let text::PendingText { name, mut obj, servers, paints, non_scaling, under, .. } = self.slots.texts.get(i)?.clone();
         // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
         // space; runs paint in text space.
         let to_text = obj.xf.inverse();
-        let resolved: Vec<Paint> = (0..paints)
-            .map(|k| match kids.get(main + 1 + k) {
-                Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
-                    let area = kurbo::Shape::bounding_box(&bezpath(p.data(), to_text));
-                    self.paint(f.paint(), to_text, Some(area))
-                }),
-                _ => Paint::None,
-            })
-            .collect();
+        let slot_paint = |im: &mut Self, k: usize, m: Affine| match kids.get(main + 1 + k) {
+            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
+                let area = kurbo::Shape::bounding_box(&bezpath(p.data(), m));
+                im.paint(f.paint(), m, Some(area))
+            }),
+            _ => Paint::None,
+        };
+        let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
         let server = |k: usize| resolved.get(k).cloned().unwrap_or(Paint::None);
         for (run, (fill, stroke)) in obj.runs.iter_mut().zip(servers) {
             if let Some(k) = fill {
@@ -682,7 +698,25 @@ impl Importer {
             }
         }
         obj.xf = ts * obj.xf;
-        Some(vec![Arc::new(self.named(&name, NodeKind::Text(Box::new(obj))))])
+        if non_scaling && !vector_effect::unscale_text(&mut obj, self.screen) {
+            let label = if name.is_empty() || made_up(&name) { "a text".to_string() } else { format!("text '{name}'") };
+            self.warn(format!("non-scaling stroke on {label} approximated: the text is stretched or skewed"));
+        }
+        // A stroke under the characters is the object's own: it paints in the document.
+        let under = under.map(|(mut sl, k)| {
+            if let Some(k) = k {
+                sl.paint = slot_paint(self, k, ts);
+            }
+            let mut ap = Appearance { items: vec![AppearanceItem::Stroke(sl)], ..Default::default() };
+            ap.scale_strokes(if non_scaling { self.screen } else { obj.xf.determinant().abs().sqrt() });
+            ap.set_contents_at(1);
+            ap
+        });
+        let mut n = self.named(&name, NodeKind::Text(Box::new(obj)));
+        if let Some(ap) = under {
+            n.appearance = ap;
+        }
+        Some(vec![Arc::new(n)])
     }
 
     fn group_node(&mut self, g: &usvg::Group, acc: Affine) -> Option<Node> {
@@ -930,7 +964,9 @@ impl Importer {
         }
         let mut stroke = None;
         if let Some(s) = p.stroke() {
-            let scale = m.determinant().abs().sqrt();
+            // A non-scaling stroke is as wide on screen whatever `m` does: the path takes `m`, so a
+            // stroke of that width in the document is exact.
+            let scale = if self.non_scaling.contains(p.id()) { self.screen } else { m.determinant().abs().sqrt() };
             // The stroke reaches past the path (miters further: a generous margin).
             let reach = s.width().get() as f64 * scale * (s.miterlimit().get() as f64).max(1.0);
             let paint = self.paint(s.paint(), m, area.map(|a| a.inflate(reach, reach)));
@@ -1025,10 +1061,15 @@ impl Importer {
     /// An SVG shown as an image (a data URL or a linked file) → its art, `acc` mapping its size.
     /// Its ids are its own: they mean nothing in the SVG around it.
     fn svg_image(&mut self, tree: &usvg::Tree, acc: Affine) -> Option<Node> {
-        let outer =
-            (std::mem::take(&mut self.links), std::mem::take(&mut self.hidden), std::mem::take(&mut self.uses), std::mem::take(&mut self.labels));
+        let outer = (
+            std::mem::take(&mut self.links),
+            std::mem::take(&mut self.hidden),
+            std::mem::take(&mut self.uses),
+            std::mem::take(&mut self.labels),
+            std::mem::take(&mut self.non_scaling),
+        );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling) = outer;
         art
     }
 }

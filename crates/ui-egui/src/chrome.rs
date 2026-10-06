@@ -1,5 +1,7 @@
 //! Window chrome: application bar (menus), Control bar, document tabs, status bar.
 
+use std::borrow::Cow;
+
 use egui::{CornerRadius, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
@@ -27,8 +29,9 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
             crate::brand::paint_mark(ui, r);
             ui.add_space(4.0);
-            if widgets::icon_button(ui, "house", "Home", false, 24.0).clicked() {
-                crate::dialogs::open_new_document(app);
+            let on_home = app.ui.home.is_some() || app.session.active().is_none();
+            if widgets::icon_button(ui, "house", "Home", on_home, 24.0).clicked() {
+                app.run("app.home", json!({})).ok();
             }
             ui.add_space(2.0);
             let menus_end = if app.native_menu {
@@ -134,6 +137,8 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
                 ui.add_space(6.0);
                 crate::place::control_bar_details(app, ui);
+                crate::toolbar::control_bar_options(app, ui);
+                crate::dialogs::envelope::control_bar(app, ui);
                 let shown_stroke = crate::panels::current_stroke(app);
                 let mixed = crate::panels::stroke_mixed(app, ui.ctx());
                 let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
@@ -197,14 +202,18 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 ui.separator();
                 // Transform fields.
-                let b = app.session.active().and_then(|s| app.session.transform_bounds(&s.selection.objects));
-                if let Some(b) = b {
-                    for (k, lbl, v) in
-                        [("x", "X:", b.center().x), ("y", "Y:", b.center().y), ("width", "W:", b.width()), ("height", "H:", b.height())]
-                    {
+                // The bounding box, rotated with rotated objects: its centre and its own sides.
+                if let Some(b) = app.selection_box() {
+                    let c = b.center();
+                    let link = app.session.prefs.constrain_proportions;
+                    for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", b.rect.width()), ("height", "H:", b.rect.height())] {
+                        // The W/H link sits between W and H.
+                        if k == "height" {
+                            crate::panels::transform::constrain_link(app, ui);
+                        }
                         ui.label(egui::RichText::new(lbl).size(12.0).color(t.text_dim));
                         if let Some(nv) = widgets::num_field(ui, ("cb", k), Some(v), units, 80.0) {
-                            app.run("object.setBounds", json!({k: nv, "reference": 4})).ok();
+                            app.run("object.setBounds", json!({k: nv, "reference": 4, "proportional": link})).ok();
                         }
                     }
                 }
@@ -237,7 +246,8 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     for (i, d) in app.session.documents().iter().enumerate() {
         let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
         let title = tab_title(d, zoom, app.ui.view.outline);
-        let is_active = Some(i) == active;
+        // On the Home screen no tab is the current one.
+        let is_active = Some(i) == active && app.ui.home.is_none();
         let galley = ui.painter().layout_no_wrap(title, theme::semibold(12.5), if is_active { t.text_strong } else { t.text_dim });
         let w = galley.size().x + 50.0;
         let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
@@ -265,6 +275,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.status(e);
         }
     } else if let Some(i) = activate {
+        app.ui.home = None;
         app.session.set_active(i);
     }
     // Isolation mode breadcrumb bar.
@@ -397,15 +408,16 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
 }
 
-/// Contextual hint for the active tool: segments of (text, bold).
-fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
-    match tool {
+/// Contextual hint for the active tool: segments of (text, bold). Keys in bold segments are
+/// written as shortcuts are ("Alt+Click"); [`hint_segments`] names them for the platform.
+fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
+    Some(match tool {
         "selection" => &[
             ("Click", true),
             (" the object to select  |  ", false),
             ("Shift+Click", true),
             (" to select multiple objects  |  ", false),
-            ("Option+Drag", true),
+            ("Alt+Drag", true),
             (" the object to duplicate", false),
         ],
         "directSelection" => &[
@@ -447,7 +459,7 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             (" to draw  |  ", false),
             ("Shift+Drag", true),
             (" to constrain proportions  |  ", false),
-            ("Option+Drag", true),
+            ("Alt+Drag", true),
             (" from center  |  ", false),
             ("Click", true),
             (" for exact size", false),
@@ -457,14 +469,14 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
             (" to set the reference point  |  ", false),
             ("Drag", true),
             (" to transform  |  ", false),
-            ("Option+Click", true),
+            ("Alt+Click", true),
             (" for exact values", false),
         ],
         "hand" => &[("Drag", true), (" to pan the view", false)],
         "zoom" => &[
             ("Click", true),
             (" to zoom in  |  ", false),
-            ("Option+Click", true),
+            ("Alt+Click", true),
             (" to zoom out  |  ", false),
             ("Drag", true),
             (" to zoom into an area", false),
@@ -479,8 +491,91 @@ fn hint_for(tool: &str) -> &'static [(&'static str, bool)] {
         ],
         "gradient" => &[("Drag", true), (" across a selected object to set the gradient direction", false)],
         "artboard" => &[("Click", true), (" to select an artboard  |  ", false), ("Drag", true), (" on the canvas to create one", false)],
-        _ => &[("Press ", false), ("Cmd+Shift+/", true), (" to search every command", false)],
-    }
+        "width" => &[
+            ("Drag", true),
+            (" a stroke to add a width point  |  ", false),
+            ("Alt+Drag", true),
+            (" to change one side  |  ", false),
+            ("Shift+Click", true),
+            (" to select more points  |  ", false),
+            ("Double-click", true),
+            (" a point to edit it  |  ", false),
+            ("Delete", true),
+            (" to remove points", false),
+        ],
+        "puppetWarp" => &[
+            ("Click", true),
+            (" the art to add a pin  |  ", false),
+            ("Shift+Click", true),
+            (" to select more pins  |  ", false),
+            ("Drag", true),
+            (" a pin to warp  |  ", false),
+            ("Alt+Drag", true),
+            (" near a selected pin to rotate  |  ", false),
+            ("Delete", true),
+            (" to remove pins", false),
+        ],
+        "warp" => &[
+            ("Drag", true),
+            (" across paths to push them along  |  ", false),
+            ("Alt+Drag", true),
+            (" to size the brush (", false),
+            ("Shift", true),
+            (" keeps its proportions)", false),
+        ],
+        "twirl" | "pucker" | "bloat" => &[
+            ("Click or drag", true),
+            (" over paths, and hold still to keep going  |  ", false),
+            ("Alt+Drag", true),
+            (" to size the brush (", false),
+            ("Shift", true),
+            (" keeps its proportions)", false),
+        ],
+        "scallop" | "crystallize" | "wrinkle" => &[
+            ("Click or drag", true),
+            (" over paths to roughen their outlines  |  ", false),
+            ("Alt+Drag", true),
+            (" to size the brush (", false),
+            ("Shift", true),
+            (" keeps its proportions)", false),
+        ],
+        "perspectiveSelection" => &[
+            ("Drag", true),
+            (" to move in perspective  |  ", false),
+            ("Alt+Drag", true),
+            (" to copy  |  ", false),
+            ("5", true),
+            (" while dragging to move perpendicular to the plane  |  ", false),
+            ("Drag a handle", true),
+            (" to scale in perspective", false),
+        ],
+        "blend" => &[
+            ("Click", true),
+            (" an object, then another to blend them  |  ", false),
+            ("Click an anchor point", true),
+            (" to blend from it  |  ", false),
+            ("Alt+Click", true),
+            (" to set spacing and orientation", false),
+        ],
+        _ => return None,
+    })
+}
+
+/// The hint bar's segments for `tool`, with keys named as the menus name them (Alt and Ctrl on
+/// Windows and Linux, ⌥ and ⌘ on macOS). Tools without a hint point to Search Commands.
+fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
+    let search;
+    let segments = match hint_for(tool) {
+        Some(s) => s,
+        None => {
+            search = match menus::shortcut_of("help.commandPalette") {
+                Some(sc) => [("Press ", false), (sc, true), (" to search every command", false)],
+                None => [("Use ", false), ("Help › Search Commands…", true), (" to search every command", false)],
+            };
+            &search
+        }
+    };
+    segments.iter().map(|&(text, bold)| (if bold { Cow::Owned(menus::pretty_shortcut(text)) } else { Cow::Borrowed(text) }, bold)).collect()
 }
 
 pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -495,9 +590,9 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", theme::semibold(11.0), t.text);
                 ui.add_space(6.0);
                 let mut job = egui::text::LayoutJob::default();
-                for (txt, bold) in hint_for(app.session.tool_id()) {
-                    let font = if *bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
-                    job.append(txt, 0.0, egui::TextFormat { font_id: font, color: if *bold { t.text_strong } else { t.text }, ..Default::default() });
+                for (txt, bold) in hint_segments(app.session.tool_id()) {
+                    let font = if bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
+                    job.append(&txt, 0.0, egui::TextFormat { font_id: font, color: if bold { t.text_strong } else { t.text }, ..Default::default() });
                 }
                 ui.label(job);
             });
@@ -508,6 +603,27 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use serde_json::json;
     use vectorcraft_engine::Session;
+
+    #[test]
+    fn hints_name_keys_as_the_menus_do() {
+        let text = |tool: &str| super::hint_segments(tool).into_iter().map(|(s, _)| s).collect::<String>();
+        for tool in vectorcraft_tools::catalog::all_tools().map(|t| t.id) {
+            let hint = text(tool);
+            assert!(!hint.contains("Option"), "{tool}: {hint}");
+            assert!(cfg!(target_os = "macos") || !hint.contains("Cmd"), "{tool}: {hint}");
+        }
+        let pretty = crate::menus::pretty_shortcut;
+        assert!(text("selection").contains(&pretty("Alt+Drag")));
+        assert!(text("rectangle").contains(&pretty("Alt+Drag")));
+        assert!(text("zoom").contains(&pretty("Alt+Click")));
+        assert!(text("rotate").contains(&pretty("Alt+Click")));
+        assert!(text("eyedropper").contains(&pretty("Alt+Click")));
+        assert!(text("perspectiveSelection").contains(&pretty("Alt+Drag")) && text("perspectiveSelection").contains("perpendicular"));
+        assert!(text("paintbrush").contains(&pretty("Cmd+Shift+/")), "the Search Commands shortcut");
+        if !cfg!(target_os = "macos") {
+            assert!(text("zoom").contains("Alt+Click") && text("paintbrush").contains("Ctrl+Shift+/"));
+        }
+    }
 
     #[test]
     fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {

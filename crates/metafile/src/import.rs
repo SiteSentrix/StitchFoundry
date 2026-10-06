@@ -583,7 +583,7 @@ impl Player {
         let mut bp = BezPath::new();
         bp.move_to(*first);
         if bezier {
-            for c in rest.chunks_exact(3) {
+            for c in rest.as_chunks::<3>().0 {
                 bp.curve_to(c[0], c[1], c[2]);
             }
         } else {
@@ -636,7 +636,7 @@ impl Player {
             }
         };
         if bezier {
-            for c in pts.chunks_exact(3) {
+            for c in pts.as_chunks::<3>().0 {
                 target.curve_to(xf * c[0], xf * c[1], xf * c[2]);
             }
         } else {

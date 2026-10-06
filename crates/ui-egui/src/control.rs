@@ -144,7 +144,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                     vectorcraft_geom::Point::new(x, y)
                 };
                 let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
-                crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, pressure: 1.0 }, view);
+                crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, pressure: PointerEvent::json_pressure(e) }, view);
+                let hold = PointerEvent::json_hold(e);
+                if hold > 0.0 {
+                    let r = app.session.tool_tick(hold, view);
+                    crate::canvas::apply_requests(app, r);
+                }
             }
             ctx.request_repaint();
             wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "tool": app.session.tool_id()})))
@@ -160,10 +165,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 command: b("cmd"),
             };
             app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: m });
-            app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: false, repeat: false, modifiers: m });
+            // Typed text comes with the press, so it shares the key's frame and modifiers.
             if let Some(t) = s("text") {
                 app.synthetic.push(egui::Event::Text(t.to_string()));
             }
+            app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: false, repeat: false, modifiers: m });
             ctx.request_repaint();
             ok(Value::Null)
         }

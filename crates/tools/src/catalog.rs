@@ -68,6 +68,9 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("eraser", "Eraser Tool", Some("Shift+E"), "tool-eraser"),
         t("scissors", "Scissors Tool", Some("C"), "tool-scissors"),
         t("knife", "Knife", None, "tool-knife"),
+        t("mirrorCut", "Mirror & Cut Tool", None, "tool-mirror-cut"),
+        t("lineCut", "Line Cut Tool", None, "tool-line-cut"),
+        t("rectCut", "Rectangle Cut Tool", None, "tool-rect-cut"),
     ],
     &[t("rotate", "Rotate Tool", Some("R"), "tool-rotate"), t("reflect", "Reflect Tool", Some("O"), "tool-reflect")],
     &[

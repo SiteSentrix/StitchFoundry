@@ -197,20 +197,7 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
-        if independent {
-            a.kind = AnchorKind::Corner;
-        }
-        let (moved, other) = if out { (&mut a.h_out, &mut a.h_in) } else { (&mut a.h_in, &mut a.h_out) };
-        *moved = pos;
-        if a.kind == AnchorKind::Smooth {
-            // Keep the opposite handle collinear, preserving its length.
-            let len = (*other - a.p).hypot();
-            let dir = a.p - pos;
-            let l = dir.hypot();
-            if l > 1e-9 {
-                *other = a.p + dir * (len / l);
-            }
-        }
+        a.set_handle(out, pos, independent);
         Ok(())
     })?;
     ok()

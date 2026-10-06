@@ -125,9 +125,24 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
                 .inner
         })
         .inner;
+    select_all_on_focus(ui, &resp, &buf);
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if commit { unit.parse(&buf) } else { None }
+}
+
+/// Numeric fields take the whole text, unit included, when they gain focus or are double-clicked
+/// (egui would select one word): typing a number or an expression replaces it.
+fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
+    if !(resp.gained_focus() || resp.double_clicked()) {
+        return;
+    }
+    if let Some(mut st) = egui::TextEdit::load_state(ui.ctx(), resp.id) {
+        let all = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(text.chars().count()));
+        st.cursor.set_char_range(Some(all));
+        st.store(ui.ctx(), resp.id);
+        ui.ctx().request_repaint();
+    }
 }
 
 /// The recessed text box of the panel fields showing `shown`, `rows` lines tall (1: single line),
@@ -206,8 +221,12 @@ pub fn mixed_field(
         })
         .unwrap_or_default();
     let (buf, resp) = recessed_text(ui, id, &shown, width, 1);
+    select_all_on_focus(ui, &resp, &buf);
     if resp.lost_focus() && buf != shown {
-        buf.trim().trim_end_matches(suffix.trim()).trim().trim_end_matches(['%', '°']).parse::<f64>().ok()
+        // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
+        let suffix = suffix.trim();
+        let bare = if suffix.is_empty() { buf.clone() } else { buf.replace(suffix, "") };
+        vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
     } else {
         None
     }
@@ -390,7 +409,7 @@ pub fn dropdown_with(
     width: f32,
     enabled: impl Fn(usize) -> bool,
 ) -> Option<usize> {
-    combo(ui, id, current, width, |ui| {
+    combo(ui, id, current, width, false, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
             if ui.add_enabled(enabled(i), egui::Button::selectable(*o == current, *o)).clicked() {
@@ -402,12 +421,14 @@ pub fn dropdown_with(
 }
 
 /// The recessed combo box of [`dropdown`] showing `current`; `list` draws the options and returns
-/// the chosen one.
+/// the chosen one. A `searchable` list (a search field over a list it scrolls itself) stays open
+/// while it is clicked: it closes itself when an option is chosen.
 fn combo<R>(
     ui: &mut Ui,
     id: impl std::hash::Hash + std::fmt::Debug,
     current: &str,
     width: f32,
+    searchable: bool,
     list: impl FnOnce(&mut Ui) -> Option<R>,
 ) -> Option<R> {
     let t = Tokens::get(ui.ctx());
@@ -419,11 +440,88 @@ fn combo<R>(
             egui::ComboBox::from_id_salt(ui.id().with(id))
                 .selected_text(egui::RichText::new(current).size(12.0))
                 .width(width - 4.0)
+                .close_behavior(if searchable { egui::PopupCloseBehavior::CloseOnClickOutside } else { egui::PopupCloseBehavior::CloseOnClick })
+                .height(if searchable { f32::INFINITY } else { ui.spacing().combo_height })
                 .show_ui(ui, list)
                 .inner
                 .flatten()
         })
         .inner
+}
+
+/// The font family dropdown: every family available (the installed fonts included), with a search
+/// field over the list that filters it as you type (Enter picks the first match). Returns the
+/// chosen family.
+pub fn font_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str, width: f32) -> Option<String> {
+    let state = ui.id().with(&id).with("font-search");
+    combo(ui, id, current, width, true, |ui| {
+        // Each time the list opens: unfiltered, with the current font in view. Typing goes to the
+        // search field.
+        let pass = ui.ctx().cumulative_pass_nr();
+        // (the last pass the list was drawn in, the pass it opened in)
+        let (last, opened) = ui.data(|d| d.get_temp::<(u64, u64)>(state)).unwrap_or_default();
+        let opened = if last + 1 < pass || last == 0 { pass } else { opened };
+        let field = state.with("query");
+        ui.data_mut(|d| {
+            d.insert_temp(state, (pass, opened));
+            if opened == pass {
+                d.insert_temp(field, String::new());
+            }
+        });
+        // Its first two passes: a popup sizes itself in the first, invisibly.
+        let opening = pass <= opened + 1;
+        if ui.memory(|m| m.focused().is_none()) {
+            ui.memory_mut(|m| m.request_focus(field.with("edit")));
+        }
+        let query = search_field(ui, field, "Search").to_lowercase();
+        let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let families = vectorcraft_text::FontDb::global().family_list();
+        let (mut chosen, mut first) = (None, None);
+        // The search field stays put over the list as it scrolls.
+        menu_scroll(ui, |ui| {
+            for f in families.iter().filter(|f| query.is_empty() || f.to_lowercase().contains(&query)) {
+                first.get_or_insert(f);
+                let r = ui.add(egui::Button::selectable(f == current, f.as_str()));
+                if opening && f == current {
+                    r.scroll_to_me(Some(egui::Align::Center));
+                }
+                if r.clicked() {
+                    chosen = Some(f.clone());
+                }
+            }
+        });
+        match first {
+            None => {
+                dim_label(ui, "No matching fonts");
+            }
+            Some(f) if enter && chosen.is_none() => chosen = Some(f.clone()),
+            _ => {}
+        }
+        if chosen.is_some() {
+            ui.close();
+        }
+        chosen
+    })
+}
+
+/// The body of a menu or popup list: as tall as its items up to the bottom of the window, and
+/// scrolling only past that, so long menus (Window, Effect, a panel's menu) stay reachable on
+/// small windows.
+pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    // Room left below the popup's first item, less the popup frame and a small gap.
+    const BOTTOM_GAP: f32 = 12.0;
+    const MIN_HEIGHT: f32 = 120.0;
+    let room = (ui.ctx().content_rect().bottom() - ui.next_widget_position().y - BOTTOM_GAP).max(MIN_HEIGHT);
+    // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
+    // its items when they need less.
+    egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).show(ui, add_contents).inner
+}
+
+/// A column of tool or panel buttons (the toolbar, the dock's icon column) that scrolls when the
+/// window is too short for it: with the mouse wheel, or the scroll bar shown while the pointer is
+/// over it.
+pub fn strip_scroll<R>(ui: &mut Ui, id: &str, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    egui::ScrollArea::vertical().id_salt(id).auto_shrink([false, true]).show(ui, add_contents).inner
 }
 
 /// Whether the blend-mode list draws a separator above `BlendMode::ALL[i]`: where a
@@ -435,7 +533,7 @@ pub fn blend_separator_before(i: usize) -> bool {
 /// The blend-mode dropdown, its groups separated (Normal | darken | lighten | contrast | inversion
 /// | component modes). `None` (objects that differ) shows blank. Returns the chosen mode.
 pub fn blend_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: Option<BlendMode>, width: f32) -> Option<BlendMode> {
-    combo(ui, id, current.map_or("", BlendMode::label), width, |ui| {
+    combo(ui, id, current.map_or("", BlendMode::label), width, false, |ui| {
         let mut chosen = None;
         for (i, m) in BlendMode::ALL.into_iter().enumerate() {
             if blend_separator_before(i) {
@@ -988,6 +1086,7 @@ pub fn opt_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
             )
         })
         .inner;
+    select_all_on_focus(ui, &resp, &buf);
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if resp.lost_focus() && buf != shown {
         let s = buf.trim();

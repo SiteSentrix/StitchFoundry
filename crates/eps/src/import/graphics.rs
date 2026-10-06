@@ -429,10 +429,8 @@ impl Interp<'_> {
             return Err(PsError::Limit("a path has too many points"));
         }
         let mut bp = BezPath::new();
-        for r in nums.chunks_exact(4) {
-            if let [x, y, w, h] = r {
-                bp.extend(self.rect_path(*x, *y, *w, *h));
-            }
+        for [x, y, w, h] in nums.as_chunks::<4>().0 {
+            bp.extend(self.rect_path(*x, *y, *w, *h));
         }
         Ok(bp)
     }

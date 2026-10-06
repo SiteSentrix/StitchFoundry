@@ -56,6 +56,20 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             }
             return;
         }
+        // The Blend tool's double-click and Alt-click: Blend Options.
+        super::blend_options::KIND => {
+            if let Err(e) = super::blend_options::open(app) {
+                app.status(e);
+            }
+            return;
+        }
+        // Double-clicking a plane widget of the perspective grid: that plane's options.
+        super::perspective_plane::KIND => {
+            if let Err(e) = super::perspective_plane::open(app, &p) {
+                app.status(e);
+            }
+            return;
+        }
         // Double-clicking a slice with the Slice Selection tool: Slice Options.
         super::slices::OPTIONS => {
             if let Err(e) = super::slices::open_options(app) {

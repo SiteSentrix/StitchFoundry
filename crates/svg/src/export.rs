@@ -67,6 +67,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         symbols: HashMap::new(),
         symbol_nest: 0,
         fonts: Vec::new(),
+        shared_images: HashMap::new(),
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -247,6 +248,9 @@ struct Writer<'a> {
     symbol_nest: u32,
     /// The characters type uses from each face ([`ExportOptions::embed_fonts`]).
     fonts: Vec<FontUse>,
+    /// Images written once in the defs and drawn with `<use>`, by key and size: the pieces an
+    /// envelope cuts a distorted image into share its pixels.
+    shared_images: HashMap<(String, u32, u32), String>,
 }
 
 /// The characters type uses from one face, under one `@font-face` description: the family the
@@ -411,10 +415,6 @@ impl Writer<'_> {
     fn tiny(&self) -> bool {
         self.opts.profile == Profile::Tiny12
     }
-    /// Are the fonts type uses embedded?
-    fn embeds_fonts(&self) -> bool {
-        self.opts.embed_fonts && !self.opts.outline_text && !self.tiny()
-    }
     fn num(&self, v: f64) -> String {
         fmt_num(v, self.opts.decimals)
     }
@@ -437,6 +437,58 @@ impl Writer<'_> {
             self.defs.push('\n');
         }
     }
+    /// The `href` of image `im`: its file with [`ImageMode::Link`] (or when its pixels are
+    /// missing), else its bytes. `None` when it has neither.
+    fn image_href(&mut self, im: &vectorcraft_doc::ImageObject) -> Option<String> {
+        let (doc, link) = (self.doc, self.opts.images == ImageMode::Link);
+        match (im.link.as_ref().filter(|_| link), doc.images.get(&im.key)) {
+            (Some(l), _) => Some(l.path.clone()),
+            (None, Some(b)) if !b.bytes.is_empty() => Some(self.blob_href(b)),
+            _ => im.link.as_ref().map(|l| l.path.clone()),
+        }
+    }
+
+    /// Images drawn more than once in `art` (the pieces of a distorted image) go into the defs
+    /// once; each piece then draws them with `<use>`.
+    fn share_images(&mut self, art: &Node) {
+        let mut seen: HashMap<(String, u32, u32), usize> = HashMap::new();
+        art.walk(&mut |c| {
+            if let NodeKind::Image(im) = &c.kind {
+                *seen.entry((im.key.clone(), im.width, im.height)).or_default() += 1;
+            }
+        });
+        let mut repeated: Vec<_> = seen.into_iter().filter(|(k, n)| *n > 1 && !self.shared_images.contains_key(k)).map(|(k, _)| k).collect();
+        repeated.sort();
+        for (key, width, height) in repeated {
+            let link = self.linked_of(art, &key);
+            let im = vectorcraft_doc::ImageObject { key: key.clone(), width, height, xf: Affine::IDENTITY, link, placement: Default::default() };
+            let Some(href) = self.image_href(&im) else { continue };
+            let id = self.fresh_id("image");
+            self.def(
+                0,
+                &format!(
+                    "<image id=\"{id}\" width=\"{width}\" height=\"{height}\" preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+                    xml_escape(&href)
+                ),
+            );
+            self.shared_images.insert((key, width, height), id);
+        }
+    }
+
+    /// The link of the first image with blob `key` in `art`.
+    fn linked_of(&self, art: &Node, key: &str) -> Option<vectorcraft_doc::LinkInfo> {
+        let mut link = None;
+        art.walk(&mut |c| {
+            if let NodeKind::Image(im) = &c.kind
+                && im.key == key
+                && link.is_none()
+            {
+                link = im.link.clone();
+            }
+        });
+        link
+    }
+
     fn fresh_id(&mut self, prefix: &str) -> String {
         let mut i = 1;
         loop {
@@ -1237,18 +1289,15 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
-                let (doc, link) = (self.doc, self.opts.images == ImageMode::Link);
-                let href = match (im.link.as_ref().filter(|_| link), doc.images.get(&im.key)) {
-                    (Some(l), _) => l.path.clone(),
-                    (None, Some(b)) if !b.bytes.is_empty() => self.blob_href(b),
-                    _ => match &im.link {
-                        Some(l) => l.path.clone(),
-                        None => return,
-                    },
-                };
                 let id = self.id_attr(n);
                 let m = self.matrix(self.xf * im.xf);
                 let a = self.attrs(&css::transparency(n));
+                if let Some(shared) = self.shared_images.get(&(im.key.clone(), im.width, im.height)) {
+                    let shared = shared.clone();
+                    self.line(&format!("<use{id} transform=\"{m}\"{a} xlink:href=\"#{shared}\"/>"));
+                    return;
+                }
+                let Some(href) = self.image_href(im) else { return };
                 self.line(&format!(
                     "<image{id} width=\"{}\" height=\"{}\" transform=\"{m}\" preserveAspectRatio=\"none\"{a} xlink:href=\"{}\"/>",
                     im.width,
@@ -1294,7 +1343,8 @@ impl Writer<'_> {
             }
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
-                let g = vectorcraft_doc::live::expand_deep(n, None);
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                self.share_images(&g);
                 self.node_body(&g);
             }
         }
@@ -1505,7 +1555,7 @@ impl Writer<'_> {
     fn char_props(&mut self, st: &CharStyle, space: (Rect, Affine)) -> Props {
         let decimals = self.opts.decimals;
         let len = |v: f64| fmt_num(v, decimals);
-        let mut p = css::font_props(st, &len, self.embeds_fonts());
+        let mut p = css::font_props(st, &len);
         // Character paints resolve in the text's space (`to_user` maps it into user space).
         let (bounds, to_user) = space;
         let saved = std::mem::replace(&mut self.xf, to_user);
@@ -1526,7 +1576,7 @@ impl Writer<'_> {
     /// as the canvas paints them, the object's own fills and strokes on the glyph outlines: those
     /// below the Characters row under the characters, the others over them.
     fn text_node(&mut self, n: &Node, t: &TextObject) {
-        let chars = |w: &mut Self, n: &Node| if w.opts.outline_text { w.text_outlines(n, t) } else { w.text(n, t) };
+        let chars = |w: &mut Self, n: &Node| if w.opts.outline_text || t.vertical { w.text_outlines(n, t) } else { w.text(n, t) };
         if !n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) {
             return chars(self, n);
         }

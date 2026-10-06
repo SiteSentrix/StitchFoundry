@@ -218,3 +218,12 @@ fn area_and_path_tools_convert_clicked_paths() {
     let acts = tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 100.0));
     assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.createInPath" && p["mode"] == "onPath")), "{acts:?}");
 }
+
+#[test]
+fn vertical_tools_preserve_their_ids_and_create_vertical_text() {
+    for id in ["verticalType", "verticalAreaType", "verticalTypeOnPath"] {
+        let tool = TypeTool::new(id);
+        assert_eq!(tool.id(), id);
+        assert!(tool.vertical);
+    }
+}

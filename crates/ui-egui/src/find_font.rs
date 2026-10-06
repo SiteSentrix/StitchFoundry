@@ -75,12 +75,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
             ui.add_space(10.0);
             widgets::subheader(ui, "Replace With Font");
-            let families = vectorcraft_text::FontDb::global().families();
             let fam = d.str("family");
             ui.horizontal(|ui| {
-                let names: Vec<&str> = families.iter().map(String::as_str).collect();
-                if let Some(i) = widgets::dropdown(ui, "ff-family", &fam, &names, 220.0) {
-                    d.fields.insert("family".into(), json!(families[i]));
+                if let Some(f) = widgets::font_dropdown(ui, "ff-family", &fam, 220.0) {
+                    d.fields.insert("family".into(), json!(f));
                     d.fields.insert("style".into(), json!(""));
                 }
                 let styles = vectorcraft_text::FontDb::global().styles(&d.str("family"));

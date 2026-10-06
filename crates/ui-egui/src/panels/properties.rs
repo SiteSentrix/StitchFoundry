@@ -250,21 +250,27 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(st) = app.session.active() else { return };
+    if app.session.active().is_none() {
+        return;
+    }
     let units = app.session.general_unit();
-    let Some(b) = app.session.transform_bounds(&st.selection.objects) else {
+    // The bounding box, rotated with rotated objects (as in the Transform panel).
+    let Some(bx) = app.selection_box() else {
         dim_label(ui, "No Selection");
         return;
     };
+    let b = bx.rect;
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
-    let rp = vectorcraft_geom::reference_point(b, refi);
+    let rp = bx.reference_point(refi);
     section_header(ui, "Transform");
     ui.horizontal(|ui| {
         if let Some(i) = widgets::reference_point(ui, refi) {
             ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
         }
         ui.add_space(6.0);
-        let fw = ((ui.available_width() - 44.0) / 2.0).clamp(60.0, 110.0);
+        let link = app.session.prefs.constrain_proportions;
+        // Room for the labels and the W/H link.
+        let fw = ((ui.available_width() - 70.0) / 2.0).clamp(60.0, 110.0);
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
             if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x), units, fw) {
@@ -272,7 +278,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             dim_label(ui, "W:");
             if let Some(v) = widgets::num_field(ui, "tw", Some(b.width()), units, fw) {
-                app.run("object.setBounds", json!({"width": v, "reference": refi})).ok();
+                app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link})).ok();
             }
             ui.end_row();
             dim_label(ui, "Y:");
@@ -281,15 +287,17 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             dim_label(ui, "H:");
             if let Some(v) = widgets::num_field(ui, "th", Some(b.height()), units, fw) {
-                app.run("object.setBounds", json!({"height": v, "reference": refi})).ok();
+                app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link})).ok();
             }
             ui.end_row();
         });
+        super::transform::constrain_link(app, ui);
     });
     ui.horizontal(|ui| {
         icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);
-        if let Some(a) = widgets::plain_field(ui, "rot", 0.0, "°", 2, 70.0) {
-            app.run("object.rotate", json!({"angle": a})).ok();
+        // The bounding box's angle: a new value turns the selection to it.
+        if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, 70.0) {
+            app.run("object.rotate", json!({"angle": a, "absolute": true})).ok();
         }
         ui.add_space(10.0);
         if widgets::icon_button(ui, "flip-horizontal-2", "Flip Along Horizontal Axis", false, 24.0).clicked() {
@@ -374,10 +382,8 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let s = tx.first_style();
     section_header(ui, "Character");
-    let fams = vectorcraft_text::FontDb::global().families();
-    let names: Vec<&str> = fams.iter().map(String::as_str).collect();
-    if let Some(i) = widgets::dropdown(ui, "font", &s.font_family, &names, ui.available_width() - 4.0) {
-        app.run("text.setStyle", json!({"font": names[i]})).ok();
+    if let Some(f) = widgets::font_dropdown(ui, "font", &s.font_family, ui.available_width() - 4.0) {
+        app.run("text.setStyle", json!({ "font": f })).ok();
     }
     ui.horizontal(|ui| {
         dim_label(ui, "Size");

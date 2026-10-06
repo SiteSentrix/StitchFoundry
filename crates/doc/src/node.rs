@@ -272,6 +272,14 @@ pub enum NodeKind {
         /// Edit Contents mode (the content, not the envelope, is edited).
         #[serde(default)]
         editing: bool,
+        /// Envelope Options besides Fidelity.
+        #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+        options: crate::live::EnvelopeOptions,
+        /// The envelope's own axes (→ the document): the transforms it took since it was made that
+        /// the page axes can't stand for (rotation, shear, reflection). The content maps from its
+        /// bounds in this frame, and a warp bends along it.
+        #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+        frame: Affine,
     },
     /// Gradient mesh.
     Mesh(GradientMesh),
@@ -335,6 +343,14 @@ pub struct Node {
     /// these options.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slice: Option<Box<crate::SliceOptions>>,
+    /// The angle of the object's own axes, counter-clockwise degrees (0: square to the page): its
+    /// bounding box and handles stand at this angle. Transforms turn it with the object (see
+    /// [`crate::orient`]); Reset Bounding Box sets it back to 0.
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub bbox_angle: f64,
+    /// Object › Perspective: the perspective grid plane the object is attached to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub perspective: Option<Box<crate::PerspectiveAttachment>>,
 }
 
 /// Opacity mask: the luminance of the mask art sets the object's opacity (white = opaque).
@@ -383,6 +399,8 @@ impl Node {
             graphic_style: None,
             attrs: None,
             slice: None,
+            bbox_angle: 0.0,
+            perspective: None,
         }
     }
     pub fn path(id: NodeId, path: PathData, appearance: Appearance) -> Self {
@@ -516,14 +534,14 @@ impl Node {
                 .iter()
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds())),
-            NodeKind::Text(t) => t.bounds(),
+            NodeKind::Text(t) => self.projected(t.bounds()),
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
-            NodeKind::SymbolInstance { xf, .. } => Some(xf.transform_rect_bbox(Rect::new(-10.0, -10.0, 10.0, 10.0))),
+            NodeKind::SymbolInstance { xf, .. } => self.projected(Some(xf.transform_rect_bbox(Rect::new(-10.0, -10.0, 10.0, 10.0)))),
             NodeKind::Blend { children, spec } => {
                 let b = crate::live::nodes_bounds(children);
                 vectorcraft_geom::union_opt(b, spec.spine.as_ref().and_then(|s| s.bounds()))
             }
-            NodeKind::Envelope { content, kind, .. } => crate::live::envelope_bounds(content, kind),
+            NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, *frame),
             NodeKind::Mesh(m) => m.bounds(),
             NodeKind::Repeat(r) => r.bounds(),
         }
@@ -572,6 +590,11 @@ impl Node {
         self.transform_scaled(a, &scaling.into());
     }
     fn transform_scaled(&mut self, a: Affine, sc: &Scaling) {
+        if !self.is_layer() {
+            self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
+        }
+        // Type and symbols in perspective keep looking the same, moved by `a`.
+        self.transform_projection(a);
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
         if !keeps_gradient_fit(a) {
             self.pin_gradients();
@@ -623,14 +646,21 @@ impl Node {
                     s.transform(a);
                 }
             }
-            NodeKind::Envelope { content, kind, .. } => {
+            NodeKind::Envelope { content, kind, frame, .. } => {
                 for c in content.iter_mut() {
                     Arc::make_mut(c).transform_scaled(a, sc);
                 }
+                *frame = crate::live::envelope_frame(a * *frame);
                 match kind {
-                    EnvelopeKind::Mesh { points, .. } => {
+                    EnvelopeKind::Mesh { points, handles, .. } => {
                         for p in points.iter_mut() {
                             *p = a * *p;
+                        }
+                        // Handles are offsets: they take the linear part.
+                        let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+                        let lin = Affine::new([m0, m1, m2, m3, 0.0, 0.0]);
+                        for h in handles.iter_mut().flatten() {
+                            *h = (lin * h.to_point()).to_vec2();
                         }
                     }
                     EnvelopeKind::TopObject { path } => path.transform(a),

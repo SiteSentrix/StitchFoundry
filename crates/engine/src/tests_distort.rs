@@ -207,13 +207,19 @@ fn puppet_tool_drag_warps_selection() {
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     let v = ViewInfo::default();
     s.select_tool("puppetWarp", v).unwrap();
-    // First click seeds pins and adds one at the right end, then drag it.
-    s.pointer(&PointerEvent::new(PointerKind::Down, 385.0, 150.0), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, 385.0, 150.0), v).unwrap();
+    // The automatic pins show at once, one in the middle of each end: drag the right end's up.
+    let pins = s.execute("object.puppetWarp.pins", &json!({})).unwrap()["moved"].clone();
+    let right = pins
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap()))
+        .fold((0.0, 0.0), |a, q| if q.0 > a.0 { q } else { a });
+    assert!(right.0 > 350.0, "{pins}");
     let n = undo_len(&s);
-    s.pointer(&PointerEvent::new(PointerKind::Down, 385.0, 150.0), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Drag, 385.0, 120.0), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, 385.0, 120.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, right.0, right.1), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, right.0, right.1 - 30.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, right.0, right.1 - 30.0), v).unwrap();
     assert_eq!(undo_len(&s), n + 1);
     assert_eq!(s.journal.last().unwrap().0, "object.puppetWarp");
     assert!(path(&s, a).bounds().unwrap().y0 < 95.0);
@@ -290,6 +296,8 @@ fn rectangle_tool_draws_in_perspective_on_the_active_plane() {
     let mut s = session();
     s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
     s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    // Snap to Grid (on by default) would move the dragged corners onto gridlines.
+    s.execute("perspective.grid.snap", &json!({"on": false})).unwrap();
     let n = undo_len(&s);
     gesture(&mut s, "rectangle", &[(300.0, 320.0), (330.0, 360.0), (350.0, 400.0)], Mods::default());
     assert_eq!(undo_len(&s), n + 1);
@@ -313,6 +321,8 @@ fn perspective_selection_moves_within_the_plane() {
     s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
     let a = rect(&mut s, 450.0, 380.0, 60.0, 60.0);
     s.execute("perspective.attach", &json!({"ids": [a.0], "plane": "right"})).unwrap();
+    // Snap to Grid (on by default) would land the moved edges on gridlines.
+    s.execute("perspective.grid.snap", &json!({"on": false})).unwrap();
     let g = grid(&s);
     let before: Vec<Point> = path(&s, a).anchors().map(|(_, _, an)| g.to_plane(Plane::Right, an.p).unwrap()).collect();
     let centre = before.iter().fold(vectorcraft_geom::Vec2::ZERO, |a, p| a + p.to_vec2()) / before.len() as f64;

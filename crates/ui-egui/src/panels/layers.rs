@@ -25,6 +25,18 @@ fn expanded_id() -> egui::Id {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
+    // A rename belongs to the document it started in (node ids are per document): drop it when
+    // another document shows, so it can't rename that document's node with the same id.
+    let shown_doc = egui::Id::new("layers-doc");
+    let before = ui.data(|d| d.get_temp::<u64>(shown_doc));
+    if before != Some(st.uid) {
+        ui.data_mut(|d| {
+            if before.is_some() {
+                d.remove::<(u64, String)>(egui::Id::new("layers-rename"));
+            }
+            d.insert_temp(shown_doc, st.uid);
+        });
+    }
     let doc = st.doc.clone();
     let sel: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
     let target = st.selection.target;
@@ -202,7 +214,11 @@ fn row(
         Some((rid, mut buf)) if rid == n.id.0 => {
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
             let te = child.add(egui::TextEdit::singleline(&mut buf).desired_width(name_rect.width()).font(font.clone()));
-            te.request_focus();
+            // Focus the field as it opens. Asking every frame took the focus back from Enter,
+            // Escape or a click elsewhere, so the rename never ended.
+            if !te.has_focus() && !te.lost_focus() {
+                te.request_focus();
+            }
             if te.lost_focus() {
                 ui.data_mut(|d| d.remove::<(u64, String)>(rename_id));
                 if child.input(|i| !i.key_pressed(egui::Key::Escape)) && buf != name {
@@ -585,6 +601,55 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!(st.doc.node(layer).unwrap().opacity, 1.0);
         assert_eq!(st.doc.node_count(), count);
+    }
+
+    #[test]
+    fn renaming_a_layer_commits_on_enter_and_escape_cancels() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let layer = app.session.doc().unwrap().doc.layers[0].id;
+        let name = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].display_name();
+        let ctx = egui::Context::default();
+        let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        let select_all =
+            egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND };
+        // What a double-click on the row does: the name field opens with the name.
+        let open = |app: &mut VectorcraftApp| {
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new("layers-rename"), (layer.0, name(app))));
+            frame(app, &ctx, vec![], false);
+            frame(app, &ctx, vec![], false);
+        };
+        open(&mut app);
+        frame(&mut app, &ctx, vec![select_all.clone(), egui::Event::Text("Sky".into())], false);
+        frame(&mut app, &ctx, vec![key(egui::Key::Enter)], false);
+        frame(&mut app, &ctx, vec![], false);
+        assert_eq!(name(&app), "Sky", "Enter keeps the new name");
+        assert!(ctx.data(|d| d.get_temp::<(u64, String)>(egui::Id::new("layers-rename"))).is_none(), "and closes the field");
+        open(&mut app);
+        frame(&mut app, &ctx, vec![select_all, egui::Event::Text("Ground".into())], false);
+        frame(&mut app, &ctx, vec![key(egui::Key::Escape)], false);
+        frame(&mut app, &ctx, vec![], false);
+        assert_eq!(name(&app), "Sky", "Escape cancels");
+    }
+
+    #[test]
+    fn an_open_rename_does_not_follow_into_another_document() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let layer = app.session.doc().unwrap().doc.layers[0].id;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![], false);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("layers-rename"), (layer.0, "Renamed in the first".to_string())));
+        frame(&mut app, &ctx, vec![], false);
+        // A second document, whose first layer has the same node id, comes to the front.
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].id, layer);
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, &ctx, vec![], false);
+        frame(&mut app, &ctx, vec![enter], false);
+        frame(&mut app, &ctx, vec![], false);
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].display_name(), "Layer 1");
+        assert!(ctx.data(|d| d.get_temp::<(u64, String)>(egui::Id::new("layers-rename"))).is_none());
     }
 
     #[test]

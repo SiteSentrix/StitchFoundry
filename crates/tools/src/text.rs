@@ -2,7 +2,8 @@
 //!
 //! Type: click places point type, drag draws an area-type frame, clicking into existing text
 //! places the caret. Area Type / Type on a Path: click a path to turn it into a text frame or a
-//! baseline (`text.createInPath`).
+//! baseline (`text.createInPath`). Point type placed by a click and left empty is discarded when
+//! editing ends (`text.discardEmpty`); frames keep their shape.
 //!
 //! While editing: caret movement by character / word (Cmd or Alt) / line (Up/Down) / line ends
 //! (Home/End; Cmd = whole text), Shift extends the selection, drag selects, double-click selects a
@@ -39,9 +40,12 @@ struct Typing {
 
 #[derive(Default)]
 pub struct TypeTool {
+    vertical: bool,
     mode: Mode,
     /// Text object being edited.
     editing: Option<NodeId>,
+    /// The point type a click just placed (edited now): discarded if empty when editing ends.
+    fresh: Option<NodeId>,
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
@@ -62,11 +66,11 @@ pub struct TypeTool {
 impl TypeTool {
     pub fn new(id: &str) -> Self {
         let mode = match id {
-            "areaType" => Mode::Area,
-            "typeOnPath" => Mode::OnPath,
+            "areaType" | "verticalAreaType" => Mode::Area,
+            "typeOnPath" | "verticalTypeOnPath" => Mode::OnPath,
             _ => Mode::Type,
         };
-        Self { mode, ..Default::default() }
+        Self { mode, vertical: id.starts_with("vertical"), ..Default::default() }
     }
 
     fn text<'a>(cx: &'a ToolContext, id: NodeId) -> Option<&'a TextObject> {
@@ -114,8 +118,16 @@ impl TypeTool {
         if self.typing.take().is_some() { vec![Action::Commit] } else { vec![] }
     }
 
-    fn finish(&mut self) -> Vec<Action> {
-        let out = self.commit();
+    /// Stop editing. Point type a click placed that is still empty is discarded, with the steps
+    /// since its click (`text.discardEmpty`).
+    fn finish(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let mut out = self.commit();
+        if let Some(id) = self.fresh.take()
+            && self.editing == Some(id)
+            && Self::text(cx, id).is_some_and(|t| matches!(t.kind, TextKind::Point) && edit::runs_len(&t.runs) == 0)
+        {
+            out.push(Action::Exec("text.discardEmpty".into(), json!({"id": id.0})));
+        }
         self.editing = None;
         self.selecting = false;
         self.goal_x = None;
@@ -170,6 +182,7 @@ impl TypeTool {
 
     fn start_editing(&mut self, id: NodeId, caret: usize) {
         self.editing = Some(id);
+        self.fresh = None;
         self.caret = caret;
         self.anchor = caret;
         self.goal_x = None;
@@ -206,7 +219,7 @@ impl TypeTool {
     }
 
     fn on_up(&mut self, cx: &ToolContext, start: Point) -> Vec<Action> {
-        let mut out = self.finish();
+        let mut out = self.finish(cx);
         // Click into existing text: place the caret.
         if let Some(h) = hit_test(cx.doc, start, cx.hit_options())
             && let Some(NodeKind::Text(t)) = cx.doc.node(h.leaf).map(|n| &n.kind)
@@ -224,16 +237,20 @@ impl TypeTool {
             let on_path = self.mode == Mode::OnPath;
             if let Some(pid) = Self::path_at(cx, start, !on_path) {
                 let mode = if on_path { "onPath" } else { "area" };
-                out.push(Action::Exec("text.createInPath".into(), json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y]})));
+                out.push(Action::Exec(
+                    "text.createInPath".into(),
+                    json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": self.vertical}),
+                ));
                 out.push(Action::Notify("text.editNew".into()));
                 return out;
             }
         }
         let area = drag.map(|d| Rect::from_points(start, d)).filter(|r| r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0));
-        let params = match area {
+        let mut params = match area {
             Some(r) => json!({"x": r.x0, "y": r.y0 + 12.0, "text": "", "area": {"width": r.width(), "height": r.height()}}),
             None => json!({"x": start.x, "y": start.y, "text": ""}),
         };
+        params["vertical"] = json!(self.vertical);
         out.push(Action::Exec("text.create".into(), params));
         out.push(Action::Notify("text.editNew".into()));
         out
@@ -282,10 +299,13 @@ fn common_affixes(a: &str, b: &str) -> (usize, usize) {
 
 impl Tool for TypeTool {
     fn id(&self) -> &'static str {
-        match self.mode {
-            Mode::Type => "type",
-            Mode::Area => "areaType",
-            Mode::OnPath => "typeOnPath",
+        match (self.mode, self.vertical) {
+            (Mode::Type, false) => "type",
+            (Mode::Type, true) => "verticalType",
+            (Mode::Area, false) => "areaType",
+            (Mode::Area, true) => "verticalAreaType",
+            (Mode::OnPath, false) => "typeOnPath",
+            (Mode::OnPath, true) => "verticalTypeOnPath",
         }
     }
     fn busy(&self) -> bool {
@@ -385,12 +405,23 @@ impl Tool for TypeTool {
         let (a, b) = self.sel();
         let word = mods.cmd || mods.alt;
         let lay = self.layout(&t);
+        let key = if lay.vertical {
+            match key {
+                ToolKey::Up => ToolKey::Left,
+                ToolKey::Down => ToolKey::Right,
+                ToolKey::Right => ToolKey::Up,
+                ToolKey::Left => ToolKey::Down,
+                other => other,
+            }
+        } else {
+            key
+        };
         let vertical = matches!(key, ToolKey::Up | ToolKey::Down);
         if !vertical {
             self.goal_x = None;
         }
         match key {
-            ToolKey::Escape => self.finish(),
+            ToolKey::Escape => self.finish(cx),
             ToolKey::Enter => self.replace(cx, "\n", None),
             ToolKey::Tab => self.replace(cx, "\t", None),
             ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
@@ -425,7 +456,7 @@ impl Tool for TypeTool {
             ToolKey::Up | ToolKey::Down => {
                 let d = if key == ToolKey::Up { -1 } else { 1 };
                 let from = if a != b && !mods.shift { if d < 0 { a } else { b } } else { self.caret };
-                let x = self.goal_x.unwrap_or_else(|| vectorcraft_text::caret_position(&lay, from).0.x);
+                let x = self.goal_x.unwrap_or_else(|| lay.logical_point(vectorcraft_text::caret_position(&lay, from).0).x);
                 let to = if mods.cmd {
                     // Cmd+Up/Down: paragraph start / end.
                     let p = edit::paragraph_at(&text, from);
@@ -454,8 +485,21 @@ impl Tool for TypeTool {
             _ => vec![],
         }
     }
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        self.finish()
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.finish(cx)
+    }
+    /// Editing ends when a command takes the text out of the selection (Deselect, another object
+    /// picked in the Layers panel) or removes it.
+    fn after_command(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let Some(id) = self.editing else { return vec![] };
+        let mut cur = Some(id).filter(|i| cx.doc.node(*i).is_some());
+        while let Some(c) = cur {
+            if cx.selection.contains(c) {
+                return vec![];
+            }
+            cur = cx.doc.parent_of(c);
+        }
+        self.finish(cx)
     }
     /// After `text.create` / `text.createInPath` the engine selects the new object; edit it.
     fn notify(&mut self, cx: &ToolContext, what: &str) {
@@ -463,6 +507,7 @@ impl Tool for TypeTool {
             && let Some(id) = cx.selection.objects.first().copied()
         {
             self.start_editing(id, 0);
+            self.fresh = Self::text(cx, id).filter(|t| matches!(t.kind, TextKind::Point)).map(|_| id);
         }
     }
     /// `{editing, start, end, caret, anchor, typing}` — the Character panel styles `start..end`.

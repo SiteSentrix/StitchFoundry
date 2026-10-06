@@ -127,6 +127,8 @@ pub fn tool_definitions() -> Vec<Value> {
                             "x": num("Document x (pt)"),
                             "y": num("Document y (pt)"),
                             "mods": mods_schema(),
+                            "pressure": num("Pen pressure 0..1 (default 1): the Liquify tools' intensity with Use Pressure Pen on"),
+                            "holdMs": num("Milliseconds the pointer then holds still, button down (0..60000): Twirl, Pucker and Bloat keep applying"),
                         }), &["kind", "x", "y"]),
                     },
                     "mods": mods_schema(),

@@ -158,8 +158,10 @@ pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
     icons::paint(ui, "menu", rect.shrink(1.0), if resp.hovered() { t.text_strong } else { t.text_dim });
     let resp = resp.on_hover_text("Panel menu");
     egui::Popup::menu(&resp).show(|ui| {
-        ui.set_min_width(220.0);
-        panel_menu_items(app, ui, id);
+        crate::widgets::menu_scroll(ui, |ui| {
+            ui.set_min_width(220.0);
+            panel_menu_items(app, ui, id);
+        });
     });
 }
 
@@ -452,6 +454,8 @@ mod tests {
 mod tests_appearance;
 #[cfg(test)]
 mod tests_asset_export;
+#[cfg(test)]
+mod tests_constrain;
 #[cfg(test)]
 mod tests_css_properties;
 #[cfg(test)]

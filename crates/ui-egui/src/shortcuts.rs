@@ -8,6 +8,8 @@ use vectorcraft_tools::{Mods, ToolKey};
 use crate::VectorcraftApp;
 
 /// Parse "Cmd+Shift+]" into an egui shortcut. `Cmd` is Command on macOS and Ctrl elsewhere.
+/// `+` and `=` name one chord key ([`Key::Equals`]): `+` is Shift+`=` on many layouts, so a
+/// `Cmd+=` chord also answers `+` however it is typed (see [`consume`]).
 pub fn parse(s: &str) -> Option<KeyboardShortcut> {
     if s.is_empty() {
         return None;
@@ -31,9 +33,8 @@ pub fn parse(s: &str) -> Option<KeyboardShortcut> {
         "'" => Key::Quote,
         "/" => Key::Slash,
         "\\" => Key::Backslash,
-        "=" => Key::Equals,
+        "=" | "+" => Key::Equals,
         "-" => Key::Minus,
-        "+" => Key::Plus,
         "Delete" => Key::Delete,
         "Backspace" => Key::Backspace,
         "Tab" => Key::Tab,
@@ -69,8 +70,25 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
     v
 }
 
+/// Consume a press of `sc`. A `=` chord also takes [`Key::Plus`], which is how `+` arrives from
+/// the numpad and from layouts where it has its own key (Shift+`=` arrives as either; extra Shift
+/// is ignored). `native`: the system menu already handles the chord as written, so only that
+/// alias is left to match here.
+pub(crate) fn consume(i: &mut egui::InputState, sc: &KeyboardShortcut, native: bool) -> bool {
+    (!native && i.consume_shortcut(sc)) || (sc.logical_key == Key::Equals && i.consume_key(sc.modifiers, Key::Plus))
+}
+
 /// Keys that paste with Cmd, or alone. (Shift+Insert is left out: Ctrl+Insert copies.)
 const PASTE_KEYS: [Key; 2] = [Key::V, Key::Paste];
+
+/// The paste command whose V chord `held` holds (Paste in Place for Cmd+Shift+V by default), else
+/// Paste: egui reports every Cmd+V chord as a paste, never as its key.
+pub(crate) fn paste_command(held: Modifiers) -> &'static str {
+    all_shortcuts()
+        .into_iter()
+        .find(|(sc, id, _)| sc.logical_key == Key::V && id.starts_with("edit.paste") && held.matches_logically(sc.modifiers))
+        .map_or("edit.paste", |(_, id, _)| id)
+}
 
 /// Keyboard pastes of something other than text. egui swallows a paste chord's key press and
 /// sends a Paste event only when the clipboard holds text, so a paste key released without its
@@ -84,21 +102,26 @@ pub(crate) struct PasteChord {
 }
 
 impl PasteChord {
-    /// Follow one frame's `events` → whether they hold a paste egui sent no event for.
-    fn textless_paste(&mut self, events: &[egui::Event]) -> bool {
-        let mut fire = false;
+    /// Follow one frame's `events` → the modifiers of a paste egui sent no event for (the chord's,
+    /// as its key is released).
+    pub(crate) fn textless_paste(&mut self, events: &[egui::Event]) -> Option<Modifiers> {
+        let mut fire = None;
         for e in events {
             match e {
                 egui::Event::Paste(_) => self.pasted = true,
                 // A release that comes while the window is away is never seen.
                 egui::Event::WindowFocused(false) => *self = Self::default(),
                 egui::Event::Key { key, pressed: true, .. } if PASTE_KEYS.contains(key) && !self.pressed.contains(key) => self.pressed.push(*key),
-                egui::Event::Key { key, pressed: false, .. } if PASTE_KEYS.contains(key) => match self.pressed.iter().position(|k| k == key) {
-                    Some(i) => {
-                        self.pressed.swap_remove(i);
+                egui::Event::Key { key, pressed: false, modifiers, .. } if PASTE_KEYS.contains(key) => {
+                    match self.pressed.iter().position(|k| k == key) {
+                        Some(i) => {
+                            self.pressed.swap_remove(i);
+                        }
+                        // Unless a Paste event came (the guard takes it either way).
+                        None if !std::mem::take(&mut self.pasted) => fire = Some(*modifiers),
+                        None => {}
                     }
-                    None => fire |= !std::mem::take(&mut self.pasted),
-                },
+                }
                 _ => {}
             }
         }
@@ -155,20 +178,22 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // Editing keys with modifiers, clipboard and Cmd+A.
         crate::panels::character::route_type_input(app, ctx);
         // Enter was already delivered above as ToolKey::Enter (newline).
-        let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| i.consume_shortcut(sc)));
+        let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| consume(i, sc, false)));
         if let Some((_, id, p)) = fire {
             crate::menus::invoke(app, id, p);
         }
         return;
     }
-    // Clipboard keys arrive as events, not key presses (except where the native menu has them).
+    // Clipboard keys arrive as events, not key presses (except where the native menu has them);
+    // the chord held says which paste.
     let mut clip = vec![];
     ctx.input_mut(|i| {
+        let held = i.modifiers;
         i.events.retain(|e| {
             let (id, text) = match e {
                 egui::Event::Copy => ("edit.copy", None),
                 egui::Event::Cut => ("edit.cut", None),
-                egui::Event::Paste(t) => ("edit.paste", Some(t.clone())),
+                egui::Event::Paste(t) => (paste_command(held), Some(t.clone())),
                 _ => return true,
             };
             if app.native_shortcuts.contains(id) {
@@ -179,8 +204,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         })
     });
     // Only the system clipboard service reads what isn't text (the native menu has its own Paste).
-    if textless_paste && app.services.system_clipboard.is_some() && !app.native_shortcuts.contains("edit.paste") {
-        clip.push(("edit.paste", None));
+    if let Some(id) = textless_paste.map(paste_command)
+        && app.services.system_clipboard.is_some()
+        && !app.native_shortcuts.contains(id)
+    {
+        clip.push((id, None));
     }
     for (id, text) in clip {
         app.clipboard_in = text;
@@ -191,6 +219,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k)) {
                 let _ = app.session.tool_key(tk, Mods::default(), view);
             }
+        }
+        // Digits (5 while dragging with the Perspective Selection tool), once per press.
+        let digits: Vec<u8> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Key { key, pressed: true, repeat: false, .. } => digit_of(*key),
+                    _ => None,
+                })
+                .collect()
+        });
+        for d in digits {
+            let _ = app.session.tool_key(ToolKey::Digit(d), Mods::default(), view);
         }
         return;
     }
@@ -211,6 +252,28 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             return;
         }
     }
+    // Digits the active tool or the perspective grid takes (1–4 pick the plane while it shows).
+    if !(m.command || m.alt || m.ctrl) {
+        let digits: Vec<(u8, Key)> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Key { key, pressed: true, .. } => digit_of(*key).map(|d| (d, *key)),
+                    _ => None,
+                })
+                .collect()
+        });
+        for (d, k) in digits {
+            if app.session.tool_claims_key(ToolKey::Digit(d), view) && ctx.input_mut(|i| i.consume_key(m, k)) {
+                // The digit's text is the key's too: no single-key shortcut sees it.
+                let text = d.to_string();
+                ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Text(t) if *t == text)));
+                let r = app.session.tool_key(ToolKey::Digit(d), crate::canvas::mods(m, false), view);
+                crate::canvas::apply_requests(app, r);
+                return;
+            }
+        }
+    }
     // Command shortcuts.
     let mut fire = None;
     for (sc, id, p) in all_shortcuts() {
@@ -220,10 +283,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if plain && (sc.logical_key.name().len() == 1 || matches!(sc.logical_key, Key::Slash | Key::Comma | Key::Period)) {
             continue;
         }
-        if app.native_shortcuts.contains(id) {
-            continue;
-        }
-        if ctx.input_mut(|i| i.consume_shortcut(&sc)) {
+        let native = app.native_shortcuts.contains(id);
+        if ctx.input_mut(|i| consume(i, &sc, native)) {
             fire = Some((id, p));
             break;
         }
@@ -269,6 +330,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             app.select_tool(t);
         }
     }
+}
+
+/// The digit a number-row or keypad key types.
+fn digit_of(k: Key) -> Option<u8> {
+    const DIGITS: [Key; 10] = [Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
+    DIGITS.iter().position(|d| *d == k).map(|i| i as u8)
 }
 
 #[cfg(test)]
@@ -323,6 +390,56 @@ mod tests {
         assert!(matches!(fill(&app), vectorcraft_color::Paint::Gradient(_)), "`.` applies the last gradient");
         frame(&mut app, vec![egui::Event::Text(",".into())]);
         assert_eq!(fill(&app).color().unwrap().to_hex(), "#336699", "`,` applies the last colour");
+    }
+
+    #[test]
+    fn plus_typed_any_way_zooms_in() {
+        assert_eq!(parse("Cmd++"), parse("Cmd+="), "`+` and `=` are one chord key");
+        assert_eq!(crate::shortcut_editor::chord_from_event(Key::Plus, Modifiers::COMMAND).as_deref(), Some("Cmd+="), "a recorded `+` too");
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let zoom = |app: &mut VectorcraftApp| app.view_mut().unwrap().zoom;
+        let press = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+        // `=`, Shift+`=` (reported as `=` or as `+`), and the numpad `+` / a layout's own `+` key.
+        for (key, m) in [(Key::Equals, Modifiers::COMMAND), (Key::Equals, cmd_shift), (Key::Plus, cmd_shift), (Key::Plus, Modifiers::COMMAND)] {
+            let before = zoom(&mut app);
+            frame(&mut app, vec![press(key, m)]);
+            assert!(zoom(&mut app) > before, "{key:?} with {m:?} zooms in");
+        }
+        let before = zoom(&mut app);
+        frame(&mut app, vec![press(Key::Minus, Modifiers::COMMAND)]);
+        assert!(zoom(&mut app) < before, "Cmd+- zooms out");
+        // The system menu handles `Cmd+=` itself; the `+` key is still matched here.
+        app.native_shortcuts.insert("view.zoomIn".into());
+        let before = zoom(&mut app);
+        frame(&mut app, vec![press(Key::Equals, Modifiers::COMMAND)]);
+        assert_eq!(zoom(&mut app), before, "left to the system menu");
+        frame(&mut app, vec![press(Key::Plus, Modifiers::COMMAND)]);
+        assert!(zoom(&mut app) > before);
+    }
+
+    #[test]
+    fn digit_keys_reach_a_dragging_tool_once_per_press() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+        app.session.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 450, "y": 380, "width": 60, "height": 60})).unwrap()["id"].clone();
+        app.session.execute("perspective.attach", &json!({"ids": [id], "plane": "right"})).unwrap();
+        app.select_tool("perspectiveSelection");
+        let v = app.view_info();
+        let c =
+            app.session.doc().unwrap().doc.node(vectorcraft_engine::doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().center();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, c.x, c.y), v).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, c.x + 30.0, c.y), v).unwrap();
+        let key = |repeat| egui::Event::Key { key: Key::Num5, physical_key: None, pressed: true, repeat, modifiers: Modifiers::NONE };
+        // A held key repeats: only its first press toggles.
+        frame(&mut app, vec![key(false), key(true)]);
+        let preview = app.session.doc().unwrap().interaction.as_ref().unwrap().preview.clone().unwrap();
+        assert_eq!((preview.0.as_str(), &preview.1["perpendicular"]), ("perspective.move", &json!(true)));
+        assert_eq!(digit_of(Key::Num0), Some(0));
+        assert_eq!(digit_of(Key::A), None);
     }
 
     #[test]

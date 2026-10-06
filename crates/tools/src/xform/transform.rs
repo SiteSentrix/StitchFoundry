@@ -14,7 +14,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use super::target_overlays;
 use crate::bbox::rotate_for_drag;
 use crate::guides::snap_pick;
-use crate::select::{matrix_json, selection_bounds};
+use crate::select::{matrix_json, selection_bounds, selection_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,7 +90,7 @@ impl TransformTool {
     }
 
     /// The effective reference point: the custom one if it belongs to the current selection,
-    /// otherwise the selection centre.
+    /// otherwise the centre of its bounding box (rotated with rotated objects).
     pub fn reference_point(&self, cx: &ToolContext) -> Option<Point> {
         if let Some((p, ids)) = &self.origin
             && *ids == cx.selection.objects
@@ -98,7 +98,7 @@ impl TransformTool {
         {
             return Some(*p);
         }
-        selection_bounds(cx).map(|b| b.center())
+        selection_box(cx).map(|b| b.center())
     }
 
     /// Transform for dragging from `start` to `p` about `o`; returns the matrix and a readout.

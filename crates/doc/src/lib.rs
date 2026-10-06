@@ -7,6 +7,7 @@
 
 pub mod appearance;
 pub mod assets;
+pub mod blend;
 pub mod clipnest;
 pub mod graph;
 pub mod hit;
@@ -16,13 +17,17 @@ pub mod live;
 pub mod marks;
 pub mod metadata;
 pub mod node;
+pub mod orient;
 pub mod overprint;
 pub mod pattern;
+pub mod perspective;
 mod pixels;
 pub mod profiles;
+pub mod puppet;
 pub mod range;
 pub mod rastersettings;
 mod reach;
+pub mod recolor;
 pub mod selection;
 pub mod setup;
 pub mod slices;
@@ -61,8 +66,11 @@ pub use node::Knockout;
 pub use node::Scaling;
 pub use node::{ImageMap, ObjectAttributes};
 pub use node::{ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeId, NodeKind, OpacityMask};
+pub use orient::OrientedBox;
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
+pub use perspective::PerspectiveAttachment;
 pub use profiles::ColorProfiles;
+pub use puppet::{PuppetPin, PuppetPins};
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
 pub use selection::{AnchorRef, Selection};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
@@ -175,8 +183,11 @@ impl Unit {
         if s == "-0" { "0".into() } else { s.into() }
     }
     /// Parse `12`, `12pt`, `1in`, `3 mm`, `2p6` (picas+points), simple `+ - * /` arithmetic.
+    ///
+    /// A unit after a `*` or `/` operand measures the whole expression (`1080/2 px` is 540 px), so
+    /// math typed before a field's unit suffix works.
     pub fn parse(self, s: &str) -> Option<f64> {
-        parse_measure(s, self)
+        parse_measure(s, self).filter(|v| v.is_finite())
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
     /// `feetInches`).
@@ -219,14 +230,20 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
             if l.trim().is_empty() {
                 continue;
             }
-            let a = parse_measure(l, default)?;
             return match op {
-                '+' => Some(a + parse_measure(r, default)?),
-                '-' => Some(a - parse_measure(r, default)?),
-                '*' => Some(a * r.trim().parse::<f64>().ok()?),
+                '+' => Some(parse_measure(l, default)? + parse_measure(r, default)?),
+                '-' => Some(parse_measure(l, default)? - parse_measure(r, default)?),
                 _ => {
-                    let d = r.trim().parse::<f64>().ok()?;
-                    if d == 0.0 { None } else { Some(a / d) }
+                    // A factor or divisor is a plain number; a unit after it is the expression's.
+                    let (k, unit) = number_unit(r)?;
+                    let a = parse_measure(l, unit.unwrap_or(default))?;
+                    if op == '*' {
+                        Some(a * k)
+                    } else if k == 0.0 {
+                        None
+                    } else {
+                        Some(a / k)
+                    }
                 }
             };
         }
@@ -240,22 +257,40 @@ fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     {
         return Some(p.trim().parse::<f64>().ok()? * 12.0 + pt.trim().parse::<f64>().unwrap_or(0.0));
     }
+    let (v, unit) = number_unit(s)?;
+    Some(unit.unwrap_or(default).to_pt(v))
+}
+
+/// A number with an optional unit suffix (`12`, `3 mm`, `2in`) → (the number, its unit).
+fn number_unit(s: &str) -> Option<(f64, Option<Unit>)> {
+    let s = s.trim();
     let num_end = s.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-')).unwrap_or(s.len());
-    let v: f64 = s[..num_end].trim().parse().ok()?;
-    let unit = match s[num_end..].trim() {
-        "" => default,
-        "pt" => Unit::Points,
-        "px" => Unit::Pixels,
-        "in" | "\"" => Unit::Inches,
-        "mm" => Unit::Millimeters,
-        "cm" => Unit::Centimeters,
-        "m" => Unit::Meters,
-        "ft" | "'" => Unit::Feet,
-        "yd" => Unit::Yards,
-        "pc" => Unit::Picas,
+    let v: f64 = s.get(..num_end)?.trim().parse().ok()?;
+    let unit = match s.get(num_end..)?.trim() {
+        "" => None,
+        "pt" => Some(Unit::Points),
+        "px" => Some(Unit::Pixels),
+        "in" | "\"" => Some(Unit::Inches),
+        "mm" => Some(Unit::Millimeters),
+        "cm" => Some(Unit::Centimeters),
+        "m" => Some(Unit::Meters),
+        "ft" | "'" => Some(Unit::Feet),
+        "yd" => Some(Unit::Yards),
+        "p" | "pc" => Some(Unit::Picas),
         _ => return None,
     };
-    Some(unit.to_pt(v))
+    Some((v, unit))
+}
+
+/// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
+/// [`Unit::parse`] (`45*2`, `100/3`); text other than digits, `.` and operators reads as nothing.
+pub fn parse_number(s: &str) -> Option<f64> {
+    if !s.chars().all(|c| c.is_ascii_digit() || " .+-*/".contains(c)) {
+        return None;
+    }
+    // A leading `+` is a sign (`+5`), as a plain number read it.
+    let s = s.trim();
+    Unit::Points.parse(s.strip_prefix('+').unwrap_or(s))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -533,6 +568,10 @@ pub struct Document {
     /// export settings are Export for Screens' ([`Document::export_settings`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assets: Vec<ExportAsset>,
+    /// Puppet Warp pins on the selected artwork while the tool edits it ([`PuppetPins`]): editing
+    /// state, never saved.
+    #[serde(skip)]
+    pub puppet: Option<Arc<PuppetPins>>,
 }
 
 fn ppi72() -> f64 {
@@ -600,6 +639,7 @@ impl Document {
             slices_clip_to_artboard: true,
             print_setup: None,
             assets: vec![],
+            puppet: None,
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));

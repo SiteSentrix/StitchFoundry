@@ -273,7 +273,9 @@ pub(crate) fn put_below(d: &mut Document, m: &mut Node, image: Node) {
             let mut inner = m.clone();
             inner.id = d.alloc_id();
             (inner.name, inner.opacity, inner.blend, inner.isolate, inner.mask) = (None, 1.0, Default::default(), false, None);
-            inner.knockout = Default::default();
+            // Knockout is between the object's own parts (a blend's steps): it stays with them,
+            // so the image doesn't knock out the art over it.
+            m.knockout = Default::default();
             inner.knockout_shape = false;
             m.appearance = Default::default();
             m.kind = NodeKind::Group { children: vec![Arc::new(image), Arc::new(inner)], clip: false };

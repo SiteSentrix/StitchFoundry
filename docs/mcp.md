@@ -57,7 +57,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. |
-| `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool. |
+| `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool). |
 | `type_text` | `{text}` | Remote only. |
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
 | `open_panel` | `{panel}` | Remote only. |
@@ -133,7 +133,8 @@ lists every option with its default. `encoding` is `utf8`, `utf16` (big-endian a
 (presentation attributes only; filters, masks, blend modes and embedded fonts left out, symbols as art, each with
 a warning). `embedFonts: true` embeds the fonts type uses as `@font-face` rules subset to the characters used; a
 font whose licence (OS/2 `fsType`) forbids subsetting is embedded whole, one that forbids embedding is left out
-with a warning, and the type then names faces by numeric `font-weight` (600 for Semibold). `svgz` takes the same options and writes the SVG gzipped (`.svgz` files also open,
+with a warning. Type names its faces by numeric `font-weight` (600 for Semibold, 300 for Light, `bold` for 700),
+embedded or not. `svgz` takes the same options and writes the SVG gzipped (`.svgz` files also open,
 place and paste). `run_command document.save {path: "x.svg", svg: {…}}` saves as SVG (or `.svgz`).
 
 Symbols export as one `<symbol>` with a `<use>` per instance. An instance the def can't stand for is written as its
@@ -869,6 +870,28 @@ two points at the same `t` (the width before it, then after it), and the stroke'
 `document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
 for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
 points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.
+With the Width tool, `press_key` Delete or Backspace removes the selected width points (`handledBy: "tool"`); with none
+selected the key clears the selected objects as usual (`edit.clear`). The Puppet Warp tool's selected pins go the
+same way.
+A compound path's stroke is the compound's: width point commands given one of its members edit the compound's
+profile, which runs along every subpath (the Width tool shows each subpath's points).
+
+`object.puppetWarp {ids?, pins, moved, angles?, expand?}` warps art as rigidly as possible so that each pin (a point
+on the art) lands on its `moved` point. `angles` (degrees, or null for a free pin; as long as `pins`) holds the turn
+the art takes around a pin, as Alt-dragging near a selected pin with the Puppet Warp tool does: one pin with
+`angles: [90]` turns the art a quarter turn around it.
+
+The Puppet Warp tool's pins live in the document while the same art stays selected (never saved; Undo and Redo take
+them back with the art). `object.puppetWarp.pins {ids?}` reads them: `pins` (where each sits on the shape the pins
+started from), `moved` (where it is now), `angles`, and `auto: true` while none was placed (the tool's automatic pins:
+the centre and the end of each limb). Edit `moved`, `angles` or the lists and pass the result back to
+`object.puppetWarp`: with `rest: true` the warp always starts from that rest shape, so warps don't stack and putting
+a pin back restores the original; every pin must be on the art's mesh, and empty lists remove the pins.
+
+```json
+{"name":"run_command","arguments":{"command":"object.puppetWarp.pins","params":{}}}
+{"name":"run_command","arguments":{"command":"object.puppetWarp","params":{"rest":true,"pins":[[250,150],[110,150],[390,150]],"moved":[[250,150],[110,150],[390,90]],"angles":[null,null,null]}}}
+```
 
 ```json
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.5,"left":4,"right":4}}}
@@ -1638,4 +1661,331 @@ CMYK one. Settings saved before these options load with their defaults.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/proof.pdf","settings":{"advanced":{"overprints":"simulate","flattenerPreset":"High Resolution"},"color":{"profile":"VectorCraft Generic CMYK (SWOP-like)","intent":"perceptual"}}}}}
+```
+
+### Rotated bounding boxes
+
+Every object keeps the angle of its own axes (counter-clockwise degrees; `document.inspect` reports it as a node's
+`rotation`, and the selection's shared angle as `selectionRotation`, 0 when the selected objects differ). Transforms
+turn it with the object while its path geometry is still baked, so after a rotation the bounding box and its handles
+stay square to it, as in the reference app. `object.rotate {angle, absolute: true}` turns the selection to an angle
+(the Transform and Properties panels' Rotate field), and `object.setBounds` measures width, height and the reference
+point along the turned box (x, y stay page coordinates). Objects turned together share the box. A new group starts
+square to the page. `object.resetBoundingBox` squares the box again without moving the art.
+
+```json
+{"name":"run_command","arguments":{"command":"object.rotate","params":{"angle":45,"absolute":true}}}
+```
+
+## Empty point type
+
+Point type the Type tool places with a click and leaves empty is discarded when editing ends: Escape, another tool,
+a click elsewhere, switching documents, or a command that takes the text out of the selection (`select.none`, a
+`select.set` of other objects). The steps since the click go with it (`text.discardEmpty {id}`), so the document and
+its undo history are as if the click never happened. Commands on the edited text (the Character panel's
+`text.setRangeStyle {id}`) keep it in editing. Area type dragged as a frame and type in or on a path keep their frame
+(Object → Path → Clean Up removes empty text).
+
+```json
+{"name":"run_command","arguments":{"command":"text.discardEmpty","params":{"id":42}}}
+```
+
+## Constrain proportions
+
+The link between W and H in the Transform panel, the Properties panel and the Control bar is the
+`constrainProportions` preference (`prefs.get` / `prefs.set`). With it on, those fields send `proportional: true`
+to `object.setBounds`, which scales the other dimension by the same factor; agents pass `proportional` themselves.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"constrainProportions","value":true}}}
+{"name":"run_command","arguments":{"command":"object.setBounds","params":{"width":200,"proportional":true}}}
+```
+
+## Plug-ins
+
+WebAssembly plug-ins ([plugins.md](plugins.md)) are installed per process and reached through commands:
+`plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
+schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
+undo step; it may change, delete or add objects, and the result is selected). A live-effect plug-in is an effect with
+id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
+`effect.list` lists it. A failing plug-in returns an error and leaves the document as it was.
+
+```json
+{"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
+{"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+```
+
+## Colour adjustments
+
+Effect → Color Adjustments holds live effects that recolour what an object paints
+with (fills and strokes, gradient stops, type, gradient meshes, embedded images; on a group or layer every member),
+each colour keeping its colour model: `adjust.brightnessContrast`, `adjust.curves` (`points` as `"x,y x,y …"` or
+`[[x, y], …]`, 0–255), `adjust.levels`, `adjust.hueSaturation`, `adjust.shiftToColor` and `adjust.temperatureTint`
+(`effect.list` documents their parameters). Apply them with `effect.apply` like any effect, or with `item` to recolour
+one fill or stroke; they stay editable (`effect.setParams`), export with the adjusted colours (an adjusted image as a
+recoloured copy) and become permanent with `effect.expandAppearance`. Patterns and the shadows and glows of raster
+effects keep their colours.
+
+## Vector halftone
+
+`object.vectorHalftone` turns the selection into vector dots, lines or shapes sized by its
+tone (mono, or CMYK screens multiplied over each other), clipped to the art's outline by default:
+
+```json
+{"name":"run_command","arguments":{"command":"object.vectorHalftone","params":{"shape":"circle","frequency":25,"angle":45,"mode":"cmyk"}}}
+```
+
+## Fonts
+
+Type can use the bundled fonts, fonts added to the session and the fonts installed on the system (none on the web).
+The installed fonts are cataloged once per session (in the background when the app starts, else on the first lookup
+by family name), so opening, placing, pasting and importing files find them whatever ran before. `text.fontList`
+lists every family available, the installed ones included; with `family` it gives that family's styles (upright
+by weight, then italics) and fails when the family isn't available. `text.rescanFonts` (Character panel menu ›
+Refresh Font List) scans the font folders again, for fonts installed or removed since the app started: type set in a
+font that became available redraws in it, without editing the document.
+
+```json
+{"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
+{"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
+{"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
+```
+
+## Tool options
+
+`tool.setOption` reads and sets a tool's options, headless too: `{key, value}` or `{values: {…}}` sets them on the
+active tool, `tool` names another one, and `{}` just reads them; the result is the tool's options. The options a
+tool keeps last across tool switches (and documents) and are saved with the preferences (`toolSettings` in
+`prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
+axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
+polygon sides and star points. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
+intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
+```
+
+## Perspective grid
+
+The grid is document data (`perspective.grid.set` edits the model directly). `perspective.grid.get` reads it:
+`grid` (the model), `define` (the Define Grid fields), `station` (the viewer: `x` the centre of vision on the
+horizon `y`, `distance` from the picture plane, in points) and `defined` (false while the document uses the default
+grid). `perspective.grid.define` sets the grid from the Define Grid fields: `kind`, `units`, `scale`
+(`[artboard, real world]`), `gridline`, `angle` (the viewing angle, 0–90°), `distance` (the viewing distance),
+`horizonHeight`, `thirdVp` (`[x right, y up]` from the centre of vision), `leftColor`, `rightColor`, `groundColor`
+(`"#rrggbb"`) and `opacity` (0–100). Lengths are real-world lengths in `units` drawn at `scale`; missing fields keep the
+grid's. Only what differs changes (an unchanged OK is no undo step): a new type, angle or distance moves the vanishing
+points around the station point, which stays put. In two- and three-point grids the viewer looks at the left plane at
+the viewing angle, so the vanishing points sit at `x − distance/tan(angle)` and `x + distance·tan(angle)`.
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.grid.get","params":{}}}
+{"name":"run_command","arguments":{"command":"perspective.grid.define","params":{"units":"inches","gridline":0.5,"angle":30,"distance":6,"horizonHeight":3}}}
+```
+
+Perspective grid presets: `perspective.presets.list` lists the built-in views (`[1P-Normal View]`, `[1P-Low View]`,
+`[1P-High View]`, `[2P-Normal View]`, `[2P-Low View]`, `[2P-High View]`, `[3P-Normal View]`, `[3P-Low View]`;
+`builtIn: true`, fitted to the first artboard, protected), then the saved ones, each with its Define Grid fields.
+`perspective.grid.preset {name}` (or `{kind}`, that type's normal view) resets the grid to one, fitted to the first
+artboard. `perspective.presets.save {name?, newName?, preset?, …fields}` saves a preset: just `{name}` saves the
+document's grid (View → Perspective Grid → Save Grid as Preset). `perspective.presets.delete {name}`,
+`perspective.presets.export {names?, path?}` (a `.vcperspective` JSON file; without `path` it returns `data`) and
+`perspective.presets.import {path? | data? | dataBase64?, replace?}` manage them. Saved presets are kept with the
+preferences, and a grid whose fields are a preset's is named after it (`name`).
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.grid.preset","params":{"name":"[2P-Low View]"}}}
+{"name":"run_command","arguments":{"command":"perspective.presets.save","params":{"name":"Street","units":"feet","scale":[1,48],"gridline":1}}}
+```
+
+Perspective grid view options (View → Perspective Grid; view state saved with the document, no undo step, each
+`{on?: bool}`, no param toggles, → `{on}`): `perspective.grid.lock` (Lock Grid: the grid's widgets can't be dragged),
+`perspective.grid.lockStation` (Lock Station Point: dragging one vanishing point turns the view around the station
+point, so the other one moves), `perspective.grid.snap` (Snap to Grid, on by default: `perspective.draw` lands the
+drawn corners, and `perspective.move` the nearer edge, on gridlines within a quarter cell; both take `snap: false`)
+and `perspective.grid.rulers` (Show Rulers: a ruler up the line where the planes meet, in the grid's units at its
+scale). Gridlines draw in the Define Grid colours at its opacity.
+
+Perspective grid widgets: with the Perspective Grid tool (`pointer_gesture`), the vanishing points (Shift keeps the
+horizon; with Lock Station Point the other one swings), the horizon, the third vanishing point, the origin, the left
+and right ground-level points (24 px from the origin along each wall's ground line: they move the whole grid; Shift
+keeps one axis), the left and right extents (separate: `extent` and `extentRight`; Alt drags both, Shift goes by
+whole cells), the vertical extent and the cell size widget (on the line where the planes meet, a cell up, or more
+cells while they're small) reshape the grid; Lock Grid stops them. The Plane Switching Widget stays put in a corner
+of the document window (headless: the first artboard's top-left corner); a press on it picks the plane with any tool
+while the grid shows (a perspective tool shows it), and the keys 1–4 (`key` with `"1"`…`"4"`) pick the left,
+horizontal, right and no plane. `perspective.widget.options {show?, position?}` (Perspective Grid Options,
+double-click the tool) hides it or moves it to `topLeft`, `topRight`, `bottomLeft` or `bottomRight`, kept with the
+preferences (`prefs.get`/`prefs.set` key `perspectiveWidget`).
+
+## Envelopes
+
+Object → Envelope Distort wraps the selection in a live envelope: `object.envelope.makeWithWarp` (`style`: arc,
+arcLower, arcUpper, arch, bulge, shellLower, shellUpper, flag, wave, fish, rise, fisheye, inflate, squeeze or twist;
+`bend`, `h` and `v` in % from -100 to 100; `horizontal` or `orientation`), `object.envelope.makeWithMesh` (`rows`,
+`cols`: 1–50) and `object.envelope.makeWithTopObject` (the topmost selected path becomes the envelope).
+`object.envelope.info` reads the selected envelope's settings (`type`, the warp's or mesh's values, `fidelity` and
+the options, `editing`), or with no envelope selected the options new envelopes get. With an envelope selected,
+`object.envelope.resetWithWarp` and `object.envelope.resetWithMesh` (`rows`, `cols`, `maintainShape`: true keeps
+the current shape) switch its kind and keep its content. `object.envelope.options` sets `fidelity` and the options
+(`antiAlias`, `preserveShape`: clippingMask or transparency, `distortAppearance`, `distortLinearGradients`,
+`distortPatternFills`; the last two need `distortAppearance`); with no envelope selected it sets them for new
+envelopes. New envelopes start with Distort Appearance on, as in the reference app; envelopes saved before these
+options existed keep their old look (appearance applied after the distortion).
+
+`object.envelope.release` gives back the content and the envelope's shape (a grey gradient mesh for warp and mesh
+envelopes, the path for a top-object envelope); the content keeps the envelope's opacity, blend mode and opacity mask
+(a group around it carries them when there are several objects). `object.envelope.expand`, and `object.expand` with
+`object` on, replace envelopes by groups of their distorted content that keep the name, transparency, knockout and
+opacity mask.
+Type inside an envelope distorts as its glyph outlines, run by run in each run's paint, on the canvas and in every
+export (SVG, PDF, EPS, EMF/WMF, DXF).
+Everything inside bends with the envelope: images as a raster mesh warp (cut into pieces by Fidelity, each a clipped
+image under its own affine map; SVG shares the pixels between the pieces), symbol instances as their symbol's art,
+and with Distort Appearance strokes (as their filled outlines) and geometry effects; with it, Distort Linear Gradients
+bends linear gradients and Distort Pattern Fills the pattern tiles. A transformed envelope keeps its warp in its own
+frame (`kind.frame` in `document.inspect`; rotating a warp envelope turns the warp with it), and move and scale keep
+it square to the page.
+
+```json
+{"name":"run_command","arguments":{"command":"object.envelope.makeWithWarp","params":{"style":"arch","bend":40}}}
+{"name":"run_command","arguments":{"command":"object.envelope.resetWithMesh","params":{"rows":3,"cols":3,"maintainShape":true}}}
+{"name":"run_command","arguments":{"command":"object.envelope.options","params":{"fidelity":80,"distortAppearance":true,"distortLinearGradients":true}}}
+{"name":"run_command","arguments":{"command":"object.envelope.info","params":{}}}
+```
+
+## Liquify tools
+
+The Liquify tools (`warp`, `twirl`, `pucker`, `bloat`, `scallop`, `crystallize`, `wrinkle`) drag a brush over paths:
+the selected ones, or with nothing selected every path the brush passes over. A stroke is one undo step and one
+`object.liquify` journal entry, which an agent can also run directly. Their options (`tool.setOption`) are the Global
+Brush Dimensions shared by the seven tools (`width`, `height` in pt, `angle`, `intensity` 0..1, `usePressure`,
+`showBrush`) and the tool's own: `detail` (1..10); `simplify` (0..100) with `simplifyOn` (Warp, Twirl, Pucker,
+Bloat); `rate` (Twirl, -180..180°); `complexity` (0..15) and `affectAnchors`, `affectIn`, `affectOut` (Scallop,
+Crystallize, Wrinkle: what the brush moves); `horizontal`, `vertical` (Wrinkle, 0..1). Alt-drag sizes the brush from
+its current size (with Shift too it keeps its proportions). With Use Pressure Pen on, each `pointer_gesture` event's
+`pressure` (0..1) is the intensity there, and `object.liquify` takes points as `[x, y, pressure]`.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"bloat","values":{"width":80,"height":80,"usePressure":true}}}}
+{"name":"pointer_gesture","arguments":{"tool":"bloat","events":[{"kind":"down","x":280,"y":150,"pressure":0.3},{"kind":"drag","x":280,"y":200,"pressure":0.8},{"kind":"up","x":280,"y":250}]}}
+{"name":"run_command","arguments":{"command":"object.liquify","params":{"tool":"scallop","points":[[300,150],[300,250]],"complexity":3,"affectAnchors":false}}}
+```
+
+Holding the brush still keeps Twirl, Pucker and Bloat working, scaled by the time held: every tenth of a second the
+stroke's last point repeats in `object.liquify`'s `points`, one more dab there (other tools ignore repeated points).
+Give a `pointer_gesture` event `holdMs` (0..60000) to hold the pointer that long after it, button down; the same
+time gives the same result. Liquify reshapes paths only: type, symbols, images, graphs, meshes, and envelopes,
+repeats and blends with their contents stay as they are, and guides are never touched. `object.liquify` returns
+those under the brush in `skipped` with a `warning`, which the gesture's `requests` carry as `{"status": …}` (the
+status bar in the app). A drag applies only the dabs each new sample adds; the result equals applying the whole
+stroke at once, so the journal entry replays it exactly.
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"twirl","events":[{"kind":"down","x":300,"y":200,"holdMs":800},{"kind":"up","x":300,"y":200}]}}
+```
+
+## Perspective Selection
+
+Objects in perspective keep their attachment themselves (`perspective` on the object: `plane` and `depth`, the
+distance along the plane's normal), so copies, duplicates and pastes stay attached. With the
+`perspectiveSelection` tool, a drag moves the selection within its plane (`perspective.move`; Alt copies), the
+bounding-box handles scale it in plane space (`perspective.transform`; Shift keeps proportions, Alt scales about the
+centre), and `press_key` `5` during a drag switches the move to perpendicular to the plane (press again to switch
+back). The arrow keys nudge a selection in perspective by the keyboard increment (`perspective.nudge`; Shift ×10, Alt
+copies). Object › Transform › Transform Again repeats the last perspective move or scale in plane space.
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"perspectiveSelection","events":[{"kind":"down","x":480,"y":410},{"kind":"drag","x":470,"y":405}]}}
+{"name":"press_key","arguments":{"key":"5"}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"up","x":470,"y":405}]}}
+{"name":"run_command","arguments":{"command":"perspective.transform","params":{"matrix":[1.5,0,0,1.5,0,0],"copy":true}}}
+{"name":"run_command","arguments":{"command":"object.transformAgain","params":{}}}
+```
+
+Planes move along their normals: `perspective.plane.move {plane, offset | by, objects}` (`leftOffset`,
+`rightOffset`, `groundOffset` in the grid). The plane widgets (a diamond on each plane, drawn while the grid shows)
+do it with the Perspective Grid and Perspective Selection tools: a plain drag moves the plane alone, Shift-drag moves
+the objects on it too, Alt-drag copies them; double-clicking a widget (or `ui.perspectivePlane {plane}`) opens the
+`perspectivePlane` dialog (`location` in points, `objects`: none, move or copy). Objects keep their place when the
+grid's definition changes, as in the reference app; `perspective.grid.set` with `reproject: true` moves them with it
+instead. `perspective.plane.matchObject` (Object › Perspective › Move Plane to Match Object) moves the plane of the
+selected object onto it.
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.plane.move","params":{"plane":"right","offset":40,"objects":"move"}}}
+{"name":"run_command","arguments":{"command":"perspective.plane.matchObject","params":{}}}
+{"name":"run_command","arguments":{"command":"ui.perspectivePlane","params":{"plane":"ground"}}}
+```
+
+Type and symbol instances attached to a plane stay type and symbol instances: their `perspective` record keeps a
+`projection` (a 3 × 3 matrix) the canvas and every export (SVG, PDF, EPS, EMF/WMF, DXF, PNG) draw their outlines
+through, so they are really foreshortened and still editable. `perspective.editText` (Object › Perspective › Edit
+Text, or double-clicking the type with the Perspective Selection tool) shows the type flat where it is drawn, in
+isolation mode, for the Type tool and `text.*` commands; `object.exitIsolation` projects it again. Release with
+Perspective keeps their look. Shape, spiral, polar grid and flare drags draw on the active plane while the grid
+shows, and so do the click-to-size dialogs (`perspective.draw` with `at`: the click; sizes are plane units).
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.editText","params":{}}}
+{"name":"run_command","arguments":{"command":"text.setText","params":{"text":"OPEN"}}}
+{"name":"run_command","arguments":{"command":"object.exitIsolation","params":{}}}
+{"name":"run_command","arguments":{"command":"perspective.draw","params":{"command":"shape.rectangle","params":{"x":470,"y":300,"width":50,"height":30},"at":[470,300]}}}
+```
+
+## Blends
+
+`object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing and orientation default to
+what `object.blend.options` set with no blend selected (`object.blend.info` reads them: `target: "defaults"`),
+else Smooth Color and Align to Page. `starts` gives, per object, the anchor of its first subpath the blend starts
+from (as the Blend tool's clicks on anchor points do; an open path's last anchor runs it the other way). A blend
+among the objects takes the others in as more key objects, keeping its options, name and transparency:
+
+```json
+{"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[12,15],"starts":[0,2],"steps":8}}}
+{"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[20,31]}}}
+{"name":"run_command","arguments":{"command":"object.blend.info","params":{}}}
+```
+
+A blend's spine is the straight lines between its key centres until it is edited. `object.blend.info` lists it
+(`spine.anchors`, `keyAnchors`: the point each key sits on). `object.blend.spine.addAnchor {x, y}` adds a point where
+the spine passes nearest, `object.blend.spine.moveAnchor {anchor, x, y}` moves a point (a key on it moves along; with
+`handle: "in" | "out"` it places that handle) and `object.blend.spine.removeAnchor {anchor}` deletes a point no key
+sits on; the first edit turns the spine into a path. Moving a key moves its end of the spine. Release
+(`object.blend.release`) leaves the spine as a path that paints nothing (`spines` in the result):
+
+```json
+{"name":"run_command","arguments":{"command":"object.blend.spine.addAnchor","params":{"id":40,"x":150,"y":100}}}
+{"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
+```
+
+How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; strokes
+interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale
+and width profiles, while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
+different stop counts resample to a common set of stops. Groups pair their members in stacking order (members only
+one group has grow out of the other's centre), compound paths stay compound paths, and type, symbol instances and
+images interpolate their transforms (type also its colours, stroke weight and size run by run; the words and the
+symbol switch halfway). New blends are knockout groups (`object.setProps {knockout}` changes it), drawn on the
+canvas as they export. `object.blend.expand` and `object.blend.release` keep the blend's name, transparency,
+opacity mask and appearance (Release on a group around the keys and spine when the blend has any), and
+`object.expand` with `object: true` expands the blends in the selection.
+
+## Editing envelopes
+
+`object.envelope.editContents {editing}` switches between editing the envelope and its contents (the menu item reads
+Edit Envelope while the contents are edited; it has no default shortcut, since the reference app's is Paste in Place
+here). While the contents are edited, clicks hit the content where it sits undistorted and the Selection tool selects
+it. A mesh envelope's points have bezier handles (`kind.handles`, offsets
+right/left/down/up; none stored means the smooth mesh through the points, as older files have):
+`object.envelope.setMeshPoint {id, index, x, y, handle?}` and `object.mesh.movePoint`, `object.mesh.addLine` and
+`object.mesh.deletePoint` edit them like a gradient mesh's (one undo step each). On the canvas a selected envelope
+shows its mesh; the Mesh tool and Direct Selection drag its points and the clicked point's handles, and the Mesh tool
+adds a row and a column where it clicks inside. The Control bar shows Edit Envelope / Edit Contents, the warp's
+style, orientation, bend and distortions (or the mesh's rows and columns), Reset (an unbent warp, a flat mesh) and
+Envelope Options.
+
+```json
+{"name":"run_command","arguments":{"command":"object.envelope.editContents","params":{"editing":true}}}
+{"name":"run_command","arguments":{"command":"object.mesh.movePoint","params":{"id":12,"index":4,"x":220,"y":140,"handle":0}}}
 ```

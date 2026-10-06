@@ -207,6 +207,8 @@ impl Dialog {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
+    #[serde(default)]
+    pub language: crate::i18n::Language,
     pub brightness: Brightness,
     pub dock_tab: DockTab,
     /// Icon panel currently popped out of the collapsed column.
@@ -298,6 +300,29 @@ pub struct UiState {
     /// never used).
     #[serde(default)]
     pub dxf_import: Value,
+    /// The Home screen is shown over the open documents (`app.home`): the active document's uid
+    /// and the document count when it opened. Choosing a tab, or a document opening, closing or
+    /// becoming active, leaves it.
+    #[serde(skip)]
+    pub home: Option<(Option<u64>, usize)>,
+    /// The desktop window's size, position and maximized state, saved when the app quits and
+    /// restored at the next launch (the desktop host reads and writes it; none on the web).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<WindowGeometry>,
+}
+
+/// The desktop window's geometry, kept across launches.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WindowGeometry {
+    /// Top-left corner of the window frame, in physical pixels on the desktop (none where the
+    /// system doesn't tell windows where they are).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pos: Option<[i32; 2]>,
+    /// Size of the window's contents in logical pixels (points at 100% UI scaling).
+    pub size: [f32; 2],
+    /// The window was maximized; `pos` and `size` are where un-maximizing puts it.
+    #[serde(default)]
+    pub maximized: bool,
 }
 
 impl UiState {
@@ -319,6 +344,7 @@ impl UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            language: crate::i18n::Language::default(),
             brightness: Brightness::MediumDark,
             dock_tab: DockTab::Properties,
             open_panel: None,
@@ -359,6 +385,8 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             dxf_import: Value::Null,
+            home: None,
+            window: None,
         }
     }
 }

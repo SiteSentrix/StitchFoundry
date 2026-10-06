@@ -1,10 +1,13 @@
 //! Illustrator's Pathfinder panel and Shape Builder regions, over an ordered stack of shapes
 //! (index 0 = back-most, last = front-most).
 
+use std::collections::HashMap;
+
 use kurbo::{BezPath, ParamCurve, ParamCurveNearest, Point, Shape as _};
+use linesweeper::topology::ContourIdx;
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::boolean::{Arrangement, Seg, all_contours_to_path, contours_to_path, fill_bezpath, segs_to_subpath, unite_all};
+use crate::boolean::{Arrangement, Multi, Seg, all_contours_to_path, contours_to_path, fill_bezpath, segs_to_subpath, unite_all};
 
 /// A filled shape in a Pathfinder stack. `key` identifies its paint (e.g. a hashed fill colour);
 /// results carry the key of the object whose paint they keep.
@@ -142,19 +145,106 @@ pub fn pathfinder(op: PathfinderOp, shapes: &[Shape]) -> Vec<Shape> {
     }
 }
 
+/// The faces of `arr`, each distinct coverage mask's in turn (sorted), each face grouped as
+/// `arr.contours(|m| m == mask).grouped()` groups it.
+///
+/// A contour pass walks the whole arrangement, so one pass per mask would cost masks × edges
+/// (two blends crossing make thousands of each). Instead the masks go into batches whose faces
+/// share no vertex (so no edge either): one pass per batch walks each face's contours exactly as
+/// its own mask's pass would, and the mask a contour bounds is the one of its batch at its first
+/// point.
 fn regions_of(arr: &Arrangement) -> Vec<Region> {
-    let mut out = Vec::new();
-    for mask in arr.distinct_masks() {
-        let c = arr.contours(|m| m == mask.as_slice());
-        let sources: Vec<usize> = mask.iter().enumerate().filter(|(_, b)| **b).map(|(i, _)| i).collect();
-        for g in c.grouped() {
-            let path = contours_to_path(&c, g, &arr.tidy);
-            if !path.is_empty() {
-                out.push(Region { path, sources: sources.clone() });
+    let masks = arr.distinct_masks();
+    let ids: HashMap<&[bool], usize> = masks.iter().enumerate().map(|(i, m)| (m.as_slice(), i)).collect();
+    let id = |w: &Multi| ids.get(arr.mask(w).as_slice()).copied();
+    let top = &arr.top;
+    // The masks of the faces around each vertex.
+    let mut around: HashMap<(u64, u64), Vec<usize>> = HashMap::new();
+    for s in top.segment_indices() {
+        let h = s.first_half();
+        let sides = [id(top.winding_clockwise(h)), id(top.winding_counter_clockwise(h))];
+        for end in [h, s.second_half()] {
+            let at = around.entry(vertex_key(top.point(end).to_kurbo())).or_default();
+            for m in sides.into_iter().flatten() {
+                if !at.contains(&m) {
+                    at.push(m);
+                }
             }
         }
     }
+    let mut near = vec![Vec::new(); masks.len()];
+    for at in around.values() {
+        for &a in at {
+            near[a].extend(at.iter().copied().filter(|&b| b != a));
+        }
+    }
+    // Greedy colouring: each mask takes the first batch none of its neighbours is in.
+    let mut batch = vec![usize::MAX; masks.len()];
+    let mut batches = 0;
+    for m in 0..masks.len() {
+        let mut taken = vec![false; batches];
+        for &n in &near[m] {
+            if let Some(t) = taken.get_mut(batch[n]) {
+                *t = true;
+            }
+        }
+        batch[m] = taken.iter().position(|t| !t).unwrap_or(batches);
+        batches = batches.max(batch[m] + 1);
+    }
+    let mut faces: Vec<Vec<PathData>> = vec![Vec::new(); masks.len()];
+    for b in 0..batches {
+        let c = top.contours(|w| id(w).is_some_and(|m| batch[m] == b));
+        let owner: Option<Vec<usize>> = c
+            .contours()
+            .map(|ct| {
+                let Some(kurbo::PathEl::MoveTo(p)) = ct.path.elements().first() else { return None };
+                around.get(&vertex_key(*p))?.iter().copied().find(|&m| batch[m] == b)
+            })
+            .collect();
+        let Some(owner) = owner else {
+            // Not expected: every contour starts at a vertex of the arrangement. Fall back to a
+            // pass per mask for this batch.
+            for (m, mask) in masks.iter().enumerate().filter(|(m, _)| batch[*m] == b) {
+                let c = arr.contours(|k| k == mask.as_slice());
+                faces[m].extend(c.grouped().into_iter().map(|g| contours_to_path(&c, g, &arr.tidy)));
+            }
+            continue;
+        };
+        // A contour belongs under the nearest enclosing contour of the same mask, as in that
+        // mask's own pass.
+        let mut children = vec![Vec::new(); owner.len()];
+        let mut roots = Vec::new();
+        for (i, &m) in owner.iter().enumerate() {
+            let mut up = c[ContourIdx(i)].parent;
+            while let Some(p) = up.filter(|p| owner.get(p.0) != Some(&m)) {
+                up = c[p].parent;
+            }
+            match up {
+                Some(p) => children[p.0].push(i),
+                None => roots.push(i),
+            }
+        }
+        for r in roots {
+            let mut group = Vec::new();
+            let mut stack = vec![r];
+            while let Some(i) = stack.pop() {
+                group.push(ContourIdx(i));
+                stack.extend(children[i].iter().rev());
+            }
+            faces[owner[r]].push(contours_to_path(&c, group, &arr.tidy));
+        }
+    }
+    let mut out = Vec::new();
+    for (mask, paths) in masks.iter().zip(faces) {
+        let sources: Vec<usize> = mask.iter().enumerate().filter(|(_, b)| **b).map(|(i, _)| i).collect();
+        out.extend(paths.into_iter().filter(|p| !p.is_empty()).map(|path| Region { path, sources: sources.clone() }));
+    }
     out
+}
+
+/// A point as a map key (the arrangement's vertices are exact).
+fn vertex_key(p: Point) -> (u64, u64) {
+    (p.x.to_bits(), p.y.to_bits())
 }
 
 /// All faces of the planar arrangement of `shapes` (every area covered by at least one shape,
@@ -276,4 +366,83 @@ fn mid_point(c: &[Seg]) -> Point {
         acc += l;
     }
     c[0].c.p0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use vectorcraft_geom::{Rect, SubPath, shapes};
+
+    /// The faces one contour pass per mask finds: what [`regions_of`] must match exactly.
+    fn regions_one_mask_at_a_time(arr: &Arrangement) -> Vec<Region> {
+        let mut out = Vec::new();
+        for mask in arr.distinct_masks() {
+            let c = arr.contours(|m| m == mask.as_slice());
+            let sources: Vec<usize> = mask.iter().enumerate().filter(|(_, b)| **b).map(|(i, _)| i).collect();
+            for g in c.grouped() {
+                let path = contours_to_path(&c, g, &arr.tidy);
+                if !path.is_empty() {
+                    out.push(Region { path, sources: sources.clone() });
+                }
+            }
+        }
+        out
+    }
+
+    fn same_as_one_mask_at_a_time(shapes: &[Shape]) {
+        let arr = arrangement(shapes).expect("arrangement");
+        assert_eq!(regions_of(&arr), regions_one_mask_at_a_time(&arr));
+    }
+
+    fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> PathData {
+        shapes::rectangle(Rect::new(x0, y0, x1, y1))
+    }
+
+    /// Shapes on a coarse grid, so that edges and corners coincide: rectangles, rectangles with
+    /// a hole, ellipses and polygons that may cross themselves, under either fill rule.
+    fn arb_shape() -> impl Strategy<Value = Shape> {
+        let c = || (0..12i32).prop_map(|v| f64::from(v) * 10.0);
+        let r = (c(), c(), 1..6i32, 1..6i32).prop_map(|(x, y, w, h)| (x, y, x + f64::from(w) * 10.0, y + f64::from(h) * 10.0));
+        let path = prop_oneof![
+            r.clone().prop_map(|(x0, y0, x1, y1)| rect(x0, y0, x1, y1)),
+            r.clone().prop_map(|(x0, y0, x1, y1)| {
+                let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+                let mut p = rect(x0 - 10.0, y0 - 10.0, x1 + 10.0, y1 + 10.0);
+                p.subpaths.extend(rect(x0, y0, cx.max(x0 + 5.0), cy.max(y0 + 5.0)).subpaths);
+                p
+            }),
+            r.prop_map(|(x0, y0, x1, y1)| shapes::ellipse(Rect::new(x0, y0, x1, y1))),
+            prop::collection::vec((c(), c()), 3..7).prop_map(|pts| {
+                let pts: Vec<Point> = pts.into_iter().map(|(x, y)| Point::new(x, y)).collect();
+                PathData::single(SubPath::polyline(&pts, true))
+            }),
+        ];
+        (path, any::<bool>(), any::<u64>())
+            .prop_map(|(p, even_odd, key)| Shape::new(p, if even_odd { FillRule::EvenOdd } else { FillRule::NonZero }, key))
+    }
+
+    #[test]
+    fn crossing_strips_match_one_mask_at_a_time() {
+        let mut v = Vec::new();
+        for i in 0..12 {
+            let x = 10.0 + 20.0 * f64::from(i);
+            v.push(Shape::new(rect(x, 0.0, x + 4.0, 250.0), FillRule::NonZero, 1));
+            v.push(Shape::new(rect(0.0, x, 250.0, x + 4.0), FillRule::NonZero, 2));
+        }
+        same_as_one_mask_at_a_time(&v);
+        // Every crossing, and each strip in 13 pieces.
+        assert_eq!(regions(&v).len(), 12 * 12 + 2 * 12 * 13);
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 256, failure_persistence: None, rng_seed: proptest::test_runner::RngSeed::Fixed(0x5eed_9a7f), ..ProptestConfig::default() })]
+
+        /// Batching the masks changes nothing: the same regions, in the same order, with the same
+        /// contours in each.
+        #[test]
+        fn batched_regions_match_one_mask_at_a_time(v in prop::collection::vec(arb_shape(), 1..8)) {
+            same_as_one_mask_at_a_time(&v);
+        }
+    }
 }

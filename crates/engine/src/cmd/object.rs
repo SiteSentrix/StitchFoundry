@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind, Scaling};
+use vectorcraft_doc::{Appearance, Document, Knockout, Node, NodeId, NodeKind, OrientedBox, Scaling};
 use vectorcraft_geom::{Affine, FillRule, Point, Rect, Vec2};
 
 use super::edit::{duplicate_in, selected_roots};
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rotate…",
             ["Object", "Transform"],
             None,
-            "{angle: deg (counter-clockwise), origin?: [x,y], copy?}",
+            "{angle: deg (counter-clockwise), absolute?: bool (angle is the bounding box's new angle, not an amount), origin?: [x,y] (default: the bounding box centre), copy?} → {ids}",
             has_selection,
             rotate
         ),
@@ -175,7 +175,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Bounds",
             [],
             None,
-            "{x?, y?, width?, height?, reference?: 0..8 (9-point grid), proportional?, strokes?, corners?} (Transform panel; with Use Preview Bounds the values measure the visual bounds; strokes/corners as object.scale)",
+            "{x?, y?, width?, height?, reference?: 0..8 (9-point grid), proportional?, strokes?, corners?} (Transform panel; width/height and the reference point follow the bounding box, rotated with rotated objects; x, y are page coordinates; with Use Preview Bounds the values measure the visual bounds; strokes/corners as object.scale)",
             has_selection,
             set_bounds
         ),
@@ -188,7 +188,7 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     if let Some(o) = point_param(p, "origin") {
         return Ok(o);
     }
-    s.transform_bounds(ids).map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
+    s.transform_box(ids).map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
 }
 
 /// What a transform command scales besides geometry: Scale Strokes & Effects and Scale Corners from
@@ -219,6 +219,7 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
     let st = s.doc_mut()?;
     if st.interaction.is_none() {
         st.last_transform = Some((xf, copy));
+        st.last_perspective = None;
     }
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
@@ -255,8 +256,12 @@ fn about(o: Point, a: Affine) -> Affine {
 fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let o = origin_of(s, p, &ids)?;
-    // Illustrator angles are counter-clockwise; y is down, so negate.
-    let a = about(o, Affine::rotate(-f64_or(p, "angle", 0.0).to_radians()));
+    let mut angle = f64_or(p, "angle", 0.0);
+    if bool_or(p, "absolute", false) {
+        angle = vectorcraft_geom::normalize_deg(angle - s.doc()?.doc.bbox_angle(&ids));
+    }
+    // Angles are counter-clockwise; y is down, so negate.
+    let a = about(o, Affine::rotate(-angle.to_radians()));
     apply_transform(s, "Rotate", ids, a, p)
 }
 
@@ -295,6 +300,9 @@ fn shear(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn transform_again(s: &mut Session, _: &Value) -> Result<Value> {
+    if let Some(again) = s.doc()?.last_perspective.clone() {
+        return super::distortcmds::transform_again(s, &again);
+    }
     let (m, copy) = s.doc()?.last_transform.ok_or_else(|| EngineError::Other("no previous transform".into()))?;
     let ids = selected_roots(s)?;
     apply_transform(s, "Transform Again", ids, m, &json!({ "copy": copy }))
@@ -657,6 +665,7 @@ fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
 fn exit_isolation(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     if let Some(i) = st.isolation.take() {
+        super::distortcmds::finish_edit_text(st, i);
         st.selection.set([i]);
     }
     st.revision += 1;
@@ -715,6 +724,11 @@ impl Session {
     /// visual bounds (strokes included) with Use Preview Bounds on, else geometric bounds.
     pub fn transform_bounds(&self, ids: &[NodeId]) -> Option<Rect> {
         self.doc().ok()?.doc.bounds_of(ids, self.prefs.use_preview_bounds)
+    }
+    /// [`Session::transform_bounds`] square to the objects' own angle (their rotated bounding
+    /// box, see [`Document::oriented_bounds`]).
+    pub fn transform_box(&self, ids: &[NodeId]) -> Option<OrientedBox> {
+        self.doc().ok()?.doc.oriented_bounds(ids, self.prefs.use_preview_bounds)
     }
 }
 
@@ -876,10 +890,13 @@ fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
 fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let d = &s.doc()?.doc;
-    let g = d.bounds_of(&ids, false).ok_or_else(|| EngineError::Other("no bounds".into()))?;
+    // Sizes are measured square to the bounding box, which a rotation turns with the objects:
+    // the math below runs in its frame.
+    let frame = d.oriented_bounds(&ids, false).ok_or_else(|| EngineError::Other("no bounds".into()))?;
+    let g = frame.rect;
     // With Use Preview Bounds the values measure the visual box, whose margins around the
     // geometric box (left, top, right, bottom) scale with the strokes or stay.
-    let v = if s.prefs.use_preview_bounds { d.bounds_of(&ids, true).unwrap_or(g) } else { g };
+    let v = if s.prefs.use_preview_bounds { d.oriented_bounds(&ids, true).map_or(g, |b| b.rect) } else { g };
     let m = [g.x0 - v.x0, g.y0 - v.y0, v.x1 - g.x1, v.y1 - g.y1];
     let refi = p.get("reference").and_then(Value::as_u64).unwrap_or(4) as usize;
     let rp = vectorcraft_geom::reference_point(v, refi);
@@ -906,9 +923,10 @@ fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
     // box's reference point moves with the art, the margin from it to the visual one by `f`.
     let gp = vectorcraft_geom::reference_point(g, refi);
     let new_rp = scale * gp + (rp - gp) * f(sx, sy);
-    let tx = f64_or(p, "x", rp.x) - new_rp.x;
-    let ty = f64_or(p, "y", rp.y) - new_rp.y;
-    apply_transform(s, "Transform", ids, Affine::translate((tx, ty)) * scale, p)
+    // x, y place the reference point on the page.
+    let page = frame.to_doc() * rp;
+    let to = frame.to_local(Point::new(f64_or(p, "x", page.x), f64_or(p, "y", page.y)));
+    apply_transform(s, "Transform", ids, frame.conjugate(Affine::translate(to - new_rp) * scale), p)
 }
 
 fn expand_shape(s: &mut Session, _: &Value) -> Result<Value> {

@@ -6,19 +6,21 @@
 //! outlines, [`reshape`]) — is evaluated exactly like the renderer does, and so are the own fills,
 //! strokes and geometry effects of groups and layers ([`evaluate_container`]). Raster effects
 //! (shadows, glows, blur) stay on the objects for the exporter to translate (e.g. SVG filters).
+//! Colour adjustments recolour the objects ([`adjust_in_document`]; recoloured embedded images
+//! become images of their own).
 //!
 //! Object → Expand Appearance goes further ([`expand_leaf`]): every fill and stroke becomes an
 //! object of its own, strokes turned into filled art by the caller (their outlines or brush art).
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 
 use crate::group::{has_own_paint, paints};
 use crate::{
-    GeomContext, apply_geometry_with, crop_marks_art, evaluate_container, has_crop_marks, has_geometry, has_pathfinder, is_geometry, needs_outline,
-    reshape,
+    GeomContext, adjust_in_document, apply_geometry_with, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
+    has_pathfinder, is_geometry, needs_outline, reshape,
 };
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -37,10 +39,12 @@ fn clear_item_effects(item: &mut AppearanceItem) {
 
 /// Does anything in `n`'s subtree need baking?
 pub fn needs_bake(n: &Node) -> bool {
-    has_crop_marks(n)
+    has_adjustment(n)
+        || has_crop_marks(n)
         || has_pathfinder(n)
         || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
+        || n.projection().is_some()
         || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)))
         || n.children().is_some_and(|ch| ch.iter().any(|c| needs_bake(c)))
 }
@@ -78,12 +82,18 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     if !needs_bake(n) {
         return None;
     }
+    // Colour adjustments: the object recoloured (inside it too), then baked as it is.
+    if has_adjustment(n)
+        && let Some(m) = adjust_in_document(d, n)
+    {
+        return Some(bake_node(d, &m).unwrap_or(m));
+    }
     // Crop marks: the object and its marks.
     if let Some(m) = crop_marks_art(n) {
         return Some(bake_pieces(d, m));
     }
     // Type, images, symbol instances and live objects: reshaped through their outlines.
-    if needs_outline(n) && has_geometry(&n.appearance.effects) {
+    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some()) {
         let symbol = match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
             _ => None,
@@ -270,6 +280,48 @@ pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
     for c in n.children_mut().into_iter().flatten() {
         expand_art(d, Arc::make_mut(c), stroke_art);
     }
+}
+
+/// Envelope Options → Distort Appearance: path or compound path `n` as plain filled art that an
+/// envelope bends as a whole: its geometry effects applied, every visible fill a copy of the path
+/// painted by that fill and every visible stroke without a brush its filled outline in the
+/// stroke's paint, opacity and blend mode (a brushed stroke stays a stroke), in paint order, as
+/// the members of a group keeping `n`'s id, transparency, opacity mask and raster effects. `None`
+/// when it has neither a stroke to outline nor a geometry effect, so bending first changes nothing.
+pub fn bake_appearance(n: &Node) -> Option<Node> {
+    if !matches!(n.kind, NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. }) {
+        return None;
+    }
+    let outlined = |i: &AppearanceItem| paints(i) && matches!(i, AppearanceItem::Stroke(s) if s.brush.is_none());
+    let geometric = has_geometry(&n.appearance.effects) || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)));
+    if !geometric && !n.appearance.items.iter().any(outlined) {
+        return None;
+    }
+    let (g, rule, ctx, mut m) = leaf_base(n)?;
+    let piece = |path: PathData, rule: FillRule, item: AppearanceItem| {
+        let mut p = Node::path(n.id, path, Appearance { items: vec![item], ..Default::default() });
+        if let NodeKind::Path { rule: r, .. } = &mut p.kind {
+            *r = rule;
+        }
+        Arc::new(p)
+    };
+    let mut pieces = vec![];
+    for item in n.appearance.items.iter().filter(|i| paints(i)) {
+        let ig = apply(item_effects(item), &g, &ctx.item(item));
+        let mut it = item.clone();
+        clear_item_effects(&mut it);
+        pieces.push(match &it {
+            AppearanceItem::Stroke(st) if st.brush.is_none() => {
+                let fill = FillLayer { opacity: st.opacity, blend: st.blend, ..FillLayer::new(st.paint.clone()) };
+                piece(crate::stroke::outline_region(&ig, rule, st), FillRule::NonZero, AppearanceItem::Fill(fill))
+            }
+            _ => piece(ig, rule, it),
+        });
+    }
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    m.kind = NodeKind::Group { children: pieces, clip: false };
+    Some(m)
 }
 
 /// A copy of `doc` with every live geometry effect baked into plain paths, or `None` when the

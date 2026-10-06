@@ -1233,6 +1233,12 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "foldhash"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+
+[[package]]
+name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
@@ -1439,7 +1445,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed4a1bb24121291d27230c1b1b44e07d6a9b28cefdb32fe1581dfb84e14f940a"
 dependencies = [
  "bytemuck",
- "foldhash",
+ "foldhash 0.2.0",
  "hashbrown 0.17.1",
  "log",
  "peniko",
@@ -1455,7 +1461,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282a26c1e23de04bdab3e34a21b6f877a479b96737792516b9b8b8f69b6661be"
 dependencies = [
  "bytemuck",
- "foldhash",
+ "foldhash 0.2.0",
  "hashbrown 0.17.1",
  "log",
  "peniko",
@@ -1605,13 +1611,22 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
+version = "0.15.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
+dependencies = [
+ "foldhash 0.1.5",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash",
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -1620,7 +1635,7 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
- "foldhash",
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -2058,6 +2073,12 @@ dependencies = [
  "serde",
  "smallvec",
 ]
+
+[[package]]
+name = "leb128fmt"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "libc"
@@ -3668,6 +3689,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
+
+[[package]]
 name = "spirv"
 version = "0.4.0+sdk-1.4.341.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3695,6 +3722,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 dependencies = [
  "float-cmp",
+]
+
+[[package]]
+name = "string-interner"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23de088478b31c349c9ba67816fa55d9355232d63c3afea8bf513e31f0f1d2c0"
+dependencies = [
+ "hashbrown 0.15.5",
+ "serde",
 ]
 
 [[package]]
@@ -4174,7 +4211,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "arboard",
  "clipboard-win",
@@ -4188,12 +4225,13 @@ dependencies = [
  "vectorcraft-engine",
  "vectorcraft-ui-egui",
  "webbrowser",
+ "winit",
  "winresource",
 ]
 
 [[package]]
 name = "vectorcraft-brush"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "serde",
@@ -4205,7 +4243,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-cad"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4221,7 +4259,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde_json",
  "vectorcraft-color",
@@ -4237,7 +4275,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-color"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "moxcms",
@@ -4249,7 +4287,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-doc"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4263,7 +4301,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-effects"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "serde_json",
@@ -4271,12 +4309,13 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-geom",
  "vectorcraft-pathops",
+ "vectorcraft-plugins",
  "vectorcraft-text",
 ]
 
 [[package]]
 name = "vectorcraft-engine"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "image",
@@ -4296,17 +4335,19 @@ dependencies = [
  "vectorcraft-metafile",
  "vectorcraft-pathops",
  "vectorcraft-pdf",
+ "vectorcraft-plugins",
  "vectorcraft-render",
  "vectorcraft-svg",
  "vectorcraft-testkit",
  "vectorcraft-text",
  "vectorcraft-tools",
  "vectorcraft-trace",
+ "wat",
 ]
 
 [[package]]
 name = "vectorcraft-eps"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "image",
@@ -4323,7 +4364,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-format"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "proptest",
@@ -4337,7 +4378,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-geom"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "proptest",
@@ -4349,7 +4390,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-mcp"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "log",
@@ -4368,7 +4409,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-metafile"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4382,7 +4423,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-pathops"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "linesweeper",
@@ -4394,7 +4435,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-pdf"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "aes",
  "flate2",
@@ -4420,8 +4461,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-plugins"
+version = "0.3.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "vectorcraft-color",
+ "vectorcraft-doc",
+ "vectorcraft-geom",
+ "wasmi",
+ "wat",
+]
+
+[[package]]
 name = "vectorcraft-render"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "gif",
@@ -4446,7 +4501,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-svg"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "image",
@@ -4470,7 +4525,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-testkit"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4487,7 +4542,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-text"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "harfrust 0.13.3",
  "kurbo 0.13.1",
@@ -4500,7 +4555,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-tools"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4515,7 +4570,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-trace"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4528,7 +4583,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-ui-egui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "egui",
  "egui_extras",
@@ -4545,16 +4600,18 @@ dependencies = [
  "vectorcraft-format",
  "vectorcraft-geom",
  "vectorcraft-pdf",
+ "vectorcraft-plugins",
  "vectorcraft-render",
  "vectorcraft-svg",
  "vectorcraft-testkit",
  "vectorcraft-text",
  "vectorcraft-tools",
+ "wat",
 ]
 
 [[package]]
 name = "vectorcraft-web"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "eframe",
  "egui",
@@ -4717,6 +4774,99 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasm-encoder"
+version = "0.261.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2608e8bb6d67fd68f5a8d0eb1363d6e7bcbc1f8ded5a0bd3a1e382462b876b22"
+dependencies = [
+ "leb128fmt",
+ "wasmparser 0.261.0",
+]
+
+[[package]]
+name = "wasmi"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78693fcdd618e0fc34af59c6b8efa9ac5d58c68df940beff4bedddb6acfe7c27"
+dependencies = [
+ "spin",
+ "wasmi_collections",
+ "wasmi_core",
+ "wasmi_ir",
+ "wasmparser 0.228.0",
+]
+
+[[package]]
+name = "wasmi_collections"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a8be2aa467cf2d29e96ff759472c36eeb44a3c81c67fc9cb76c9a24c519c557"
+dependencies = [
+ "string-interner",
+]
+
+[[package]]
+name = "wasmi_core"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69372d5fda3ea3d1e0aa6603c7888110e0187e88ea17cd8fc2e2df0a0e1f37fa"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "wasmi_ir"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f17b774caa13c618c7244f1ee51fe23c5e7b8538a471fa46d9949779758aed6"
+dependencies = [
+ "wasmi_core",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.228.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4abf1132c1fdf747d56bbc1bb52152400c70f336870f968b85e89ea422198ae3"
+dependencies = [
+ "bitflags 2.13.2",
+ "indexmap",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.261.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f20f20e44f7e8aeb6744823ea9d869ede51e51be4fdaedede2852282e54d2d8"
+dependencies = [
+ "bitflags 2.13.2",
+ "indexmap",
+ "semver",
+]
+
+[[package]]
+name = "wast"
+version = "261.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "776443145731a4062e5b0d392892a2005909b6ab72d9fdc3cad53dd1a714e44a"
+dependencies = [
+ "bumpalo",
+ "leb128fmt",
+ "memchr",
+ "unicode-width",
+ "wasm-encoder",
+]
+
+[[package]]
+name = "wat"
+version = "1.261.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7b4d1a49ea73a8f3326e74e3a05db667001b16bd1035ed3356fc1a0ed05ca7f"
+dependencies = [
+ "wast",
 ]
 
 [[package]]
@@ -5535,7 +5685,7 @@ checksum = "9440ea3e5aeabb0ac63af70daf835274065238cdd0cec83418f417eae38bacee"
 
 [[package]]
 name = "xtask"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde_json",
 ]

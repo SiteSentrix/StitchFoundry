@@ -154,6 +154,10 @@ cd apps/vectorcraft-web && trunk build --release            # web build → dist
 cargo xtask ci                                            # fmt, clippy, tests, layering, wasm, vendor names
 ```
 
+Japanese fonts come from [storytold/craft-fonts](https://github.com/storytold/craft-fonts), an optional
+build input (releases always use it): `CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p vectorcraft` (an absolute path).
+Without it, Japanese text uses the installed system fonts. See [`docs/development.md`](docs/development.md#fonts-craft-fonts-optional-build-input).
+
 ### Use it from Claude Code and other agents
 
 Register the MCP server with Claude Code:
@@ -169,7 +173,7 @@ The details are in [`docs/mcp.md`](docs/mcp.md) and [`docs/control-protocol.md`]
 VectorCraft is under active development. [**ROADMAP.md**](ROADMAP.md) covers what ships today, the
 milestones, and honest time-to-parity estimates.
 
-**Where we are (2026-10-05):** roughly 68–74% of Illustrator's features exist and work, and about 40–55% of
+**Where we are (2026-10-06):** roughly 69–75% of Illustrator's features exist and work, and about 40–55% of
 "a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles and threading, and
 files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats and PSD, Print, Package). The scores are
@@ -178,7 +182,7 @@ self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-0
 **What's missing:**
 - 3D and Materials;
 - the Photoshop-style raster effects (Effect Gallery);
-- vertical and CJK type;
+- CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - Variables and scripting;
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - packaging for Windows and Linux.
@@ -241,7 +245,9 @@ VectorCraft is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-AP
 Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors. Required notices are in [NOTICE](NOTICE).
 
 Bundled fonts, icons, images and other assets keep their own open licenses; each one is listed
-with its author, source and license in [ASSETS.md](ASSETS.md).
+with its author, source and license in [ASSETS.md](ASSETS.md). Release builds also embed the
+Japanese fonts of [craft-fonts](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md)
+(SIL Open Font License 1.1).
 
 The app icon (an engraved dragon on VectorCraft red, `#e8573f`) is the owner's original artwork; its
 palette and files are in [`assets/app-icon/`](assets/app-icon/README.md).

@@ -13,6 +13,7 @@ use crate::VectorcraftApp;
 use crate::io;
 use crate::state::{DockTab, ICON_PANELS, next_zoom};
 use crate::theme::{self, Brightness, Tokens};
+use crate::widgets;
 
 #[derive(Clone, Debug)]
 pub enum Item {
@@ -49,6 +50,7 @@ use Item::Sep;
 
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
+    ("app.language", "Interface Language", "", "{lang: en|ja} — persistent interface language"),
     ("file.open", "Open…", "Cmd+O", "{path?}"),
     (
         "file.save",
@@ -110,6 +112,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("file.documentSetup", "Document Setup…", "Cmd+Alt+P", "{}"),
     ("file.newDialog", "New…", "Cmd+N", "{} opens the New Document dialog"),
+    ("app.home", "Home", "", "{} shows the Home screen (new file presets, Open) over the open documents; choosing a document tab returns to it"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
@@ -168,7 +171,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.list", "List Workspaces", "", "{}"),
     ("window.newWindow", "New Window", "", "{}"),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
-    ("tool.setOption", "Tool Option", "", "{key, value}"),
+    (
+        "tool.setOption",
+        "Tool Option",
+        "",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+    ),
     (
         "effect.dialog",
         "Effect…",
@@ -226,7 +234,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.options",
         "Tool Options…",
         "",
-        "{tool: id} what double-clicking a tool button opens: gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true})",
+        "{tool: id} what double-clicking a tool button opens: gradient → the Gradient panel (window.panel), eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values})",
     ),
     (
         "ui.colorGuideOptions",
@@ -359,7 +367,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.menuDialog",
         "Menu Dialog",
         "",
-        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates)",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|object.path.offsetPath|object.path.simplify|object.path.splitIntoGrid|object.vectorHalftone|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, envelopeWarp, envelopeMesh, envelopeOptions; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
     ),
     (
         "ui.widthPointEdit",
@@ -528,10 +536,148 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{name?: a saved preset to edit | preset?: the preset a new one starts from (default [Default])} open the preset editor (dialog `printPreset`: the Print dialog's settings fields plus `name`); OK runs print.presets.save and returns to Print Presets",
     ),
+    (
+        "plugin.dialog",
+        "Plug-in…",
+        "",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step)",
+    ),
+    (
+        "ui.installPlugin",
+        "Install Plug-in…",
+        "",
+        "{path?: a .wasm file} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too)",
+    ),
+    (
+        "ui.perspectiveGridDialog",
+        "Define Perspective Grid…",
+        "",
+        "{} open View › Perspective Grid › Define Grid (dialog `perspectiveGrid`, prefilled from the grid: the fields of perspective.grid.define); OK runs perspective.grid.define",
+    ),
+    (
+        "ui.perspectivePresetsDialog",
+        "Perspective Grid Presets…",
+        "",
+        "{selected?} open Edit › Perspective Grid Presets (dialog `perspectiveGridPresets`, field `selected`): New… and Edit… open the preset editor (dialog `perspectiveGrid` with `__mode` edit), whose OK runs perspective.presets.save and comes back; Delete, Import… and Export… run perspective.presets.*",
+    ),
+    (
+        "ui.savePerspectivePreset",
+        "Save Grid as Preset…",
+        "",
+        "{} open View › Perspective Grid › Save Grid as Preset (dialog `perspectiveGrid` with `__mode` save, `name` a new preset name): OK runs perspective.presets.save with the fields",
+    ),
+    (
+        "ui.perspectiveUserPreset1.1",
+        "One Point Perspective Preset 1",
+        "",
+        "{} apply the 1. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.2",
+        "One Point Perspective Preset 2",
+        "",
+        "{} apply the 2. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.3",
+        "One Point Perspective Preset 3",
+        "",
+        "{} apply the 3. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.4",
+        "One Point Perspective Preset 4",
+        "",
+        "{} apply the 4. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.5",
+        "One Point Perspective Preset 5",
+        "",
+        "{} apply the 5. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.1",
+        "Two Point Perspective Preset 1",
+        "",
+        "{} apply the 1. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.2",
+        "Two Point Perspective Preset 2",
+        "",
+        "{} apply the 2. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.3",
+        "Two Point Perspective Preset 3",
+        "",
+        "{} apply the 3. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.4",
+        "Two Point Perspective Preset 4",
+        "",
+        "{} apply the 4. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.5",
+        "Two Point Perspective Preset 5",
+        "",
+        "{} apply the 5. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.1",
+        "Three Point Perspective Preset 1",
+        "",
+        "{} apply the 1. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.2",
+        "Three Point Perspective Preset 2",
+        "",
+        "{} apply the 2. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.3",
+        "Three Point Perspective Preset 3",
+        "",
+        "{} apply the 3. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.4",
+        "Three Point Perspective Preset 4",
+        "",
+        "{} apply the 4. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.5",
+        "Three Point Perspective Preset 5",
+        "",
+        "{} apply the 5. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.blendOptions",
+        "Blend Options…",
+        "",
+        "{} open Blend Options (Object › Blend › Blend Options…, the Blend tool's double-click, Alt-click and toolbar button; dialog `blendOptions`: spacing smooth|steps|distance, steps, distance (pt), orientation page|path, preview) on the selected blend's options, previewed live: OK runs object.blend.options as one undo step; with no blend selected it sets what new blends start with",
+    ),
+    (
+        "ui.perspectivePlane",
+        "Perspective Plane Options…",
+        "",
+        "{plane?: left|right|ground (default: the active plane)} open the plane's options, as double-clicking its plane widget does (dialog `perspectivePlane`: location (pt along the plane's normal), objects: none|move|copy): OK runs perspective.plane.move",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    if id == "app.language" {
+        let language = p.get("lang").and_then(Value::as_str).and_then(crate::i18n::Language::parse);
+        let Some(language) = language else { return Some(Err("lang must be en or ja".into())) };
+        app.ui.language = language;
+        return Some(Ok(json!(language)));
+    }
     if let Some(r) = crate::panels::character::intercept_text_command(app, id) {
         return Some(r);
     }
@@ -546,6 +692,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     let r = match id {
         "file.newDialog" => {
             crate::dialogs::open_new_document(app);
+            Ok(Value::Null)
+        }
+        "app.home" => {
+            app.ui.home = Some(home_key(app));
             Ok(Value::Null)
         }
         "file.open" => match s("path") {
@@ -768,11 +918,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
-        "tool.setOption" => {
-            let k = s("key").unwrap_or_default();
-            app.session.set_tool_option(&k, p.get("value").unwrap_or(&Value::Null));
-            Ok(app.session.tool_options())
-        }
+        "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.paramDialog" => {
@@ -866,12 +1012,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.expandDialog" => crate::dialogs::expand::open(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.spotColors" => crate::dialogs::spot_colors::open(app),
-        "ui.menuDialog" => match s("command").as_deref().and_then(menu_dialog) {
-            Some((kind, fields)) => {
-                app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
-                Ok(Value::Null)
-            }
-            None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
+        "ui.menuDialog" => match s("command").as_deref() {
+            Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
+            c => match c.and_then(menu_dialog) {
+                Some((kind, fields)) => {
+                    app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+                    Ok(Value::Null)
+                }
+                None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
+            },
         },
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
@@ -939,6 +1088,20 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "ui.printPresetDialog" => crate::dialogs::print::open_preset(app, p),
+        "plugin.dialog" => crate::dialogs::plugin::open(app, p),
+        "ui.installPlugin" => io::install_plugin(app, s("path")),
+        "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
+        "ui.perspectivePresetsDialog" => {
+            crate::dialogs::perspective_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
+        "ui.savePerspectivePreset" => crate::dialogs::perspective_grid::open_save(app),
+        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => match crate::dialogs::perspective_presets::slot_preset(app, id) {
+            Some(name) => app.run("perspective.grid.preset", json!({ "name": name })),
+            None => Err("no such perspective grid preset".into()),
+        },
+        "ui.blendOptions" => crate::dialogs::blend_options::open(app),
+        "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
         _ => return None,
     };
     Some(r)
@@ -946,8 +1109,19 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
+    if id == "app.language" {
+        return Some(p.get("lang").and_then(Value::as_str).and_then(crate::i18n::Language::parse) == Some(app.ui.language));
+    }
     let v = &app.ui.view;
     Some(match id {
+        "type.orientation.vertical" | "type.orientation.horizontal" => {
+            let st = app.session.active()?;
+            let t = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+                Some(vectorcraft_engine::doc::NodeKind::Text(t)) => Some(t),
+                _ => None,
+            })?;
+            t.vertical == (id == "type.orientation.vertical")
+        }
         "view.outline" => v.outline,
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
@@ -986,12 +1160,19 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
+        "perspective.grid.snap" => perspective_grid(app)?.snap,
+        "perspective.grid.lockStation" => perspective_grid(app)?.lock_station,
         "file.documentColorMode" | "object.convertDocumentColorMode" => {
             let cmyk = app.session.active().is_some_and(|d| d.doc.color_mode == vectorcraft_engine::doc::ColorMode::Cmyk);
             p.get("mode").and_then(Value::as_str) == Some(if cmyk { "cmyk" } else { "rgb" })
         }
         _ => return None,
     })
+}
+
+/// The active document's perspective grid (View → Perspective Grid toggles).
+fn perspective_grid(app: &VectorcraftApp) -> Option<vectorcraft_tools::distort::perspective::PerspectiveGrid> {
+    app.session.active().map(|d| vectorcraft_tools::distort::perspective::PerspectiveGrid::current(&d.doc))
 }
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
@@ -1031,6 +1212,17 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         id if id.starts_with("file.openRecent") => recent_slot(app, id)
             .map(|p| std::path::Path::new(p).file_name().map_or(p.clone(), |f| f.to_string_lossy().to_string()))
             .unwrap_or_else(|| "—".into()),
+        // Edit Contents reads Edit Envelope while an envelope's contents are being edited.
+        "object.envelope.editContents" => {
+            let editing = app.session.active().is_some_and(|st| {
+                st.selection
+                    .objects
+                    .first()
+                    .and_then(|id| vectorcraft_doc::live::envelope_of(&st.doc, *id))
+                    .is_some_and(|e| matches!(e.kind, vectorcraft_doc::NodeKind::Envelope { editing: true, .. }))
+            });
+            if editing { "Edit Envelope" } else { "Edit Contents" }.into()
+        }
         "edit.undo" => app.session.active().and_then(|d| d.history.undo.last()).map(|h| format!("Undo {}", h.label)).unwrap_or_else(|| "Undo".into()),
         "edit.redo" => app.session.active().and_then(|d| d.history.redo.last()).map(|h| format!("Redo {}", h.label)).unwrap_or_else(|| "Redo".into()),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => {
@@ -1039,6 +1231,12 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => {
             crate::panels::graphic_styles::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
         }
+        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
+            crate::dialogs::perspective_presets::slot_preset(app, id).unwrap_or_else(|| "—".into())
+        }
+        "perspective.grid.show" => if perspective_grid(app).is_some_and(|g| g.visible) { "Hide Grid" } else { "Show Grid" }.into(),
+        "perspective.grid.rulers" => if perspective_grid(app).is_some_and(|g| g.rulers) { "Hide Rulers" } else { "Show Rulers" }.into(),
+        "perspective.grid.lock" => if perspective_grid(app).is_some_and(|g| g.locked) { "Unlock Grid" } else { "Lock Grid" }.into(),
         _ => label.into(),
     }
 }
@@ -1050,6 +1248,18 @@ fn hidden_when_disabled(id: &str) -> bool {
         || id.starts_with("file.openRecent")
         || id.starts_with(crate::panels::swatches::USER_SLOT)
         || id.starts_with(crate::panels::graphic_styles::USER_SLOT)
+        || id.starts_with(crate::dialogs::perspective_presets::SLOT)
+}
+
+/// Menu items another item stands in for right now: Envelope Distort's Reset with Warp and Reset
+/// with Mesh take the place of Make with Warp and Make with Mesh while an envelope is selected.
+fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
+    let reset = match id {
+        "object.envelope.makeWithWarp" | "object.envelope.makeWithMesh" => false,
+        "object.envelope.resetWithWarp" | "object.envelope.resetWithMesh" => true,
+        _ => return false,
+    };
+    enabled(app, "object.envelope.release") != reset
 }
 
 /// File → Open Recent Files slots (Preferences → File Handling shows 0–30 of them).
@@ -1104,8 +1314,43 @@ pub fn listed_slots(app: &VectorcraftApp) -> usize {
     use vectorcraft_engine::cmd::{stylelib, swatchlib};
     let user = |libs: Vec<swatchlib::LibraryInfo>| libs.iter().filter(|l| l.category == "user").count().min(10);
     let views = app.session.active().map_or(0, |d| d.doc.views.len().min(10));
-    views + io::recent_files(app).len().min(RECENT_IDS.len()) + user(swatchlib::libraries(&app.session)) + user(stylelib::libraries(&app.session))
+    views
+        + io::recent_files(app).len().min(RECENT_IDS.len())
+        + user(swatchlib::libraries(&app.session))
+        + user(stylelib::libraries(&app.session))
+        + crate::dialogs::perspective_presets::listed_slots(app)
 }
+
+/// Changes whenever a plug-in is installed or removed: Object › Plug-ins and Effect › Plug-ins
+/// list them, so a menu built once (the native one) is rebuilt.
+pub fn plugin_revision() -> u64 {
+    vectorcraft_plugins::registry::revision()
+}
+
+/// View → Perspective Grid → One/Two/Three Point Perspective: the saved-preset slots of each type.
+const PERSPECTIVE_SLOTS: [[&str; crate::dialogs::perspective_presets::SLOTS]; 3] = [
+    [
+        "ui.perspectiveUserPreset1.1",
+        "ui.perspectiveUserPreset1.2",
+        "ui.perspectiveUserPreset1.3",
+        "ui.perspectiveUserPreset1.4",
+        "ui.perspectiveUserPreset1.5",
+    ],
+    [
+        "ui.perspectiveUserPreset2.1",
+        "ui.perspectiveUserPreset2.2",
+        "ui.perspectiveUserPreset2.3",
+        "ui.perspectiveUserPreset2.4",
+        "ui.perspectiveUserPreset2.5",
+    ],
+    [
+        "ui.perspectiveUserPreset3.1",
+        "ui.perspectiveUserPreset3.2",
+        "ui.perspectiveUserPreset3.3",
+        "ui.perspectiveUserPreset3.4",
+        "ui.perspectiveUserPreset3.5",
+    ],
+];
 
 /// Type → Recent Fonts slots.
 const RECENT_FONT_IDS: [&str; 10] = [
@@ -1178,6 +1423,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        "plugin.dialog" => app.session.active().is_some(),
+        "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
+        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
+            app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
+        }
+        "ui.perspectivePlane" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1199,6 +1450,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Join Our Discord", "help.discord"),
                 Sep,
                 c("Settings…", "edit.preferences"),
+                sub("Language", vec![cp("English", "app.language", json!({"lang": "en"})), cp("日本語", "app.language", json!({"lang": "ja"}))]),
                 Sep,
                 sub("UI Brightness", Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({"brightness": b.id()}))).collect()),
                 Sep,
@@ -1313,7 +1565,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 c("Print Presets…", "ui.printPresetsDialog"),
                 c("PDF Presets…", "ui.pdfPresetsDialog"),
-                cp("Perspective Grid Presets…", "perspective.grid.preset", json!({"kind": 2})),
+                c("Perspective Grid Presets…", "ui.perspectivePresetsDialog"),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),
                 c("Assign Profile…", "edit.assignProfile"),
@@ -1387,6 +1639,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "object.createObjectMosaic",
                     json!({"columns": 10, "rows": 10, "spacingX": 0, "spacingY": 0, "gray": false, "deleteRaster": false}),
                 ),
+                c("Vector Halftone…", "object.vectorHalftone"),
                 c("Create Trim Marks", "object.createTrimMarks"),
                 c("Flatten Transparency…", "ui.flattenTransparencyDialog"),
                 Sep,
@@ -1451,7 +1704,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Make", "object.blend.make"),
                         c("Release", "object.blend.release"),
                         Sep,
-                        cp("Blend Options…", "object.blend.options", json!({"steps": 5})),
+                        c("Blend Options…", "object.blend.options"),
                         Sep,
                         c("Expand", "object.blend.expand"),
                         Sep,
@@ -1463,22 +1716,29 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 sub(
                     "Envelope Distort",
                     vec![
-                        cp(
-                            "Make with Warp…",
-                            "object.envelope.makeWithWarp",
-                            json!({"style": "arc", "bend": 50, "h": 0, "v": 0, "horizontal": true}),
-                        ),
-                        cp("Make with Mesh…", "object.envelope.makeWithMesh", json!({"rows": 4, "cols": 4})),
+                        // While an envelope is selected, Reset takes Make's place (`swapped_out`).
+                        c("Make with Warp…", "object.envelope.makeWithWarp"),
+                        c("Reset with Warp…", "object.envelope.resetWithWarp"),
+                        c("Make with Mesh…", "object.envelope.makeWithMesh"),
+                        c("Reset with Mesh…", "object.envelope.resetWithMesh"),
                         c("Make with Top Object", "object.envelope.makeWithTopObject"),
                         Sep,
                         c("Release", "object.envelope.release"),
-                        cp("Envelope Options…", "object.envelope.options", json!({"fidelity": 50})),
+                        c("Envelope Options…", "object.envelope.options"),
                         c("Expand", "object.envelope.expand"),
                         Sep,
                         c("Edit Contents", "object.envelope.editContents"),
                     ],
                 ),
-                sub("Perspective", vec![c("Attach to Active Plane", "perspective.attach"), c("Release with Perspective", "perspective.release")]),
+                sub(
+                    "Perspective",
+                    vec![
+                        c("Attach to Active Plane", "perspective.attach"),
+                        c("Release with Perspective", "perspective.release"),
+                        c("Move Plane to Match Object", "perspective.plane.matchObject"),
+                        c("Edit Text", "perspective.editText"),
+                    ],
+                ),
                 sub(
                     "Live Paint",
                     vec![
@@ -1537,6 +1797,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         cp("As Multiple Assets", "assets.add", json!({"multiple": true})),
                     ],
                 ),
+                Sep,
+                sub("Plug-ins", crate::dialogs::plugin::object_menu()),
             ],
         ),
         (
@@ -1594,7 +1856,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Fill with Placeholder Text", "type.fillPlaceholder"),
                 Sep,
                 c("Show Hidden Characters", "type.hiddenCharacters"),
-                sub("Type Orientation", vec![todo("Horizontal"), todo("Vertical")]),
+                sub("Type Orientation", vec![c("Horizontal", "type.orientation.horizontal"), c("Vertical", "type.orientation.vertical")]),
             ],
         ),
         (
@@ -1725,11 +1987,17 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "Perspective Grid",
                     vec![
                         c("Show Grid", "perspective.grid.show"),
+                        c("Show Rulers", "perspective.grid.rulers"),
+                        c("Snap to Grid", "perspective.grid.snap"),
+                        c("Lock Grid", "perspective.grid.lock"),
+                        c("Lock Station Point", "perspective.grid.lockStation"),
                         Sep,
-                        cp("One Point Perspective", "perspective.grid.preset", json!({"kind": 1})),
-                        cp("Two Point Perspective", "perspective.grid.preset", json!({"kind": 2})),
-                        cp("Three Point Perspective", "perspective.grid.preset", json!({"kind": 3})),
-                        cp("Define Grid…", "perspective.grid.set", json!({"kind": 2, "cell": 20, "distance": 300})),
+                        c("Define Grid…", "ui.perspectiveGridDialog"),
+                        sub("One Point Perspective", crate::dialogs::perspective_presets::menu(1, PERSPECTIVE_SLOTS[0])),
+                        sub("Two Point Perspective", crate::dialogs::perspective_presets::menu(2, PERSPECTIVE_SLOTS[1])),
+                        sub("Three Point Perspective", crate::dialogs::perspective_presets::menu(3, PERSPECTIVE_SLOTS[2])),
+                        Sep,
+                        c("Save Grid as Preset…", "ui.savePerspectivePreset"),
                     ],
                 ),
                 c("Show Grid", "view.grid"),
@@ -1845,9 +2113,9 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         .ui(ui, |ui| {
             for (i, (title, items)) in tree.iter().enumerate() {
                 let text = if i == 0 {
-                    egui::RichText::new(*title).font(theme::semibold(13.0)).color(t.text)
+                    egui::RichText::new(app.ui.language.tr(title)).font(theme::semibold(13.0)).color(t.text)
                 } else {
-                    egui::RichText::new(*title).size(13.0).color(t.text)
+                    egui::RichText::new(app.ui.language.tr(title)).size(13.0).color(t.text)
                 };
                 ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked));
             }
@@ -1860,10 +2128,13 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     end
 }
 
-/// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt.
+/// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt;
+/// it scrolls when it is taller than the window.
 fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
-    ui.set_min_width(230.0);
-    render_items(app, ui, items, clicked);
+    widgets::menu_scroll(ui, |ui| {
+        ui.set_min_width(230.0);
+        render_items(app, ui, items, clicked);
+    });
 }
 
 fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
@@ -1874,17 +2145,19 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
                 ui.separator();
             }
             Item::Header(h) => {
-                ui.label(egui::RichText::new(*h).size(11.0).color(t.text_dim));
+                ui.label(egui::RichText::new(app.ui.language.tr(h)).size(11.0).color(t.text_dim));
             }
             Item::Sub(label, children) => {
-                ui.menu_button(*label, |ui| {
-                    ui.set_min_width(200.0);
-                    render_items(app, ui, children, clicked);
+                ui.menu_button(app.ui.language.tr(label), |ui| {
+                    widgets::menu_scroll(ui, |ui| {
+                        ui.set_min_width(200.0);
+                        render_items(app, ui, children, clicked);
+                    });
                 });
             }
             Item::Todo(label, sc) => {
                 ui.add_enabled_ui(false, |ui| {
-                    ui.add(egui::Button::new(*label).shortcut_text(pretty_shortcut(sc)));
+                    ui.add(egui::Button::new(app.ui.language.tr(label)).shortcut_text(pretty_shortcut(sc)));
                 })
                 .response
                 .on_disabled_hover_text("Coming soon — tracked in the parity plan");
@@ -1892,10 +2165,11 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
             Item::Cmd(label, id, p) => {
                 let en = enabled(app, id);
                 // Unused saved-view and recent-file slots are hidden (only the real ones are listed).
-                if !en && hidden_when_disabled(id) {
+                if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
                     continue;
                 }
                 let label = dynamic_label(app, id, label);
+                let label = app.ui.language.tr(&label).to_string();
                 let sc = item_shortcut(id, p).map(pretty_shortcut).unwrap_or_default();
                 let chk = checked(app, id, p);
                 let text = match chk {
@@ -1913,6 +2187,12 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked
     }
 }
 
+/// What the Home screen remembers when it opens (`app.home`): the active document and the
+/// document count. When either changes, the Home screen gives way to the document.
+pub(crate) fn home_key(app: &VectorcraftApp) -> (Option<u64>, usize) {
+    (app.session.active().map(|d| d.uid), app.session.documents().len())
+}
+
 fn label_of(it: &Item) -> &'static str {
     match it {
         Item::Cmd(l, _, _) => l,
@@ -1925,7 +2205,7 @@ fn label_of(it: &Item) -> &'static str {
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode");
+        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
@@ -1945,6 +2225,7 @@ fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
         "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
         "object.path.simplify" => ("simplify", json!({"tolerance": "1 pt"})),
         "object.path.splitIntoGrid" => ("splitIntoGrid", json!({"rows": 2, "columns": 2, "gutter": "12 pt"})),
+        "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
         _ => return None,
     })
 }
@@ -1955,6 +2236,13 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         && p.as_object().is_none_or(|o| o.is_empty())
     {
         app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+        return;
+    }
+    // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
+    if crate::dialogs::envelope::opens(id) && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::envelope::open(app, id) {
+            app.status(e);
+        }
         return;
     }
     // Repeat Options: a dialog with the selected repeat's current values.
@@ -2032,6 +2320,13 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
+    // Blend Options…: its dialog, on the selected blend's options.
+    if id == "object.blend.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::blend_options::open(app) {
+            app.status(e);
+        }
+        return;
+    }
     // Expand…: its dialog.
     if id == "object.expand" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::expand::open(app) {
@@ -2095,7 +2390,7 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     fn walk(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
         for it in items {
             match it {
-                Item::Cmd(_, id, _) if hidden_when_disabled(id) && !enabled(app, id) => {}
+                Item::Cmd(_, id, _) if (hidden_when_disabled(id) && !enabled(app, id)) || swapped_out(app, id) => {}
                 Item::Cmd(l, id, p) => out.push(MenuEntry {
                     path: path.clone(),
                     label: dynamic_label(app, id, l),
@@ -2181,25 +2476,35 @@ fn insert_items(list: &[(&'static str, &'static str)]) -> Vec<Item> {
     list.iter().map(|(l, c)| cp(l, "type.insert", json!({ "char": c }))).collect()
 }
 
-/// Type → Font: one item per installed family (labels interned once so the per-frame menu build
-/// doesn't allocate forever).
+/// Type → Font: one item per available family, the installed fonts included. Built again only when
+/// the fonts change (the menu tree is built every frame); labels are interned once each, so
+/// rebuilding doesn't allocate forever.
 fn font_items() -> Vec<Item> {
-    static NAMES: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
-    let fams = vectorcraft_text::FontDb::global().families();
-    let Ok(mut names) = NAMES.lock() else { return vec![] };
-    fams.iter()
-        .map(|f| {
-            let label: &'static str = match names.iter().find(|n| **n == f.as_str()) {
-                Some(n) => n,
-                None => {
-                    let n: &'static str = Box::leak(f.clone().into_boxed_str());
-                    names.push(n);
-                    n
-                }
-            };
-            cp(label, "text.setStyle", json!({ "font": label }))
-        })
-        .collect()
+    static NAMES: std::sync::Mutex<std::collections::BTreeSet<&'static str>> = std::sync::Mutex::new(std::collections::BTreeSet::new());
+    static ITEMS: std::sync::Mutex<(u64, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, Vec::new()));
+    let db = vectorcraft_text::FontDb::global();
+    // Read first: fonts that load meanwhile make the next frame build the list again.
+    let generation = db.generation();
+    let fams = db.family_list();
+    let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
+    if items.0 != generation {
+        let list = fams
+            .iter()
+            .map(|f| {
+                let label: &'static str = match names.get(f.as_str()) {
+                    Some(n) => n,
+                    None => {
+                        let n: &'static str = Box::leak(f.clone().into_boxed_str());
+                        names.insert(n);
+                        n
+                    }
+                };
+                cp(label, "text.setStyle", json!({ "font": label }))
+            })
+            .collect();
+        *items = (generation, list);
+    }
+    items.1.clone()
 }
 
 /// The Effect menu, built from the effects catalogue (vector effects), plus raster effects.
@@ -2214,8 +2519,19 @@ fn effect_menu() -> Vec<Item> {
         Item::Header("Vector Effects"),
     ];
     // Submenus (and Crop Marks, an item of its own) in the reference app's order.
-    let order =
-        ["3D and Materials", "Convert to Shape", "Crop Marks", "Distort & Transform", "Path", "Pathfinder", "Stylize", "SVG Filters", "Warp", "Blur"];
+    let order = [
+        "3D and Materials",
+        "Color Adjustments",
+        "Convert to Shape",
+        "Crop Marks",
+        "Distort & Transform",
+        "Path",
+        "Pathfinder",
+        "Stylize",
+        "SVG Filters",
+        "Warp",
+        "Blur",
+    ];
     let top_level = |e: &vectorcraft_effects::EffectInfo| e.menu == ["Effect"] && order.contains(&e.label);
     for sub_name in order {
         if let Some(e) = cat.iter().find(|e| top_level(e) && e.label == sub_name) {
@@ -2232,6 +2548,8 @@ fn effect_menu() -> Vec<Item> {
             })
             .collect();
         if sub_name == "Blur" {
+            // Live-effect plug-ins close the vector effects.
+            out.extend(crate::dialogs::plugin::effect_menu());
             if !items.is_empty() {
                 out.push(Sep);
                 out.push(Item::Header("Raster Effects"));
@@ -2366,14 +2684,13 @@ mod tests {
         fn walk(items: &[Item], bad: &mut Vec<String>) {
             for it in items {
                 match it {
-                    Item::Cmd(_, id, _) => {
+                    Item::Cmd(_, id, _)
                         if vectorcraft_engine::find_command(id).is_none()
                             && !UI_COMMANDS.iter().any(|c| c.0 == *id)
                             && !id.starts_with("object.path.")
-                            && *id != "type.createOutlines"
-                        {
-                            bad.push(id.to_string());
-                        }
+                            && *id != "type.createOutlines" =>
+                    {
+                        bad.push(id.to_string());
                     }
                     Item::Sub(_, ch) => walk(ch, bad),
                     _ => {}
@@ -2427,5 +2744,37 @@ mod tests {
         }
         let w = ctx.memory(|m| m.area_rect(id)).unwrap().width();
         assert!((230.0..340.0).contains(&w), "File menu is {w} pt wide");
+    }
+
+    #[test]
+    fn long_menus_scroll_inside_a_short_window() {
+        // The Window menu is taller than a 600 pt window: it stops above the bottom edge and
+        // scrolls instead of running off screen.
+        let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let tree = menu_tree();
+        let (_, window) = tree.iter().find(|(t, _)| *t == "Window").unwrap();
+        let id = egui::Id::new("test-long-menu");
+        let rect = |height: f32| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
+            for _ in 0..3 {
+                let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+                let mut out = ctx.run_ui(input, |ui| {
+                    egui::Area::new(id).fixed_pos(egui::pos2(300.0, 30.0)).show(ui.ctx(), |ui| {
+                        egui::containers::menu::menu_style(ui.style_mut());
+                        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| menu_body(&app, ui, window, &mut None));
+                    });
+                });
+                out.textures_delta.clear();
+            }
+            ctx.memory(|m| m.area_rect(id)).unwrap()
+        };
+        let short = rect(600.0);
+        assert!(short.bottom() <= 600.0, "Window menu ends at {} in a 600 pt window", short.bottom());
+        // With room to spare it shows whole, taller than the short window allowed.
+        let tall = rect(3000.0);
+        assert!(tall.height() > short.height() + 100.0, "{} vs {}", tall.height(), short.height());
+        assert!(tall.bottom() < 3000.0);
     }
 }

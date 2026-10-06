@@ -20,15 +20,18 @@ pub struct Hit {
     pub leaf: NodeId,
     pub ancestry: Vec<NodeId>,
     pub kind: HitKind,
+    /// The innermost envelope in the ancestry whose contents are being edited (Edit Contents):
+    /// its content, not the envelope, is the object clicked.
+    pub contents_of: Option<NodeId>,
 }
 
 impl Hit {
     /// The object the Selection tool selects: the child of the layer (the outermost group).
     /// Inside isolation mode (`scope`), the child of the isolated container instead.
     pub fn top_object(&self, scope: Option<NodeId>) -> NodeId {
-        if let Some(s) = scope
-            && let Some(i) = self.ancestry.iter().position(|x| *x == s)
-        {
+        // The innermost of the isolated container and an envelope whose contents are edited.
+        let at = |s: Option<NodeId>| s.and_then(|s| self.ancestry.iter().position(|x| *x == s));
+        if let Some(i) = at(scope).max(at(self.contents_of)) {
             return self.ancestry.get(i + 1).copied().unwrap_or(self.leaf);
         }
         // Skip layers and sublayers.
@@ -68,12 +71,18 @@ pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
             continue;
         }
         chain.push(layer.id);
-        if let Some(h) = hit_children(layer, p, opt, &mut chain) {
+        if let Some(mut h) = hit_children(layer, p, opt, &mut chain) {
+            h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
             return Some(h);
         }
         chain.pop();
     }
     None
+}
+
+/// Is `n` an envelope whose contents are being edited (they hit, not the envelope)?
+fn edits_contents(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Envelope { editing: true, .. })
 }
 
 /// Is `p` inside the region `clip` clips to ([`Node::clip_shapes`])? Text counts by its frame:
@@ -99,7 +108,9 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
         if !c.visible || c.locked {
             continue;
         }
-        if let Some(b) = c.reach_bounds()
+        // (An envelope's content sits where it was, not where the envelope draws it.)
+        if !edits_contents(c)
+            && let Some(b) = c.reach_bounds()
             && !b.inflate(opt.tol, opt.tol).contains(p)
         {
             continue;
@@ -107,7 +118,13 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
         chain.push(c.id);
         let hit = match &c.kind {
             NodeKind::Layer { .. } | NodeKind::Group { .. } => hit_children(c, p, opt, chain),
-            _ => hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind }),
+            // Edit Contents: the envelope's content hits, undistorted.
+            NodeKind::Envelope { editing: true, .. } => hit_children(c, p, opt, chain),
+            // A blend's key objects first (Direct and Group Selection pick them); its steps hit
+            // as the blend.
+            NodeKind::Blend { .. } => hit_children(c, p, opt, chain)
+                .or_else(|| hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None })),
+            _ => hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None }),
         };
         if hit.is_some() {
             return hit;

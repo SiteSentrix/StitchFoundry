@@ -757,11 +757,7 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
                         visit(c, true, false, false, v, opts);
                     }
                 }
-                NodeKind::Text(t) => {
-                    if empty_text && t.plain_text().trim().is_empty() {
-                        v.push(n.id);
-                    }
-                }
+                NodeKind::Text(t) if empty_text && t.plain_text().trim().is_empty() => v.push(n.id),
                 NodeKind::Layer { children, .. } => {
                     for c in children {
                         visit(c, false, false, false, v, opts);

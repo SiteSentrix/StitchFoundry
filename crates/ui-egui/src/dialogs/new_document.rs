@@ -97,7 +97,9 @@ fn sync(app: &VectorcraftApp, d: &mut Dialog) {
     let preset = d.str("preset");
     match d.fields.get(APPLIED).and_then(Value::as_object) {
         Some(a) if a.get("preset").and_then(Value::as_str) == Some(preset.as_str()) => {
-            if a.iter().any(|(k, v)| k != "preset" && d.fields.get(k) != Some(v)) {
+            // Unchanged fields keep the preset (falling through would apply it again).
+            let edited = a.iter().any(|(k, v)| k != "preset" && d.fields.get(k) != Some(v));
+            if edited {
                 d.fields.insert("preset".into(), json!(""));
                 d.fields.remove(APPLIED);
             }

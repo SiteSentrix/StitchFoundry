@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\"), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow) → {ids, index, item}",
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow) → {ids, index, item}",
             has_doc,
             apply
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Effects",
             [],
             None,
-            "{} → {catalog: [{id, label, menu, params, defaults, raster, lengths: {always, absolute (while relative is false)} (distance params Scale Strokes & Effects scales)}], applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
+            "{} → {catalog: [{id, label, menu, params, defaults, raster, lengths: {always, absolute (while relative is false)} (distance params Scale Strokes & Effects scales)}] (installed effect plug-ins last: id plugin.<plug-in id>, menu Effect › Plug-ins), applied: [{id, effects, items: [{index, kind: fill|stroke, effects}]}], activeItem} for the selection",
             always,
             list
         ),
@@ -146,6 +146,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
 fn list(s: &mut Session, p: &Value) -> Result<Value> {
     let catalog: Vec<Value> = effects::effect_catalog()
         .into_iter()
+        .chain(effects::plugin_effects())
         .map(|e| {
             json!({"id": e.id, "label": e.label, "menu": e.menu, "params": e.params, "defaults": e.defaults, "raster": e.raster,
             "lengths": {"always": e.lengths.always, "absolute": e.lengths.absolute}})
@@ -321,11 +322,25 @@ fn expand_pieces(d: &mut Document, m: &mut Node, all: bool, stroke_art: effects:
 /// stroke becomes an object of its own (strokes outlined, brushes as their art), geometry effects
 /// are baked, raster effects become an embedded image, and the object keeps its transparency.
 fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
-    let Some(n) = d.node(id).cloned() else { return };
-    let container = is_container(&n);
+    let Some(mut n) = d.node(id).cloned() else { return };
     if !expandable(&n) {
         return;
     }
+    // Colour adjustments: the colours inside become the adjusted ones (an embedded image a
+    // recoloured copy), then the rest of the appearance expands.
+    if effects::has_adjustment(&n)
+        && let Some(m) = effects::adjust_in_document(d, &n)
+        && let Some(slot) = d.node_mut(id)
+    {
+        *slot = m.clone();
+        out.push(id);
+        n = m;
+        if !expandable(&n) {
+            return;
+        }
+    }
+    // (A symbol instance has become its art, a group.)
+    let container = is_container(&n);
     // Crop Marks: a group of the object and its marks, then the object expands on its own.
     if let Some(mut m) = effects::crop_marks_art(&n) {
         let mut seen = std::collections::HashSet::from([id]);
@@ -385,7 +400,9 @@ fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush
         && let Some(slot) = d.node_mut(id)
     {
         *slot = m;
-        out.push(id);
+        if out.last() != Some(&id) {
+            out.push(id);
+        }
     }
     if container {
         let children: Vec<NodeId> = d.node(id).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id).collect()).unwrap_or_default();

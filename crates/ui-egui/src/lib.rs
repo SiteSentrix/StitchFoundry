@@ -15,6 +15,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 pub mod find_font;
+pub mod i18n;
 pub mod icon_data;
 pub mod icons;
 pub mod io;
@@ -33,10 +34,13 @@ pub mod sysclip;
 pub mod theme;
 pub mod titlebar;
 pub mod toolbar;
+mod ui_fonts;
 pub mod unsaved;
 pub mod widgets;
 pub mod workspaces;
 
+#[cfg(test)]
+mod tests_adjust;
 #[cfg(test)]
 mod tests_aisave;
 #[cfg(test)]
@@ -44,23 +48,39 @@ mod tests_background;
 #[cfg(test)]
 mod tests_clipboard;
 #[cfg(test)]
+mod tests_cut;
+#[cfg(test)]
+mod tests_distortkeys;
+#[cfg(test)]
 mod tests_docsetup;
+#[cfg(test)]
+mod tests_fonts;
+#[cfg(test)]
+mod tests_home;
 #[cfg(test)]
 mod tests_labels;
 #[cfg(test)]
 mod tests_nativeoptions;
 #[cfg(test)]
+mod tests_numfields;
+#[cfg(test)]
 mod tests_overprint;
 #[cfg(test)]
 mod tests_paintchips;
+#[cfg(test)]
+mod tests_pastechords;
 #[cfg(test)]
 mod tests_pdfoutput;
 #[cfg(test)]
 mod tests_place;
 #[cfg(test)]
+mod tests_plugins;
+#[cfg(test)]
 mod tests_printps;
 #[cfg(test)]
 mod tests_printtiling;
+#[cfg(test)]
+mod tests_puppetwarp;
 #[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
@@ -68,17 +88,23 @@ mod tests_recovery;
 #[cfg(test)]
 mod tests_save;
 #[cfg(test)]
+mod tests_saveext;
+#[cfg(test)]
 mod tests_slices;
 #[cfg(test)]
 mod tests_svg;
 #[cfg(test)]
 mod tests_svgsave;
 #[cfg(test)]
+mod tests_synthetic;
+#[cfg(test)]
 mod tests_sysclip;
 #[cfg(test)]
 mod tests_sysclip_emf;
 #[cfg(test)]
 mod tests_transparencygrid;
+#[cfg(test)]
+mod tests_widthtool;
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -182,6 +208,8 @@ pub struct CanvasCache {
     pub slices: Option<SliceCache>,
     /// The print tiling's pages for (document uid, revision) (View → Show Print Tiling).
     pub print_tiling: Option<PrintTilingCache>,
+    /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
+    pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
@@ -237,6 +265,8 @@ pub struct VectorcraftApp {
     pub synthetic: Vec<egui::Event>,
     styled: bool,
     fonts_ready: bool,
+    /// Installed fonts added to the UI's for characters its own fonts lack (CJK names…).
+    ui_fonts: ui_fonts::UiFonts,
     frame: u64,
     last_time: f64,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
@@ -267,6 +297,10 @@ pub struct VectorcraftApp {
     pub background: background::Background,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
+    /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
+    host_modifiers: egui::Modifiers,
+    /// Synthetic input set the modifiers egui holds (see [`Self::raw_input_hook`]).
+    synthetic_modifiers: bool,
 }
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
@@ -274,6 +308,8 @@ const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 impl VectorcraftApp {
     pub fn new(mut session: Session, services: Services) -> Self {
+        // The font menus and the first file opened need the installed fonts: catalog them now.
+        vectorcraft_text::FontDb::global().scan_in_background();
         if let Some(store) = &services.recovery_store {
             session.recovery.set_store(store.clone());
         }
@@ -292,6 +328,7 @@ impl VectorcraftApp {
                 worker_started: false,
                 slices: None,
                 print_tiling: None,
+                selection_box: None,
             },
             perf: Perf::default(),
             integrated_titlebar: false,
@@ -309,6 +346,7 @@ impl VectorcraftApp {
             synthetic: vec![],
             styled: false,
             fonts_ready: false,
+            ui_fonts: Default::default(),
             frame: 0,
             last_time: 0.0,
             canvas_rect: None,
@@ -320,6 +358,8 @@ impl VectorcraftApp {
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
+            host_modifiers: Default::default(),
+            synthetic_modifiers: false,
         }
     }
 
@@ -354,7 +394,21 @@ impl VectorcraftApp {
             show_bbox: self.ui.view.bounding_box,
             snap_to_point: self.ui.view.snap_to_point,
             corner_widgets: self.ui.view.corner_widgets,
+            screen: self.screen_frame(),
         }
+    }
+
+    /// The canvas on screen in document coordinates (none before it is laid out).
+    pub fn screen_frame(&self) -> Option<vectorcraft_tools::ScreenFrame> {
+        let (rect, view) = (self.canvas_rect?, self.view()?);
+        let xf = canvas::Xf::new(rect, view);
+        let px = |x: f32, y: f32| xf.delta_to_doc(egui::vec2(x, y));
+        Some(vectorcraft_tools::ScreenFrame {
+            origin: xf.to_doc(rect.left_top()),
+            right: px(1.0, 0.0),
+            down: px(0.0, 1.0),
+            size: (f64::from(rect.width()), f64::from(rect.height())),
+        })
     }
 
     /// Run a UI or engine command by id. The single entry point for every frontend path.
@@ -550,6 +604,23 @@ pub fn now_ms() -> f64 {
     }
 }
 
+impl VectorcraftApp {
+    /// The selection's bounding box, rotated with rotated objects ([`Session::transform_box`]). The
+    /// canvas and the transform fields read it every frame: it is measured once per revision.
+    pub fn selection_box(&mut self) -> Option<vectorcraft_doc::OrientedBox> {
+        let st = self.session.active()?;
+        let key = (st.uid, st.revision, self.session.prefs.use_preview_bounds);
+        if let Some((k, b)) = self.canvas.selection_box
+            && k == key
+        {
+            return b;
+        }
+        let b = self.session.transform_box(&st.selection.objects);
+        self.canvas.selection_box = Some((key, b));
+        b
+    }
+}
+
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl.
 impl VectorcraftApp {
@@ -652,19 +723,51 @@ impl VectorcraftApp {
         place::drop_files(self, files, target);
     }
 
-    /// Inject synthetic events (one press/release step per frame).
+    /// Inject synthetic events (one press/release step per frame). Handlers read the modifiers
+    /// egui holds (`i.modifiers`), so a synthetic key or button holds its own for the frames it
+    /// spans (a drag's moves included); the keyboard's come back after.
     pub fn raw_input_hook(&mut self, raw: &mut egui::RawInput) {
-        if self.synthetic.is_empty() {
-            return;
+        for e in &raw.events {
+            match e {
+                egui::Event::ModifiersChanged(m) => self.host_modifiers = *m,
+                egui::Event::WindowFocused(false) => self.host_modifiers = egui::Modifiers::NONE,
+                _ => {}
+            }
         }
+        let Some(first) = self.synthetic.first() else {
+            if std::mem::take(&mut self.synthetic_modifiers) {
+                raw.events.push(egui::Event::ModifiersChanged(self.host_modifiers));
+            }
+            return;
+        };
         // Pointer events go one per frame so egui sees presses, drags and releases as real input;
         // keyboard sequences go up to the key release.
-        let n = match self.synthetic[0] {
+        let n = match first {
             egui::Event::PointerMoved(_) | egui::Event::PointerButton { .. } => 1,
             _ => self.synthetic.iter().position(|e| matches!(e, egui::Event::Key { pressed: false, .. })).map_or(self.synthetic.len(), |i| i + 1),
         };
-        if let Some(egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. }) = self.synthetic.first() {
+        if let egui::Event::PointerMoved(p) | egui::Event::PointerButton { pos: p, .. } = first {
             raw.events.push(egui::Event::PointerMoved(*p));
+        }
+        let (now, later) = self.synthetic.split_at(n.min(self.synthetic.len()));
+        // This frame's key or button, else the button a drag holds down (released later).
+        let held = now
+            .iter()
+            .find_map(|e| match e {
+                egui::Event::Key { modifiers, .. } | egui::Event::PointerButton { modifiers, .. } => Some(*modifiers),
+                _ => None,
+            })
+            .or_else(|| match later.iter().find(|e| matches!(e, egui::Event::PointerButton { .. })) {
+                Some(egui::Event::PointerButton { pressed: false, modifiers, .. }) => Some(*modifiers),
+                _ => None,
+            });
+        match held {
+            Some(m) => {
+                raw.events.push(egui::Event::ModifiersChanged(m));
+                self.synthetic_modifiers = true;
+            }
+            None if std::mem::take(&mut self.synthetic_modifiers) => raw.events.push(egui::Event::ModifiersChanged(self.host_modifiers)),
+            None => {}
         }
         raw.events.extend(self.synthetic.drain(..n));
     }
@@ -713,6 +816,7 @@ impl VectorcraftApp {
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
         }
+        self.ui_fonts.frame(&ctx);
         self.perf.frame_ms = now_ms() - t0;
         let _ = json!(null);
     }

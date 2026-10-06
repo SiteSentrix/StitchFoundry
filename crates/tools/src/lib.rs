@@ -11,17 +11,20 @@ pub mod bbox;
 pub mod builder;
 pub mod catalog;
 pub mod corners;
+pub mod cut;
 pub mod direct;
 pub mod distort;
 pub mod draw2;
 pub mod extra;
 pub mod guides;
 pub mod meshblend;
+pub mod meshedit;
 pub mod params;
 pub mod pen;
 pub mod place;
 pub mod printtiling;
 pub mod select;
+pub mod settings;
 pub mod shape;
 pub mod slice;
 pub mod symbolism;
@@ -32,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, NodeId, Selection, Unit};
-use vectorcraft_geom::{BezPath, Point, Rect};
+use vectorcraft_geom::{BezPath, Point, Rect, Vec2};
 
 pub use catalog::{TOOL_GROUPS, ToolInfo, tool_info};
 
@@ -90,6 +93,15 @@ impl PointerEvent {
         self.mods = m;
         self
     }
+    /// The pen `pressure` of a pointer event given as JSON (control channel, MCP): 0..1, default 1.
+    pub fn json_pressure(e: &Value) -> f32 {
+        e.get("pressure").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(1.0, |f| f.clamp(0.0, 1.0) as f32)
+    }
+    /// How long the pointer then holds still, in seconds, from a JSON pointer event's `holdMs`
+    /// (0..60000; default 0): the time [`Tool::tick`] gets.
+    pub fn json_hold(e: &Value) -> f64 {
+        e.get("holdMs").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(0.0, |ms| ms.clamp(0.0, 60_000.0) / 1000.0)
+    }
 }
 
 /// Keys tools care about.
@@ -109,6 +121,9 @@ pub enum ToolKey {
     Tab,
     Home,
     End,
+    /// A digit key 0–9 (5 while dragging with the Perspective Selection tool moves perpendicular
+    /// to the plane).
+    Digit(u8),
 }
 
 /// What a tool asks the engine to do.
@@ -168,6 +183,26 @@ impl Default for PaintDefaults {
     }
 }
 
+/// The document window on screen, in document coordinates: widgets that stay put on screen (the
+/// Plane Switching Widget) are placed with it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScreenFrame {
+    /// The window's top-left corner.
+    pub origin: Point,
+    /// One screen pixel to the right and one down.
+    pub right: Vec2,
+    pub down: Vec2,
+    /// The window's size in screen pixels.
+    pub size: (f64, f64),
+}
+
+impl ScreenFrame {
+    /// The document point `x`, `y` screen pixels from the window's top-left corner.
+    pub fn at(&self, x: f64, y: f64) -> Point {
+        self.origin + self.right * x + self.down * y
+    }
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
@@ -215,6 +250,10 @@ pub struct ToolContext<'a> {
     pub slices_hidden: bool,
     /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
     pub slices_locked: bool,
+    /// The document window (none headless): screen-fixed widgets sit in it.
+    pub screen: Option<ScreenFrame>,
+    /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
+    pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
 }
 
 impl ToolContext<'_> {
@@ -260,6 +299,8 @@ pub enum Overlay {
     Highlight { quad: [Point; 4], color: [u8; 4] },
     /// A colour chip of fixed screen size (a gradient stop), RGBA; ringed when selected.
     Swatch { p: Point, color: [u8; 4], selected: bool },
+    /// A hairline in a translucent colour (perspective gridlines), RGBA.
+    GridLine { a: Point, b: Point, color: [u8; 4] },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -296,6 +337,18 @@ pub enum Cursor {
     Slice,
     /// The Slice Selection tool: the arrow with a slice badge.
     SliceSelect,
+    /// The Width tool away from strokes.
+    Width,
+    /// The Width tool over a stroke: a drag adds a width point.
+    WidthAdd,
+    /// The Width tool over a width point or a handle end: a drag moves or widens it.
+    WidthPoint,
+    /// The Blend tool away from art: a crosshair with a hollow square.
+    Blend,
+    /// The Blend tool over an object it can blend: a crosshair with a filled square.
+    BlendObject,
+    /// The Blend tool over an anchor point (the blend starts there): a crosshair with a target.
+    BlendAnchor,
 }
 
 /// A tool state machine.
@@ -337,6 +390,21 @@ pub trait Tool: Send {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }
+    /// A command from outside the tool ran (a menu, a panel, an agent): finish work it ended (the
+    /// Type tool stops editing text the command took out of the selection).
+    fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
+    /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
+    /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
+    /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.
+    fn tick(&mut self, _cx: &ToolContext, _dt: f64) -> Vec<Action> {
+        vec![]
+    }
+    /// Does the tool want [`Tool::tick`]s now (the host keeps time only then)?
+    fn wants_ticks(&self) -> bool {
+        false
+    }
 }
 
 /// Create a tool by id. Unknown or not-yet-implemented tools fall back to a no-op tool that keeps the id.
@@ -346,7 +414,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "directSelection" => Box::new(direct::DirectSelectionTool::new(false)),
         "groupSelection" => Box::new(direct::DirectSelectionTool::new(true)),
         "pen" => Box::new(pen::PenTool::default()),
-        "type" | "areaType" | "typeOnPath" => Box::new(text::TypeTool::new(id)),
+        "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath" => Box::new(text::TypeTool::new(id)),
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
@@ -359,6 +427,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
             .or_else(|| extra::create(other))
             .or_else(|| slice::create(other))
             .or_else(|| printtiling::create(other))
+            .or_else(|| cut::create(other))
             .unwrap_or_else(|| Box::new(NoopTool(tool_info(other).map(|t| t.id).unwrap_or("selection")))),
     }
 }
@@ -423,6 +492,8 @@ pub(crate) mod testutil {
             paste_plain_text: false,
             slices_hidden: false,
             slices_locked: false,
+            screen: None,
+            plane_widget: Some(Default::default()),
         }
     }
 }

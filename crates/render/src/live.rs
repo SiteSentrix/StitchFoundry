@@ -1,8 +1,10 @@
 //! Live objects in the renderer.
 //!
-//! Blends and envelopes are evaluated by `vectorcraft_doc::live` and the resulting objects cached
-//! by `Arc` identity of the live node (so the steps keep stable `Arc`s and hit the geometry cache
-//! frame after frame). Gradient meshes are tessellated into many small solid-colour quads (vello
+//! Blends and envelopes are evaluated by `vectorcraft_doc::live` (through
+//! `vectorcraft_effects::expand_live`, as the exporters do) and the resulting objects cached by
+//! `Arc` identity of the live node and of the symbols and patterns it draws (so the steps keep
+//! stable `Arc`s and hit the geometry cache frame after frame, and editing a symbol redraws an
+//! envelope around an instance of it). Gradient meshes are tessellated into many small solid-colour quads (vello
 //! has no mesh shading), with the density chosen from the on-screen patch size; each quad is
 //! grown by half a device pixel along its edges so neighbours overlap and no antialiasing seams
 //! show.
@@ -10,13 +12,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::live::{self, GradientMesh, MeshQuad};
-use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::{BezPath, PathData, Vec2};
+use vectorcraft_doc::live::{GradientMesh, MeshQuad};
+use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_geom::{BezPath, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
 
-use crate::{Frame, Renderer, text_geom};
+use crate::{Frame, Renderer};
 
 type Expanded = Arc<Vec<Arc<Node>>>;
 type MeshEntry = (Arc<Node>, Arc<Vec<MeshQuad>>, u64);
@@ -24,7 +26,7 @@ type MeshEntry = (Arc<Node>, Arc<Vec<MeshQuad>>, u64);
 /// Per-renderer cache of evaluated live objects.
 #[derive(Default)]
 pub(crate) struct LiveCache {
-    expanded: HashMap<usize, (Arc<Node>, Expanded, u64)>,
+    expanded: HashMap<usize, (Arc<Node>, Expanded, u64, u64)>,
     meshes: HashMap<(usize, usize), MeshEntry>,
     stamp: u64,
 }
@@ -41,29 +43,34 @@ impl LiveCache {
     }
 }
 
-/// Text converted to one outline path (for envelopes): glyphs in document space, painted with the
-/// first run's fill/stroke.
-pub(crate) fn outline_text(n: &Node) -> Option<Node> {
-    let NodeKind::Text(t) = &n.kind else { return None };
-    let g = text_geom(t);
-    let mut bp = g.all.clone();
-    bp.apply_affine(t.xf);
-    let mut out = Node::path(n.id, PathData::from_bezpath(&bp), n.appearance.clone());
-    if out.appearance.items.is_empty()
-        && let Some(r) = t.runs.first()
-    {
-        out.appearance = r.style.appearance();
-    }
-    out.opacity = n.opacity;
-    out.blend = n.blend;
-    Some(out)
+/// One level of evaluation of a live node (blend steps, envelope result with type outlined run by
+/// run, mesh → flat pieces) without a document (symbol instances and pattern tiles in envelopes
+/// stay as they are). Non-live nodes return themselves.
+pub fn expand_live(n: &Node) -> Vec<Node> {
+    crate::effects::expand_live(None, n)
 }
 
-/// Evaluate a live node one level (blend steps / envelope result, text outlined; mesh → flat
-/// pieces). Non-live nodes return themselves.
-pub fn expand_live(n: &Node) -> Vec<Node> {
-    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
-    live::expand_live_with(n, Some(hook))
+/// What an evaluated live node depends on besides itself: the art of the symbols and the patterns
+/// it draws (their `Arc`s outlive document copies, so this changes only when one is edited).
+fn resources_key(doc: &Document, n: &Node) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    n.walk(&mut |c| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &c.kind
+            && let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol)
+        {
+            (Arc::as_ptr(&s.art) as usize).hash(&mut h);
+        }
+        for i in &c.appearance.items {
+            if let vectorcraft_color::Paint::Pattern { pattern, .. } = i.paint()
+                && let Some(def) = doc.pattern(pattern)
+            {
+                def.art.iter().for_each(|a| (Arc::as_ptr(a) as usize).hash(&mut h));
+                [def.tile.x0, def.tile.y0, def.tile.x1, def.tile.y1].iter().for_each(|v| v.to_bits().hash(&mut h));
+            }
+        }
+    });
+    h.finish()
 }
 
 /// Subdivisions per patch for a patch about `size_px` device pixels across.
@@ -73,22 +80,23 @@ fn mesh_level(m: &GradientMesh, bounds_px: f64) -> usize {
 }
 
 impl Renderer {
-    fn live_expanded(&mut self, a: &Arc<Node>, cache: bool) -> Expanded {
+    fn live_expanded(&mut self, doc: &Document, a: &Arc<Node>, cache: bool) -> Expanded {
         let key = Arc::as_ptr(a) as usize;
+        let resources = resources_key(doc, a);
         if cache
             && let Some(e) = self.live.expanded.get_mut(&key)
             && Arc::ptr_eq(&e.0, a)
+            && e.3 == resources
         {
             e.2 = self.live.stamp;
             return e.1.clone();
         }
-        let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
-        let v: Expanded = match crate::effects::pathfinder_children(a, Some(hook)) {
+        let v: Expanded = match crate::effects::pathfinder_children(a, crate::effects::text_outliner()) {
             Some(children) => Arc::new(children),
-            None => Arc::new(expand_live(a).into_iter().map(Arc::new).collect()),
+            None => Arc::new(crate::effects::expand_live(Some(doc), a).into_iter().map(Arc::new).collect()),
         };
         if cache {
-            self.live.expanded.insert(key, (a.clone(), v.clone(), self.live.stamp));
+            self.live.expanded.insert(key, (a.clone(), v.clone(), self.live.stamp, resources));
         }
         v
     }
@@ -114,7 +122,13 @@ impl Renderer {
         let stamp = self.stamp;
         self.live.tick(stamp);
         let opacity = self.opacity_of(a);
-        if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate) {
+        // A knockout blend's steps knock each other out, as in the exports (opaque ones can't show it).
+        let knockout = !f.opts.outline
+            && matches!(a.kind, NodeKind::Blend { .. })
+            && a.knockout.resolve(self.knockout)
+            && vectorcraft_doc::live::steps_knockout_shows(&self.live_expanded(f.doc, a, true));
+        let enclosing = std::mem::replace(&mut self.knockout, knockout);
+        if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate || knockout) {
             let blends = self.blends_through(a);
             let bounds = if blends { self.bounds_of(a) } else { None };
             let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
@@ -122,6 +136,7 @@ impl Renderer {
         } else {
             self.draw_live_body(ctx, f, a, true);
         }
+        self.knockout = enclosing;
         self.stats.drawn += 1;
     }
 
@@ -130,9 +145,14 @@ impl Renderer {
         match &a.kind {
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => {
-                let items = self.live_expanded(a, cache);
-                for c in items.iter() {
-                    self.draw_arc(ctx, f, c);
+                let items = self.live_expanded(f.doc, a, cache);
+                // The flag holds while this blend is drawn (see `draw_live`).
+                if self.knockout && matches!(a.kind, NodeKind::Blend { .. }) {
+                    self.draw_knockout(ctx, f, &items);
+                } else {
+                    for c in items.iter() {
+                        self.draw_arc(ctx, f, c);
+                    }
                 }
             }
             _ => {}

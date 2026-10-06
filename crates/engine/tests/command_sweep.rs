@@ -224,6 +224,24 @@ fn structured_junk() {
         ("stroke.set", json!({"dash": [1e-12]})),
         ("transparency.set", json!({"opacity": -50})),
         ("transparency.set", json!({"opacity": 1e308, "blend": "NoSuchBlend"})),
+        ("perspective.move", json!({"from": [0, 0], "to": [1e308, -1e308], "perpendicular": true, "copy": true, "plane": "ground"})),
+        ("perspective.move", json!({"from": [f64::MAX, 0], "to": [0, 0], "plane": "left"})),
+        ("perspective.transform", json!({"matrix": [1e308, 0, 0, 1e308, 0, 0], "plane": "right"})),
+        ("perspective.transform", json!({"matrix": [1, 0, 0, 1, 0, 0], "depth": -1e9, "plane": "left", "copy": true})),
+        ("perspective.transform", json!({"matrix": [1, 0, 0, 1, 1e300, 0], "plane": "left"})),
+        ("perspective.nudge", json!({"dx": 1e308, "dy": -1e308, "big": true, "copy": true})),
+        ("perspective.plane.move", json!({"plane": "ground", "offset": 1e308, "objects": "copy"})),
+        ("perspective.plane.move", json!({"plane": "left", "by": -1e7, "objects": "move"})),
+        ("perspective.plane.move", json!({"plane": "none", "offset": 0})),
+        ("perspective.plane.matchObject", json!({"id": u64::MAX})),
+        ("perspective.grid.set", json!({"leftOffset": -1e12, "reproject": true})),
+        ("perspective.grid.set", json!({"vpRight": -1e6, "reproject": true})),
+        ("perspective.editText", json!({"id": u64::MAX})),
+        (
+            "perspective.draw",
+            json!({"command": "shape.rectangle", "params": {"x": 1, "y": 1, "width": 10, "height": 10}, "at": [1e308, -1e308], "plane": "left"}),
+        ),
+        ("perspective.draw", json!({"command": "shape.flare", "params": {"cx": 0, "cy": 0}, "plane": "ground"})),
         ("object.setProps", json!({"opacity": -1, "blend": 5})),
         ("effect.apply", json!({"effect": "distort.roughen", "params": {"size": 100, "detail": 100, "relative": false}})),
         ("effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 1e308, "ridges": 100}})),
@@ -262,6 +280,21 @@ fn structured_junk() {
         ("file.new", json!({"width": -1, "height": 0, "artboards": 1000000})),
         ("command.batch", json!({"commands": [{"command": 5}, {"params": 3}]})),
         ("command.batch", json!({"commands": "nope"})),
+        ("object.puppetWarp", json!({"pins": [[0, 0]], "moved": [[0, 0]], "angles": [1e308]})),
+        ("object.puppetWarp", json!({"pins": [[0, 0], [5, 5]], "moved": [[0, 0], [1e9, 1e9]], "angles": [-1e308, "x"]})),
+        ("object.liquify", json!({"tool": "pucker", "points": [[0, 0, 1e308], [1, 1, -5], [2, 2, "x"]], "usePressure": true})),
+        ("object.liquify", json!({"tool": "twirl", "points": vec![json!([50, 50, 0.5]); 400], "usePressure": "yes", "simplifyOn": 3})),
+        ("object.liquify", json!({"tool": "wrinkle", "points": [[0, 0], [1e4, 1e4]], "width": 1e308, "complexity": -1, "affectIn": null})),
+        ("object.blend.make", json!({"ids": [1, 2, 3], "starts": [u64::MAX, -1, "x", null, 1e308]})),
+        ("object.blend.make", json!({"ids": [2, 2], "starts": {"a": 1}, "steps": 1e308})),
+        ("object.blend.options", json!({"spacing": "distance", "value": -1e308, "orientation": 5})),
+        ("object.blend.spine.moveAnchor", json!({"id": 2, "anchor": u64::MAX, "x": 1e308, "y": -1e308, "handle": "sideways"})),
+        ("object.blend.spine.addAnchor", json!({"id": u64::MAX, "x": 0, "y": 0})),
+        ("object.blend.spine.removeAnchor", json!({"anchor": -1})),
+        ("object.puppetWarp", json!({"rest": true, "pins": [], "moved": []})),
+        ("object.puppetWarp", json!({"rest": true, "pins": [[1e308, 0]], "moved": [[0, 0]], "expand": -5})),
+        ("object.puppetWarp", json!({"rest": true, "ids": [u64::MAX], "pins": [[0, 0]], "moved": [[0, 0]]})),
+        ("object.puppetWarp.pins", json!({"ids": [0, 1, 2], "expand": 1e308})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {
@@ -362,4 +395,48 @@ fn recovery_commands_with_a_damaged_store_and_junk_params() {
             }
         }
     }
+}
+
+/// Envelope Distort's commands on warp, mesh and top-object envelopes (selected, and with their
+/// content selected in Edit Contents) with `{}` and junk params: never a panic, an open
+/// interaction or a broken tree.
+#[test]
+fn envelope_commands_with_junk_params_on_envelopes() {
+    let path = safe_path();
+    let makes: [(&str, Value); 3] = [
+        ("object.envelope.makeWithWarp", json!({"style": "twist", "bend": 80})),
+        ("object.envelope.makeWithMesh", json!({"rows": 2, "cols": 3})),
+        ("object.envelope.makeWithTopObject", json!({})),
+    ];
+    let mut failures = vec![];
+    for (make, mp) in &makes {
+        for editing in [false, true] {
+            let ids: Vec<&str> =
+                command_specs().iter().map(|c| c.id).filter(|id| id.starts_with("object.envelope.") || id.starts_with("object.mesh.")).collect();
+            for id in ids {
+                let spec = command_specs().iter().find(|c| c.id == id).unwrap();
+                for p in std::iter::once(json!({})).chain(junk_params(spec.params, &path)) {
+                    let mut s = Fixture::Multi.session();
+                    if s.execute(make, mp).is_err() {
+                        failures.push(format!("{make} failed on the Multi fixture"));
+                        continue;
+                    }
+                    if editing {
+                        let _ = s.execute("object.envelope.editContents", &json!({"editing": true}));
+                    }
+                    let r = catch_quiet(|| s.execute(id, &p));
+                    if r.is_err() {
+                        failures.push(format!("PANIC {id} {p} [{make}, editing {editing}]"));
+                    } else if s.in_interaction() {
+                        failures.push(format!("{id} {p} [{make}]: left an interaction open"));
+                    } else if let Err(e) = check_session(&s) {
+                        failures.push(format!("{id} {p} [{make}]: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    failures.sort();
+    failures.dedup();
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.iter().take(40).cloned().collect::<Vec<_>>().join("\n"));
 }

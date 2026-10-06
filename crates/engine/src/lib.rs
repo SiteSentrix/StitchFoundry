@@ -22,6 +22,7 @@ use vectorcraft_tools::{PaintDefaults, Tool};
 
 pub use cmd::EyedropperOptions;
 pub use cmd::clipboard::Clipboard;
+pub use cmd::distortcmds::perspective_click;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use tooling::{UiRequest, ViewInfo};
@@ -81,6 +82,9 @@ pub struct Interaction {
     /// Per-document state restored on cancel (current layer, isolation).
     pub active_layer: Option<NodeId>,
     pub isolation: Option<NodeId>,
+    /// The perspective transform the previews make (`perspective.transform` params): Transform
+    /// Again repeats it once the drag is committed.
+    pub perspective_again: Option<Value>,
 }
 
 /// Per-document editing state.
@@ -131,6 +135,9 @@ pub struct DocState {
     pub recovery: Option<cmd::recovery::RecoveryCopy>,
     /// View → Show Print Tiling, per document (view state: not saved, not undoable).
     pub print_tiling: bool,
+    /// Transform Again after a perspective move or scale (Perspective Selection tool): the
+    /// `perspective.transform` params it repeats. `None` once an ordinary transform follows.
+    pub last_perspective: Option<Value>,
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -163,6 +170,7 @@ impl DocState {
             recovered: false,
             recovery: None,
             print_tiling: false,
+            last_perspective: None,
         }
     }
     /// Unsaved changes: the document differs from the saved one (selection changes don't count).
@@ -472,6 +480,30 @@ pub struct Prefs {
     /// Preferences dialog field: resetting the preferences keeps it; `print.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub print_presets: Vec<cmd::printpresets::PrintPreset>,
+    /// Constrain Width and Height Proportions: the link between W and H in the Transform panel,
+    /// the Properties panel and the Control bar (their size fields pass `proportional` to
+    /// `object.setBounds`).
+    pub constrain_proportions: bool,
+    /// The tools' persistent options by store (a tool id, or a store a family shares: `liquify`
+    /// holds the Liquify tools' Global Brush Dimensions), see [`vectorcraft_tools::settings`]:
+    /// kept across tool switches and saved with the preferences. Not a Preferences dialog field:
+    /// resetting the preferences keeps them; `tool.setOption` edits them.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub tool_settings: std::collections::BTreeMap<String, serde_json::Map<String, Value>>,
+    /// View → Perspective Grid presets: the user's (the built-in ones aren't stored). A local
+    /// library, not a Preferences dialog field: resetting the preferences keeps it;
+    /// `perspective.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub perspective_presets: Vec<vectorcraft_tools::distort::perspective::GridDefinition>,
+    /// Blend Options set with no blend selected: what new blends start with
+    /// (`object.blend.options`; none: Smooth Color, Align to Page). A tool setting, not a
+    /// Preferences dialog field: it has no [`cmd::prefscmds::PREF_SPECS`] row and resetting the
+    /// preferences keeps it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blend_options: Option<vectorcraft_doc::live::BlendDefaults>,
+    /// Perspective Grid Options (double-click the Perspective Grid tool): whether the Plane
+    /// Switching Widget shows and where (`perspective.widget.options`).
+    pub perspective_widget: vectorcraft_tools::distort::perspective::widget::WidgetOptions,
 }
 
 impl Default for Prefs {
@@ -604,6 +636,11 @@ impl Default for Prefs {
             web_export_presets: vec![],
             web_export_settings: None,
             print_presets: vec![],
+            constrain_proportions: false,
+            tool_settings: Default::default(),
+            perspective_presets: vec![],
+            blend_options: None,
+            perspective_widget: Default::default(),
         }
     }
 }
@@ -668,6 +705,17 @@ pub struct Session {
     pub(crate) batch_stash: Option<Vec<DocState>>,
     /// Where Data Recovery keeps its copies ([`cmd::recovery`]).
     pub recovery: cmd::recovery::Recovery,
+    /// While the active tool's actions run: their commands aren't "a command from outside the
+    /// tool" ([`Session::after_command`]).
+    pub(crate) in_tool_actions: bool,
+    /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
+    /// (`None`: the reference app's defaults, fidelity 50); not saved.
+    pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
+    /// The Liquify stroke the last live preview applied, which the next sample of the drag goes on
+    /// from ([`cmd::distortcmds::LiquifyStroke`]).
+    pub(crate) liquify_stroke: Option<Box<cmd::distortcmds::LiquifyStroke>>,
+    /// A press on the Plane Switching Widget is under way: its drag and release are the widget's.
+    pub(crate) plane_widget_press: bool,
 }
 
 impl Default for Session {
@@ -708,6 +756,10 @@ impl Session {
             note_depth: 1,
             batch_stash: None,
             recovery: Default::default(),
+            in_tool_actions: false,
+            envelope_defaults: None,
+            liquify_stroke: None,
+            plane_widget_press: false,
         }
     }
 
@@ -747,7 +799,8 @@ impl Session {
         if self.batch_stash.is_none() {
             let _ = self.cancel_interaction();
         }
-        self.tool = vectorcraft_tools::create(self.tool.id());
+        self.keep_tool_settings();
+        self.tool = self.make_tool(self.tool.id());
     }
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
@@ -860,6 +913,9 @@ impl Session {
         if spec.journal && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
             let p = self.noted(params);
             self.journal.push((id.to_string(), p));
+        }
+        if self.depth == 0 {
+            self.after_command();
         }
         Ok(r)
     }
@@ -1005,6 +1061,10 @@ impl Session {
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
         st.revision += 1;
+        // Puppet Warp pins belong to the art they were placed on: another selection starts afresh.
+        if st.doc.puppet.as_ref().is_some_and(|p| p.ids != st.selection.objects) {
+            cmd::distortcmds::drop_puppet_pins(st);
+        }
         Ok(())
     }
 
@@ -1022,6 +1082,7 @@ impl Session {
             preview: None,
             active_layer: st.active_layer,
             isolation: st.isolation,
+            perspective_again: None,
         });
         Ok(())
     }
@@ -1050,13 +1111,18 @@ impl Session {
         let st = self.doc_mut()?;
         let Some(mut it) = st.interaction.take() else { return Ok(()) };
         let Some(preview) = it.preview.take() else { return Ok(()) };
+        let perspective_again = it.perspective_again.take();
         st.keep_interaction(it);
         if preview.0 == "object.transform" {
             let m = cmd::matrix_param(&preview.1, "matrix");
             let copy = preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
             if let Some(m) = m {
                 st.last_transform = Some((m, copy));
+                st.last_perspective = None;
             }
+        }
+        if perspective_again.is_some() {
+            st.last_perspective = perspective_again;
         }
         self.journal.push(preview);
         Ok(())
@@ -1088,11 +1154,21 @@ impl Session {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_adjust;
+#[cfg(test)]
 mod tests_appearance;
 #[cfg(test)]
 mod tests_assets;
 #[cfg(test)]
 mod tests_attributes;
+#[cfg(test)]
+mod tests_bboxrotate;
+#[cfg(test)]
+mod tests_blendfidelity;
+#[cfg(test)]
+mod tests_blendopts;
+#[cfg(test)]
+mod tests_blendspine;
 #[cfg(test)]
 mod tests_brushsym;
 #[cfg(test)]
@@ -1124,6 +1200,8 @@ mod tests_containers;
 #[cfg(test)]
 mod tests_css;
 #[cfg(test)]
+mod tests_cut;
+#[cfg(test)]
 mod tests_dashalign;
 #[cfg(test)]
 mod tests_distort;
@@ -1135,6 +1213,14 @@ mod tests_draw2;
 mod tests_editcolors;
 #[cfg(test)]
 mod tests_effectedit;
+#[cfg(test)]
+mod tests_emptytype;
+#[cfg(test)]
+mod tests_envelope;
+#[cfg(test)]
+mod tests_envelope_distort;
+#[cfg(test)]
+mod tests_envelope_edit;
 #[cfg(test)]
 mod tests_expand;
 #[cfg(test)]
@@ -1152,11 +1238,15 @@ mod tests_flatten;
 #[cfg(test)]
 mod tests_focal;
 #[cfg(test)]
+mod tests_fontlist;
+#[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]
 mod tests_gradient;
 #[cfg(test)]
 mod tests_gradpanel;
+#[cfg(test)]
+mod tests_halftone;
 #[cfg(test)]
 mod tests_journal;
 #[cfg(test)]
@@ -1171,6 +1261,8 @@ mod tests_linked_stops;
 mod tests_links;
 #[cfg(test)]
 mod tests_linkspanel;
+#[cfg(test)]
+mod tests_liquify;
 #[cfg(test)]
 mod tests_live;
 #[cfg(test)]
@@ -1210,7 +1302,17 @@ mod tests_pdfpresets;
 #[cfg(test)]
 mod tests_pdfraster;
 #[cfg(test)]
+mod tests_persp_planes;
+#[cfg(test)]
+mod tests_persp_select;
+#[cfg(test)]
+mod tests_persp_text;
+#[cfg(test)]
+mod tests_perspgrid;
+#[cfg(test)]
 mod tests_place;
+#[cfg(test)]
+mod tests_plugins;
 #[cfg(test)]
 mod tests_prefs;
 #[cfg(test)]
@@ -1229,6 +1331,8 @@ mod tests_printps;
 mod tests_printtiling;
 #[cfg(test)]
 mod tests_proxyitems;
+#[cfg(test)]
+mod tests_puppetwarp;
 #[cfg(test)]
 mod tests_rastersettings;
 #[cfg(test)]
@@ -1276,6 +1380,8 @@ mod tests_tileedge;
 #[cfg(test)]
 mod tests_tints;
 #[cfg(test)]
+mod tests_toolsettings;
+#[cfg(test)]
 mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_units;
@@ -1285,5 +1391,7 @@ mod tests_webexport;
 mod tests_widthpoints;
 #[cfg(test)]
 mod tests_widthprofiles;
+#[cfg(test)]
+mod tests_widthtool;
 #[cfg(test)]
 mod tests_xform;

@@ -274,6 +274,9 @@ type ClipPaintEntry = (Arc<Node>, Option<Arc<Node>>, Option<Arc<Node>>);
 /// Reusable renderer (keeps the render context, decoded images and glyph caches between frames).
 pub struct Renderer {
     texts: PtrMap<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
+    /// again when fonts are added or rescanned.
+    text_fonts: u64,
     /// Clip regions per clipping path (see [`Self::clip_of`]).
     clips: PtrMap<usize, ClipEntry>,
     /// Context reused when rendering single-threaded (`threads == 0`).
@@ -324,6 +327,9 @@ pub struct Renderer {
     ink_images: ink::InkImages,
     /// Gradients along or across strokes, keyed like `strokes` (see [`Self::fill_path_gradient`]).
     stroke_slices: PtrMap<(usize, i32), SliceEntry>,
+    /// The keys and sizes of the recoloured images colour adjustments made in `images`, oldest
+    /// first (see [`Self::adjusted_image`]).
+    adjusted: std::collections::VecDeque<(String, usize)>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -373,6 +379,7 @@ impl Renderer {
     pub fn new() -> Self {
         Self {
             texts: PtrMap::default(),
+            text_fonts: 0,
             clips: PtrMap::default(),
             ctx_st: None,
             threads: default_threads(),
@@ -398,6 +405,7 @@ impl Renderer {
             clip_paints: PtrMap::default(),
             ink_images: Default::default(),
             stroke_slices: PtrMap::default(),
+            adjusted: Default::default(),
         }
     }
 
@@ -826,6 +834,16 @@ impl Renderer {
                     && let Some(region) = self.clip_of(clip)
                 {
                     let (fill, stroke) = self.clip_paint_of(clip);
+                    // An image inside its own frame painted straight into the clipping path, without
+                    // a clip layer (envelopes cut distorted images into many such pieces).
+                    if let ([image], None, None) = (rest, &fill, &stroke)
+                        && let NodeKind::Image(im) = &image.kind
+                        && plain_image(image, im, &region.0)
+                    {
+                        self.draw_image_in(ctx, f, im, Some(&region));
+                        self.stats.drawn += 1;
+                        return;
+                    }
                     let blends = self.blends_through(n);
                     let bounds = if blends { Some(region.0.bounding_box()) } else { None };
                     let comp = Composite { clip: Some((&region.0, region.1)), blends, bounds, ..Default::default() };
@@ -1138,6 +1156,11 @@ impl Renderer {
 
     /// Cached glyph geometry for a text node (keyed by Arc identity like paths).
     fn text_geom_of(&mut self, a: &Arc<Node>, t: &TextObject) -> Arc<TextGeom> {
+        let fonts = vectorcraft_text::FontDb::global().generation();
+        if fonts != self.text_fonts {
+            self.texts.clear();
+            self.text_fonts = fonts;
+        }
         let key = Arc::as_ptr(a) as usize;
         if let Some((node, g)) = self.texts.get(&key)
             && Arc::ptr_eq(node, a)
@@ -1251,6 +1274,12 @@ impl Renderer {
     }
 
     fn draw_image(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject) {
+        self.draw_image_in(ctx, f, im, None);
+    }
+
+    /// Draw an image, or with `area` (a region in the document inside the image's frame, see
+    /// [`plain_image`]) the image painted into that region.
+    fn draw_image_in(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject, area: Option<&(BezPath, FillRule)>) {
         let rect = Rect::new(0.0, 0.0, im.width as f64, im.height as f64);
         // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
         // Mode its pixels in greyscale under the frame.
@@ -1265,16 +1294,58 @@ impl Renderer {
             let pm = if outline { pm } else { self.ink_image(&cache_key, &pm, f.ink) };
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
-            ctx.set_transform(f.view * im.xf);
             ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler: peniko::ImageSampler::default() });
-            ctx.set_paint_transform(Affine::scale_non_uniform(sx, sy));
-            ctx.fill_rect(&rect);
+            match area {
+                Some((bp, rule)) => {
+                    ctx.set_transform(f.view);
+                    ctx.set_paint_transform(im.xf * Affine::scale_non_uniform(sx, sy));
+                    ctx.set_fill_rule(fill_rule(*rule));
+                    ctx.fill_path(bp);
+                }
+                None => {
+                    ctx.set_transform(f.view * im.xf);
+                    ctx.set_paint_transform(Affine::scale_non_uniform(sx, sy));
+                    ctx.fill_rect(&rect);
+                }
+            }
             ctx.reset_paint_transform();
         }
         if outline {
             let mut p = rect.to_path(0.1);
             p.apply_affine(im.xf);
             self.hairline(ctx, f, &p, [0, 0, 0, 255]);
+        }
+    }
+
+    /// Cache the pixels of image blob `key` recoloured by `map` as `derived` (the key the adjusted
+    /// art's image takes). The latest ones are kept up to a memory budget: dropping one drops the
+    /// cached art too, so it is made again.
+    fn adjusted_image(&mut self, doc: &Document, key: &str, derived: String, map: &vectorcraft_effects::ColorMap) {
+        const BUDGET: usize = 256 << 20;
+        if self.images.contains_key(&derived) {
+            return;
+        }
+        let Some(src) = self.image_pixmap(doc, key, key, false) else { return };
+        let mut pm = (*src).clone();
+        let mut memo: HashMap<[u8; 4], [u8; 3]> = HashMap::new();
+        for px in pm.data_mut().iter_mut().filter(|p| p.a > 0) {
+            let a = px.a as u32;
+            let [r, g, b] = *memo.entry([px.r, px.g, px.b, px.a]).or_insert_with(|| {
+                // Premultiplied to straight, adjusted, then premultiplied again.
+                let straight = [px.r, px.g, px.b].map(|v| ((v as u32 * 255 + a / 2) / a).min(255) as u8);
+                map.apply_rgb8(straight).map(|v| ((v as u32 * a + 127) / 255) as u8)
+            });
+            (px.r, px.g, px.b) = (r, g, b);
+        }
+        let bytes = pm.data().len() * 4;
+        self.images.insert(derived.clone(), Arc::new(pm));
+        self.adjusted.push_back((derived, bytes));
+        let mut total: usize = self.adjusted.iter().map(|(_, b)| b).sum();
+        while total > BUDGET && self.adjusted.len() > 1 {
+            let Some((old, b)) = self.adjusted.pop_front() else { break };
+            self.images.remove(&old);
+            self.fx_arts.clear();
+            total -= b;
         }
     }
 
@@ -1305,6 +1376,21 @@ impl Renderer {
         self.images.insert(grey_key, pm.clone());
         Some(pm)
     }
+}
+
+/// Can image node `n` (`im`) clipped by `region` be painted straight into the region: visible,
+/// with no transparency, effects or paint of its own, and the region inside the image's frame
+/// (within a pixel), so no paint past the image's edge shows?
+fn plain_image(n: &Node, im: &vectorcraft_doc::ImageObject, region: &BezPath) -> bool {
+    if !(n.visible && n.has_default_transparency() && n.appearance.items.is_empty() && n.appearance.effects.is_empty()) {
+        return false;
+    }
+    let det = im.xf.determinant();
+    if !(det.abs() > 1e-12 && det.is_finite()) {
+        return false;
+    }
+    let b = im.xf.inverse().transform_rect_bbox(region.bounding_box());
+    b.x0 >= -1.0 && b.y0 >= -1.0 && b.x1 <= im.width as f64 + 1.0 && b.y1 <= im.height as f64 + 1.0
 }
 
 /// Opacity-mask coverage of one premultiplied pixel: luminance, with the area outside the mask
@@ -1480,6 +1566,8 @@ fn now() -> u64 {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_adjust;
+#[cfg(test)]
 mod tests_blend;
 #[cfg(test)]
 mod tests_charstroke;
@@ -1489,6 +1577,8 @@ mod tests_clip;
 mod tests_cmykblend;
 #[cfg(test)]
 mod tests_container;
+#[cfg(test)]
+mod tests_fontchange;
 #[cfg(test)]
 mod tests_freeform;
 #[cfg(test)]

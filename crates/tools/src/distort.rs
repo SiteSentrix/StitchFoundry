@@ -20,14 +20,14 @@ mod width;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::{Affine, Point, Vec2};
+use vectorcraft_geom::{Homography, Point};
 
 use crate::Tool;
 
 pub use liquify::LiquifyTool;
 pub use perspective::{PerspectiveGridTool, PerspectiveSelectionTool};
-pub use puppet::{PuppetWarpTool, mesh_for, mesh_input};
-pub use width::WidthTool;
+pub use puppet::{PinSet, PuppetWarpTool, mesh_for, mesh_input, rest_and_pins, warp_from_rest};
+pub use width::{WidthTool, stroke_owner};
 
 /// Create a distortion tool by id (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
@@ -46,6 +46,24 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
 /// editable points (text, images, symbols, meshes, live objects) get the approximation at their
 /// centre. Live shapes become plain paths.
 pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
+    warp_node(n, f, None);
+}
+
+/// [`warp_node_with`] for the projective map `h` (perspective): type and symbol instances keep
+/// their flat art and are drawn through `h` (composed with the projection they had).
+pub fn project_node(n: &mut Node, h: &Homography) {
+    warp_node(n, &|p| h.apply(p).unwrap_or(p), Some(h));
+}
+
+fn warp_node(n: &mut Node, f: &dyn Fn(Point) -> Point, h: Option<&Homography>) {
+    if let Some(h) = h
+        && matches!(n.kind, NodeKind::Text(_) | NodeKind::SymbolInstance { .. })
+    {
+        let rec = n.perspective.get_or_insert_with(Default::default);
+        let had = rec.homography().unwrap_or(Homography::IDENTITY);
+        rec.projection = Some(h.then_after(&had).to_array());
+        return;
+    }
     let bounds = n.geometric_bounds();
     // Finite-difference step: 5% of the object (at least half a point).
     let eps = bounds.map_or(0.5, |b| (b.width().max(b.height()) * 0.05).max(0.5));
@@ -66,7 +84,7 @@ pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
         | NodeKind::Compound { children, .. }
         | NodeKind::Blend { children, .. } => {
             for c in children.iter_mut() {
-                warp_node_with(Arc::make_mut(c), f);
+                warp_node(Arc::make_mut(c), f, h);
             }
         }
         _ => {
@@ -79,14 +97,7 @@ pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
     n.appearance.warp_gradients(&|p| affine_near(f, p, eps));
 }
 
-/// The affine map that best matches `f` near `p` (finite differences with step `eps`).
-pub fn affine_near(f: &dyn Fn(Point) -> Point, p: Point, eps: f64) -> Affine {
-    let o = f(p);
-    let ex = (f(p + Vec2::new(eps, 0.0)) - f(p - Vec2::new(eps, 0.0))) / (2.0 * eps);
-    let ey = (f(p + Vec2::new(0.0, eps)) - f(p - Vec2::new(0.0, eps))) / (2.0 * eps);
-    let lin = Affine::new([ex.x, ex.y, ey.x, ey.y, 0.0, 0.0]);
-    Affine::translate(o.to_vec2()) * lin * Affine::translate(-p.to_vec2())
-}
+pub use vectorcraft_doc::live::affine_near;
 
 /// Every anchor and handle position in `n` (for meshes and bounds).
 pub fn collect_points(n: &Node, out: &mut Vec<Point>) {
@@ -127,7 +138,7 @@ mod tests {
     use super::*;
     use vectorcraft_color::{Gradient, GradientPaint, Paint};
     use vectorcraft_doc::Appearance;
-    use vectorcraft_geom::{PathData, Rect, shapes};
+    use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
     #[test]
     fn create_covers_all_distort_tools() {

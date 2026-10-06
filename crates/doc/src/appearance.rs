@@ -892,6 +892,30 @@ impl Appearance {
             g.transform(a);
         }
     }
+    /// Envelope Options → Distort Linear Gradients: bend the linear gradients of an object whose
+    /// geometric bounds are `bounds` with a warp, given its local affine approximation at a point
+    /// (taken at the middle of each gradient's vector). Unplaced ones are fixed to their fit first;
+    /// other gradients stay as they are.
+    pub fn warp_linear_gradients(&mut self, bounds: vectorcraft_geom::Rect, near: &dyn Fn(vectorcraft_geom::Point) -> vectorcraft_geom::Affine) {
+        for i in &mut self.items {
+            let (g, b) = match i {
+                AppearanceItem::Fill(FillLayer { paint: Paint::Gradient(g), .. }) => (g, bounds),
+                AppearanceItem::Stroke(s) => {
+                    let b = s.paint_bounds(bounds);
+                    let Paint::Gradient(g) = &mut s.paint else { continue };
+                    (g, b)
+                }
+                _ => continue,
+            };
+            if g.gradient.kind != vectorcraft_color::GradientKind::Linear {
+                continue;
+            }
+            g.pin(b);
+            if let Some(geom) = g.geom {
+                g.transform(near(geom.start.midpoint(geom.end)));
+            }
+        }
+    }
     /// Map placed gradients through a warp, given its local affine approximation at a point (taken
     /// at each gradient's centre: the start of a radial, the middle of a linear vector). Freeform
     /// points each follow the warp at their own position.

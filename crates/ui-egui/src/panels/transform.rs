@@ -23,16 +23,19 @@ pub fn constrained(w: f64, h: f64, new_w: Option<f64>, new_h: Option<f64>) -> (f
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let Some(st) = app.session.active() else {
+    if app.session.active().is_none() {
         widgets::dim_label(ui, "No document");
         return;
-    };
+    }
     let units = app.session.general_unit();
-    let bounds = app.session.transform_bounds(&st.selection.objects);
+    // The bounding box, rotated with rotated objects: W/H are its own sides, X/Y its reference
+    // point on the page.
+    let bx = app.selection_box();
+    let bounds = bx.map(|b| b.rect);
     let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
-    let link: bool = pstate(ui.ctx(), "xf-link");
+    let link = app.session.prefs.constrain_proportions;
     let has = bounds.is_some();
-    let rp = bounds.map(|b| vectorcraft_geom::reference_point(b, refi));
+    let rp = bx.map(|b| b.reference_point(refi));
     ui.horizontal(|ui| {
         if let Some(i) = widgets::reference_point(ui, refi) {
             ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
@@ -60,20 +63,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.end_row();
             });
         });
-        if widgets::icon_button(ui, if link { "link" } else { "link-2-off" }, "Constrain Width and Height Proportions", link, 22.0).clicked() {
-            set_pstate(ui.ctx(), "xf-link", !link);
-        }
+        constrain_link(app, ui);
     });
     ui.add_space(4.0);
     let origin = rp.map(|p| json!([p.x, p.y]));
     ui.horizontal(|ui| {
         ui.add_enabled_ui(has, |ui| {
             icons::icon(ui, "rotate-ccw", 16.0, t.icon).on_hover_text("Rotate");
-            // Rotation is applied relative to the current orientation (0° shown after each apply).
-            if let Some(a) = widgets::spin_plain(ui, "xfp-rot", 0.0, "°", 2, 96.0, 15.0, -360.0, &ANGLE_PRESETS)
-                && a != 0.0
+            // The bounding box's angle: a new value turns the selection to it.
+            let angle = bx.map_or(0.0, |b| b.angle);
+            if let Some(a) = widgets::spin_plain(ui, "xfp-rot", angle, "°", 2, 96.0, 15.0, -360.0, &ANGLE_PRESETS)
+                && a != angle
             {
-                app.run("object.rotate", json!({"angle": a, "origin": origin})).ok();
+                app.run("object.rotate", json!({"angle": a, "absolute": true, "origin": origin})).ok();
             }
             ui.add_space(4.0);
             icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text("Shear");
@@ -132,6 +134,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::check(ui, "Scale Strokes & Effects", ss, true) {
         set_pref(app, "scaleStrokes", !ss);
+    }
+}
+
+/// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
+/// `constrainProportions` preference, which the size fields pass on as `proportional`.
+pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let on = app.session.prefs.constrain_proportions;
+    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, "Constrain Width and Height Proportions", on, 22.0).clicked() {
+        set_pref(app, "constrainProportions", !on);
     }
 }
 
@@ -202,6 +213,21 @@ mod tests {
         let shown = texts(&mut app, show);
         assert!(shown.iter().any(|t| t == "110 pt") && shown.iter().any(|t| t == "60 pt"), "{shown:?}");
         assert!(texts(&mut app, crate::panels::align::menu).iter().any(|t| t == "✓ Use Preview Bounds"));
+    }
+
+    #[test]
+    fn rotation_field_shows_the_angle_the_box_keeps() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+        app.run("object.rotate", json!({"angle": 45, "absolute": true})).unwrap();
+        let shown = texts(&mut app, show);
+        // The angle stays, and W/H are the rectangle's own sides.
+        assert!(shown.iter().any(|t| t == "45°"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "100 pt") && shown.iter().any(|t| t == "50 pt"), "{shown:?}");
+        app.run("object.resetBoundingBox", json!({})).unwrap();
+        let shown = texts(&mut app, show);
+        assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
     }
 
     #[test]

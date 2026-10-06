@@ -59,15 +59,16 @@ pub const TABLE: &[(&str, Class)] = &[
     ("cad", Class::Layer(3)),
     ("eps", Class::Layer(3)),
     ("metafile", Class::Layer(3)),
+    ("plugins", Class::Layer(2)),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
 /// The L0 foundation is a small chain: `raster` builds on `color` and
 /// `geom`, which the §3 diagram draws on one line. The GPU backend (`gpu`)
 /// reuses the CPU reference (`compose`) for LUTs and parity tests. EPS previews use the renderer's
-/// TIFF writer.
+/// TIFF writer. Live effects run effect plug-ins.
 pub const INTRA_LAYER_ORDER: &[&[&str]] =
-    &[&["geom", "color"], &["pathops", "effects"], &["pathops", "trace"], &["text", "effects"], &["render", "eps"]];
+    &[&["geom", "color"], &["pathops", "effects"], &["pathops", "trace"], &["text", "effects"], &["render", "eps"], &["plugins", "effects"]];
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {
     let (from, to) = (short_name(from), short_name(to));
@@ -177,11 +178,11 @@ pub fn check(crates: &[Crate]) -> Vec<Violation> {
                 match classify(&d.name) {
                     // Unregistered deps are reported on their own entry.
                     None => {}
-                    Some(Class::Testkit) => {
-                        if d.kind != DepKind::Dev {
-                            out.push(Violation::TestkitAsNormalDep { krate: c.name.clone() });
-                        }
+                    Some(Class::Testkit) if d.kind != DepKind::Dev => {
+                        out.push(Violation::TestkitAsNormalDep { krate: c.name.clone() });
                     }
+                    // The testkit as a dev-dependency is how tests use it.
+                    Some(Class::Testkit) => {}
                     Some(dc) => {
                         let to = dc.layer().unwrap_or(u8::MAX);
                         if to >= layer && !(to == layer && intra_layer_allowed(&c.name, &d.name)) {

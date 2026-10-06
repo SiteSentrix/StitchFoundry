@@ -15,14 +15,22 @@ use crate::{FilePick, Services, VectorcraftApp, dialogs};
 const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"];
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
-/// graphic style library files open in the library panel and flattener, PDF and print presets
-/// files are imported.
+/// graphic style library files open in the library panel and flattener, PDF, print and perspective
+/// grid presets files are imported.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<(), String> {
     let ext = fileio::extension(name);
+    // A WebAssembly plug-in is installed.
+    if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
+        let r =
+            app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}))?;
+        app.status(format!("Installed plug-in {}", r["name"].as_str().unwrap_or(name)));
+        return Ok(());
+    }
     let presets = [
         (vectorcraft_engine::cmd::flatten::PRESET_EXTS, "flattener.presets.import", "flattener presets"),
         (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
+        (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
     ];
     if let Some((_, import, what)) = presets.iter().find(|(exts, ..)| exts.contains(&ext.as_str())) {
         let r = app.run(import, serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
@@ -63,6 +71,19 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 /// A path from the open dialog, or "cancelled".
 fn pick_open(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
     app.services.pick_open.as_mut().and_then(|f| f(pick)).ok_or_else(|| "cancelled".into())
+}
+
+/// Object › Plug-ins › Install Plug-in…: installs the `.wasm` at `path`, else a picked one (the
+/// web's file picker hands the file to [`open_bytes`], which installs it).
+pub fn install_plugin(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
+    let path = match path {
+        Some(p) => p,
+        None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
+        None => pick_open(app, &FilePick { filters: vec![("Plug-ins", vectorcraft_engine::cmd::plugin::EXTS)], ..Default::default() })?,
+    };
+    let r = app.run("plugin.install", json!({ "path": path }))?;
+    app.status(format!("Installed plug-in {}", r["name"].as_str().unwrap_or_default()));
+    Ok(r)
 }
 
 /// File → Open…
@@ -134,12 +155,25 @@ pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: 
 }
 
 /// Where a file goes when no path was given: the suggested name on the web (a download), else the
-/// save panel's choice.
+/// save panel's choice, given the suggested name's extension when it names no file type (a name
+/// typed without one).
 fn pick_path(app: &mut VectorcraftApp, pick: &FilePick) -> Result<String, String> {
     if is_web(app) {
         return Ok(pick.name.clone());
     }
-    app.services.pick_save.as_mut().and_then(|f| f(pick)).ok_or_else(|| "cancelled".into())
+    let picked = app.services.pick_save.as_mut().and_then(|f| f(pick)).ok_or("cancelled")?;
+    Ok(with_extension(&picked, &fileio::extension(&pick.name), |_| true))
+}
+
+/// `path` as typed in a save panel: kept when it ends in `ext` or its extension names a format
+/// `keeps` takes, else with `.ext` added.
+fn with_extension(path: &str, ext: &str, keeps: impl Fn(&Format) -> bool) -> String {
+    let has = fileio::extension(path);
+    if ext.is_empty() || has.eq_ignore_ascii_case(ext) || fileio::format_for_name(path).is_some_and(keeps) {
+        path.to_string()
+    } else {
+        format!("{path}.{ext}")
+    }
 }
 
 /// The active document's file name with extension `ext`, and its folder.
@@ -172,10 +206,7 @@ pub fn remember_view(app: &mut VectorcraftApp) {
 /// A path typed in a save panel: kept when its extension names a save format (the panel's file
 /// type), else `f`'s extension is added.
 fn with_save_extension(path: &str, f: &Format) -> String {
-    match fileio::format_for_name(path) {
-        Some(g) if SAVE_FORMATS.contains(&g.id) => path.to_string(),
-        _ => format!("{path}.{}", f.extensions[0]),
-    }
+    with_extension(path, f.extensions[0], |g| SAVE_FORMATS.contains(&g.id))
 }
 
 /// Write every file of an export (one per artboard, linked images) for the destination `path`.
