@@ -158,10 +158,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         fit(app, "view.fitArtboard");
     }
     let resp = ui.interact(rect, egui::Id::new("canvas"), Sense::click_and_drag());
-    handle_input(app, ui, &resp, rect);
+    // A press on the canvas while the context menu is open only closes it (a drag too, which egui
+    // alone would leave open); the tool doesn't get it.
+    if resp.context_menu_opened() && resp.hovered() && ui.input(|i| i.pointer.any_pressed()) {
+        egui::Popup::close_all(ui.ctx());
+    } else {
+        handle_input(app, ui, &resp, rect);
+    }
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::new(rect, &v);
     panel_drop(app, ui, &resp, &xf);
+    context_menu(app, &resp, &xf);
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
@@ -819,6 +826,25 @@ fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::hit::Hit> {
     let opt = vectorcraft_doc::hit::HitOptions { tol: 3.0 / zoom, outline: app.ui.view.outline, path_only: false };
     vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, p, opt)
+}
+
+/// Right-click: the object under the pointer is selected first unless it already is, then the
+/// context menu lists what applies to the selection ([`crate::menus::context_items`]).
+fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
+    if resp.secondary_clicked()
+        && let Some(p) = resp.interact_pointer_pos()
+        && let Some(st) = app.session.active()
+        && let Some(top) = hit_at(app, xf.to_doc(p), xf.zoom).map(|h| h.top_object(st.isolation))
+        && !st.selection.contains(top)
+    {
+        // A locked or hidden object can't be selected; the menu is then for the selection as is.
+        let _ = app.run("select.set", json!({ "ids": [top.0] }));
+    }
+    let mut clicked = None;
+    resp.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked));
+    if let Some((id, p)) = clicked {
+        crate::menus::invoke(app, &id, p);
+    }
 }
 
 /// A panel drag ([`widgets::PanelDrag`]) dropped on art acts on the object under the pointer,
