@@ -328,9 +328,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.add_space(12.0);
             cancel = (spec.body)(app, ui, &mut d);
             ui.add_space(16.0);
-            // The button row is as tall as the buttons: a right-to-left layout would otherwise take
-            // all the height left in the window, so the window could never shrink to its content.
-            let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+            // The button row is as wide as the fields above it and as tall as the buttons: a
+            // right-to-left layout would otherwise take all the room left in the window, so the
+            // window could never shrink to its content.
+            let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
             ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
                     && widgets::primary_button(ui, label).clicked()
