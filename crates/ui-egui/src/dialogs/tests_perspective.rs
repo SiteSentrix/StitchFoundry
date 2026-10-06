@@ -79,3 +79,85 @@ fn define_grid_is_a_view_menu_item() {
     assert!(e.path.iter().any(|p| p == "Perspective Grid"), "{:?}", e.path);
     assert!(e.enabled);
 }
+
+#[test]
+fn define_grid_loads_and_saves_presets() {
+    let mut app = app();
+    app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+    frame(&mut app);
+    assert_eq!(field(&app, "name"), json!("[2P-Normal View]"));
+    // Choosing a preset (an agent sets its fields; the menu loads them) keeps its name while the
+    // fields are its; a changed field makes the fields [Custom].
+    set(&mut app, "angle", json!(20));
+    frame(&mut app);
+    assert_eq!(field(&app, "name"), json!(""));
+    // Save Preset… asks for a name; OK saves the fields and comes back to Define Grid on it.
+    app.ui.dialog.as_mut().unwrap().fields.insert("__mode".into(), json!("save"));
+    set(&mut app, "__from", json!("define"));
+    set(&mut app, "name", json!("Shallow"));
+    frame(&mut app);
+    super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(super::perspective_grid::KIND));
+    assert_eq!((field(&app, "name"), field(&app, "__mode")), (json!("Shallow"), Value::Null));
+    assert_eq!(app.session.prefs.perspective_presets[0].angle, 20.0);
+    frame(&mut app);
+    assert_eq!(field(&app, "name"), json!("Shallow"), "the fields are the saved preset's");
+    super::confirm(&mut app).unwrap();
+    assert_eq!(grid(&app).name, "Shallow");
+    // View › Perspective Grid › Save Grid as Preset…: the grid under a new name.
+    app.run("ui.savePerspectivePreset", json!({})).unwrap();
+    assert_eq!(field(&app, "name"), json!("Perspective Preset 1"));
+    frame(&mut app);
+    super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), None);
+    assert_eq!(app.session.prefs.perspective_presets.len(), 2);
+}
+
+#[test]
+fn the_presets_manager_creates_edits_and_deletes_presets() {
+    use super::perspective_presets::{self, Action};
+    let mut app = app();
+    app.run("ui.perspectivePresetsDialog", json!({"selected": "[3P-Normal View]"})).unwrap();
+    frame(&mut app);
+    let press = |app: &mut VectorcraftApp, act: Action, current: &str| {
+        let mut d = app.ui.dialog.take().unwrap();
+        perspective_presets::run(app, &mut d, act, current).unwrap();
+        app.ui.dialog = Some(d);
+        frame(app);
+    };
+    // New… opens the editor on a copy of the selected preset; its OK comes back here.
+    press(&mut app, Action::New, "[3P-Normal View]");
+    assert_eq!((kind(&app), field(&app, "kind")), (Some(super::perspective_grid::KIND), json!(3)));
+    set(&mut app, "name", json!("Canyon"));
+    set(&mut app, "opacity", json!(90));
+    super::confirm(&mut app).unwrap();
+    assert_eq!((kind(&app), field(&app, "selected")), (Some(perspective_presets::KIND), json!("Canyon")));
+    // Edit… renames it.
+    press(&mut app, Action::Edit, "Canyon");
+    set(&mut app, "name", json!("Gorge"));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(field(&app, "selected"), json!("Gorge"));
+    assert_eq!(app.session.prefs.perspective_presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Gorge"]);
+    assert_eq!(app.session.prefs.perspective_presets[0].opacity, 90.0);
+    // Its type's menu lists it in a slot, which applies it.
+    assert_eq!(crate::menus::dynamic_label(&app, "ui.perspectiveUserPreset3.1", ""), "Gorge");
+    assert!(crate::menus::hidden_slot(&app, "ui.perspectiveUserPreset3.2") && crate::menus::hidden_slot(&app, "ui.perspectiveUserPreset2.1"));
+    app.run("ui.perspectiveUserPreset3.1", json!({})).unwrap();
+    assert_eq!(grid(&app).name, "Gorge");
+    // Delete selects the one above it.
+    press(&mut app, Action::Delete, "Gorge");
+    assert!(app.session.prefs.perspective_presets.is_empty());
+    assert_eq!(field(&app, "selected"), json!("[3P-Low View]"));
+    assert!(app.run("ui.perspectiveUserPreset3.1", json!({})).is_err());
+}
+
+#[test]
+fn perspective_preset_menus_list_the_views_of_each_type() {
+    let app = app();
+    let entries = crate::menus::menu_entries(&app);
+    let under = |sub: &str| entries.iter().filter(|e| e.path.iter().any(|p| p == sub)).map(|e| e.label.clone()).collect::<Vec<_>>();
+    assert_eq!(under("One Point Perspective"), ["[1P-Normal View]", "[1P-Low View]", "[1P-High View]"]);
+    assert_eq!(under("Three Point Perspective"), ["[3P-Normal View]", "[3P-Low View]"]);
+    let presets = entries.iter().find(|e| e.command.as_deref() == Some("ui.perspectivePresetsDialog")).unwrap();
+    assert_eq!((presets.label.as_str(), presets.path.first().map(String::as_str)), ("Perspective Grid Presets…", Some("Edit")));
+}

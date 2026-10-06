@@ -87,9 +87,9 @@ pub fn specs() -> Vec<CommandSpec> {
             "Perspective Grid Preset",
             [],
             None,
-            "{kind: 1|2|3} reset the grid to the one/two/three-point preset for the first artboard (and show it)",
+            "{kind: 1|2|3 (its normal view) | name: a preset (see perspective.presets.list)} reset the grid to the preset fitted to the first artboard (and show it; attached objects stay attached)",
             has_doc,
-            grid_preset
+            super::perspgrid::grid_preset
         ),
         cmd!(
             "perspective.grid.show",
@@ -471,22 +471,6 @@ fn silent(s: &mut Session, f: impl FnOnce(&mut PerspectiveGrid)) -> Result<Persp
 fn grid_set(s: &mut Session, p: &Value) -> Result<Value> {
     let g = grid_of(&s.doc()?.doc).merged(p).map_err(|e| bad("perspective.grid.set", e))?;
     s.edit("Define Perspective Grid", |d, _| {
-        store_grid(d, &g);
-        Ok(())
-    })?;
-    Ok(g.definition_json())
-}
-
-fn grid_preset(s: &mut Session, p: &Value) -> Result<Value> {
-    let kind = p
-        .get("kind")
-        .and_then(Value::as_u64)
-        .filter(|k| (1..=3).contains(k))
-        .ok_or_else(|| bad("perspective.grid.preset", "kind must be 1, 2 or 3"))? as u8;
-    let old = grid_of(&s.doc()?.doc);
-    let ab = s.doc()?.doc.artboards.first().map(|a| a.rect).ok_or_else(|| EngineError::Other("no artboard".into()))?;
-    let g = PerspectiveGrid { attached: old.attached, ..PerspectiveGrid::preset(kind, ab) };
-    s.edit("Perspective Grid Preset", |d, _| {
         store_grid(d, &g);
         Ok(())
     })?;

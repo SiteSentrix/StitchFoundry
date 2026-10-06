@@ -111,3 +111,100 @@ fn grid_definition_fields_survive_a_native_round_trip() {
     let g: PerspectiveGrid = serde_json::from_value(old).unwrap();
     assert_eq!((g.angle, g.units.as_str(), g.scale, g.opacity), (None, "points", [1.0, 1.0], 50.0));
 }
+
+// ---------- M8.9: presets ----------
+
+fn preset_names(s: &mut Session) -> Vec<String> {
+    let r = run(s, "perspective.presets.list", json!({}));
+    r["presets"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap().to_string()).collect()
+}
+
+#[test]
+fn built_in_views_apply_by_name_or_type() {
+    let mut s = session();
+    let names = preset_names(&mut s);
+    assert_eq!(&names[..3], ["[1P-Normal View]", "[1P-Low View]", "[1P-High View]"]);
+    assert!(names.contains(&"[3P-Normal View]".to_string()));
+    let r = run(&mut s, "perspective.presets.list", json!({}));
+    assert!(r["presets"].as_array().unwrap().iter().all(|p| p["builtIn"] == json!(true)));
+    run(&mut s, "perspective.grid.preset", json!({"name": "[2P-low view]"}));
+    let low = grid(&s);
+    assert_eq!((low.name.as_str(), low.kind, low.visible), ("[2P-Low View]", 2, true));
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let normal = grid(&s);
+    assert_eq!(normal.name, "[2P-Normal View]");
+    assert!(low.origin[1] - low.horizon < normal.origin[1] - normal.horizon, "the low view's horizon is nearer the ground");
+    assert!(s.execute("perspective.grid.preset", &json!({"name": "[9P-Fisheye]"})).is_err());
+    assert!(s.execute("perspective.grid.preset", &json!({})).is_err());
+}
+
+#[test]
+fn presets_save_rename_delete_and_protect_the_built_in_ones() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 3}));
+    run(&mut s, "perspective.grid.define", json!({"angle": 35, "opacity": 30}));
+    // Save Grid as Preset: the document's grid under a name, not an undo step.
+    let n = undo_len(&s);
+    let r = run(&mut s, "perspective.presets.save", json!({"name": "Tower"}));
+    assert_eq!((r["name"].clone(), r["created"].clone(), r["definition"]["kind"].clone()), (json!("Tower"), json!(true), json!(3)));
+    assert_eq!(undo_len(&s), n);
+    let saved = &s.prefs.perspective_presets[0];
+    assert!((saved.angle - 35.0).abs() < 1e-9 && saved.opacity == 30.0);
+    // A grid with its fields is that preset; changing one makes it custom again.
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    run(&mut s, "perspective.grid.preset", json!({"name": "tower"}));
+    assert_eq!(grid(&s).name, "Tower");
+    assert!((grid(&s).viewing_angle() - 35.0).abs() < 1e-9);
+    run(&mut s, "perspective.grid.define", json!({"opacity": 31}));
+    assert_eq!(grid(&s).name, "");
+    run(&mut s, "perspective.grid.define", json!({"name": "Tower", "opacity": 30}));
+    assert_eq!(grid(&s).name, "Tower");
+    // Edit, rename, start from another preset.
+    let r = run(&mut s, "perspective.presets.save", json!({"name": "Tower", "newName": "Spire", "gridline": 12}));
+    assert_eq!((r["name"].clone(), r["created"].clone()), (json!("Spire"), json!(false)));
+    assert_eq!(s.prefs.perspective_presets[0].gridline, 12.0);
+    assert_eq!(run(&mut s, "perspective.presets.save", json!({"preset": "[1P-Normal View]"}))["name"], json!("Perspective Preset 1"));
+    assert_eq!(s.prefs.perspective_presets[1].kind, 1);
+    // Built-in names are protected and names stay unique.
+    assert!(s.execute("perspective.presets.save", &json!({"name": "[2P-Normal View]"})).is_err());
+    assert!(s.execute("perspective.presets.save", &json!({"name": "Spire", "newName": "[1P-Low View]"})).is_err());
+    assert!(s.execute("perspective.presets.save", &json!({"name": "Spire", "newName": "perspective preset 1"})).is_err());
+    assert!(s.execute("perspective.presets.save", &json!({"name": "Spire", "angle": 95})).is_err());
+    assert!(s.execute("perspective.presets.delete", &json!({"name": "[3P-Low View]"})).is_err());
+    assert_eq!(run(&mut s, "perspective.presets.delete", json!({"name": "spire"}))["deleted"], json!("Spire"));
+    assert!(s.execute("perspective.presets.delete", &json!({"name": "Spire"})).is_err());
+    assert_eq!(preset_names(&mut s).last().unwrap(), "Perspective Preset 1");
+}
+
+#[test]
+fn presets_export_import_and_live_in_the_preferences() {
+    let mut s = session();
+    run(&mut s, "perspective.presets.save", json!({"name": "Street", "units": "inches", "gridline": 1, "distance": 8, "horizonHeight": 4}));
+    let text = run(&mut s, "perspective.presets.export", json!({"names": ["Street", "[2P-High View]"]}))["data"].as_str().unwrap().to_string();
+    assert!(text.contains("vcperspective"));
+    let mut t = session();
+    let r = run(&mut t, "perspective.presets.import", json!({"data": text}));
+    assert_eq!(r["imported"], json!(["Street", "2P-High View"]), "a built-in view comes in as a saved copy");
+    assert_eq!(t.prefs.perspective_presets[0], s.prefs.perspective_presets[0]);
+    // Again: names in use get a number, or replace.
+    assert_eq!(run(&mut t, "perspective.presets.import", json!({"data": text}))["imported"], json!(["Street 2", "2P-High View 2"]));
+    assert_eq!(run(&mut t, "perspective.presets.import", json!({"data": text, "replace": true}))["imported"], json!(["Street", "2P-High View"]));
+    assert_eq!(t.prefs.perspective_presets.len(), 4);
+    // Bad files are refused whole.
+    for bad in [
+        json!({"data": "{}"}),
+        json!({"data": "{\"format\": \"vcprintpresets\", \"presets\": []}"}),
+        json!({"data": "{\"format\": \"vcperspective\", \"presets\": [{\"name\": \"ok\"}, {\"name\": \"x\", \"angle\": 120}]}"}),
+        json!({"data": "{\"format\": \"vcperspective\", \"presets\": [{\"kind\": \"two\"}]}"}),
+        json!({"dataBase64": "%%%"}),
+        json!({}),
+    ] {
+        assert!(t.execute("perspective.presets.import", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(t.prefs.perspective_presets.len(), 4);
+    assert!(Session::new().execute("perspective.presets.export", &json!({})).is_err(), "nothing saved to export");
+    // Saved with the preferences; older preferences have none.
+    let back: Prefs = serde_json::from_value(serde_json::to_value(&t.prefs).unwrap()).unwrap();
+    assert_eq!(back.perspective_presets, t.prefs.perspective_presets);
+    assert!(serde_json::from_value::<Prefs>(json!({})).unwrap().perspective_presets.is_empty());
+}

@@ -482,6 +482,11 @@ pub struct Prefs {
     /// resetting the preferences keeps them; `tool.setOption` edits them.
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub tool_settings: std::collections::BTreeMap<String, serde_json::Map<String, Value>>,
+    /// View → Perspective Grid presets: the user's (the built-in ones aren't stored). A local
+    /// library, not a Preferences dialog field: resetting the preferences keeps it;
+    /// `perspective.presets.*` edit it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub perspective_presets: Vec<vectorcraft_tools::distort::perspective::GridDefinition>,
 }
 
 impl Default for Prefs {
@@ -616,6 +621,7 @@ impl Default for Prefs {
             print_presets: vec![],
             constrain_proportions: false,
             tool_settings: Default::default(),
+            perspective_presets: vec![],
         }
     }
 }

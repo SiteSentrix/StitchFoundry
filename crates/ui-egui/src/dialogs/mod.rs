@@ -42,6 +42,7 @@ pub mod package;
 mod path_ops;
 pub mod pdf_presets;
 pub mod perspective_grid;
+pub mod perspective_presets;
 pub mod place;
 pub mod placement_options;
 pub mod plugin;
@@ -255,6 +256,7 @@ registry! {
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
+    PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

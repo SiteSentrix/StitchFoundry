@@ -1204,3 +1204,34 @@ proptest! {
         print_presets("mutated print presets", &mutate_text(&text, cut, &edits))?;
     }
 }
+
+// ---------- perspective grid presets files ----------
+
+/// Import perspective grid presets from `data`, then apply each one and draw on its grid.
+fn perspective_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive_library(what, "perspective.presets.import", data, |s, r| {
+        for name in r["imported"].as_array().into_iter().flatten() {
+            let _ = s.execute("perspective.grid.preset", &json!({"name": name}));
+            let _ = s.execute("perspective.grid.define", &json!({"name": name, "gridline": 3}));
+            let _ = s.execute("perspective.draw", &json!({"command": "shape.rectangle", "params": {"x": 300, "y": 400, "width": 40, "height": 30}}));
+        }
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn perspective_presets_garbage_never_panics(s in ".{0,300}", head in prop::sample::select(vec!["", "{\"format\": \"vcperspective\", ", "{\"format\": \"vcperspective\", \"presets\": [{\"name\": \"x\", \"kind\": 3, \"scale\": "])) {
+        perspective_presets("perspective presets garbage", &format!("{head}{s}"))?;
+    }
+
+    #[test]
+    fn mutated_perspective_presets_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        let mut s = rich_session();
+        s.execute("perspective.presets.save", &json!({"name": "Tall", "kind": 3, "units": "inches", "scale": [1, 4], "angle": 25, "thirdVp": [1, 30]})).unwrap();
+        s.execute("perspective.presets.save", &json!({"name": "Flat", "preset": "[1P-Low View]", "gridline": 4, "groundColor": "#00ff00"})).unwrap();
+        let text = s.execute("perspective.presets.export", &json!({"names": ["Tall", "Flat", "[2P-High View]"]})).unwrap()["data"].as_str().unwrap().to_string();
+        perspective_presets("mutated perspective presets", &mutate_text(&text, cut, &edits))?;
+    }
+}

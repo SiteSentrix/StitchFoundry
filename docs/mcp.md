@@ -1817,3 +1817,18 @@ its current size (with Shift too it keeps its proportions). With Use Pressure Pe
 {"name":"pointer_gesture","arguments":{"tool":"bloat","events":[{"kind":"down","x":280,"y":150,"pressure":0.3},{"kind":"drag","x":280,"y":200,"pressure":0.8},{"kind":"up","x":280,"y":250}]}}
 {"name":"run_command","arguments":{"command":"object.liquify","params":{"tool":"scallop","points":[[300,150],[300,250]],"complexity":3,"affectAnchors":false}}}
 ```
+
+Perspective grid presets: `perspective.presets.list` lists the built-in views (`[1P-Normal View]`, `[1P-Low View]`,
+`[1P-High View]`, `[2P-Normal View]`, `[2P-Low View]`, `[2P-High View]`, `[3P-Normal View]`, `[3P-Low View]`;
+`builtIn: true`, fitted to the first artboard, protected), then the saved ones, each with its Define Grid fields.
+`perspective.grid.preset {name}` (or `{kind}`, that type's normal view) resets the grid to one, fitted to the first
+artboard. `perspective.presets.save {name?, newName?, preset?, …fields}` saves a preset: just `{name}` saves the
+document's grid (View → Perspective Grid → Save Grid as Preset). `perspective.presets.delete {name}`,
+`perspective.presets.export {names?, path?}` (a `.vcperspective` JSON file; without `path` it returns `data`) and
+`perspective.presets.import {path? | data? | dataBase64?, replace?}` manage them. Saved presets are kept with the
+preferences, and a grid whose fields are a preset's is named after it (`name`).
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.grid.preset","params":{"name":"[2P-Low View]"}}}
+{"name":"run_command","arguments":{"command":"perspective.presets.save","params":{"name":"Street","units":"feet","scale":[1,48],"gridline":1}}}
+```
