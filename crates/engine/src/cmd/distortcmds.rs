@@ -69,7 +69,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Puppet Warp",
             [],
             None,
-            "{id?|ids? (default: selection), pins: [[x,y]…] (current pin positions), moved: [[x,y]…] (targets, same length), expand?: pt} as-rigid-as-possible mesh warp of anchors and handles",
+            "{id?|ids? (default: selection), pins: [[x,y]…] (current pin positions), moved: [[x,y]…] (targets, same length), angles?: [deg|null…] (same length: the turn the art takes around each pin, as Alt-dragging around a pin does; null leaves it free), expand?: pt} as-rigid-as-possible mesh warp of anchors and handles",
             has_doc,
             puppet_warp
         ),
@@ -408,7 +408,12 @@ fn puppet_warp(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let expand = f64_or(p, "expand", 3.0).clamp(0.0, 1000.0);
     let mesh = mesh_for(&s.doc()?.doc, &ids, expand).ok_or_else(|| EngineError::Other("nothing to warp".into()))?;
-    let pins: Vec<arap::Pin> = pins.iter().zip(&moved).map(|(a, b)| arap::Pin { rest: *a, target: *b }).collect();
+    let angles: Vec<Option<f64>> = match p.get("angles") {
+        None | Some(Value::Null) => vec![None; pins.len()],
+        Some(Value::Array(a)) if a.len() == pins.len() => a.iter().map(|v| v.as_f64().filter(|d| d.is_finite()).map(f64::to_radians)).collect(),
+        Some(_) => return Err(bad(C, "angles must be a list as long as pins (degrees or null)")),
+    };
+    let pins: Vec<arap::Pin> = pins.iter().zip(&moved).zip(angles).map(|((a, b), angle)| arap::Pin { angle, ..arap::Pin::new(*a, *b) }).collect();
     let deformed = arap::deform(&mesh, &pins);
     let f = |q: Point| mesh.map(&deformed, q);
     s.edit("Puppet Warp", |d, _| {

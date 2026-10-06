@@ -874,6 +874,11 @@ With the Width tool, `press_key` Delete or Backspace removes the selected width 
 selected the key clears the selected objects as usual (`edit.clear`). The Puppet Warp tool's selected pins go the
 same way.
 
+`object.puppetWarp {ids?, pins, moved, angles?, expand?}` warps art as rigidly as possible so that each pin (a point
+on the art) lands on its `moved` point. `angles` (degrees, or null for a free pin; as long as `pins`) holds the turn
+the art takes around a pin, as Alt-dragging near a selected pin with the Puppet Warp tool does: one pin with
+`angles: [90]` turns the art a quarter turn around it.
+
 ```json
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.5,"left":4,"right":4}}}
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.8,"left":12,"right":12}}}

@@ -1272,6 +1272,8 @@ mod tests_printtiling;
 #[cfg(test)]
 mod tests_proxyitems;
 #[cfg(test)]
+mod tests_puppetwarp;
+#[cfg(test)]
 mod tests_rastersettings;
 #[cfg(test)]
 mod tests_recolor;
