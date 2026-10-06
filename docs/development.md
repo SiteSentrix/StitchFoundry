@@ -37,16 +37,19 @@ option at a checkout:
 
 ```sh
 git clone https://github.com/storytold/craft-fonts ../craft-fonts
-CRAFT_FONTS_DIR=../craft-fonts cargo run --release -p vectorcraft   # relative to the workspace root
-CRAFT_FONTS_DIR=../craft-fonts cargo xtask ci                       # also runs the Japanese-glyph tests
+CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p vectorcraft
+CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-glyph tests
 ```
 
 - `crates/text/build.rs` reads the checkout's `fonts/manifest.txt` and embeds every font it lists as
-  `vectorcraft_text::CRAFT_FONTS` (empty without `CRAFT_FONTS_DIR`). Nothing is downloaded, and
+  `vectorcraft_text::CRAFT_FONTS` (empty without `CRAFT_FONTS_DIR`). Give it an absolute path:
+  build scripts run in the crate's directory (a relative path is taken from the workspace root
+  as a convenience, but CI and the docs always use absolute paths). Nothing is downloaded, and
   craft-fonts is never a `Cargo.toml` dependency. A bad path is a build warning, or an error with
   `CRAFT_FONTS_REQUIRED=1` (release builds).
-- Web (wasm32) builds embed only BIZ UDPGothic Regular, to keep the `.wasm` small enough for static
-  hosts.
+- Web (wasm32) builds embed only BIZ UDPGothic Regular (+4.7 MB of `.wasm`), to stay well under
+  static hosts' per-file limits (Cloudflare Pages: 25 MiB). Shippori Mincho, which this repo used to
+  embed everywhere, was 8.7 MB, so the web build is still smaller than before.
 - Document text: the Japanese faces join the font database after the bundled fonts (Mincho first),
   so they are the fallback for Japanese after the requested font; installed system fonts come after.
 - UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first), after
