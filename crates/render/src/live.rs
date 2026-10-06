@@ -10,13 +10,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use vectorcraft_doc::live::{self, GradientMesh, MeshQuad};
+use vectorcraft_doc::live::{GradientMesh, MeshQuad};
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::{BezPath, PathData, Vec2};
+use vectorcraft_geom::{BezPath, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko;
 
-use crate::{Frame, Renderer, text_geom};
+use crate::{Frame, Renderer};
 
 type Expanded = Arc<Vec<Arc<Node>>>;
 type MeshEntry = (Arc<Node>, Arc<Vec<MeshQuad>>, u64);
@@ -41,30 +41,9 @@ impl LiveCache {
     }
 }
 
-/// Text converted to one outline path (for envelopes): glyphs in document space, painted with the
-/// first run's fill/stroke.
-pub(crate) fn outline_text(n: &Node) -> Option<Node> {
-    let NodeKind::Text(t) = &n.kind else { return None };
-    let g = text_geom(t);
-    let mut bp = g.all.clone();
-    bp.apply_affine(t.xf);
-    let mut out = Node::path(n.id, PathData::from_bezpath(&bp), n.appearance.clone());
-    if out.appearance.items.is_empty()
-        && let Some(r) = t.runs.first()
-    {
-        out.appearance = r.style.appearance();
-    }
-    out.opacity = n.opacity;
-    out.blend = n.blend;
-    Some(out)
-}
-
-/// Evaluate a live node one level (blend steps / envelope result, text outlined; mesh → flat
-/// pieces). Non-live nodes return themselves.
-pub fn expand_live(n: &Node) -> Vec<Node> {
-    let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
-    live::expand_live_with(n, Some(hook))
-}
+/// One level of evaluation of a live node (blend steps, envelope result with type outlined run by
+/// run, mesh → flat pieces); the exporters evaluate them alike. Non-live nodes return themselves.
+pub use crate::effects::expand_live;
 
 /// Subdivisions per patch for a patch about `size_px` device pixels across.
 fn mesh_level(m: &GradientMesh, bounds_px: f64) -> usize {
@@ -82,8 +61,7 @@ impl Renderer {
             e.2 = self.live.stamp;
             return e.1.clone();
         }
-        let hook: &dyn Fn(&Node) -> Option<Node> = &outline_text;
-        let v: Expanded = match crate::effects::pathfinder_children(a, Some(hook)) {
+        let v: Expanded = match crate::effects::pathfinder_children(a, crate::effects::text_outliner()) {
             Some(children) => Arc::new(children),
             None => Arc::new(expand_live(a).into_iter().map(Arc::new).collect()),
         };

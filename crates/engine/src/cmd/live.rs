@@ -826,8 +826,7 @@ fn env_options(s: &mut Session, p: &Value) -> Result<Value> {
 /// transparency and opacity mask; the generated pieces get ids of their own.
 fn expand_envelope(d: &mut Document, id: NodeId) -> Result<()> {
     let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
-    let hook: &dyn Fn(&Node) -> Option<Node> = &vectorcraft_render::effects::outline_text;
-    let mut g = live::expanded_group(&n, Some(hook));
+    let mut g = live::expanded_group(&n, vectorcraft_render::effects::text_outliner());
     fix_ids(d, &mut g);
     // Outlined type repeats its object's id on its pieces.
     vectorcraft_render::effects::fresh_ids(d, &mut g, &mut Default::default());

@@ -209,3 +209,60 @@ fn envelope_options_round_trip_natively_and_old_files_load() {
     }
     assert!(serde_json::to_value(&legacy).unwrap()["kind"].get("options").is_none());
 }
+
+/// Regression: every exporter wrote type inside an envelope undistorted (no text outliner), so a
+/// warped line of type exported the same whatever its bend.
+#[test]
+fn enveloped_type_exports_distorted_in_every_format() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Envelope", "size": 48})).unwrap());
+    sel(&mut s, &[t]);
+    s.execute("object.envelope.makeWithWarp", &json!({"style": "arch", "bend": 0})).unwrap();
+    let export =
+        |s: &mut Session, format: &str| s.execute("document.export", &json!({"format": format})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    for format in ["svg", "pdf", "eps", "emf", "dxf"] {
+        s.execute("object.envelope.options", &json!({"bend": 0})).unwrap();
+        let flat = export(&mut s, format);
+        assert_eq!(export(&mut s, format), flat, "{format} exports are repeatable");
+        s.execute("object.envelope.options", &json!({"bend": 80})).unwrap();
+        assert_ne!(export(&mut s, format), flat, "{format}: the bend shows in the export");
+    }
+    let svg = String::from_utf8(vectorcraft_format::base64_decode(&export(&mut s, "svg")).unwrap()).unwrap();
+    assert!(!svg.contains("<text"), "type in an envelope exports as its distorted outlines");
+}
+
+/// Regression: on the canvas, type in an envelope was outlined in its first run's paint only.
+#[test]
+fn enveloped_type_keeps_each_runs_colour_on_the_canvas() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "MMMMMMMM", "size": 60, "fill": "#000000"})).unwrap());
+    s.edit("red half", |d, _| {
+        if let NodeKind::Text(tx) = &mut d.node_mut(t).unwrap().kind {
+            vectorcraft_text::edit::style_range(&mut tx.runs, 0, 4, |st| {
+                st.fill = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))
+            });
+        }
+        Ok(())
+    })
+    .unwrap();
+    sel(&mut s, &[t]);
+    s.execute("object.envelope.makeWithWarp", &json!({"style": "flag", "bend": 0})).unwrap();
+    let b = node(&s, t).geometric_bounds().unwrap();
+    let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 800.0, 400.0), 1.0, true);
+    // Inked pixels of each half of the line: red at the start, black at the end.
+    let (mut red, mut black) = (0, 0);
+    for y in (b.y0 as u32)..(b.y1 as u32) {
+        for x in (b.x0 as u32)..(b.x1 as u32) {
+            let p = img.pixel(x, y);
+            let left = (x as f64) < b.center().x;
+            if p[0] > 200 && p[1] < 60 {
+                assert!(left, "red at ({x}, {y})");
+                red += 1;
+            } else if p[0] < 60 && p[1] < 60 && p[3] > 200 {
+                assert!(!left, "black at ({x}, {y})");
+                black += 1;
+            }
+        }
+    }
+    assert!(red > 100 && black > 100, "{red} red, {black} black");
+}
