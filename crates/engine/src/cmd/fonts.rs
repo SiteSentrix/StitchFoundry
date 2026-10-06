@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Font List",
             [],
             None,
-            "{family?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web); with family: {family, styles: [names]} (upright styles by weight, then italics; an error when the family isn't available)",
+            "{family?} → {families: [names]} sorted: the bundled fonts, fonts added and the fonts installed on the system (none on the web), as the font menus list them (without the system's hidden families, whose names start with a dot; they still resolve by name); with family: {family, styles: [names]} (upright styles by weight, then italics; an error when the family isn't available)",
             always,
             font_list
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Refresh Font List",
             [],
             None,
-            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it (no fonts are installed on the web) → {families, faces} (families available, installed faces found)",
+            "{} scan the system font folders again, for fonts installed or removed since the app started; text in a font that became available redraws in it (no fonts are installed on the web) → {families, faces} (families listed, installed faces found)",
             always,
             rescan
         ),
@@ -196,7 +196,7 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
             let name = db.family_list().iter().find(|f| f.eq_ignore_ascii_case(family)).cloned().unwrap_or_else(|| family.to_string());
             Ok(json!({ "family": name, "styles": db.styles(family) }))
         }
-        None => Ok(json!({ "families": *db.family_list() })),
+        None => Ok(json!({ "families": *db.menu_family_list() })),
     }
 }
 
@@ -229,7 +229,7 @@ fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
         }
         d.revision += 1;
     }
-    Ok(json!({ "families": db.family_list().len(), "faces": faces }))
+    Ok(json!({ "families": db.menu_family_list().len(), "faces": faces }))
 }
 
 #[cfg(test)]

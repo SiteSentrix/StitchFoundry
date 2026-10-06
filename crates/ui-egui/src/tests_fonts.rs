@@ -16,10 +16,10 @@ fn type_font_menu_lists_every_available_family() {
         menus::menu_entries(app).into_iter().filter(|e| e.path == ["Type", "Font"]).map(|e| e.label).collect()
     };
     let labels = fonts(&app);
-    assert_eq!(labels, FontDb::global().families());
+    assert_eq!(labels, *FontDb::global().menu_family_list());
     let installed = FontDb::with_font_dirs(system_font_dirs());
     installed.load_system_fonts();
-    let missing: Vec<String> = installed.families().into_iter().filter(|f| !labels.contains(f)).collect();
+    let missing: Vec<String> = installed.menu_family_list().iter().filter(|f| !labels.contains(f)).cloned().collect();
     assert!(missing.is_empty(), "installed but not in Type › Font: {missing:?}");
     // The menu is built every frame, from a list built once.
     assert_eq!(fonts(&app), labels);

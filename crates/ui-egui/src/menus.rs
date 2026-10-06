@@ -2485,7 +2485,7 @@ fn font_items() -> Vec<Item> {
     let db = vectorcraft_text::FontDb::global();
     // Read first: fonts that load meanwhile make the next frame build the list again.
     let generation = db.generation();
-    let fams = db.family_list();
+    let fams = db.menu_family_list();
     let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
     if items.0 != generation {
         let list = fams
