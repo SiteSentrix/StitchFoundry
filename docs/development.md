@@ -24,6 +24,37 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 - **No control server:** browsers can't listen on TCP. To automate the web build, drive headless Chrome with `--remote-debugging-port`.
 - Quick smoke test: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --enable-unsafe-webgpu --screenshot=web.png --window-size=1440,900 --virtual-time-budget=15000 http://127.0.0.1:8766/` (headless Chrome on macOS gets a real WebGPU adapter).
 
+## Fonts: craft-fonts (optional build input)
+
+Font files are never committed to this repository. Fonts shared by the Crafting Apps live in
+[storytold/craft-fonts](https://github.com/storytold/craft-fonts); the rules are in craftrules
+[`standards/fonts.md`](https://github.com/storytold/craftrules/blob/main/standards/fonts.md). To add
+a font, add it there. (The Latin fonts in `assets/fonts/` predate the rule and stay.)
+
+VectorCraft builds, tests and runs without craft-fonts. To embed its Japanese fonts (BIZ UDPGothic
+for UI text, Shippori Mincho and BIZ UDMincho for document text), point the `CRAFT_FONTS_DIR` build
+option at a checkout:
+
+```sh
+git clone https://github.com/storytold/craft-fonts ../craft-fonts
+CRAFT_FONTS_DIR=../craft-fonts cargo run --release -p vectorcraft   # relative to the workspace root
+CRAFT_FONTS_DIR=../craft-fonts cargo xtask ci                       # also runs the Japanese-glyph tests
+```
+
+- `crates/text/build.rs` reads the checkout's `fonts/manifest.txt` and embeds every font it lists as
+  `vectorcraft_text::CRAFT_FONTS` (empty without `CRAFT_FONTS_DIR`). Nothing is downloaded, and
+  craft-fonts is never a `Cargo.toml` dependency. A bad path is a build warning, or an error with
+  `CRAFT_FONTS_REQUIRED=1` (release builds).
+- Web (wasm32) builds embed only BIZ UDPGothic Regular, to keep the `.wasm` small enough for static
+  hosts.
+- Document text: the Japanese faces join the font database after the bundled fonts (Mincho first),
+  so they are the fallback for Japanese after the requested font; installed system fonts come after.
+- UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first), after
+  the UI fonts and before the installed fonts `ui_fonts.rs` discovers for other scripts.
+- Tests that need Japanese glyphs skip with a message when built without craft-fonts. The FreeBSD
+  CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
+  packages carry each embedded font's `OFL-<family>.txt`.
+
 ## Vendor names gate
 
 `cargo xtask brands` (part of `cargo xtask ci`) fails when user-visible text names another vendor's products or company: string literals in Rust sources (command labels and params docs, menus, panels, MCP tool definitions), `Cargo.toml` descriptions and packaging files. Comments and test code are not checked. Say "the reference app" or name the feature itself. A line that must keep an old name, such as an alias that files or preferences from earlier versions still use, carries a `brand-ok` comment.
