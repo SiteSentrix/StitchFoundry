@@ -1210,6 +1210,8 @@ mod tests_links;
 #[cfg(test)]
 mod tests_linkspanel;
 #[cfg(test)]
+mod tests_liquify;
+#[cfg(test)]
 mod tests_live;
 #[cfg(test)]
 mod tests_maskview;

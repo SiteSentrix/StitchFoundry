@@ -1,11 +1,12 @@
 //! Liquify tools: Warp (Shift+R), Twirl, Pucker, Bloat, Scallop, Crystallize, Wrinkle.
 //!
 //! A drag previews `object.liquify {tool, points, width, height, angle, intensity, detail,
-//! simplify, rate?, complexity?, horizontal?, vertical?, ids?}` with every pointer sample so far;
-//! the engine re-applies the whole stroke to the interaction snapshot with [`apply_stroke`], so the
-//! result is a pure function of the parameters (replay reproduces it exactly).
+//! simplify, rate?, complexity?, horizontal?, vertical?, affect…?, usePressure?, ids?}` with every
+//! pointer sample so far (and its pen pressure while Use Pressure Pen is on), so the result is a
+//! pure function of the parameters (replay reproduces it exactly).
 //!
-//! The kernel resamples the stroke into dabs spaced a fraction of the brush apart. For each dab it
+//! The kernel resamples the stroke into dabs spaced a fraction of the brush apart ([`Dabber`]:
+//! more samples only add dabs, so a growing stroke can be applied as it grows). For each dab it
 //! first subdivides the segments the brush touches (Detail: more anchors where the brush passes,
 //! lines become curves so the result stays smooth), then moves anchors and handles by the tool's
 //! displacement field weighted by a smooth falloff `(1 − r²)²` inside the (elliptical, rotated)
@@ -64,6 +65,18 @@ impl LiquifyKind {
             Self::Wrinkle => "Wrinkle",
         }
     }
+    /// Holding the brush still keeps applying the tool (a repeated stroke sample is one more dab).
+    pub fn holds(self) -> bool {
+        matches!(self, Self::Twirl | Self::Pucker | Self::Bloat)
+    }
+    /// Has the Simplify option (Scallop, Crystallize and Wrinkle have Brush Affects instead).
+    pub fn simplifies(self) -> bool {
+        matches!(self, Self::Warp | Self::Twirl | Self::Pucker | Self::Bloat)
+    }
+    /// Has the Brush Affects options (anchor points, in and out tangent handles).
+    pub fn has_affects(self) -> bool {
+        !self.simplifies()
+    }
 }
 
 /// Brush and tool options (Warp Tool Options and friends).
@@ -76,10 +89,14 @@ pub struct LiquifyParams {
     pub angle: f64,
     /// 0..1.
     pub intensity: f64,
+    /// Use Pressure Pen: each stroke sample's pen pressure is the intensity there.
+    pub use_pressure: bool,
     /// 1..10: anchor density added where the brush passes.
     pub detail: f64,
-    /// 0..100: removal of redundant flat anchors afterwards.
+    /// 0..100: removal of redundant flat anchors afterwards (Warp, Twirl, Pucker, Bloat).
     pub simplify: f64,
+    /// The Simplify checkbox.
+    pub simplify_on: bool,
     /// Twirl rate, degrees (−180..180).
     pub rate: f64,
     /// Scallop/Crystallize/Wrinkle complexity (0..15).
@@ -100,8 +117,10 @@ impl LiquifyParams {
             height: 100.0,
             angle: 0.0,
             intensity: 0.5,
+            use_pressure: false,
             detail: 2.0,
             simplify: 50.0,
+            simplify_on: true,
             rate: 40.0,
             complexity: 1.0,
             horizontal: 0.0,
@@ -132,23 +151,36 @@ impl LiquifyParams {
         s.complexity = f("complexity").unwrap_or(1.0).clamp(0.0, 15.0);
         s.horizontal = pct(f("horizontal").unwrap_or(0.0)).clamp(0.0, 1.0);
         s.vertical = pct(f("vertical").unwrap_or(1.0)).clamp(0.0, 1.0);
-        let b = |k: &str| p.get(k).and_then(Value::as_bool).unwrap_or(true);
-        s.affect_anchors = b("affectAnchors");
-        s.affect_in = b("affectIn");
-        s.affect_out = b("affectOut");
+        let b = |k: &str, d: bool| p.get(k).and_then(Value::as_bool).unwrap_or(d);
+        s.affect_anchors = b("affectAnchors", true);
+        s.affect_in = b("affectIn", true);
+        s.affect_out = b("affectOut", true);
+        s.use_pressure = b("usePressure", false);
+        s.simplify_on = b("simplifyOn", true);
         Some(s)
     }
 
+    /// The command parameters (those the kind uses).
     pub fn to_json(&self) -> Value {
         let mut v = json!({
             "tool": self.kind.id(), "width": self.width, "height": self.height, "angle": self.angle,
-            "intensity": self.intensity, "detail": self.detail, "simplify": self.simplify,
+            "intensity": self.intensity, "detail": self.detail,
         });
+        if self.use_pressure {
+            v["usePressure"] = json!(true);
+        }
+        if self.kind.simplifies() {
+            v["simplify"] = json!(self.simplify);
+            v["simplifyOn"] = json!(self.simplify_on);
+        } else {
+            v["complexity"] = json!(self.complexity);
+            v["affectAnchors"] = json!(self.affect_anchors);
+            v["affectIn"] = json!(self.affect_in);
+            v["affectOut"] = json!(self.affect_out);
+        }
         match self.kind {
             LiquifyKind::Twirl => v["rate"] = json!(self.rate),
-            LiquifyKind::Scallop | LiquifyKind::Crystallize => v["complexity"] = json!(self.complexity),
             LiquifyKind::Wrinkle => {
-                v["complexity"] = json!(self.complexity);
                 v["horizontal"] = json!(self.horizontal);
                 v["vertical"] = json!(self.vertical);
             }
@@ -161,10 +193,30 @@ impl LiquifyParams {
     /// the parameters its kind uses).
     pub fn options_json(&self) -> Value {
         let mut v = self.to_json();
-        for (k, x) in [("rate", self.rate), ("complexity", self.complexity), ("horizontal", self.horizontal), ("vertical", self.vertical)] {
+        for (k, x) in [
+            ("simplify", self.simplify),
+            ("rate", self.rate),
+            ("complexity", self.complexity),
+            ("horizontal", self.horizontal),
+            ("vertical", self.vertical),
+        ] {
+            v[k] = json!(x);
+        }
+        for (k, x) in [
+            ("usePressure", self.use_pressure),
+            ("simplifyOn", self.simplify_on),
+            ("affectAnchors", self.affect_anchors),
+            ("affectIn", self.affect_in),
+            ("affectOut", self.affect_out),
+        ] {
             v[k] = json!(x);
         }
         v
+    }
+
+    /// How far off the chord Simplify removes anchors (0: Simplify is off or not an option).
+    fn simplify_tolerance(&self) -> f64 {
+        if self.kind.simplifies() && self.simplify_on { self.simplify / 100.0 * self.detail_spacing() * 0.02 } else { 0.0 }
     }
 
     fn radii(&self) -> (f64, f64) {
@@ -206,34 +258,96 @@ impl LiquifyParams {
 
 /// Resample a stroke polyline into dabs spaced `spacing` apart (the first point is always a dab).
 pub fn dabs(points: &[Point], spacing: f64) -> Vec<Point> {
-    let mut out: Vec<Point> = vec![];
-    let Some(&first) = points.first() else { return out };
-    out.push(first);
-    let mut last = first;
-    let mut carry = 0.0;
-    for w in points.windows(2) {
-        let (a, b) = (w[0], w[1]);
+    let mut d = Dabber::with(spacing, Some(1.0), false);
+    for p in points {
+        d.push((*p, 1.0));
+    }
+    d.dabs.iter().chain(d.tail().as_ref()).map(|d| d.c).collect()
+}
+
+/// One brush dab: its centre and intensity (0..1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Dab {
+    pub c: Point,
+    pub intensity: f64,
+}
+
+/// A stroke sample: the pointer position and its pen pressure (0..1).
+pub type Sample = (Point, f64);
+
+/// Most dabs a stroke makes (later samples add none).
+const MAX_DABS: usize = 20_000;
+
+/// Resamples a growing stroke into dabs `spacing` apart along it, the first sample always a dab.
+/// More samples only add dabs ([`Self::dabs`] is a prefix of what it becomes), so a stroke can be
+/// applied as it grows; the stroke's end, when it is off the spacing, is the [`Self::tail`].
+#[derive(Clone, Debug, Default)]
+pub struct Dabber {
+    spacing: f64,
+    /// Every dab's intensity; None: each sample's pressure.
+    intensity: Option<f64>,
+    /// A repeated sample is one more dab there (the brush held still).
+    holds: bool,
+    samples: Vec<Sample>,
+    /// Distance from the last dab to the last sample.
+    carry: f64,
+    /// The dabs on the spacing so far.
+    pub dabs: Vec<Dab>,
+}
+
+impl Dabber {
+    /// The dabs of a stroke with brush `prm`.
+    pub fn new(prm: &LiquifyParams) -> Self {
+        Self::with(prm.dab_spacing(), (!prm.use_pressure).then_some(prm.intensity), prm.kind.holds())
+    }
+
+    fn with(spacing: f64, intensity: Option<f64>, holds: bool) -> Self {
+        Self { spacing, intensity, holds, ..Self::default() }
+    }
+
+    /// The samples so far.
+    pub fn samples(&self) -> &[Sample] {
+        &self.samples
+    }
+
+    fn dab(&self, c: Point, pressure: f64) -> Dab {
+        Dab { c, intensity: self.intensity.unwrap_or(pressure.clamp(0.0, 1.0)) }
+    }
+
+    /// Add a sample, and the dabs up to it.
+    pub fn push(&mut self, (b, pb): Sample) {
+        let prev = self.samples.last().copied();
+        self.samples.push((b, pb));
+        let Some((a, pa)) = prev else {
+            self.dabs.push(self.dab(b, pb));
+            return;
+        };
+        if self.dabs.len() > MAX_DABS {
+            return;
+        }
         let len = a.distance(b);
         if len < 1e-12 {
-            continue;
+            if self.holds {
+                self.dabs.push(self.dab(b, pb));
+                self.carry = 0.0;
+            }
+            return;
         }
-        let mut s = spacing - carry;
+        let mut s = self.spacing - self.carry;
         while s <= len {
-            last = a.lerp(b, s / len);
-            out.push(last);
-            s += spacing;
+            let t = s / len;
+            self.dabs.push(self.dab(a.lerp(b, t), pa + (pb - pa) * t));
+            s += self.spacing;
         }
-        carry = len - (s - spacing);
-        if out.len() > 20_000 {
-            break;
-        }
+        self.carry = len - (s - self.spacing);
     }
-    if let Some(&end) = points.last()
-        && end.distance(last) > spacing * 0.25
-    {
-        out.push(end);
+
+    /// The dab at the last sample when it is off the spacing (the stroke ends there).
+    pub fn tail(&self) -> Option<Dab> {
+        let &(end, p) = self.samples.last()?;
+        let last = self.dabs.last()?.c;
+        (end.distance(last) > self.spacing * 0.25).then(|| self.dab(end, p))
     }
-    out
 }
 
 fn hash(mut x: u64) -> u64 {
@@ -414,35 +528,98 @@ fn simplify(sp: &mut SubPath, tol: f64, region: Rect) {
     }
 }
 
-/// Apply a liquify stroke to `path`. `salt` decorrelates noise between paths. Returns whether
-/// anything moved.
+/// Apply a liquify stroke (its dabs, at the brush's intensity) to `path`. `salt` decorrelates
+/// noise between paths. Returns whether anything moved.
 pub fn apply_stroke(path: &mut PathData, dab_pts: &[Point], prm: &LiquifyParams, salt: u64) -> bool {
-    let spacing = prm.detail_spacing();
-    let mut changed = false;
-    let mut region: Option<Rect> = None;
-    for (si, sp) in path.subpaths.iter_mut().enumerate() {
-        let salt = hash(salt ^ (si as u64 + 1).wrapping_mul(0x1234_5678_9abc_def1));
-        for (di, c) in dab_pts.iter().enumerate() {
-            let prev = if di == 0 { *c } else { dab_pts[di - 1] };
-            let bb = prm.brush_bounds(*c);
-            let Some(spb) = sp_bounds(sp) else { continue };
-            if spb.intersect(bb).area() <= 0.0 && !(spb.width() == 0.0 || spb.height() == 0.0) {
-                continue;
-            }
-            subdivide(sp, prm, *c, spacing);
-            if apply_dab(sp, prm, *c, prev, di as u64, salt) {
-                changed = true;
-                region = Some(region.map_or(bb, |r| r.union(bb)));
-            }
+    let dabs: Vec<Dab> = dab_pts.iter().map(|c| Dab { c: *c, intensity: prm.intensity }).collect();
+    let mut ps = PathStroke::new(std::mem::take(path), salt);
+    ps.advance(&dabs, prm);
+    match ps.finish(&dabs, None, prm) {
+        Some(done) => {
+            *path = done;
+            true
+        }
+        None => {
+            *path = ps.path;
+            false
         }
     }
-    if changed && let Some(r) = region {
-        let tol = prm.simplify / 100.0 * spacing * 0.02;
-        for sp in &mut path.subpaths {
-            simplify(sp, tol, r);
+}
+
+/// Does the brush box `bb` reach subpath `sp`?
+fn touches(sp: &SubPath, bb: Rect) -> bool {
+    sp_bounds(sp).is_some_and(|spb| spb.intersect(bb).area() > 0.0 || spb.width() == 0.0 || spb.height() == 0.0)
+}
+
+/// Apply dab `d` (number `di`, after the dab at `prev`) to every subpath of `path` it reaches.
+fn dab_on(path: &mut PathData, di: usize, d: Dab, prev: Point, prm: &LiquifyParams, salt: u64) -> bool {
+    let prm = LiquifyParams { intensity: d.intensity, ..*prm };
+    let (bb, spacing) = (prm.brush_bounds(d.c), prm.detail_spacing());
+    let mut changed = false;
+    for (si, sp) in path.subpaths.iter_mut().enumerate() {
+        if !touches(sp, bb) {
+            continue;
         }
+        subdivide(sp, &prm, d.c, spacing);
+        changed |= apply_dab(sp, &prm, d.c, prev, di as u64, hash(salt ^ (si as u64 + 1).wrapping_mul(0x1234_5678_9abc_def1)));
     }
     changed
+}
+
+/// A path under a growing stroke: the dabs applied so far (Simplify comes at [`Self::finish`]).
+/// Applying a stroke's dabs in any number of steps gives the same path as applying them at once.
+#[derive(Clone, Debug)]
+pub struct PathStroke {
+    path: PathData,
+    /// Decorrelates noise between paths.
+    salt: u64,
+    /// Dabs applied.
+    applied: usize,
+    /// Where dabs moved something (Simplify works there), None while nothing moved.
+    region: Option<Rect>,
+}
+
+impl PathStroke {
+    pub fn new(path: PathData, salt: u64) -> Self {
+        Self { path, salt, applied: 0, region: None }
+    }
+
+    /// Apply the stroke's dabs not applied yet.
+    pub fn advance(&mut self, dabs: &[Dab], prm: &LiquifyParams) {
+        for di in self.applied..dabs.len() {
+            let Some(&d) = dabs.get(di) else { break };
+            let prev = di.checked_sub(1).and_then(|i| dabs.get(i)).map_or(d.c, |p| p.c);
+            if dab_on(&mut self.path, di, d, prev, prm, self.salt) {
+                let bb = prm.brush_bounds(d.c);
+                self.region = Some(self.region.map_or(bb, |r| r.union(bb)));
+            }
+        }
+        self.applied = self.applied.max(dabs.len());
+    }
+
+    /// The path after the stroke (`dabs`, all applied, then `tail`), simplified; None when
+    /// nothing moved.
+    pub fn finish(&self, dabs: &[Dab], tail: Option<Dab>, prm: &LiquifyParams) -> Option<PathData> {
+        let mut region = self.region;
+        let mut out = None;
+        if let Some(t) = tail.filter(|t| self.path.subpaths.iter().any(|sp| touches(sp, prm.brush_bounds(t.c)))) {
+            let mut p = self.path.clone();
+            if dab_on(&mut p, dabs.len(), t, dabs.last().map_or(t.c, |d| d.c), prm, self.salt) {
+                let bb = prm.brush_bounds(t.c);
+                region = Some(region.map_or(bb, |r| r.union(bb)));
+            }
+            out = Some(p);
+        }
+        let region = region?;
+        let mut path = out.unwrap_or_else(|| self.path.clone());
+        let tol = prm.simplify_tolerance();
+        if tol > 0.0 {
+            for sp in &mut path.subpaths {
+                simplify(sp, tol, region);
+            }
+        }
+        Some(path)
+    }
 }
 
 fn sp_bounds(sp: &SubPath) -> Option<Rect> {
@@ -453,29 +630,56 @@ fn sp_bounds(sp: &SubPath) -> Option<Rect> {
 
 // ---------- the tool ----------
 
+/// An Alt-drag sizing the brush: where it started and the brush size then.
+#[derive(Clone, Copy, Debug)]
+struct Sizing {
+    start: Point,
+    width: f64,
+    height: f64,
+}
+
 pub struct LiquifyTool {
     pub params: LiquifyParams,
-    points: Vec<Point>,
+    /// Show Brush Size: the brush outline follows the pointer.
+    pub show_brush: bool,
+    /// The stroke's samples (position, pen pressure).
+    points: Vec<Sample>,
     active: bool,
-    /// Alt-drag resizes the brush from this centre.
-    sizing: Option<Point>,
+    sizing: Option<Sizing>,
     hover: Option<Point>,
 }
 
 impl LiquifyTool {
     pub fn new(id: &str) -> Self {
         let kind = LiquifyKind::parse(id).unwrap_or(LiquifyKind::Warp);
-        Self { params: LiquifyParams::new(kind), points: vec![], active: false, sizing: None, hover: None }
+        Self { params: LiquifyParams::new(kind), show_brush: true, points: vec![], active: false, sizing: None, hover: None }
     }
 
-    /// The command + params for the stroke so far.
+    /// The command + params for the stroke so far (with each sample's pressure while Use Pressure
+    /// Pen is on).
     pub fn command(&self, cx: &ToolContext) -> (String, Value) {
         let mut v = self.params.to_json();
-        v["points"] = Value::Array(self.points.iter().map(|p| json!([p.x, p.y])).collect());
+        let pressure = self.params.use_pressure;
+        v["points"] = Value::Array(self.points.iter().map(|(p, f)| if pressure { json!([p.x, p.y, f]) } else { json!([p.x, p.y]) }).collect());
         if !cx.selection.is_empty() {
             v["ids"] = crate::json_ids(&cx.selection.objects);
         }
         ("object.liquify".into(), v)
+    }
+
+    /// Alt-drag from `s` to `p`: the brush grows or shrinks from its size at the press (its edge
+    /// follows the pointer); with Shift it keeps its proportions.
+    fn resize(&mut self, s: Sizing, p: Point, proportional: bool) {
+        let (w, h) = (s.width + 2.0 * (p.x - s.start.x), s.height + 2.0 * (p.y - s.start.y));
+        let (w, h) = if !proportional {
+            (w, h)
+        } else if (p.x - s.start.x).abs() >= (p.y - s.start.y).abs() {
+            (w, s.height * w / s.width)
+        } else {
+            (s.width * h / s.height, h)
+        };
+        self.params.width = w.clamp(1.0, 10_000.0);
+        self.params.height = h.clamp(1.0, 10_000.0);
     }
 }
 
@@ -486,28 +690,28 @@ impl Tool for LiquifyTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
         self.hover = Some(p);
+        let sample = (p, f64::from(ev.pressure).clamp(0.0, 1.0));
         match ev.kind {
             PointerKind::Down if ev.mods.alt => {
-                self.sizing = Some(p);
+                self.sizing = Some(Sizing { start: p, width: self.params.width, height: self.params.height });
                 vec![]
             }
             PointerKind::Down => {
-                self.points = vec![p];
+                self.points = vec![sample];
                 self.active = true;
                 let (c, v) = self.command(cx);
                 vec![Action::Begin(self.params.kind.label().into()), Action::Preview(c, v)]
             }
             PointerKind::Drag => {
-                if let Some(c) = self.sizing {
-                    self.params.width = ((p.x - c.x).abs() * 2.0).max(1.0);
-                    self.params.height = if ev.mods.shift { self.params.width } else { ((p.y - c.y).abs() * 2.0).max(1.0) };
-                    self.hover = Some(c);
+                if let Some(s) = self.sizing {
+                    self.resize(s, p, ev.mods.shift);
+                    self.hover = Some(s.start);
                     return vec![];
                 }
-                if !self.active || self.points.last().is_some_and(|l| l.distance(p) < cx.tol(2.0)) {
+                if !self.active || self.points.last().is_some_and(|(l, _)| l.distance(p) < cx.tol(2.0)) {
                     return vec![];
                 }
-                self.points.push(p);
+                self.points.push(sample);
                 let (c, v) = self.command(cx);
                 vec![Action::Preview(c, v)]
             }
@@ -526,7 +730,7 @@ impl Tool for LiquifyTool {
         }
     }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        let Some(c) = self.hover else { return vec![] };
+        let Some(c) = self.hover.filter(|_| self.show_brush || self.sizing.is_some()) else { return vec![] };
         vec![Overlay::Path {
             path: ellipse_path(c, self.params.width / 2.0, self.params.height / 2.0, self.params.angle),
             color: [0x80, 0x80, 0x80],
@@ -537,18 +741,28 @@ impl Tool for LiquifyTool {
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::Crosshair
     }
+    /// Every option ([`LiquifyParams::options_json`]) and `showBrush`.
     fn options(&self) -> Value {
-        self.params.options_json()
+        let mut v = self.params.options_json();
+        v["showBrush"] = json!(self.show_brush);
+        v
     }
     fn set_option(&mut self, key: &str, value: &Value) {
-        let mut v = self.params.to_json();
-        v[key] = value.clone();
-        if key == "diameter" {
-            v["width"] = value.clone();
-            v["height"] = value.clone();
-        }
-        if let Some(p) = LiquifyParams::from_json(&v) {
-            self.params = p;
+        match key {
+            // The kind is the tool's: another tool is another tool.
+            "tool" => {}
+            "showBrush" => self.show_brush = value.as_bool().unwrap_or(self.show_brush),
+            _ => {
+                let mut v = self.params.options_json();
+                v[key] = value.clone();
+                if key == "diameter" {
+                    v["width"] = value.clone();
+                    v["height"] = value.clone();
+                }
+                if let Some(p) = LiquifyParams::from_json(&v) {
+                    self.params = p;
+                }
+            }
         }
     }
     fn busy(&self) -> bool {

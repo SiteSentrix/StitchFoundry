@@ -42,6 +42,8 @@ mod tests_gradient;
 #[cfg(test)]
 mod tests_links;
 #[cfg(test)]
+mod tests_liquify;
+#[cfg(test)]
 mod tests_place;
 #[cfg(test)]
 mod tests_svg;

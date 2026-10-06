@@ -1799,3 +1799,21 @@ export (SVG, PDF, EPS, EMF/WMF, DXF).
 {"name":"run_command","arguments":{"command":"object.envelope.options","params":{"fidelity":80,"distortAppearance":true,"distortLinearGradients":true}}}
 {"name":"run_command","arguments":{"command":"object.envelope.info","params":{}}}
 ```
+
+## Liquify tools
+
+The Liquify tools (`warp`, `twirl`, `pucker`, `bloat`, `scallop`, `crystallize`, `wrinkle`) drag a brush over paths:
+the selected ones, or with nothing selected every path the brush passes over. A stroke is one undo step and one
+`object.liquify` journal entry, which an agent can also run directly. Their options (`tool.setOption`) are the Global
+Brush Dimensions shared by the seven tools (`width`, `height` in pt, `angle`, `intensity` 0..1, `usePressure`,
+`showBrush`) and the tool's own: `detail` (1..10); `simplify` (0..100) with `simplifyOn` (Warp, Twirl, Pucker,
+Bloat); `rate` (Twirl, -180..180°); `complexity` (0..15) and `affectAnchors`, `affectIn`, `affectOut` (Scallop,
+Crystallize, Wrinkle: what the brush moves); `horizontal`, `vertical` (Wrinkle, 0..1). Alt-drag sizes the brush from
+its current size (with Shift too it keeps its proportions). With Use Pressure Pen on, each `pointer_gesture` event's
+`pressure` (0..1) is the intensity there, and `object.liquify` takes points as `[x, y, pressure]`.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"bloat","values":{"width":80,"height":80,"usePressure":true}}}}
+{"name":"pointer_gesture","arguments":{"tool":"bloat","events":[{"kind":"down","x":280,"y":150,"pressure":0.3},{"kind":"drag","x":280,"y":200,"pressure":0.8},{"kind":"up","x":280,"y":250}]}}
+{"name":"run_command","arguments":{"command":"object.liquify","params":{"tool":"scallop","points":[[300,150],[300,250]],"complexity":3,"affectAnchors":false}}}
+```

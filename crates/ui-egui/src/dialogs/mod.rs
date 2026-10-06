@@ -32,6 +32,7 @@ mod gradient_stop;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod import_pdf;
+pub mod liquify;
 pub mod missing_links;
 pub mod new_color_group;
 mod new_document;
@@ -253,6 +254,7 @@ registry! {
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
+    LiquifyOptions: [liquify::KIND] => liquify::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).

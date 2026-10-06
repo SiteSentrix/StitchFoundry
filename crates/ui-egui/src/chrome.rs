@@ -502,6 +502,30 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             ("Delete", true),
             (" to remove pins", false),
         ],
+        "warp" => &[
+            ("Drag", true),
+            (" across paths to push them along  |  ", false),
+            ("Alt+Drag", true),
+            (" to size the brush (", false),
+            ("Shift", true),
+            (" keeps its proportions)", false),
+        ],
+        "twirl" | "pucker" | "bloat" => &[
+            ("Click or drag", true),
+            (" over paths to reshape them  |  ", false),
+            ("Alt+Drag", true),
+            (" to size the brush (", false),
+            ("Shift", true),
+            (" keeps its proportions)", false),
+        ],
+        "scallop" | "crystallize" | "wrinkle" => &[
+            ("Click or drag", true),
+            (" over paths to roughen their outlines  |  ", false),
+            ("Alt+Drag", true),
+            (" to size the brush (", false),
+            ("Shift", true),
+            (" keeps its proportions)", false),
+        ],
         _ => return None,
     })
 }

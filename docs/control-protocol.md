@@ -472,3 +472,10 @@ Mesh… open `envelopeMesh` (`rows`, `cols`, `reset`, and `maintainShape` when r
 `distortLinearGradients`, `distortPatternFills`) with the selected envelope's values, or with nothing selected the
 defaults for new envelopes. They preview live while an envelope is involved, and `ui.dialog.confirm` keeps the result
 as one undo step.
+
+Liquify Tool Options: double-clicking a Liquify tool (`tool.options {tool: "twirl"}`) opens a `liquifyOptions` dialog.
+Its fields are `tool`, the Global Brush Dimensions `width`, `height` (pt), `angle`, `intensity` (%) and `usePressure`,
+then the tool's options `detail`, `simplify` and `simplifyOn` (Warp, Twirl, Pucker, Bloat), `rate` (Twirl),
+`complexity`, `affectAnchors`, `affectIn` and `affectOut` (Scallop, Crystallize, Wrinkle), `horizontal` and
+`vertical` (Wrinkle, %), and `showBrush`. `ui.dialog.confirm` runs `tool.setOption {tool, values}`. `ui.pointer`
+events take `pressure` (0..1, default 1): it is the Liquify intensity while Use Pressure Pen is on.
