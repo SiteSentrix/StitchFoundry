@@ -226,7 +226,7 @@ fn enveloped_type_exports_distorted_in_every_format() {
         let data = s.execute("document.export", &json!({"format": format})).unwrap()["dataBase64"].as_str().unwrap().to_string();
         let bytes = vectorcraft_format::base64_decode(&data).unwrap();
         let dated = |line: &&[u8]| line.windows(12).any(|w| w == b"CreationDate") || line.windows(7).any(|w| w == b"ModDate");
-        bytes.split(|b| *b == b'\n').filter(|l| !dated(l)).flat_map(|l| l.iter().copied().chain([b'\n'])).collect()
+        bytes.split(|b| *b == b'\n').filter(|l| !dated(l)).flat_map(|l| l.iter().copied().chain(*b"\n")).collect()
     };
     for format in ["svg", "pdf", "eps", "emf", "dxf"] {
         s.execute("object.envelope.options", &json!({"bend": 0})).unwrap();
