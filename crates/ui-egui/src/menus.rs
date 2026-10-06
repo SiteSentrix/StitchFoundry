@@ -553,6 +553,108 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open View › Perspective Grid › Define Grid (dialog `perspectiveGrid`, prefilled from the grid: the fields of perspective.grid.define); OK runs perspective.grid.define",
     ),
+    (
+        "ui.perspectivePresetsDialog",
+        "Perspective Grid Presets…",
+        "",
+        "{selected?} open Edit › Perspective Grid Presets (dialog `perspectiveGridPresets`, field `selected`): New… and Edit… open the preset editor (dialog `perspectiveGrid` with `__mode` edit), whose OK runs perspective.presets.save and comes back; Delete, Import… and Export… run perspective.presets.*",
+    ),
+    (
+        "ui.savePerspectivePreset",
+        "Save Grid as Preset…",
+        "",
+        "{} open View › Perspective Grid › Save Grid as Preset (dialog `perspectiveGrid` with `__mode` save, `name` a new preset name): OK runs perspective.presets.save with the fields",
+    ),
+    (
+        "ui.perspectiveUserPreset1.1",
+        "One Point Perspective Preset 1",
+        "",
+        "{} apply the 1. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.2",
+        "One Point Perspective Preset 2",
+        "",
+        "{} apply the 2. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.3",
+        "One Point Perspective Preset 3",
+        "",
+        "{} apply the 3. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.4",
+        "One Point Perspective Preset 4",
+        "",
+        "{} apply the 4. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset1.5",
+        "One Point Perspective Preset 5",
+        "",
+        "{} apply the 5. saved 1-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.1",
+        "Two Point Perspective Preset 1",
+        "",
+        "{} apply the 1. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.2",
+        "Two Point Perspective Preset 2",
+        "",
+        "{} apply the 2. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.3",
+        "Two Point Perspective Preset 3",
+        "",
+        "{} apply the 3. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.4",
+        "Two Point Perspective Preset 4",
+        "",
+        "{} apply the 4. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset2.5",
+        "Two Point Perspective Preset 5",
+        "",
+        "{} apply the 5. saved 2-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.1",
+        "Three Point Perspective Preset 1",
+        "",
+        "{} apply the 1. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.2",
+        "Three Point Perspective Preset 2",
+        "",
+        "{} apply the 2. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.3",
+        "Three Point Perspective Preset 3",
+        "",
+        "{} apply the 3. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.4",
+        "Three Point Perspective Preset 4",
+        "",
+        "{} apply the 4. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
+    (
+        "ui.perspectiveUserPreset3.5",
+        "Three Point Perspective Preset 5",
+        "",
+        "{} apply the 5. saved 3-point perspective grid preset (perspective.grid.preset)",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -970,6 +1072,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "plugin.dialog" => crate::dialogs::plugin::open(app, p),
         "ui.installPlugin" => io::install_plugin(app, s("path")),
         "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
+        "ui.perspectivePresetsDialog" => {
+            crate::dialogs::perspective_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
+        "ui.savePerspectivePreset" => crate::dialogs::perspective_grid::open_save(app),
+        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => match crate::dialogs::perspective_presets::slot_preset(app, id) {
+            Some(name) => app.run("perspective.grid.preset", json!({ "name": name })),
+            None => Err("no such perspective grid preset".into()),
+        },
         _ => return None,
     };
     Some(r)
@@ -1070,6 +1181,9 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => {
             crate::panels::graphic_styles::user_library(app, id).map_or_else(|| "—".into(), |l| l.name)
         }
+        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
+            crate::dialogs::perspective_presets::slot_preset(app, id).unwrap_or_else(|| "—".into())
+        }
         _ => label.into(),
     }
 }
@@ -1081,6 +1195,7 @@ fn hidden_when_disabled(id: &str) -> bool {
         || id.starts_with("file.openRecent")
         || id.starts_with(crate::panels::swatches::USER_SLOT)
         || id.starts_with(crate::panels::graphic_styles::USER_SLOT)
+        || id.starts_with(crate::dialogs::perspective_presets::SLOT)
 }
 
 /// Menu items another item stands in for right now: Envelope Distort's Reset with Warp and Reset
@@ -1146,7 +1261,11 @@ pub fn listed_slots(app: &VectorcraftApp) -> usize {
     use vectorcraft_engine::cmd::{stylelib, swatchlib};
     let user = |libs: Vec<swatchlib::LibraryInfo>| libs.iter().filter(|l| l.category == "user").count().min(10);
     let views = app.session.active().map_or(0, |d| d.doc.views.len().min(10));
-    views + io::recent_files(app).len().min(RECENT_IDS.len()) + user(swatchlib::libraries(&app.session)) + user(stylelib::libraries(&app.session))
+    views
+        + io::recent_files(app).len().min(RECENT_IDS.len())
+        + user(swatchlib::libraries(&app.session))
+        + user(stylelib::libraries(&app.session))
+        + crate::dialogs::perspective_presets::listed_slots(app)
 }
 
 /// Changes whenever a plug-in is installed or removed: Object › Plug-ins and Effect › Plug-ins
@@ -1154,6 +1273,31 @@ pub fn listed_slots(app: &VectorcraftApp) -> usize {
 pub fn plugin_revision() -> u64 {
     vectorcraft_plugins::registry::revision()
 }
+
+/// View → Perspective Grid → One/Two/Three Point Perspective: the saved-preset slots of each type.
+const PERSPECTIVE_SLOTS: [[&str; crate::dialogs::perspective_presets::SLOTS]; 3] = [
+    [
+        "ui.perspectiveUserPreset1.1",
+        "ui.perspectiveUserPreset1.2",
+        "ui.perspectiveUserPreset1.3",
+        "ui.perspectiveUserPreset1.4",
+        "ui.perspectiveUserPreset1.5",
+    ],
+    [
+        "ui.perspectiveUserPreset2.1",
+        "ui.perspectiveUserPreset2.2",
+        "ui.perspectiveUserPreset2.3",
+        "ui.perspectiveUserPreset2.4",
+        "ui.perspectiveUserPreset2.5",
+    ],
+    [
+        "ui.perspectiveUserPreset3.1",
+        "ui.perspectiveUserPreset3.2",
+        "ui.perspectiveUserPreset3.3",
+        "ui.perspectiveUserPreset3.4",
+        "ui.perspectiveUserPreset3.5",
+    ],
+];
 
 /// Type → Recent Fonts slots.
 const RECENT_FONT_IDS: [&str; 10] = [
@@ -1227,7 +1371,10 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
         "plugin.dialog" => app.session.active().is_some(),
-        "ui.perspectiveGridDialog" => app.session.active().is_some(),
+        "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
+        id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
+            app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
+        }
         _ => true,
     }
 }
@@ -1363,7 +1510,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 c("Print Presets…", "ui.printPresetsDialog"),
                 c("PDF Presets…", "ui.pdfPresetsDialog"),
-                cp("Perspective Grid Presets…", "perspective.grid.preset", json!({"kind": 2})),
+                c("Perspective Grid Presets…", "ui.perspectivePresetsDialog"),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),
                 c("Assign Profile…", "edit.assignProfile"),
@@ -1778,10 +1925,12 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     vec![
                         c("Show Grid", "perspective.grid.show"),
                         Sep,
-                        cp("One Point Perspective", "perspective.grid.preset", json!({"kind": 1})),
-                        cp("Two Point Perspective", "perspective.grid.preset", json!({"kind": 2})),
-                        cp("Three Point Perspective", "perspective.grid.preset", json!({"kind": 3})),
                         c("Define Grid…", "ui.perspectiveGridDialog"),
+                        sub("One Point Perspective", crate::dialogs::perspective_presets::menu(1, PERSPECTIVE_SLOTS[0])),
+                        sub("Two Point Perspective", crate::dialogs::perspective_presets::menu(2, PERSPECTIVE_SLOTS[1])),
+                        sub("Three Point Perspective", crate::dialogs::perspective_presets::menu(3, PERSPECTIVE_SLOTS[2])),
+                        Sep,
+                        c("Save Grid as Preset…", "ui.savePerspectivePreset"),
                     ],
                 ),
                 c("Show Grid", "view.grid"),

@@ -38,6 +38,11 @@ pub const BUILTINS: [(&str, u8, f64); 8] = [
     ("[3P-Low View]", 3, 0.66),
 ];
 
+/// Is `name` a built-in preset's (any case)?
+pub fn is_builtin(name: &str) -> bool {
+    BUILTINS.iter().any(|b| b.0.eq_ignore_ascii_case(name.trim()))
+}
+
 /// The first artboard of `doc` (a Letter page without one).
 pub fn first_artboard(doc: &Document) -> Rect {
     doc.artboards.first().map_or(LETTER, |a| a.rect)

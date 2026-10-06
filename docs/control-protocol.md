@@ -479,3 +479,15 @@ then the tool's options `detail`, `simplify` and `simplifyOn` (Warp, Twirl, Puck
 `complexity`, `affectAnchors`, `affectIn` and `affectOut` (Scallop, Crystallize, Wrinkle), `horizontal` and
 `vertical` (Wrinkle, %), and `showBrush`. `ui.dialog.confirm` runs `tool.setOption {tool, values}`. `ui.pointer`
 events take `pressure` (0..1, default 1): it is the Liquify intensity while Use Pressure Pen is on.
+
+Perspective grid presets: in the `perspectiveGrid` dialog, `name` is the preset whose fields are loaded (setting the
+fields of a preset, as the Preset menu does, keeps its name; other changes clear it, which reads [Custom]). Save
+Preset… sets `__mode: "save"` and `__from: "define"` with `name` the new preset's name: `ui.dialog.confirm` then saves
+the fields as that preset (`perspective.presets.save`) and returns to Define Grid on it. View → Perspective Grid →
+Save Grid as Preset… (`ui.savePerspectivePreset`) opens the same dialog in `save` mode; OK saves and closes. Edit →
+Perspective Grid Presets… (`ui.perspectivePresetsDialog {selected?}`) opens dialog `perspectiveGridPresets` (field
+`selected`): New… and Edit… open the preset editor (`perspectiveGrid` with `__mode: "edit"`, `__original` the preset
+edited), whose OK runs `perspective.presets.save` and comes back; Delete, Import… and Export… are
+`perspective.presets.delete`, `import` and `export`. View → Perspective Grid → One/Two/Three Point Perspective list
+that type's built-in views and the saved presets (`ui.perspectiveUserPreset<type>.<n>`, hidden while empty). Opening a
+`.vcperspective` file with `app.open` imports its presets.
