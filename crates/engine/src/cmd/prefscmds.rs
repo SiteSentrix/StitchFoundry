@@ -176,6 +176,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("fontNamesInEnglish", "Type", "Options", "Show Font Names in English", bool),
     p!("autoSizeAreaType", "Type", "Options", "Auto Size New Area Type", bool),
     p!("fontPreview", "Type", "Options", "Enable in-menu font previews", bool),
+    p!("adobeFonts", "Type", "Options", "Include Fonts of Other Design Apps' Folders", bool),
     p!("fontPreviewSize", "Type", "Options", "Font Preview Size", choice(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")])),
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
@@ -448,6 +449,7 @@ impl Session {
         let tile_edge_changed = p.pattern_tile_edge_color != self.prefs.pattern_tile_edge_color;
         self.prefs = p;
         vectorcraft_render::set_default_threads(u16::try_from(self.prefs.render_threads).ok());
+        vectorcraft_text::FontDb::global().set_adobe_fonts(self.prefs.adobe_fonts);
         for st in &mut self.docs {
             if history_changed {
                 st.history.limit = self.prefs.history_states as usize;
