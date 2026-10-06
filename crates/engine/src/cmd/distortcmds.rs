@@ -11,7 +11,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, PuppetPin, WidthProfile}
 use vectorcraft_geom::{Affine, Homography, PathData, Point, Rect};
 use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sample, reach_bounds};
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
-use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, warp_from_rest, warp_node_with};
+use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, stroke_owner, warp_from_rest, warp_node_with};
 
 use super::edit::{duplicate_in, selected_roots};
 use super::*;
@@ -194,10 +194,16 @@ fn uniform() -> WidthProfile {
 /// Width points closer than this (in t) are at the same place: a discontinuous point.
 const SAME_T: f64 = 1e-6;
 
-/// The weighted stroke of `id` that width point commands edit.
-fn weighted_stroke(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc::StrokeLayer> {
+/// The stroke of `id` that width point commands edit (a compound path's for its members).
+fn stroke_mut(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc::StrokeLayer> {
+    let id = stroke_owner(d, id);
     let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-    let st = n.appearance.stroke_mut().ok_or_else(|| EngineError::Other("the object has no stroke".into()))?;
+    n.appearance.stroke_mut().ok_or_else(|| EngineError::Other("the object has no stroke".into()))
+}
+
+/// [`stroke_mut`], which must have a weight.
+fn weighted_stroke(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc::StrokeLayer> {
+    let st = stroke_mut(d, id)?;
     if st.width <= 0.0 {
         return Err(EngineError::Other("the stroke has no weight".into()));
     }
@@ -316,8 +322,7 @@ fn width_point_remove(s: &mut Session, p: &Value) -> Result<Value> {
     indices.sort_unstable();
     indices.dedup();
     s.edit("Delete Width Point", |d, _| {
-        let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-        let st = n.appearance.stroke_mut().ok_or_else(|| EngineError::Other("the object has no stroke".into()))?;
+        let st = stroke_mut(d, id)?;
         let fits = |pr: &&mut WidthProfile| indices.last().is_some_and(|i| *i < pr.points.len());
         let prof = st.profile.as_mut().filter(fits).ok_or_else(|| bad(C, "no such width point"))?;
         for i in indices.iter().rev() {
@@ -351,7 +356,10 @@ fn width_profile_set(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => return Err(bad(C, "points must be an array or null")),
     };
-    let ids = targets(s, p)?;
+    let doc = &s.doc()?.doc;
+    let mut ids: Vec<NodeId> = targets(s, p)?.into_iter().map(|id| stroke_owner(doc, id)).collect();
+    ids.sort_unstable();
+    ids.dedup();
     s.edit("Width Profile", |d, _| {
         for id in &ids {
             let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;

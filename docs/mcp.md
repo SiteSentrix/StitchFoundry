@@ -873,6 +873,8 @@ points}` replaces them all, as dragging several Shift-selected points with the W
 With the Width tool, `press_key` Delete or Backspace removes the selected width points (`handledBy: "tool"`); with none
 selected the key clears the selected objects as usual (`edit.clear`). The Puppet Warp tool's selected pins go the
 same way.
+A compound path's stroke is the compound's: width point commands given one of its members edit the compound's
+profile, which runs along every subpath (the Width tool shows each subpath's points).
 
 `object.puppetWarp {ids?, pins, moved, angles?, expand?}` warps art as rigidly as possible so that each pin (a point
 on the art) lands on its `moved` point. `angles` (degrees, or null for a free pin; as long as `pins`) holds the turn

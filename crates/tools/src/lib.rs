@@ -312,6 +312,12 @@ pub enum Cursor {
     Slice,
     /// The Slice Selection tool: the arrow with a slice badge.
     SliceSelect,
+    /// The Width tool away from strokes.
+    Width,
+    /// The Width tool over a stroke: a drag adds a width point.
+    WidthAdd,
+    /// The Width tool over a width point or a handle end: a drag moves or widens it.
+    WidthPoint,
     /// The Blend tool away from art: a crosshair with a hollow square.
     Blend,
     /// The Blend tool over an object it can blend: a crosshair with a filled square.

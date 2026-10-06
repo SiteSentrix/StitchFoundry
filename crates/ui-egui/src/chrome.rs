@@ -490,6 +490,18 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
         ],
         "gradient" => &[("Drag", true), (" across a selected object to set the gradient direction", false)],
         "artboard" => &[("Click", true), (" to select an artboard  |  ", false), ("Drag", true), (" on the canvas to create one", false)],
+        "width" => &[
+            ("Drag", true),
+            (" a stroke to add a width point  |  ", false),
+            ("Alt+Drag", true),
+            (" to change one side  |  ", false),
+            ("Shift+Click", true),
+            (" to select more points  |  ", false),
+            ("Double-click", true),
+            (" a point to edit it  |  ", false),
+            ("Delete", true),
+            (" to remove points", false),
+        ],
         "puppetWarp" => &[
             ("Click", true),
             (" the art to add a pin  |  ", false),
