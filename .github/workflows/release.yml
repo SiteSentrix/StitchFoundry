@@ -244,6 +244,13 @@ jobs:
       VECTORCRAFT_BUILD_DATE: ${{ needs.version.outputs.date }}
     steps:
       - uses: actions/checkout@v4
+      # Japanese UI/document fonts, embedded by crates/text/build.rs (CRAFT_FONTS_DIR in the VM).
+      # Bump the commit deliberately; see craftrules standards/fonts.md.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: storytold/craft-fonts
+          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          path: craft-fonts
       - uses: dtolnay/rust-toolchain@stable
         if: inputs.version != ''
       - name: Apply version override
@@ -265,6 +272,8 @@ jobs:
             . "$HOME/.cargo/env"
             git config --global --add safe.directory "$PWD"
             # Build outside the checkout so only dist/ is copied back out of the VM.
+            # The craft-fonts checkout is synced into the VM with the workspace.
+            export CRAFT_FONTS_DIR="$PWD/craft-fonts" CRAFT_FONTS_REQUIRED=1
             export CARGO_TARGET_DIR=/var/tmp/vectorcraft-target CARGO_BUILD_JOBS=4
             bash packaging/freebsd/package.sh
       - uses: actions/upload-artifact@v4
