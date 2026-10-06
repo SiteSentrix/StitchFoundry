@@ -23,8 +23,8 @@
         DowngradeErrorMessage="A newer version of VectorCraft is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <Icon Id="VectorcraftIcon" SourceFile="$(var.IconPath)" />
-    <Property Id="ARPPRODUCTICON" Value="VectorcraftIcon" />
+    <Icon Id="VectorcraftIcon.ico" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="VectorcraftIcon.ico" />
     <Property Id="ARPURLINFOABOUT" Value="https://getartcraft.com/apps/vectorcraft" />
     <Property Id="ARPURLUPDATEINFO" Value="https://getartcraft.com/apps/vectorcraft" />
     <Property Id="ARPHELPLINK" Value="https://discord.gg/artcraft" />
@@ -45,7 +45,7 @@
         <File Id="VectorcraftExe" Source="$(var.BinDir)\vectorcraft.exe" KeyPath="yes">
           <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="VectorCraft"
               Description="VectorCraft vector illustration app" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
-              Icon="VectorcraftIcon" IconIndex="0" />
+              Icon="VectorcraftIcon.ico" IconIndex="0" />
         </File>
 
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\vectorcraft.exe" Value="[#VectorcraftExe]" Type="string" />
