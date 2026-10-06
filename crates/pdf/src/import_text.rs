@@ -156,13 +156,17 @@ impl TextLine {
         self.last_dir.dot(self.at.dir) < 0.9986
     }
 
-    /// A smooth path through the glyphs' baseline origins and the end of the last glyph
-    /// (Catmull-Rom through the points, as cubic Béziers).
+    /// A smooth path through the glyphs' baseline origins and the end of the last glyph, an em
+    /// further (Catmull-Rom through the points, as cubic Béziers).
     fn baseline_path(&self) -> Option<BezPath> {
         let mut pts = self.baseline.clone();
+        // On past the end of the last glyph by an em, so rounding in the spacing doesn't push it
+        // off the end of the path (where type on a path stops).
         pts.push(self.next);
+        pts.push(self.next + self.last_dir * self.at.size);
         let first = *pts.first()?;
-        if pts.len() < 3 {
+        // Finite placements far out can still overflow once an em is added: no path then.
+        if pts.len() < 3 || !pts.iter().all(|p| p.is_finite()) {
             return None;
         }
         let mut bp = BezPath::new();

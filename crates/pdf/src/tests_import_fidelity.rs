@@ -383,6 +383,8 @@ fn glyphs_turned_along_a_curve_become_type_on_a_path() {
     let vectorcraft_doc::TextKind::OnPath { path, .. } = &t[0].kind else { panic!("type on a path: {:?}", t[0].kind) };
     let b = path.bounds().unwrap();
     assert!(b.height() > 15.0, "the path curves: {b:?}");
+    // Every glyph fits on the path, the last one too.
+    assert_eq!(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t[0]).glyphs.len(), 7);
     // Straight type with a slight rotation stays one point type object.
     let straight = texts(&open(&one_page("BT /F1 18 Tf 0.98481 0.17365 -0.17365 0.98481 20 40 Tm (Straight) Tj ET", HELVETICA, &[])));
     assert_eq!(straight.len(), 1);
