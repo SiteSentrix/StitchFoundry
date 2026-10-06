@@ -15,7 +15,9 @@ use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_geom::{Point, Rect, Vec2};
 use vectorcraft_tools::distort::perspective::Plane;
 use vectorcraft_tools::distort::perspective::define::{BUILTINS, LETTER, first_artboard, is_builtin};
+use vectorcraft_tools::distort::perspective::widget::{WidgetCorner, WidgetPlace};
 use vectorcraft_tools::distort::perspective::{GridDefinition, PerspectiveGrid};
+use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
 use super::distortcmds::{grid_of, silent, store_grid};
 use super::*;
@@ -84,6 +86,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path? | data?: file text | dataBase64?, replace?: false (replace saved presets of the same names; else imported ones whose name is taken get a number)} add the presets of a .vcperspective file (as perspective.presets.export writes) to the saved ones → {imported: [names]}",
             always,
             presets_import
+        ),
+        cmd!(
+            query "perspective.widget.options",
+            "Perspective Grid Options",
+            [],
+            None,
+            "{show?: bool, position?: topLeft|topRight|bottomLeft|bottomRight} the Plane Switching Widget: shown or not, and the corner of the document window it stays in (kept with the preferences; no params reads them) → {show, position}",
+            always,
+            widget_options
         ),
         cmd!(
             "perspective.grid.lock",
@@ -416,4 +427,55 @@ pub(crate) fn snap_fix(doc: &Document, ids: &[NodeId], p: &Value, (from, to): (P
     let (plane, depth, b) = g.plane_bounds(doc, ids)?;
     let dv = g.plane_delta(plane, depth, from, to)?;
     Some((plane, depth, g.snap_offset(b, dv) - dv))
+}
+
+fn widget_options(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "perspective.widget.options";
+    let mut o = s.prefs.perspective_widget;
+    if let Some(v) = p.get("show") {
+        o.show = v.as_bool().ok_or_else(|| bad(C, "show must be true or false"))?;
+    }
+    if let Some(v) = p.get("position") {
+        o.position =
+            v.as_str().and_then(WidgetCorner::parse).ok_or_else(|| bad(C, "position must be topLeft, topRight, bottomLeft or bottomRight"))?;
+    }
+    s.prefs.perspective_widget = o;
+    Ok(json!(o))
+}
+
+impl Session {
+    /// The Plane Switching Widget's part of a pointer event: a press on it picks the plane (its
+    /// drag and release go nowhere); None when the event isn't the widget's.
+    pub(crate) fn plane_widget_pointer(&mut self, ev: &PointerEvent, view: crate::ViewInfo) -> Option<Result<Vec<crate::UiRequest>>> {
+        match ev.kind {
+            PointerKind::Down => {
+                let w = self.prefs.perspective_widget;
+                let st = self.active().filter(|_| w.show)?;
+                let g = PerspectiveGrid::current(&st.doc);
+                if !g.shown(self.tool_id()) {
+                    return None;
+                }
+                let place = WidgetPlace { screen: view.screen.as_ref(), corner: w.position };
+                let plane = g.widget_hit_at(&st.doc, 1.0 / view.zoom.max(1e-9), place, ev.pos)?;
+                self.plane_widget_press = true;
+                Some(self.execute("perspective.plane.set", &json!({ "plane": plane.id() })).map(|_| vec![]))
+            }
+            PointerKind::Drag if self.plane_widget_press => Some(Ok(vec![])),
+            PointerKind::Up if std::mem::take(&mut self.plane_widget_press) => Some(Ok(vec![])),
+            _ => None,
+        }
+    }
+
+    /// The plane digit key `key` picks while the grid is shown: 1 left, 2 horizontal (ground),
+    /// 3 right, 4 none.
+    pub(crate) fn plane_key(&self, key: ToolKey) -> Option<Plane> {
+        let plane = match key {
+            ToolKey::Digit(1) => Plane::Left,
+            ToolKey::Digit(2) => Plane::Ground,
+            ToolKey::Digit(3) => Plane::Right,
+            ToolKey::Digit(4) => Plane::None,
+            _ => return None,
+        };
+        PerspectiveGrid::current(&self.active()?.doc).shown(self.tool_id()).then_some(plane)
+    }
 }

@@ -215,6 +215,10 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::dialogs::blend_options::open(app)?;
             Ok(json!({ "dialog": crate::dialogs::blend_options::KIND }))
         }
+        "perspectiveGrid" => {
+            crate::dialogs::perspective_options::open(app);
+            Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
+        }
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
         // The Liquify tools: their Tool Options (the Global Brush Dimensions and the tool's own).

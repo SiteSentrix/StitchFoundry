@@ -520,3 +520,9 @@ blend's spine adds a point (on a point no key sits on, deletes it).
 Perspective grid view options: View → Perspective Grid lists Show/Hide Grid, Show/Hide Rulers, Snap to Grid
 (checked), Lock/Unlock Grid and Lock Station Point (checked); `ui.menu.list` reports the current labels. They run
 `perspective.grid.show`, `rulers`, `snap`, `lock` and `lockStation`.
+
+Perspective grid widgets: the Plane Switching Widget is fixed in a corner of the canvas (`ui.pointer` with
+`space: "screen"` reaches it at the same pixels whatever the zoom); a press on it with any tool picks the plane while
+the grid shows. `ui.key` with `key` `"1"`…`"4"` picks the left, horizontal, right or no plane. Double-clicking the
+Perspective Grid tool (`tool.options {tool: "perspectiveGrid"}`) opens `perspectiveGridOptions` (fields `show`,
+`position`: `topLeft`, `topRight`, `bottomLeft`, `bottomRight`); `ui.dialog.confirm` runs `perspective.widget.options`.

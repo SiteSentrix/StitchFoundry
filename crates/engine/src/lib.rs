@@ -501,6 +501,9 @@ pub struct Prefs {
     /// preferences keeps it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blend_options: Option<vectorcraft_doc::live::BlendDefaults>,
+    /// Perspective Grid Options (double-click the Perspective Grid tool): whether the Plane
+    /// Switching Widget shows and where (`perspective.widget.options`).
+    pub perspective_widget: vectorcraft_tools::distort::perspective::widget::WidgetOptions,
 }
 
 impl Default for Prefs {
@@ -637,6 +640,7 @@ impl Default for Prefs {
             tool_settings: Default::default(),
             perspective_presets: vec![],
             blend_options: None,
+            perspective_widget: Default::default(),
         }
     }
 }
@@ -710,6 +714,8 @@ pub struct Session {
     /// The Liquify stroke the last live preview applied, which the next sample of the drag goes on
     /// from ([`cmd::distortcmds::LiquifyStroke`]).
     pub(crate) liquify_stroke: Option<Box<cmd::distortcmds::LiquifyStroke>>,
+    /// A press on the Plane Switching Widget is under way: its drag and release are the widget's.
+    pub(crate) plane_widget_press: bool,
 }
 
 impl Default for Session {
@@ -753,6 +759,7 @@ impl Session {
             in_tool_actions: false,
             envelope_defaults: None,
             liquify_stroke: None,
+            plane_widget_press: false,
         }
     }
 

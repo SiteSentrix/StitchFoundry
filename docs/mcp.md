@@ -1807,6 +1807,18 @@ drawn corners, and `perspective.move` the nearer edge, on gridlines within a qua
 and `perspective.grid.rulers` (Show Rulers: a ruler up the line where the planes meet, in the grid's units at its
 scale). Gridlines draw in the Define Grid colours at its opacity.
 
+Perspective grid widgets: with the Perspective Grid tool (`pointer_gesture`), the vanishing points (Shift keeps the
+horizon; with Lock Station Point the other one swings), the horizon, the third vanishing point, the origin, the left
+and right ground-level points (24 px from the origin along each wall's ground line: they move the whole grid; Shift
+keeps one axis), the left and right extents (separate: `extent` and `extentRight`; Alt drags both, Shift goes by
+whole cells), the vertical extent and the cell size widget (on the line where the planes meet, a cell up, or more
+cells while they're small) reshape the grid; Lock Grid stops them. The Plane Switching Widget stays put in a corner
+of the document window (headless: the first artboard's top-left corner); a press on it picks the plane with any tool
+while the grid shows (a perspective tool shows it), and the keys 1–4 (`key` with `"1"`…`"4"`) pick the left,
+horizontal, right and no plane. `perspective.widget.options {show?, position?}` (Perspective Grid Options,
+double-click the tool) hides it or moves it to `topLeft`, `topRight`, `bottomLeft` or `bottomRight`, kept with the
+preferences (`prefs.get`/`prefs.set` key `perspectiveWidget`).
+
 ## Envelopes
 
 Object → Envelope Distort wraps the selection in a live envelope: `object.envelope.makeWithWarp` (`style`: arc,

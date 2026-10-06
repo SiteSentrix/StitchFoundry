@@ -350,3 +350,177 @@ fn snapped_moves_keep_objects_on_a_plane_together() {
     assert!(near(left(&s, b) - left(&s, a), gap), "they move by the same amount");
     assert!(near(left(&s, a), 3.0 * g.cell), "the joint bounds land on a gridline");
 }
+
+// ---------- M8.11: grid widgets and the Plane Switching Widget ----------
+
+use vectorcraft_tools::distort::perspective::widget::{WidgetCorner, WidgetPlace};
+use vectorcraft_tools::{Mods, ScreenFrame, ToolKey};
+
+/// A 1000 × 700 window at zoom 2 showing the document from (100, 50).
+fn screen() -> ScreenFrame {
+    ScreenFrame {
+        origin: Point::new(100.0, 50.0),
+        right: vectorcraft_geom::Vec2::new(0.5, 0.0),
+        down: vectorcraft_geom::Vec2::new(0.0, 0.5),
+        size: (1000.0, 700.0),
+    }
+}
+
+fn windowed() -> ViewInfo {
+    ViewInfo { zoom: 2.0, screen: Some(screen()), ..Default::default() }
+}
+
+/// The centre of the widget's `plane` face in `view`.
+fn face(s: &Session, view: ViewInfo, corner: WidgetCorner, plane: Plane) -> Point {
+    let d = &s.doc().unwrap().doc;
+    let (faces, (c, _)) = grid(s).widget_at(d, 1.0 / view.zoom, WidgetPlace { screen: view.screen.as_ref(), corner });
+    match faces.into_iter().find(|f| f.0 == plane) {
+        Some((_, q)) => Point::new((q[0].x + q[1].x + q[2].x + q[3].x) / 4.0, (q[0].y + q[1].y + q[2].y + q[3].y) / 4.0),
+        None => c,
+    }
+}
+
+fn click(s: &mut Session, p: Point, view: ViewInfo) {
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, p.x, p.y), view).unwrap();
+    }
+}
+
+#[test]
+fn the_plane_widget_stays_on_screen_and_takes_clicks_with_any_tool() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let view = windowed();
+    // In the window's top-left corner, whatever part of the document shows.
+    let p = face(&s, view, WidgetCorner::TopLeft, Plane::Right);
+    assert!(p.x > 100.0 && p.x < 100.0 + 40.0 && p.y > 50.0 && p.y < 50.0 + 40.0, "{p:?}");
+    // The Selection tool's click on it picks the plane and selects nothing.
+    s.select_tool("selection", view).unwrap();
+    let n = undo_len(&s);
+    click(&mut s, p, view);
+    assert_eq!(grid(&s).plane, Plane::Right);
+    assert!(s.doc().unwrap().selection.is_empty());
+    assert_eq!(undo_len(&s), n);
+    // While the grid is hidden only the perspective tools show it (and take its clicks).
+    run(&mut s, "perspective.grid.show", json!({"visible": false}));
+    let q = face(&s, view, WidgetCorner::TopLeft, Plane::Ground);
+    click(&mut s, q, view);
+    assert_eq!(grid(&s).plane, Plane::Right);
+    s.select_tool("perspectiveSelection", view).unwrap();
+    click(&mut s, q, view);
+    assert_eq!(grid(&s).plane, Plane::Ground);
+    // Perspective Grid Options move it to another corner or hide it.
+    assert_eq!(run(&mut s, "perspective.widget.options", json!({"position": "bottomRight"})), json!({"show": true, "position": "bottomRight"}));
+    let r = face(&s, view, WidgetCorner::BottomRight, Plane::Left);
+    assert!(r.x > 100.0 + 450.0 && r.y > 50.0 + 300.0, "{r:?}");
+    click(&mut s, r, view);
+    assert_eq!(grid(&s).plane, Plane::Left);
+    run(&mut s, "perspective.widget.options", json!({"show": false}));
+    let hidden = face(&s, view, WidgetCorner::BottomRight, Plane::Right);
+    click(&mut s, hidden, view);
+    assert_eq!(grid(&s).plane, Plane::Left, "a hidden widget takes no clicks");
+    assert!(s.execute("perspective.widget.options", &json!({"position": "middle"})).is_err());
+    assert!(s.execute("perspective.widget.options", &json!({"show": "yes"})).is_err());
+}
+
+#[test]
+fn digit_keys_pick_the_plane_while_the_grid_shows() {
+    let mut s = session();
+    let view = ViewInfo::default();
+    assert!(!s.tool_claims_key(ToolKey::Digit(2), view), "no grid shown: the digit is free");
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    for (n, plane) in [(1, Plane::Left), (2, Plane::Ground), (3, Plane::Right), (4, Plane::None)] {
+        assert!(s.tool_claims_key(ToolKey::Digit(n), view));
+        s.tool_key(ToolKey::Digit(n), Mods::default(), view).unwrap();
+        assert_eq!(grid(&s).plane, plane, "key {n}");
+    }
+    assert!(!s.tool_claims_key(ToolKey::Digit(5), view));
+}
+
+#[test]
+fn ground_level_points_move_the_whole_grid() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let g = grid(&s);
+    let o = Point::new(g.origin[0], g.origin[1]);
+    // The left ground-level point sits 24 px from the origin along the left wall's ground line.
+    let towards = g.to_page(Plane::Left, Point::new(g.cell, 0.0)).unwrap();
+    let gl = o + (towards - o).normalize() * 24.0;
+    drag(&mut s, "perspectiveGrid", gl, gl + vectorcraft_geom::Vec2::new(30.0, -20.0));
+    let n = grid(&s);
+    let moved = [n.origin[0] - o.x, n.origin[1] - o.y, n.horizon - g.horizon, n.vp_left - g.vp_left, n.vp_right - g.vp_right];
+    for (got, want) in moved.into_iter().zip([30.0, -20.0, -20.0, 30.0, 30.0]) {
+        assert!(near(got, want), "{moved:?}");
+    }
+    assert_eq!((n.cell, n.viewing_angle()), (g.cell, g.viewing_angle()), "the same grid, elsewhere");
+    // Shift keeps it on one axis.
+    s.execute("edit.undo", &json!({})).unwrap();
+    gesture_mods(&mut s, gl, gl + vectorcraft_geom::Vec2::new(30.0, -8.0), Mods { shift: true, ..Default::default() });
+    let n = grid(&s);
+    assert!(near(n.origin[0], o.x + 30.0) && n.origin[1] == o.y && n.horizon == g.horizon);
+}
+
+/// A Perspective Grid tool drag with modifiers held.
+fn gesture_mods(s: &mut Session, from: Point, to: Point, mods: Mods) {
+    let v = ViewInfo::default();
+    s.select_tool("perspectiveGrid", v).unwrap();
+    for (k, p) in [(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+        s.pointer(&PointerEvent::new(k, p.x, p.y).with_mods(mods), v).unwrap();
+    }
+}
+
+#[test]
+fn extents_cell_size_and_vanishing_points_follow_their_widgets() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let g = grid(&s);
+    // The right extent alone.
+    let er = g.to_page(Plane::Right, Point::new(g.extent, 0.0)).unwrap();
+    let to = g.to_page(Plane::Right, Point::new(g.extent * 0.5, 0.0)).unwrap();
+    drag(&mut s, "perspectiveGrid", er, to);
+    let n = grid(&s);
+    assert!((n.right_extent() - g.extent * 0.5).abs() < 1e-6 && n.extent == g.extent, "{:?} {}", n.extent_right, n.extent);
+    assert_eq!(n.domain(Plane::Right).width(), n.right_extent());
+    // Alt drags both; Shift goes by whole cells.
+    let el = g.to_page(Plane::Left, Point::new(g.extent, 0.0)).unwrap();
+    let to = g.to_page(Plane::Left, Point::new(5.3 * g.cell, 0.0)).unwrap();
+    gesture_mods(&mut s, el, to, Mods { alt: true, shift: true, ..Default::default() });
+    let n = grid(&s);
+    assert!((n.extent - 5.0 * g.cell).abs() < 1e-6 && n.extent_right == Some(n.extent));
+    // The cell widget: a cell up the line where the planes meet (more cells when they're small).
+    let c = g.to_page(Plane::Left, Point::new(0.0, g.cell)).unwrap();
+    drag(&mut s, "perspectiveGrid", c, g.to_page(Plane::Left, Point::new(0.0, 40.0)).unwrap());
+    assert!((grid(&s).cell - 40.0).abs() < 1e-6, "{}", grid(&s).cell);
+    // Shift-dragging a vanishing point keeps the horizon.
+    gesture_mods(
+        &mut s,
+        Point::new(g.vp_right, g.horizon),
+        Point::new(g.vp_right + 20.0, g.horizon + 30.0),
+        Mods { shift: true, ..Default::default() },
+    );
+    assert_eq!((grid(&s).vp_right, grid(&s).horizon), (g.vp_right + 20.0, g.horizon));
+}
+
+#[test]
+fn widget_options_and_the_right_extent_are_saved() {
+    let mut s = session();
+    run(&mut s, "perspective.widget.options", json!({"position": "Top Right"}));
+    let back: Prefs = serde_json::from_value(serde_json::to_value(&s.prefs).unwrap()).unwrap();
+    assert_eq!(back.perspective_widget.position, WidgetCorner::TopRight);
+    run(&mut s, "perspective.grid.set", json!({"extentRight": 123}));
+    let doc = s.doc().unwrap().doc.clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(PerspectiveGrid::from_doc(&back).unwrap().extent_right, Some(123.0));
+    assert!(s.execute("perspective.grid.set", &json!({"extentRight": -1})).is_err());
+}
+
+#[test]
+fn perspective_grid_options_are_a_preference_group() {
+    let mut s = session();
+    run(&mut s, "prefs.set", json!({"key": "perspectiveWidget", "value": {"position": "bottomLeft"}}));
+    assert_eq!(s.prefs.perspective_widget.position, WidgetCorner::BottomLeft);
+    assert!(s.prefs.perspective_widget.show, "a partial object keeps the rest");
+    assert!(s.execute("prefs.set", &json!({"key": "perspectiveWidget", "value": {"position": "nowhere"}})).is_err());
+    run(&mut s, "prefs.reset", json!({}));
+    assert_eq!(s.prefs.perspective_widget, Default::default());
+}
