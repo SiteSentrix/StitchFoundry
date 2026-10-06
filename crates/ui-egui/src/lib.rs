@@ -102,6 +102,8 @@ mod tests_sysclip;
 mod tests_sysclip_emf;
 #[cfg(test)]
 mod tests_transparencygrid;
+#[cfg(test)]
+mod tests_widthtool;
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
