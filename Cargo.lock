@@ -4211,7 +4211,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "arboard",
  "clipboard-win",
@@ -4231,7 +4231,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-brush"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "serde",
@@ -4243,7 +4243,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-cad"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4259,7 +4259,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde_json",
  "vectorcraft-color",
@@ -4275,7 +4275,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-color"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "moxcms",
@@ -4287,7 +4287,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-doc"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4301,7 +4301,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-effects"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "serde_json",
@@ -4315,7 +4315,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-engine"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "image",
@@ -4347,7 +4347,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-eps"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "image",
@@ -4364,7 +4364,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-format"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "proptest",
@@ -4378,7 +4378,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-geom"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "proptest",
@@ -4390,7 +4390,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-mcp"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "log",
@@ -4409,7 +4409,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-metafile"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4423,7 +4423,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-pathops"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kurbo 0.13.1",
  "linesweeper",
@@ -4435,7 +4435,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-pdf"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "aes",
  "flate2",
@@ -4462,7 +4462,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-plugins"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4476,7 +4476,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-render"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "gif",
@@ -4501,7 +4501,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-svg"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "image",
@@ -4525,7 +4525,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-testkit"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4542,7 +4542,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-text"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "harfrust 0.13.3",
  "kurbo 0.13.1",
@@ -4555,7 +4555,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-tools"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4570,7 +4570,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-trace"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "kurbo 0.13.1",
@@ -4583,7 +4583,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-ui-egui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "egui",
  "egui_extras",
@@ -4611,7 +4611,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-web"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "eframe",
  "egui",
@@ -5685,7 +5685,7 @@ checksum = "9440ea3e5aeabb0ac63af70daf835274065238cdd0cec83418f417eae38bacee"
 
 [[package]]
 name = "xtask"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde_json",
 ]
