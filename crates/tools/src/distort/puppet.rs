@@ -131,6 +131,14 @@ impl Tool for PuppetWarpTool {
             _ => vec![],
         }
     }
+    /// Delete/Backspace remove the selected pin; with none selected they are the shortcut's
+    /// (Clear deletes the selected objects).
+    fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
+        matches!(key, ToolKey::Delete | ToolKey::Backspace)
+            && self.drag.is_none()
+            && cx.selection.objects == self.ids
+            && self.selected.is_some_and(|i| i < self.pins.len())
+    }
     fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         if matches!(key, ToolKey::Delete | ToolKey::Backspace)
             && let Some(i) = self.selected.take()
