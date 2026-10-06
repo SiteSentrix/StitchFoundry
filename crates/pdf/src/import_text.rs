@@ -3,12 +3,15 @@
 //! fifth of the size reads as a space). Fonts are named from the file's base font name (its
 //! subset prefix dropped, the family matched against the fonts available); a font that isn't
 //! available keeps its name, and the text shows in the fallback font until it is.
+//!
+//! Glyphs each turned a little further along a curve (type set on a path: apps write each glyph
+//! with its own placement) make one type-on-a-path object, its path through the glyphs' baseline.
 
 use std::collections::HashMap;
 
-use kurbo::{Affine, Point, Vec2};
+use kurbo::{Affine, BezPath, Point, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
 #[derive(Clone, Copy, Debug)]
@@ -93,12 +96,19 @@ pub(crate) struct TextLine {
     next: Point,
     /// The last glyph's origin.
     last: Point,
+    /// The last glyph's baseline direction.
+    last_dir: Vec2,
+    /// Each glyph's baseline origin, then where the last one ends.
+    baseline: Vec<Point>,
     runs: Vec<(Look, String)>,
 }
 
+/// The most a glyph on a curve turns from the one before it (about 20°).
+const CURVE_TURN_COS: f64 = 0.94;
+
 impl TextLine {
     pub fn new(at: Placement, opacity: f32) -> Self {
-        Self { at, opacity, next: at.origin, last: at.origin, runs: vec![] }
+        Self { at, opacity, next: at.origin, last: at.origin, last_dir: at.dir, baseline: vec![], runs: vec![] }
     }
 
     /// Add glyph `text` drawn with `look` at `at` (advancing `advance` points) at `opacity` if
@@ -106,13 +116,20 @@ impl TextLine {
     pub fn push(&mut self, look: &Look, at: Placement, opacity: f32, advance: f64, text: &str) -> bool {
         if let Some((last, run)) = self.runs.last_mut() {
             let size = self.at.size.max(at.size);
-            let gap = (at.origin - self.next).dot(self.at.dir);
+            let gap = (at.origin - self.next).dot(self.last_dir);
             let on_line = opacity == self.opacity
                 && at.dir.dot(self.at.dir) > 0.9995
                 && (at.origin - self.at.origin).dot(self.at.up()).abs() < size * 0.15
                 && gap > -size * 0.3
                 && gap < size * 3.0;
-            if !on_line {
+            // Or on a curve: turned a little from the glyph before it, and starting about where
+            // that one ends.
+            let on_curve = !on_line
+                && opacity == self.opacity
+                && at.dir.dot(self.last_dir) > CURVE_TURN_COS
+                && at.dir.dot(self.last_dir) < 0.99999
+                && (at.origin - self.next).hypot() < size * 0.6;
+            if !on_line && !on_curve {
                 return false;
             }
             // A gap wider than a fifth of an em reads as a space.
@@ -127,9 +144,36 @@ impl TextLine {
         } else {
             self.runs.push((look.clone(), text.to_string()));
         }
-        self.next = at.origin + self.at.dir * advance;
+        self.next = at.origin + at.dir * advance;
         self.last = at.origin;
+        self.last_dir = at.dir;
+        self.baseline.push(at.origin);
         true
+    }
+
+    /// Has the baseline turned (more than about 3° from the first glyph to the last)?
+    fn curved(&self) -> bool {
+        self.last_dir.dot(self.at.dir) < 0.9986
+    }
+
+    /// A smooth path through the glyphs' baseline origins and the end of the last glyph
+    /// (Catmull-Rom through the points, as cubic Béziers).
+    fn baseline_path(&self) -> Option<BezPath> {
+        let mut pts = self.baseline.clone();
+        pts.push(self.next);
+        let first = *pts.first()?;
+        if pts.len() < 3 {
+            return None;
+        }
+        let mut bp = BezPath::new();
+        bp.move_to(first);
+        for (i, seg) in pts.windows(2).enumerate() {
+            let &[p1, p2] = seg else { continue };
+            let p0 = *pts.get(i.wrapping_sub(1)).unwrap_or(&p1);
+            let p3 = *pts.get(i + 2).unwrap_or(&p2);
+            bp.curve_to(p1 + (p2 - p0) / 6.0, p2 - (p3 - p1) / 6.0, p2);
+        }
+        Some(bp)
     }
 
     /// A stroke (`stroke`: paint and width) over the glyph just drawn at `at` in `font` (fill
@@ -144,6 +188,8 @@ impl TextLine {
 
     /// The point type object and its opacity.
     pub fn finish(mut self) -> Option<(TextObject, f32)> {
+        // Turned along a curve: type on a path through the glyphs.
+        let path = if self.curved() { self.baseline_path() } else { None };
         if let Some((_, last)) = self.runs.last_mut() {
             last.truncate(last.trim_end().len());
         }
@@ -156,6 +202,10 @@ impl TextLine {
         let mut t = TextObject::point(Point::ORIGIN, &first.text, first.style);
         t.runs.extend(runs);
         t.xf = Affine::translate(self.at.origin.to_vec2()) * Affine::rotate(self.at.dir.atan2());
+        if let Some(path) = path {
+            t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0 };
+            t.xf = Affine::IDENTITY;
+        }
         Some((t, self.opacity))
     }
 }

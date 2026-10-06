@@ -359,3 +359,32 @@ fn appearance_items_are_untouched_for_plain_art() {
     assert!(nodes.iter().all(|n| n.mask.is_none() && !matches!(n.kind, NodeKind::Group { .. })));
     assert!(matches!(nodes.iter().find(|n| n.appearance.stroke().is_some()).unwrap().appearance.items[0], AppearanceItem::Stroke(_)));
 }
+
+/// Type set on a path (each glyph placed and turned along a curve, as apps write it) comes back
+/// as type on a path through the glyphs, not as a straight line; straight type stays point type.
+#[test]
+fn glyphs_turned_along_a_curve_become_type_on_a_path() {
+    // "ARCHING" along an arc of radius 100 around (150, 0), each glyph where the one before
+    // it ends (Helvetica's advances), clockwise from 135° (PDF y up: the arc bulges upwards).
+    let mut content = String::from("BT /F1 18 Tf ");
+    let mut a = 135f64.to_radians();
+    for (c, adv) in "ARCHING".chars().zip([667.0, 722.0, 722.0, 722.0, 278.0, 722.0, 778.0]) {
+        let (x, y) = (150.0 + 100.0 * a.cos(), 100.0 * a.sin());
+        // The baseline's direction is the tangent, clockwise along the arc.
+        let (dx, dy) = (a.sin(), -a.cos());
+        content.push_str(&format!("{dx:.5} {dy:.5} {:.5} {dx:.5} {x:.3} {y:.3} Tm ({c}) Tj ", -dy));
+        a -= adv / 1000.0 * 18.0 / 100.0;
+    }
+    content.push_str("ET");
+    let t = texts(&open(&one_page(&content, HELVETICA, &[])));
+    assert_eq!(t.len(), 1, "one text object: {t:?}");
+    let text: String = t[0].runs.iter().map(|r| r.text.as_str()).collect();
+    assert_eq!(text, "ARCHING");
+    let vectorcraft_doc::TextKind::OnPath { path, .. } = &t[0].kind else { panic!("type on a path: {:?}", t[0].kind) };
+    let b = path.bounds().unwrap();
+    assert!(b.height() > 15.0, "the path curves: {b:?}");
+    // Straight type with a slight rotation stays one point type object.
+    let straight = texts(&open(&one_page("BT /F1 18 Tf 0.98481 0.17365 -0.17365 0.98481 20 40 Tm (Straight) Tj ET", HELVETICA, &[])));
+    assert_eq!(straight.len(), 1);
+    assert!(matches!(straight[0].kind, vectorcraft_doc::TextKind::Point), "{:?}", straight[0].kind);
+}
