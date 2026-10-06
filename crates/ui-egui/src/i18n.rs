@@ -1,5 +1,6 @@
 //! Interface translations. Command ids, document text and file names remain stable.
-//! Untranslated labels fall back to English so coverage can grow incrementally.
+//! Untranslated labels fall back to English so coverage can grow incrementally. Every entry is a
+//! label VectorCraft's menus show (tested), so labels from other apps don't creep in.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -41,86 +42,39 @@ const JAPANESE: &[(&str, &str)] = &[
     ("Object", "オブジェクト"),
     ("Effect", "効果"),
     ("Settings…", "環境設定…"),
-    ("Image", "画像"),
-    ("Layer", "レイヤー"),
     ("Type", "書式"),
     ("Select", "選択"),
-    ("Filter", "フィルター"),
     ("Window", "ウィンドウ"),
     ("Language", "表示言語"),
     ("Save As…", "別名で保存…"),
-    ("Exit", "終了"),
     ("New…", "新規…"),
-    ("New", "新規"),
     ("Horizontal", "横書き"),
     ("Vertical", "縦書き"),
-    ("Orientation", "組み方向"),
     ("Type Orientation", "組み方向"),
     ("Layers", "レイヤー"),
     ("History", "履歴"),
     ("Properties", "プロパティ"),
     ("Color", "カラー"),
-    ("Brush Settings", "ブラシ設定"),
     ("Tools", "ツール"),
-    ("Options", "オプション"),
     ("Zoom In", "ズームイン"),
     ("Zoom Out", "ズームアウト"),
-    ("Fit on Screen", "画面に合わせる"),
     ("Copy", "コピー"),
     ("Cut", "切り取り"),
     ("Paste", "貼り付け"),
-    ("Select All", "すべて選択"),
     ("Deselect", "選択を解除"),
     ("Export", "書き出し"),
     ("Export As…", "形式を指定して書き出し…"),
-    ("Search…", "検索…"),
-    ("Theme", "テーマ"),
-    ("Menu", "メニュー"),
     ("File", "ファイル"),
     ("Edit", "編集"),
-    ("Pages", "ページ"),
     ("View", "表示"),
     ("Help", "ヘルプ"),
-    ("Preferences", "環境設定"),
     ("Preferences…", "環境設定…"),
-    ("Interface language", "表示言語"),
     ("Open…", "開く…"),
-    ("New blank PDF", "空白の PDF を作成"),
-    ("Create PDF from file…", "ファイルから PDF を作成…"),
-    ("Create PDF from images…", "画像から PDF を作成…"),
-    ("Create PDF from clipboard", "クリップボードから PDF を作成"),
-    ("Combine files…", "ファイルを結合…"),
     ("Save", "保存"),
-    ("Save as…", "別名で保存…"),
-    ("Close file", "ファイルを閉じる"),
-    ("Close all", "すべて閉じる"),
     ("Revert", "保存済みの状態に戻す"),
     ("Print…", "印刷…"),
-    ("Document properties…", "文書のプロパティ…"),
     ("Undo", "取り消し"),
     ("Redo", "やり直し"),
-    ("Find…", "検索…"),
-    ("Advanced search…", "高度な検索…"),
-    ("Copy pages", "ページをコピー"),
-    ("Cut pages", "ページを切り取り"),
-    ("Paste pages", "ページを貼り付け"),
-    ("Fit visible", "表示範囲に合わせる"),
-    ("Marquee zoom", "範囲指定ズーム"),
-    ("Take a snapshot", "スナップショットを作成"),
-    ("Full screen mode", "全画面表示"),
-    ("Read mode", "閲覧モード"),
-    ("Switch light / dark theme", "明るい／暗いテーマを切り替え"),
-    ("Comments panel", "コメントパネル"),
-    ("Form fields panel", "フォームフィールドパネル"),
-    ("Clear form", "フォームをクリア"),
-    ("Find tools and commands…", "ツールとコマンドを検索…"),
-    ("Zoom", "ズーム"),
-    ("Actual size", "実際のサイズ"),
-    ("Zoom to page level", "ページ全体を表示"),
-    ("Fit to width", "幅に合わせる"),
-    ("Display theme", "表示テーマ"),
-    ("Side panels", "サイドパネル"),
-    ("OK", "OK"),
 ];
 
 #[cfg(test)]
@@ -137,6 +91,30 @@ mod tests {
         assert_eq!(Language::Ja.tr("File"), "ファイル");
         assert_eq!(Language::Ja.tr("日本語の文書.pdf"), "日本語の文書.pdf");
         assert_eq!(Language::parse("xx"), None);
+    }
+
+    #[test]
+    fn every_translated_label_is_a_menu_label() {
+        fn walk(items: &[crate::menus::Item], out: &mut Vec<&'static str>) {
+            for i in items {
+                match i {
+                    crate::menus::Item::Cmd(l, ..) | crate::menus::Item::Todo(l, _) | crate::menus::Item::Header(l) => out.push(l),
+                    crate::menus::Item::Sub(l, children) => {
+                        out.push(l);
+                        walk(children, out);
+                    }
+                    crate::menus::Item::Sep => {}
+                }
+            }
+        }
+        let mut labels = vec![];
+        for (title, items) in crate::menus::menu_tree() {
+            labels.push(title);
+            walk(&items, &mut labels);
+        }
+        for (en, _) in JAPANESE {
+            assert!(labels.contains(en), "`{en}` isn't a VectorCraft menu label");
+        }
     }
 
     #[test]
