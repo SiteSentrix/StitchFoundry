@@ -92,6 +92,10 @@ impl PointerEvent {
         self.mods = m;
         self
     }
+    /// The pen `pressure` of a pointer event given as JSON (control channel, MCP): 0..1, default 1.
+    pub fn json_pressure(e: &Value) -> f32 {
+        e.get("pressure").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(1.0, |f| f.clamp(0.0, 1.0) as f32)
+    }
 }
 
 /// Keys tools care about.

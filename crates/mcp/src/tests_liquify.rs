@@ -27,3 +27,20 @@ fn tool_options_are_set_headless_and_kept_across_tool_switches() {
     command(&mut h, "tool.select", json!({"tool": "warp"}));
     assert_eq!(command(&mut h, "tool.setOption", json!({}))["detail"], json!(6.0));
 }
+
+#[test]
+fn pointer_gestures_carry_pen_pressure() {
+    let bloat = |pressure: f64| {
+        let mut h = Headless::with_document();
+        let id = command(&mut h, "shape.rectangle", json!({"x": 100, "y": 100, "width": 200, "height": 200}))["id"].clone();
+        command(&mut h, "select.set", json!({"ids": []}));
+        command(&mut h, "tool.select", json!({"tool": "bloat"}));
+        command(&mut h, "tool.setOption", json!({"key": "usePressure", "value": true}));
+        let ev = |kind: &str, y: f64| json!({"kind": kind, "x": 280, "y": y, "pressure": pressure});
+        ok(&mut h, "pointer_gesture", json!({"events": [ev("down", 150.0), ev("drag", 200.0), ev("up", 250.0)]}));
+        command(&mut h, "document.node", json!({"id": id}))
+    };
+    let (none, full) = (bloat(0.0), bloat(1.0));
+    assert_eq!(none["path"], bloat(0.0)["path"]);
+    assert_ne!(none, full);
+}

@@ -200,8 +200,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// Open a tool's options (`tool.options`, a double-click on its button): the Gradient tool's are
-/// the Gradient panel, the Eyedropper's the Eyedropper Options dialog; the Print Tiling tool's
-/// resets the print tiling.
+/// the Gradient panel, the Eyedropper's the Eyedropper Options dialog, a Liquify tool's its Tool
+/// Options dialog; the Print Tiling tool's resets the print tiling.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "gradient" if app.ui.open_panel.as_deref() == Some("gradient") => Ok(json!({ "open": "gradient" })),
@@ -212,6 +212,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         }
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
+        // The Liquify tools: their Tool Options (the Global Brush Dimensions and the tool's own).
+        _ if vectorcraft_tools::settings::LIQUIFY.contains(&tool) => crate::dialogs::liquify::open(app, tool),
         _ if vectorcraft_tools::tool_info(tool).is_none() => Err(format!("unknown tool `{tool}`")),
         _ => Err(format!("the {tool} tool has no options")),
     }

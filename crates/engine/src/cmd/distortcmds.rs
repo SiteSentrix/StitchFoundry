@@ -9,7 +9,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind, WidthProfile};
 use vectorcraft_geom::Point;
-use vectorcraft_tools::distort::liquify::{LiquifyParams, apply_stroke, dabs};
+use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sample};
 use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
 use vectorcraft_tools::distort::{arap, collect_points, mesh_for, warp_node_with};
 
@@ -60,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Liquify",
             [],
             None,
-            "{tool: warp|twirl|pucker|bloat|scallop|crystallize|wrinkle, points: [[x,y]…] (the brush stroke), diameter?|width?, height? (pt, default 100), angle?, intensity? (0..1 or %), detail? (1..10), simplify? (0..100), rate? (twirl °), complexity?, horizontal?, vertical?, affectAnchors?, affectIn?, affectOut?, ids? (default: selection, else every path the brush touches)}",
+            "{tool: warp|twirl|pucker|bloat|scallop|crystallize|wrinkle, points: [[x,y,pressure?]…] (the brush stroke; pen pressure 0..1, default 1), diameter?|width?, height? (pt, default 100), angle?, intensity? (0..1 or %), usePressure? (each point's pressure is the intensity there), detail? (1..10), simplify? (0..100) and simplifyOn? (default true; warp, twirl, pucker, bloat), rate? (twirl °), complexity? (0..15), horizontal?, vertical? (wrinkle, 0..1 or %), affectAnchors?, affectIn?, affectOut? (scallop, crystallize, wrinkle; default true), ids? (default: selection, else every path the brush touches)}",
             has_doc,
             liquify
         ),
@@ -325,6 +325,15 @@ fn points_of(p: &Value, key: &str) -> Option<Vec<Point>> {
     p.get(key)?.as_array()?.iter().map(|q| Some(Point::new(q.get(0)?.as_f64()?, q.get(1)?.as_f64()?))).collect()
 }
 
+/// A stroke's `[[x, y, pressure?]…]` samples (pressure 0..1, default 1).
+fn samples_of(p: &Value, key: &str) -> Option<Vec<Sample>> {
+    p.get(key)?
+        .as_array()?
+        .iter()
+        .map(|q| Some((Point::new(q.get(0)?.as_f64()?, q.get(1)?.as_f64()?), q.get(2).map_or(Some(1.0), Value::as_f64)?)))
+        .collect()
+}
+
 /// Leaf paths under `roots` that can be edited.
 fn leaf_paths(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
     let mut out = vec![];
@@ -344,11 +353,16 @@ fn leaf_paths(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.liquify";
     let prm = LiquifyParams::from_json(p).ok_or_else(|| bad(C, "missing or unknown `tool`"))?;
-    let pts = points_of(p, "points").filter(|v| !v.is_empty()).ok_or_else(|| bad(C, "points must be a non-empty [[x,y]…] list"))?;
-    if pts.iter().any(|q| !q.x.is_finite() || !q.y.is_finite()) {
+    let pts = samples_of(p, "points").filter(|v| !v.is_empty()).ok_or_else(|| bad(C, "points must be a non-empty [[x,y,pressure?]…] list"))?;
+    if pts.iter().any(|(q, f)| !q.x.is_finite() || !q.y.is_finite() || !f.is_finite()) {
         return Err(bad(C, "points must be finite"));
     }
-    let dab_pts = dabs(&pts, prm.dab_spacing());
+    let mut stroke = Dabber::new(&prm);
+    for s in pts {
+        stroke.push(s);
+    }
+    let tail = stroke.tail();
+    let dab_pts: Vec<Point> = stroke.dabs.iter().chain(tail.as_ref()).map(|d| d.c).collect();
     let roots = match ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])) {
         Some(v) => v,
         None => s.doc()?.selection.objects.clone(),
@@ -375,11 +389,14 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
         let mut changed = vec![];
         for id in &leaves {
             let Some(n) = d.node_mut(*id) else { continue };
-            if let NodeKind::Path { path, live, .. } = &mut n.kind
-                && apply_stroke(path, &dab_pts, &prm, id.0)
-            {
-                *live = None;
-                changed.push(id.0);
+            if let NodeKind::Path { path, live, .. } = &mut n.kind {
+                let mut ps = PathStroke::new(path.clone(), id.0);
+                ps.advance(&stroke.dabs, &prm);
+                if let Some(done) = ps.finish(&stroke.dabs, tail, &prm) {
+                    *path = done;
+                    *live = None;
+                    changed.push(id.0);
+                }
             }
         }
         Ok(changed)

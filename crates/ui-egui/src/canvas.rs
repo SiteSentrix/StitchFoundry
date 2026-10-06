@@ -92,6 +92,22 @@ fn temp_tool_id() -> egui::Id {
     egui::Id::new("canvas-temp-tool")
 }
 
+/// The pen pressure (0..1) of the press in progress: the force of this frame's pen or touch
+/// input, else the last one seen since the press (`pressed`: a new press, whose mouse has none
+/// until a pen reports it). A mouse presses fully (1).
+fn pen_pressure(ui: &Ui, pressed: bool) -> f32 {
+    let id = egui::Id::new("canvas-pressure");
+    let force = ui.input(|i| {
+        i.events.iter().rev().find_map(|e| match e {
+            egui::Event::Touch { force: Some(f), .. } if f.is_finite() => Some(f.clamp(0.0, 1.0)),
+            _ => None,
+        })
+    });
+    let p = force.or_else(|| if pressed { None } else { ui.data(|d| d.get_temp::<f32>(id)) }).unwrap_or(1.0);
+    ui.data_mut(|d| d.insert_temp(id, p));
+    p
+}
+
 pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
@@ -436,7 +452,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 app.select_tool("selection");
                 kind = Drag::TempSelect;
             }
-            let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+            let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, true) };
             dispatch(app, &ev, view);
             kind
         };
@@ -473,7 +489,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
                 Drag::Tool | Drag::TempSelect => {
                     if pointer.delta() != egui::Vec2::ZERO {
-                        let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+                        let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
                     }
                 }
@@ -499,7 +515,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                 }
                 Drag::Tool | Drag::TempSelect | Drag::Art { .. } => {
                     if !matches!(d, Drag::Art { .. }) {
-                        let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
+                        let ev = PointerEvent { kind: PointerKind::Up, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
                     }
                     if matches!(d, Drag::TempSelect | Drag::Art { temp: true })

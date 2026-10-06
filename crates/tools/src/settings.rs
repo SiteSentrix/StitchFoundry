@@ -19,8 +19,8 @@ const SYMBOLISM: &[&str] =
 
 const ROWS: &[Row] = &[
     // Global Brush Dimensions.
-    (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity"]),
-    (LIQUIFY, None, &["detail", "simplify", "rate", "complexity", "horizontal", "vertical"]),
+    (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity", "usePressure", "showBrush"]),
+    (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),
     (SYMBOLISM, Some("symbolism"), &["diameter", "intensity", "density"]),
     (&["mirrorCut"], None, &["axis", "keep"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
