@@ -6,6 +6,10 @@ Every non-code asset in this repository (icons, images, fonts, example art, colo
 
 Generated-in-code art is original and has no file to list. This covers the default swatches, brushes, symbols, patterns, graphic styles, image-trace presets and the vector tool cursors (`crates/ui-egui/src/cursors.rs`).
 
+**Font files are never committed here.** Fonts shared by the Crafting Apps live in [storytold/craft-fonts](https://github.com/storytold/craft-fonts) (rules: craftrules [`standards/fonts.md`](https://github.com/storytold/craftrules/blob/main/standards/fonts.md)). The small Latin UI/document fonts below predate that rule and stay.
+
+**Optional build input: craft-fonts.** Builds made with `CRAFT_FONTS_DIR=<craft-fonts checkout>` (all official releases) embed the Japanese fonts listed in its [`ATTRIBUTION.md`](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md): BIZ UDPGothic Regular and Bold, Shippori Mincho Regular and BIZ UDMincho Regular (web builds: BIZ UDPGothic Regular only), all under the SIL Open Font License 1.1. They are not files in this repository; release packages carry each one's `OFL-<family>.txt`. Builds without `CRAFT_FONTS_DIR` embed none of them.
+
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|
 | `docs/brand/artcraft-logo-white.png` | ArtCraft team (project owner) | https://getartcraft.com/ | ArtCraft trademark, see docs/brand/LICENSE-brand.txt (not open source) | Used in README only; not shipped in the app |
@@ -46,8 +50,6 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/fonts/OFL-JetBrainsMono.txt` | (licence text) | upstream project | — |  |
 | `assets/fonts/OFL-SourceSans3.txt` | (licence text) | upstream project | — |  |
 | `assets/fonts/OFL-SourceSerif4.txt` | (licence text) | upstream project | — |  |
-| `assets/fonts/ShipporiMincho-Regular.ttf` | The Shippori Mincho Project Authors (FONTDASU) | https://github.com/google/fonts/tree/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/shipporimincho | OFL-1.1 (`assets/fonts/OFL-ShipporiMincho.txt`) | Japanese UI/document fallback; SHA-256 `769b5269f0f9bc6534b352c0e6bd856a566e03ff788f107191c2d835863570b2` |
-| `assets/fonts/OFL-ShipporiMincho.txt` | The Shippori Mincho Project Authors (FONTDASU) | https://github.com/google/fonts/blob/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/shipporimincho/OFL.txt | OFL-1.1 | Licence for Shippori Mincho |
 | `assets/icons/LICENSE-lucide.txt` | (licence text) | upstream project | — |  |
 | `assets/icons/align-center-horizontal.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
 | `assets/icons/align-center-vertical.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |

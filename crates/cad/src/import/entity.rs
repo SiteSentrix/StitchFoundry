@@ -19,6 +19,9 @@ const LINE_SPACING: f64 = 5.0 / 3.0;
 const MAX_CELLS: i64 = 10_000;
 /// Art farther than this from the origin (drawing units) is damaged data, left out.
 const MAX_COORD: f64 = 1e12;
+/// How far fit and aligned text may be squeezed or stretched to span their two points: at width
+/// factor 1, the 1 to 10,000% horizontal scale the Character panel allows.
+const SPAN_SCALE: (f64, f64) = (0.01, 100.0);
 
 /// The colour of index `i` on paper: index 7 (white on a CAD screen) is black.
 pub(crate) fn aci_paper(i: u64) -> [u8; 3] {
@@ -121,6 +124,27 @@ pub(crate) struct TextItem {
     pub family: Option<String>,
     /// Baseline-to-baseline distance (drawing units), for several lines.
     pub leading: Option<f64>,
+    /// The distance aligned and fit text run along their baseline.
+    pub span: Option<Span>,
+}
+
+/// How text fills the distance between its two points (drawing units).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Span {
+    /// Stretched or squeezed across, its height kept.
+    Fit(f64),
+    /// Scaled as a whole, height included.
+    Aligned(f64),
+}
+
+impl Span {
+    /// The scale that makes text `natural` long run the span, within [`SPAN_SCALE`] (None when
+    /// either length is degenerate).
+    pub fn scale(self, natural: f64) -> Option<f64> {
+        let (Self::Fit(d) | Self::Aligned(d)) = self;
+        let k = d / natural;
+        (k.is_finite() && k > 0.0).then(|| k.clamp(SPAN_SCALE.0, SPAN_SCALE.1))
+    }
 }
 
 /// A block reference: one transform per copy (an array insert makes several), each from the
@@ -608,10 +632,13 @@ fn text(g: &[Pair<'_>], attrib: bool) -> Option<TextItem> {
     let (h, v) = (g.int_or(72, 0), g.int_or(if attrib { 74 } else { 73 }, 0));
     let (p1, p2) = (g.point(10), g.point_opt(11));
     let mut angle = g.num_or(50, 0.0).to_radians();
+    let mut span = None;
     // Aligned and fit text run from the first point to the second.
     let anchor = match (h, p2) {
         (3 | 5, Some(p)) => {
             angle = (p - p1).atan2();
+            let d = p1.distance(p);
+            span = (d > 1e-12).then_some(if h == 3 { Span::Aligned(d) } else { Span::Fit(d) });
             p1
         }
         (0, _) if v == 0 => p1,
@@ -636,6 +663,7 @@ fn text(g: &[Pair<'_>], attrib: bool) -> Option<TextItem> {
         style: g.name(7).unwrap_or("STANDARD").to_uppercase(),
         family: None,
         leading: None,
+        span,
     })
 }
 
@@ -662,5 +690,15 @@ fn mtext(g: &[Pair<'_>]) -> Option<TextItem> {
     let direction = g.point_opt(11).map(|p| p.to_vec2()).filter(|d| d.hypot() > 1e-12);
     let angle = direction.map_or_else(|| g.num_or(50, 0.0), |d| d.atan2());
     let xf = Affine::translate(g.point(10).to_vec2()) * Affine::rotate(angle) * Affine::translate((0.0, first));
-    Some(TextItem { text: s, height, xf, width: 1.0, justify, style: g.name(7).unwrap_or("STANDARD").to_uppercase(), family, leading: Some(leading) })
+    Some(TextItem {
+        text: s,
+        height,
+        xf,
+        width: 1.0,
+        justify,
+        style: g.name(7).unwrap_or("STANDARD").to_uppercase(),
+        family,
+        leading: Some(leading),
+        span: None,
+    })
 }

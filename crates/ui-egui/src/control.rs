@@ -5,6 +5,7 @@
 //! - `engine.commands`: engine + UI commands with enablement
 //! - `document.inspect`: document summary; `ui.inspect`: UI state
 //! - `ui.menu.list`: flattened menu tree
+//! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
 //! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen"}], mods?}`:
 //!   drive the active tool through the same path as the mouse
@@ -117,6 +118,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "document.inspect" => wrap(app.run("document.inspect", json!({}))),
         "ui.inspect" => ok(inspect(app, ctx)),
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
+        "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
         "ui.tool.list" => ok(serde_json::to_value(vectorcraft_tools::TOOL_GROUPS).unwrap_or_default()),
         "ui.pointer" => {

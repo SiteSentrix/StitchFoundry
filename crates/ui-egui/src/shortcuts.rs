@@ -129,6 +129,49 @@ impl PasteChord {
     }
 }
 
+/// End an IME composition outside the IME (a click away, the IME going away): the
+/// marked text stays as typed, and the system IME is told to drop it.
+pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
+    let Some(m) = app.ime_marked.take() else { return };
+    app.ime_discard = true;
+    if app.session.tool_composing() {
+        // Errors are already reported by the engine's interaction.
+        let _ = app.session.tool_text(&m, app.view_info());
+    }
+}
+
+/// Typed text and IME events, in the order they came, to the Type tool.
+fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let view = app.view_info();
+    // Switching apps mid-composition needs nothing: the macOS IME keeps its marked text and goes
+    // on with it when the window comes back (measured with Kotoeri), as the tool does.
+    let events: Vec<egui::Event> =
+        ctx.input(|i| i.events.iter().filter(|e| matches!(e, egui::Event::Text(_) | egui::Event::Ime(_))).cloned().collect());
+    for e in events {
+        // Errors are already reported by the engine's interaction (a failed preview keeps it).
+        let _ = match e {
+            // Keys the IME passed through come as text only when nothing is marked.
+            egui::Event::Text(t) if !app.session.tool_composing() => app.session.tool_text(&t, view),
+            egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
+                app.ime_marked = Some(text.clone()).filter(|t| !t.is_empty());
+                app.session.tool_preedit(&text, active_range_chars, view)
+            }
+            // A bare line break confirms the composition (Enter): the marked text, not a newline.
+            egui::Event::Ime(egui::ImeEvent::Commit(t)) if t == "\n" || t == "\r" => {
+                keep_marked_text(app);
+                Ok(vec![])
+            }
+            egui::Event::Ime(egui::ImeEvent::Commit(t)) => {
+                app.ime_marked = None;
+                app.session.tool_text(&t, view)
+            }
+            // `DeleteSurrounding` isn't sent by egui-winit (desktop); the web host has no IME
+            // path to the canvas yet.
+            _ => Ok(vec![]),
+        };
+    }
+}
+
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Followed before anything returns, so a key typed in a field isn't taken for a paste.
     let textless_paste = ctx.input(|i| app.paste_chord.textless_paste(&i.events));
@@ -144,10 +187,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let typing = ctx.egui_wants_keyboard_input();
     let view = app.view_info();
+    // While an IME composes, Enter and Escape are its own (confirm / cancel).
+    let composing = app.session.tool_composing();
     // Tool keys first (Enter/Escape end paths; arrows change polygon sides while dragging).
     let busy = app.session.tool_busy();
     for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)] {
-        if !typing && ctx.input(|i| i.key_pressed(k)) {
+        if !typing && !composing && ctx.input(|i| i.key_pressed(k)) {
             // A key the tool claims (Esc with a loaded place cursor) is only the tool's.
             let claimed = app.session.tool_claims_key(tk, view);
             let r = app.session.tool_key(tk, Mods::default(), view);
@@ -168,12 +213,17 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if typing {
         return;
     }
-    // Type tool editing: text and editing keys go to the tool.
+    // Type tool editing: text, IME composition and editing keys go to the tool.
     if app.session.tool_wants_text() {
-        let texts: Vec<String> =
-            ctx.input(|i| i.events.iter().filter_map(|e| if let egui::Event::Text(t) = e { Some(t.clone()) } else { None }).collect());
-        for t in texts {
-            let _ = app.session.tool_text(&t, view);
+        type_text(app, ctx);
+        // Keys of a frame that began composing are the IME's too (a Backspace that empties the
+        // marked text must not delete the committed character before it).
+        if composing || app.session.tool_composing() {
+            // The IME owns the keyboard until it commits: no editing keys, clipboard or shortcuts.
+            ctx.input_mut(|i| {
+                i.events.retain(|e| !matches!(e, egui::Event::Key { .. } | egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_)))
+            });
+            return;
         }
         // Editing keys with modifiers, clipboard and Cmd+A.
         crate::panels::character::route_type_input(app, ctx);

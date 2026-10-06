@@ -116,10 +116,21 @@ fn set_units(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// A typing session in progress (the Type tool previews the whole session as one interaction).
+fn typing_in_progress(s: &Session) -> bool {
+    s.active().and_then(|d| d.interaction.as_ref()).is_some_and(|it| it.label == "Typing" && it.preview.is_some())
+}
+
 fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     // What is still in progress (typing, a drag) is the step to undo: keep it first, so Undo takes
     // back only that and Redo brings it back, instead of dropping it and undoing the step before.
+    // A typing session also ends in the Type tool, whose caret and marked text (IME) must follow
+    // the document.
+    let typing = typing_in_progress(s);
     s.commit_interaction()?;
+    if typing {
+        s.set_tool_option("endTyping", &Value::Bool(true));
+    }
     let st = s.doc_mut()?;
     let e = st.history.undo.pop().ok_or_else(|| EngineError::Other("nothing to undo".into()))?;
     let label = e.label.clone();

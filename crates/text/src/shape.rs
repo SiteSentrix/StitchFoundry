@@ -40,6 +40,22 @@ pub(crate) struct SGlyph {
     pub xh: f64,
     /// First source character of the cluster.
     pub ch: char,
+    /// Vertical type: part of a tate-chu-yoko block (set across the column, upright).
+    pub tcy: Option<Tcy>,
+}
+
+/// A glyph's place in a tate-chu-yoko block: the block takes one em of the column, its glyphs side
+/// by side across it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Tcy {
+    /// Laid-out distance from the block's start to this glyph's pen position.
+    pub pen: f64,
+    /// Distance from the block's start to the glyph in the block's own (horizontal) setting.
+    pub ink: f64,
+    /// Width of the block's own setting.
+    pub width: f64,
+    /// Horizontal scale that fits the block into one em (1 when it fits as it is).
+    pub squeeze: f64,
 }
 
 impl SGlyph {
@@ -75,6 +91,46 @@ pub(crate) fn hyphen_glyph(g: &SGlyph) -> SGlyph {
     h.len = 0;
     h.ch = '-';
     h
+}
+
+/// Kinsoku (Japanese line breaking, the strict set): a character that can't start a line —
+/// closing brackets, the Japanese comma and full stop, middle dots, colons, ! and ?, the long
+/// vowel mark, iteration marks and small kana.
+pub(crate) fn no_line_start(c: char) -> bool {
+    matches!(c,
+        ')' | ']' | '}' | ',' | '.' | ':' | ';' | '!' | '?' | '»' | '’' | '”' | '‐' | '–' | '‼' | '⁇' | '⁈' | '⁉'
+        | '、' | '。' | '〉' | '》' | '」' | '』' | '】' | '〕' | '〗' | '〙' | '〛' | '〟' | '〜' | '゠' | '・' | '｠'
+        | 'ー' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ' | '々' | '〻'
+        | 'ぁ' | 'ぃ' | 'ぅ' | 'ぇ' | 'ぉ' | 'っ' | 'ゃ' | 'ゅ' | 'ょ' | 'ゎ' | 'ゕ' | 'ゖ'
+        | 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ッ' | 'ャ' | 'ュ' | 'ョ' | 'ヮ' | 'ヵ' | 'ヶ' | 'ㇰ'..='ㇿ'
+        | '！' | '）' | '，' | '．' | '：' | '；' | '？' | '］' | '｝' | '～' | '｡' | '｣' | '､' | '･' | 'ｰ' | 'ｧ'..='ｯ')
+}
+
+/// Kinsoku: a character that can't end a line (opening brackets).
+pub(crate) fn no_line_end(c: char) -> bool {
+    matches!(
+        c,
+        '(' | '['
+            | '{'
+            | '«'
+            | '‘'
+            | '“'
+            | '〈'
+            | '《'
+            | '「'
+            | '『'
+            | '【'
+            | '〔'
+            | '〖'
+            | '〘'
+            | '〚'
+            | '〝'
+            | '（'
+            | '［'
+            | '｛'
+            | '｟'
+            | '｢'
+    )
 }
 
 fn is_cjk(c: char) -> bool {
@@ -255,6 +311,7 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
             cap,
             xh,
             ch,
+            tcy: None,
         });
     }
 }
