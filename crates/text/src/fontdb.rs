@@ -16,6 +16,9 @@ use skrifa::{GlyphId, MetadataProvider};
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
 
+/// Bundled Japanese font bytes, shared with UI glyph fallback.
+pub static SHIPPORI_MINCHO_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/ShipporiMincho-Regular.ttf");
+
 static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf"),
     include_bytes!("../../../assets/fonts/SourceSans3-Semibold.ttf"),
@@ -26,6 +29,7 @@ static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/Inter-Medium.ttf"),
     include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"),
     include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
+    SHIPPORI_MINCHO_REGULAR,
 ];
 
 enum FontBytes {

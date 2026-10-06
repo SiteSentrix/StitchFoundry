@@ -207,6 +207,8 @@ impl Dialog {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
+    #[serde(default)]
+    pub language: crate::i18n::Language,
     pub brightness: Brightness,
     pub dock_tab: DockTab,
     /// Icon panel currently popped out of the collapsed column.
@@ -342,6 +344,7 @@ impl UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            language: crate::i18n::Language::default(),
             brightness: Brightness::MediumDark,
             dock_tab: DockTab::Properties,
             open_panel: None,

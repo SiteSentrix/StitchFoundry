@@ -421,3 +421,34 @@ fn tab_stops_position_text() {
     p.para.tabs = vec![stop(50.0, TabAlign::Left)];
     assert!((x_of(&p, 4) - 72.0).abs() < 1e-6);
 }
+
+#[test]
+fn vertical_japanese_columns_have_upright_ink_and_edit_geometry() {
+    let mut t = point("日本語\n縦書き", style(30.0));
+    t.vertical = true;
+    let l = layout(db(), &t);
+    assert!(l.vertical);
+    assert_eq!(l.lines.len(), 2);
+    assert!(l.glyphs.iter().all(|g| g.gid != 0 && !g.outline.elements().is_empty()));
+    assert!(l.glyphs[3].origin.x < l.glyphs[0].origin.x);
+    assert!(l.glyphs[1].origin.y > l.glyphs[0].origin.y);
+    for g in &l.glyphs {
+        let p = g.origin + dir(g.angle) * (g.advance * 0.1);
+        assert_eq!(hit_byte(&l, p), g.byte);
+        let (a, b) = caret_position(&l, g.byte);
+        assert!((a.y - b.y).abs() < 1e-6);
+        assert!(a.x > b.x);
+    }
+    let selection = selection_quads(&l, 0, "日本語".len());
+    assert_eq!(selection.len(), 1);
+}
+
+#[test]
+fn vertical_area_type_wraps_into_columns_inside_the_frame() {
+    let mut t = area("日本語日本語日本語", style(20.0), Rect::new(0.0, 0.0, 100.0, 65.0), Justify::Left);
+    t.vertical = true;
+    let l = layout(db(), &t);
+    assert!(l.lines.len() > 1);
+    assert!(l.glyphs.iter().all(|g| g.origin.x >= 0.0 && g.origin.x <= 100.0 && g.origin.y >= 0.0 && g.origin.y <= 65.0));
+    assert!(l.glyphs[l.lines[1].glyph_start].origin.x < l.glyphs[0].origin.x);
+}

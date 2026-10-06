@@ -1576,7 +1576,7 @@ impl Writer<'_> {
     /// as the canvas paints them, the object's own fills and strokes on the glyph outlines: those
     /// below the Characters row under the characters, the others over them.
     fn text_node(&mut self, n: &Node, t: &TextObject) {
-        let chars = |w: &mut Self, n: &Node| if w.opts.outline_text { w.text_outlines(n, t) } else { w.text(n, t) };
+        let chars = |w: &mut Self, n: &Node| if w.opts.outline_text || t.vertical { w.text_outlines(n, t) } else { w.text(n, t) };
         if !n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none()) {
             return chars(self, n);
         }

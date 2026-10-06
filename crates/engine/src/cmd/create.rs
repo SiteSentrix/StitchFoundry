@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, size?: pt, font?: family, style?, color?, area?: {width, height}} → {id}",
+            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height}} → {id}",
             has_doc,
             text_create
         ),
@@ -401,6 +401,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let y = f64_req(p, "y", "text.create")?;
     let text = str_param(p, "text").unwrap_or("");
     let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p));
+    t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
     if let Some(a) = p.get("area") {
         let w = f64_or(a, "width", 200.0);
         let h = f64_or(a, "height", 100.0);

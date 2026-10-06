@@ -378,3 +378,22 @@ fn type_tool_state_does_not_leak_across_documents() {
     assert_eq!(obj(&s, id).plain_text(), "First");
     assert!(!s.in_interaction());
 }
+
+#[test]
+fn vertical_text_creation_orientation_and_persistence() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x":100,"y":100,"text":"日本語", "vertical":true})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let t = obj(&s, id);
+    assert!(t.vertical);
+    let round: TextObject = serde_json::from_value(serde_json::to_value(&t).unwrap()).unwrap();
+    assert!(round.vertical);
+    s.execute("type.orientation.horizontal", &json!({"id":id.0})).unwrap();
+    assert!(!obj(&s, id).vertical);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(obj(&s, id).vertical);
+    let old = serde_json::to_value(TextObject::point(Point::ZERO, "old", Default::default())).unwrap();
+    assert!(old.get("vertical").is_none());
+    let old: TextObject = serde_json::from_value(old).unwrap();
+    assert!(!old.vertical);
+}

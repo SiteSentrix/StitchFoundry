@@ -178,7 +178,7 @@ self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-0
 **What's missing:**
 - 3D and Materials;
 - the Photoshop-style raster effects (Effect Gallery);
-- vertical and CJK type;
+- CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - Variables and scripting;
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - packaging for Windows and Linux.

@@ -40,6 +40,7 @@ struct Typing {
 
 #[derive(Default)]
 pub struct TypeTool {
+    vertical: bool,
     mode: Mode,
     /// Text object being edited.
     editing: Option<NodeId>,
@@ -65,11 +66,11 @@ pub struct TypeTool {
 impl TypeTool {
     pub fn new(id: &str) -> Self {
         let mode = match id {
-            "areaType" => Mode::Area,
-            "typeOnPath" => Mode::OnPath,
+            "areaType" | "verticalAreaType" => Mode::Area,
+            "typeOnPath" | "verticalTypeOnPath" => Mode::OnPath,
             _ => Mode::Type,
         };
-        Self { mode, ..Default::default() }
+        Self { mode, vertical: id.starts_with("vertical"), ..Default::default() }
     }
 
     fn text<'a>(cx: &'a ToolContext, id: NodeId) -> Option<&'a TextObject> {
@@ -236,16 +237,20 @@ impl TypeTool {
             let on_path = self.mode == Mode::OnPath;
             if let Some(pid) = Self::path_at(cx, start, !on_path) {
                 let mode = if on_path { "onPath" } else { "area" };
-                out.push(Action::Exec("text.createInPath".into(), json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y]})));
+                out.push(Action::Exec(
+                    "text.createInPath".into(),
+                    json!({"path": pid.0, "mode": mode, "text": "", "at": [start.x, start.y], "vertical": self.vertical}),
+                ));
                 out.push(Action::Notify("text.editNew".into()));
                 return out;
             }
         }
         let area = drag.map(|d| Rect::from_points(start, d)).filter(|r| r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0));
-        let params = match area {
+        let mut params = match area {
             Some(r) => json!({"x": r.x0, "y": r.y0 + 12.0, "text": "", "area": {"width": r.width(), "height": r.height()}}),
             None => json!({"x": start.x, "y": start.y, "text": ""}),
         };
+        params["vertical"] = json!(self.vertical);
         out.push(Action::Exec("text.create".into(), params));
         out.push(Action::Notify("text.editNew".into()));
         out
@@ -294,10 +299,13 @@ fn common_affixes(a: &str, b: &str) -> (usize, usize) {
 
 impl Tool for TypeTool {
     fn id(&self) -> &'static str {
-        match self.mode {
-            Mode::Type => "type",
-            Mode::Area => "areaType",
-            Mode::OnPath => "typeOnPath",
+        match (self.mode, self.vertical) {
+            (Mode::Type, false) => "type",
+            (Mode::Type, true) => "verticalType",
+            (Mode::Area, false) => "areaType",
+            (Mode::Area, true) => "verticalAreaType",
+            (Mode::OnPath, false) => "typeOnPath",
+            (Mode::OnPath, true) => "verticalTypeOnPath",
         }
     }
     fn busy(&self) -> bool {
@@ -397,6 +405,17 @@ impl Tool for TypeTool {
         let (a, b) = self.sel();
         let word = mods.cmd || mods.alt;
         let lay = self.layout(&t);
+        let key = if lay.vertical {
+            match key {
+                ToolKey::Up => ToolKey::Left,
+                ToolKey::Down => ToolKey::Right,
+                ToolKey::Right => ToolKey::Up,
+                ToolKey::Left => ToolKey::Down,
+                other => other,
+            }
+        } else {
+            key
+        };
         let vertical = matches!(key, ToolKey::Up | ToolKey::Down);
         if !vertical {
             self.goal_x = None;
@@ -437,7 +456,7 @@ impl Tool for TypeTool {
             ToolKey::Up | ToolKey::Down => {
                 let d = if key == ToolKey::Up { -1 } else { 1 };
                 let from = if a != b && !mods.shift { if d < 0 { a } else { b } } else { self.caret };
-                let x = self.goal_x.unwrap_or_else(|| vectorcraft_text::caret_position(&lay, from).0.x);
+                let x = self.goal_x.unwrap_or_else(|| lay.logical_point(vectorcraft_text::caret_position(&lay, from).0).x);
                 let to = if mods.cmd {
                     // Cmd+Up/Down: paragraph start / end.
                     let p = edit::paragraph_at(&text, from);

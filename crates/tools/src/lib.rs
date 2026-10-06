@@ -414,7 +414,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "directSelection" => Box::new(direct::DirectSelectionTool::new(false)),
         "groupSelection" => Box::new(direct::DirectSelectionTool::new(true)),
         "pen" => Box::new(pen::PenTool::default()),
-        "type" | "areaType" | "typeOnPath" => Box::new(text::TypeTool::new(id)),
+        "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath" => Box::new(text::TypeTool::new(id)),
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),

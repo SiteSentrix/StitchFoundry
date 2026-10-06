@@ -14,8 +14,8 @@ _Last updated: 2026-10-06 (after M4.14–M4.98, M8.1–M8.20 and M14.4–M14.7; 
 | Look & feel vs Illustrator 2026 default workspace (measured) | **~75–80%** |
 | Feature surface vs full Illustrator (weighted, see below) | **~75%** on the rubric · **69–75%** honest range (self-graded, see [Honest assessment](#honest-assessment-2026-10-05)) |
 | Parity including interaction fidelity and hardening ("a power user can't tell the difference, but faster") | **~40–55%** |
-| Time to **feature parity** (every menu item, tool, panel, effect and dialog functional) | **~225–345 h** one agent · **~60–100 h** with 4–6 agents |
-| Time to **full parity** (feature parity + interaction-fidelity pass + hardening) | **~330–515 h** one agent · **~85–150 h** with 4–6 agents |
+| Time to **feature parity** (every menu item, tool, panel, effect and dialog functional) | **~210–330 h** one agent · **~55–95 h** with 4–6 agents |
+| Time to **full parity** (feature parity + interaction-fidelity pass + hardening) | **~320–500 h** one agent · **~80–145 h** with 4–6 agents |
 
 ## Honest assessment (2026-10-05)
 
@@ -33,9 +33,9 @@ since 2026-10-01.
 
 | Dimension | Estimate | Evidence and what's missing |
 |---|---|---|
-| **Breadth:** menus, tools and panels exist | ~90% | 18 menu items still stubbed; every tool implemented except Touch Type and vertical type ×3; 51 panel modules |
-| **Depth:** each feature behaves like Illustrator | ~69–75% | Strong: paint, appearance and colour (M3), Pathfinder and booleans, selection, drawing, files (M4). Weak: advanced type (~35%), brushes and symbols (in progress), raster effects (~20%) |
-| **Large missing subsystems** | 0–20% | 3D & Materials (0%), Photoshop-style raster effects and the Effect Gallery (~1 of ~56 filters), SVG Filters, vertical/CJK type, Variables (data merge), scripting |
+| **Breadth:** menus, tools and panels exist | ~90% | 16 menu items still stubbed; every tool implemented except Touch Type; 51 panel modules |
+| **Depth:** each feature behaves like Illustrator | ~69–75% | Strong: paint, appearance and colour (M3), Pathfinder and booleans, selection, drawing, files (M4). Weak: advanced type (~45%), brushes and symbols (in progress), raster effects (~20%) |
+| **Large missing subsystems** | 0–20% | 3D & Materials (0%), Photoshop-style raster effects and the Effect Gallery (~1 of ~56 filters), SVG Filters, CJK composition (vertical type has initial support), Variables (data merge), scripting |
 | **Interaction fidelity:** modifiers, cursors, small behaviours | ~30–40% | The dedicated pass hasn't started, and there has been no side-by-side session with Illustrator yet. A power user notices this first |
 | **Look & feel** | ~75–80% | Measured against Illustrator 2026 screenshots (2026-10-02); the panels added since haven't been re-measured |
 | **File interop** | ~85% | SVG/SVGZ, PDF and PDF-compatible `.ai`, EPS, DXF, EMF/WMF, raster formats, PSD export, Place and Links, Package, Print, clipboard flavours. Native `.ai` private data is out of scope by design; DWG has no open spec |
@@ -58,9 +58,10 @@ Ordered by how much each gap blocks someone from switching. Sizes are one-agent 
 3. **3D and Materials:** Extrude & Bevel, Revolve, Inflate and Rotate with lighting and materials, using a software
    renderer in its own crate (layering allows it below L6), with output in SVG/PDF as rasters or projected vectors.
    The largest single gap. 50–80 h.
-4. **Advanced type:** vertical type and its tools, CJK composition, Optical Margin Alignment, the
-   composer/hyphenation options, tab leaders, a spell-check dictionary (open licence), Touch Type and Snap to Glyph.
-   41–55 h across type core and advanced.
+4. **Advanced type:** CJK composition for vertical type (kinsoku, ruby, tate-chu-yoko, vertical font metrics,
+   mixed-script orientation), Optical Margin Alignment, the composer/hyphenation options, tab leaders, a
+   spell-check dictionary (open licence), Touch Type and Snap to Glyph. Vertical point, area and path type have
+   initial support. 35–48 h across type core and advanced.
 5. **Brushes, symbols and libraries:** brush options depth; original brush, symbol and graphic-style libraries
    generated in code (never Adobe's); dynamic symbols; Start Global Edit. 14–22 h.
 6. **Automation:** Variables (data merge), a scripting surface over the command registry, batch. 8–12 h.
@@ -111,6 +112,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - Pathfinder (10 exact curve booleans), Offset, Outline Stroke, Simplify, Clean Up, Split Into Grid, Divide Objects Below.
   - Live effects with previewing dialogs: Distort & Transform, Path, Convert to Shape, 15 Warp styles, Round Corners, Scribble, Effect → Pathfinder (all 10 operations, live on groups), Color Adjustments (Brightness/Contrast, Curves, Levels, Hue/Saturation, Shift to Color, Temperature/Tint, on vectors, live type and embedded images), and raster drop shadow, glows and feather. SVG and PDF export keep live effects (geometry baked; SVG raster effects as filters).
 - **Type:** Text Wrap, Type on a Path effects (Rainbow/Skew/3D Ribbon/Stair Step/Gravity), Character and Paragraph Styles (override-preserving redefine), Area Type Options (rows/columns/inset/first baseline), threaded text across any closed shapes, Fit Headline.
+- **Japanese interface and vertical type:** VectorCraft ▸ Language switches the menus between English and Japanese (untranslated labels stay English) and persists; the bundled OFL Shippori Mincho gives Japanese glyphs without system fonts. Vertical Type, Vertical Area Type and Vertical Type on a Path create vertical text (columns right to left, upright CJK glyphs with `vert`/`vrt2` alternates); Type ▸ Type Orientation switches existing text; caret, selection, hit testing and arrow keys follow the writing direction. Vertical text exports to PDF as real text and to SVG as outlines.
 - **Transparency:** opacity masks (clip/invert/disable/link), exported as SVG `<mask>` and PDF soft masks.
 - **Advanced art:** live Blends (steps/distance/smooth colour, editable spine, anchor-targeted Blend tool, faithful interpolation, knockout), Envelope Distort (warp/mesh/top object, Reset, full Envelope Options, mesh handles, Edit Contents; type, images, symbols, gradients, patterns and appearance distorted everywhere), Liquify tools with options and pen pressure, Puppet Warp with rotating pins, Perspective Grid with presets, movable planes and projected type, Gradient Mesh, Shape Builder, Live Paint, Image Trace (12 presets), pattern swatches with pattern editing mode, live Repeat (radial/grid/mirror).
 - **Paint and appearance (M3):**
@@ -153,7 +155,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
 | M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, shortcut editor, workspaces, a custom title bar on Windows/Linux with a Home button, content-sized dialogs and menus that scroll when longer than the window done; accessibility, Windows/Linux packaging pending | 18–28 |
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance) | ⬜ | 60–90 |
 | — | Hardening at scale (big-file corpus, fuzzing, cross-platform + browser QA) | 🟡 | 50–80 |
-| | **Total to full parity** (one agent; re-derived from the [Parity estimate](#parity-estimate) table) | | **~330–515** |
+| | **Total to full parity** (one agent; re-derived from the [Parity estimate](#parity-estimate) table) | | **~320–500** |
 
 ## Parity estimate
 
@@ -179,7 +181,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Raster effects (Effect Gallery, Document Raster Effects Settings) | 4 | 20% | ~55 Photoshop-style filters (Artistic, Brush Strokes, Distort, Pixelate, Sketch, Stylize, Texture, Video) and the Effect Gallery; Document Raster Effects Settings and raster effects in PDF are done | 28–42 |
 | 3D and Materials | 4 | 0% | Extrude & Bevel, Revolve, Inflate, Rotate, lighting, materials (software renderer) | 50–80 |
 | Type core | 9 | 78% | composer/hyphenation options, Optical Margin Alignment, hidden characters | 15–20 |
-| Type advanced | 4 | 35% | vertical type/CJK, tab leaders, spell check (open dictionary), Touch Type, Retype | 26–35 |
+| Type advanced | 4 | 45% | CJK composition for vertical type (kinsoku, ruby, tate-chu-yoko, vertical metrics, mixed-script orientation), tab leaders, spell check (open dictionary), Touch Type, Retype; vertical point/area/path type and Type Orientation have initial support | 20–28 |
 | Symbols, blends, envelopes, Repeat, perspective | 5 | 88% | symbol libraries (original), dynamic symbols, envelope Anti-Alias/Preserve Shape output and warp point editing, brush interpolation in blends (M8 fidelity pass done) | 5–8 |
 | Image Trace, graphs, image tools | 3 | 70% | graph Design/Column/Marker, Create Object Mosaic, Crop Image polish (Vector Halftone is done) | 6–10 |
 | Layers, artboards, document setup | 5 | 80% | Layers panel options depth, artboard presets/rearrange polish (Document Setup and New Document are done) | 5–8 |
@@ -191,17 +193,17 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Automation | 3 | 60% | Variables (data merge), scripting surface, batch | 8–12 |
 | UI chrome (panels, contextual Properties, workspaces, prefs) | 6 | 78% | Variables, SVG Interactivity, Properties per context, Consolidate All Windows (Links, Asset Export, CSS Properties, Attributes are done) | 15–25 |
 | Libraries, Links, Package | 2 | 50% | a local Libraries panel (no cloud by design); Links and Package are done | 5–8 |
-| **Feature parity** | **103** | **~75%** | | **~225–345** |
+| **Feature parity** | **103** | **~75%** | | **~210–330** |
 | Interaction-fidelity pass (side by side with Illustrator: every tool modifier, cursor, dialog, Properties context) | | | | 60–90 |
 | Hardening (big-file corpus, fuzzing, cross-platform and browser QA, accessibility, packaging) | | | | 50–80 |
-| **Full parity** | | **~56%** | | **~330–515** |
+| **Full parity** | | **~56%** | | **~320–500** |
 
 With 4–6 agents working on disjoint crates (as the layering allows) the wall-clock time divides by roughly 3.5–4
-(integration, review and shared files such as `menus.rs` serialize some work): **~60–100 h** to feature parity,
-**~85–150 h** to full parity.
+(integration, review and shared files such as `menus.rs` serialize some work): **~55–95 h** to feature parity,
+**~80–145 h** to full parity.
 
-_Inventories (2026-10-05):_ 18 menu items still stubbed (`todo(…)` in `crates/ui-egui/src/menus.rs`); every tool
-implemented except four (Touch Type, vertical type ×3); 51 panel modules; Illustrator-style live
+_Inventories (2026-10-05):_ 16 menu items still stubbed (`todo(…)` in `crates/ui-egui/src/menus.rs`); every tool
+implemented except Touch Type; 51 panel modules; Illustrator-style live
 effects ~44/54, Photoshop-style raster effects ~1/56, 3D 0/5; ~2,840 tests; ~221k lines of Rust.
 
 _Where we already beat Illustrator:_ exact curve booleans, off-thread multithreaded rendering, undo that never runs out,
