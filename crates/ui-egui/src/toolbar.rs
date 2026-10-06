@@ -217,8 +217,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
     }
 }
 
-/// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps (set
-/// through `tool.setOption`).
+/// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
+/// Warp's mesh and pins (set through `tool.setOption`).
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// (value, label) of each choice.
     type Choices = &'static [(&'static str, &'static str)];
@@ -226,6 +226,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         ("axis", "Axis:", &[("free", "Free"), ("vertical", "Vertical"), ("horizontal", "Horizontal")]),
         ("keep", "Keep:", &[("left", "Left"), ("right", "Right"), ("top", "Top"), ("bottom", "Bottom")]),
     ];
+    if app.session.tool_id() == "puppetWarp" {
+        return puppet_warp_options(app, ui);
+    }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
@@ -355,6 +358,26 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.flyout = None;
     }
     let _ = theme::semibold;
+}
+
+/// The Puppet Warp tool's Control bar: Expand (how far the mesh reaches past the art), Show Mesh
+/// and Select All Pins.
+fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let t = Tokens::get(ui.ctx());
+    let opts = app.session.tool_options();
+    ui.label(egui::RichText::new("Expand:").size(12.0).color(t.text));
+    let unit = app.session.general_unit();
+    if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
+        app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+    }
+    let show = opts["showMesh"].as_bool().unwrap_or(true);
+    if widgets::check(ui, "Show Mesh", show, true) {
+        app.run("tool.setOption", json!({ "key": "showMesh", "value": !show })).ok();
+    }
+    if widgets::flat_button(ui, "Select All Pins", 104.0).clicked() {
+        app.run("tool.setOption", json!({ "key": "selectAllPins", "value": true })).ok();
+    }
+    ui.separator();
 }
 
 #[cfg(test)]

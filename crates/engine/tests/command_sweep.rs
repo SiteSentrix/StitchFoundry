@@ -262,6 +262,8 @@ fn structured_junk() {
         ("file.new", json!({"width": -1, "height": 0, "artboards": 1000000})),
         ("command.batch", json!({"commands": [{"command": 5}, {"params": 3}]})),
         ("command.batch", json!({"commands": "nope"})),
+        ("object.puppetWarp", json!({"pins": [[0, 0]], "moved": [[0, 0]], "angles": [1e308]})),
+        ("object.puppetWarp", json!({"pins": [[0, 0], [5, 5]], "moved": [[0, 0], [1e9, 1e9]], "angles": [-1e308, "x"]})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {

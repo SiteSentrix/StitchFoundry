@@ -79,6 +79,8 @@ mod tests_printps;
 #[cfg(test)]
 mod tests_printtiling;
 #[cfg(test)]
+mod tests_puppetwarp;
+#[cfg(test)]
 mod tests_recolor;
 #[cfg(test)]
 mod tests_recovery;

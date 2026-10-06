@@ -308,6 +308,26 @@ const REG: f64 = 1.0e-7;
 pub struct Pin {
     pub rest: Point,
     pub target: Point,
+    /// The rotation (radians) the art takes around the pin; `None` leaves it free (the solve
+    /// picks it), as for a pin that was only moved.
+    pub angle: Option<f64>,
+}
+
+impl Pin {
+    /// A pin free to turn.
+    pub fn new(rest: Point, target: Point) -> Self {
+        Self { rest, target, angle: None }
+    }
+
+    /// The soft constraints this pin puts on the mesh: the pin itself and, when its rotation is
+    /// held, two points a cell away along the rest axes, turned by the angle around the target.
+    fn constraints(&self, reach: f64) -> impl Iterator<Item = (Point, Point)> + use<> {
+        let frame = self.angle.map(|a| {
+            let (s, c) = a.sin_cos();
+            [Vec2::new(reach, 0.0), Vec2::new(0.0, reach)].map(|d| (self.rest + d, self.target + Vec2::new(d.x * c - d.y * s, d.x * s + d.y * c)))
+        });
+        std::iter::once((self.rest, self.target)).chain(frame.into_iter().flatten())
+    }
 }
 
 /// Run both ARAP steps. Returns the deformed vertex positions (the rest mesh if fewer than one
@@ -317,7 +337,8 @@ pub fn deform(mesh: &Mesh, pins: &[Pin]) -> Vec<Point> {
     if n == 0 || pins.is_empty() {
         return mesh.verts.clone();
     }
-    let located: Vec<(usize, [f64; 3], Point)> = pins.iter().filter_map(|p| mesh.locate(p.rest).map(|(t, w)| (t, w, p.target))).collect();
+    let located: Vec<(usize, [f64; 3], Point)> =
+        pins.iter().flat_map(|p| p.constraints(mesh.cell)).filter_map(|(rest, target)| mesh.locate(rest).map(|(t, w)| (t, w, target))).collect();
     let vb = mesh.vertex_band();
     // ---- step 1: similarity-invariant error, 2n unknowns interleaved (x0, y0, x1, y1, ...).
     let mut g = BandMatrix::new(2 * n, 2 * vb + 1);
@@ -528,7 +549,7 @@ mod tests {
     fn pins_at_rest_leave_the_mesh_unchanged() {
         let m = rect_mesh();
         let pins: Vec<Pin> =
-            [(20.0, 50.0), (180.0, 50.0), (100.0, 20.0)].iter().map(|&(x, y)| Pin { rest: Point::new(x, y), target: Point::new(x, y) }).collect();
+            [(20.0, 50.0), (180.0, 50.0), (100.0, 20.0)].iter().map(|&(x, y)| Pin::new(Point::new(x, y), Point::new(x, y))).collect();
         let d = deform(&m, &pins);
         let err = m.verts.iter().zip(&d).map(|(a, b)| a.distance(*b)).fold(0.0, f64::max);
         assert!(err < 1e-4, "{err}");
@@ -541,10 +562,8 @@ mod tests {
             let (s, c) = 0.5f64.sin_cos();
             Point::new(p.x * c - p.y * s + 30.0, p.x * s + p.y * c - 10.0)
         };
-        let pins: Vec<Pin> = [(20.0, 50.0), (180.0, 50.0), (100.0, 90.0)]
-            .iter()
-            .map(|&(x, y)| Pin { rest: Point::new(x, y), target: rot(Point::new(x, y)) })
-            .collect();
+        let pins: Vec<Pin> =
+            [(20.0, 50.0), (180.0, 50.0), (100.0, 90.0)].iter().map(|&(x, y)| Pin::new(Point::new(x, y), rot(Point::new(x, y)))).collect();
         let d = deform(&m, &pins);
         let err = m.verts.iter().zip(&d).map(|(a, b)| rot(*a).distance(*b)).fold(0.0, f64::max);
         assert!(err < 1e-2, "{err}");
@@ -555,9 +574,9 @@ mod tests {
         let m = rect_mesh();
         // Hold the left end, lift the right end.
         let pins = vec![
-            Pin { rest: Point::new(10.0, 30.0), target: Point::new(10.0, 30.0) },
-            Pin { rest: Point::new(10.0, 70.0), target: Point::new(10.0, 70.0) },
-            Pin { rest: Point::new(190.0, 50.0), target: Point::new(180.0, -30.0) },
+            Pin::new(Point::new(10.0, 30.0), Point::new(10.0, 30.0)),
+            Pin::new(Point::new(10.0, 70.0), Point::new(10.0, 70.0)),
+            Pin::new(Point::new(190.0, 50.0), Point::new(180.0, -30.0)),
         ];
         let d = deform(&m, &pins);
         for p in &pins {
@@ -577,6 +596,31 @@ mod tests {
             .map(|(i, j)| (d[i].distance(d[j]) / m.verts[i].distance(m.verts[j]) - 1.0).abs())
             .fold(0.0, f64::max);
         assert!(worst < 0.3, "edge stretch {worst}");
+    }
+
+    #[test]
+    fn a_held_rotation_turns_the_art_around_its_pin() {
+        let m = rect_mesh();
+        let c = Point::new(100.0, 50.0);
+        let rot = |p: Point| {
+            let (s, co) = 0.4f64.sin_cos();
+            let d = p - c;
+            c + Vec2::new(d.x * co - d.y * s, d.x * s + d.y * co)
+        };
+        // One pin, held at 0.4 rad: the whole shape turns rigidly around it.
+        let d = deform(&m, &[Pin { angle: Some(0.4), ..Pin::new(c, c) }]);
+        let err = m.verts.iter().zip(&d).map(|(a, b)| rot(*a).distance(*b)).fold(0.0, f64::max);
+        assert!(err < 0.05, "{err}");
+        // A free pin alone leaves the shape where it is.
+        let d = deform(&m, &[Pin::new(c, c)]);
+        assert!(m.verts.iter().zip(&d).all(|(a, b)| a.distance(*b) < 1e-3));
+        // Held ends: the turned end turns, the other end stays.
+        let left = Point::new(10.0, 50.0);
+        let pins = [Pin { angle: Some(0.5), ..Pin::new(left, left) }, Pin::new(Point::new(190.0, 50.0), Point::new(190.0, 50.0))];
+        let d = deform(&m, &pins);
+        let near = m.map(&d, Point::new(10.0, 62.0)) - left;
+        assert!((near.atan2() - (Vec2::new(0.0, 12.0).atan2() + 0.5)).abs() < 0.1, "the left end turned: {near:?}");
+        assert!(m.map(&d, Point::new(190.0, 80.0)).distance(Point::new(190.0, 80.0)) < 5.0);
     }
 
     #[test]
