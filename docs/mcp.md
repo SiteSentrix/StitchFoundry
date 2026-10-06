@@ -1863,6 +1863,21 @@ copies). Object › Transform › Transform Again repeats the last perspective m
 {"name":"run_command","arguments":{"command":"object.transformAgain","params":{}}}
 ```
 
+Planes move along their normals: `perspective.plane.move {plane, offset | by, objects}` (`leftOffset`,
+`rightOffset`, `groundOffset` in the grid). The plane widgets (a diamond on each plane, drawn while the grid shows)
+do it with the Perspective Grid and Perspective Selection tools: a plain drag moves the plane alone, Shift-drag moves
+the objects on it too, Alt-drag copies them; double-clicking a widget (or `ui.perspectivePlane {plane}`) opens the
+`perspectivePlane` dialog (`location` in points, `objects`: none, move or copy). Objects keep their place when the
+grid's definition changes, as in the reference app; `perspective.grid.set` with `reproject: true` moves them with it
+instead. `perspective.plane.matchObject` (Object › Perspective › Move Plane to Match Object) moves the plane of the
+selected object onto it.
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.plane.move","params":{"plane":"right","offset":40,"objects":"move"}}}
+{"name":"run_command","arguments":{"command":"perspective.plane.matchObject","params":{}}}
+{"name":"run_command","arguments":{"command":"ui.perspectivePlane","params":{"plane":"ground"}}}
+```
+
 ## Blends
 
 `object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing and orientation default to
