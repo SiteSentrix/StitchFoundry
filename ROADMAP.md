@@ -95,6 +95,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - Medium Dark theme, categorized and Advanced toolbars, 35 pt document tabs, 33 pt panel tabs.
   - Hint bar, contextual task bar, 19 dock panels with ≡ menus.
   - Native macOS menu bar, vector tool cursors, a ⌘K command palette, middle-button panning with any tool.
+  - A canvas context menu: right-click selects the object under the pointer and lists what applies to the selection (Undo/Redo, clipboard, group, isolation, join, masks, compound paths, guides, Transform, Arrange, Select, Export Selection), or the view commands on empty canvas.
   - Save / Don't Save / Cancel before closing or quitting with unsaved documents (tabs, Close, Close All, Quit, window close).
   - Four brightness themes, persistent preferences.
   - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content.
@@ -191,7 +192,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Export for Screens, Asset Export, slices, Save for Web | 3 | 85% | polish only (all four are done) | 2–4 |
 | Print, colour management, separations, flattener | 3 | 80% | print preview fidelity (flattener presets in PDF and print, overprint in PDF and composite print, Print dialog, presets, PostScript, marks, separations, Print Tiling, print overprint/flattener/bitmap options and printer profile are done) | 1–2 |
 | Automation | 3 | 60% | Variables (data merge), scripting surface, batch | 8–12 |
-| UI chrome (panels, contextual Properties, workspaces, prefs) | 6 | 78% | Variables, SVG Interactivity, Properties per context, Consolidate All Windows (Links, Asset Export, CSS Properties, Attributes are done) | 15–25 |
+| UI chrome (panels, contextual Properties, workspaces, prefs) | 6 | 78% | Variables, SVG Interactivity, Properties per context, Consolidate All Windows, context menus beyond the canvas (Links, Asset Export, CSS Properties, Attributes and the canvas context menu are done) | 15–25 |
 | Libraries, Links, Package | 2 | 50% | a local Libraries panel (no cloud by design); Links and Package are done | 5–8 |
 | **Feature parity** | **103** | **~75%** | | **~210–330** |
 | Interaction-fidelity pass (side by side with Illustrator: every tool modifier, cursor, dialog, Properties context) | | | | 60–90 |
