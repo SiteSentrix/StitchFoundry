@@ -18,8 +18,8 @@ use std::f64::consts::PI;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_color::{Color, Gradient, GradientPaint, Paint};
-use vectorcraft_geom::{Affine, Anchor, BezPath, CubicBez, FillRule, ParamCurve, PathData, Point, Rect, Shape, SubPath, Vec2};
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_geom::{Affine, Anchor, BezPath, CubicBez, ParamCurve, PathData, Point, Rect, Shape, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, FillLayer};
 use crate::node::{Node, NodeId, NodeKind};
@@ -69,6 +69,31 @@ pub struct BlendSpec {
     /// Replaced spine. `None` = the straight lines between the key objects' centres.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spine: Option<PathData>,
+    /// The anchor of the spine's first subpath each key object sits on (a spine edited on the
+    /// canvas: moving a key moves its anchor and the other way round). Empty: the keys spread
+    /// evenly along the spine by arc length (Replace Spine).
+    #[serde(default, rename = "keyAnchors", skip_serializing_if = "Vec::is_empty")]
+    pub key_anchors: Vec<u32>,
+    /// Per key object, the anchor of its first subpath the blend starts from (Blend tool clicks
+    /// on anchor points); `None`: chosen so closed shapes don't twist.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub starts: Vec<Option<u32>>,
+}
+
+impl BlendSpec {
+    /// The start anchor of key `i` (see [`Self::starts`]).
+    pub fn start(&self, i: usize) -> Option<usize> {
+        self.starts.get(i).copied().flatten().map(|a| a as usize)
+    }
+}
+
+/// Blend Options set with no blend selected: what new blends start with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BlendDefaults {
+    #[serde(default)]
+    pub spacing: BlendSpacing,
+    #[serde(default)]
+    pub orientation: BlendOrientation,
 }
 
 /// How an envelope distorts its content.
@@ -228,374 +253,10 @@ pub fn default_fidelity() -> f64 {
 }
 
 // =====================================================================================
-// Colour / paint interpolation
+// Blends (evaluation in `crate::blend`)
 // =====================================================================================
 
-/// Interpolate two colours in their shared model (display RGB when the models differ).
-pub fn lerp_color(a: &Color, b: &Color, t: f32) -> Color {
-    let l = |x: f32, y: f32| x + (y - x) * t;
-    match (*a, *b) {
-        (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) => Color::cmyk(l(c, c2), l(m, m2), l(y, y2), l(k, k2)),
-        (Color::Gray { k }, Color::Gray { k: k2 }) => Color::gray(l(k, k2)),
-        (Color::Lab { l: l1, a, b }, Color::Lab { l: l2, a: a2, b: b2 }) => Color::lab(l(l1, l2), l(a, a2), l(b, b2)),
-        _ => a.lerp(b, t),
-    }
-}
-
-fn solid_gradient(c: Color, like: &Gradient) -> Gradient {
-    let mut g = like.clone();
-    for s in &mut g.stops {
-        s.color = c;
-        s.opacity = 1.0;
-    }
-    g
-}
-
-fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<GradientPaint> {
-    if a.gradient.kind != b.gradient.kind || a.gradient.stops.len() != b.gradient.stops.len() {
-        return None;
-    }
-    let mut out = if t < 0.5 { a.clone() } else { b.clone() };
-    let l = |x: f32, y: f32| x + (y - x) * t;
-    for (i, s) in out.gradient.stops.iter_mut().enumerate() {
-        let (sa, sb) = (&a.gradient.stops[i], &b.gradient.stops[i]);
-        s.offset = l(sa.offset, sb.offset);
-        s.color = lerp_color(&sa.color, &sb.color, t);
-        s.opacity = l(sa.opacity, sb.opacity);
-        s.midpoint = l(sa.midpoint, sb.midpoint);
-    }
-    out.angle = a.angle + (b.angle - a.angle) * t as f64;
-    out.swatch = None;
-    if let (Some(ga), Some(gb)) = (a.geom, b.geom) {
-        let mut g = ga;
-        g.start = ga.start.lerp(gb.start, t as f64);
-        g.end = ga.end.lerp(gb.end, t as f64);
-        g.aspect = ga.aspect + (gb.aspect - ga.aspect) * t as f64;
-        g.focal = (ga.focal.is_some() || gb.focal.is_some()).then(|| ga.focal_point().lerp(gb.focal_point(), t as f64));
-        out.geom = Some(g);
-    } else {
-        out.geom = None;
-    }
-    Some(out)
-}
-
-/// Interpolate paints: solid↔solid, compatible gradients, solid↔gradient; otherwise switch halfway.
-pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
-    match (a, b) {
-        (Paint::Solid { color: x, .. }, Paint::Solid { color: y, .. }) => Paint::solid(lerp_color(x, y, t)),
-        (Paint::Gradient(ga), Paint::Gradient(gb)) => match lerp_gradient(ga, gb, t) {
-            Some(g) => Paint::Gradient(Box::new(g)),
-            None => (if t < 0.5 { a } else { b }).clone(),
-        },
-        (Paint::Solid { color, .. }, Paint::Gradient(g)) => {
-            let ga = GradientPaint { gradient: solid_gradient(*color, &g.gradient), ..(**g).clone() };
-            Paint::Gradient(Box::new(lerp_gradient(&ga, g, t).unwrap_or_else(|| (**g).clone())))
-        }
-        (Paint::Gradient(g), Paint::Solid { color, .. }) => {
-            let gb = GradientPaint { gradient: solid_gradient(*color, &g.gradient), ..(**g).clone() };
-            Paint::Gradient(Box::new(lerp_gradient(g, &gb, t).unwrap_or_else(|| (**g).clone())))
-        }
-        _ => (if t < 0.5 { a } else { b }).clone(),
-    }
-}
-
-/// Interpolate appearance stacks: item by item when their structure matches, else the top fill
-/// and stroke only (on the structure of the nearer key).
-pub fn lerp_appearance(a: &Appearance, b: &Appearance, t: f64) -> Appearance {
-    let tf = t as f32;
-    let mut out = if t < 0.5 { a.clone() } else { b.clone() };
-    let same = a.items.len() == b.items.len()
-        && a.items.iter().zip(&b.items).all(|(x, y)| {
-            matches!((x, y), (AppearanceItem::Fill(_), AppearanceItem::Fill(_)) | (AppearanceItem::Stroke(_), AppearanceItem::Stroke(_)))
-        });
-    if same {
-        for (i, it) in out.items.iter_mut().enumerate() {
-            match (it, &a.items[i], &b.items[i]) {
-                (AppearanceItem::Fill(o), AppearanceItem::Fill(x), AppearanceItem::Fill(y)) => {
-                    o.paint = lerp_paint(&x.paint, &y.paint, tf);
-                    o.opacity = x.opacity + (y.opacity - x.opacity) * tf;
-                }
-                (AppearanceItem::Stroke(o), AppearanceItem::Stroke(x), AppearanceItem::Stroke(y)) => {
-                    o.paint = lerp_paint(&x.paint, &y.paint, tf);
-                    o.width = x.width + (y.width - x.width) * t;
-                    o.opacity = x.opacity + (y.opacity - x.opacity) * tf;
-                }
-                _ => {}
-            }
-        }
-        return out;
-    }
-    let (fa, fb) = (a.fill_paint(), b.fill_paint());
-    if !(fa.is_none() && fb.is_none()) {
-        out.set_fill(lerp_paint(&fa, &fb, tf));
-    }
-    let (sa, sb) = (a.stroke_paint(), b.stroke_paint());
-    if !(sa.is_none() && sb.is_none()) {
-        out.set_stroke(lerp_paint(&sa, &sb, tf));
-        let w = a.stroke_width() + (b.stroke_width() - a.stroke_width()) * t;
-        if let Some(s) = out.stroke_mut() {
-            s.width = w;
-        }
-    }
-    out
-}
-
-// =====================================================================================
-// Path interpolation
-// =====================================================================================
-
-/// Grow a subpath to `n` anchors by splitting its longest segments.
-fn grow(sp: &mut SubPath, n: usize) {
-    let mut guard = 0;
-    while sp.anchors.len() < n && guard < 20_000 {
-        guard += 1;
-        if sp.segment_count() == 0 {
-            match sp.anchors.last().copied() {
-                Some(a) => sp.anchors.push(Anchor::corner(a.p)),
-                None => return,
-            }
-            continue;
-        }
-        let seg = (0..sp.segment_count())
-            .max_by(|i, j| {
-                let (ci, cj) = (sp.segment(*i), sp.segment(*j));
-                (ci.p3 - ci.p0).hypot().total_cmp(&(cj.p3 - cj.p0).hypot())
-            })
-            .unwrap_or(0);
-        sp.insert_anchor(seg, 0.5);
-    }
-}
-
-fn lerp_anchor(x: &Anchor, y: &Anchor, t: f64) -> Anchor {
-    Anchor { p: x.p.lerp(y.p, t), h_in: x.h_in.lerp(y.h_in, t), h_out: x.h_out.lerp(y.h_out, t), kind: if t < 0.5 { x.kind } else { y.kind } }
-}
-
-/// Interpolate two paths anchor-by-anchor. Subpath and anchor counts are equalised first (missing
-/// subpaths grow out of a point; shorter subpaths are resampled); closed subpaths of opposite
-/// winding are reversed so they don't flip through themselves.
-pub fn lerp_path(a: &PathData, b: &PathData, t: f64) -> PathData {
-    let n = a.subpaths.len().max(b.subpaths.len());
-    let ca = a.bounds().map(|r| r.center()).unwrap_or_default();
-    let cb = b.bounds().map(|r| r.center()).unwrap_or_default();
-    let degenerate = |like: &SubPath, c: Point| SubPath::new(vec![Anchor::corner(c); like.anchors.len().max(1)], like.closed);
-    let mut out = Vec::with_capacity(n);
-    for i in 0..n {
-        let (mut sa, mut sb) = match (a.subpaths.get(i), b.subpaths.get(i)) {
-            (Some(x), Some(y)) => (x.clone(), y.clone()),
-            (Some(x), None) => (x.clone(), degenerate(x, cb)),
-            (None, Some(y)) => (degenerate(y, ca), y.clone()),
-            (None, None) => continue,
-        };
-        if sa.closed && sb.closed && sa.anchors.len() > 2 && sb.anchors.len() > 2 && (sa.area() * sb.area()) < 0.0 {
-            sb.reverse();
-        }
-        let m = sa.anchors.len().max(sb.anchors.len());
-        grow(&mut sa, m);
-        grow(&mut sb, m);
-        let anchors = sa.anchors.iter().zip(&sb.anchors).map(|(x, y)| lerp_anchor(x, y, t)).collect();
-        out.push(SubPath::new(anchors, if t < 0.5 { sa.closed } else { sb.closed }));
-    }
-    PathData::new(out)
-}
-
-/// Path data of a path or compound path node (compound children concatenated).
-fn node_path(n: &Node) -> Option<(PathData, FillRule)> {
-    match &n.kind {
-        NodeKind::Path { path, rule, .. } => Some((path.clone(), *rule)),
-        NodeKind::Compound { children, rule } => {
-            let subs = children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect();
-            Some((PathData::new(subs), *rule))
-        }
-        _ => None,
-    }
-}
-
-/// Interpolate two objects at `t` (0 = `a`, 1 = `b`).
-pub fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
-    let base = if t < 0.5 { a } else { b };
-    let mut n = match (&a.kind, &b.kind) {
-        (NodeKind::Group { children: ca, clip: k1 }, NodeKind::Group { children: cb, clip: k2 }) if ca.len() == cb.len() && k1 == k2 => {
-            let children = ca.iter().zip(cb).map(|(x, y)| Arc::new(lerp_node(x, y, t))).collect();
-            Node::new(NodeId(0), NodeKind::Group { children, clip: *k1 })
-        }
-        (NodeKind::Mesh(ma), NodeKind::Mesh(mb)) if ma.rows == mb.rows && ma.cols == mb.cols && ma.points.len() == mb.points.len() => {
-            let mut m = ma.clone();
-            for (i, p) in m.points.iter_mut().enumerate() {
-                let q = &mb.points[i];
-                p.p = p.p.lerp(q.p, t);
-                p.color = lerp_color(&p.color, &q.color, t as f32);
-                p.opacity += (q.opacity - p.opacity) * t as f32;
-                for h in 0..4 {
-                    p.handles[h] = p.handles[h].lerp(q.handles[h], t);
-                }
-            }
-            Node::new(NodeId(0), NodeKind::Mesh(m))
-        }
-        _ => match (node_path(a), node_path(b)) {
-            (Some((pa, ra)), Some((pb, rb))) => {
-                let path = lerp_path(&pa, &pb, t);
-                let mut n = Node::path(NodeId(0), path, Appearance::default());
-                if let NodeKind::Path { rule, .. } = &mut n.kind {
-                    *rule = if t < 0.5 { ra } else { rb };
-                }
-                n
-            }
-            _ => {
-                // Different structure: move/scale a copy of the nearer key into the interpolated box.
-                let mut n = base.clone();
-                if let (Some(ba), Some(bb), Some(bn)) = (a.geometric_bounds(), b.geometric_bounds(), base.geometric_bounds()) {
-                    let w = ba.width() + (bb.width() - ba.width()) * t;
-                    let h = ba.height() + (bb.height() - ba.height()) * t;
-                    let c = ba.center().lerp(bb.center(), t);
-                    let sx = if bn.width() > 1e-9 { w / bn.width() } else { 1.0 };
-                    let sy = if bn.height() > 1e-9 { h / bn.height() } else { 1.0 };
-                    n.transform(
-                        Affine::translate(c.to_vec2()) * Affine::scale_non_uniform(sx, sy) * Affine::translate(-bn.center().to_vec2()),
-                        false,
-                    );
-                }
-                if let NodeKind::Path { live, .. } = &mut n.kind {
-                    *live = None;
-                }
-                n.id = NodeId(0);
-                n
-            }
-        },
-    };
-    n.appearance = lerp_appearance(&a.appearance, &b.appearance, t);
-    n.opacity = a.opacity + (b.opacity - a.opacity) * t as f32;
-    n.blend = base.blend;
-    n.visible = true;
-    n
-}
-
-// =====================================================================================
-// Blend evaluation
-// =====================================================================================
-
-/// Largest channel difference (0..1) between the solid colours of two objects' top fill and stroke.
-fn color_distance(a: &Node, b: &Node) -> f32 {
-    let mut d = 0.0f32;
-    let mut cmp = |x: &Paint, y: &Paint| {
-        let cols = |p: &Paint| -> Vec<Color> {
-            match p {
-                Paint::Solid { color, .. } => vec![*color],
-                Paint::Gradient(g) => g.gradient.stops.iter().map(|s| s.color).collect(),
-                _ => vec![],
-            }
-        };
-        let (cx, cy) = (cols(x), cols(y));
-        for (i, c) in cx.iter().enumerate() {
-            if let Some(o) = cy.get(i).or(cy.first()) {
-                let (p, q) = (c.to_rgb(), o.to_rgb());
-                for k in 0..3 {
-                    d = d.max((p[k] - q[k]).abs());
-                }
-            }
-        }
-    };
-    cmp(&a.appearance.fill_paint(), &b.appearance.fill_paint());
-    cmp(&a.appearance.stroke_paint(), &b.appearance.stroke_paint());
-    d
-}
-
-fn center_of(n: &Node) -> Point {
-    n.geometric_bounds().map(|b| b.center()).unwrap_or_default()
-}
-
-/// Number of intermediate steps between two keys `len` apart (along the spine).
-pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> usize {
-    match spacing {
-        BlendSpacing::Steps(n) => n.clamp(1, 1000) as usize,
-        BlendSpacing::Distance(d) => {
-            let d = d.max(0.01);
-            ((len / d).round() as i64 - 1).clamp(0, 1000) as usize
-        }
-        BlendSpacing::SmoothColor => {
-            let cd = color_distance(a, b);
-            if cd > 1.0 / 255.0 {
-                ((cd * 255.0 / 2.0).ceil() as usize).clamp(1, 256)
-            } else {
-                // Same colours: base the count on the distance between the objects.
-                let (ba, bb) = (a.geometric_bounds(), b.geometric_bounds());
-                let dist = match (ba, bb) {
-                    (Some(x), Some(y)) => (x.x0 - y.x0).abs().max((x.x1 - y.x1).abs()).max((x.y0 - y.y0).abs()).max((x.y1 - y.y1).abs()),
-                    _ => len,
-                };
-                ((dist / 2.0).ceil() as usize).clamp(1, 256)
-            }
-        }
-    }
-}
-
-/// A spine flattened to a polyline with cumulative lengths.
-pub struct Spine {
-    pts: Vec<Point>,
-    cum: Vec<f64>,
-}
-
-impl Spine {
-    pub fn new(path: &PathData) -> Option<Self> {
-        let sp = path.subpaths.first()?;
-        let pts = flatten_subpath(sp, 0.1);
-        if pts.len() < 2 {
-            return None;
-        }
-        Some(Self { cum: cumulative_lengths(&pts), pts })
-    }
-    pub fn length(&self) -> f64 {
-        *self.cum.last().unwrap_or(&0.0)
-    }
-    /// Point and tangent angle (radians) at arc-length fraction `f` (0..1).
-    pub fn at(&self, f: f64) -> (Point, f64) {
-        let total = self.length();
-        let s = f.clamp(0.0, 1.0) * total;
-        let i = match self.cum.binary_search_by(|c| c.total_cmp(&s)) {
-            Ok(i) => i.min(self.pts.len() - 2),
-            Err(i) => i.saturating_sub(1).min(self.pts.len() - 2),
-        };
-        let seg = (self.cum[i + 1] - self.cum[i]).max(1e-12);
-        let u = ((s - self.cum[i]) / seg).clamp(0.0, 1.0);
-        let d = self.pts[i + 1] - self.pts[i];
-        (self.pts[i].lerp(self.pts[i + 1], u), d.y.atan2(d.x))
-    }
-}
-
-/// Evaluate a blend: the keys and generated steps in paint order.
-pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
-    let k = keys.len();
-    if k < 2 {
-        return keys.iter().map(|n| (**n).clone()).collect();
-    }
-    let spine = spec.spine.as_ref().and_then(Spine::new);
-    let place = |mut n: Node, f: f64| -> Node {
-        if let Some(sp) = &spine {
-            let (p, ang) = sp.at(f);
-            let c = center_of(&n);
-            let rot = if spec.orientation == BlendOrientation::AlignToPath { Affine::rotate(ang) } else { Affine::IDENTITY };
-            n.transform(Affine::translate(p.to_vec2()) * rot * Affine::translate(-c.to_vec2()), false);
-        }
-        n
-    };
-    let mut out = Vec::new();
-    for i in 0..k {
-        let a = &keys[i];
-        out.push(place((**a).clone(), i as f64 / (k - 1) as f64));
-        let Some(b) = keys.get(i + 1) else { break };
-        let len = match &spine {
-            Some(sp) => sp.length() / (k - 1) as f64,
-            None => center_of(a).distance(center_of(b)),
-        };
-        let n = blend_step_count(a, b, spec.spacing, len);
-        for j in 1..=n {
-            let t = j as f64 / (n + 1) as f64;
-            let mut s = lerp_node(a, b, t);
-            s.id = NodeId(0);
-            out.push(place(s, (i as f64 + t) / (k - 1) as f64));
-        }
-    }
-    out
-}
+pub use crate::blend::{Spine, blend_expand, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path};
 
 // =====================================================================================
 // Warp maps (shared with vectorcraft-effects' Warp effects)
@@ -711,7 +372,7 @@ fn poly_len(c: &CubicBez) -> f64 {
 }
 
 /// Running length along a polyline: `0, |p0p1|, |p0p1| + |p1p2|, …` (one entry per point).
-fn cumulative_lengths(pts: &[Point]) -> Vec<f64> {
+pub(crate) fn cumulative_lengths(pts: &[Point]) -> Vec<f64> {
     let mut total = 0.0;
     let mut cum = Vec::with_capacity(pts.len());
     cum.push(0.0);
@@ -772,7 +433,7 @@ pub fn map_nonlinear(path: &PathData, max_piece: f64, f: impl Fn(Point) -> Point
 // Coons patches from outlines
 // =====================================================================================
 
-fn flatten_subpath(sp: &SubPath, tol: f64) -> Vec<Point> {
+pub(crate) fn flatten_subpath(sp: &SubPath, tol: f64) -> Vec<Point> {
     let mut bp = BezPath::new();
     sp.to_bezpath_into(&mut bp);
     let mut pts: Vec<Point> = Vec::new();

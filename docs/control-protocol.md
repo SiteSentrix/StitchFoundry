@@ -491,3 +491,10 @@ edited), whose OK runs `perspective.presets.save` and comes back; Delete, Import
 `perspective.presets.delete`, `import` and `export`. View → Perspective Grid → One/Two/Three Point Perspective list
 that type's built-in views and the saved presets (`ui.perspectiveUserPreset<type>.<n>`, hidden while empty). Opening a
 `.vcperspective` file with `app.open` imports its presets.
+
+Blend Options (Object › Blend › Blend Options…, `ui.blendOptions`, the Blend tool's double-click, Alt-click and
+toolbar button) opens the `blendOptions` dialog on the selected blend's options: `spacing` (`smooth` | `steps` |
+`distance`), `steps`, `distance` (pt), `orientation` (`page` | `path`) and `preview`; it previews live and
+`ui.dialog.confirm` keeps the change as one undo step. With no blend selected (`__target: "defaults"`) OK sets what
+new blends start with. The Blend tool (`ui.tool.select {tool: "blend"}`): `ui.pointer` down on an object, then on
+another, blends them; down on an anchor point blends from that point; each further object clicked joins the blend.

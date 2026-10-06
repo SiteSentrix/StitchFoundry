@@ -140,6 +140,21 @@ fn ibeam(p: &Painter, o: Pos2) {
     line(p, o + vec2(-2.0, 3.0), o + vec2(2.0, 3.0));
 }
 
+/// The Blend tool: a crosshair with a square below right of the hotspot, hollow away from art,
+/// filled over an object; over an anchor point a ringed dot (the blend starts there).
+fn blend(p: &Painter, o: Pos2, badge: Cursor) {
+    crosshair(p, o);
+    let b = o + vec2(9.0, 9.0);
+    if badge == Cursor::BlendAnchor {
+        p.circle_stroke(b + vec2(3.5, 3.5), 3.5, Stroke::new(3.0, HALO));
+        p.circle_stroke(b + vec2(3.5, 3.5), 3.5, Stroke::new(1.2, INK));
+        p.circle_filled(b + vec2(3.5, 3.5), 1.4, INK);
+        return;
+    }
+    let fill = if badge == Cursor::BlendObject { INK } else { HALO };
+    poly(p, vec![b, b + vec2(7.0, 0.0), b + vec2(7.0, 7.0), b + vec2(0.0, 7.0)], fill, INK);
+}
+
 /// Paint cursor `c` at `p` on the given (foreground) painter. Returns false for cursors that should
 /// stay system cursors (hand, zoom, busy states).
 pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
@@ -170,6 +185,7 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
             arrow(painter, p, false);
             slice_badge(painter, p + vec2(11.0, 14.0));
         }
+        Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor => blend(painter, p, c),
         _ => return false,
     }
     let _ = pos2;
