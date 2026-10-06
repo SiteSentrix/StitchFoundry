@@ -126,6 +126,9 @@ pub struct LineInfo {
 pub struct TextLayout {
     /// Lines retain inline/block coordinates; glyph geometry is in physical text space.
     pub vertical: bool,
+    /// Inline/block (line) space → physical text space: identity for horizontal type, a quarter
+    /// turn clockwise for vertical type (point type also centres its first column on the anchor).
+    pub line_xf: Affine,
     pub glyphs: Vec<PositionedGlyph>,
     pub lines: Vec<LineInfo>,
     /// Ink/advance bounds in text space.
@@ -142,10 +145,10 @@ pub struct TextLayout {
 impl TextLayout {
     /// Convert physical text coordinates to inline/block coordinates.
     pub fn logical_point(&self, p: Point) -> Point {
-        if self.vertical { Point::new(p.y, -p.x) } else { p }
+        if self.vertical { self.line_xf.inverse() * p } else { p }
     }
     pub fn physical_point(&self, p: Point) -> Point {
-        if self.vertical { Point::new(-p.y, p.x) } else { p }
+        if self.vertical { self.line_xf * p } else { p }
     }
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
@@ -166,7 +169,7 @@ impl TextLayout {
     /// the layout changed.
     pub fn snap_to_pixels(&mut self, to_device: Affine) -> bool {
         let [a, b, c, d, _, _] = to_device.as_coeffs();
-        if self.on_path || b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-12 || d.abs() < 1e-12 {
+        if self.on_path || self.vertical || b.abs() > 1e-9 || c.abs() > 1e-9 || a.abs() < 1e-12 || d.abs() < 1e-12 {
             return false;
         }
         let mut moved = false;
@@ -379,3 +382,5 @@ mod tests_snap;
 mod tests_sysfonts;
 #[cfg(test)]
 mod tests_typo;
+#[cfg(test)]
+mod tests_vertical;

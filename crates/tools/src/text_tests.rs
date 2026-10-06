@@ -227,3 +227,22 @@ fn vertical_tools_preserve_their_ids_and_create_vertical_text() {
         assert!(tool.vertical);
     }
 }
+
+#[test]
+fn arrows_follow_the_columns_of_vertical_type() {
+    let (mut d, id) = doc_with_text("§§§\n§§§");
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.vertical = true;
+    }
+    let mut tool = TypeTool::new("type");
+    tool.start_editing(id, 0);
+    let s = "§".len();
+    key(&mut tool, &d, ToolKey::Down, Mods::default());
+    assert_eq!(tool.caret, s, "↓ goes down the column to the next character");
+    key(&mut tool, &d, ToolKey::Left, Mods::default());
+    assert_eq!(tool.caret, "§§§\n§".len(), "← goes on to the next column, keeping the place in it");
+    key(&mut tool, &d, ToolKey::Right, Mods::default());
+    assert_eq!(tool.caret, s, "→ comes back");
+    key(&mut tool, &d, ToolKey::Up, Mods::default());
+    assert_eq!(tool.caret, 0);
+}
