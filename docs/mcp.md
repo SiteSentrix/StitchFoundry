@@ -1785,6 +1785,8 @@ envelopes, the path for a top-object envelope); the content keeps the envelope's
 (a group around it carries them when there are several objects). `object.envelope.expand`, and `object.expand` with
 `object` on, replace envelopes by groups of their distorted content that keep the name, transparency, knockout and
 opacity mask.
+Type inside an envelope distorts as its glyph outlines, run by run in each run's paint, on the canvas and in every
+export (SVG, PDF, EPS, EMF/WMF, DXF).
 
 ```json
 {"name":"run_command","arguments":{"command":"object.envelope.makeWithWarp","params":{"style":"arch","bend":40}}}

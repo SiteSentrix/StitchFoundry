@@ -34,6 +34,7 @@ mod bake;
 mod clip;
 mod distort;
 mod group;
+mod live;
 mod marks;
 mod raster;
 mod reshape;
@@ -58,6 +59,7 @@ pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, paints,
     pathfinder_children,
 };
+pub use live::{expand_live, expand_live_deep, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use raster::{RasterFx, outset, raster_effects};
 pub use reshape::{expand_outlined, needs_outline, outline_art, outline_text, reshape};

@@ -1290,7 +1290,7 @@ impl Writer<'_> {
             }
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
-                let g = vectorcraft_doc::live::expand_deep(n, None);
+                let g = vectorcraft_effects::expand_live_deep(n);
                 self.node_body(&g);
             }
         }
