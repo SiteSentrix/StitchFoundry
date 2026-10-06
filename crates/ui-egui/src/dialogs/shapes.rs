@@ -38,5 +38,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             json!({"x": x, "y": y, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0), "radius": d.f64("radius", 0.0)}),
         ),
     };
-    run_and_close(app, id, params)
+    // On the active plane while the perspective grid shows, sized in plane units from the click.
+    match vectorcraft_engine::perspective_click(&app.session, id, &params, vectorcraft_geom::Point::new(x, y)) {
+        Some((id, params)) => run_and_close(app, &id, params),
+        None => run_and_close(app, id, params),
+    }
 }

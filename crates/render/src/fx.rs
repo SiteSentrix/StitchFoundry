@@ -52,7 +52,7 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 /// symbol instances, live objects; Crop Marks and colour adjustments on anything), or is it a group
 /// or layer with an appearance of its own (see [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
-    (effects::needs_outline(n) && visible(&n.appearance.effects))
+    (effects::needs_outline(n) && (visible(&n.appearance.effects) || n.projection().is_some()))
         || effects::has_container_appearance(n)
         || effects::has_crop_marks(n)
         || effects::has_adjustment(n)

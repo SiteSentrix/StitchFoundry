@@ -11,7 +11,7 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, PuppetPin, WidthProfile}
 use vectorcraft_geom::{Affine, Homography, PathData, Point, Rect};
 use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sample, reach_bounds};
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
-use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, stroke_owner, warp_from_rest, warp_node_with};
+use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project_node, stroke_owner, warp_from_rest, warp_node_with};
 
 use super::edit::{duplicate_in, selected_roots};
 use super::*;
@@ -181,6 +181,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id? (default: the first selected object)} move the plane the object is attached to onto the object and make it the active plane → {plane, offset}",
             has_doc,
             plane_match
+        ),
+        cmd!(
+            "perspective.editText",
+            "Edit Text",
+            [],
+            None,
+            "{id? (default: the selected type)} Object › Perspective › Edit Text: show type in perspective flat where it is drawn, in isolation mode, to edit it (text.* commands, the Type tool); exiting isolation (object.exitIsolation, Esc) projects it again → {id}",
+            has_doc,
+            edit_text
         ),
     ]
 }
@@ -717,7 +726,7 @@ fn grid_set(s: &mut Session, p: &Value) -> Result<Value> {
                 let h = old.homography_at(plane, depth).and_then(|h| h.inverse()).zip(g.homography_at(plane, depth));
                 let (hi, h) = h.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
                 let m = h.then_after(&hi);
-                warp_checked(d, id, &|q| m.apply(q))?;
+                warp_checked(d, id, &m)?;
             }
         }
         store_grid(d, &g);
@@ -757,20 +766,25 @@ fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
 }
 
 /// Map `n` with `f`, failing if any point would leave the plane's visible side.
-fn warp_checked(d: &mut Document, id: NodeId, f: &dyn Fn(Point) -> Option<Point>) -> Result<()> {
+/// Map `n` with `h` (type and symbols in perspective keep their art and are drawn through it),
+/// failing if any point would leave the plane's visible side.
+fn warp_checked(d: &mut Document, id: NodeId, h: &Homography) -> Result<()> {
     let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
     let mut pts = vec![];
     collect_points(n, &mut pts);
-    if pts.iter().any(|q| f(*q).is_none()) {
+    if pts.iter().any(|q| h.apply(*q).is_none()) {
         return Err(EngineError::Other("the object would cross the horizon of the perspective plane".into()));
     }
-    warp_node_with(n, &|q| f(q).unwrap_or(q));
+    project_node(n, h);
     Ok(())
 }
 
-fn attach_in(d: &mut Document, g: &mut PerspectiveGrid, id: NodeId, plane: Plane, snap: bool) -> Result<()> {
+/// Attach `id` to `plane`: projected by `map`, else by the map that keeps its bounds' corners
+/// (on the nearest gridlines with `snap`).
+fn attach_in(d: &mut Document, g: &mut PerspectiveGrid, id: NodeId, plane: Plane, snap: bool, map: Option<Homography>) -> Result<()> {
     let b = d.node(id).ok_or(EngineError::NoNode(id))?.geometric_bounds().ok_or_else(|| EngineError::Other("the object has no geometry".into()))?;
-    let m = g.attach_map_with(plane, b, snap).ok_or_else(|| EngineError::Other("the object is beyond the plane's horizon".into()))?;
+    let m =
+        map.or_else(|| g.attach_homography(plane, b, snap)).ok_or_else(|| EngineError::Other("the object is beyond the plane's horizon".into()))?;
     warp_checked(d, id, &m)?;
     persp::set_attachment(d.node_mut(id).ok_or(EngineError::NoNode(id))?, plane, g.offset(plane));
     g.attached.insert(id.0.to_string(), plane);
@@ -783,7 +797,7 @@ fn attach(s: &mut Session, p: &Value) -> Result<Value> {
     let plane = plane_param(&g, p, "perspective.attach")?;
     s.edit("Attach to Active Plane", |d, _| {
         for id in &ids {
-            attach_in(d, &mut g, *id, plane, false)?;
+            attach_in(d, &mut g, *id, plane, false, None)?;
         }
         store_grid(d, &g);
         Ok(())
@@ -798,7 +812,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             g.attached.remove(&id.0.to_string());
             if let Some(n) = d.node_mut(*id) {
-                n.perspective = None;
+                persp::release(n);
             }
         }
         store_grid(d, &g);
@@ -842,13 +856,13 @@ fn persp_edit(
                 Some(a) => a,
                 None => {
                     let pl = fallback.ok_or_else(|| EngineError::Other("the object isn't on a perspective plane".into()))?;
-                    attach_in(d, &mut g, *id, pl, false)?;
+                    attach_in(d, &mut g, *id, pl, false, None)?;
                     (pl, g.offset(pl))
                 }
             };
             first.get_or_insert((plane, depth));
             let (h, depth) = step(&g, plane, depth)?;
-            warp_checked(d, *id, &|q| h.apply(q))?;
+            warp_checked(d, *id, &h)?;
             persp::set_attachment(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, plane, depth);
         }
         store_grid(d, &g);
@@ -986,7 +1000,7 @@ fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
             ids = if objects == "copy" { duplicate_in(d, sel, &on, Affine::IDENTITY)? } else { on };
             let m = old.transform_map(plane, from, Affine::IDENTITY, to - from).ok_or_else(beyond_horizon)?;
             for id in &ids {
-                warp_checked(d, *id, &|q| m.apply(q))?;
+                warp_checked(d, *id, &m)?;
                 persp::set_attachment(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, plane, to);
             }
         }
@@ -1040,11 +1054,16 @@ fn persp_draw(s: &mut Session, p: &Value) -> Result<Value> {
     let mut g = grid_of(&s.doc()?.doc);
     let plane = plane_param(&g, p, C)?;
     let snap = bool_or(p, "snap", g.snap);
+    // A click-to-size dialog's shape keeps its sizes in plane units from the click.
+    let map = match point_param(p, "at") {
+        Some(at) => Some(g.size_homography(plane, at, snap).ok_or_else(beyond_horizon)?),
+        None => None,
+    };
     let undo_before = s.doc()?.history.undo.len();
     let r = s.execute(&command, &params)?;
     let id = r.get("id").and_then(Value::as_u64).map(NodeId).ok_or_else(|| EngineError::Other(format!("{command} didn't create an object")))?;
     let res = s.edit("Draw in Perspective", |d, _| {
-        attach_in(d, &mut g, id, plane, snap)?;
+        attach_in(d, &mut g, id, plane, snap, map)?;
         store_grid(d, &g);
         Ok(())
     });
@@ -1062,10 +1081,85 @@ fn persp_draw(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Shape tool previews become `perspective.draw` while the grid is shown with an active plane.
 pub(crate) fn perspective_rewrite(s: &Session, cmd: &str, params: &Value) -> Option<(String, Value)> {
-    const SHAPES: &[&str] = &["shape.rectangle", "shape.ellipse", "shape.polygon", "shape.star", "shape.line", "shape.rectangularGrid", "shape.arc"];
+    const SHAPES: &[&str] = &[
+        "shape.rectangle",
+        "shape.ellipse",
+        "shape.polygon",
+        "shape.star",
+        "shape.line",
+        "shape.rectangularGrid",
+        "shape.arc",
+        "shape.flare",
+        "shape.spiral",
+        "shape.polarGrid",
+    ];
     if !SHAPES.contains(&cmd) {
         return None;
     }
-    let g = PerspectiveGrid::from_doc(&s.active()?.doc)?;
+    let g = PerspectiveGrid::current(&s.active()?.doc);
     (g.visible && g.plane != Plane::None).then(|| ("perspective.draw".to_string(), json!({"command": cmd, "params": params})))
+}
+
+/// A click-to-size shape dialog's command (`cmd` with `params`, clicked at `at`) as it runs: on the
+/// active plane while the grid shows (`perspective.draw` keeping the sizes in plane units from the
+/// click), else `None` (run it as it is).
+pub fn perspective_click(s: &Session, cmd: &str, params: &Value, at: Point) -> Option<(String, Value)> {
+    let (c, mut p) = perspective_rewrite(s, cmd, params)?;
+    p["at"] = json!([at.x, at.y]);
+    Some((c, p))
+}
+
+/// Object › Perspective › Edit Text: type in perspective shown flat where it is drawn, in isolation
+/// mode, to be edited; exiting isolation projects it again ([`finish_edit_text`]).
+fn edit_text(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    let id =
+        id_param(p, "id").or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
+    if !st.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)) && n.projection().is_some()) {
+        return Err(EngineError::Other("select type in perspective".into()));
+    }
+    s.edit("Edit Text", |d, _| {
+        let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
+        let h = n.projection().ok_or_else(|| EngineError::Other("select type in perspective".into()))?;
+        let NodeKind::Text(t) = &mut n.kind else { return Err(EngineError::Other("select type in perspective".into())) };
+        // Shown flat where it is drawn: the type moves there and the projection moves the other
+        // way, so the picture stays.
+        let (Some(flat), Some(drawn)) = (t.bounds(), t.bounds().and_then(|b| h.map_rect_bbox(b))) else { return Ok(()) };
+        let shift = vectorcraft_geom::Affine::translate(drawn.center() - flat.center());
+        t.transform(shift);
+        if let Some(rec) = n.perspective.as_deref_mut() {
+            rec.projection = Some(h.then_after(&Homography::from_affine(shift.inverse())).to_array());
+            rec.editing = true;
+        }
+        Ok(())
+    })?;
+    let st = s.doc_mut()?;
+    st.isolation = Some(id);
+    st.selection.set([id]);
+    st.revision += 1;
+    Ok(json!({ "id": id.0 }))
+}
+
+/// Edit Text ends (isolation mode on `id` exits): the type is projected again, in the document and
+/// in every undo state (the flat view is never an undo step of its own).
+pub(crate) fn finish_edit_text(st: &mut crate::DocState, id: NodeId) {
+    let clear = |doc: &mut Arc<Document>| {
+        if doc.node(id).and_then(|n| n.perspective.as_deref()).is_some_and(|p| p.editing)
+            && let Some(p) = Arc::make_mut(doc).node_mut(id).and_then(|n| n.perspective.as_deref_mut())
+        {
+            p.editing = false;
+        }
+    };
+    let saved = Arc::ptr_eq(&st.doc, &st.saved_doc);
+    clear(&mut st.doc);
+    if saved {
+        st.saved_doc = st.doc.clone();
+    }
+    for e in st.history.undo.iter_mut().chain(st.history.redo.iter_mut()) {
+        clear(&mut e.doc);
+    }
+    if let Some(it) = &mut st.interaction {
+        clear(&mut it.doc);
+    }
+    st.revision += 1;
 }

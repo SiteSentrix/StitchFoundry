@@ -534,9 +534,9 @@ impl Node {
                 .iter()
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds())),
-            NodeKind::Text(t) => t.bounds(),
+            NodeKind::Text(t) => self.projected(t.bounds()),
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
-            NodeKind::SymbolInstance { xf, .. } => Some(xf.transform_rect_bbox(Rect::new(-10.0, -10.0, 10.0, 10.0))),
+            NodeKind::SymbolInstance { xf, .. } => self.projected(Some(xf.transform_rect_bbox(Rect::new(-10.0, -10.0, 10.0, 10.0)))),
             NodeKind::Blend { children, spec } => {
                 let b = crate::live::nodes_bounds(children);
                 vectorcraft_geom::union_opt(b, spec.spine.as_ref().and_then(|s| s.bounds()))
@@ -593,6 +593,8 @@ impl Node {
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }
+        // Type and symbols in perspective keep looking the same, moved by `a`.
+        self.transform_projection(a);
         // Refitting an unplaced gradient only reproduces moves and uniform scales.
         if !keeps_gradient_fit(a) {
             self.pin_gradients();

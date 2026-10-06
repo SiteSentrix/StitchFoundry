@@ -36,5 +36,12 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let cmd = d.str("__command");
     let params = form::params(d);
     app.ui.dialog = None;
+    // A tool's click-to-size shape (Flare) goes on the active perspective plane while the grid shows.
+    let at = |x: &str, y: &str| Some(vectorcraft_geom::Point::new(params.get(x)?.as_f64()?, params.get(y)?.as_f64()?));
+    if let Some((c, p)) =
+        at("cx", "cy").or_else(|| at("x", "y")).and_then(|pt| vectorcraft_engine::perspective_click(&app.session, &cmd, &params, pt))
+    {
+        return app.run(&c, p);
+    }
     app.run(&cmd, params)
 }

@@ -22,6 +22,7 @@ use vectorcraft_tools::{PaintDefaults, Tool};
 
 pub use cmd::EyedropperOptions;
 pub use cmd::clipboard::Clipboard;
+pub use cmd::distortcmds::perspective_click;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use tooling::{UiRequest, ViewInfo};
@@ -1295,6 +1296,8 @@ mod tests_pdfraster;
 mod tests_persp_planes;
 #[cfg(test)]
 mod tests_persp_select;
+#[cfg(test)]
+mod tests_persp_text;
 #[cfg(test)]
 mod tests_perspgrid;
 #[cfg(test)]

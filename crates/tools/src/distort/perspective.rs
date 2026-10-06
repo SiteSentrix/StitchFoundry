@@ -480,11 +480,18 @@ impl PerspectiveGrid {
     /// bottom-right, then the plane homography projects it (so a drawn rectangle keeps the two
     /// corners the user dragged between).
     pub fn attach_map(&self, plane: Plane, b: Rect) -> Option<impl Fn(Point) -> Option<Point> + use<>> {
-        self.attach_map_with(plane, b, false)
+        let h = self.attach_homography(plane, b, false)?;
+        Some(move |p: Point| h.apply(p))
     }
 
     /// [`Self::attach_map`]; with `snap` the corners land on the nearest gridlines (Snap to Grid).
     pub fn attach_map_with(&self, plane: Plane, b: Rect, snap: bool) -> Option<impl Fn(Point) -> Option<Point> + use<>> {
+        let h = self.attach_homography(plane, b, snap)?;
+        Some(move |p: Point| h.apply(p))
+    }
+
+    /// [`Self::attach_map_with`] as one projective map.
+    pub fn attach_homography(&self, plane: Plane, b: Rect, snap: bool) -> Option<Homography> {
         let h = self.homography(plane)?;
         let hi = h.inverse()?;
         let snapped = |q: Point| if snap { self.snap_plane(q) } else { q };
@@ -493,8 +500,23 @@ impl PerspectiveGrid {
         let sx = if b.width().abs() > 1e-9 { (c.x - a.x) / b.width() } else { 1.0 };
         let sy = if b.height().abs() > 1e-9 { (c.y - a.y) / b.height() } else { sx.abs() * if c.y < a.y { -1.0 } else { 1.0 } };
         let sx = if b.width().abs() > 1e-9 { sx } else { sy.abs() };
-        let (x0, y0) = (b.x0, b.y0);
-        Some(move |p: Point| h.apply(Point::new(a.x + (p.x - x0) * sx, a.y + (p.y - y0) * sy)))
+        let m = Affine::new([sx, 0.0, 0.0, sy, a.x - b.x0 * sx, a.y - b.y0 * sy]);
+        Some(h.then_after(&Homography::from_affine(m)))
+    }
+
+    /// The map that puts flat art drawn at `at` onto `plane` keeping its sizes in plane units (a
+    /// click-to-size shape dialog's shape): `at` stays where it is, and right and down on the page
+    /// go the ways the plane's axes run on the page there.
+    /// With `snap` the click lands on the nearest gridline intersection (Snap to Grid).
+    pub fn size_homography(&self, plane: Plane, at: Point, snap: bool) -> Option<Homography> {
+        let h = self.homography(plane)?;
+        let q = h.inverse()?.apply(at)?;
+        let q = if snap { self.snap_plane(q) } else { q };
+        let at = h.apply(q)?;
+        let sx = if h.apply(q + Vec2::new(1.0, 0.0))?.x < at.x { -1.0 } else { 1.0 };
+        let sy = if h.apply(q + Vec2::new(0.0, 1.0))?.y < at.y { -1.0 } else { 1.0 };
+        let m = Affine::new([sx, 0.0, 0.0, sy, q.x - sx * at.x, q.y - sy * at.y]);
+        Some(h.then_after(&Homography::from_affine(m)))
     }
 
     /// The map that slides art lying on `plane` by the plane-space offset between `from` and `to`.
@@ -667,9 +689,20 @@ pub fn attached_roots(doc: &Document) -> Vec<(NodeId, Plane, f64)> {
     out
 }
 
-/// Attach `n` to `plane` at `depth`.
+/// Attach `n` to `plane` at `depth` (type and symbols keep their projection).
 pub fn set_attachment(n: &mut Node, plane: Plane, depth: f64) {
-    n.perspective = Some(Box::new(PerspectiveAttachment::new(plane.id(), depth)));
+    let rec = n.perspective.get_or_insert_with(Default::default);
+    rec.plane = plane.id().into();
+    rec.depth = if depth.is_finite() { depth } else { 0.0 };
+}
+
+/// Release `n` from the grid (Release with Perspective): it keeps its look, type and symbols their
+/// projection.
+pub fn release(n: &mut Node) {
+    match n.perspective.as_deref_mut() {
+        Some(rec) if rec.projection.is_some() => *rec = PerspectiveAttachment { projection: rec.projection, ..Default::default() },
+        _ => n.perspective = None,
+    }
 }
 
 /// The bounds of `n` mapped by `hi`: paths by their mapped curves, other objects by their boxes'
@@ -1076,7 +1109,16 @@ impl Tool for PerspectiveSelectionTool {
             }
             (PointerKind::DoubleClick, d) => {
                 self.drag = d;
-                PlaneDrag::hit(&g, cx.tol(6.0), p).map(|d| d.options()).into_iter().collect()
+                if let Some(w) = PlaneDrag::hit(&g, cx.tol(6.0), p) {
+                    return vec![w.options()];
+                }
+                // Type in perspective: Edit Text, then type.
+                match vectorcraft_doc::hit::hit_test(cx.doc, p, cx.hit_options()).map(|h| h.top_object(cx.isolation)) {
+                    Some(id) if cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)) && n.projection().is_some()) => {
+                        vec![Action::Exec("perspective.editText".into(), json!({"id": id.0})), Action::SwitchTool("type".into())]
+                    }
+                    _ => vec![],
+                }
             }
             (_, d) => {
                 self.drag = d;

@@ -1907,6 +1907,21 @@ selected object onto it.
 {"name":"run_command","arguments":{"command":"ui.perspectivePlane","params":{"plane":"ground"}}}
 ```
 
+Type and symbol instances attached to a plane stay type and symbol instances: their `perspective` record keeps a
+`projection` (a 3 × 3 matrix) the canvas and every export (SVG, PDF, EPS, EMF/WMF, DXF, PNG) draw their outlines
+through, so they are really foreshortened and still editable. `perspective.editText` (Object › Perspective › Edit
+Text, or double-clicking the type with the Perspective Selection tool) shows the type flat where it is drawn, in
+isolation mode, for the Type tool and `text.*` commands; `object.exitIsolation` projects it again. Release with
+Perspective keeps their look. Shape, spiral, polar grid and flare drags draw on the active plane while the grid
+shows, and so do the click-to-size dialogs (`perspective.draw` with `at`: the click; sizes are plane units).
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.editText","params":{}}}
+{"name":"run_command","arguments":{"command":"text.setText","params":{"text":"OPEN"}}}
+{"name":"run_command","arguments":{"command":"object.exitIsolation","params":{}}}
+{"name":"run_command","arguments":{"command":"perspective.draw","params":{"command":"shape.rectangle","params":{"x":470,"y":300,"width":50,"height":30},"at":[470,300]}}}
+```
+
 ## Blends
 
 `object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing and orientation default to

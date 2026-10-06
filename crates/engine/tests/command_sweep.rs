@@ -236,6 +236,12 @@ fn structured_junk() {
         ("perspective.plane.matchObject", json!({"id": u64::MAX})),
         ("perspective.grid.set", json!({"leftOffset": -1e12, "reproject": true})),
         ("perspective.grid.set", json!({"vpRight": -1e6, "reproject": true})),
+        ("perspective.editText", json!({"id": u64::MAX})),
+        (
+            "perspective.draw",
+            json!({"command": "shape.rectangle", "params": {"x": 1, "y": 1, "width": 10, "height": 10}, "at": [1e308, -1e308], "plane": "left"}),
+        ),
+        ("perspective.draw", json!({"command": "shape.flare", "params": {"cx": 0, "cy": 0}, "plane": "ground"})),
         ("object.setProps", json!({"opacity": -1, "blend": 5})),
         ("effect.apply", json!({"effect": "distort.roughen", "params": {"size": 100, "detail": 100, "relative": false}})),
         ("effect.apply", json!({"effect": "distort.zigZag", "params": {"size": 1e308, "ridges": 100}})),

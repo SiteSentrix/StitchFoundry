@@ -127,4 +127,23 @@ mod tests {
         assert_eq!(heading(app.ui.dialog.as_ref().unwrap()), "Horizontal Plane");
         assert!(app.run("ui.perspectivePlane", json!({"plane": "up"})).is_err());
     }
+
+    #[test]
+    fn a_click_to_size_rectangle_goes_on_the_active_plane() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+        app.run("perspective.grid.preset", json!({"kind": 2})).unwrap();
+        app.run("perspective.plane.set", json!({"plane": "right"})).unwrap();
+        app.select_tool("rectangle");
+        let view = app.view_info();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, 470.0, 300.0), view);
+        }
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("rectangle"));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.journal.last().unwrap().0, "perspective.draw");
+        let st = app.session.active().unwrap();
+        let id = *st.selection.objects.first().unwrap();
+        assert_eq!(vectorcraft_tools::distort::perspective::attachment(st.doc.node(id).unwrap()).map(|a| a.0), Some(Plane::Right));
+    }
 }
