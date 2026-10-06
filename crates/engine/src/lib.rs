@@ -494,6 +494,12 @@ pub struct Prefs {
     /// `perspective.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub perspective_presets: Vec<vectorcraft_tools::distort::perspective::GridDefinition>,
+    /// Blend Options set with no blend selected: what new blends start with
+    /// (`object.blend.options`; none: Smooth Color, Align to Page). A tool setting, not a
+    /// Preferences dialog field: it has no [`cmd::prefscmds::PREF_SPECS`] row and resetting the
+    /// preferences keeps it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blend_options: Option<vectorcraft_doc::live::BlendDefaults>,
 }
 
 impl Default for Prefs {
@@ -629,6 +635,7 @@ impl Default for Prefs {
             constrain_proportions: false,
             tool_settings: Default::default(),
             perspective_presets: vec![],
+            blend_options: None,
         }
     }
 }
@@ -1140,6 +1147,8 @@ mod tests_assets;
 mod tests_attributes;
 #[cfg(test)]
 mod tests_bboxrotate;
+#[cfg(test)]
+mod tests_blendopts;
 #[cfg(test)]
 mod tests_brushsym;
 #[cfg(test)]

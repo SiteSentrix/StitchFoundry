@@ -655,6 +655,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} apply the 5. saved 3-point perspective grid preset (perspective.grid.preset)",
     ),
+    (
+        "ui.blendOptions",
+        "Blend Options…",
+        "",
+        "{} open Blend Options (Object › Blend › Blend Options…, the Blend tool's double-click, Alt-click and toolbar button; dialog `blendOptions`: spacing smooth|steps|distance, steps, distance (pt), orientation page|path, preview) on the selected blend's options, previewed live: OK runs object.blend.options as one undo step; with no blend selected it sets what new blends start with",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -1081,6 +1087,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(name) => app.run("perspective.grid.preset", json!({ "name": name })),
             None => Err("no such perspective grid preset".into()),
         },
+        "ui.blendOptions" => crate::dialogs::blend_options::open(app),
         _ => return None,
     };
     Some(r)
@@ -1649,7 +1656,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Make", "object.blend.make"),
                         c("Release", "object.blend.release"),
                         Sep,
-                        cp("Blend Options…", "object.blend.options", json!({"steps": 5})),
+                        c("Blend Options…", "object.blend.options"),
                         Sep,
                         c("Expand", "object.blend.expand"),
                         Sep,
@@ -2249,6 +2256,13 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
                 let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Text Wrap Options", "params": fields}));
             }
             Err(e) => app.status(e.to_string()),
+        }
+        return;
+    }
+    // Blend Options…: its dialog, on the selected blend's options.
+    if id == "object.blend.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::blend_options::open(app) {
+            app.status(e);
         }
         return;
     }

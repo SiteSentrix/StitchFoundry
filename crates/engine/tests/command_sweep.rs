@@ -273,6 +273,9 @@ fn structured_junk() {
         ("object.liquify", json!({"tool": "pucker", "points": [[0, 0, 1e308], [1, 1, -5], [2, 2, "x"]], "usePressure": true})),
         ("object.liquify", json!({"tool": "twirl", "points": vec![json!([50, 50, 0.5]); 400], "usePressure": "yes", "simplifyOn": 3})),
         ("object.liquify", json!({"tool": "wrinkle", "points": [[0, 0], [1e4, 1e4]], "width": 1e308, "complexity": -1, "affectIn": null})),
+        ("object.blend.make", json!({"ids": [1, 2, 3], "starts": [u64::MAX, -1, "x", null, 1e308]})),
+        ("object.blend.make", json!({"ids": [2, 2], "starts": {"a": 1}, "steps": 1e308})),
+        ("object.blend.options", json!({"spacing": "distance", "value": -1e308, "orientation": 5})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {

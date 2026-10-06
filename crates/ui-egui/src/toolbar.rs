@@ -201,7 +201,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Open a tool's options (`tool.options`, a double-click on its button): the Gradient tool's are
 /// the Gradient panel, the Eyedropper's the Eyedropper Options dialog, a Liquify tool's its Tool
-/// Options dialog; the Print Tiling tool's resets the print tiling.
+/// Options dialog, the Blend tool's Blend
+/// Options; the Print Tiling tool's resets the print tiling.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "gradient" if app.ui.open_panel.as_deref() == Some("gradient") => Ok(json!({ "open": "gradient" })),
@@ -209,6 +210,10 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         "eyedropper" => {
             crate::dialogs::eyedropper::open(app);
             Ok(json!({ "dialog": crate::dialogs::eyedropper::KIND }))
+        }
+        "blend" => {
+            crate::dialogs::blend_options::open(app)?;
+            Ok(json!({ "dialog": crate::dialogs::blend_options::KIND }))
         }
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),

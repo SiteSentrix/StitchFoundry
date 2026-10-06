@@ -1850,3 +1850,17 @@ copies). Object › Transform › Transform Again repeats the last perspective m
 {"name":"run_command","arguments":{"command":"perspective.transform","params":{"matrix":[1.5,0,0,1.5,0,0],"copy":true}}}
 {"name":"run_command","arguments":{"command":"object.transformAgain","params":{}}}
 ```
+
+## Blends
+
+`object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing and orientation default to
+what `object.blend.options` set with no blend selected (`object.blend.info` reads them: `target: "defaults"`),
+else Smooth Color and Align to Page. `starts` gives, per object, the anchor of its first subpath the blend starts
+from (as the Blend tool's clicks on anchor points do; an open path's last anchor runs it the other way). A blend
+among the objects takes the others in as more key objects, keeping its options, name and transparency:
+
+```json
+{"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[12,15],"starts":[0,2],"steps":8}}}
+{"name":"run_command","arguments":{"command":"object.blend.make","params":{"ids":[20,31]}}}
+{"name":"run_command","arguments":{"command":"object.blend.info","params":{}}}
+```

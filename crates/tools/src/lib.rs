@@ -305,6 +305,12 @@ pub enum Cursor {
     Slice,
     /// The Slice Selection tool: the arrow with a slice badge.
     SliceSelect,
+    /// The Blend tool away from art: a crosshair with a hollow square.
+    Blend,
+    /// The Blend tool over an object it can blend: a crosshair with a filled square.
+    BlendObject,
+    /// The Blend tool over an anchor point (the blend starts there): a crosshair with a target.
+    BlendAnchor,
 }
 
 /// A tool state machine.

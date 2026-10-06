@@ -10,7 +10,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::live::{
-    self, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, EnvelopeOptions, GradientMesh, MeshAppearance, PreserveShape, Spine,
+    self, BlendDefaults, BlendOrientation, BlendSpacing, BlendSpec, EnvelopeKind, EnvelopeOptions, GradientMesh, MeshAppearance, PreserveShape, Spine,
 };
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Affine, PathData, Point};
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Blend"],
             Some("Cmd+Alt+B"),
-            "{ids?, steps?: n | distance?: pt | smooth?: bool (default smooth colour), orientation?: page|path} blend the selected objects (paint order) into a live blend → {id}",
+            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name and transparency) instead of nesting → {id}",
             has_doc,
             blend_make
         ),
@@ -45,8 +45,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Options…",
             ["Object", "Blend"],
             None,
-            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path} set the options of the selected blends",
-            has_blend,
+            "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path} set the options of the selected blends; with no blend selected, the options new blends start with (a tool setting, not an undo step) → {defaults?: true}",
+            always,
             blend_options
         ),
         cmd!(
@@ -75,6 +75,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} reverse the order of the key objects along the spine",
             has_blend,
             blend_reverse_spine
+        ),
+        cmd!(
+            query "object.blend.info",
+            "Blend Info",
+            [],
+            None,
+            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, keys?: [ids], starts?: [anchor|null]}",
+            always,
+            blend_info
         ),
         cmd!(
             "object.blend.reverseFrontToBack",
@@ -352,14 +361,18 @@ fn fix_ids(d: &mut Document, n: &mut Node) {
 
 // ---------- Blend ----------
 
+/// The Specified Steps and Specified Distance a spacing mode starts with.
+const DEFAULT_STEPS: u32 = 5;
+const DEFAULT_DISTANCE: f64 = 10.0;
+
 fn spacing_param(p: &Value, cmd: &str, current: BlendSpacing) -> Result<BlendSpacing> {
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     let mode = str_param(p, "spacing");
     let value = num("value");
     let sp = match mode {
         Some("smooth") | Some("smoothColor") => BlendSpacing::SmoothColor,
-        Some("steps") => BlendSpacing::Steps(value.or(num("steps")).unwrap_or(5.0) as u32),
-        Some("distance") => BlendSpacing::Distance(value.or(num("distance")).unwrap_or(10.0)),
+        Some("steps") => BlendSpacing::Steps(value.or(num("steps")).unwrap_or(DEFAULT_STEPS as f64) as u32),
+        Some("distance") => BlendSpacing::Distance(value.or(num("distance")).unwrap_or(DEFAULT_DISTANCE)),
         Some(o) => return Err(bad(cmd, format!("unknown spacing `{o}` (smooth|steps|distance)"))),
         None => {
             if let Some(n) = num("steps") {
@@ -388,16 +401,77 @@ fn orientation_param(p: &Value, current: BlendOrientation) -> BlendOrientation {
     }
 }
 
+/// `starts`: per object of `ids` (else of `roots`), the anchor its blend starts from.
+fn starts_param(p: &Value, roots: &[NodeId]) -> Result<Vec<(NodeId, u32)>> {
+    const C: &str = "object.blend.make";
+    let Some(v) = p.get("starts").filter(|v| !v.is_null()) else { return Ok(vec![]) };
+    let list = v.as_array().ok_or_else(|| bad(C, "`starts` must be an array of anchor indices (or nulls)"))?;
+    let owners = ids_param(p, "ids").unwrap_or_else(|| roots.to_vec());
+    let mut out = vec![];
+    for (id, a) in owners.iter().zip(list) {
+        if a.is_null() {
+            continue;
+        }
+        let i = a.as_u64().and_then(|i| u32::try_from(i).ok()).ok_or_else(|| bad(C, "a start must be an anchor index ≥ 0 or null"))?;
+        out.push((*id, i));
+    }
+    Ok(out)
+}
+
+/// The first blend among `roots`.
+fn first_blend(d: &Document, roots: &[NodeId]) -> Option<Node> {
+    roots.iter().filter_map(|r| d.node(*r)).find(|n| is_blend(n)).cloned()
+}
+
+/// Key objects of a blend made of `nodes` (paint order) and their start points: a blend among
+/// them gives its keys (with theirs), the other objects are keys themselves.
+fn merge_keys(nodes: Vec<Arc<Node>>, starts: &[(NodeId, u32)]) -> (Vec<Arc<Node>>, Vec<Option<u32>>) {
+    let (mut keys, mut st) = (vec![], vec![]);
+    for n in nodes {
+        match &n.kind {
+            NodeKind::Blend { children, spec } => {
+                st.extend((0..children.len()).map(|i| spec.starts.get(i).copied().flatten()));
+                keys.extend(children.iter().cloned());
+            }
+            _ => {
+                st.push(starts.iter().find(|(id, _)| *id == n.id).map(|(_, a)| *a));
+                keys.push(n);
+            }
+        }
+    }
+    if st.iter().all(Option::is_none) {
+        st.clear();
+    }
+    (keys, st)
+}
+
 fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.make";
-    let spacing = spacing_param(p, C, BlendSpacing::SmoothColor)?;
-    let orientation = orientation_param(p, BlendOrientation::AlignToPage);
     let roots = roots_param(s, p)?;
     if roots.len() < 2 {
         return Err(bad(C, "select at least two objects"));
     }
+    let starts = starts_param(p, &roots)?;
+    let base = first_blend(&s.doc()?.doc, &roots);
+    let cur = match base.as_ref().map(|n| &n.kind) {
+        Some(NodeKind::Blend { spec, .. }) => BlendDefaults { spacing: spec.spacing, orientation: spec.orientation },
+        _ => s.prefs.blend_options.unwrap_or_default(),
+    };
+    let spacing = spacing_param(p, C, cur.spacing)?;
+    let orientation = orientation_param(p, cur.orientation);
     let id = s.edit("Make Blend", |d, sel| {
-        wrap(d, sel, &roots, |id, children| Node::new(id, NodeKind::Blend { children, spec: BlendSpec { spacing, orientation, spine: None } }))
+        wrap(d, sel, &roots, |id, nodes| {
+            let (children, starts) = merge_keys(nodes, &starts);
+            // A blend taking more keys keeps its name, transparency and spine.
+            let mut n = base.unwrap_or_else(|| Node::new(id, NodeKind::Group { children: vec![], clip: false }));
+            let spine = match &n.kind {
+                NodeKind::Blend { spec, .. } => spec.spine.clone(),
+                _ => None,
+            };
+            n.id = id;
+            n.kind = NodeKind::Blend { children, spec: BlendSpec { spacing, orientation, spine, starts, ..Default::default() } };
+            n
+        })
     })?;
     Ok(json!({ "id": id.0 }))
 }
@@ -430,18 +504,60 @@ fn edit_blends(s: &mut Session, label: &str, f: impl Fn(&mut Vec<Arc<Node>>, &mu
     ok()
 }
 
+/// The first selected blend: its id, spec and key ids.
+fn selected_spec(s: &Session) -> Option<(NodeId, BlendSpec, Vec<NodeId>)> {
+    let b = *selected_of(s, is_blend).first()?;
+    match &s.doc().ok()?.doc.node(b)?.kind {
+        NodeKind::Blend { spec, children } => Some((b, spec.clone(), children.iter().map(|c| c.id).collect())),
+        _ => None,
+    }
+}
+
 fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.options";
-    let blends = selected_of(s, is_blend);
-    let cur = match blends.first().and_then(|b| s.doc().ok()?.doc.node(*b)).map(|n| &n.kind) {
-        Some(NodeKind::Blend { spec, .. }) => spec.clone(),
-        _ => BlendSpec::default(),
+    let Some((_, cur, _)) = selected_spec(s) else {
+        // Nothing to set them on: the options new blends start with.
+        let d = s.prefs.blend_options.unwrap_or_default();
+        let spacing = spacing_param(p, C, d.spacing)?;
+        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation) });
+        return Ok(json!({ "defaults": true }));
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
     edit_blends(s, "Blend Options", |_, spec| {
         spec.spacing = spacing;
         spec.orientation = orientation;
+    })
+}
+
+/// Spacing and orientation as `object.blend.options` takes them; the step count and distance
+/// not in use show their defaults.
+fn blend_options_json(spacing: BlendSpacing, orientation: BlendOrientation) -> Value {
+    let (mode, steps, distance) = match spacing {
+        BlendSpacing::SmoothColor => ("smooth", DEFAULT_STEPS, DEFAULT_DISTANCE),
+        BlendSpacing::Steps(n) => ("steps", n, DEFAULT_DISTANCE),
+        BlendSpacing::Distance(d) => ("distance", DEFAULT_STEPS, d),
+    };
+    let orientation = if orientation == BlendOrientation::AlignToPath { "path" } else { "page" };
+    json!({ "spacing": mode, "steps": steps, "distance": distance, "orientation": orientation })
+}
+
+fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
+    Ok(match selected_spec(s) {
+        Some((id, spec, keys)) => {
+            let mut v = blend_options_json(spec.spacing, spec.orientation);
+            v["target"] = json!("blend");
+            v["id"] = json!(id.0);
+            v["starts"] = json!((0..keys.len()).map(|i| spec.start(i)).collect::<Vec<_>>());
+            v["keys"] = json!(keys.iter().map(|k| k.0).collect::<Vec<_>>());
+            v
+        }
+        None => {
+            let d = s.prefs.blend_options.unwrap_or_default();
+            let mut v = blend_options_json(d.spacing, d.orientation);
+            v["target"] = json!("defaults");
+            v
+        }
     })
 }
 
@@ -524,6 +640,11 @@ fn blend_reverse_spine(s: &mut Session, _: &Value) -> Result<Value> {
 fn blend_reverse_stack(s: &mut Session, _: &Value) -> Result<Value> {
     edit_blends(s, "Reverse Front to Back", |children, spec| {
         children.reverse();
+        // Each key keeps its start point.
+        if !spec.starts.is_empty() {
+            spec.starts.resize(children.len(), None);
+            spec.starts.reverse();
+        }
         if let Some(sp) = &mut spec.spine {
             sp.reverse();
         }
@@ -682,7 +803,7 @@ fn env_reset_mesh(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// `v` with an envelope's options and fidelity added.
-fn options_json(mut v: Value, o: &EnvelopeOptions, fidelity: f64) -> Value {
+fn envelope_options_json(mut v: Value, o: &EnvelopeOptions, fidelity: f64) -> Value {
     v["fidelity"] = json!(fidelity);
     v["antiAlias"] = json!(o.anti_alias);
     v["preserveShape"] = json!(o.preserve_shape.id());
@@ -712,7 +833,7 @@ fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
     let env = selected_of(s, is_envelope).into_iter().find_map(|e| Some((e, &doc.node(e)?.kind)));
     let Some((id, NodeKind::Envelope { kind, fidelity, editing, options, .. })) = env else {
         let (options, fidelity) = envelope_defaults(s);
-        return Ok(options_json(json!({ "id": null }), &options, fidelity));
+        return Ok(envelope_options_json(json!({ "id": null }), &options, fidelity));
     };
     let v = match kind {
         EnvelopeKind::Warp { style, bend, h, v, horizontal } => {
@@ -721,7 +842,7 @@ fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
         EnvelopeKind::Mesh { rows, cols, .. } => json!({"type": "mesh", "rows": rows, "cols": cols}),
         EnvelopeKind::TopObject { .. } => json!({"type": "topObject"}),
     };
-    let mut v = options_json(v, options, *fidelity);
+    let mut v = envelope_options_json(v, options, *fidelity);
     v["id"] = json!(id.0);
     v["editing"] = json!(editing);
     Ok(v)

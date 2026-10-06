@@ -536,6 +536,14 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             ("Drag a handle", true),
             (" to scale in perspective", false),
         ],
+        "blend" => &[
+            ("Click", true),
+            (" an object, then another to blend them  |  ", false),
+            ("Click an anchor point", true),
+            (" to blend from it  |  ", false),
+            ("Alt+Click", true),
+            (" to set spacing and orientation", false),
+        ],
         _ => return None,
     })
 }

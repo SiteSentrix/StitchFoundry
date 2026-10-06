@@ -9,6 +9,7 @@
 mod about;
 mod all_tools;
 mod artboard_options;
+pub mod blend_options;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -257,6 +258,7 @@ registry! {
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
+    BlendOptions: [blend_options::KIND] => blend_options::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
