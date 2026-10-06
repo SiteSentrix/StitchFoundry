@@ -16,9 +16,6 @@ use skrifa::{GlyphId, MetadataProvider};
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
 
-/// Bundled Japanese font bytes, shared with UI glyph fallback.
-pub static SHIPPORI_MINCHO_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/ShipporiMincho-Regular.ttf");
-
 static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf"),
     include_bytes!("../../../assets/fonts/SourceSans3-Semibold.ttf"),
@@ -29,7 +26,6 @@ static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/Inter-Medium.ttf"),
     include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"),
     include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
-    SHIPPORI_MINCHO_REGULAR,
 ];
 
 enum FontBytes {
@@ -387,7 +383,10 @@ impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs`.
     pub fn with_font_dirs(font_dirs: Vec<PathBuf>) -> Self {
         let mut faces = Vec::new();
-        for data in BUNDLED {
+        // The bundled fonts, then the Japanese craft-fonts faces (when built with them), Mincho
+        // first: fallbacks for Japanese text after the requested and bundled fonts.
+        let craft = crate::craft_fonts::japanese_document_fonts().into_iter().map(|f| f.bytes);
+        for data in BUNDLED.iter().copied().chain(craft) {
             for (i, family, style) in enumerate_faces(data) {
                 if let Some(f) = make_face(FontBytes::Static(data), i, family, style, None) {
                     faces.push(Arc::new(f));
