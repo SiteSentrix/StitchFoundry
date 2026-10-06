@@ -1729,3 +1729,17 @@ font that became available redraws in it, without editing the document.
 {"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
 ```
+
+## Tool options
+
+`tool.setOption` reads and sets a tool's options, headless too: `{key, value}` or `{values: {…}}` sets them on the
+active tool, `tool` names another one, and `{}` just reads them; the result is the tool's options. The options a
+tool keeps last across tool switches (and documents) and are saved with the preferences (`toolSettings` in
+`prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
+axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
+polygon sides and star points. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
+intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh.
+
+```json
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
+```

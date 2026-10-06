@@ -23,6 +23,7 @@ pub mod pen;
 pub mod place;
 pub mod printtiling;
 pub mod select;
+pub mod settings;
 pub mod shape;
 pub mod slice;
 pub mod symbolism;

@@ -476,6 +476,12 @@ pub struct Prefs {
     /// the Properties panel and the Control bar (their size fields pass `proportional` to
     /// `object.setBounds`).
     pub constrain_proportions: bool,
+    /// The tools' persistent options by store (a tool id, or a store a family shares: `liquify`
+    /// holds the Liquify tools' Global Brush Dimensions), see [`vectorcraft_tools::settings`]:
+    /// kept across tool switches and saved with the preferences. Not a Preferences dialog field:
+    /// resetting the preferences keeps them; `tool.setOption` edits them.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub tool_settings: std::collections::BTreeMap<String, serde_json::Map<String, Value>>,
 }
 
 impl Default for Prefs {
@@ -609,6 +615,7 @@ impl Default for Prefs {
             web_export_settings: None,
             print_presets: vec![],
             constrain_proportions: false,
+            tool_settings: Default::default(),
         }
     }
 }
@@ -756,7 +763,8 @@ impl Session {
         if self.batch_stash.is_none() {
             let _ = self.cancel_interaction();
         }
-        self.tool = vectorcraft_tools::create(self.tool.id());
+        self.keep_tool_settings();
+        self.tool = self.make_tool(self.tool.id());
     }
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
@@ -1301,6 +1309,8 @@ mod tests_textimport;
 mod tests_tileedge;
 #[cfg(test)]
 mod tests_tints;
+#[cfg(test)]
+mod tests_toolsettings;
 #[cfg(test)]
 mod tests_transparencygrid;
 #[cfg(test)]

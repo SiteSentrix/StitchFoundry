@@ -1,10 +1,10 @@
 //! Hosting the active tool: pointer/key events → actions → commands.
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 use vectorcraft_geom::Point;
-use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, ToolContext, ToolKey};
+use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
 
-use crate::{EngineError, Result, Session};
+use crate::{EngineError, Prefs, Result, Session};
 
 /// View state the tools need from the frontend.
 #[derive(Clone, Copy, Debug)]
@@ -56,8 +56,48 @@ impl Session {
         }
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         self.apply_actions(acts)?;
-        self.tool = vectorcraft_tools::create(id);
+        self.keep_tool_settings();
+        self.tool = self.make_tool(id);
         Ok(())
+    }
+
+    /// A fresh `id` tool with the options it keeps ([`settings`]): its last values, from this
+    /// session or a saved one.
+    pub(crate) fn make_tool(&self, id: &str) -> Box<dyn Tool> {
+        let mut t = vectorcraft_tools::create(id);
+        Self::restore_tool_settings(&self.prefs, t.as_mut());
+        t
+    }
+
+    /// Give `t` the persistent options stored for it in `prefs`.
+    fn restore_tool_settings(prefs: &Prefs, t: &mut dyn Tool) {
+        for (store, keys) in settings::stores(t.id()) {
+            let Some(saved) = prefs.tool_settings.get(store) else { continue };
+            for k in keys {
+                if let Some(v) = saved.get(*k) {
+                    t.set_option(k, v);
+                }
+            }
+        }
+    }
+
+    /// Store the persistent options of `t` in `prefs` (so they are saved with them too).
+    fn store_tool_settings(prefs: &mut Prefs, t: &dyn Tool) {
+        let opts = t.options();
+        for (store, keys) in settings::stores(t.id()) {
+            let saved = prefs.tool_settings.entry(store.to_string()).or_default();
+            for k in keys {
+                if let Some(v) = opts.get(*k) {
+                    saved.insert(k.to_string(), v.clone());
+                }
+            }
+        }
+    }
+
+    /// Keep the active tool's persistent options for the next time it, or a tool sharing them, is
+    /// made.
+    pub(crate) fn keep_tool_settings(&mut self) {
+        Self::store_tool_settings(&mut self.prefs, self.tool.as_ref());
     }
 
     pub(crate) fn with_tool_cx<R>(&mut self, view: ViewInfo, f: impl FnOnce(&mut dyn vectorcraft_tools::Tool, &ToolContext) -> R) -> R
@@ -98,7 +138,7 @@ impl Session {
             Err(msg) => {
                 // A bug in the tool: start it afresh and drop its half-done drag.
                 let id = self.tool.id();
-                self.tool = vectorcraft_tools::create(id);
+                self.tool = self.make_tool(id);
                 let _ = self.cancel_interaction();
                 self.tool_panic = Some(EngineError::Internal { cmd: format!("tool `{id}`"), msg });
                 R::default()
@@ -116,6 +156,10 @@ impl Session {
         self.last_view = view;
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         self.take_tool_panic()?;
+        // A gesture may change options (Alt-drag sizes a Liquify brush): keep them.
+        if ev.kind == PointerKind::Up {
+            self.keep_tool_settings();
+        }
         self.apply_actions(acts)
     }
 
@@ -162,6 +206,47 @@ impl Session {
     }
     pub fn set_tool_option(&mut self, key: &str, v: &Value) {
         self.tool.set_option(key, v);
+        self.keep_tool_settings();
+    }
+
+    /// The options of tool `id`: the active tool's, or those it would have if chosen now.
+    pub fn tool_options_of(&self, id: &str) -> Value {
+        if id == self.tool.id() { self.tool.options() } else { self.make_tool(id).options() }
+    }
+
+    /// Set options of tool `id` (default: the active tool). Another tool's persistent options are
+    /// stored for when it is chosen, and the active tool takes those it shares with it (the
+    /// Liquify tools' Global Brush Dimensions). Returns the tool's options.
+    pub fn set_tool_options(&mut self, id: Option<&str>, values: &Map<String, Value>) -> Value {
+        let active = id.is_none_or(|id| id == self.tool.id());
+        let mut other = (!active).then(|| self.make_tool(id.unwrap_or_default()));
+        let t = other.as_deref_mut().unwrap_or(self.tool.as_mut());
+        for (k, v) in values {
+            t.set_option(k, v);
+        }
+        Self::store_tool_settings(&mut self.prefs, t);
+        let out = t.options();
+        if other.is_some() {
+            Self::restore_tool_settings(&self.prefs, self.tool.as_mut());
+        }
+        out
+    }
+
+    /// `tool.setOption {tool?, key?, value?, values?}` (a command of the desktop app and of the
+    /// headless host): set one option (`key`, `value`) or several (`values`) of `tool` (default:
+    /// the active tool) → its options.
+    pub fn set_tool_option_cmd(&mut self, p: &Value) -> std::result::Result<Value, String> {
+        let tool = p.get("tool").and_then(Value::as_str);
+        if let Some(t) = tool
+            && vectorcraft_tools::tool_info(t).is_none()
+        {
+            return Err(format!("unknown tool `{t}`"));
+        }
+        let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
+        if let Some(k) = p.get("key").and_then(Value::as_str) {
+            values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
+        }
+        Ok(self.set_tool_options(tool, &values))
     }
 
     /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):

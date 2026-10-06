@@ -38,6 +38,11 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
         "{folder?, zip?, artboards? | range? | fullDocument? | assets?, includeBleed?, subfolders?, preset?, formats?, settings?, prefix?} = document.exportForScreens (no folder → the files, or one zip, as dataBase64)",
     ),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),
+    (
+        "tool.setOption",
+        "Tool Option",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them); kept options last across tool switches",
+    ),
 ];
 
 fn s<'a>(p: &'a Value, k: &str) -> Option<&'a str> {
@@ -113,6 +118,7 @@ impl Headless {
             "file.export" => self.export(params),
             "file.exportForScreens" => self.session.execute("document.exportForScreens", params).map_err(|e| e.to_string()),
             "tool.select" => self.select_tool(params),
+            "tool.setOption" => self.session.set_tool_option_cmd(params),
             _ => self.session.execute(id, params).map_err(|e| e.to_string()),
         }
     }
