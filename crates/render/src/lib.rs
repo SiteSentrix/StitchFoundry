@@ -1488,8 +1488,14 @@ fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
     let mut runs = vec![BezPath::new(); t.runs.len()];
     let mut all = BezPath::new();
     // Per run: is its family missing, and the face its glyphs should come from.
-    let faces: Vec<(bool, Option<u32>)> =
-        t.runs.iter().map(|r| (!db.has_family(&r.style.font_family), db.face(&r.style.font_family, &r.style.font_style).map(|f| f.id()))).collect();
+    let faces: Vec<(bool, Option<u32>)> = t
+        .runs
+        .iter()
+        .map(|r| match db.resolve(&r.style.font_family, &r.style.font_style) {
+            Some((f, m)) => (m == vectorcraft_text::FontMatch::Missing, Some(f.id())),
+            None => (true, None),
+        })
+        .collect();
     let (mut substituted_fonts, mut substituted_glyphs) = (BezPath::new(), BezPath::new());
     for g in &layout.glyphs {
         if let Some(r) = runs.get_mut(g.run) {
