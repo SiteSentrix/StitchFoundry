@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release",
             ["Object", "Blend"],
             Some("Cmd+Alt+Shift+B"),
-            "{} release the selected blends, keeping the key objects → {ids}",
+            "{} release the selected blends: the key objects come back and the spine stays as a path with no fill or stroke, below them → {ids (the keys), spines: [ids]}",
             has_blend,
             blend_release
         ),
@@ -81,9 +81,36 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Info",
             [],
             None,
-            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, keys?: [ids], starts?: [anchor|null]}",
+            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, keys?: [ids], starts?: [anchor|null], spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
             always,
             blend_info
+        ),
+        cmd!(
+            "object.blend.spine.moveAnchor",
+            "Move Spine Point",
+            [],
+            None,
+            "{id? (default: the selected blend), anchor: index, x, y, handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on the point moves with it. The first edit turns the straight spine into a path",
+            has_doc,
+            spine_move_anchor
+        ),
+        cmd!(
+            "object.blend.spine.addAnchor",
+            "Add Spine Point",
+            [],
+            None,
+            "{id? (default: the selected blend), x, y} add a point to the blend's spine where it passes nearest (x, y) → {anchor}",
+            has_doc,
+            spine_add_anchor
+        ),
+        cmd!(
+            "object.blend.spine.removeAnchor",
+            "Delete Spine Point",
+            [],
+            None,
+            "{id? (default: the selected blend), anchor: index} delete a point of the blend's spine that no key object sits on",
+            has_doc,
+            spine_remove_anchor
         ),
         cmd!(
             "object.blend.reverseFrontToBack",
@@ -445,6 +472,30 @@ fn merge_keys(nodes: Vec<Arc<Node>>, starts: &[(NodeId, u32)]) -> (Vec<Arc<Node>
     (keys, st)
 }
 
+/// The spine of a blend of `keys` made by giving blend `old` (spec `old_spec`) more keys: its
+/// spine pinned, with a straight segment to each new key before or after its own (a closed spine
+/// gives way to the straight lines between the keys).
+fn extend_spine(spec: &mut BlendSpec, old: &[Arc<Node>], old_spec: &BlendSpec, keys: &[Arc<Node>]) {
+    if old_spec.spine.is_none() {
+        return;
+    }
+    let Some((mut path, anchors)) = live::pin_spine(old, old_spec) else { return };
+    let Some(first) = old.first().and_then(|f| keys.iter().position(|k| k.id == f.id)) else { return };
+    let Some(sp) = path.subpaths.first_mut().filter(|sp| !sp.closed) else { return };
+    let center = |k: &Arc<Node>| vectorcraft_geom::Anchor::corner(k.geometric_bounds().map(|b| b.center()).unwrap_or_default());
+    let before: Vec<_> = keys.iter().take(first).map(center).collect();
+    let after: Vec<_> = keys.iter().skip(first + old.len()).map(center).collect();
+    let shift = before.len();
+    sp.anchors.splice(0..0, before);
+    let n = sp.anchors.len();
+    sp.anchors.extend(after);
+    let mut ka: Vec<usize> = (0..shift).collect();
+    ka.extend(anchors.iter().map(|a| a + shift));
+    ka.extend(n..sp.anchors.len());
+    spec.key_anchors = ka.iter().map(|a| u32::try_from(*a).unwrap_or(u32::MAX)).collect();
+    spec.spine = Some(path);
+}
+
 fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.make";
     let roots = roots_param(s, p)?;
@@ -464,12 +515,12 @@ fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
             let (children, starts) = merge_keys(nodes, &starts);
             // A blend taking more keys keeps its name, transparency and spine.
             let mut n = base.unwrap_or_else(|| Node::new(id, NodeKind::Group { children: vec![], clip: false }));
-            let spine = match &n.kind {
-                NodeKind::Blend { spec, .. } => spec.spine.clone(),
-                _ => None,
-            };
+            let mut spec = BlendSpec { spacing, orientation, starts, ..Default::default() };
+            if let NodeKind::Blend { children: old, spec: old_spec } = &n.kind {
+                extend_spine(&mut spec, old, old_spec, &children);
+            }
             n.id = id;
-            n.kind = NodeKind::Blend { children, spec: BlendSpec { spacing, orientation, spine, starts, ..Default::default() } };
+            n.kind = NodeKind::Blend { children, spec };
             n
         })
     })?;
@@ -478,17 +529,126 @@ fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn blend_release(s: &mut Session, _: &Value) -> Result<Value> {
     let blends = selected_of(s, is_blend);
-    let ids = s.edit("Release Blend", |d, sel| {
-        let mut out = vec![];
+    let (ids, spines) = s.edit("Release Blend", |d, sel| {
+        let (mut keys, mut spines) = (vec![], vec![]);
         for b in &blends {
             let Some(n) = d.node(*b).cloned() else { continue };
-            let keys: Vec<Node> = n.children().into_iter().flatten().map(|c| (**c).clone()).collect();
-            out.extend(replace_with(d, *b, keys)?);
+            let NodeKind::Blend { children, spec } = &n.kind else { continue };
+            // The spine stays behind as a path that paints nothing, below the keys.
+            let mut nodes = vec![];
+            if let Some((path, _)) = live::blend_spine(children, spec) {
+                let id = d.alloc_id();
+                spines.push(id);
+                nodes.push(Node::path(id, path, Appearance::basic(Paint::None, Paint::None, 0.0)));
+            }
+            keys.extend(children.iter().map(|c| c.id));
+            nodes.extend(children.iter().map(|c| (**c).clone()));
+            replace_with(d, *b, nodes)?;
         }
-        sel.set(out.iter().copied());
-        Ok(out)
+        sel.set(spines.iter().chain(&keys).copied());
+        Ok((keys, spines))
     })?;
-    Ok(ids_json(&ids))
+    let mut r = ids_json(&ids);
+    r["spines"] = json!(spines.iter().map(|i| i.0).collect::<Vec<_>>());
+    Ok(r)
+}
+
+/// The blend `id` (default: the first selected), its spine pinned to its keys (see
+/// [`live::pin_spine`]) and given to `f` with the key anchors and the keys; the result is stored
+/// as the blend's spine, one undo step.
+fn edit_spine<T>(
+    s: &mut Session,
+    p: &Value,
+    cmd: &str,
+    label: &str,
+    f: impl FnOnce(&mut vectorcraft_geom::SubPath, &mut Vec<usize>, &mut [Arc<Node>]) -> Result<T>,
+) -> Result<T> {
+    let id = match id_param(p, "id") {
+        Some(id) => id,
+        None => *selected_of(s, is_blend).first().ok_or_else(|| bad(cmd, "select a blend or give `id`"))?,
+    };
+    let c = cmd.to_string();
+    s.edit(label, move |d, _| {
+        let Some(NodeKind::Blend { children, spec }) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(bad(&c, "not a blend")) };
+        let (mut path, mut anchors) = live::pin_spine(children, spec).ok_or_else(|| bad(&c, "the blend has no spine"))?;
+        let sp = path.subpaths.first_mut().ok_or_else(|| bad(&c, "the blend has no spine"))?;
+        let out = f(sp, &mut anchors, children)?;
+        spec.key_anchors = anchors.iter().map(|a| u32::try_from(*a).unwrap_or(u32::MAX)).collect();
+        spec.spine = Some(path);
+        Ok(out)
+    })
+}
+
+/// A point parameter that must be finite.
+fn finite_point(p: &Value, cmd: &str) -> Result<Point> {
+    let q = Point::new(f64_req(p, "x", cmd)?, f64_req(p, "y", cmd)?);
+    if q.x.is_finite() && q.y.is_finite() && q.x.abs() < 1e9 && q.y.abs() < 1e9 { Ok(q) } else { Err(bad(cmd, "x and y must be finite")) }
+}
+
+fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.spine.moveAnchor";
+    let index = index_param(p, "anchor", C)?;
+    let q = finite_point(p, C)?;
+    let handle = match str_param(p, "handle") {
+        None => None,
+        Some("out") => Some(true),
+        Some("in") => Some(false),
+        Some(_) => return Err(bad(C, "handle must be in or out")),
+    };
+    let independent = bool_or(p, "independent", false);
+    edit_spine(s, p, C, "Reshape Spine", |sp, anchors, keys| {
+        let a = sp.anchors.get_mut(index).ok_or_else(|| bad(C, "no such spine point"))?;
+        if let Some(out) = handle {
+            a.set_handle(out, q, independent);
+            return Ok(());
+        }
+        let delta = q - a.p;
+        a.translate(delta);
+        // The key objects on the point move with it.
+        for (k, _) in anchors.iter().enumerate().filter(|(_, a)| **a == index) {
+            if let Some(key) = keys.get_mut(k) {
+                Arc::make_mut(key).transform(Affine::translate(delta), false);
+            }
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
+fn spine_add_anchor(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.spine.addAnchor";
+    let q = finite_point(p, C)?;
+    let index = edit_spine(s, p, C, "Add Spine Point", |sp, anchors, _| {
+        let (_, seg, t, _, _) = PathData::single(sp.clone()).nearest(q).ok_or_else(|| bad(C, "the spine has no segments"))?;
+        let i = sp.insert_anchor(seg, t.clamp(1e-3, 1.0 - 1e-3));
+        for a in anchors.iter_mut().filter(|a| **a >= i) {
+            *a += 1;
+        }
+        Ok(i)
+    })?;
+    Ok(json!({ "anchor": index }))
+}
+
+fn spine_remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.spine.removeAnchor";
+    let index = index_param(p, "anchor", C)?;
+    edit_spine(s, p, C, "Delete Spine Point", |sp, anchors, _| {
+        if index >= sp.anchors.len() {
+            return Err(bad(C, "no such spine point"));
+        }
+        if anchors.contains(&index) {
+            return Err(bad(C, "a key object sits on that point"));
+        }
+        if sp.anchors.len() <= 2 {
+            return Err(bad(C, "a spine keeps at least two points"));
+        }
+        sp.anchors.remove(index);
+        for a in anchors.iter_mut().filter(|a| **a > index) {
+            *a -= 1;
+        }
+        Ok(())
+    })?;
+    ok()
 }
 
 fn edit_blends(s: &mut Session, label: &str, f: impl Fn(&mut Vec<Arc<Node>>, &mut BlendSpec)) -> Result<Value> {
@@ -550,6 +710,14 @@ fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
             v["id"] = json!(id.0);
             v["starts"] = json!((0..keys.len()).map(|i| spec.start(i)).collect::<Vec<_>>());
             v["keys"] = json!(keys.iter().map(|k| k.0).collect::<Vec<_>>());
+            if let Some(NodeKind::Blend { children, .. }) = s.doc()?.doc.node(id).map(|n| &n.kind)
+                && let Some((path, anchors)) = live::blend_spine(children, &spec)
+                && let Some(sp) = path.subpaths.first()
+            {
+                let pt = |p: Point| json!([p.x, p.y]);
+                let points: Vec<Value> = sp.anchors.iter().map(|a| json!({"x": a.p.x, "y": a.p.y, "in": pt(a.h_in), "out": pt(a.h_out)})).collect();
+                v["spine"] = json!({"anchors": points, "closed": sp.closed, "keyAnchors": anchors, "explicit": spec.spine.is_some()});
+            }
             v
         }
         None => {
@@ -581,15 +749,44 @@ fn blend_expand(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
-/// Move the keys onto their spine positions (so what's stored matches what's drawn).
+/// Move the keys onto their spine positions (so what's stored matches what's drawn): onto their
+/// anchors, or spread evenly by arc length along a spine from Replace Spine.
 fn keys_to_spine(children: &mut [Arc<Node>], spec: &BlendSpec) {
-    let Some(sp) = spec.spine.as_ref().and_then(Spine::new) else { return };
+    let Some(path) = &spec.spine else { return };
     let k = children.len();
+    let pinned = spec.key_anchors.len() == k;
+    let sp = Spine::new(path);
     for (i, c) in children.iter_mut().enumerate() {
-        let f = if k > 1 { i as f64 / (k - 1) as f64 } else { 0.0 };
-        let (pt, _) = sp.at(f);
-        if let Some(b) = c.geometric_bounds() {
+        let pt = if pinned {
+            spec.key_anchors.get(i).and_then(|a| path.subpaths.first()?.anchors.get(*a as usize)).map(|a| a.p)
+        } else {
+            sp.as_ref().map(|sp| sp.at(if k > 1 { i as f64 / (k - 1) as f64 } else { 0.0 }).0)
+        };
+        if let (Some(pt), Some(b)) = (pt, c.geometric_bounds()) {
             Arc::make_mut(c).transform(Affine::translate(pt - b.center()), false);
+        }
+    }
+}
+
+/// Store the blend's spine pinned to its keys (see [`live::pin_spine`]); false when it has none.
+fn pin(children: &[Arc<Node>], spec: &mut BlendSpec) -> bool {
+    match live::pin_spine(children, spec) {
+        Some((path, anchors)) => {
+            spec.spine = Some(path);
+            spec.key_anchors = anchors.iter().map(|a| u32::try_from(*a).unwrap_or(u32::MAX)).collect();
+            true
+        }
+        None => false,
+    }
+}
+
+/// `spec`'s spine reversed: the key anchors count from the other end.
+fn reverse_spine(spec: &mut BlendSpec) {
+    if let Some(sp) = &mut spec.spine {
+        sp.reverse();
+        let n = sp.subpaths.first().map_or(0, |s| s.anchors.len() as u32);
+        for a in &mut spec.key_anchors {
+            *a = n.saturating_sub(1).saturating_sub(*a);
         }
     }
 }
@@ -614,6 +811,7 @@ fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
         d.remove(path)?;
         if let Some(NodeKind::Blend { children, spec }) = d.node_mut(b).map(|n| &mut n.kind) {
             spec.spine = Some(spine);
+            spec.key_anchors.clear();
             keys_to_spine(children, spec);
         }
         sel.set([b]);
@@ -624,8 +822,11 @@ fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn blend_reverse_spine(s: &mut Session, _: &Value) -> Result<Value> {
     edit_blends(s, "Reverse Spine", |children, spec| {
-        if let Some(sp) = &mut spec.spine {
-            sp.reverse();
+        if spec.spine.is_some() && pin(children, spec) {
+            // The keys keep their anchors, which now count from the other end.
+            if let Some(sp) = &mut spec.spine {
+                sp.reverse();
+            }
             keys_to_spine(children, spec);
         } else {
             let centers: Vec<Point> = children.iter().map(|k| k.geometric_bounds().map(|b| b.center()).unwrap_or_default()).collect();
@@ -645,9 +846,9 @@ fn blend_reverse_stack(s: &mut Session, _: &Value) -> Result<Value> {
             spec.starts.resize(children.len(), None);
             spec.starts.reverse();
         }
-        if let Some(sp) = &mut spec.spine {
-            sp.reverse();
-        }
+        // Each key keeps its place: on its anchor, or (spread evenly) with the spine reversed.
+        spec.key_anchors.reverse();
+        reverse_spine(spec);
     })
 }
 
@@ -1093,8 +1294,8 @@ fn with_mesh<T>(s: &mut Session, p: &Value, cmd: &str, label: &str, f: impl FnOn
     })
 }
 
-fn index_param(p: &Value, cmd: &str) -> Result<usize> {
-    let i = f64_req(p, "index", cmd)?;
+fn index_param(p: &Value, key: &str, cmd: &str) -> Result<usize> {
+    let i = f64_req(p, key, cmd)?;
     if i < 0.0 {
         return Err(bad(cmd, "index must be ≥ 0"));
     }
@@ -1103,7 +1304,7 @@ fn index_param(p: &Value, cmd: &str) -> Result<usize> {
 
 fn mesh_set_color(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.setPointColor";
-    let index = index_param(p, C)?;
+    let index = index_param(p, "index", C)?;
     let color = p.get("color").and_then(color_value);
     let opacity = p.get("opacity").and_then(Value::as_f64);
     if color.is_none() && opacity.is_none() {
@@ -1124,7 +1325,7 @@ fn mesh_set_color(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn mesh_move_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.movePoint";
-    let index = index_param(p, C)?;
+    let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = p.get("handle").and_then(Value::as_u64).map(|h| h as usize);
     if handle.is_some_and(|h| h > 3) {
@@ -1157,7 +1358,7 @@ fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn mesh_delete_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.deletePoint";
-    let index = index_param(p, C)?;
+    let index = index_param(p, "index", C)?;
     with_mesh(s, p, C, "Delete Mesh Point", |m| {
         if m.remove_point_lines(index) { Ok(()) } else { Err(bad(C, "only interior mesh lines can be deleted")) }
     })?;

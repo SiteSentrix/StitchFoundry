@@ -3,7 +3,8 @@
 //! Click adds a corner anchor; click-drag adds a smooth anchor with symmetric handles (Alt-drag
 //! breaks the handles); Shift constrains to 45°. Clicking the first anchor closes the path.
 //! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
-//! it. The rubber-band preview shows the next segment.
+//! it. The rubber-band preview shows the next segment. On a selected blend's spine a click adds a
+//! point (on a point no key object sits on: deletes it).
 
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
@@ -67,6 +68,9 @@ impl Tool for PenTool {
                     }
                     self.drag = Some((p, false));
                     return vec![Action::Begin("Pen".into()), Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": p.x, "y": p.y}))];
+                }
+                if let Some(acts) = spine_click(cx, p, tol) {
+                    return acts;
                 }
                 // Continue a selected open path when clicking on one of its ends.
                 if let Some((_, first, last, _)) = active_path(cx)
@@ -149,6 +153,13 @@ impl Tool for PenTool {
         vec![Overlay::Path { path: bp, color: c, width: 1.0, dashed: false }]
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
+        if !self.drawing {
+            match spine_click(cx, p, cx.tol(5.0)).as_deref() {
+                Some([Action::Exec(c, _)]) if c == "object.blend.spine.removeAnchor" => return Cursor::PenDelete,
+                Some([_]) => return Cursor::PenAdd,
+                _ => {}
+            }
+        }
         if let Some((_, first, last, _)) = active_path(cx) {
             if self.drawing && p.distance(first) <= cx.tol(5.0) {
                 return Cursor::PenClose;
@@ -159,6 +170,25 @@ impl Tool for PenTool {
         }
         Cursor::Pen
     }
+}
+
+/// A click on a selected blend's spine: delete the point under `p` when no key object sits on it
+/// (a key's point does nothing), else add one where the spine passes within `tol`.
+fn spine_click(cx: &ToolContext, p: Point, tol: f64) -> Option<Vec<Action>> {
+    for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
+        let Some(NodeKind::Blend { children, spec }) = cx.doc.node(id).map(|n| &n.kind) else { continue };
+        let keys = vectorcraft_doc::live::blend_spine(children, spec).and_then(|(_, a)| a).unwrap_or_default();
+        if let Some((_, ai, _)) = path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol) {
+            if keys.contains(&ai) {
+                return Some(vec![]);
+            }
+            return Some(vec![Action::Exec("object.blend.spine.removeAnchor".into(), json!({"id": id.0, "anchor": ai}))]);
+        }
+        if path.nearest(p).is_some_and(|n| n.4 <= tol) {
+            return Some(vec![Action::Exec("object.blend.spine.addAnchor".into(), json!({"id": id.0, "x": p.x, "y": p.y}))]);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -178,5 +208,32 @@ mod tests {
         assert_eq!(a[0], Action::Begin("Pen".into()));
         assert!(matches!(&a[1], Action::Preview(c, _) if c == "path.create"));
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn clicking_a_selected_blend_spine_adds_a_point() {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let key = |id: NodeId, x: f64| {
+            let r = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 300.0, x + 20.0, 320.0));
+            std::sync::Arc::new(vectorcraft_doc::Node::path(id, r, vectorcraft_doc::Appearance::default_art()))
+        };
+        let (g, k1, k2) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        d.insert(
+            Some(l),
+            1,
+            vectorcraft_doc::Node::new(g, NodeKind::Blend { children: vec![key(k1, 100.0), key(k2, 200.0)], spec: Default::default() }),
+        )
+        .unwrap();
+        let mut s = Selection::default();
+        s.set([g]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool::default();
+        assert_eq!(t.cursor(&cx, Point::new(160.0, 311.0), Mods::default()), Cursor::PenAdd);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 311.0));
+        assert_eq!(a, vec![Action::Exec("object.blend.spine.addAnchor".into(), json!({"id": g.0, "x": 160.0, "y": 310.0}))]);
+        // A key's own point is left alone (the click snaps to the spine line).
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 310.0)), vec![]);
     }
 }

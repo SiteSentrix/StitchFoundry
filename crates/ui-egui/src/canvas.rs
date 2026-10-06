@@ -1071,6 +1071,20 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             p.circle_filled(o, 2.5, color);
         }
     }
+    // The spine of each selected blend (or of the blend a selected key object belongs to).
+    let mut spines = vec![];
+    for id in &st.selection.objects {
+        let is_blend = |b: &vectorcraft_doc::NodeId| st.doc.node(*b).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. }));
+        let Some(b) = [Some(*id), st.doc.parent_of(*id)].into_iter().flatten().find(is_blend).filter(|b| !spines.contains(b)) else { continue };
+        spines.push(b);
+        let Some(NodeKind::Blend { children, spec }) = st.doc.node(b).map(|n| &n.kind) else { continue };
+        let Some((path, _)) = vectorcraft_doc::live::blend_spine(children, spec) else { continue };
+        let color = c32(st.doc.layer_color(b));
+        stroke_path(p, &path.to_bezpath(), xf, Stroke::new(1.0, color));
+        for (_, _, a) in path.anchors() {
+            anchor_square(p, xf.to_screen(a.p), color, false, if direct { 5.0 } else { 4.0 });
+        }
+    }
     // Live Corners widgets (Selection / Direct Selection on a single live rectangle).
     if matches!(tool, "selection" | "directSelection")
         && app.ui.view.corner_widgets

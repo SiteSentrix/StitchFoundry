@@ -4,11 +4,13 @@
 //! path's anchors on that segment, drag to move selected anchors, drag a direction handle to
 //! reshape, marquee to select anchors, drag a live rectangle's corner widget to round its corners.
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
+//! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
+//! points (a key object on a point moves with it) and, once a point is clicked, its handles.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
 use vectorcraft_doc::{AnchorRef, NodeId, NodeKind};
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_geom::{PathData, Point, Rect};
 
 use crate::bbox::move_delta;
 use crate::corners::{CornerDrag, over_widget};
@@ -18,21 +20,93 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 #[derive(Clone, Debug)]
 enum State {
     Idle,
-    MoveAnchors { start: Point, began: bool },
-    MoveObject { start: Point, began: bool },
-    Handle { id: NodeId, si: usize, ai: usize, out: bool },
-    Marquee { start: Point, cur: Point, add: bool },
+    MoveAnchors {
+        start: Point,
+        began: bool,
+    },
+    MoveObject {
+        start: Point,
+        began: bool,
+    },
+    Handle {
+        id: NodeId,
+        si: usize,
+        ai: usize,
+        out: bool,
+    },
+    Marquee {
+        start: Point,
+        cur: Point,
+        add: bool,
+    },
     Corner(CornerDrag),
+    /// Dragging a point of a blend's spine from `from`.
+    SpinePoint {
+        id: NodeId,
+        anchor: usize,
+        from: Point,
+        start: Point,
+        began: bool,
+    },
+    /// Dragging a handle of the clicked spine point.
+    SpineHandle {
+        id: NodeId,
+        anchor: usize,
+        out: bool,
+    },
 }
 
 pub struct DirectSelectionTool {
     group: bool,
     state: State,
+    /// The spine point last clicked (blend, anchor): its handles show and can be dragged.
+    spine: Option<(NodeId, usize)>,
 }
 
 impl DirectSelectionTool {
     pub fn new(group: bool) -> Self {
-        Self { group, state: State::Idle }
+        Self { group, state: State::Idle, spine: None }
+    }
+}
+
+/// The spines of the editable blends, topmost first: (blend, spine).
+pub(crate) fn spines(cx: &ToolContext) -> Vec<(NodeId, PathData)> {
+    let mut v = vec![];
+    cx.doc.walk(|n| {
+        if let NodeKind::Blend { children, spec } = &n.kind
+            && let Some((path, _)) = vectorcraft_doc::live::blend_spine(children, spec)
+        {
+            v.push((n.id, path));
+        }
+    });
+    v.reverse();
+    v.retain(|(id, _)| cx.doc.is_editable(*id));
+    v
+}
+
+/// The spine point under `p`: (blend, anchor, where it is).
+fn hit_spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, Point)> {
+    spines(cx).into_iter().find_map(|(id, path)| {
+        let (_, ai, a) = path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol)?;
+        Some((id, ai, a.p))
+    })
+}
+
+/// The spine point `sel` and whether `p` is on its outgoing handle's end (`Some(true)`) or its
+/// incoming one's.
+fn hit_spine_handle(cx: &ToolContext, sel: (NodeId, usize), p: Point, tol: f64) -> Option<bool> {
+    let a = spine_anchor(cx, sel)?;
+    if a.has_out() && a.h_out.distance(p) <= tol {
+        return Some(true);
+    }
+    (a.has_in() && a.h_in.distance(p) <= tol).then_some(false)
+}
+
+/// Anchor `sel.1` of blend `sel.0`'s spine.
+fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcraft_geom::Anchor> {
+    match &cx.doc.node(id)?.kind {
+        NodeKind::Blend { children, spec } => vectorcraft_doc::live::blend_spine(children, spec)?.0.subpaths.first()?.anchors.get(ai).copied(),
+        _ => None,
     }
 }
 
@@ -123,9 +197,21 @@ impl Tool for DirectSelectionTool {
                     self.state = State::Corner(c);
                     return vec![];
                 }
+                if let Some(sel) = self.spine.filter(|(id, _)| cx.selection.contains(*id))
+                    && let Some(out) = hit_spine_handle(cx, sel, p, tol)
+                {
+                    self.state = State::SpineHandle { id: sel.0, anchor: sel.1, out };
+                    return vec![Action::Begin("Reshape Spine".into())];
+                }
+                self.spine = None;
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, tol) {
                     self.state = State::Handle { id, si, ai, out };
                     return vec![Action::Begin("Reshape".into())];
+                }
+                if let Some((id, anchor, from)) = hit_spine_point(cx, p, tol) {
+                    self.spine = Some((id, anchor));
+                    self.state = State::SpinePoint { id, anchor, from, start: p, began: false };
+                    return if cx.selection.contains(id) { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                 }
                 if let Some((id, si, ai)) = hit_anchor(cx, p, tol, false) {
                     let already = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, ai)));
@@ -187,6 +273,23 @@ impl Tool for DirectSelectionTool {
                     json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": p.x, "y": p.y, "independent": ev.mods.alt}),
                 )]
             }
+            (PointerKind::Drag, State::SpinePoint { id, anchor, from, start, began }) => {
+                let mut out = vec![];
+                if !began {
+                    if p.distance(start) < cx.tol(3.0) {
+                        return out;
+                    }
+                    out.push(Action::Begin("Reshape Spine".into()));
+                    self.state = State::SpinePoint { id, anchor, from, start, began: true };
+                }
+                let q = from + move_delta(start, p, ev.mods.shift);
+                out.push(Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": id.0, "anchor": anchor, "x": q.x, "y": q.y})));
+                out
+            }
+            (PointerKind::Drag, State::SpineHandle { id, anchor, out }) => vec![Action::Preview(
+                "object.blend.spine.moveAnchor".into(),
+                json!({"id": id.0, "anchor": anchor, "handle": if out {"out"} else {"in"}, "x": p.x, "y": p.y, "independent": ev.mods.alt}),
+            )],
             (PointerKind::Drag, State::Marquee { start, add, .. }) => {
                 self.state = State::Marquee { start, cur: p, add };
                 vec![]
@@ -200,11 +303,11 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Idle;
                 c.finish()
             }
-            (PointerKind::Up, State::MoveAnchors { began, .. } | State::MoveObject { began, .. }) => {
+            (PointerKind::Up, State::MoveAnchors { began, .. } | State::MoveObject { began, .. } | State::SpinePoint { began, .. }) => {
                 self.state = State::Idle;
                 if began { vec![Action::Commit] } else { vec![] }
             }
-            (PointerKind::Up, State::Handle { .. }) => {
+            (PointerKind::Up, State::Handle { .. } | State::SpineHandle { .. }) => {
                 self.state = State::Idle;
                 vec![Action::Commit]
             }
@@ -235,7 +338,7 @@ impl Tool for DirectSelectionTool {
         match &self.state {
             State::Marquee { start, cur, .. } => vec![Overlay::Marquee(Rect::from_points(*start, *cur))],
             State::Corner(c) => c.overlays(cx),
-            _ => vec![],
+            _ => self.spine_overlays(cx),
         }
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
@@ -246,11 +349,72 @@ impl Tool for DirectSelectionTool {
     }
 }
 
+impl DirectSelectionTool {
+    /// The clicked spine point, filled, with its handles.
+    fn spine_overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        let Some(sel) = self.spine.filter(|(id, _)| cx.selection.contains(*id)) else { return vec![] };
+        let Some(a) = spine_anchor(cx, sel) else { return vec![] };
+        let color = cx.doc.layer_color(sel.0);
+        let mut out = vec![];
+        for h in [a.h_in, a.h_out].into_iter().filter(|h| h.distance(a.p) > 1e-6) {
+            out.push(Overlay::Line { a: a.p, b: h, color, dashed: false });
+            out.push(Overlay::Handle { p: h, color });
+        }
+        out.push(Overlay::Anchor { p: a.p, color, filled: true, size: 5.0 });
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+
+    /// A blend of two 20 pt squares centred on (110, 310) and (210, 310), selected.
+    fn blend_doc() -> (vectorcraft_doc::Document, NodeId, NodeId) {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let key = |id: NodeId, x: f64| {
+            let r = vectorcraft_geom::shapes::rectangle(Rect::new(x, 300.0, x + 20.0, 320.0));
+            std::sync::Arc::new(vectorcraft_doc::Node::path(id, r, vectorcraft_doc::Appearance::default_art()))
+        };
+        let (g, k1, k2) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let b = vectorcraft_doc::Node::new(g, NodeKind::Blend { children: vec![key(k1, 100.0), key(k2, 200.0)], spec: Default::default() });
+        d.insert(Some(l), 1, b).unwrap();
+        (d, g, k1)
+    }
+
+    #[test]
+    fn dragging_a_spine_point_moves_it() {
+        let (d, g, _) = blend_doc();
+        let mut s = Selection::default();
+        s.set([g]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 211.0, 310.0)), vec![]);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 221.0, 350.0));
+        assert_eq!(a[0], Action::Begin("Reshape Spine".into()));
+        assert_eq!(a[1], Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 1, "x": 220.0, "y": 350.0})));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 221.0, 350.0)), vec![Action::Commit]);
+        assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the clicked point shows");
+    }
+
+    #[test]
+    fn direct_and_group_selection_pick_blend_keys() {
+        let (d, g, k1) = blend_doc();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let a = DirectSelectionTool::new(false).pointer(&cx, &PointerEvent::new(PointerKind::Down, 104.0, 304.0));
+        assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [k1.0]}))]);
+        let a = DirectSelectionTool::new(true).pointer(&cx, &PointerEvent::new(PointerKind::Down, 104.0, 304.0));
+        assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [k1.0]}))]);
+        // A click on a step (between the keys) still selects the blend.
+        let a = DirectSelectionTool::new(true).pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 304.0));
+        assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
+    }
 
     #[test]
     fn click_anchor_selects_it() {

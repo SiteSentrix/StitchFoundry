@@ -498,3 +498,7 @@ toolbar button) opens the `blendOptions` dialog on the selected blend's options:
 `ui.dialog.confirm` keeps the change as one undo step. With no blend selected (`__target: "defaults"`) OK sets what
 new blends start with. The Blend tool (`ui.tool.select {tool: "blend"}`): `ui.pointer` down on an object, then on
 another, blends them; down on an anchor point blends from that point; each further object clicked joins the blend.
+A selected blend shows its spine. With Direct Selection (`directSelection`) a `ui.pointer` drag from a spine point
+moves it (`object.blend.spine.moveAnchor`, one undo step) and, once a point is clicked, from one of its handles
+reshapes the curve; Direct and Group Selection pick a blend's key objects. With the Pen tool a click on a selected
+blend's spine adds a point (on a point no key sits on, deletes it).

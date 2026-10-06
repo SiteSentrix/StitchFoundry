@@ -107,6 +107,11 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
         chain.push(c.id);
         let hit = match &c.kind {
             NodeKind::Layer { .. } | NodeKind::Group { .. } => hit_children(c, p, opt, chain),
+            // A blend's key objects first (Direct and Group Selection pick them); its steps hit
+            // as the blend.
+            NodeKind::Blend { .. } => {
+                hit_children(c, p, opt, chain).or_else(|| hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind }))
+            }
             _ => hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind }),
         };
         if hit.is_some() {
