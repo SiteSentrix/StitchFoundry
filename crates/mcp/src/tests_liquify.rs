@@ -41,6 +41,24 @@ fn pointer_gestures_carry_pen_pressure() {
         command(&mut h, "document.node", json!({"id": id}))
     };
     let (none, full) = (bloat(0.0), bloat(1.0));
-    assert_eq!(none["path"], bloat(0.0)["path"]);
+    assert_eq!(none, bloat(0.0));
     assert_ne!(none, full);
+}
+
+#[test]
+fn holding_still_through_mcp_and_skips_are_reported() {
+    let pucker = |hold: u64| {
+        let mut h = Headless::with_document();
+        let id = command(&mut h, "shape.rectangle", json!({"x": 100, "y": 100, "width": 200, "height": 200}))["id"].clone();
+        command(&mut h, "text.create", json!({"x": 290, "y": 200, "text": "Hi"}));
+        command(&mut h, "select.set", json!({"ids": []}));
+        let ev = |kind: &str| json!({"kind": kind, "x": 290, "y": 200, "holdMs": hold});
+        let r = ok(&mut h, "pointer_gesture", json!({"tool": "pucker", "events": [ev("down"), ev("up")]}));
+        (r, command(&mut h, "document.node", json!({"id": id})))
+    };
+    let (r, still) = pucker(0);
+    assert!(r["requests"].as_array().unwrap().iter().any(|q| q["status"].as_str().is_some_and(|m| m.contains("type"))), "{r}");
+    let (_, held) = pucker(500);
+    assert_ne!(still, held);
+    assert_eq!(held, pucker(500).1, "the same hold, the same result");
 }

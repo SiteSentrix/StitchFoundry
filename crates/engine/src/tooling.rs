@@ -42,6 +42,9 @@ impl Default for ViewInfo {
 pub enum UiRequest {
     Dialog(String, Value),
     SwitchTool(String),
+    /// A message for the status bar: the `warning` of a command the tool ran (Liquify skipping
+    /// type under the brush).
+    Status(String),
 }
 
 impl Session {
@@ -163,6 +166,22 @@ impl Session {
         self.apply_actions(acts)
     }
 
+    /// Time passed while the pointer button is held (`dt` seconds; see [`Tool::tick`]): the
+    /// desktop app ticks every frame of a press, agents with `holdMs` on a pointer event.
+    pub fn tool_tick(&mut self, dt: f64, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        if !self.tool.wants_ticks() {
+            return Ok(vec![]);
+        }
+        let acts = self.with_tool_cx(view, |t, cx| t.tick(cx, dt));
+        self.take_tool_panic()?;
+        self.apply_actions(acts)
+    }
+
+    /// Does the active tool want [`Session::tool_tick`]s now?
+    pub fn tool_wants_ticks(&self) -> bool {
+        self.tool.wants_ticks()
+    }
+
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
@@ -275,13 +294,25 @@ impl Session {
         for a in acts {
             match a {
                 Action::Begin(label) => self.begin_interaction(&label)?,
-                Action::Preview(cmd, p) => {
-                    if let Err(e) = self.preview(&cmd, &p) {
-                        log::warn!("preview {cmd}: {e}");
+                Action::Preview(cmd, p) => match self.preview(&cmd, &p) {
+                    Ok(v) => {
+                        if let Some(w) = v.get("warning").and_then(Value::as_str)
+                            && !ui.iter().any(|r| matches!(r, UiRequest::Status(s) if s == w))
+                        {
+                            ui.push(UiRequest::Status(w.to_string()));
+                        }
                     }
+                    Err(e) => log::warn!("preview {cmd}: {e}"),
+                },
+                // The drag is over: the dabs of a Liquify stroke have no further use.
+                Action::Commit => {
+                    self.liquify_stroke = None;
+                    self.commit_interaction()?
                 }
-                Action::Commit => self.commit_interaction()?,
-                Action::Cancel => self.cancel_interaction()?,
+                Action::Cancel => {
+                    self.liquify_stroke = None;
+                    self.cancel_interaction()?
+                }
                 Action::Exec(cmd, p) => {
                     self.execute(&cmd, &p)?;
                 }

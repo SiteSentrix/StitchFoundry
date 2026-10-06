@@ -489,6 +489,11 @@ then the tool's options `detail`, `simplify` and `simplifyOn` (Warp, Twirl, Puck
 `vertical` (Wrinkle, %), and `showBrush`. `ui.dialog.confirm` runs `tool.setOption {tool, values}`. `ui.pointer`
 events take `pressure` (0..1, default 1): it is the Liquify intensity while Use Pressure Pen is on.
 
+`ui.pointer` events also take `holdMs` (0..60000): the pointer then holds still that long, button down, before the
+next event. Twirl, Pucker and Bloat keep applying while held (a repeat of the last point every 0.1 s), exactly as
+for the same time held with the mouse. Liquify leaves type, symbols, images, graphs, meshes, envelopes, repeats and
+blends as they are and says so in the status bar.
+
 Perspective grid presets: in the `perspectiveGrid` dialog, `name` is the preset whose fields are loaded (setting the
 fields of a preset, as the Preset menu does, keeps its name; other changes clear it, which reads [Custom]). Save
 Preset… sets `__mode: "save"` and `__from: "define"` with `name` the new preset's name: `ui.dialog.confirm` then saves

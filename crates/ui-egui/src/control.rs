@@ -145,6 +145,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 };
                 let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
                 crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, pressure: PointerEvent::json_pressure(e) }, view);
+                let hold = PointerEvent::json_hold(e);
+                if hold > 0.0 {
+                    let r = app.session.tool_tick(hold, view);
+                    crate::canvas::apply_requests(app, r);
+                }
             }
             ctx.request_repaint();
             wrap(app.run("document.inspect", json!({})).map(|d| json!({"selection": d["selection"], "tool": app.session.tool_id()})))
