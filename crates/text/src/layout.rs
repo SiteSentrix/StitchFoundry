@@ -8,19 +8,22 @@ use vectorcraft_doc::{CharStyle, Justify, ParaStyle, PathEffect, TextKind, TextO
 use crate::composer::{Breakpoint, compose};
 use crate::fontdb::FontDb;
 use crate::hyphen::hyphen_points;
-use crate::shape::{SGlyph, cap_x_heights, hyphen_glyph, shape_range, style_metrics};
-use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, PositionedGlyph, TextLayout};
+use crate::shape::{SGlyph, Tcy, cap_x_heights, hyphen_glyph, no_line_end, no_line_start, shape_range, style_metrics};
+use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout};
 
 const EPS: f64 = 1e-6;
 
 struct Ctx<'a> {
-    vertical: bool,
     on_path: bool,
     db: &'a FontDb,
     text: &'a str,
     runs: Vec<(Range<usize>, &'a CharStyle)>,
     default: CharStyle,
     opts: &'a LayoutOptions,
+    /// Vertical type: lines are laid out as horizontal lines in line space, upright glyphs turned
+    /// a quarter turn back (see [`stands_upright`]); [`TextLayout::line_xf`] then stands the lines
+    /// up as columns.
+    vertical: bool,
     out: TextLayout,
 }
 
@@ -33,6 +36,19 @@ impl Ctx<'_> {
     fn shape_para(&self, r: Range<usize>) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         shape_range(self.db, self.text, r, &self.runs, &self.opts.features, &mut v);
+        if self.vertical {
+            tate_chu_yoko(&mut v, |g| self.style_at(g.byte).size);
+            // An upright glyph advances at least one em down the column (the vertical advance of
+            // CJK fonts), centred in it: a narrow mark like § must not overlap its neighbours.
+            for g in v.iter_mut().filter(|g| stands_upright(g)) {
+                let natural = g.face.advance(g.gid) * g.sx;
+                let em = g.face.units_per_em() * g.sx;
+                if natural < em && g.adv > 0.0 {
+                    g.dx += (em - natural) * 0.5;
+                    g.adv += em - natural;
+                }
+            }
+        }
         v
     }
 
@@ -40,20 +56,21 @@ impl Ctx<'_> {
         let src = self.db.outline(&g.face, g.gid);
         let local = Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
         let mut m = pre * local;
-        let mut origin = origin;
-        let mut angle = angle;
-        if self.vertical {
-            let writing = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
-            if self.on_path {
-                // Vertical path type keeps the baseline path and turns each glyph across it.
-                m = Affine::translate(origin.to_vec2()) * Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::translate(-origin.to_vec2()) * m;
-            } else {
-                let physical = writing * origin;
-                let upright = matches!(g.ch as u32, 0x3000..=0x30ff | 0x3400..=0x9fff | 0xf900..=0xfaff | 0xfe10..=0xfe4f | 0xff01..=0xff60 | 0x20000..=0x3134f);
-                m = if upright { Affine::translate((physical - origin) + Vec2::new(-g.descent, g.ascent)) * m } else { writing * m };
-                origin = physical;
-                angle += std::f64::consts::FRAC_PI_2;
-            }
+        if self.vertical && self.on_path {
+            // Vertical path type keeps the baseline path and turns each glyph across it.
+            m = Affine::rotate_about(std::f64::consts::FRAC_PI_2, origin) * m;
+        } else if let (true, Some(t)) = (self.vertical, g.tcy) {
+            // Tate-chu-yoko: the block set across the column, centred on its em of it.
+            let em = self.style_at(g.byte).size;
+            let start = origin.x - t.pen;
+            let centre = Point::new(start + em * 0.5, origin.y - EM_CENTER * em);
+            let across = Affine::translate((centre.x - t.width * 0.5 + t.ink - origin.x, 0.0));
+            let squeeze = Affine::translate((centre.x, 0.0)) * Affine::scale_non_uniform(t.squeeze, 1.0) * Affine::translate((-centre.x, 0.0));
+            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, centre) * squeeze * across * m;
+        } else if self.vertical && stands_upright(g) {
+            // Turned about the centre of its em box, which the column's centre line runs through.
+            let em = self.style_at(g.byte).size;
+            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + advance * 0.5, origin.y - EM_CENTER * em)) * m;
         }
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
@@ -116,48 +133,122 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
         }
     }
     paras.push(s..text.len());
-    let mut vertical_opts = opts.clone();
-    vertical_opts.features.vertical = t.vertical;
-    let opts = &vertical_opts;
+    let vertical = t.vertical;
     let is_on_path = matches!(&t.kind, TextKind::OnPath { .. });
-    let mut cx = Ctx {
-        vertical: t.vertical,
-        on_path: is_on_path,
-        db,
-        text: &text,
-        runs,
-        default: CharStyle::default(),
-        opts,
-        out: TextLayout { vertical: t.vertical && !is_on_path, ..Default::default() },
+    let vopts;
+    let opts = if vertical {
+        vopts = LayoutOptions { features: OtFeatures { vertical: true, ..opts.features }, ..opts.clone() };
+        &vopts
+    } else {
+        opts
+    };
+    let mut cx = Ctx { on_path: is_on_path, db, text: &text, runs, default: CharStyle::default(), opts, vertical, out: TextLayout::default() };
+    // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next
+    // one to the left). Point type's anchor is on the first column's centre line. Vertical path
+    // type stays on its path (each glyph turned across it in `emit`).
+    let line_xf = match &t.kind {
+        _ if !vertical => Affine::IDENTITY,
+        TextKind::OnPath { .. } => Affine::IDENTITY,
+        TextKind::Point => Affine::translate((-EM_CENTER * cx.style_at(0).size, 0.0)) * QUARTER_TURN,
+        _ => QUARTER_TURN,
     };
     match &t.kind {
         TextKind::Point => flow(&mut cx, &paras, &t.para, None),
         TextKind::Area { frame } => {
-            let inverse = Affine::new([0.0, -1.0, 1.0, 0.0, 0.0, 0.0]);
-            let frame = if t.vertical { frame.transformed(inverse) } else { frame.clone() };
-            let mut wrap = t.wrap.clone();
-            if t.vertical {
-                for w in &mut wrap {
-                    w.path.transform(inverse);
-                }
-            }
-            let regions = Region::cells(&frame.to_bezpath(), opts, &wrap);
-            cx.out.frames = regions.iter().map(|r| r.cell).collect();
+            let to_lines = line_xf.inverse();
+            let wrap: Vec<vectorcraft_doc::WrapShape> = if vertical {
+                t.wrap.iter().map(|w| vectorcraft_doc::WrapShape { path: w.path.transformed(to_lines), ..w.clone() }).collect()
+            } else {
+                t.wrap.clone()
+            };
+            let regions = Region::cells(&(to_lines * frame.to_bezpath()), opts, &wrap);
+            cx.out.frames = regions.iter().map(|r| line_xf.transform_rect_bbox(r.cell)).collect();
             flow(&mut cx, &paras, &t.para, Some(&regions));
         }
         TextKind::OnPath { path, start } => on_path(&mut cx, &paras, &t.para, &path.to_bezpath(), *start, path.is_closed(), t.path_effect),
     }
-    if cx.out.vertical {
-        let writing = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
-        for frame in &mut cx.out.frames {
-            *frame = writing.transform_rect_bbox(*frame);
+    if vertical && !is_on_path {
+        // Glyph origins, outlines and transforms to text space (lines stay in line space).
+        for g in &mut cx.out.glyphs {
+            g.outline.apply_affine(line_xf);
+            g.xf = line_xf * g.xf;
+            g.origin = line_xf * g.origin;
+            g.angle += std::f64::consts::FRAC_PI_2;
         }
+        cx.out.vertical = true;
+        cx.out.line_xf = line_xf;
     }
     finish_bounds(&mut cx.out);
     cx.out
 }
 
+/// Tate-chu-yoko: a run of two or three half-width digits (`10`月, `100`年) stands upright across
+/// the column as one block one em long, squeezed to the em when wider; longer numbers (`2026`)
+/// stay on their side.
+fn tate_chu_yoko(g: &mut [SGlyph], size: impl Fn(&SGlyph) -> f64) {
+    let digits: Vec<bool> = g.iter().map(|g| g.ch.is_ascii_digit()).collect();
+    let digit = |i: usize| digits.get(i).copied().unwrap_or(false);
+    let mut i = 0;
+    while i < g.len() {
+        if !digit(i) {
+            i += 1;
+            continue;
+        }
+        let mut end = i;
+        while digit(end) {
+            end += 1;
+        }
+        if (2..=3).contains(&(end - i)) {
+            let em = size(&g[i]);
+            let width: f64 = g[i..end].iter().map(|g| g.adv).sum();
+            let squeeze = if width > em && width > 0.0 { em / width } else { 1.0 };
+            let mut ink = 0.0;
+            for (k, gl) in g[i..end].iter_mut().enumerate() {
+                let adv = gl.adv;
+                gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze });
+                gl.adv = if k == 0 { em } else { 0.0 };
+                ink += adv;
+            }
+        }
+        i = end;
+    }
+}
+
+/// Height of the centre of the ideographic em box above the baseline, in ems (the em box runs
+/// from 0.12 em below the baseline to 0.88 em above it).
+const EM_CENTER: f64 = 0.38;
+
+/// A quarter turn clockwise (y down), exact: line space → text space for vertical type.
+const QUARTER_TURN: Affine = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
+
+/// Does the glyph stand upright in vertical type? CJK characters and symbols do (their vertical
+/// forms come from the font's `vert` feature); Latin letters, digits and other characters lie on
+/// their side. Brackets, the long vowel mark and similar marks that need a vertical form lie on
+/// their side when the font has none (Unicode's Vertical_Orientation Tr).
+fn stands_upright(g: &SGlyph) -> bool {
+    let c = g.ch as u32;
+    let upright = matches!(c,
+        0x00A7 | 0x00A9 | 0x00AE | 0x00B1 | 0x00BC..=0x00BE | 0x00D7 | 0x00F7
+        | 0x2016 | 0x2020 | 0x2021 | 0x2030 | 0x2031 | 0x203B | 0x203C | 0x2042 | 0x2047..=0x2049 | 0x2051
+        | 0x20DD..=0x20E0 | 0x20E2..=0x20E4 | 0x2100..=0x2101 | 0x2103..=0x2109 | 0x210F | 0x2113 | 0x2116 | 0x2117
+        | 0x211E..=0x2123 | 0x2125 | 0x2127 | 0x2129 | 0x212E | 0x2135..=0x213F | 0x2145..=0x214A | 0x214C | 0x214D | 0x214F..=0x2189
+        | 0x2460..=0x24FF | 0x25A0..=0x27BF | 0x2B12..=0x2B2F | 0x2B50..=0x2B59
+        | 0x1100..=0x11FF | 0x2E80..=0x303F | 0x3040..=0xA4CF | 0xA960..=0xA97F | 0xAC00..=0xD7FF
+        | 0xE000..=0xFAFF | 0xFE10..=0xFE1F | 0xFE30..=0xFE4F | 0xFE50..=0xFE6F | 0xFF00..=0xFFE7
+        | 0x1F000..=0x1FAFF | 0x20000..=0x3FFFF);
+    if !upright {
+        return false;
+    }
+    let needs_vertical_form = matches!(c,
+        0x3001 | 0x3002 | 0x3008..=0x3011 | 0x3013..=0x301F | 0x3030 | 0x30A0 | 0x30FC
+        | 0xFE50..=0xFE52 | 0xFE59..=0xFE5E | 0xFF01 | 0xFF08 | 0xFF09 | 0xFF0C | 0xFF0E | 0xFF1A | 0xFF1B | 0xFF1F
+        | 0xFF3B | 0xFF3D | 0xFF3F | 0xFF5B..=0xFF60 | 0xFFE3);
+    // Without a vertical alternate the shaped glyph is the nominal one.
+    !needs_vertical_form || g.gid != g.face.glyph_for(g.ch)
+}
+
 fn finish_bounds(out: &mut TextLayout) {
+    let xf = out.line_xf;
     let mut b: Option<Rect> = None;
     let mut add = |r: Rect| b = Some(b.map_or(r, |b| b.union(r)));
     for g in &out.glyphs {
@@ -167,8 +258,7 @@ fn finish_bounds(out: &mut TextLayout) {
     }
     if !out.on_path {
         for l in &out.lines {
-            let r = Rect::new(l.x0.min(l.x1), l.baseline - l.ascent, l.x0.max(l.x1), l.baseline + l.descent);
-            add(if out.vertical { Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]).transform_rect_bbox(r) } else { r });
+            add(xf.transform_rect_bbox(Rect::new(l.x0.min(l.x1), l.baseline - l.ascent, l.x0.max(l.x1), l.baseline + l.descent)));
         }
     }
     out.bounds = b.unwrap_or_default();
@@ -502,7 +592,7 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool) -
             break;
         }
         x += gl.adv;
-        if gl.break_after() {
+        if gl.break_after() && kinsoku_allows(g, j) {
             if gl.is_soft_hyphen() {
                 if x + hyphen_glyph(gl).adv <= width + EPS {
                     last_break = Some((j + 1, true));
@@ -524,7 +614,7 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool) -
             we += 1;
         }
         let x_ws: f64 = g[i..word_start].iter().map(|g| g.adv).sum();
-        let pts = hyphen_breaks(text, g, word_start, we);
+        let pts: Vec<usize> = hyphen_breaks(text, g, word_start, we).into_iter().filter(|&k| k > 0 && kinsoku_allows(g, k - 1)).collect();
         for &k in pts.iter().rev() {
             if k <= j && k > i {
                 let w = x_ws + g[word_start..k].iter().map(|g| g.adv).sum::<f64>() + hyphen_glyph(&g[k - 1]).adv;
@@ -543,6 +633,30 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool) -
         end -= 1;
     }
     (end, hy)
+}
+
+/// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a
+/// closing one, a comma, a full stop, a small kana… (the character is pushed to the next line
+/// with the one before it).
+fn kinsoku_allows(g: &[SGlyph], j: usize) -> bool {
+    g.get(j).is_some_and(|gl| kinsoku_between(gl.ch, g.get(j + 1).map(|n| n.ch)))
+}
+
+/// Kinsoku for a break between `before` and `after` (none: the end of the paragraph).
+fn kinsoku_between(before: char, after: Option<char>) -> bool {
+    !no_line_end(before) && after.is_none_or(|c| !no_line_start(c))
+}
+
+#[cfg(test)]
+#[test]
+fn kinsoku_keeps_closing_marks_off_line_starts_and_opening_ones_off_line_ends() {
+    for (a, b) in [('字', '。'), ('弧', '」'), ('」', '、'), ('ャ', 'ー'), ('カ', 'ッ'), ('「', 'か'), ('（', '雅')] {
+        assert!(!kinsoku_between(a, Some(b)), "{a}{b}");
+    }
+    for (a, b) in [('。', '雅'), ('」', 'は'), ('字', '「'), ('の', '演')] {
+        assert!(kinsoku_between(a, Some(b)), "{a}{b}");
+    }
+    assert!(kinsoku_between('。', None));
 }
 
 /// Glyph indices inside `g[ws..we]` (a word) where a hyphenated break may go.
@@ -579,19 +693,19 @@ fn candidates(text: &str, g: &[SGlyph], hyphenate: bool) -> Vec<Breakpoint> {
         let end_of_word = gl.is_space() || gl.break_after();
         if end_of_word {
             if hyphenate && j > ws {
-                for k in hyphen_breaks(text, g, ws, j) {
+                for k in hyphen_breaks(text, g, ws, j).into_iter().filter(|&k| k > 0 && kinsoku_allows(g, k - 1)) {
                     v.push(Breakpoint { end: k, hyphen: hyphen_glyph(&g[k - 1]).adv });
                 }
             }
             let hy = if gl.is_soft_hyphen() { hyphen_glyph(gl).adv } else { 0.0 };
-            if j + 1 < g.len() && g[j + 1].byte != gl.byte {
+            if j + 1 < g.len() && g[j + 1].byte != gl.byte && kinsoku_allows(g, j) {
                 v.push(Breakpoint { end: j + 1, hyphen: hy });
             }
             ws = j + 1;
         }
     }
     if hyphenate && g.len() > ws {
-        for k in hyphen_breaks(text, g, ws, g.len()) {
+        for k in hyphen_breaks(text, g, ws, g.len()).into_iter().filter(|&k| k > 0 && kinsoku_allows(g, k - 1)) {
             v.push(Breakpoint { end: k, hyphen: hyphen_glyph(&g[k - 1]).adv });
         }
     }

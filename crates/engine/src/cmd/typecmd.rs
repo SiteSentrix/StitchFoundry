@@ -316,6 +316,23 @@ mod area_tests {
     use super::*;
 
     #[test]
+    fn vertical_point_type_keeps_its_anchor_on_the_column_centre_line() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 100, "y": 50, "text": "§§§§ abc"})).unwrap()["id"].as_u64().unwrap();
+        let bounds = |s: &Session| s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+        let wide = bounds(&s);
+        assert!(wide.width() > wide.height());
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("type.orientation.vertical", &json!({})).unwrap();
+        let tall = bounds(&s);
+        assert!(tall.height() > tall.width(), "{tall:?}");
+        assert!((tall.center().x - 100.0).abs() < 6.0, "the anchor stays on the column's centre line: {tall:?}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(bounds(&s), wide);
+    }
+
+    #[test]
     fn area_options_columns_change_layout() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
