@@ -46,6 +46,7 @@ mod path;
 mod pathops;
 mod patterncmds;
 pub mod pdfcmds;
+pub mod perspgrid;
 mod place;
 pub mod plugin;
 pub mod prefscmds;
@@ -250,6 +251,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(plugin::specs());
         v.extend(cut::specs());
         v.extend(halftone::specs());
+        v.extend(perspgrid::specs());
         v
     })
 }

@@ -547,6 +547,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{path?: a .wasm file} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too)",
     ),
+    (
+        "ui.perspectiveGridDialog",
+        "Define Perspective Grid…",
+        "",
+        "{} open View › Perspective Grid › Define Grid (dialog `perspectiveGrid`, prefilled from the grid: the fields of perspective.grid.define); OK runs perspective.grid.define",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -960,6 +966,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "ui.printPresetDialog" => crate::dialogs::print::open_preset(app, p),
         "plugin.dialog" => crate::dialogs::plugin::open(app, p),
         "ui.installPlugin" => io::install_plugin(app, s("path")),
+        "ui.perspectiveGridDialog" => crate::dialogs::perspective_grid::open(app),
         _ => return None,
     };
     Some(r)
@@ -1206,6 +1213,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
         "plugin.dialog" => app.session.active().is_some(),
+        "ui.perspectiveGridDialog" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1760,7 +1768,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         cp("One Point Perspective", "perspective.grid.preset", json!({"kind": 1})),
                         cp("Two Point Perspective", "perspective.grid.preset", json!({"kind": 2})),
                         cp("Three Point Perspective", "perspective.grid.preset", json!({"kind": 3})),
-                        cp("Define Grid…", "perspective.grid.set", json!({"kind": 2, "cell": 20, "distance": 300})),
+                        c("Define Grid…", "ui.perspectiveGridDialog"),
                     ],
                 ),
                 c("Show Grid", "view.grid"),
