@@ -319,6 +319,41 @@ fn solid_hatches_fill_and_pattern_hatches_outline() {
     assert!(square.appearance.fill().is_some_and(|f| !f.paint.is_none()));
 }
 
+/// A solid hatch: a loop of a line and a spline edge (`fit` its fit data, if any), followed by
+/// `source` (the loop's source-object count and handles), and a square hole.
+fn spline_edged_hatch(fit: &[(i32, &'static str)], source: &[(i32, &'static str)]) -> Vec<(i32, &'static str)> {
+    let mut e = vec![(0, "HATCH"), (62, "1"), (10, "0"), (20, "0"), (30, "0"), (2, "SOLID"), (70, "1"), (71, "1"), (91, "2")];
+    e.extend([(92, "1"), (93, "2"), (72, "1"), (10, "0"), (20, "0"), (11, "100"), (21, "0")]);
+    e.extend([(72, "4"), (94, "3"), (73, "0"), (74, "0"), (95, "8"), (96, "4")]);
+    e.extend(["0", "0", "0", "0", "1", "1", "1", "1"].map(|k| (40, k)));
+    e.extend([(10, "100"), (20, "0"), (10, "100"), (20, "100"), (10, "0"), (20, "100"), (10, "0"), (20, "0")]);
+    e.extend_from_slice(fit);
+    e.extend_from_slice(source);
+    e.extend([(92, "2"), (72, "0"), (73, "1"), (93, "4"), (10, "40"), (20, "20"), (10, "60"), (20, "20")]);
+    e.extend([(10, "60"), (20, "40"), (10, "40"), (20, "40"), (97, "0"), (75, "0"), (76, "1"), (98, "0")]);
+    e
+}
+
+#[test]
+fn hatch_spline_edges_with_or_without_fit_data() {
+    // Before DXF 2010 a spline edge has no fit data, so a 97 right after it is the loop's own
+    // count of source objects; from 2010 on it has a fit count, here 0, before that.
+    let source = [(97, "1"), (330, "1F")];
+    for fit in [&[][..], &[(97, "0")][..]] {
+        let r = open(&entities(&spline_edged_hatch(fit, &source)), &points());
+        let [hatch] = &r.document.layers[0].children().unwrap()[..] else { panic!("fit data {fit:?}: the hatch is lost") };
+        let NodeKind::Compound { children, .. } = &hatch.kind else { panic!("{:?}", hatch.kind) };
+        assert_eq!(children.len(), 2, "the outline and the hole, fit data {fit:?}");
+        // The spline edge peaks three quarters of the way up its control polygon.
+        let b = bounds(hatch);
+        assert!((b.width() - 100.0).abs() < 1e-6 && (b.height() - 75.0).abs() < 1e-6, "{b:?}");
+    }
+    // Fit points after the count are still read (and ignored when there are control points).
+    let fit = [(97, "2"), (11, "100"), (21, "0"), (11, "0"), (21, "0")];
+    let r = open(&entities(&spline_edged_hatch(&fit, &source)), &points());
+    assert_eq!(r.document.layers[0].children().unwrap().len(), 1);
+}
+
 #[test]
 fn text_and_multiline_text() {
     let tables = [(0, "TABLE"), (2, "STYLE"), (0, "STYLE"), (2, "Notes"), (3, "DejaVuSans.ttf"), (0, "ENDTAB")];

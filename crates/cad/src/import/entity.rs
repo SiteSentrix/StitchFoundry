@@ -547,7 +547,14 @@ fn edge(c: &mut Cursor<'_, '_>) -> Option<BezPath> {
                 ctrl.push(c.point(10)?);
                 weights.push(c.num(42).unwrap_or(1.0));
             }
-            let fit: Vec<Point> = match c.count(97) {
+            // Fit data (DXF 2010 and later): a count, then that many points. Older files have none,
+            // and the 97 that may follow is the boundary's count of source objects (then their
+            // handles), so it is only the fit count when it is 0 or points follow.
+            let fit_count = match (c.g.get(c.i), c.g.get(c.i + 1)) {
+                (Some(count), next) if count.code == 97 => number(count.value) == Some(0.0) || next.is_some_and(|p| p.code == 11),
+                _ => false,
+            };
+            let fit: Vec<Point> = match fit_count.then(|| c.count(97)).flatten() {
                 Some(n) => (0..n).map(|_| c.point(11)).collect::<Option<_>>()?,
                 None => vec![],
             };
