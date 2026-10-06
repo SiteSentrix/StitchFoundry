@@ -24,6 +24,9 @@ use vectorcraft_geom::{Point, Rect};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
+pub mod define;
+pub use define::{GridDefinition, Rgb, Station};
+
 /// Key under `Document.unknown`.
 pub const DOC_KEY: &str = "perspectiveGrid";
 
@@ -160,6 +163,30 @@ pub struct PerspectiveGrid {
     /// Objects attached to planes (node id → plane).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub attached: BTreeMap<String, Plane>,
+    /// The preset the grid came from ("" = custom).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// Viewing angle in degrees (two/three-point): where the station point stands between the
+    /// vanishing points ([`Station`]). None for grids made before it: they foreshorten every axis
+    /// by `distance`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angle: Option<f64>,
+    /// The unit Define Grid measures in (a unit name, e.g. `points`, `inches`).
+    #[serde(default = "define::points", skip_serializing_if = "define::is_points")]
+    pub units: String,
+    /// Scale: `[artboard, real world]` lengths (Define Grid's real-world lengths over this).
+    #[serde(default = "define::one_to_one", skip_serializing_if = "define::is_one_to_one")]
+    pub scale: [f64; 2],
+    /// Gridline colours of the left, right and horizontal (ground) planes.
+    #[serde(default = "define::left_rgb")]
+    pub left_color: Rgb,
+    #[serde(default = "define::right_rgb")]
+    pub right_color: Rgb,
+    #[serde(default = "define::ground_rgb")]
+    pub ground_color: Rgb,
+    /// Gridline opacity, 0–100 %.
+    #[serde(default = "define::half")]
+    pub opacity: f64,
 }
 
 impl PerspectiveGrid {
@@ -185,6 +212,14 @@ impl PerspectiveGrid {
             visible: true,
             plane: Plane::Left,
             attached: BTreeMap::new(),
+            name: String::new(),
+            angle: None,
+            units: define::points(),
+            scale: define::one_to_one(),
+            left_color: define::left_rgb(),
+            right_color: define::right_rgb(),
+            ground_color: define::ground_rgb(),
+            opacity: define::half(),
         }
     }
 
@@ -193,12 +228,9 @@ impl PerspectiveGrid {
         doc.unknown.get(DOC_KEY).and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
-    /// The document's grid, or the default 2-point preset for the first artboard (hidden).
+    /// The document's grid, or the default two-point preset for the first artboard (hidden).
     pub fn effective(doc: &Document) -> Self {
-        Self::from_doc(doc).unwrap_or_else(|| {
-            let ab = doc.artboards.first().map(|a| a.rect).unwrap_or(Rect::new(0.0, 0.0, 612.0, 792.0));
-            Self { visible: false, ..Self::preset(2, ab) }
-        })
+        Self::from_doc(doc).unwrap_or_else(|| Self { visible: false, ..Self::normal(2, define::first_artboard(doc)) })
     }
 
     /// Store into the document.
@@ -230,7 +262,8 @@ impl PerspectiveGrid {
                 o.insert(k.clone(), val.clone());
             }
         }
-        let g: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;
+        let mut g: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;
+        g.reconcile(self, patch);
         g.validate()?;
         Ok(g)
     }
@@ -261,7 +294,7 @@ impl PerspectiveGrid {
         if (self.origin[1] - self.horizon).abs() < 1e-6 {
             return Err("ground level must differ from the horizon".into());
         }
-        Ok(())
+        self.validate_definition()
     }
 
     pub fn planes(&self) -> [Plane; 3] {
@@ -270,11 +303,11 @@ impl PerspectiveGrid {
 
     /// The homography of `plane` (plane coordinates in points → page).
     pub fn homography(&self, plane: Plane) -> Option<Homography> {
-        let l = 1.0 / self.distance.max(1e-9);
+        let (ll, lr, lu) = self.foreshortening();
         let o = [self.origin[0], self.origin[1], 1.0];
-        let vl = [self.vp_left * l, self.horizon * l, l];
-        let vr = [self.vp_right * l, self.horizon * l, l];
-        let up = if self.kind == 3 { [self.vp_vertical[0] * l, self.vp_vertical[1] * l, l] } else { [0.0, -1.0, 0.0] };
+        let vl = [self.vp_left * ll, self.horizon * ll, ll];
+        let vr = [self.vp_right * lr, self.horizon * lr, lr];
+        let up = if self.kind == 3 { [self.vp_vertical[0] * lu, self.vp_vertical[1] * lu, lu] } else { [0.0, -1.0, 0.0] };
         let flat = [1.0, 0.0, 0.0];
         let (c1, c2) = match (self.kind, plane) {
             (_, Plane::None) => return None,

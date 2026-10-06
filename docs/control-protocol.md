@@ -449,3 +449,9 @@ Tool options last: `tool.setOption {key, value}` or `{values: {…}}` (and `tool
 the options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, Symbolism, drawing tools) stay
 when you switch tools or documents and are saved with the preferences. The Liquify tools share their Global Brush
 Dimensions (`width`, `height`, `angle`, `intensity`).
+
+Perspective grid: View → Perspective Grid → Define Grid… (`ui.perspectiveGridDialog`) opens the `perspectiveGrid`
+dialog prefilled from the grid. Its fields are those of `perspective.grid.define` (`kind`, `units`, `scale`,
+`gridline`, `angle`, `distance`, `horizonHeight`, `thirdVp`, `leftColor`, `rightColor`, `groundColor`, `opacity`;
+lengths in `units`, so setting `units` converts them). `ui.dialog.confirm` runs `perspective.grid.define`; a refused
+value keeps the dialog open.

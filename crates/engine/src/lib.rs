@@ -1242,6 +1242,8 @@ mod tests_pdfpresets;
 #[cfg(test)]
 mod tests_pdfraster;
 #[cfg(test)]
+mod tests_perspgrid;
+#[cfg(test)]
 mod tests_place;
 #[cfg(test)]
 mod tests_plugins;

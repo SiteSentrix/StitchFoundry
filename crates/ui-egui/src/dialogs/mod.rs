@@ -39,6 +39,7 @@ pub mod office_export;
 pub mod package;
 mod path_ops;
 pub mod pdf_presets;
+pub mod perspective_grid;
 pub mod place;
 pub mod placement_options;
 pub mod plugin;
@@ -249,6 +250,7 @@ registry! {
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
+    PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
 }
 
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
@@ -392,3 +394,6 @@ mod tests_print_advanced;
 
 #[cfg(test)]
 mod tests_scale;
+
+#[cfg(test)]
+mod tests_perspective;

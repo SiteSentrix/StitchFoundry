@@ -1746,3 +1746,21 @@ intensity), and the Symbolism tools one brush. Interaction state (pins, a refere
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
 ```
+
+## Perspective grid
+
+The grid is document data (`perspective.grid.set` edits the model directly). `perspective.grid.get` reads it:
+`grid` (the model), `define` (the Define Grid fields), `station` (the viewer: `x` the centre of vision on the
+horizon `y`, `distance` from the picture plane, in points) and `defined` (false while the document uses the default
+grid). `perspective.grid.define` sets the grid from the Define Grid fields: `kind`, `units`, `scale`
+(`[artboard, real world]`), `gridline`, `angle` (the viewing angle, 0–90°), `distance` (the viewing distance),
+`horizonHeight`, `thirdVp` (`[x right, y up]` from the centre of vision), `leftColor`, `rightColor`, `groundColor`
+(`"#rrggbb"`) and `opacity` (0–100). Lengths are real-world lengths in `units` drawn at `scale`; missing fields keep the
+grid's. Only what differs changes (an unchanged OK is no undo step): a new type, angle or distance moves the vanishing
+points around the station point, which stays put. In two- and three-point grids the viewer looks at the left plane at
+the viewing angle, so the vanishing points sit at `x − distance/tan(angle)` and `x + distance·tan(angle)`.
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.grid.get","params":{}}}
+{"name":"run_command","arguments":{"command":"perspective.grid.define","params":{"units":"inches","gridline":0.5,"angle":30,"distance":6,"horizonHeight":3}}}
+```
