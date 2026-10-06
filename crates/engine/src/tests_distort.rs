@@ -296,6 +296,8 @@ fn rectangle_tool_draws_in_perspective_on_the_active_plane() {
     let mut s = session();
     s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
     s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    // Snap to Grid (on by default) would move the dragged corners onto gridlines.
+    s.execute("perspective.grid.snap", &json!({"on": false})).unwrap();
     let n = undo_len(&s);
     gesture(&mut s, "rectangle", &[(300.0, 320.0), (330.0, 360.0), (350.0, 400.0)], Mods::default());
     assert_eq!(undo_len(&s), n + 1);
@@ -319,6 +321,8 @@ fn perspective_selection_moves_within_the_plane() {
     s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
     let a = rect(&mut s, 450.0, 380.0, 60.0, 60.0);
     s.execute("perspective.attach", &json!({"ids": [a.0], "plane": "right"})).unwrap();
+    // Snap to Grid (on by default) would land the moved edges on gridlines.
+    s.execute("perspective.grid.snap", &json!({"on": false})).unwrap();
     let g = grid(&s);
     let before: Vec<Point> = path(&s, a).anchors().map(|(_, _, an)| g.to_plane(Plane::Right, an.p).unwrap()).collect();
     let centre = before.iter().fold(vectorcraft_geom::Vec2::ZERO, |a, p| a + p.to_vec2()) / before.len() as f64;

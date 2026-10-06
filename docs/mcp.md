@@ -1782,6 +1782,29 @@ the viewing angle, so the vanishing points sit at `x − distance/tan(angle)` an
 {"name":"run_command","arguments":{"command":"perspective.grid.define","params":{"units":"inches","gridline":0.5,"angle":30,"distance":6,"horizonHeight":3}}}
 ```
 
+Perspective grid presets: `perspective.presets.list` lists the built-in views (`[1P-Normal View]`, `[1P-Low View]`,
+`[1P-High View]`, `[2P-Normal View]`, `[2P-Low View]`, `[2P-High View]`, `[3P-Normal View]`, `[3P-Low View]`;
+`builtIn: true`, fitted to the first artboard, protected), then the saved ones, each with its Define Grid fields.
+`perspective.grid.preset {name}` (or `{kind}`, that type's normal view) resets the grid to one, fitted to the first
+artboard. `perspective.presets.save {name?, newName?, preset?, …fields}` saves a preset: just `{name}` saves the
+document's grid (View → Perspective Grid → Save Grid as Preset). `perspective.presets.delete {name}`,
+`perspective.presets.export {names?, path?}` (a `.vcperspective` JSON file; without `path` it returns `data`) and
+`perspective.presets.import {path? | data? | dataBase64?, replace?}` manage them. Saved presets are kept with the
+preferences, and a grid whose fields are a preset's is named after it (`name`).
+
+```json
+{"name":"run_command","arguments":{"command":"perspective.grid.preset","params":{"name":"[2P-Low View]"}}}
+{"name":"run_command","arguments":{"command":"perspective.presets.save","params":{"name":"Street","units":"feet","scale":[1,48],"gridline":1}}}
+```
+
+Perspective grid view options (View → Perspective Grid; view state saved with the document, no undo step, each
+`{on?: bool}`, no param toggles, → `{on}`): `perspective.grid.lock` (Lock Grid: the grid's widgets can't be dragged),
+`perspective.grid.lockStation` (Lock Station Point: dragging one vanishing point turns the view around the station
+point, so the other one moves), `perspective.grid.snap` (Snap to Grid, on by default: `perspective.draw` lands the
+drawn corners, and `perspective.move` the nearer edge, on gridlines within a quarter cell; both take `snap: false`)
+and `perspective.grid.rulers` (Show Rulers: a ruler up the line where the planes meet, in the grid's units at its
+scale). Gridlines draw in the Define Grid colours at its opacity.
+
 ## Envelopes
 
 Object → Envelope Distort wraps the selection in a live envelope: `object.envelope.makeWithWarp` (`style`: arc,
@@ -1828,21 +1851,6 @@ its current size (with Shift too it keeps its proportions). With Use Pressure Pe
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"bloat","values":{"width":80,"height":80,"usePressure":true}}}}
 {"name":"pointer_gesture","arguments":{"tool":"bloat","events":[{"kind":"down","x":280,"y":150,"pressure":0.3},{"kind":"drag","x":280,"y":200,"pressure":0.8},{"kind":"up","x":280,"y":250}]}}
 {"name":"run_command","arguments":{"command":"object.liquify","params":{"tool":"scallop","points":[[300,150],[300,250]],"complexity":3,"affectAnchors":false}}}
-```
-
-Perspective grid presets: `perspective.presets.list` lists the built-in views (`[1P-Normal View]`, `[1P-Low View]`,
-`[1P-High View]`, `[2P-Normal View]`, `[2P-Low View]`, `[2P-High View]`, `[3P-Normal View]`, `[3P-Low View]`;
-`builtIn: true`, fitted to the first artboard, protected), then the saved ones, each with its Define Grid fields.
-`perspective.grid.preset {name}` (or `{kind}`, that type's normal view) resets the grid to one, fitted to the first
-artboard. `perspective.presets.save {name?, newName?, preset?, …fields}` saves a preset: just `{name}` saves the
-document's grid (View → Perspective Grid → Save Grid as Preset). `perspective.presets.delete {name}`,
-`perspective.presets.export {names?, path?}` (a `.vcperspective` JSON file; without `path` it returns `data`) and
-`perspective.presets.import {path? | data? | dataBase64?, replace?}` manage them. Saved presets are kept with the
-preferences, and a grid whose fields are a preset's is named after it (`name`).
-
-```json
-{"name":"run_command","arguments":{"command":"perspective.grid.preset","params":{"name":"[2P-Low View]"}}}
-{"name":"run_command","arguments":{"command":"perspective.presets.save","params":{"name":"Street","units":"feet","scale":[1,48],"gridline":1}}}
 ```
 
 ## Perspective Selection
@@ -1903,3 +1911,4 @@ sits on; the first edit turns the spine into a path. Moving a key moves its end 
 {"name":"run_command","arguments":{"command":"object.blend.spine.addAnchor","params":{"id":40,"x":150,"y":100}}}
 {"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
 ```
+

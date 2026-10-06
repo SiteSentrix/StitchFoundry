@@ -26,6 +26,7 @@ use crate::bbox::{Handle as BoxHandle, scale_for_drag};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 pub mod define;
+pub mod view;
 pub use define::{GridDefinition, Rgb, Station};
 
 /// Key under `Document.unknown`.
@@ -152,6 +153,18 @@ pub struct PerspectiveGrid {
     pub right_offset: f64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub ground_offset: f64,
+    /// View → Perspective Grid → Lock Grid: the grid's widgets can't be dragged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Lock Station Point: dragging one vanishing point moves the other around the station point.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lock_station: bool,
+    /// Snap to Grid: art drawn or moved in perspective lands on gridlines within a quarter cell.
+    #[serde(default = "yes")]
+    pub snap: bool,
+    /// Show Rulers: a ruler up the line where the planes meet.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rulers: bool,
 }
 
 impl PerspectiveGrid {
@@ -188,6 +201,10 @@ impl PerspectiveGrid {
             left_offset: 0.0,
             right_offset: 0.0,
             ground_offset: 0.0,
+            locked: false,
+            lock_station: false,
+            snap: true,
+            rulers: false,
         }
     }
 
@@ -463,10 +480,16 @@ impl PerspectiveGrid {
     /// bottom-right, then the plane homography projects it (so a drawn rectangle keeps the two
     /// corners the user dragged between).
     pub fn attach_map(&self, plane: Plane, b: Rect) -> Option<impl Fn(Point) -> Option<Point> + use<>> {
+        self.attach_map_with(plane, b, false)
+    }
+
+    /// [`Self::attach_map`]; with `snap` the corners land on the nearest gridlines (Snap to Grid).
+    pub fn attach_map_with(&self, plane: Plane, b: Rect, snap: bool) -> Option<impl Fn(Point) -> Option<Point> + use<>> {
         let h = self.homography(plane)?;
         let hi = h.inverse()?;
-        let a = hi.apply(Point::new(b.x0, b.y0))?;
-        let c = hi.apply(Point::new(b.x1, b.y1))?;
+        let snapped = |q: Point| if snap { self.snap_plane(q) } else { q };
+        let a = snapped(hi.apply(Point::new(b.x0, b.y0))?);
+        let c = snapped(hi.apply(Point::new(b.x1, b.y1))?);
         let sx = if b.width().abs() > 1e-9 { (c.x - a.x) / b.width() } else { 1.0 };
         let sy = if b.height().abs() > 1e-9 { (c.y - a.y) / b.height() } else { sx.abs() * if c.y < a.y { -1.0 } else { 1.0 } };
         let sx = if b.width().abs() > 1e-9 { sx } else { sy.abs() };
@@ -476,10 +499,8 @@ impl PerspectiveGrid {
 
     /// The map that slides art lying on `plane` by the plane-space offset between `from` and `to`.
     pub fn move_map(&self, plane: Plane, from: Point, to: Point) -> Option<impl Fn(Point) -> Option<Point> + use<>> {
-        let h = self.homography(plane)?;
-        let hi = h.inverse()?;
-        let d = hi.apply(to)? - hi.apply(from)?;
-        Some(move |p: Point| h.apply(hi.apply(p)? + d))
+        let hi = self.homography(plane)?.inverse()?;
+        self.move_map_by(plane, hi.apply(to)? - hi.apply(from)?)
     }
 
     /// The plane object `id` is attached to, as collected by [`Self::from_doc`].
@@ -706,9 +727,9 @@ pub fn grid_overlays(doc: &Document, tol: f64, tool_id: &str) -> Vec<Overlay> {
     }
     let mut out = vec![];
     for pl in g.planes() {
-        let color = pl.color();
+        let (line, color) = (g.line_color(pl), g.plane_color(pl));
         for (a, b) in g.lines(pl) {
-            out.push(Overlay::Line { a, b, color, dashed: false });
+            out.push(Overlay::GridLine { a, b, color: line });
         }
         if pl == g.plane
             && let Some(h) = g.homography(pl)
@@ -724,6 +745,9 @@ pub fn grid_overlays(doc: &Document, tol: f64, tool_id: &str) -> Vec<Overlay> {
     let xs = [g.vp_left, g.vp_right, g.origin[0]];
     let (x0, x1) = (xs.iter().cloned().fold(f64::MAX, f64::min) - 50.0 * tol, xs.iter().cloned().fold(f64::MIN, f64::max) + 50.0 * tol);
     out.push(Overlay::Line { a: Point::new(x0, g.horizon), b: Point::new(x1, g.horizon), color: [0x60, 0x60, 0x60], dashed: true });
+    if g.rulers {
+        out.extend(g.ruler_overlays(tol));
+    }
     // Widget.
     let (faces, (c, r)) = g.widget(doc, tol);
     for (pl, q) in faces {
@@ -783,6 +807,10 @@ fn handles(g: &PerspectiveGrid) -> Vec<(Handle, Point)> {
 fn drag_handle(g: &PerspectiveGrid, h: Handle, p: Point) -> PerspectiveGrid {
     let mut n = g.clone();
     match h {
+        Handle::VpLeft | Handle::VpRight if g.lock_station && g.kind != 1 => {
+            n.horizon = p.y;
+            n.swing(h == Handle::VpLeft, p.x);
+        }
         Handle::VpLeft => {
             n.vp_left = p.x;
             n.horizon = p.y;
@@ -837,8 +865,9 @@ impl Tool for PerspectiveGridTool {
                     return pre;
                 }
                 let tol = cx.tol(6.0);
-                if let Some((h, _)) =
-                    handles(&g).into_iter().filter(|(_, q)| q.distance(p) <= tol).min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p)))
+                if !g.locked
+                    && let Some((h, _)) =
+                        handles(&g).into_iter().filter(|(_, q)| q.distance(p) <= tol).min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p)))
                 {
                     self.drag = Some(h);
                     pre.push(Action::Begin("Edit Perspective Grid".into()));
@@ -873,6 +902,9 @@ impl Tool for PerspectiveGridTool {
         let tol = cx.tol(6.0);
         if self.plane.is_some() || PlaneDrag::hit(&g, tol, p).is_some() {
             return Cursor::Move;
+        }
+        if g.locked {
+            return Cursor::Arrow;
         }
         match handles(&g).into_iter().find(|(_, q)| q.distance(p) <= tol).map(|h| h.0) {
             Some(Handle::Horizon | Handle::Height) => Cursor::ResizeV,

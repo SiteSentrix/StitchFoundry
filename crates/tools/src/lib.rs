@@ -269,6 +269,8 @@ pub enum Overlay {
     Highlight { quad: [Point; 4], color: [u8; 4] },
     /// A colour chip of fixed screen size (a gradient stop), RGBA; ringed when selected.
     Swatch { p: Point, color: [u8; 4], selected: bool },
+    /// A hairline in a translucent colour (perspective gridlines), RGBA.
+    GridLine { a: Point, b: Point, color: [u8; 4] },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

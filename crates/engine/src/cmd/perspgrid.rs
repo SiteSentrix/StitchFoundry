@@ -5,14 +5,19 @@
 //! Presets: the built-in views (generated in code, fitted to the first artboard, protected) and
 //! the user's, saved with the preferences ([`crate::Prefs::perspective_presets`]) as Define Grid
 //! fields; `perspective.grid.preset` applies one, `perspective.presets.*` manage them.
+//!
+//! View options (Lock Grid, Lock Station Point, Snap to Grid, Show Rulers) are view state on
+//! the grid: they toggle without an undo step, as Show Grid does.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_geom::Rect;
+use vectorcraft_doc::{Document, NodeId};
+use vectorcraft_geom::{Point, Rect, Vec2};
+use vectorcraft_tools::distort::perspective::Plane;
 use vectorcraft_tools::distort::perspective::define::{BUILTINS, LETTER, first_artboard, is_builtin};
 use vectorcraft_tools::distort::perspective::{GridDefinition, PerspectiveGrid};
 
-use super::distortcmds::{grid_of, store_grid};
+use super::distortcmds::{grid_of, silent, store_grid};
 use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -79,6 +84,42 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path? | data?: file text | dataBase64?, replace?: false (replace saved presets of the same names; else imported ones whose name is taken get a number)} add the presets of a .vcperspective file (as perspective.presets.export writes) to the saved ones → {imported: [names]}",
             always,
             presets_import
+        ),
+        cmd!(
+            "perspective.grid.lock",
+            "Lock Grid",
+            [],
+            None,
+            "{on?: bool} (no param toggles) View › Perspective Grid › Lock Grid: the grid's widgets can't be dragged (the Plane Switching Widget still works). View state: not an undo step → {on}",
+            has_doc,
+            lock
+        ),
+        cmd!(
+            "perspective.grid.lockStation",
+            "Lock Station Point",
+            [],
+            None,
+            "{on?: bool} (no param toggles) dragging one vanishing point moves the other around the station point (the viewing angle turns, the viewer stays). View state: not an undo step → {on}",
+            has_doc,
+            lock_station
+        ),
+        cmd!(
+            "perspective.grid.snap",
+            "Snap to Grid",
+            [],
+            None,
+            "{on?: bool} (no param toggles) art drawn or moved in perspective lands on gridlines within a quarter cell (on by default). View state: not an undo step → {on}",
+            has_doc,
+            snap
+        ),
+        cmd!(
+            "perspective.grid.rulers",
+            "Show Rulers",
+            [],
+            None,
+            "{on?: bool} (no param toggles) a ruler up the line where the planes meet, in the grid's units at its scale. View state: not an undo step → {on}",
+            has_doc,
+            rulers
         ),
     ]
 }
@@ -201,7 +242,8 @@ pub(crate) fn grid_preset(s: &mut Session, p: &Value) -> Result<Value> {
     let old = grid_of(&s.doc()?.doc);
     let ab = s.doc()?.doc.artboards.first().map(|a| a.rect).ok_or_else(|| EngineError::Other("no artboard".into()))?;
     let g = s.perspective_preset_grid(&name, ab).ok_or_else(|| bad(C, format!("no perspective grid preset named `{name}`")))?;
-    let g = PerspectiveGrid { attached: old.attached, ..g };
+    // The objects stay attached and the view options stay as they were.
+    let g = PerspectiveGrid { attached: old.attached, locked: old.locked, lock_station: old.lock_station, snap: old.snap, rulers: old.rulers, ..g };
     s.edit("Perspective Grid Preset", |d, _| {
         store_grid(d, &g);
         Ok(())
@@ -335,4 +377,43 @@ fn presets_import(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     Ok(json!({ "imported": imported }))
+}
+
+/// Toggle (or set, with `on`) a view option of the grid.
+fn view_option(s: &mut Session, p: &Value, field: fn(&mut PerspectiveGrid) -> &mut bool) -> Result<Value> {
+    let want = p.get("on").and_then(Value::as_bool);
+    let mut g = silent(s, |g| {
+        let f = field(g);
+        *f = want.unwrap_or(!*f);
+    })?;
+    Ok(json!({ "on": *field(&mut g) }))
+}
+
+fn lock(s: &mut Session, p: &Value) -> Result<Value> {
+    view_option(s, p, |g| &mut g.locked)
+}
+
+fn lock_station(s: &mut Session, p: &Value) -> Result<Value> {
+    view_option(s, p, |g| &mut g.lock_station)
+}
+
+fn snap(s: &mut Session, p: &Value) -> Result<Value> {
+    view_option(s, p, |g| &mut g.snap)
+}
+
+fn rulers(s: &mut Session, p: &Value) -> Result<Value> {
+    view_option(s, p, |g| &mut g.rulers)
+}
+
+/// Snap to Grid for a move of `ids` from page point `from` to `to` (unless `p` says `snap: false`):
+/// the plane and depth of the first one and the plane-space correction that lands the edge of the
+/// joint bounds of the objects there nearer a gridline on it.
+pub(crate) fn snap_fix(doc: &Document, ids: &[NodeId], p: &Value, (from, to): (Point, Point)) -> Option<(Plane, f64, Vec2)> {
+    let g = grid_of(doc);
+    if !bool_or(p, "snap", g.snap) {
+        return None;
+    }
+    let (plane, depth, b) = g.plane_bounds(doc, ids)?;
+    let dv = g.plane_delta(plane, depth, from, to)?;
+    Some((plane, depth, g.snap_offset(b, dv) - dv))
 }

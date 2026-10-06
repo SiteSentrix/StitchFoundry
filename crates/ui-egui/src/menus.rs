@@ -1142,12 +1142,19 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.proofColors" => vectorcraft_render::proof::view().proof_colors,
         "view.overprintPreview" => vectorcraft_render::proof::view().overprint,
         "view.proofSetup" => p.get("target").and_then(Value::as_str) == Some(vectorcraft_render::proof::view().setup.target.id().as_str()),
+        "perspective.grid.snap" => perspective_grid(app)?.snap,
+        "perspective.grid.lockStation" => perspective_grid(app)?.lock_station,
         "file.documentColorMode" | "object.convertDocumentColorMode" => {
             let cmyk = app.session.active().is_some_and(|d| d.doc.color_mode == vectorcraft_engine::doc::ColorMode::Cmyk);
             p.get("mode").and_then(Value::as_str) == Some(if cmyk { "cmyk" } else { "rgb" })
         }
         _ => return None,
     })
+}
+
+/// The active document's perspective grid (View → Perspective Grid toggles).
+fn perspective_grid(app: &VectorcraftApp) -> Option<vectorcraft_tools::distort::perspective::PerspectiveGrid> {
+    app.session.active().map(|d| vectorcraft_tools::distort::perspective::PerspectiveGrid::effective(&d.doc))
 }
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
@@ -1198,6 +1205,9 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
             crate::dialogs::perspective_presets::slot_preset(app, id).unwrap_or_else(|| "—".into())
         }
+        "perspective.grid.show" => if perspective_grid(app).is_some_and(|g| g.visible) { "Hide Grid" } else { "Show Grid" }.into(),
+        "perspective.grid.rulers" => if perspective_grid(app).is_some_and(|g| g.rulers) { "Hide Rulers" } else { "Show Rulers" }.into(),
+        "perspective.grid.lock" => if perspective_grid(app).is_some_and(|g| g.locked) { "Unlock Grid" } else { "Lock Grid" }.into(),
         _ => label.into(),
     }
 }
@@ -1946,6 +1956,10 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                     "Perspective Grid",
                     vec![
                         c("Show Grid", "perspective.grid.show"),
+                        c("Show Rulers", "perspective.grid.rulers"),
+                        c("Snap to Grid", "perspective.grid.snap"),
+                        c("Lock Grid", "perspective.grid.lock"),
+                        c("Lock Station Point", "perspective.grid.lockStation"),
                         Sep,
                         c("Define Grid…", "ui.perspectiveGridDialog"),
                         sub("One Point Perspective", crate::dialogs::perspective_presets::menu(1, PERSPECTIVE_SLOTS[0])),

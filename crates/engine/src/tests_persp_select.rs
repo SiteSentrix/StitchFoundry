@@ -13,6 +13,8 @@ pub(crate) fn persp_session() -> (Session, NodeId) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
     s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    // Snap to Grid (on by default) would land moved edges on gridlines: these tests measure exact moves.
+    s.execute("perspective.grid.snap", &json!({"on": false})).unwrap();
     let r = s.execute("shape.rectangle", &json!({"x": 450, "y": 380, "width": 60, "height": 60})).unwrap();
     let id = NodeId(r["id"].as_u64().unwrap());
     s.execute("perspective.attach", &json!({"ids": [id.0], "plane": "right"})).unwrap();

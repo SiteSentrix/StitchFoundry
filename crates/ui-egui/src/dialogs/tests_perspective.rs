@@ -161,3 +161,25 @@ fn perspective_preset_menus_list_the_views_of_each_type() {
     let presets = entries.iter().find(|e| e.command.as_deref() == Some("ui.perspectivePresetsDialog")).unwrap();
     assert_eq!((presets.label.as_str(), presets.path.first().map(String::as_str)), ("Perspective Grid Presets…", Some("Edit")));
 }
+
+#[test]
+fn perspective_grid_view_toggles_flip_their_labels_and_checks() {
+    use crate::menus::{checked, dynamic_label};
+    let mut app = app();
+    assert_eq!(dynamic_label(&app, "perspective.grid.show", ""), "Show Grid");
+    assert_eq!(checked(&app, "perspective.grid.snap", &Value::Null), Some(true), "Snap to Grid is on by default");
+    app.run("perspective.grid.show", json!({})).unwrap();
+    app.run("perspective.grid.rulers", json!({})).unwrap();
+    app.run("perspective.grid.lock", json!({})).unwrap();
+    app.run("perspective.grid.lockStation", json!({})).unwrap();
+    app.run("perspective.grid.snap", json!({})).unwrap();
+    assert_eq!(
+        ["perspective.grid.show", "perspective.grid.rulers", "perspective.grid.lock"].map(|id| dynamic_label(&app, id, "")),
+        ["Hide Grid", "Hide Rulers", "Unlock Grid"]
+    );
+    assert_eq!(checked(&app, "perspective.grid.lockStation", &Value::Null), Some(true));
+    assert_eq!(checked(&app, "perspective.grid.snap", &Value::Null), Some(false));
+    let entries = crate::menus::menu_entries(&app);
+    let labels: Vec<&str> = entries.iter().filter(|e| e.path.last().is_some_and(|p| p == "Perspective Grid")).map(|e| e.label.as_str()).collect();
+    assert_eq!(&labels[..6], ["Hide Grid", "Hide Rulers", "Snap to Grid", "Unlock Grid", "Lock Station Point", "Define Grid…"]);
+}
