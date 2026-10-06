@@ -834,6 +834,16 @@ impl Renderer {
                     && let Some(region) = self.clip_of(clip)
                 {
                     let (fill, stroke) = self.clip_paint_of(clip);
+                    // An image inside its own frame painted straight into the clipping path, without
+                    // a clip layer (envelopes cut distorted images into many such pieces).
+                    if let ([image], None, None) = (rest, &fill, &stroke)
+                        && let NodeKind::Image(im) = &image.kind
+                        && plain_image(image, im, &region.0)
+                    {
+                        self.draw_image_in(ctx, f, im, Some(&region));
+                        self.stats.drawn += 1;
+                        return;
+                    }
                     let blends = self.blends_through(n);
                     let bounds = if blends { Some(region.0.bounding_box()) } else { None };
                     let comp = Composite { clip: Some((&region.0, region.1)), blends, bounds, ..Default::default() };
@@ -1264,6 +1274,12 @@ impl Renderer {
     }
 
     fn draw_image(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject) {
+        self.draw_image_in(ctx, f, im, None);
+    }
+
+    /// Draw an image, or with `area` (a region in the document inside the image's frame, see
+    /// [`plain_image`]) the image painted into that region.
+    fn draw_image_in(&mut self, ctx: &mut RenderContext, f: &Frame, im: &vectorcraft_doc::ImageObject, area: Option<&(BezPath, FillRule)>) {
         let rect = Rect::new(0.0, 0.0, im.width as f64, im.height as f64);
         // Outline mode draws the image's frame, and with Document Setup → Show Images in Outline
         // Mode its pixels in greyscale under the frame.
@@ -1278,10 +1294,20 @@ impl Renderer {
             let pm = if outline { pm } else { self.ink_image(&cache_key, &pm, f.ink) };
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
-            ctx.set_transform(f.view * im.xf);
             ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler: peniko::ImageSampler::default() });
-            ctx.set_paint_transform(Affine::scale_non_uniform(sx, sy));
-            ctx.fill_rect(&rect);
+            match area {
+                Some((bp, rule)) => {
+                    ctx.set_transform(f.view);
+                    ctx.set_paint_transform(im.xf * Affine::scale_non_uniform(sx, sy));
+                    ctx.set_fill_rule(fill_rule(*rule));
+                    ctx.fill_path(bp);
+                }
+                None => {
+                    ctx.set_transform(f.view * im.xf);
+                    ctx.set_paint_transform(Affine::scale_non_uniform(sx, sy));
+                    ctx.fill_rect(&rect);
+                }
+            }
             ctx.reset_paint_transform();
         }
         if outline {
@@ -1350,6 +1376,21 @@ impl Renderer {
         self.images.insert(grey_key, pm.clone());
         Some(pm)
     }
+}
+
+/// Can image node `n` (`im`) clipped by `region` be painted straight into the region: visible,
+/// with no transparency, effects or paint of its own, and the region inside the image's frame
+/// (within a pixel), so no paint past the image's edge shows?
+fn plain_image(n: &Node, im: &vectorcraft_doc::ImageObject, region: &BezPath) -> bool {
+    if !(n.visible && n.has_default_transparency() && n.appearance.items.is_empty() && n.appearance.effects.is_empty()) {
+        return false;
+    }
+    let det = im.xf.determinant();
+    if !(det.abs() > 1e-12 && det.is_finite()) {
+        return false;
+    }
+    let b = im.xf.inverse().transform_rect_bbox(region.bounding_box());
+    b.x0 >= -1.0 && b.y0 >= -1.0 && b.x1 <= im.width as f64 + 1.0 && b.y1 <= im.height as f64 + 1.0
 }
 
 /// Opacity-mask coverage of one premultiplied pixel: luminance, with the area outside the mask

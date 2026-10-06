@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 
 use crate::group::{has_own_paint, paints};
@@ -279,6 +279,48 @@ pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
     for c in n.children_mut().into_iter().flatten() {
         expand_art(d, Arc::make_mut(c), stroke_art);
     }
+}
+
+/// Envelope Options → Distort Appearance: path or compound path `n` as plain filled art that an
+/// envelope bends as a whole: its geometry effects applied, every visible fill a copy of the path
+/// painted by that fill and every visible stroke without a brush its filled outline in the
+/// stroke's paint, opacity and blend mode (a brushed stroke stays a stroke), in paint order, as
+/// the members of a group keeping `n`'s id, transparency, opacity mask and raster effects. `None`
+/// when it has neither a stroke to outline nor a geometry effect, so bending first changes nothing.
+pub fn bake_appearance(n: &Node) -> Option<Node> {
+    if !matches!(n.kind, NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. }) {
+        return None;
+    }
+    let outlined = |i: &AppearanceItem| paints(i) && matches!(i, AppearanceItem::Stroke(s) if s.brush.is_none());
+    let geometric = has_geometry(&n.appearance.effects) || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)));
+    if !geometric && !n.appearance.items.iter().any(outlined) {
+        return None;
+    }
+    let (g, rule, ctx, mut m) = leaf_base(n)?;
+    let piece = |path: PathData, rule: FillRule, item: AppearanceItem| {
+        let mut p = Node::path(n.id, path, Appearance { items: vec![item], ..Default::default() });
+        if let NodeKind::Path { rule: r, .. } = &mut p.kind {
+            *r = rule;
+        }
+        Arc::new(p)
+    };
+    let mut pieces = vec![];
+    for item in n.appearance.items.iter().filter(|i| paints(i)) {
+        let ig = apply(item_effects(item), &g, &ctx.item(item));
+        let mut it = item.clone();
+        clear_item_effects(&mut it);
+        pieces.push(match &it {
+            AppearanceItem::Stroke(st) if st.brush.is_none() => {
+                let fill = FillLayer { opacity: st.opacity, blend: st.blend, ..FillLayer::new(st.paint.clone()) };
+                piece(crate::stroke::outline_region(&ig, rule, st), FillRule::NonZero, AppearanceItem::Fill(fill))
+            }
+            _ => piece(ig, rule, it),
+        });
+    }
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    m.kind = NodeKind::Group { children: pieces, clip: false };
+    Some(m)
 }
 
 /// A copy of `doc` with every live geometry effect baked into plain paths, or `None` when the

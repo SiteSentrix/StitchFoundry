@@ -53,13 +53,13 @@ use vectorcraft_doc::{AppearanceItem, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Rect};
 
 pub use adjust::{ADJUSTMENTS, ColorMap, ImageHook, adjust, adjust_in_document, color_map, curve_at, curve_points, has_adjustment, is_adjustment};
-pub use bake::{StrokeArt, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
+pub use bake::{StrokeArt, bake_appearance, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
 pub use clip::clip_outline;
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_shapes, paints,
     pathfinder_children,
 };
-pub use live::{expand_live, expand_live_deep, text_outliner};
+pub use live::{expand_live, expand_live_deep, expanded_live_group, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use raster::{RasterFx, outset, raster_effects};
 pub use reshape::{expand_outlined, needs_outline, outline_art, outline_text, reshape};

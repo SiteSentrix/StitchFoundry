@@ -451,7 +451,7 @@ pub fn lerp_path(a: &PathData, b: &PathData, t: f64) -> PathData {
 
 /// Path data of a path or compound path node (compound children concatenated), its fill rule and
 /// the number of subpaths each compound member holds.
-fn node_path(n: &Node) -> Option<(PathData, FillRule, Option<Vec<usize>>)> {
+pub(crate) fn node_path(n: &Node) -> Option<(PathData, FillRule, Option<Vec<usize>>)> {
     match &n.kind {
         NodeKind::Path { path, rule, .. } => Some((path.clone(), *rule, None)),
         NodeKind::Compound { children, rule } => {

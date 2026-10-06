@@ -67,6 +67,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         symbols: HashMap::new(),
         symbol_nest: 0,
         fonts: Vec::new(),
+        shared_images: HashMap::new(),
     };
     w.assign_name_ids();
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
@@ -247,6 +248,9 @@ struct Writer<'a> {
     symbol_nest: u32,
     /// The characters type uses from each face ([`ExportOptions::embed_fonts`]).
     fonts: Vec<FontUse>,
+    /// Images written once in the defs and drawn with `<use>`, by key and size: the pieces an
+    /// envelope cuts a distorted image into share its pixels.
+    shared_images: HashMap<(String, u32, u32), String>,
 }
 
 /// The characters type uses from one face, under one `@font-face` description: the family the
@@ -433,6 +437,58 @@ impl Writer<'_> {
             self.defs.push('\n');
         }
     }
+    /// The `href` of image `im`: its file with [`ImageMode::Link`] (or when its pixels are
+    /// missing), else its bytes. `None` when it has neither.
+    fn image_href(&mut self, im: &vectorcraft_doc::ImageObject) -> Option<String> {
+        let (doc, link) = (self.doc, self.opts.images == ImageMode::Link);
+        match (im.link.as_ref().filter(|_| link), doc.images.get(&im.key)) {
+            (Some(l), _) => Some(l.path.clone()),
+            (None, Some(b)) if !b.bytes.is_empty() => Some(self.blob_href(b)),
+            _ => im.link.as_ref().map(|l| l.path.clone()),
+        }
+    }
+
+    /// Images drawn more than once in `art` (the pieces of a distorted image) go into the defs
+    /// once; each piece then draws them with `<use>`.
+    fn share_images(&mut self, art: &Node) {
+        let mut seen: HashMap<(String, u32, u32), usize> = HashMap::new();
+        art.walk(&mut |c| {
+            if let NodeKind::Image(im) = &c.kind {
+                *seen.entry((im.key.clone(), im.width, im.height)).or_default() += 1;
+            }
+        });
+        let mut repeated: Vec<_> = seen.into_iter().filter(|(k, n)| *n > 1 && !self.shared_images.contains_key(k)).map(|(k, _)| k).collect();
+        repeated.sort();
+        for (key, width, height) in repeated {
+            let link = self.linked_of(art, &key);
+            let im = vectorcraft_doc::ImageObject { key: key.clone(), width, height, xf: Affine::IDENTITY, link, placement: Default::default() };
+            let Some(href) = self.image_href(&im) else { continue };
+            let id = self.fresh_id("image");
+            self.def(
+                0,
+                &format!(
+                    "<image id=\"{id}\" width=\"{width}\" height=\"{height}\" preserveAspectRatio=\"none\" xlink:href=\"{}\"/>",
+                    xml_escape(&href)
+                ),
+            );
+            self.shared_images.insert((key, width, height), id);
+        }
+    }
+
+    /// The link of the first image with blob `key` in `art`.
+    fn linked_of(&self, art: &Node, key: &str) -> Option<vectorcraft_doc::LinkInfo> {
+        let mut link = None;
+        art.walk(&mut |c| {
+            if let NodeKind::Image(im) = &c.kind
+                && im.key == key
+                && link.is_none()
+            {
+                link = im.link.clone();
+            }
+        });
+        link
+    }
+
     fn fresh_id(&mut self, prefix: &str) -> String {
         let mut i = 1;
         loop {
@@ -1233,18 +1289,15 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
-                let (doc, link) = (self.doc, self.opts.images == ImageMode::Link);
-                let href = match (im.link.as_ref().filter(|_| link), doc.images.get(&im.key)) {
-                    (Some(l), _) => l.path.clone(),
-                    (None, Some(b)) if !b.bytes.is_empty() => self.blob_href(b),
-                    _ => match &im.link {
-                        Some(l) => l.path.clone(),
-                        None => return,
-                    },
-                };
                 let id = self.id_attr(n);
                 let m = self.matrix(self.xf * im.xf);
                 let a = self.attrs(&css::transparency(n));
+                if let Some(shared) = self.shared_images.get(&(im.key.clone(), im.width, im.height)) {
+                    let shared = shared.clone();
+                    self.line(&format!("<use{id} transform=\"{m}\"{a} xlink:href=\"#{shared}\"/>"));
+                    return;
+                }
+                let Some(href) = self.image_href(im) else { return };
                 self.line(&format!(
                     "<image{id} width=\"{}\" height=\"{}\" transform=\"{m}\" preserveAspectRatio=\"none\"{a} xlink:href=\"{}\"/>",
                     im.width,
@@ -1290,7 +1343,8 @@ impl Writer<'_> {
             }
             // Live blends/envelopes/meshes export their evaluated (expanded) form.
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) => {
-                let g = vectorcraft_effects::expand_live_deep(n);
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                self.share_images(&g);
                 self.node_body(&g);
             }
         }
