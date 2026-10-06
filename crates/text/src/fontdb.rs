@@ -176,6 +176,7 @@ pub struct FontDb {
     cataloged: std::sync::OnceLock<()>,
     /// [`FontDb::family_list`], built on demand and dropped when fonts are added or rescanned.
     family_cache: Mutex<Option<Arc<[String]>>>,
+    menu_cache: Mutex<Option<MenuFamilies>>,
     generation: AtomicU64,
     /// System fallback state: characters no system font covers.
     #[cfg(not(target_arch = "wasm32"))]
@@ -511,6 +512,9 @@ fn style_italic(style: &str) -> bool {
     s.contains("italic") || s.contains("oblique") || s == "it"
 }
 
+/// [`FontDb::menu_family_list`], with the [`FontDb::family_list`] it was built from.
+type MenuFamilies = (Arc<[String]>, Arc<[String]>);
+
 impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs`.
     pub fn with_font_dirs(font_dirs: Vec<PathBuf>) -> Self {
@@ -535,6 +539,7 @@ impl FontDb {
             #[cfg(not(target_arch = "wasm32"))]
             cataloged: std::sync::OnceLock::new(),
             family_cache: Mutex::new(None),
+            menu_cache: Mutex::new(None),
             generation: AtomicU64::new(0),
             #[cfg(not(target_arch = "wasm32"))]
             sys: Mutex::new(SysFallback { enabled: true, ..Default::default() }),
@@ -599,6 +604,23 @@ impl FontDb {
         v.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
         let list: Arc<[String]> = v.into();
         *cache = Some(list.clone());
+        list
+    }
+
+    /// The families font menus and lists show: [`FontDb::family_list`] without the system's hidden
+    /// families, whose names start with "." (macOS keeps ".SF NS", ".LastResort" and others for its
+    /// own interface, and Mac apps don't list them). Those still resolve by name, for documents and
+    /// fallbacks that name them. Cheap to call every frame.
+    pub fn menu_family_list(&self) -> Arc<[String]> {
+        let all = self.family_list();
+        let mut cache = self.menu_cache.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((from, list)) = cache.as_ref()
+            && Arc::ptr_eq(from, &all)
+        {
+            return list.clone();
+        }
+        let list: Arc<[String]> = all.iter().filter(|f| !f.starts_with('.')).cloned().collect();
+        *cache = Some((all, list.clone()));
         list
     }
 

@@ -9,9 +9,15 @@ const FAMILY: &str = "Sysfont Sans3";
 
 /// A bundled Source Sans 3 file renamed [`FAMILY`] (as long as the original name).
 fn renamed(file: &str) -> Vec<u8> {
+    renamed_to(file, FAMILY)
+}
+
+/// A bundled Source Sans 3 file renamed `family`, which is as long as the original name.
+fn renamed_to(file: &str, family: &str) -> Vec<u8> {
+    assert_eq!(family.len(), "Source Sans 3".len());
     let mut data = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/fonts").join(file)).unwrap();
     let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
-    for (from, to) in [(utf16("Source Sans 3"), utf16(FAMILY)), (b"Source Sans 3".to_vec(), FAMILY.as_bytes().to_vec())] {
+    for (from, to) in [(utf16("Source Sans 3"), utf16(family)), (b"Source Sans 3".to_vec(), family.as_bytes().to_vec())] {
         let mut i = 0;
         while let Some(at) = data[i..].windows(from.len()).position(|w| w == from) {
             data[i + at..i + at + to.len()].copy_from_slice(&to);
@@ -130,6 +136,30 @@ fn the_family_list_is_shared_until_fonts_change() {
     assert!(db.add_font(renamed("SourceSans3-Regular.ttf")) > 0);
     let b = db.family_list();
     assert!(!Arc::ptr_eq(&a, &b) && has(&b, FAMILY) && !has(&a, FAMILY));
+}
+
+#[test]
+fn font_lists_leave_out_hidden_system_families_which_still_resolve() {
+    // macOS names the faces it keeps for its own interface with a leading "." (".SF NS").
+    const HIDDEN: &str = ".Sysfont Sans";
+    const DOTTED: &str = "Sysfont.Sans3";
+    let dir = font_dir("hidden");
+    std::fs::write(dir.join("Hidden.ttf"), renamed_to("SourceSans3-Regular.ttf", HIDDEN)).unwrap();
+    std::fs::write(dir.join("Dotted.ttf"), renamed_to("SourceSans3-Regular.ttf", DOTTED)).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    let listed = db.menu_family_list();
+    assert!(has(&listed, FAMILY) && has(&listed, FALLBACK_FAMILY));
+    assert!(!has(&listed, HIDDEN), "a leading dot hides a family: {listed:?}");
+    assert!(has(&listed, DOTTED), "a dot elsewhere doesn't");
+    assert_eq!(listed.len() + 1, db.family_list().len(), "only the hidden family is left out");
+    assert!(Arc::ptr_eq(&listed, &db.menu_family_list()), "shared until the fonts change");
+    // Documents and fallbacks that name it still find it.
+    assert!(has(&db.families(), HIDDEN) && db.has_family(HIDDEN));
+    assert_eq!(db.find_family(HIDDEN).as_deref(), Some(HIDDEN));
+    assert_eq!(db.face(HIDDEN, "Regular").unwrap().family, HIDDEN);
+    // Loading it changed the fonts: the list is built again, still without it.
+    let again = db.menu_family_list();
+    assert!(!Arc::ptr_eq(&listed, &again) && *listed == *again);
 }
 
 #[test]

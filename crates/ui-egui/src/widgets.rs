@@ -475,7 +475,7 @@ pub fn font_dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, cu
         }
         let query = search_field(ui, field, "Search").to_lowercase();
         let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-        let families = vectorcraft_text::FontDb::global().family_list();
+        let families = vectorcraft_text::FontDb::global().menu_family_list();
         let (mut chosen, mut first) = (None, None);
         // The search field stays put over the list as it scrolls.
         menu_scroll(ui, |ui| {
