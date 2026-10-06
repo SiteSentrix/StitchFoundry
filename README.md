@@ -16,13 +16,13 @@
 
 <p align="center">
   A fast, open-source, clean-room take on the Adobe Illustrator workflow. It runs natively on
-  macOS, Windows and Linux, and in the browser via WebAssembly. Built by the ArtCraft team.
+  macOS, Windows, Linux and FreeBSD, and in the browser via WebAssembly. Built by the ArtCraft team.
 </p>
 
 <p align="center">
   <img alt="Status: in active development" src="https://img.shields.io/badge/status-in%20active%20development-e8573f">
   <img alt="Written in pure Rust" src="https://img.shields.io/badge/pure-Rust-b83a24?logo=rust&logoColor=white">
-  <img alt="Runs on macOS, Windows, Linux and the web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20Web-555555">
+  <img alt="Runs on macOS, Windows, Linux, FreeBSD and the web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20FreeBSD%20%C2%B7%20Web-555555">
   <img alt="MCP server for agents" src="https://img.shields.io/badge/agents-MCP%20server-555555">
   <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-555555">
 </p>
