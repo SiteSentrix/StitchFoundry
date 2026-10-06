@@ -279,6 +279,10 @@ fn structured_junk() {
         ("object.blend.spine.moveAnchor", json!({"id": 2, "anchor": u64::MAX, "x": 1e308, "y": -1e308, "handle": "sideways"})),
         ("object.blend.spine.addAnchor", json!({"id": u64::MAX, "x": 0, "y": 0})),
         ("object.blend.spine.removeAnchor", json!({"anchor": -1})),
+        ("object.puppetWarp", json!({"rest": true, "pins": [], "moved": []})),
+        ("object.puppetWarp", json!({"rest": true, "pins": [[1e308, 0]], "moved": [[0, 0]], "expand": -5})),
+        ("object.puppetWarp", json!({"rest": true, "ids": [u64::MAX], "pins": [[0, 0]], "moved": [[0, 0]]})),
+        ("object.puppetWarp.pins", json!({"ids": [0, 1, 2], "expand": 1e308})),
     ];
     let mut failures = vec![];
     for fx in Fixture::ALL {

@@ -26,7 +26,7 @@ use crate::Tool;
 
 pub use liquify::LiquifyTool;
 pub use perspective::{PerspectiveGridTool, PerspectiveSelectionTool};
-pub use puppet::{PuppetWarpTool, mesh_for, mesh_input};
+pub use puppet::{PinSet, PuppetWarpTool, mesh_for, mesh_input, rest_and_pins, warp_from_rest};
 pub use width::WidthTool;
 
 /// Create a distortion tool by id (None = not one of ours).

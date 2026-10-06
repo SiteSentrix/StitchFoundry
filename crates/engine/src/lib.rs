@@ -1049,6 +1049,10 @@ impl Session {
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
         st.revision += 1;
+        // Puppet Warp pins belong to the art they were placed on: another selection starts afresh.
+        if st.doc.puppet.as_ref().is_some_and(|p| p.ids != st.selection.objects) {
+            cmd::distortcmds::drop_puppet_pins(st);
+        }
         Ok(())
     }
 

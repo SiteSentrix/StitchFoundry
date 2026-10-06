@@ -879,6 +879,18 @@ on the art) lands on its `moved` point. `angles` (degrees, or null for a free pi
 the art takes around a pin, as Alt-dragging near a selected pin with the Puppet Warp tool does: one pin with
 `angles: [90]` turns the art a quarter turn around it.
 
+The Puppet Warp tool's pins live in the document while the same art stays selected (never saved; Undo and Redo take
+them back with the art). `object.puppetWarp.pins {ids?}` reads them: `pins` (where each sits on the shape the pins
+started from), `moved` (where it is now), `angles`, and `auto: true` while none was placed (the tool's automatic pins:
+the centre and the end of each limb). Edit `moved`, `angles` or the lists and pass the result back to
+`object.puppetWarp`: with `rest: true` the warp always starts from that rest shape, so warps don't stack and putting
+a pin back restores the original; every pin must be on the art's mesh, and empty lists remove the pins.
+
+```json
+{"name":"run_command","arguments":{"command":"object.puppetWarp.pins","params":{}}}
+{"name":"run_command","arguments":{"command":"object.puppetWarp","params":{"rest":true,"pins":[[250,150],[110,150],[390,150]],"moved":[[250,150],[110,150],[390,90]],"angles":[null,null,null]}}}
+```
+
 ```json
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.5,"left":4,"right":4}}}
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.8,"left":12,"right":12}}}
