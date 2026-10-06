@@ -229,6 +229,10 @@ Width Point Edit: double-clicking a width point with the Width tool, or `ui.widt
 `adjustAdjoining`). `ui.dialog.confirm` runs `stroke.widthPoint.set` with them; `ui.dialog.set {field: "discard",
 value: true}` then confirm (the Delete button) removes the point with `stroke.widthPoint.remove`.
 
+Perspective plane options: double-clicking a plane widget of the perspective grid, or `ui.perspectivePlane {plane}`,
+opens the `perspectivePlane` dialog (fields `plane`: left, right or ground; `location`: points along the plane's
+normal; `objects`: none, move or copy). `ui.dialog.confirm` runs `perspective.plane.move` with them.
+
 Units: dialog distance fields (Move's `dx`/`dy`, shape sizes, Offset Path's `offset`, Split Into Grid's `gutter`,
 Artboard Options' sizes, effects' distances, `transformEach`'s `moveH`/`moveV`, New Document's `width`/`height`, the
 length preferences in `preferences`) show in the General unit (the active document's units, or `unitsGeneral` without a

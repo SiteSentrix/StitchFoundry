@@ -83,6 +83,9 @@ fn two() -> u8 {
 fn yes() -> bool {
     true
 }
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
 
 /// The perspective grid definition (Define Grid) plus view state.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -141,6 +144,14 @@ pub struct PerspectiveGrid {
     /// Gridline opacity, 0–100 %.
     #[serde(default = "define::half")]
     pub opacity: f64,
+    /// Where the left, right and horizontal planes were moved along their normals (points; 0: their
+    /// place in the grid's definition): the plane widgets and `perspective.plane.move` set them.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub left_offset: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub right_offset: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ground_offset: f64,
 }
 
 impl PerspectiveGrid {
@@ -174,6 +185,29 @@ impl PerspectiveGrid {
             right_color: define::right_rgb(),
             ground_color: define::ground_rgb(),
             opacity: define::half(),
+            left_offset: 0.0,
+            right_offset: 0.0,
+            ground_offset: 0.0,
+        }
+    }
+
+    /// Where `plane` is along its normal (points; 0: its place in the grid's definition).
+    pub fn offset(&self, plane: Plane) -> f64 {
+        match plane {
+            Plane::Left => self.left_offset,
+            Plane::Right => self.right_offset,
+            Plane::Ground => self.ground_offset,
+            Plane::None => 0.0,
+        }
+    }
+
+    /// Move `plane` to `offset` along its normal.
+    pub fn set_offset(&mut self, plane: Plane, offset: f64) {
+        match plane {
+            Plane::Left => self.left_offset = offset,
+            Plane::Right => self.right_offset = offset,
+            Plane::Ground => self.ground_offset = offset,
+            Plane::None => {}
         }
     }
 
@@ -293,6 +327,11 @@ impl PerspectiveGrid {
         if (self.origin[1] - self.horizon).abs() < 1e-6 {
             return Err("ground level must differ from the horizon".into());
         }
+        // A moved plane stays in front of the viewer.
+        let behind = |p: Plane| self.axes(p).is_some_and(|[.., n]| 1.0 + self.offset(p) * self.axis_col(n)[2] <= 1e-9);
+        if Plane::ALL.iter().any(|p| !self.offset(*p).is_finite() || self.offset(*p).abs() > MAX_DEPTH || behind(*p)) {
+            return Err("a plane is moved too far (behind the viewer)".into());
+        }
         self.validate_definition()
     }
 
@@ -326,9 +365,9 @@ impl PerspectiveGrid {
         })
     }
 
-    /// The homography of `plane` (plane coordinates in points → page).
+    /// The homography of `plane` where it is now (plane coordinates in points → page).
     pub fn homography(&self, plane: Plane) -> Option<Homography> {
-        self.homography_at(plane, 0.0)
+        self.homography_at(plane, self.offset(plane))
     }
 
     /// The homography of the plane parallel to `plane` that lies `depth` points along its normal
@@ -500,6 +539,78 @@ impl PerspectiveGrid {
         }
         faces.into_iter().find(|(_, q)| in_quad(q, p)).map(|(pl, _)| pl)
     }
+
+    /// The left, right and horizontal plane widgets: where each sits (on its plane: the middle of a
+    /// wall's ground edge, the middle of the horizontal plane).
+    pub fn plane_widgets(&self) -> Vec<(Plane, Point)> {
+        let e = self.extent / 2.0;
+        Plane::ALL
+            .into_iter()
+            .filter_map(|pl| {
+                let q = if pl == Plane::Ground { Point::new(e, e) } else { Point::new(e, 0.0) };
+                Some((pl, self.homography(pl)?.apply(q)?))
+            })
+            .collect()
+    }
+}
+
+/// Dragging a plane widget: the plane moves along its normal by as much as the pointer moved along
+/// it (from the widget, wherever on it the press was).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlaneDrag {
+    pub plane: Plane,
+    anchor: Point,
+    press: Point,
+    offset: f64,
+}
+
+impl PlaneDrag {
+    /// The plane widget within `tol` of `p` (drawn grids only).
+    pub fn hit(g: &PerspectiveGrid, tol: f64, p: Point) -> Option<Self> {
+        if !g.visible {
+            return None;
+        }
+        let (plane, anchor) = g.plane_widgets().into_iter().find(|(_, q)| q.distance(p) <= tol)?;
+        Some(Self { plane, anchor, press: p, offset: g.offset(plane) })
+    }
+
+    /// The preview for the pointer at `p`: Shift moves the objects on the plane with it, Alt copies
+    /// them.
+    pub fn preview(&self, g: &PerspectiveGrid, p: Point, m: Mods) -> Option<Action> {
+        let offset = g.depth_at(self.plane, self.offset, self.anchor, self.anchor + (p - self.press))?;
+        let objects = if m.alt {
+            "copy"
+        } else if m.shift {
+            "move"
+        } else {
+            "none"
+        };
+        Some(Action::Preview("perspective.plane.move".into(), json!({"plane": self.plane.id(), "offset": offset, "objects": objects})))
+    }
+
+    /// The plane options dialog a double-click on the widget opens.
+    pub fn options(&self) -> Action {
+        Action::Dialog(PLANE_DIALOG.into(), json!({"plane": self.plane.id()}))
+    }
+}
+
+/// The dialog kind of a plane's options (double-click its widget).
+pub const PLANE_DIALOG: &str = "perspectivePlane";
+
+/// The plane widgets as drawn: a diamond in each plane's colour.
+fn plane_widget_overlays(g: &PerspectiveGrid, tol: f64) -> Vec<Overlay> {
+    let r = 5.0 * tol;
+    g.plane_widgets()
+        .into_iter()
+        .flat_map(|(pl, p)| {
+            let [cr, cg, cb] = pl.color();
+            let quad = [Point::new(p.x, p.y - r), Point::new(p.x + r, p.y), Point::new(p.x, p.y + r), Point::new(p.x - r, p.y)];
+            [
+                Overlay::Highlight { quad, color: [cr, cg, cb, 220] },
+                Overlay::Path { path: super::diamond(p, r), color: [0x20, 0x20, 0x20], width: 1.0, dashed: false },
+            ]
+        })
+        .collect()
 }
 
 /// How far (points) along a plane's normal objects and planes may go.
@@ -518,6 +629,21 @@ pub enum Axis {
 pub fn attachment(n: &Node) -> Option<(Plane, f64)> {
     let a = n.perspective.as_deref()?;
     Plane::parse(&a.plane).filter(|p| *p != Plane::None).map(|p| (p, a.depth))
+}
+
+/// The objects in perspective that aren't inside another one: (id, plane, depth).
+pub fn attached_roots(doc: &Document) -> Vec<(NodeId, Plane, f64)> {
+    fn visit(n: &Node, out: &mut Vec<(NodeId, Plane, f64)>) {
+        match attachment(n) {
+            Some((pl, depth)) => out.push((n.id, pl, depth)),
+            None => n.children().into_iter().flatten().for_each(|c| visit(c, out)),
+        }
+    }
+    let mut out = vec![];
+    for l in &doc.layers {
+        visit(l, &mut out);
+    }
+    out
 }
 
 /// Attach `n` to `plane` at `depth`.
@@ -611,6 +737,7 @@ pub fn grid_overlays(doc: &Document, tol: f64, tool_id: &str) -> Vec<Overlay> {
         width: 1.5,
         dashed: false,
     });
+    out.extend(plane_widget_overlays(&g, tol));
     out
 }
 
@@ -683,6 +810,8 @@ fn drag_handle(g: &PerspectiveGrid, h: Handle, p: Point) -> PerspectiveGrid {
 #[derive(Default)]
 pub struct PerspectiveGridTool {
     drag: Option<Handle>,
+    /// Dragging a plane widget.
+    plane: Option<PlaneDrag>,
 }
 
 impl Tool for PerspectiveGridTool {
@@ -702,6 +831,11 @@ impl Tool for PerspectiveGridTool {
                     pre.push(Action::Exec("perspective.plane.set".into(), json!({"plane": pl.id()})));
                     return pre;
                 }
+                if let Some(d) = PlaneDrag::hit(&g, cx.tol(6.0), p) {
+                    self.plane = Some(d);
+                    pre.push(Action::Begin("Move Plane".into()));
+                    return pre;
+                }
                 let tol = cx.tol(6.0);
                 if let Some((h, _)) =
                     handles(&g).into_iter().filter(|(_, q)| q.distance(p) <= tol).min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p)))
@@ -711,14 +845,16 @@ impl Tool for PerspectiveGridTool {
                 }
                 pre
             }
+            PointerKind::Drag if self.plane.is_some() => self.plane.and_then(|d| d.preview(&g, p, ev.mods)).into_iter().collect(),
             PointerKind::Drag => match self.drag {
                 Some(h) => vec![Action::Preview("perspective.grid.set".into(), drag_handle(&g, h, p).definition_json())],
                 None => vec![],
             },
-            PointerKind::Up => match self.drag.take() {
-                Some(_) => vec![Action::Commit],
-                None => vec![],
+            PointerKind::Up => match (self.drag.take(), self.plane.take()) {
+                (None, None) => vec![],
+                _ => vec![Action::Commit],
             },
+            PointerKind::DoubleClick => PlaneDrag::hit(&g, cx.tol(6.0), p).map(|d| d.options()).into_iter().collect(),
             _ => vec![],
         }
     }
@@ -735,6 +871,9 @@ impl Tool for PerspectiveGridTool {
     fn cursor(&self, cx: &ToolContext, p: Point, _mods: Mods) -> Cursor {
         let g = PerspectiveGrid::current(cx.doc);
         let tol = cx.tol(6.0);
+        if self.plane.is_some() || PlaneDrag::hit(&g, tol, p).is_some() {
+            return Cursor::Move;
+        }
         match handles(&g).into_iter().find(|(_, q)| q.distance(p) <= tol).map(|h| h.0) {
             Some(Handle::Horizon | Handle::Height) => Cursor::ResizeV,
             Some(Handle::ExtentLeft | Handle::ExtentRight) => Cursor::ResizeH,
@@ -743,10 +882,13 @@ impl Tool for PerspectiveGridTool {
         }
     }
     fn busy(&self) -> bool {
-        self.drag.is_some()
+        self.drag.is_some() || self.plane.is_some()
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        if self.drag.take().is_some() { vec![Action::Commit] } else { vec![] }
+        match (self.drag.take(), self.plane.take()) {
+            (None, None) => vec![],
+            _ => vec![Action::Commit],
+        }
     }
 }
 
@@ -761,6 +903,8 @@ enum SelDrag {
     Move { ids: Vec<NodeId>, from: Point, last: Point, began: bool, perp: bool, copy: bool },
     /// Dragging `handle` of the perspective bounding box `rect` (plane space, on `plane` at `depth`).
     Scale { ids: Vec<NodeId>, plane: Plane, depth: f64, rect: Rect, handle: BoxHandle },
+    /// Dragging a plane widget.
+    Plane(PlaneDrag),
 }
 
 /// The Perspective Selection tool: selects, moves (Alt copies; press 5 while dragging to move
@@ -805,7 +949,7 @@ impl PerspectiveSelectionTool {
         if g.plane != Plane::None {
             v["plane"] = json!(g.plane.id());
         }
-        let at = ids.first().and_then(|id| g.attachment_of(cx.doc, *id)).or((g.plane != Plane::None).then_some((g.plane, 0.0)));
+        let at = ids.first().and_then(|id| g.attachment_of(cx.doc, *id)).or((g.plane != Plane::None).then_some((g.plane, g.offset(g.plane))));
         self.measure = at.and_then(|(pl, depth)| {
             let text = if *perp {
                 format!("dZ: {}", cx.len(g.depth_at(pl, depth, *from, *last)? - depth))
@@ -833,6 +977,10 @@ impl Tool for PerspectiveSelectionTool {
                     && let Some(pl) = g.widget_hit(cx.doc, cx.tol(1.0), p)
                 {
                     return vec![Action::Exec("perspective.plane.set".into(), json!({"plane": pl.id()}))];
+                }
+                if let Some(d) = PlaneDrag::hit(&g, cx.tol(6.0), p) {
+                    self.drag = SelDrag::Plane(d);
+                    return vec![Action::Begin("Move Plane".into())];
                 }
                 if let Some((plane, depth, rect, h)) = selection_persp_box(cx, &g)
                     && let Some(handle) = persp_handle_at(rect, &h, p, cx.tol(5.0))
@@ -886,9 +1034,17 @@ impl Tool for PerspectiveSelectionTool {
                 self.measure = None;
                 if began { vec![Action::Commit] } else { vec![] }
             }
-            (PointerKind::Up, SelDrag::Scale { .. }) => {
+            (PointerKind::Drag, SelDrag::Plane(d)) => {
+                self.drag = SelDrag::Plane(d);
+                d.preview(&g, p, m).into_iter().collect()
+            }
+            (PointerKind::Up, SelDrag::Scale { .. } | SelDrag::Plane(_)) => {
                 self.measure = None;
                 vec![Action::Commit]
+            }
+            (PointerKind::DoubleClick, d) => {
+                self.drag = d;
+                PlaneDrag::hit(&g, cx.tol(6.0), p).map(|d| d.options()).into_iter().collect()
             }
             (_, d) => {
                 self.drag = d;
@@ -947,9 +1103,12 @@ impl Tool for PerspectiveSelectionTool {
         let g = PerspectiveGrid::current(cx.doc);
         let handle = match &self.drag {
             SelDrag::Scale { handle, .. } => Some(*handle),
-            SelDrag::Move { began: true, .. } => return Cursor::Move,
+            SelDrag::Move { began: true, .. } | SelDrag::Plane(_) => return Cursor::Move,
             _ => None,
         };
+        if PlaneDrag::hit(&g, cx.tol(6.0), p).is_some() {
+            return Cursor::Move;
+        }
         if let Some((_, _, rect, h)) = selection_persp_box(cx, &g)
             && let Some(k) = handle.or_else(|| persp_handle_at(rect, &h, p, cx.tol(5.0)))
             && let (Some(a), Some(c)) = (h.apply(k.pos(rect)), h.apply(rect.center()))
@@ -964,7 +1123,7 @@ impl Tool for PerspectiveSelectionTool {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.measure = None;
         match std::mem::take(&mut self.drag) {
-            SelDrag::Move { began: true, .. } | SelDrag::Scale { .. } => vec![Action::Commit],
+            SelDrag::Move { began: true, .. } | SelDrag::Scale { .. } | SelDrag::Plane(_) => vec![Action::Commit],
             _ => vec![],
         }
     }

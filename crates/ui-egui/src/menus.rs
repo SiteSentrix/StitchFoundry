@@ -661,6 +661,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open Blend Options (Object › Blend › Blend Options…, the Blend tool's double-click, Alt-click and toolbar button; dialog `blendOptions`: spacing smooth|steps|distance, steps, distance (pt), orientation page|path, preview) on the selected blend's options, previewed live: OK runs object.blend.options as one undo step; with no blend selected it sets what new blends start with",
     ),
+    (
+        "ui.perspectivePlane",
+        "Perspective Plane Options…",
+        "",
+        "{plane?: left|right|ground (default: the active plane)} open the plane's options, as double-clicking its plane widget does (dialog `perspectivePlane`: location (pt along the plane's normal), objects: none|move|copy): OK runs perspective.plane.move",
+    ),
 ];
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -1088,6 +1094,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             None => Err("no such perspective grid preset".into()),
         },
         "ui.blendOptions" => crate::dialogs::blend_options::open(app),
+        "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
         _ => return None,
     };
     Some(r)
@@ -1382,6 +1389,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
+        "ui.perspectivePlane" => app.session.active().is_some(),
         _ => true,
     }
 }
@@ -1682,7 +1690,14 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Edit Contents", "object.envelope.editContents"),
                     ],
                 ),
-                sub("Perspective", vec![c("Attach to Active Plane", "perspective.attach"), c("Release with Perspective", "perspective.release")]),
+                sub(
+                    "Perspective",
+                    vec![
+                        c("Attach to Active Plane", "perspective.attach"),
+                        c("Release with Perspective", "perspective.release"),
+                        c("Move Plane to Match Object", "perspective.plane.matchObject"),
+                    ],
+                ),
                 sub(
                     "Live Paint",
                     vec![

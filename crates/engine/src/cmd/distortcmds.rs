@@ -87,7 +87,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Define Perspective Grid",
             [],
             None,
-            "{kind?: 1|2|3, origin?: [x,y], horizon?, vpLeft?, vpRight?, vpVertical?: [x,y], distance?, cell?, extent?, height?, visible?, plane?} merge into the document's grid",
+            "{kind?: 1|2|3, origin?: [x,y], horizon?, vpLeft?, vpRight?, vpVertical?: [x,y], distance?, cell?, extent?, height?, visible?, plane?, leftOffset?, rightOffset?, groundOffset?: pt (planes moved along their normals), reproject?: bool} merge into the document's grid. Objects in perspective stay where they are, as in the reference app; with reproject they move with the grid (each keeps its place on its plane)",
             has_doc,
             grid_set
         ),
@@ -163,6 +163,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{dx, dy: arrow direction (-1, 0 or 1), big?: bool (×10), copy?: bool} move the selection in perspective by the keyboard increment, as the arrow keys do with the Perspective Selection tool → {ids}",
             has_selection,
             persp_nudge
+        ),
+        cmd!(
+            "perspective.plane.move",
+            "Move Plane",
+            [],
+            None,
+            "{plane?: left|right|ground (default: the active plane), offset?: pt (where along its normal; 0 is its place in the grid's definition) | by?: pt, objects?: none|move|copy (default none: the objects on the plane stay; move: they move with it, as Shift-dragging a plane widget does; copy: copies of them do, as Alt-dragging does)} → {plane, offset, ids}",
+            has_doc,
+            plane_move
+        ),
+        cmd!(
+            "perspective.plane.matchObject",
+            "Move Plane to Match Object",
+            [],
+            None,
+            "{id? (default: the first selected object)} move the plane the object is attached to onto the object and make it the active plane → {plane, offset}",
+            has_doc,
+            plane_match
         ),
     ]
 }
@@ -528,8 +546,19 @@ fn silent(s: &mut Session, f: impl FnOnce(&mut PerspectiveGrid)) -> Result<Persp
 }
 
 fn grid_set(s: &mut Session, p: &Value) -> Result<Value> {
-    let g = grid_of(&s.doc()?.doc).merged(p).map_err(|e| bad("perspective.grid.set", e))?;
+    let old = grid_of(&s.doc()?.doc);
+    let g = old.merged(p).map_err(|e| bad("perspective.grid.set", e))?;
+    let reproject = bool_or(p, "reproject", false);
     s.edit("Define Perspective Grid", |d, _| {
+        if reproject {
+            old.adopt_stored_attachments(d);
+            for (id, plane, depth) in persp::attached_roots(d) {
+                let h = old.homography_at(plane, depth).and_then(|h| h.inverse()).zip(g.homography_at(plane, depth));
+                let (hi, h) = h.ok_or_else(|| EngineError::Other("an object in perspective would leave the edited grid".into()))?;
+                let m = h.then_after(&hi);
+                warp_checked(d, id, &|q| m.apply(q))?;
+            }
+        }
         store_grid(d, &g);
         Ok(())
     })?;
@@ -582,7 +611,7 @@ fn attach_in(d: &mut Document, g: &mut PerspectiveGrid, id: NodeId, plane: Plane
     let b = d.node(id).ok_or(EngineError::NoNode(id))?.geometric_bounds().ok_or_else(|| EngineError::Other("the object has no geometry".into()))?;
     let m = g.attach_map(plane, b).ok_or_else(|| EngineError::Other("the object is beyond the plane's horizon".into()))?;
     warp_checked(d, id, &m)?;
-    persp::set_attachment(d.node_mut(id).ok_or(EngineError::NoNode(id))?, plane, 0.0);
+    persp::set_attachment(d.node_mut(id).ok_or(EngineError::NoNode(id))?, plane, g.offset(plane));
     g.attached.insert(id.0.to_string(), plane);
     Ok(())
 }
@@ -653,7 +682,7 @@ fn persp_edit(
                 None => {
                     let pl = fallback.ok_or_else(|| EngineError::Other("the object isn't on a perspective plane".into()))?;
                     attach_in(d, &mut g, *id, pl)?;
-                    (pl, 0.0)
+                    (pl, g.offset(pl))
                 }
             };
             first.get_or_insert((plane, depth));
@@ -752,6 +781,68 @@ pub(crate) fn transform_again(s: &mut Session, again: &Value) -> Result<Value> {
         o.remove("ids");
     }
     persp_transform(s, &p)
+}
+
+fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "perspective.plane.move";
+    let old = grid_of(&s.doc()?.doc);
+    let plane = plane_param(&old, p, C)?;
+    let from = old.offset(plane);
+    let to = match (p.get("offset").and_then(Value::as_f64), p.get("by").and_then(Value::as_f64)) {
+        (Some(o), _) => o,
+        (None, Some(b)) => from + b,
+        (None, None) => return Err(bad(C, "give offset or by")),
+    };
+    let objects = str_param(p, "objects").unwrap_or("none");
+    if !matches!(objects, "none" | "move" | "copy") {
+        return Err(bad(C, "objects must be none, move or copy"));
+    }
+    let mut g = old.clone();
+    g.set_offset(plane, to);
+    g.validate().map_err(|e| bad(C, e))?;
+    let label = match objects {
+        "copy" => "Move Plane and Copy Objects",
+        "move" => "Move Plane and Objects",
+        _ => "Move Plane",
+    };
+    let ids = s.edit(label, |d, sel| {
+        old.adopt_stored_attachments(d);
+        let mut ids = vec![];
+        if objects != "none" {
+            // The objects on the plane where it was (not those moved off it along its normal).
+            let on: Vec<NodeId> = persp::attached_roots(d)
+                .into_iter()
+                .filter(|(id, pl, depth)| *pl == plane && (depth - from).abs() < 1e-6 && d.is_editable(*id))
+                .map(|(id, ..)| id)
+                .collect();
+            ids = if objects == "copy" { duplicate_in(d, sel, &on, Affine::IDENTITY)? } else { on };
+            let m = old.transform_map(plane, from, Affine::IDENTITY, to - from).ok_or_else(beyond_horizon)?;
+            for id in &ids {
+                warp_checked(d, *id, &|q| m.apply(q))?;
+                persp::set_attachment(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?, plane, to);
+            }
+        }
+        store_grid(d, &g);
+        Ok(ids)
+    })?;
+    Ok(json!({ "plane": plane.id(), "offset": to, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+fn plane_match(s: &mut Session, p: &Value) -> Result<Value> {
+    let st = s.doc()?;
+    let id = id_param(p, "id")
+        .or_else(|| st.selection.objects.first().copied())
+        .ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
+    let mut g = grid_of(&st.doc);
+    let (plane, depth) = g.attachment_of(&st.doc, id).ok_or_else(|| EngineError::Other("the object isn't in perspective".into()))?;
+    g.set_offset(plane, depth);
+    g.plane = plane;
+    g.validate().map_err(|e| bad("perspective.plane.matchObject", e))?;
+    s.edit("Move Plane to Match Object", |d, _| {
+        store_grid(d, &g);
+        Ok(())
+    })?;
+    Ok(json!({ "plane": plane.id(), "offset": depth }))
 }
 
 fn persp_nudge(s: &mut Session, p: &Value) -> Result<Value> {
