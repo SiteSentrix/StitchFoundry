@@ -303,6 +303,11 @@ pub struct VectorcraftApp {
     host_modifiers: egui::Modifiers,
     /// Synthetic input set the modifiers egui holds (see [`Self::raw_input_hook`]).
     synthetic_modifiers: bool,
+    /// The marked text the system IME last sent (`None` once it commits or clears). When the Type
+    /// tool stops composing on its own (a click, a tool switch), the IME is told to drop it.
+    pub(crate) ime_marked: Option<String>,
+    /// The IME must drop its marked text (see [`Self::take_ime_discard`]).
+    pub(crate) ime_discard: bool,
 }
 
 /// Seconds between two looks at the system clipboard for [`VectorcraftApp::system_paste`].
@@ -362,6 +367,8 @@ impl VectorcraftApp {
             recovery: Default::default(),
             host_modifiers: Default::default(),
             synthetic_modifiers: false,
+            ime_marked: None,
+            ime_discard: false,
         }
     }
 
@@ -575,6 +582,13 @@ impl VectorcraftApp {
             }));
             false
         });
+    }
+
+    /// Did the Type tool end an IME composition on its own this frame? Interrupting the IME
+    /// through egui (`should_interrupt_composition`) doesn't reach the macOS input context, which
+    /// keeps the marked text and types it again into the next composition: the host discards it.
+    pub fn take_ime_discard(&mut self) -> bool {
+        std::mem::take(&mut self.ime_discard)
     }
 
     /// Show a transient status message.

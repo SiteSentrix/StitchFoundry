@@ -385,6 +385,21 @@ pub trait Tool: Send {
     fn text_input(&mut self, _cx: &ToolContext, _s: &str) -> Vec<Action> {
         vec![]
     }
+    /// IME composition (marked text) for the tool that wants text: `text` replaces the previous
+    /// marked text (or the selection); an empty `text` ends the composition. `active_chars` is the
+    /// clause being converted, in characters of `text`. The committed result arrives through
+    /// [`Tool::text_input`].
+    fn ime_preedit(&mut self, _cx: &ToolContext, _text: &str, _active_chars: Option<std::ops::Range<usize>>) -> Vec<Action> {
+        vec![]
+    }
+    /// Is uncommitted IME text being shown? Keys, shortcuts and Undo wait while it is.
+    fn composing(&self) -> bool {
+        false
+    }
+    /// Where the IME candidate window goes: the caret line (top, bottom) in document space.
+    fn ime_caret(&self, _cx: &ToolContext) -> Option<(Point, Point)> {
+        None
+    }
     fn notify(&mut self, _cx: &ToolContext, _what: &str) {}
     /// Called when the user switches away (finish pending work).
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
