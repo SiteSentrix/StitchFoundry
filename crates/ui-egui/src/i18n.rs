@@ -132,6 +132,10 @@ mod tests {
 
     #[test]
     fn japanese_glyphs_are_available_without_system_fonts() {
+        if !vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_japanese()) {
+            eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+            return;
+        }
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});

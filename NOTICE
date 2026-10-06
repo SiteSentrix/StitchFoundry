@@ -30,6 +30,7 @@ based in part on the work of the Independent JPEG Group.
 WebAssembly plug-ins run in the wasmi interpreter (MIT OR Apache-2.0); its wasmparser dependency is
 under the Apache License 2.0 with the LLVM exception.
 
-Shippori Mincho: Copyright 2021 The Shippori Mincho Project Authors
-(https://github.com/fontdasu/ShipporiMincho). SIL Open Font License 1.1;
-see assets/fonts/OFL-ShipporiMincho.txt.
+Builds made with craft-fonts (the CRAFT_FONTS_DIR build option; all official releases) embed the
+fonts listed in https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md (today BIZ
+UDPGothic, Shippori Mincho and BIZ UDMincho; web builds BIZ UDPGothic Regular only) under the SIL
+Open Font License 1.1. Their license texts ship with the release packages as OFL-<family>.txt.

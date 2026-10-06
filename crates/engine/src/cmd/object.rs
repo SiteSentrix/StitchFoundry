@@ -375,18 +375,24 @@ fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn group(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    let Some(top) = ids.last().copied() else { return Err(EngineError::Other("nothing selected".into())) };
     let gid = s.edit("Group", |d, sel| {
-        let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
-        let gid = d.alloc_id();
-        d.insert(par, idx + 1, Node::group(gid, vec![]))?;
-        for id in &ids {
-            d.move_node(*id, Some(gid), usize::MAX)?;
-        }
+        let gid = group_nodes(d, &ids)?;
         sel.set([gid]);
         Ok(gid)
     })?;
     Ok(json!({ "id": gid.0 }))
+}
+
+/// Put `ids` (top-level objects, in paint order) in a new group where the front-most one was.
+pub(crate) fn group_nodes(d: &mut Document, ids: &[NodeId]) -> Result<NodeId> {
+    let Some(top) = ids.last().copied() else { return Err(EngineError::Other("nothing selected".into())) };
+    let (par, idx, _) = d.position(top).ok_or(EngineError::NoNode(top))?;
+    let gid = d.alloc_id();
+    d.insert(par, idx + 1, Node::group(gid, vec![]))?;
+    for id in ids {
+        d.move_node(*id, Some(gid), usize::MAX)?;
+    }
+    Ok(gid)
 }
 
 fn ungroup(s: &mut Session, _: &Value) -> Result<Value> {

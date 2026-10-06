@@ -16,9 +16,6 @@ use skrifa::{GlyphId, MetadataProvider};
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
 
-/// Bundled Japanese font bytes, shared with UI glyph fallback.
-pub static SHIPPORI_MINCHO_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/ShipporiMincho-Regular.ttf");
-
 static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf"),
     include_bytes!("../../../assets/fonts/SourceSans3-Semibold.ttf"),
@@ -29,7 +26,6 @@ static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/Inter-Medium.ttf"),
     include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"),
     include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
-    SHIPPORI_MINCHO_REGULAR,
 ];
 
 enum FontBytes {
@@ -159,19 +155,19 @@ struct CatalogFamily {
 /// [`FontDb::face`] does). Always empty on wasm, which has no system fonts.
 type Catalog = HashMap<String, CatalogFamily>;
 
+/// The installed faces' (family, style) by normalized PostScript name ([`norm`]).
+type PostScriptNames = HashMap<String, (String, String)>;
+
 /// Process-wide font database.
 pub struct FontDb {
     faces: RwLock<Vec<Arc<FontFace>>>,
     outlines: Mutex<HashMap<(u32, u32), Arc<BezPath>>>,
     catalog: RwLock<Catalog>,
+    /// The installed faces by PostScript name (documents name fonts so: PDF, EPS, .ai).
+    postscript: RwLock<PostScriptNames>,
     /// The folders the system font scan reads (the platform's font folders for [`FontDb::global`]).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     font_dirs: Vec<PathBuf>,
-    /// Adobe applications' font folders, scanned with `font_dirs` while `adobe` is on.
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    adobe_dirs: Vec<PathBuf>,
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    adobe: std::sync::atomic::AtomicBool,
     /// The installed fonts' other names (localized, legacy, PostScript) by normalized name.
     aliases: RwLock<HashMap<String, Vec<Alias>>>,
     /// Set once the font folders have been scanned. Lookups by family name wait for the first
@@ -362,8 +358,9 @@ fn enumerate_faces(data: &[u8]) -> Vec<(u32, String, String)> {
         .collect()
 }
 
-/// (family, style) of every face in the font file at `path`, reading only its table directories
-/// and `name` tables: a scan opens hundreds of font files, many of them megabytes long.
+/// (family, style, PostScript name) of every face in the font file at `path`, reading only its
+/// table directories and `name` tables: a scan opens hundreds of font files, many of them
+/// megabytes long.
 #[cfg(not(target_arch = "wasm32"))]
 fn file_face_names(path: &Path) -> Vec<(String, String, FaceKeys)> {
     use std::io::{Read, Seek, SeekFrom};
@@ -413,19 +410,6 @@ fn file_face_names(path: &Path) -> Vec<(String, String, FaceKeys)> {
             Some((family, style, keys))
         })
         .collect()
-}
-
-/// The font folders of Adobe applications (macOS): Adobe Fonts activated from Creative Cloud and
-/// the applications' own font folder. Scanned by [`FontDb::global`] unless turned off
-/// ([`FontDb::set_adobe_fonts`]); left out of the glyph fallback search (thousands of files).
-pub fn adobe_font_dirs() -> Vec<PathBuf> {
-    match std::env::var_os("HOME").map(PathBuf::from) {
-        Some(h) if cfg!(target_os = "macos") => {
-            let support = h.join("Library/Application Support/Adobe"); // brand-ok: the folder's real name
-            vec![support.join("CoreSync/plugins/livetype"), support.join("Fonts")]
-        }
-        _ => vec![],
-    }
 }
 
 /// The platform's font folders (the system's and the user's), scanned by [`FontDb::global`].
@@ -531,7 +515,10 @@ impl FontDb {
     /// A database holding the bundled fonts, whose system font scan reads `font_dirs`.
     pub fn with_font_dirs(font_dirs: Vec<PathBuf>) -> Self {
         let mut faces = Vec::new();
-        for data in BUNDLED {
+        // The bundled fonts, then the Japanese craft-fonts faces (when built with them), Mincho
+        // first: fallbacks for Japanese text after the requested and bundled fonts.
+        let craft = crate::craft_fonts::japanese_document_fonts().into_iter().map(|f| f.bytes);
+        for data in BUNDLED.iter().copied().chain(craft) {
             for (i, family, style) in enumerate_faces(data) {
                 if let Some(f) = make_face(FontBytes::Static(data), i, family, style, None) {
                     faces.push(Arc::new(f));
@@ -542,9 +529,8 @@ impl FontDb {
             faces: RwLock::new(faces),
             outlines: Mutex::new(HashMap::new()),
             catalog: RwLock::new(Catalog::new()),
+            postscript: RwLock::new(PostScriptNames::new()),
             font_dirs,
-            adobe_dirs: vec![],
-            adobe: std::sync::atomic::AtomicBool::new(true),
             aliases: RwLock::new(HashMap::new()),
             #[cfg(not(target_arch = "wasm32"))]
             cataloged: std::sync::OnceLock::new(),
@@ -571,7 +557,7 @@ impl FontDb {
     /// [`FontDb::scan_in_background`]).
     pub fn global() -> &'static FontDb {
         static DB: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();
-        DB.get_or_init(|| FontDb { adobe_dirs: adobe_font_dirs(), ..FontDb::with_font_dirs(system_font_dirs()) })
+        DB.get_or_init(|| FontDb::with_font_dirs(system_font_dirs()))
     }
 
     fn read_faces(&self) -> std::sync::RwLockReadGuard<'_, Vec<Arc<FontFace>>> {
@@ -694,11 +680,9 @@ impl FontDb {
     fn scan_font_dirs(&self) -> usize {
         let mut catalog = Catalog::new();
         let mut aliases: HashMap<String, Vec<Alias>> = HashMap::new();
+        let mut postscript = PostScriptNames::new();
         let mut n = 0;
         let mut stack = self.font_dirs.clone();
-        if self.adobe.load(Ordering::Relaxed) {
-            stack.extend(self.adobe_dirs.iter().cloned());
-        }
         // Each folder once, however links lead back to it.
         let mut visited = std::collections::HashSet::new();
         while let Some(d) = stack.pop() {
@@ -720,6 +704,10 @@ impl FontDb {
                     for (k, a) in Alias::of(&family, &style, &keys) {
                         aliases.entry(k).or_default().push(a);
                     }
+                    // `keys.postscript` is normalized ([`norm`]), as `by_postscript_name` looks it up.
+                    for ps in &keys.postscript {
+                        postscript.insert(ps.clone(), (family.clone(), style.clone()));
+                    }
                     let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
                     if entry.name.is_empty() {
                         entry.name = family;
@@ -732,19 +720,9 @@ impl FontDb {
         log::debug!("cataloged {n} system font faces");
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
         *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
+        *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
         self.changed();
         n
-    }
-
-    /// Also catalog the font folders of Adobe applications ([`adobe_font_dirs`]; on by default).
-    /// A change rescans the catalog if it was made.
-    pub fn set_adobe_fonts(&self, on: bool) {
-        #[cfg(not(target_arch = "wasm32"))]
-        if self.adobe.swap(on, Ordering::Relaxed) != on && !self.adobe_dirs.is_empty() && self.cataloged.get().is_some() {
-            self.load_system_fonts();
-        }
-        #[cfg(target_arch = "wasm32")]
-        let _ = on;
     }
 
     /// The family's own name and the style for a name given in a document: any of a family's
@@ -810,6 +788,14 @@ impl FontDb {
         let (family, style) = face?;
         self.face(&family, &style)?;
         loaded(self)
+    }
+
+    /// The (family, style) of the installed face whose PostScript name is `name` (ignoring ASCII
+    /// case). Documents name fonts this way, and a family can hold hyphens
+    /// ("Rounded-X-Mplus-1c-black" is Rounded-X M+ 1c, black), so the name can't be split.
+    pub fn by_postscript_name(&self, name: &str) -> Option<(String, String)> {
+        self.ensure_catalog();
+        self.postscript.read().unwrap_or_else(|e| e.into_inner()).get(&norm(name)).cloned()
     }
 
     /// Load the files of the installed `family`. Returns whether any face was added.
@@ -954,7 +940,6 @@ impl FontDb {
             .read_catalog()
             .values()
             .flat_map(|c| c.faces.iter().map(|(_, p)| p.clone()))
-            .filter(|p| !self.adobe_dirs.iter().any(|d| p.starts_with(d)))
             .collect();
         paths.sort();
         paths.dedup();

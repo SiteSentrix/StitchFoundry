@@ -206,6 +206,10 @@ impl Families {
             Some((tag, rest)) if tag.len() == 6 && tag.chars().all(|c| c.is_ascii_uppercase()) => rest,
             _ => name,
         };
+        // An installed face of that exact PostScript name: its own family and style.
+        if let Some((family, style)) = vectorcraft_text::FontDb::global().by_postscript_name(name) {
+            return (family, style, true);
+        }
         let (fam, style) = name.split_once(['-', ',']).unwrap_or((name, ""));
         let found = [fam, strip_ps(fam)].iter().find_map(|f| self.0.get(&norm(f)).cloned());
         let style = match spaced(strip_ps(style)).as_str() {

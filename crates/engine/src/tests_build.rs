@@ -310,6 +310,56 @@ fn live_paint_bucket_tool_fills_face() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![f.id]);
 }
 
+fn line(s: &mut Session, a: (f64, f64), b: (f64, f64)) -> NodeId {
+    let r = s.execute("shape.line", &json!({"x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+/// Crossing lines, as in the bug report: the Live Paint Bucket fills the area they enclose.
+#[test]
+fn live_paint_bucket_fills_an_area_enclosed_by_lines() {
+    let mut s = session();
+    let ids = [line(&mut s, (0.0, 0.0), (100.0, 100.0)), line(&mut s, (100.0, 0.0), (0.0, 100.0)), line(&mut s, (-10.0, 80.0), (110.0, 80.0))];
+    s.execute("select.set", &json!({"ids": ids.map(|i| i.0)})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(1.0, 0.0, 1.0));
+    // Inside the triangle (20,80) (50,50) (80,80): highlighted, then filled.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, 70.0), v).unwrap();
+    assert!(!s.overlays(v).is_empty(), "red face highlight");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 70.0), v).unwrap();
+    let g = s.doc().unwrap().selection.objects[0];
+    let gn = node(&s, g);
+    assert!(vectorcraft_tools::builder::is_live_paint(&gn));
+    assert_eq!(vectorcraft_tools::builder::faces(&gn).len(), 1);
+    let f = vectorcraft_tools::builder::face_at(&gn, vectorcraft_geom::Point::new(50.0, 70.0)).unwrap();
+    assert_eq!(f.appearance.fill_paint(), s.paint.fill);
+    assert!((vectorcraft_pathops::area(f.path_data().unwrap(), FillRule::NonZero).abs() - 900.0).abs() < 1e-6);
+    // The lines are edges, cut where they cross, and keep their stroke.
+    let edges = vectorcraft_tools::builder::edges(&gn);
+    assert_eq!(edges.len(), 9);
+    assert!(edges.iter().all(|e| !e.appearance.stroke_paint().is_none()));
+    // Outside the triangle there's nothing to fill.
+    assert!(s.execute("livePaint.fill", &json!({"group": g.0, "point": [50, 20]})).is_err());
+}
+
+#[test]
+fn a_line_across_a_live_paint_shape_splits_its_face() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    set_fill(&mut s, r, Color::rgb(1.0, 0.0, 0.0));
+    let l = line(&mut s, (40.0, -20.0), (60.0, 70.0));
+    s.execute("select.set", &json!({"ids": [r.0, l.0]})).unwrap();
+    let made = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!(made["faces"], 2, "{made}");
+    let g = NodeId(made["id"].as_u64().unwrap());
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [80, 25], "color": "#0000ff"})).unwrap();
+    let gn = node(&s, g);
+    let face = |x: f64| vectorcraft_tools::builder::face_at(&gn, vectorcraft_geom::Point::new(x, 25.0)).unwrap().appearance.fill_paint();
+    assert_eq!(face(10.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the left half keeps the rectangle's fill");
+    assert_eq!(face(80.0), Paint::solid(Color::from_hex("#0000ff").unwrap()));
+}
+
 // ---------- Image Trace ----------
 
 /// A 100×100 image with a black disc (r = 30 px), placed at (50, 50) scaled ×2.

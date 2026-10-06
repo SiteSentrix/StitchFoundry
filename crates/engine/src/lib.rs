@@ -443,9 +443,6 @@ pub struct Prefs {
     pub width_profiles: Vec<vectorcraft_doc::SavedProfile>,
     /// General → Use Japanese Crop Marks: the style of Create Trim Marks and Effect → Crop Marks.
     pub japanese_crop_marks: bool,
-    /// Type → Include Fonts of Other Design Apps' Folders (on; macOS): fonts activated from Adobe Fonts and
-    /// those in Adobe applications' own font folder are found like installed fonts.
-    pub adobe_fonts: bool,
     /// Appearance panel → New Art Has Basic Appearance (on): new art takes one fill and stroke;
     /// off, the whole appearance of the last selection (`appearance.setNewArtBasic`).
     pub new_art_basic: bool,
@@ -628,7 +625,6 @@ impl Default for Prefs {
             flattener_presets: vec![],
             width_profiles: vec![],
             japanese_crop_marks: false,
-            adobe_fonts: true,
             new_art_basic: true,
             color_themes: vec![],
             new_doc_presets: vec![],

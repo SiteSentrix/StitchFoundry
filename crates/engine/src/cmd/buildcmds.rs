@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer, StrokeLayer};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Selection};
-use vectorcraft_geom::{FillRule, PathData, Point, Rect, Shape as _};
+use vectorcraft_geom::{FillRule, Point, Rect, Shape as _};
 use vectorcraft_pathops as po;
 use vectorcraft_tools::builder::{
     self as b, EDGE_NAME, FACE_NAME, LIVE_PAINT_NAME, SOURCES_NAME, edge_near, face_at, is_live_paint, sample_polyline, shapes_for, sorted_roots,
@@ -205,52 +205,6 @@ fn stroke_only(paint: Paint, width: f64) -> Appearance {
     Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, width))], ..Default::default() }
 }
 
-/// A point strictly inside a filled path (for re-finding faces after a rebuild).
-pub(crate) fn interior_point(path: &PathData) -> Option<Point> {
-    let bb = path.bounds()?;
-    let bp = path.to_bezpath();
-    let mut edges: Vec<(Point, Point)> = vec![];
-    let (mut first, mut last) = (Point::ZERO, Point::ZERO);
-    kurbo::flatten(bp.iter(), (bb.width().max(bb.height()) * 1e-3).max(1e-4), |el| match el {
-        kurbo::PathEl::MoveTo(p) => {
-            if last != first {
-                edges.push((last, first));
-            }
-            first = p;
-            last = p;
-        }
-        kurbo::PathEl::LineTo(p) => {
-            edges.push((last, p));
-            last = p;
-        }
-        kurbo::PathEl::ClosePath => {
-            if last != first {
-                edges.push((last, first));
-            }
-            last = first;
-        }
-        _ => {}
-    });
-    if last != first {
-        edges.push((last, first));
-    }
-    let mut best: Option<(f64, Point)> = None;
-    for f in [0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875, 0.0625, 0.9375] {
-        let y = bb.y0 + bb.height() * f;
-        let mut xs: Vec<f64> =
-            edges.iter().filter(|(a, c)| (a.y <= y) != (c.y <= y)).map(|(a, c)| a.x + (y - a.y) / (c.y - a.y) * (c.x - a.x)).collect();
-        xs.sort_by(f64::total_cmp);
-        for w in xs.windows(2) {
-            let m = Point::new((w[0] + w[1]) / 2.0, y);
-            let width = w[1] - w[0];
-            if width > best.map_or(0.0, |b| b.0) && bp.winding(m) != 0 {
-                best = Some((width, m));
-            }
-        }
-    }
-    best.map(|b| b.1)
-}
-
 // ---------- Shape Builder ----------
 
 fn fill_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Paint>> {
@@ -395,7 +349,11 @@ fn build_children(d: &mut Document, sources: Vec<Arc<Node>>) -> Result<(Vec<Arc<
     src_group.name = Some(SOURCES_NAME.into());
     src_group.visible = false;
     children.push(Arc::new(src_group));
-    let regs = po::regions(&shapes);
+    // Every path is an edge, open ones included; faces are the areas they enclose.
+    let (regs, edges) = po::live_paint(&shapes);
+    if regs.is_empty() && edges.is_empty() {
+        return Err(EngineError::Other("Live Paint: these paths are too degenerate to paint".into()));
+    }
     let nfaces = regs.len();
     for r in regs {
         let id = d.alloc_id();
@@ -404,10 +362,9 @@ fn build_children(d: &mut Document, sources: Vec<Arc<Node>>) -> Result<(Vec<Arc<
         n.name = Some(FACE_NAME.into());
         children.push(Arc::new(n));
     }
-    let edges = po::pathfinder(po::PathfinderOp::Outline, &shapes);
     let nedges = edges.len();
     for e in edges {
-        let (_, stroke, w) = &styles[e.key as usize];
+        let Some((_, stroke, w)) = styles.get(e.key as usize) else { continue };
         let id = d.alloc_id();
         let mut n = Node::path(id, e.path, stroke_only(stroke.clone(), *w));
         n.name = Some(EDGE_NAME.into());
@@ -451,7 +408,7 @@ fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
         let keep_faces: Vec<(Point, Paint)> = b::faces(&old)
             .iter()
             .filter(|f| !f.appearance.fill_paint().is_none())
-            .filter_map(|f| Some((interior_point(f.path_data()?)?, f.appearance.fill_paint())))
+            .filter_map(|f| Some((po::interior_point(f.path_data()?)?, f.appearance.fill_paint())))
             .collect();
         let keep_edges: Vec<(Point, Appearance)> = b::edges(&old)
             .iter()

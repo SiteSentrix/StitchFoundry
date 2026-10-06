@@ -21,6 +21,9 @@ enum State {
     Moving {
         start: Point,
         began: bool,
+        /// Shift-pressed on this selected object: released without a drag, it leaves the
+        /// selection.
+        deselect: Option<NodeId>,
     },
     Scaling {
         handle: Handle,
@@ -141,16 +144,19 @@ impl Tool for SelectionTool {
                     Some(h) => {
                         let top = h.top_object(cx.isolation);
                         let mut out = vec![];
+                        let mut deselect = None;
                         if m.shift {
-                            out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
+                            // A Shift-click takes a selected object out of the selection when it
+                            // is released; a Shift-drag moves the selection, constrained.
                             if cx.selection.contains(top) {
-                                self.state = State::Idle;
-                                return out;
+                                deselect = Some(top);
+                            } else {
+                                out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
                             }
                         } else if !cx.selection.contains(top) {
                             out.push(Action::Exec("select.set".into(), json!({ "ids": [top.0] })));
                         }
-                        self.state = State::Moving { start: p, began: false };
+                        self.state = State::Moving { start: p, began: false, deselect };
                         out
                     }
                     None => {
@@ -185,7 +191,7 @@ impl Tool for SelectionTool {
                     d = vectorcraft_geom::Vec2::new((b.x0 + d.x).round() - b.x0, (b.y0 + d.y).round() - b.y0);
                     self.guides.clear();
                 }
-                self.state = State::Moving { start, began: true };
+                self.state = State::Moving { start, began: true, deselect: None };
                 self.measure = Some((p, cx.offset_label(d.x, d.y)));
                 out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
                 out
@@ -215,12 +221,16 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 c.finish()
             }
-            (PointerKind::Up, State::Moving { began, .. }) => {
+            (PointerKind::Up, State::Moving { began, deselect, .. }) => {
                 self.state = State::Idle;
                 self.measure = None;
                 self.guides.clear();
                 self.targets = None;
-                if began { vec![Action::Commit] } else { vec![] }
+                match (began, deselect) {
+                    (true, _) => vec![Action::Commit],
+                    (false, Some(id)) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],
+                    (false, None) => vec![],
+                }
             }
             (PointerKind::Up, State::Scaling { .. } | State::Rotating { .. }) => {
                 self.state = State::Idle;
@@ -337,6 +347,48 @@ mod tests {
         assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
         let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
         assert_eq!(a, vec![Action::Commit]);
+    }
+
+    #[test]
+    fn shift_drag_on_a_selected_object_moves_it_constrained() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+        // Pressing keeps the selection: nothing is toggled yet.
+        assert!(t.pointer(&cx, &shift(PointerKind::Down, 150.0, 150.0)).is_empty());
+        let a = t.pointer(&cx, &shift(PointerKind::Drag, 190.0, 160.0));
+        assert_eq!(a[0], Action::Begin("Move".into()));
+        assert!(
+            matches!(&a[1], Action::Preview(c, v) if c == "object.transform"
+                && v["matrix"][4].as_f64().is_some_and(|x| x > 39.0) && v["matrix"][5] == 0.0),
+            "moved right, constrained to horizontal: {a:?}"
+        );
+        assert_eq!(t.pointer(&cx, &shift(PointerKind::Up, 190.0, 160.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn shift_click_toggles_an_object_on_release() {
+        let (d, id) = doc_with_rect();
+        let p = paint();
+        let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+        let toggle = vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))];
+        // Selected: it leaves the selection when the click is released.
+        let mut s = Selection::default();
+        s.add(id);
+        let cx1 = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&cx1, &shift(PointerKind::Down, 150.0, 150.0)).is_empty());
+        assert_eq!(t.pointer(&cx1, &shift(PointerKind::Up, 150.0, 150.0)), toggle);
+        // Not selected: it joins the selection at once, ready to be dragged.
+        let s = Selection::default();
+        let cx2 = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert_eq!(t.pointer(&cx2, &shift(PointerKind::Down, 150.0, 150.0)), toggle);
+        assert!(t.pointer(&cx2, &shift(PointerKind::Up, 150.0, 150.0)).is_empty());
     }
 
     #[test]

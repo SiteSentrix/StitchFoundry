@@ -243,9 +243,15 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
 struct RegionCache {
     key: Option<(usize, Vec<NodeId>)>,
     regions: Vec<(po::Region, BezPath, Rect)>,
+    /// Live Paint faces (every path an edge, open ones included) rather than Shape Builder
+    /// regions (the filled areas of the shapes).
+    live: bool,
 }
 
 impl RegionCache {
+    fn live_paint() -> Self {
+        Self { live: true, ..Default::default() }
+    }
     fn get(&mut self, cx: &ToolContext) -> &[(po::Region, BezPath, Rect)] {
         let key = (cx.doc as *const Document as usize, cx.selection.objects.clone());
         if self.key.as_ref() != Some(&key) {
@@ -254,7 +260,8 @@ impl RegionCache {
             self.regions = if shapes.is_empty() {
                 vec![]
             } else {
-                po::regions(&shapes)
+                let regions = if self.live { po::live_paint(&shapes).0 } else { po::regions(&shapes) };
+                regions
                     .into_iter()
                     .filter_map(|r| {
                         let bp = r.path.to_bezpath();
@@ -437,10 +444,15 @@ fn lp_overlays(h: &LpHover, cache: &RegionCache) -> Vec<Overlay> {
 /// Live Paint Bucket: click fills the face under the cursor with the current fill; Shift-click
 /// paints the nearest edge with the current stroke. Clicking selected ordinary paths makes them a
 /// Live Paint group first.
-#[derive(Default)]
 pub struct LivePaintBucketTool {
     cache: RegionCache,
     hover: LpHover,
+}
+
+impl Default for LivePaintBucketTool {
+    fn default() -> Self {
+        Self { cache: RegionCache::live_paint(), hover: LpHover::None }
+    }
 }
 
 impl Tool for LivePaintBucketTool {
@@ -500,10 +512,15 @@ impl Tool for LivePaintBucketTool {
 // ---------- Live Paint Selection ----------
 
 /// Live Paint Selection: click selects a face (Shift adds); Alt-click selects an edge.
-#[derive(Default)]
 pub struct LivePaintSelectionTool {
     cache: RegionCache,
     hover: LpHover,
+}
+
+impl Default for LivePaintSelectionTool {
+    fn default() -> Self {
+        Self { cache: RegionCache::live_paint(), hover: LpHover::None }
+    }
 }
 
 impl Tool for LivePaintSelectionTool {

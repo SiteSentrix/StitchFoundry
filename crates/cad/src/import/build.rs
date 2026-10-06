@@ -13,7 +13,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, CharStyle, Dash, Document, LAY
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
 
 use super::ImportOptions;
-use super::entity::{Alpha, Col, Converter, Geom, InsertItem, Item, Lw, Props, TextItem};
+use super::entity::{Alpha, Col, Converter, Geom, InsertItem, Item, Lw, Props, Span, TextItem};
 use super::reader::{Drawing, LayoutDef};
 use crate::{CAP_HEIGHT, MAX_NEST};
 
@@ -244,14 +244,18 @@ impl<'d, 'a> Build<'d, 'a> {
             Geom::Text(t) => {
                 let lines = t.text.lines().count().max(1) as f64;
                 let longest = t.text.lines().map(|l| l.chars().count()).max().unwrap_or(0) as f64;
-                let w = longest * t.height * 0.9 * t.width;
+                let natural = longest * t.height * 0.9 * t.width;
+                // Fit and aligned text run their span; aligned text's height scales with it.
+                let k = t.span.and_then(|sp| sp.scale(natural)).unwrap_or(1.0);
+                let height = if matches!(t.span, Some(Span::Aligned(_))) { t.height * k } else { t.height };
+                let w = natural * k;
                 let x0 = match t.justify {
                     vectorcraft_doc::Justify::Center => -w / 2.0,
                     vectorcraft_doc::Justify::Right => -w,
                     _ => 0.0,
                 };
-                let below = (lines - 1.0) * t.leading.unwrap_or(0.0) + t.height * 0.3;
-                Some(t.xf.transform_rect_bbox(Rect::new(x0, -below, x0 + w, t.height)))
+                let below = (lines - 1.0) * t.leading.unwrap_or(0.0) + height * 0.3;
+                Some(t.xf.transform_rect_bbox(Rect::new(x0, -below, x0 + w, height)))
             }
             Geom::Insert(ins) => {
                 let b = self.block_bounds(&ins.block, depth);
@@ -502,6 +506,9 @@ impl<'d, 'a> Build<'d, 'a> {
         let mut obj = TextObject::point(Point::ZERO, &t.text, style);
         obj.xf = m * Affine::scale(1.0 / s);
         obj.para.justify = t.justify;
+        if let Some(span) = t.span {
+            fill_span(&mut obj, span, s);
+        }
         Some(Node::new(self.doc.alloc_id(), NodeKind::Text(Box::new(obj))))
     }
 
@@ -578,6 +585,20 @@ impl<'d, 'a> Build<'d, 'a> {
         });
         self.symbols.insert(key, made.clone());
         made
+    }
+}
+
+/// Fit text stretched or squeezed across, aligned text scaled as a whole, to run its span
+/// (`s`: points per drawing unit), measured in the font it is set in.
+fn fill_span(obj: &mut TextObject, span: Span, s: f64) {
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), obj);
+    let natural = layout.lines.iter().map(|l| l.x1 - l.x0).fold(0.0, f64::max);
+    let Some(k) = span.scale(natural / s) else { return };
+    for r in &mut obj.runs {
+        match span {
+            Span::Fit(_) => r.style.h_scale *= k,
+            Span::Aligned(_) => r.style.size *= k,
+        }
     }
 }
 

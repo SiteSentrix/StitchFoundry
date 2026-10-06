@@ -422,8 +422,47 @@ fn tab_stops_position_text() {
     assert!((x_of(&p, 4) - 72.0).abs() < 1e-6);
 }
 
+/// Are the Japanese craft-fonts faces built in? Tests of Japanese glyphs skip (and say so) when
+/// they aren't: the bundled fonts have none, and [`db`] reads no system fonts.
+fn japanese_fonts() -> bool {
+    let built_in = CRAFT_FONTS.iter().any(|f| f.is_japanese());
+    if !built_in {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+    }
+    built_in
+}
+
+#[test]
+fn japanese_text_uses_the_craft_fonts_mincho_after_the_bundled_fonts() {
+    if !japanese_fonts() {
+        return;
+    }
+    let l = layout(db(), &point("日本語の文字", style(20.0)));
+    assert_eq!(l.glyphs.len(), 6);
+    assert!(l.glyphs.iter().all(|g| g.gid != 0 && !g.outline.elements().is_empty()), "real glyphs, no tofu");
+    let face = db().face_covering('日').unwrap();
+    assert!(face.family.contains("Mincho"), "document text falls back to a Mincho face: {}", face.family);
+    assert!(CRAFT_FONTS.iter().any(|f| f.family == face.family));
+    // Latin keeps the bundled fallback family.
+    assert_eq!(db().face_covering('a').unwrap().family, FALLBACK_FAMILY);
+}
+
+#[test]
+fn japanese_text_lays_out_without_the_craft_fonts() {
+    // Built either way, Japanese text lays out (as missing glyphs when no font has them).
+    let l = layout(db(), &point("日本語の文字 abc", style(20.0)));
+    assert_eq!(l.lines.len(), 1);
+    assert!(l.glyphs.iter().all(|g| g.advance.is_finite()));
+    if CRAFT_FONTS.is_empty() {
+        assert!(db().families().iter().all(|f| !f.contains("Mincho") && !f.contains("Gothic")), "no Japanese font is bundled");
+    }
+}
+
 #[test]
 fn vertical_japanese_columns_have_upright_ink_and_edit_geometry() {
+    if !japanese_fonts() {
+        return;
+    }
     let mut t = point("日本語\n縦書き", style(30.0));
     t.vertical = true;
     let l = layout(db(), &t);
