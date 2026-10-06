@@ -50,7 +50,7 @@ use Item::Sep;
 
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
-    ("app.language", "Interface Language", "", "{lang: en|ja} — persistent interface language"),
+    ("app.language", "Interface Language", "", "{lang: en|ja|cs} — persistent interface language"),
     ("file.open", "Open…", "Cmd+O", "{path?}"),
     (
         "file.save",
@@ -674,7 +674,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     if id == "app.language" {
         let language = p.get("lang").and_then(Value::as_str).and_then(crate::i18n::Language::parse);
-        let Some(language) = language else { return Some(Err("lang must be en or ja".into())) };
+        let Some(language) = language else { return Some(Err("lang must be en, ja or cs".into())) };
         app.ui.language = language;
         return Some(Ok(json!(language)));
     }
@@ -1464,7 +1464,14 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Join Our Discord", "help.discord"),
                 Sep,
                 c("Settings…", "edit.preferences"),
-                sub("Language", vec![cp("English", "app.language", json!({"lang": "en"})), cp("日本語", "app.language", json!({"lang": "ja"}))]),
+                sub(
+                    "Language",
+                    vec![
+                        cp("English", "app.language", json!({"lang": "en"})),
+                        cp("日本語", "app.language", json!({"lang": "ja"})),
+                        cp("Čeština", "app.language", json!({"lang": "cs"})),
+                    ],
+                ),
                 Sep,
                 sub("UI Brightness", Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({"brightness": b.id()}))).collect()),
                 Sep,
