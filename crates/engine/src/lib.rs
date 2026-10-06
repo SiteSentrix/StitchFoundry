@@ -1220,6 +1220,8 @@ mod tests_envelope;
 #[cfg(test)]
 mod tests_envelope_distort;
 #[cfg(test)]
+mod tests_envelope_edit;
+#[cfg(test)]
 mod tests_expand;
 #[cfg(test)]
 mod tests_eyedropper;

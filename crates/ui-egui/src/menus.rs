@@ -1194,6 +1194,17 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         id if id.starts_with("file.openRecent") => recent_slot(app, id)
             .map(|p| std::path::Path::new(p).file_name().map_or(p.clone(), |f| f.to_string_lossy().to_string()))
             .unwrap_or_else(|| "—".into()),
+        // Edit Contents reads Edit Envelope while an envelope's contents are being edited.
+        "object.envelope.editContents" => {
+            let editing = app.session.active().is_some_and(|st| {
+                st.selection
+                    .objects
+                    .first()
+                    .and_then(|id| vectorcraft_doc::live::envelope_of(&st.doc, *id))
+                    .is_some_and(|e| matches!(e.kind, vectorcraft_doc::NodeKind::Envelope { editing: true, .. }))
+            });
+            if editing { "Edit Envelope" } else { "Edit Contents" }.into()
+        }
         "edit.undo" => app.session.active().and_then(|d| d.history.undo.last()).map(|h| format!("Undo {}", h.label)).unwrap_or_else(|| "Undo".into()),
         "edit.redo" => app.session.active().and_then(|d| d.history.redo.last()).map(|h| format!("Redo {}", h.label)).unwrap_or_else(|| "Redo".into()),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => {

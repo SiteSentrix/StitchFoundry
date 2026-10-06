@@ -114,7 +114,16 @@ pub enum EnvelopeKind {
         horizontal: bool,
     },
     /// A `(rows+1)×(cols+1)` grid of points (row-major) the content's bounding box maps onto.
-    Mesh { rows: u32, cols: u32, points: Vec<Point> },
+    Mesh {
+        rows: u32,
+        cols: u32,
+        points: Vec<Point>,
+        /// Each point's bezier handles (offsets, see [`H_RIGHT`] …), row-major like `points`.
+        /// Empty: the smooth (Catmull-Rom) mesh through the points, as before handles existed;
+        /// editing the mesh's points or handles on the canvas fills them in.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        handles: Vec<[Vec2; 4]>,
+    },
     /// The content's bounding box maps onto the outline of this path.
     TopObject { path: PathData },
 }
@@ -1081,11 +1090,16 @@ fn surface_of<'a>(kind: &'a EnvelopeKind, src: Rect, frame: Affine) -> Box<dyn F
                 frame * Point::new(c.x + x2 * hw, c.y + y2 * hh)
             })
         }
-        EnvelopeKind::Mesh { rows, cols, points } => {
-            let (rows, cols) = (*rows as usize, *cols as usize);
-            if rows == 0 || cols == 0 || points.len() != (rows + 1) * (cols + 1) {
+        EnvelopeKind::Mesh { rows, cols, points, handles } => {
+            if !handles.is_empty()
+                && let Some(m) = envelope_grid(*rows, *cols, points, handles)
+            {
+                return Box::new(move |u: f64, v: f64| mesh_at(&m, u, v));
+            }
+            if *rows == 0 || *cols == 0 || points.len() as u64 != (u64::from(*rows) + 1) * (u64::from(*cols) + 1) {
                 return Box::new(flat);
             }
+            let (rows, cols) = (*rows as usize, *cols as usize);
             Box::new(move |u: f64, v: f64| grid_eval(rows, cols, points, u, v))
         }
         EnvelopeKind::TopObject { path } => match Coons::from_path(path) {
@@ -1100,6 +1114,82 @@ pub fn envelope_mapper<'a>(kind: &'a EnvelopeKind, src: Rect) -> Box<dyn Fn(Poin
     let s = surface_of(kind, src, Affine::IDENTITY);
     let (w, h) = (src.width().max(1e-9), src.height().max(1e-9));
     Box::new(move |q: Point| s((q.x - src.x0) / w, (q.y - src.y0) / h))
+}
+
+/// Catmull-Rom tangents of a `(rows+1)×(cols+1)` point grid (row-major) as mesh handles, a third
+/// of the tangent towards each neighbour (past the borders the grid goes on straight): the curves
+/// an envelope mesh without handles of its own runs along between its points.
+pub fn smooth_handles(rows: u32, cols: u32, points: &[Point]) -> Vec<[Vec2; 4]> {
+    let (rows, cols) = (rows as usize, cols as usize);
+    let at = |r: usize, c: usize| points.get(r * (cols + 1) + c).copied().unwrap_or_default();
+    let tangent = |prev: Option<Point>, p: Point, next: Option<Point>| match (prev, next) {
+        (Some(a), Some(b)) => (b - a) / 2.0,
+        (None, Some(b)) => b - p,
+        (Some(a), None) => p - a,
+        (None, None) => Vec2::ZERO,
+    };
+    let mut out = Vec::with_capacity(points.len());
+    for r in 0..=rows {
+        for c in 0..=cols {
+            let p = at(r, c);
+            let du = tangent(c.checked_sub(1).map(|c| at(r, c)), p, (c < cols).then(|| at(r, c + 1))) / 3.0;
+            let dv = tangent(r.checked_sub(1).map(|r| at(r, c)), p, (r < rows).then(|| at(r + 1, c))) / 3.0;
+            // Handles pointing out of the grid are unused: they stay at the point.
+            let keep = |inside: bool, d: Vec2| if inside { d } else { Vec2::ZERO };
+            let mut h = [Vec2::ZERO; 4];
+            (h[H_RIGHT], h[H_LEFT], h[H_DOWN], h[H_UP]) = (keep(c < cols, du), keep(c > 0, -du), keep(r < rows, dv), keep(r > 0, -dv));
+            out.push(h);
+        }
+    }
+    out
+}
+
+/// A mesh envelope's grid (`rows`×`cols` patches, `points` and their `handles`; without handles
+/// the smooth ones, see [`smooth_handles`]) as a gradient mesh with black points: what the
+/// canvas draws and the Mesh tool and Direct Selection edit. `None` for a malformed grid.
+pub fn envelope_grid(rows: u32, cols: u32, points: &[Point], handles: &[[Vec2; 4]]) -> Option<GradientMesh> {
+    // (Counts come from files: no overflow on 32-bit targets.)
+    if rows == 0 || cols == 0 || points.len() as u64 != (u64::from(rows) + 1) * (u64::from(cols) + 1) {
+        return None;
+    }
+    let smooth;
+    let handles = if handles.len() == points.len() {
+        handles
+    } else {
+        smooth = smooth_handles(rows, cols, points);
+        &smooth
+    };
+    let points = points.iter().zip(handles).map(|(p, h)| MeshPoint { p: *p, color: Color::BLACK, opacity: 1.0, handles: *h }).collect();
+    Some(GradientMesh { rows, cols, points })
+}
+
+/// The point of mesh `m` at (u, v) over the whole mesh (each patch an equal share; past the edges
+/// the outer patches go on).
+fn mesh_at(m: &GradientMesh, u: f64, v: f64) -> Point {
+    let (rows, cols) = (m.rows.max(1) as i64, m.cols.max(1) as i64);
+    let (su, sv) = (u * cols as f64, v * rows as f64);
+    let (c, r) = ((su.floor() as i64).clamp(0, cols - 1), (sv.floor() as i64).clamp(0, rows - 1));
+    m.eval(r as usize, c as usize, su - c as f64, sv - r as f64)
+}
+
+/// The envelope `id` is, or the innermost one it sits in.
+pub fn envelope_of(doc: &crate::Document, id: NodeId) -> Option<&Node> {
+    doc.ancestry(id)?.into_iter().rev().find_map(|a| doc.node(a).filter(|n| matches!(n.kind, NodeKind::Envelope { .. })))
+}
+
+/// What a selected envelope shows on the canvas: its mesh lines (a warp's surface on a 4×4 grid,
+/// a mesh envelope's own grid) or its top object's outline, and for a mesh envelope the grid to
+/// edit (its points and handles).
+pub fn envelope_overlay(n: &Node) -> Option<(PathData, Option<GradientMesh>)> {
+    let NodeKind::Envelope { kind, .. } = &n.kind else { return None };
+    match kind {
+        EnvelopeKind::Mesh { rows, cols, points, handles } => {
+            let grid = envelope_grid(*rows, *cols, points, handles)?;
+            Some((grid.lines(), Some(grid)))
+        }
+        EnvelopeKind::Warp { .. } => Some((EnvelopeMap::of(n)?.surface_mesh(4, 4, Color::BLACK).lines(), None)),
+        EnvelopeKind::TopObject { path } => Some((path.clone(), None)),
+    }
 }
 
 /// The frame an envelope keeps after transform `m` (its frame so far composed with the
@@ -1461,6 +1551,7 @@ fn expand_envelope(content: &[Arc<Node>], kind: &EnvelopeKind, fidelity: f64, op
 /// Envelope bounds: a mesh's points, a top object's path, the warp's surface (sampled).
 pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine) -> Option<Rect> {
     match kind {
+        EnvelopeKind::Mesh { rows, cols, points, handles } if !handles.is_empty() => envelope_grid(*rows, *cols, points, handles)?.outline().bounds(),
         EnvelopeKind::Mesh { points, .. } => {
             let first = *points.first()?;
             Some(points.iter().fold(Rect::from_points(first, first), |r, p| r.union_pt(*p)))

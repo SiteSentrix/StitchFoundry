@@ -218,7 +218,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Envelope Mesh Point",
             [],
             None,
-            "{id, index, x, y} move one point of a mesh envelope",
+            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a mesh envelope (its handles follow), or with `handle` place that handle end at (x, y); object.mesh.movePoint, addLine and deletePoint edit mesh envelopes too",
             has_doc,
             env_set_mesh_point
         ),
@@ -246,7 +246,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Mesh Point",
             [],
             None,
-            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a mesh point (its handles follow), or with `handle` place that handle end at (x, y)",
+            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a gradient mesh or mesh envelope (its handles follow), or with `handle` place that handle end at (x, y)",
             has_doc,
             mesh_move_point
         ),
@@ -255,7 +255,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color?} add a mesh row and column through (x, y) → {index}",
+            "{id, x, y, color?} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope → {index}",
             has_doc,
             mesh_add_line
         ),
@@ -264,7 +264,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Mesh Point",
             [],
             None,
-            "{id, index} delete the mesh lines through a point",
+            "{id, index} delete the mesh lines through a point of a gradient mesh or mesh envelope",
             has_doc,
             mesh_delete_point
         ),
@@ -958,8 +958,12 @@ fn env_make_warp(s: &mut Session, p: &Value) -> Result<Value> {
 /// A mesh envelope of `rows`×`cols` patches for an envelope with map `map`: following its
 /// current surface (`maintain`), or a flat grid over its content.
 fn mesh_kind(map: &EnvelopeMap, maintain: bool, rows: u32, cols: u32) -> EnvelopeKind {
-    let points = if maintain { map.surface_mesh(rows, cols, Color::BLACK).points.into_iter().map(|m| m.p).collect() } else { map.grid(rows, cols) };
-    EnvelopeKind::Mesh { rows, cols, points }
+    if !maintain {
+        return EnvelopeKind::Mesh { rows, cols, points: map.grid(rows, cols), handles: vec![] };
+    }
+    // The surface's points with handles along it: the grid lines keep the current shape.
+    let m = map.surface_mesh(rows, cols, Color::BLACK);
+    EnvelopeKind::Mesh { rows, cols, points: m.points.iter().map(|q| q.p).collect(), handles: m.points.iter().map(|q| q.handles).collect() }
 }
 
 fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
@@ -969,7 +973,7 @@ fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).map(Arc::new).collect();
     let src = live::nodes_bounds(&nodes).ok_or_else(|| bad(C, "selection has no bounds"))?;
-    let kind = EnvelopeKind::Mesh { rows, cols, points: live::grid_points(src, rows, cols) };
+    let kind = EnvelopeKind::Mesh { rows, cols, points: live::grid_points(src, rows, cols), handles: vec![] };
     let defaults = envelope_defaults(s);
     let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind, defaults)))?;
     Ok(json!({ "id": id.0 }))
@@ -1106,7 +1110,12 @@ fn envelope_shape(env: &Node, kind: &EnvelopeKind) -> Option<Node> {
         EnvelopeKind::TopObject { path } => {
             return Some(Node::path(NodeId(0), path.clone(), Appearance::basic(Paint::solid(grey), Paint::None, 0.0)));
         }
-        EnvelopeKind::Mesh { rows, cols, .. } => (*rows, *cols),
+        // The mesh itself, handles and all.
+        EnvelopeKind::Mesh { rows, cols, points, handles } => {
+            let mut m = live::envelope_grid(*rows, *cols, points, handles)?;
+            m.points.iter_mut().for_each(|q| q.color = grey);
+            return Some(Node::new(NodeId(0), NodeKind::Mesh(m)));
+        }
         EnvelopeKind::Warp { .. } => (4, 4),
     };
     EnvelopeMap::of(env).map(|map| Node::new(NodeId(0), NodeKind::Mesh(map.surface_mesh(rows, cols, grey))))
@@ -1268,10 +1277,24 @@ fn env_set_mesh_point(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
     let index = f64_req(p, "index", C)? as usize;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
+    let handle = handle_param(p, C)?;
     s.edit("Move Envelope Point", |d, _| {
-        match d.node_mut(id).map(|n| &mut n.kind) {
-            Some(NodeKind::Envelope { kind: EnvelopeKind::Mesh { points, .. }, .. }) if index < points.len() => points[index] = q,
-            _ => return Err(bad(C, "not a mesh envelope point")),
+        let Some(NodeKind::Envelope { kind: EnvelopeKind::Mesh { rows, cols, points, handles }, .. }) = d.node_mut(id).map(|n| &mut n.kind) else {
+            return Err(bad(C, "not a mesh envelope point"));
+        };
+        let at = *points.get(index).ok_or_else(|| bad(C, "not a mesh envelope point"))?;
+        match handle {
+            // The handles are offsets: they follow.
+            None => points.get_mut(index).into_iter().for_each(|p| *p = q),
+            Some(h) => {
+                // The first handle edited fills in the smooth mesh's handles.
+                if handles.len() != points.len() {
+                    *handles = live::smooth_handles(*rows, *cols, points);
+                }
+                if let Some(hs) = handles.get_mut(index) {
+                    hs[h] = q - at;
+                }
+            }
         }
         Ok(())
     })?;
@@ -1333,14 +1356,35 @@ fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(r)
 }
 
-fn with_mesh<T>(s: &mut Session, p: &Value, cmd: &str, label: &str, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
+/// Run `f` on the gradient mesh `p.id` (one undo step `label`); with `envelopes`, a mesh
+/// envelope's grid too (its points and handles are written back: editing fills in the handles).
+fn with_mesh<T>(s: &mut Session, p: &Value, cmd: &str, label: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
     let id = id_param(p, "id").ok_or_else(|| bad(cmd, "missing `id`"))?;
     let c = cmd.to_string();
     s.edit(label, move |d, _| match d.node_mut(id).map(|n| &mut n.kind) {
         Some(NodeKind::Mesh(m)) => f(m),
-        Some(_) => Err(bad(&c, "not a gradient mesh")),
+        Some(NodeKind::Envelope { kind: EnvelopeKind::Mesh { rows, cols, points, handles }, .. }) if envelopes => {
+            let mut m = live::envelope_grid(*rows, *cols, points, handles).ok_or_else(|| bad(&c, "the envelope's mesh is malformed"))?;
+            let r = f(&mut m)?;
+            (*rows, *cols) = (m.rows, m.cols);
+            *points = m.points.iter().map(|q| q.p).collect();
+            *handles = m.points.iter().map(|q| q.handles).collect();
+            Ok(r)
+        }
+        Some(_) => Err(bad(&c, if envelopes { "not a gradient mesh or mesh envelope" } else { "not a gradient mesh" })),
         None => Err(EngineError::NoNode(id)),
     })
+}
+
+/// The `handle` parameter (0 right, 1 left, 2 down, 3 up), if any.
+fn handle_param(p: &Value, cmd: &str) -> Result<Option<usize>> {
+    match p.get("handle") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => match v.as_u64() {
+            Some(h) if h <= 3 => Ok(Some(h as usize)),
+            _ => Err(bad(cmd, "handle must be 0..3")),
+        },
+    }
 }
 
 fn index_param(p: &Value, key: &str, cmd: &str) -> Result<usize> {
@@ -1359,7 +1403,7 @@ fn mesh_set_color(s: &mut Session, p: &Value) -> Result<Value> {
     if color.is_none() && opacity.is_none() {
         return Err(bad(C, "missing `color` or `opacity`"));
     }
-    with_mesh(s, p, C, "Mesh Point Color", |m| {
+    with_mesh(s, p, C, "Mesh Point Color", false, |m| {
         let pt = m.points.get_mut(index).ok_or_else(|| bad(C, "index out of range"))?;
         if let Some(c) = color {
             pt.color = c;
@@ -1376,11 +1420,8 @@ fn mesh_move_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.movePoint";
     let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
-    let handle = p.get("handle").and_then(Value::as_u64).map(|h| h as usize);
-    if handle.is_some_and(|h| h > 3) {
-        return Err(bad(C, "handle must be 0..3"));
-    }
-    with_mesh(s, p, C, "Move Mesh Point", |m| {
+    let handle = handle_param(p, C)?;
+    with_mesh(s, p, C, "Move Mesh Point", true, |m| {
         let pt = m.points.get_mut(index).ok_or_else(|| bad(C, "index out of range"))?;
         match handle {
             Some(h) => pt.handles[h] = q - pt.p,
@@ -1395,7 +1436,7 @@ fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.addLine";
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let color = p.get("color").and_then(color_value);
-    let index = with_mesh(s, p, C, "Add Mesh Line", |m| {
+    let index = with_mesh(s, p, C, "Add Mesh Line", true, |m| {
         let i = m.add_lines_at(q).ok_or_else(|| bad(C, "point is outside the mesh"))?;
         if let Some(c) = color {
             m.points[i].color = c;
@@ -1408,7 +1449,7 @@ fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
 fn mesh_delete_point(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.mesh.deletePoint";
     let index = index_param(p, "index", C)?;
-    with_mesh(s, p, C, "Delete Mesh Point", |m| {
+    with_mesh(s, p, C, "Delete Mesh Point", true, |m| {
         if m.remove_point_lines(index) { Ok(()) } else { Err(bad(C, "only interior mesh lines can be deleted")) }
     })?;
     ok()

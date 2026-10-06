@@ -5,7 +5,8 @@
 //! reshape, marquee to select anchors, drag a live rectangle's corner widget to round its corners.
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
 //! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
-//! points (a key object on a point moves with it) and, once a point is clicked, its handles.
+//! points (a key object on a point moves with it) and, once a point is clicked, its handles; and
+//! the points of selected gradient meshes and mesh envelopes and their handles ([`MeshEdit`]).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
@@ -14,6 +15,7 @@ use vectorcraft_geom::{PathData, Point, Rect};
 
 use crate::bbox::move_delta;
 use crate::corners::{CornerDrag, over_widget};
+use crate::meshedit::MeshEdit;
 use crate::select::matrix_json;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
@@ -54,6 +56,8 @@ enum State {
         anchor: usize,
         out: bool,
     },
+    /// Dragging a mesh point or handle ([`MeshEdit`]).
+    Mesh,
 }
 
 pub struct DirectSelectionTool {
@@ -61,11 +65,12 @@ pub struct DirectSelectionTool {
     state: State,
     /// The spine point last clicked (blend, anchor): its handles show and can be dragged.
     spine: Option<(NodeId, usize)>,
+    mesh: MeshEdit,
 }
 
 impl DirectSelectionTool {
     pub fn new(group: bool) -> Self {
-        Self { group, state: State::Idle, spine: None }
+        Self { group, state: State::Idle, spine: None, mesh: MeshEdit::default() }
     }
 }
 
@@ -204,6 +209,11 @@ impl Tool for DirectSelectionTool {
                     return vec![Action::Begin("Reshape Spine".into())];
                 }
                 self.spine = None;
+                if let Some(g) = self.mesh.hit(cx, &cx.selection.objects, p) {
+                    self.state = State::Mesh;
+                    return self.mesh.press(g);
+                }
+                self.mesh.unfocus();
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, tol) {
                     self.state = State::Handle { id, si, ai, out };
                     return vec![Action::Begin("Reshape".into())];
@@ -290,6 +300,11 @@ impl Tool for DirectSelectionTool {
                 "object.blend.spine.moveAnchor".into(),
                 json!({"id": id.0, "anchor": anchor, "handle": if out {"out"} else {"in"}, "x": p.x, "y": p.y, "independent": ev.mods.alt}),
             )],
+            (PointerKind::Drag, State::Mesh) => self.mesh.drag_to(p).unwrap_or_default(),
+            (PointerKind::Up, State::Mesh) => {
+                self.state = State::Idle;
+                self.mesh.release().unwrap_or_default()
+            }
             (PointerKind::Drag, State::Marquee { start, add, .. }) => {
                 self.state = State::Marquee { start, cur: p, add };
                 vec![]
@@ -338,7 +353,11 @@ impl Tool for DirectSelectionTool {
         match &self.state {
             State::Marquee { start, cur, .. } => vec![Overlay::Marquee(Rect::from_points(*start, *cur))],
             State::Corner(c) => c.overlays(cx),
-            _ => self.spine_overlays(cx),
+            _ => {
+                let mut out = self.spine_overlays(cx);
+                out.extend(self.mesh.overlays(cx));
+                out
+            }
         }
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {

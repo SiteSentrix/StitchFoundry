@@ -1960,7 +1960,6 @@ sits on; the first edit turns the spine into a path. Moving a key moves its end 
 {"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
 ```
 
-
 How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; strokes
 interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale
 and width profiles, while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
@@ -1971,3 +1970,22 @@ symbol switch halfway). New blends are knockout groups (`object.setProps {knocko
 canvas as they export. `object.blend.expand` and `object.blend.release` keep the blend's name, transparency,
 opacity mask and appearance (Release on a group around the keys and spine when the blend has any), and
 `object.expand` with `object: true` expands the blends in the selection.
+
+## Editing envelopes
+
+`object.envelope.editContents {editing}` switches between editing the envelope and its contents (the menu item reads
+Edit Envelope while the contents are edited; it has no default shortcut, since the reference app's is Paste in Place
+here). While the contents are edited, clicks hit the content where it sits undistorted and the Selection tool selects
+it. A mesh envelope's points have bezier handles (`kind.handles`, offsets
+right/left/down/up; none stored means the smooth mesh through the points, as older files have):
+`object.envelope.setMeshPoint {id, index, x, y, handle?}` and `object.mesh.movePoint`, `object.mesh.addLine` and
+`object.mesh.deletePoint` edit them like a gradient mesh's (one undo step each). On the canvas a selected envelope
+shows its mesh; the Mesh tool and Direct Selection drag its points and the clicked point's handles, and the Mesh tool
+adds a row and a column where it clicks inside. The Control bar shows Edit Envelope / Edit Contents, the warp's
+style, orientation, bend and distortions (or the mesh's rows and columns), Reset (an unbent warp, a flat mesh) and
+Envelope Options.
+
+```json
+{"name":"run_command","arguments":{"command":"object.envelope.editContents","params":{"editing":true}}}
+{"name":"run_command","arguments":{"command":"object.mesh.movePoint","params":{"id":12,"index":4,"x":220,"y":140,"handle":0}}}
+```

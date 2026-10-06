@@ -138,6 +138,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.add_space(6.0);
                 crate::place::control_bar_details(app, ui);
                 crate::toolbar::control_bar_options(app, ui);
+                crate::dialogs::envelope::control_bar(app, ui);
                 let shown_stroke = crate::panels::current_stroke(app);
                 let mixed = crate::panels::stroke_mixed(app, ui.ctx());
                 let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);

@@ -785,16 +785,34 @@ fn c32(rgb: [u8; 3]) -> Color32 {
 /// Outline of a node for highlighting (paths, compound children, text/image bounds).
 fn node_outline(n: &Node) -> BezPath {
     let mut bp = BezPath::new();
-    n.walk(&mut |c| match &c.kind {
+    walk_drawn(n, &mut |c| match &c.kind {
         NodeKind::Path { path, .. } => bp.extend(path.to_bezpath()),
         NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
             if let Some(b) = c.geometric_bounds() {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
             }
         }
+        // An envelope shows its mesh (or top object), not its content.
+        NodeKind::Envelope { .. } => {
+            if let Some((lines, _)) = vectorcraft_doc::live::envelope_overlay(c) {
+                bp.extend(lines.to_bezpath());
+            }
+        }
         _ => {}
     });
     bp
+}
+
+/// [`Node::walk`] over what a selection highlight shows: an envelope's content is left out (the
+/// envelope shows its mesh instead).
+fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
+    f(n);
+    if matches!(n.kind, NodeKind::Envelope { .. }) {
+        return;
+    }
+    for c in n.children().into_iter().flatten() {
+        walk_drawn(c, f);
+    }
 }
 
 /// The topmost editable object under document point `p` at `zoom` (3 px tolerance).
@@ -1039,8 +1057,14 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         let partial = st.selection.partial(*id);
         // Path outlines.
         stroke_path(p, &node_outline(n), xf, Stroke::new(1.0, color));
-        // Anchors (and handles for selected anchors in direct mode).
-        n.walk(&mut |c| {
+        // Anchors (and handles for selected anchors in direct mode); a mesh envelope's points.
+        walk_drawn(n, &mut |c| {
+            if let Some((_, Some(grid))) = vectorcraft_doc::live::envelope_overlay(c) {
+                for q in &grid.points {
+                    anchor_square(p, xf.to_screen(q.p), color, false, if direct { 5.0 } else { 4.0 });
+                }
+                return;
+            }
             let NodeKind::Path { path, .. } = &c.kind else { return };
             for (si, ai, a) in path.anchors() {
                 let sel = match partial {
