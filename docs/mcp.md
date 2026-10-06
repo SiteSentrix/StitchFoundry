@@ -1853,6 +1853,19 @@ its current size (with Shift too it keeps its proportions). With Use Pressure Pe
 {"name":"run_command","arguments":{"command":"object.liquify","params":{"tool":"scallop","points":[[300,150],[300,250]],"complexity":3,"affectAnchors":false}}}
 ```
 
+Holding the brush still keeps Twirl, Pucker and Bloat working, scaled by the time held: every tenth of a second the
+stroke's last point repeats in `object.liquify`'s `points`, one more dab there (other tools ignore repeated points).
+Give a `pointer_gesture` event `holdMs` (0..60000) to hold the pointer that long after it, button down; the same
+time gives the same result. Liquify reshapes paths only: type, symbols, images, graphs, meshes, and envelopes,
+repeats and blends with their contents stay as they are, and guides are never touched. `object.liquify` returns
+those under the brush in `skipped` with a `warning`, which the gesture's `requests` carry as `{"status": …}` (the
+status bar in the app). A drag applies only the dabs each new sample adds; the result equals applying the whole
+stroke at once, so the journal entry replays it exactly.
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"twirl","events":[{"kind":"down","x":300,"y":200,"holdMs":800},{"kind":"up","x":300,"y":200}]}}
+```
+
 ## Perspective Selection
 
 Objects in perspective keep their attachment themselves (`perspective` on the object: `plane` and `depth`, the

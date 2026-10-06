@@ -148,6 +148,7 @@ impl Headless {
                     self.session.select_tool(&t, self.view).map_err(|e| e.to_string())?;
                 }
                 UiRequest::Dialog(k, p) => out.push(json!({"dialog": k, "params": p})),
+                UiRequest::Status(msg) => out.push(json!({"status": msg})),
             }
         }
         Ok(())
@@ -170,6 +171,11 @@ impl Headless {
             let ev = PointerEvent { kind, pos: Point::new(x, y), mods, pressure: PointerEvent::json_pressure(e) };
             let reqs = self.session.pointer(&ev, self.view).map_err(|e| e.to_string())?;
             self.apply_ui_requests(reqs, &mut requests)?;
+            let hold = PointerEvent::json_hold(e);
+            if hold > 0.0 {
+                let reqs = self.session.tool_tick(hold, self.view).map_err(|e| e.to_string())?;
+                self.apply_ui_requests(reqs, &mut requests)?;
+            }
         }
         let sel = self.session.active().map(|d| d.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>()).unwrap_or_default();
         Ok(json!({"selection": sel, "tool": self.session.tool_id(), "requests": requests}))

@@ -3,7 +3,9 @@
 //! A drag previews `object.liquify {tool, points, width, height, angle, intensity, detail,
 //! simplify, rate?, complexity?, horizontal?, vertical?, affect…?, usePressure?, ids?}` with every
 //! pointer sample so far (and its pen pressure while Use Pressure Pen is on), so the result is a
-//! pure function of the parameters (replay reproduces it exactly).
+//! pure function of the parameters (replay reproduces it exactly). Holding the brush still with
+//! Twirl, Pucker or Bloat repeats the last sample every [`HOLD_EVERY`] seconds of [`Tool::tick`]
+//! time: one more dab there each time.
 //!
 //! The kernel resamples the stroke into dabs spaced a fraction of the brush apart ([`Dabber`]:
 //! more samples only add dabs, so a growing stroke can be applied as it grows). For each dab it
@@ -622,6 +624,11 @@ impl PathStroke {
     }
 }
 
+/// The box around every anchor and handle of `path`: no dab outside it changes the path.
+pub fn reach_bounds(path: &PathData) -> Option<Rect> {
+    path.subpaths.iter().filter_map(sp_bounds).reduce(|a, b| a.union(b))
+}
+
 fn sp_bounds(sp: &SubPath) -> Option<Rect> {
     let mut it = sp.anchors.iter().flat_map(|a| [a.p, a.h_in, a.h_out]);
     let f = it.next()?;
@@ -629,6 +636,13 @@ fn sp_bounds(sp: &SubPath) -> Option<Rect> {
 }
 
 // ---------- the tool ----------
+
+/// Holding the brush still repeats the stroke's last sample this often (seconds): Twirl, Pucker
+/// and Bloat keep applying, scaled by the time held.
+pub const HOLD_EVERY: f64 = 0.1;
+
+/// Most repeats one tick adds (a minute held).
+const MAX_HOLDS_PER_TICK: u32 = 600;
 
 /// An Alt-drag sizing the brush: where it started and the brush size then.
 #[derive(Clone, Copy, Debug)]
@@ -647,12 +661,14 @@ pub struct LiquifyTool {
     active: bool,
     sizing: Option<Sizing>,
     hover: Option<Point>,
+    /// Time held still since the last sample or repeat (seconds).
+    held: f64,
 }
 
 impl LiquifyTool {
     pub fn new(id: &str) -> Self {
         let kind = LiquifyKind::parse(id).unwrap_or(LiquifyKind::Warp);
-        Self { params: LiquifyParams::new(kind), show_brush: true, points: vec![], active: false, sizing: None, hover: None }
+        Self { params: LiquifyParams::new(kind), show_brush: true, points: vec![], active: false, sizing: None, hover: None, held: 0.0 }
     }
 
     /// The command + params for the stroke so far (with each sample's pressure while Use Pressure
@@ -699,6 +715,7 @@ impl Tool for LiquifyTool {
             PointerKind::Down => {
                 self.points = vec![sample];
                 self.active = true;
+                self.held = 0.0;
                 let (c, v) = self.command(cx);
                 vec![Action::Begin(self.params.kind.label().into()), Action::Preview(c, v)]
             }
@@ -712,6 +729,7 @@ impl Tool for LiquifyTool {
                     return vec![];
                 }
                 self.points.push(sample);
+                self.held = 0.0;
                 let (c, v) = self.command(cx);
                 vec![Action::Preview(c, v)]
             }
@@ -772,6 +790,27 @@ impl Tool for LiquifyTool {
         self.hover = None;
         self.sizing = None;
         if std::mem::take(&mut self.active) { vec![Action::Commit] } else { vec![] }
+    }
+    /// Held still: every [`HOLD_EVERY`] the last sample repeats (one more dab there).
+    fn tick(&mut self, cx: &ToolContext, dt: f64) -> Vec<Action> {
+        if !self.wants_ticks() || !dt.is_finite() || dt <= 0.0 {
+            return vec![];
+        }
+        self.held += dt;
+        let mut n = 0;
+        // A hair under the period, so a sum of ticks that is one in exact arithmetic counts.
+        while self.held >= HOLD_EVERY - 1e-9 && n < MAX_HOLDS_PER_TICK {
+            self.held -= HOLD_EVERY;
+            n += 1;
+        }
+        self.held = self.held.clamp(0.0, HOLD_EVERY);
+        let Some(&last) = self.points.last().filter(|_| n > 0) else { return vec![] };
+        self.points.extend(std::iter::repeat_n(last, n as usize));
+        let (c, v) = self.command(cx);
+        vec![Action::Preview(c, v)]
+    }
+    fn wants_ticks(&self) -> bool {
+        self.active && self.params.kind.holds()
     }
 }
 

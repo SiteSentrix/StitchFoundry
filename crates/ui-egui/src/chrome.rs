@@ -512,7 +512,7 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
         ],
         "twirl" | "pucker" | "bloat" => &[
             ("Click or drag", true),
-            (" over paths to reshape them  |  ", false),
+            (" over paths, and hold still to keep going  |  ", false),
             ("Alt+Drag", true),
             (" to size the brush (", false),
             ("Shift", true),

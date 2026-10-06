@@ -96,6 +96,11 @@ impl PointerEvent {
     pub fn json_pressure(e: &Value) -> f32 {
         e.get("pressure").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(1.0, |f| f.clamp(0.0, 1.0) as f32)
     }
+    /// How long the pointer then holds still, in seconds, from a JSON pointer event's `holdMs`
+    /// (0..60000; default 0): the time [`Tool::tick`] gets.
+    pub fn json_hold(e: &Value) -> f64 {
+        e.get("holdMs").and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(0.0, |ms| ms.clamp(0.0, 60_000.0) / 1000.0)
+    }
 }
 
 /// Keys tools care about.
@@ -358,6 +363,16 @@ pub trait Tool: Send {
     /// Type tool stops editing text the command took out of the selection).
     fn after_command(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
+    }
+    /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
+    /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
+    /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.
+    fn tick(&mut self, _cx: &ToolContext, _dt: f64) -> Vec<Action> {
+        vec![]
+    }
+    /// Does the tool want [`Tool::tick`]s now (the host keeps time only then)?
+    fn wants_ticks(&self) -> bool {
+        false
     }
 }
 

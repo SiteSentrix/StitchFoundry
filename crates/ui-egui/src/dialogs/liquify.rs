@@ -213,4 +213,15 @@ mod tests {
             assert_eq!(app.session.tool_options_of(tool)["affectIn"], json!(false), "{tool}");
         }
     }
+
+    #[test]
+    fn type_under_the_brush_is_reported_in_the_status_bar() {
+        let mut app = app();
+        app.run("text.create", json!({"x": 100, "y": 100, "text": "Hi"})).unwrap();
+        app.run("select.set", json!({"ids": []})).unwrap();
+        app.select_tool("bloat");
+        let view = app.view_info();
+        crate::canvas::dispatch(&mut app, &vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, 105.0, 95.0), view);
+        assert!(app.ui.status.contains("Bloat left 1 object under the brush"), "{}", app.ui.status);
+    }
 }

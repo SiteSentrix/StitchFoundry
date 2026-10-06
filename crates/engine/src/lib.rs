@@ -706,6 +706,9 @@ pub struct Session {
     /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
     /// (`None`: the reference app's defaults, fidelity 50); not saved.
     pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
+    /// The Liquify stroke the last live preview applied, which the next sample of the drag goes on
+    /// from ([`cmd::distortcmds::LiquifyStroke`]).
+    pub(crate) liquify_stroke: Option<Box<cmd::distortcmds::LiquifyStroke>>,
 }
 
 impl Default for Session {
@@ -748,6 +751,7 @@ impl Session {
             recovery: Default::default(),
             in_tool_actions: false,
             envelope_defaults: None,
+            liquify_stroke: None,
         }
     }
 

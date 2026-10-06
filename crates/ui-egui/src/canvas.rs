@@ -493,6 +493,13 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                         let ev = PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, false) };
                         dispatch(app, &ev, view);
                     }
+                    // Time held (Twirl, Pucker and Bloat keep applying); a stalled frame counts
+                    // a quarter second at most.
+                    if app.session.tool_wants_ticks() {
+                        let dt = f64::from(ui.input(|i| i.unstable_dt).min(0.25));
+                        let r = app.session.tool_tick(dt, view);
+                        apply_requests(app, r);
+                    }
                 }
             }
         } else {
@@ -579,6 +586,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                 match r {
                     vectorcraft_engine::UiRequest::Dialog(kind, p) => crate::dialogs::open_tool_dialog(app, &kind, p),
                     vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
+                    vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                 }
             }
         }
