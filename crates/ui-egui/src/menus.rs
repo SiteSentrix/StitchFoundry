@@ -1706,6 +1706,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Attach to Active Plane", "perspective.attach"),
                         c("Release with Perspective", "perspective.release"),
                         c("Move Plane to Match Object", "perspective.plane.matchObject"),
+                        c("Edit Text", "perspective.editText"),
                     ],
                 ),
                 sub(

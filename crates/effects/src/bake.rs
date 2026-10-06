@@ -44,6 +44,7 @@ pub fn needs_bake(n: &Node) -> bool {
         || has_pathfinder(n)
         || has_own_paint(n)
         || has_geometry(&n.appearance.effects)
+        || n.projection().is_some()
         || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)))
         || n.children().is_some_and(|ch| ch.iter().any(|c| needs_bake(c)))
 }
@@ -92,7 +93,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(bake_pieces(d, m));
     }
     // Type, images, symbol instances and live objects: reshaped through their outlines.
-    if needs_outline(n) && has_geometry(&n.appearance.effects) {
+    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some()) {
         let symbol = match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => d.symbols.iter().find(|s| s.name == *symbol).map(|s| s.art.clone()),
             _ => None,

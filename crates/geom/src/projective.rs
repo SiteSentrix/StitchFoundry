@@ -102,6 +102,18 @@ impl Homography {
         Some(Self::from_affine(a).then_after(self).then_after(&Self::from_affine(a.inverse())))
     }
 
+    /// The affine map that matches `self` to first order at `p` (its derivative there), `None`
+    /// beyond the horizon.
+    pub fn affine_at(&self, p: Point) -> Option<Affine> {
+        let m = &self.0;
+        let w = m[2][0] * p.x + m[2][1] * p.y + m[2][2];
+        let q = self.apply(p)?;
+        // d(x/w) = (dx − (x/w)·dw) / w, and the same for y.
+        let j = |r: usize, c: usize| (m[r][c] - [q.x, q.y][r] * m[2][c]) / w;
+        let lin = Affine::new([j(0, 0), j(1, 0), j(0, 1), j(1, 1), 0.0, 0.0]);
+        Some(Affine::translate(q.to_vec2()) * lin * Affine::translate(-p.to_vec2()))
+    }
+
     /// The bounding box of the image of `r` (lines stay lines: its corners bound it), `None` when
     /// part of it crosses the horizon.
     pub fn map_rect_bbox(&self, r: Rect) -> Option<Rect> {
@@ -149,6 +161,18 @@ mod tests {
         let c = h().conjugated(t).unwrap();
         assert!(c.apply(t * p).unwrap().distance(t * h().apply(p).unwrap()) < 1e-9);
         assert!(h().conjugated(Affine::scale(0.0)).is_none());
+    }
+
+    #[test]
+    fn affine_at_is_the_derivative() {
+        let p = Point::new(12.0, -7.0);
+        let a = h().affine_at(p).unwrap();
+        assert!(a * p == h().apply(p).unwrap() || (a * p).distance(h().apply(p).unwrap()) < 1e-9);
+        let e = 1e-4;
+        for d in [kurbo::Vec2::new(e, 0.0), kurbo::Vec2::new(0.0, e)] {
+            let exact = h().apply(p + d).unwrap();
+            assert!((a * (p + d)).distance(exact) < 1e-7, "{d:?}");
+        }
     }
 
     #[test]

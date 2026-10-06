@@ -20,7 +20,7 @@ mod width;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{Homography, Point};
 
 use crate::Tool;
 
@@ -46,6 +46,24 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
 /// editable points (text, images, symbols, meshes, live objects) get the approximation at their
 /// centre. Live shapes become plain paths.
 pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
+    warp_node(n, f, None);
+}
+
+/// [`warp_node_with`] for the projective map `h` (perspective): type and symbol instances keep
+/// their flat art and are drawn through `h` (composed with the projection they had).
+pub fn project_node(n: &mut Node, h: &Homography) {
+    warp_node(n, &|p| h.apply(p).unwrap_or(p), Some(h));
+}
+
+fn warp_node(n: &mut Node, f: &dyn Fn(Point) -> Point, h: Option<&Homography>) {
+    if let Some(h) = h
+        && matches!(n.kind, NodeKind::Text(_) | NodeKind::SymbolInstance { .. })
+    {
+        let rec = n.perspective.get_or_insert_with(Default::default);
+        let had = rec.homography().unwrap_or(Homography::IDENTITY);
+        rec.projection = Some(h.then_after(&had).to_array());
+        return;
+    }
     let bounds = n.geometric_bounds();
     // Finite-difference step: 5% of the object (at least half a point).
     let eps = bounds.map_or(0.5, |b| (b.width().max(b.height()) * 0.05).max(0.5));
@@ -66,7 +84,7 @@ pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
         | NodeKind::Compound { children, .. }
         | NodeKind::Blend { children, .. } => {
             for c in children.iter_mut() {
-                warp_node_with(Arc::make_mut(c), f);
+                warp_node(Arc::make_mut(c), f, h);
             }
         }
         _ => {

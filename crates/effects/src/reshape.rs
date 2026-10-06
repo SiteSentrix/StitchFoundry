@@ -113,7 +113,7 @@ fn outline_nested_text(n: &mut Node) {
 /// a group with `n`'s id, name, transparency, opacity mask and remaining (raster) effects; `None`
 /// when `n` has no visible geometry effect or no art (a symbol instance without `symbol_art`).
 pub fn reshape(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    if geometry_effects(n).is_empty() || !needs_outline(n) {
+    if (geometry_effects(n).is_empty() && n.projection().is_none()) || !needs_outline(n) {
         return None;
     }
     as_art(n, symbol_art)
@@ -146,6 +146,10 @@ pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
         _ => outline_art(n, symbol_art)?,
     };
     reshape_leaves(&mut art, &fx);
+    // Type and symbols in perspective: the art projected onto their plane.
+    if let Some(h) = n.projection() {
+        project_leaves(&mut art, &h);
+    }
     // The art is a group with `n`'s id (a clip group for an image).
     let mut out = art;
     out.name = n.name.clone();
@@ -157,6 +161,33 @@ pub(crate) fn as_art(n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     out.mask = n.mask.clone();
     out.appearance.effects = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
     Some(out)
+}
+
+/// Map every path under `art` (and its gradients) through the projective map `h`, curves split
+/// finely enough to follow it.
+fn project_leaves(art: &mut Node, h: &vectorcraft_geom::Homography) {
+    let f = |p: vectorcraft_geom::Point| h.apply(p).unwrap_or(p);
+    let piece = art.geometric_bounds().map_or(1.0, |b| (b.width().max(b.height()) / 64.0).max(0.25));
+    let project = |path: &mut PathData| *path = vectorcraft_doc::live::map_nonlinear(path, piece, f);
+    for_each_leaf(art, &mut |leaf| {
+        leaf.pin_gradients();
+        leaf.appearance.warp_gradients(&|p| h.affine_at(p).unwrap_or(vectorcraft_geom::Affine::IDENTITY));
+        match &mut leaf.kind {
+            NodeKind::Path { path, live, .. } => {
+                project(path);
+                *live = None;
+            }
+            NodeKind::Compound { children, .. } => {
+                for c in children.iter_mut() {
+                    if let NodeKind::Path { path, live, .. } = &mut Arc::make_mut(c).kind {
+                        project(path);
+                        *live = None;
+                    }
+                }
+            }
+            _ => {}
+        }
+    });
 }
 
 /// The visible geometry effects of `n`'s own effect list, in order.

@@ -665,6 +665,7 @@ fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
 fn exit_isolation(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     if let Some(i) = st.isolation.take() {
+        super::distortcmds::finish_edit_text(st, i);
         st.selection.set([i]);
     }
     st.revision += 1;
