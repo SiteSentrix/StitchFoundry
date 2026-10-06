@@ -936,11 +936,7 @@ impl FontDb {
                 return true;
             }
         }
-        let mut paths: Vec<PathBuf> = self
-            .read_catalog()
-            .values()
-            .flat_map(|c| c.faces.iter().map(|(_, p)| p.clone()))
-            .collect();
+        let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|(_, p)| p.clone())).collect();
         paths.sort();
         paths.dedup();
         for p in paths {
