@@ -81,14 +81,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let cores = std::thread::available_parallelism().map_or(1, |c| c.get());
     let load = load_average();
-    println!("VectorCraft performance budgets — {n} paths, {cores} cores, load average {}", load.map_or("?".into(), |l| format!("{l:.1}")));
+    outln!("VectorCraft performance budgets — {n} paths, {cores} cores, load average {}", load.map_or("?".into(), |l| format!("{l:.1}")));
     let noisy = load.is_some_and(|l| l > cores as f64 * 0.75);
     if noisy {
-        println!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
+        outln!("WARNING: the machine is busy; wall-clock timings below are not trustworthy.");
     }
     let t = Instant::now();
     let doc = synthetic(n)?;
-    println!("  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0);
+    outln!("  (built in {:.0} ms)", t.elapsed().as_secs_f64() * 1000.0);
 
     let mut rows: Vec<(&str, f64, f64)> = vec![];
     let opts = RenderOptions::default();
@@ -150,16 +150,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 
     let mut over = 0;
-    println!("  {:<40} {:>10} {:>10}", "", "measured", "budget");
+    outln!("  {:<40} {:>10} {:>10}", "", "measured", "budget");
     for (name, ms, budget) in &rows {
         let ok = ms <= budget;
         over += usize::from(!ok);
-        println!("  {name:<40} {ms:>8.2} ms {budget:>7.0} ms  {}", if ok { "ok" } else { "OVER" });
+        outln!("  {name:<40} {ms:>8.2} ms {budget:>7.0} ms  {}", if ok { "ok" } else { "OVER" });
     }
     match (over, noisy) {
         (0, _) => Ok(()),
         (_, true) => {
-            println!("{over} over budget, but the machine is busy: re-run when idle.");
+            outln!("{over} over budget, but the machine is busy: re-run when idle.");
             Ok(())
         }
         _ => Err(format!("{over} budget(s) exceeded")),
