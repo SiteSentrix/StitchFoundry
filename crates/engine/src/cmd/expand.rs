@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (type → outlines, live shapes → paths, effects baked, envelopes → their distorted content), fill?: true (gradient fills → `gradient` art), stroke?: true (strokes → filled outlines), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh), both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (type → outlines, live shapes → paths, effects baked, blends → groups of their steps, envelopes → their distorted content), fill?: true (gradient fills → `gradient` art), stroke?: true (strokes → filled outlines), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh), both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
             has_selection,
             expand
         ),
@@ -86,6 +86,8 @@ struct Expandable {
     stroke: bool,
     /// An envelope (Object expands it into its distorted content).
     envelope: bool,
+    /// Live blends (Object expands them into groups of their steps).
+    blends: bool,
 }
 
 impl Expandable {
@@ -98,6 +100,7 @@ impl Expandable {
                 e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. });
                 e.effects |= !c.appearance.effects.is_empty();
                 e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
+                e.blends |= matches!(c.kind, NodeKind::Blend { .. });
                 e.stroke |= shape && !c.appearance.stroke_paint().is_none();
                 e.fill |= match &c.kind {
                     NodeKind::Text(t) => t.runs.iter().any(|r| matches!(r.style.fill, Paint::Gradient(_))),
@@ -109,7 +112,7 @@ impl Expandable {
     }
 
     fn object(&self) -> bool {
-        self.text || self.live || self.effects || self.envelope
+        self.text || self.live || self.effects || self.envelope || self.blends
     }
 }
 
@@ -132,6 +135,11 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
     let from = s.doc()?.history.undo.len();
     let rev0 = s.doc()?.revision;
     let e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    // Blends first: what their steps hold (type, effects, strokes, gradients) expands below.
+    if object && e.blends {
+        let roots = selected_roots(s)?;
+        s.edit("Expand", |d, _| super::live::expand_blends(d, &roots).map(|_| ()))?;
+    }
     if object && e.effects {
         let _ = run_raw(s, "effect.expandAppearance", &json!({}));
     }
