@@ -49,6 +49,8 @@ mod tests_clipboard;
 #[cfg(test)]
 mod tests_cut;
 #[cfg(test)]
+mod tests_distortkeys;
+#[cfg(test)]
 mod tests_docsetup;
 #[cfg(test)]
 mod tests_fonts;

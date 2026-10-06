@@ -197,6 +197,11 @@ impl Headless {
             self.session.select_tool(t.id, self.view).map_err(|e| e.to_string())?;
             return Ok(json!({"handledBy": "tool.select", "tool": t.id}));
         }
+        // Backspace clears the selection as Delete does (as in the desktop app).
+        if tk == Some(ToolKey::Backspace) && mods == Mods::default() && self.session.active().is_some_and(|d| !d.selection.is_empty()) {
+            let r = self.exec("edit.clear", &json!({}))?;
+            return Ok(json!({"handledBy": "command", "command": "edit.clear", "result": r}));
+        }
         if let Some(k) = tk {
             let mut out = vec![];
             let reqs = self.session.tool_key(k, mods, self.view).map_err(|e| e.to_string())?;

@@ -870,6 +870,9 @@ two points at the same `t` (the width before it, then after it), and the stroke'
 `document.inspect` reports a path's `strokeOptions.widthPoints` (`[t, left, right]`, factors of half the weight; null
 for a uniform stroke). `stroke.widthPoint.remove {id, index | indices}` deletes points; `stroke.widthProfile.set {ids,
 points}` replaces them all, as dragging several Shift-selected points with the Width tool does in one undo step.
+With the Width tool, `press_key` Delete or Backspace removes the selected width points (`handledBy: "tool"`); with none
+selected the key clears the selected objects as usual (`edit.clear`). The Puppet Warp tool's selected pins go the
+same way.
 
 ```json
 {"name":"run_command","arguments":{"command":"stroke.widthPoint.set","params":{"id":9,"t":0.5,"left":4,"right":4}}}
