@@ -5,15 +5,17 @@
 //!   more key of the new blend (as does clicking a blend first). Double-click or Alt-click opens
 //!   Blend Options (dialog `blendOptions`). Clicking empty canvas starts over.
 //! - Mesh: click inside a filled path → `object.mesh.create {ids, at}` (1×1 mesh plus lines through
-//!   the click); click inside a mesh → `object.mesh.addLine` (new point takes the current fill
-//!   colour unless Shift); drag a mesh point → `object.mesh.movePoint` previews; Alt-click a mesh
-//!   point → `object.mesh.deletePoint`.
+//!   the click); click inside a mesh or a mesh envelope → `object.mesh.addLine` (a gradient mesh's
+//!   new point takes the current fill colour unless Shift); drag a mesh point, or a handle of the
+//!   point last clicked → `object.mesh.movePoint` previews ([`MeshEdit`]); Alt-click a mesh point →
+//!   `object.mesh.deletePoint`.
 
 use serde_json::json;
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::Point;
 
+use crate::meshedit::{MeshEdit, grid_of};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
 const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
@@ -140,17 +142,17 @@ impl Tool for BlendTool {
 
 #[derive(Default)]
 pub struct MeshTool {
-    drag: Option<(NodeId, usize)>,
+    edit: MeshEdit,
 }
 
 impl MeshTool {
-    /// Meshes to consider for point hits: selected ones first, then any mesh in the document.
+    /// Meshes (gradient meshes and mesh envelopes) to consider for point hits: selected ones
+    /// first, then any in the document.
     fn meshes(cx: &ToolContext) -> Vec<NodeId> {
-        let mut v: Vec<NodeId> =
-            cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Mesh(_)))).collect();
+        let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).and_then(grid_of).is_some()).collect();
         let mut rest = vec![];
         cx.doc.walk(|n| {
-            if matches!(n.kind, NodeKind::Mesh(_)) {
+            if grid_of(n).is_some() {
                 rest.push(n.id);
             }
         });
@@ -163,12 +165,8 @@ impl MeshTool {
         v
     }
 
-    fn point_at(cx: &ToolContext, p: Point) -> Option<(NodeId, usize)> {
-        let tol = cx.tol(5.0);
-        Self::meshes(cx).into_iter().find_map(|id| match &cx.doc.node(id)?.kind {
-            NodeKind::Mesh(m) => m.point_near(p, tol).map(|i| (id, i)),
-            _ => None,
-        })
+    fn grab_at(&self, cx: &ToolContext, p: Point) -> Option<crate::meshedit::MeshGrab> {
+        self.edit.hit(cx, &Self::meshes(cx), p)
     }
 }
 
@@ -180,13 +178,14 @@ impl Tool for MeshTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Down => {
-                if let Some((id, index)) = Self::point_at(cx, p) {
-                    if ev.mods.alt {
-                        return vec![Action::Exec("object.mesh.deletePoint".into(), json!({"id": id.0, "index": index}))];
+                if let Some(g) = self.grab_at(cx, p) {
+                    if ev.mods.alt && g.handle.is_none() {
+                        self.edit.unfocus();
+                        return vec![Action::Exec("object.mesh.deletePoint".into(), json!({"id": g.id.0, "index": g.index}))];
                     }
-                    self.drag = Some((id, index));
-                    return vec![Action::Begin("Move Mesh Point".into())];
+                    return self.edit.press(g);
                 }
+                self.edit.unfocus();
                 let Some((top, leaf)) = hit_top(cx, p) else { return vec![] };
                 let color = match (&cx.paint.fill, ev.mods.shift) {
                     (Paint::Solid { color, .. }, false) => Some(color.to_hex()),
@@ -201,6 +200,9 @@ impl Tool for MeshTool {
                             }
                             return vec![Action::Exec("object.mesh.addLine".into(), params)];
                         }
+                        Some(NodeKind::Envelope { .. }) if cx.doc.node(id).and_then(grid_of).is_some() => {
+                            return vec![Action::Exec("object.mesh.addLine".into(), json!({"id": id.0, "x": p.x, "y": p.y}))];
+                        }
                         Some(NodeKind::Path { guide: false, .. }) | Some(NodeKind::Compound { .. }) => {
                             return vec![Action::Exec("object.mesh.create".into(), json!({"ids": [id.0], "at": [p.x, p.y]}))];
                         }
@@ -209,14 +211,8 @@ impl Tool for MeshTool {
                 }
                 vec![]
             }
-            PointerKind::Drag => match self.drag {
-                Some((id, index)) => vec![Action::Preview("object.mesh.movePoint".into(), json!({"id": id.0, "index": index, "x": p.x, "y": p.y}))],
-                None => vec![],
-            },
-            PointerKind::Up => match self.drag.take() {
-                Some(_) => vec![Action::Commit],
-                None => vec![],
-            },
+            PointerKind::Drag => self.edit.drag_to(p).unwrap_or_default(),
+            PointerKind::Up => self.edit.release().unwrap_or_default(),
             _ => vec![],
         }
     }
@@ -230,20 +226,22 @@ impl Tool for MeshTool {
                 }
             }
         }
+        out.extend(self.edit.overlays(cx));
         out
     }
     fn cursor(&self, cx: &ToolContext, p: Point, mods: Mods) -> Cursor {
-        match Self::point_at(cx, p) {
-            Some(_) if mods.alt => Cursor::PenDelete,
+        match self.grab_at(cx, p) {
+            Some(g) if mods.alt && g.handle.is_none() => Cursor::PenDelete,
             Some(_) => Cursor::Move,
             None => Cursor::PenAdd,
         }
     }
     fn busy(&self) -> bool {
-        self.drag.is_some()
+        self.edit.dragging()
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        if self.drag.take().is_some() { vec![Action::Commit] } else { vec![] }
+        self.edit.unfocus();
+        self.edit.release().unwrap_or_default()
     }
 }
 

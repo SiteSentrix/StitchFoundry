@@ -98,11 +98,14 @@ fn reset_with_warp_and_mesh_switch_the_kind_and_keep_the_content() {
     s.execute("object.envelope.resetWithWarp", &json!({"style": "arch", "bend": 50, "horizontal": true})).unwrap();
     let top = live::EnvelopeMap::of(&node(&s, e)).unwrap().surface_mesh(2, 2, vectorcraft_color::Color::BLACK);
     s.execute("object.envelope.resetWithMesh", &json!({"rows": 2, "cols": 2})).unwrap();
-    let EnvelopeKind::Mesh { rows: 2, cols: 2, points } = kind(&s, e) else { panic!("{:?}", kind(&s, e)) };
+    let EnvelopeKind::Mesh { rows: 2, cols: 2, points, .. } = kind(&s, e) else { panic!("{:?}", kind(&s, e)) };
     assert!(points[1].distance(top.points[1].p) < 1e-9 && points[1].y < 99.0, "{:?}", points[1]);
     // Without Maintain Envelope Shape: a flat grid over the content.
     s.execute("object.envelope.resetWithMesh", &json!({"rows": 1, "cols": 1, "maintainShape": false})).unwrap();
-    assert_eq!(kind(&s, e), EnvelopeKind::Mesh { rows: 1, cols: 1, points: live::grid_points(Rect::new(100.0, 100.0, 300.0, 200.0), 1, 1) });
+    assert_eq!(
+        kind(&s, e),
+        EnvelopeKind::Mesh { rows: 1, cols: 1, points: live::grid_points(Rect::new(100.0, 100.0, 300.0, 200.0), 1, 1), handles: vec![] }
+    );
     assert!(s.execute("object.envelope.resetWithMesh", &json!({"rows": 0})).is_err());
     // One undo step per reset.
     s.execute("edit.undo", &json!({})).unwrap();

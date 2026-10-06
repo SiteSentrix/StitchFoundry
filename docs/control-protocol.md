@@ -526,3 +526,9 @@ Perspective grid widgets: the Plane Switching Widget is fixed in a corner of the
 the grid shows. `ui.key` with `key` `"1"`…`"4"` picks the left, horizontal, right or no plane. Double-clicking the
 Perspective Grid tool (`tool.options {tool: "perspectiveGrid"}`) opens `perspectiveGridOptions` (fields `show`,
 `position`: `topLeft`, `topRight`, `bottomLeft`, `bottomRight`); `ui.dialog.confirm` runs `perspective.widget.options`.
+
+Envelopes on the canvas: `pointer_gesture` with the Mesh tool (`mesh`) or Direct Selection on a selected mesh envelope
+drags its points (a press on a point focuses it, and a press on one of the focused point's handle ends drags that
+handle); a Mesh tool click inside a mesh envelope adds a row and a column. While an envelope or its content is
+selected the Control bar shows its controls (Edit Envelope / Edit Contents, warp style, orientation, bend and
+distortions or mesh rows and columns, Reset, Envelope Options); each runs an `object.envelope.*` command.

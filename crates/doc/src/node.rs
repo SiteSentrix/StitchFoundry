@@ -652,9 +652,15 @@ impl Node {
                 }
                 *frame = crate::live::envelope_frame(a * *frame);
                 match kind {
-                    EnvelopeKind::Mesh { points, .. } => {
+                    EnvelopeKind::Mesh { points, handles, .. } => {
                         for p in points.iter_mut() {
                             *p = a * *p;
+                        }
+                        // Handles are offsets: they take the linear part.
+                        let [m0, m1, m2, m3, _, _] = a.as_coeffs();
+                        let lin = Affine::new([m0, m1, m2, m3, 0.0, 0.0]);
+                        for h in handles.iter_mut().flatten() {
+                            *h = (lin * h.to_point()).to_vec2();
                         }
                     }
                     EnvelopeKind::TopObject { path } => path.transform(a),
