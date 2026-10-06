@@ -511,3 +511,7 @@ A selected blend shows its spine. With Direct Selection (`directSelection`) a `u
 moves it (`object.blend.spine.moveAnchor`, one undo step) and, once a point is clicked, from one of its handles
 reshapes the curve; Direct and Group Selection pick a blend's key objects. With the Pen tool a click on a selected
 blend's spine adds a point (on a point no key sits on, deletes it).
+
+Perspective grid view options: View → Perspective Grid lists Show/Hide Grid, Show/Hide Rulers, Snap to Grid
+(checked), Lock/Unlock Grid and Lock Station Point (checked); `ui.menu.list` reports the current labels. They run
+`perspective.grid.show`, `rulers`, `snap`, `lock` and `lockStation`.

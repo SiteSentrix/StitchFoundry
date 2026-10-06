@@ -1158,6 +1158,10 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
                 p.rect_filled(r, CornerRadius::same(3), t.measure_bg);
                 p.galley(sp + vec2(6.0, 4.0), galley, Color32::WHITE);
             }
+            Overlay::GridLine { a, b, color } => {
+                let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
+                p.line_segment([xf.to_screen(*a), xf.to_screen(*b)], Stroke::new(1.0, c));
+            }
             Overlay::Swatch { p: pt, color, selected } => {
                 // A white disc under the colour shows its opacity; a dark rim keeps it readable on
                 // any art, and the accent ring marks the selected stop.

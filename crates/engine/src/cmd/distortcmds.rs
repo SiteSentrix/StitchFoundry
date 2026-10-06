@@ -133,7 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move in Perspective",
             [],
             None,
-            "{ids?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does)} slide objects within their plane (unattached objects attach to `plane`/the active plane first); Transform Again repeats it",
+            "{ids?, from: [x,y], to: [x,y], plane?, copy?: bool (move copies, as Alt-dragging does), perpendicular?: bool (move along the plane's normal instead, as pressing 5 while dragging does), snap?: bool (default: View › Perspective Grid › Snap to Grid)} slide objects within their plane (unattached objects attach to `plane`/the active plane first); snapping lands the nearer edge of the objects' joint bounds on a gridline within a quarter cell; Transform Again repeats it",
             has_doc,
             persp_move
         ),
@@ -142,7 +142,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Draw in Perspective",
             [],
             None,
-            "{command: shape.* id, params, plane?} run a shape command and attach the result to the plane",
+            "{command: shape.* id, params, plane?, snap?: bool (default: Snap to Grid)} run a shape command and attach the result to the plane (snapping its corners to gridlines within a quarter cell)",
             has_doc,
             persp_draw
         ),
@@ -533,7 +533,7 @@ pub(crate) fn store_grid(d: &mut Document, g: &PerspectiveGrid) {
 }
 
 /// Change view state of the grid without an undo step.
-fn silent(s: &mut Session, f: impl FnOnce(&mut PerspectiveGrid)) -> Result<PerspectiveGrid> {
+pub(crate) fn silent(s: &mut Session, f: impl FnOnce(&mut PerspectiveGrid)) -> Result<PerspectiveGrid> {
     let st = s.doc_mut()?;
     let mut g = grid_of(&st.doc);
     f(&mut g);
@@ -607,9 +607,9 @@ fn warp_checked(d: &mut Document, id: NodeId, f: &dyn Fn(Point) -> Option<Point>
     Ok(())
 }
 
-fn attach_in(d: &mut Document, g: &mut PerspectiveGrid, id: NodeId, plane: Plane) -> Result<()> {
+fn attach_in(d: &mut Document, g: &mut PerspectiveGrid, id: NodeId, plane: Plane, snap: bool) -> Result<()> {
     let b = d.node(id).ok_or(EngineError::NoNode(id))?.geometric_bounds().ok_or_else(|| EngineError::Other("the object has no geometry".into()))?;
-    let m = g.attach_map(plane, b).ok_or_else(|| EngineError::Other("the object is beyond the plane's horizon".into()))?;
+    let m = g.attach_map_with(plane, b, snap).ok_or_else(|| EngineError::Other("the object is beyond the plane's horizon".into()))?;
     warp_checked(d, id, &m)?;
     persp::set_attachment(d.node_mut(id).ok_or(EngineError::NoNode(id))?, plane, g.offset(plane));
     g.attached.insert(id.0.to_string(), plane);
@@ -622,7 +622,7 @@ fn attach(s: &mut Session, p: &Value) -> Result<Value> {
     let plane = plane_param(&g, p, "perspective.attach")?;
     s.edit("Attach to Active Plane", |d, _| {
         for id in &ids {
-            attach_in(d, &mut g, *id, plane)?;
+            attach_in(d, &mut g, *id, plane, false)?;
         }
         store_grid(d, &g);
         Ok(())
@@ -681,7 +681,7 @@ fn persp_edit(
                 Some(a) => a,
                 None => {
                     let pl = fallback.ok_or_else(|| EngineError::Other("the object isn't on a perspective plane".into()))?;
-                    attach_in(d, &mut g, *id, pl)?;
+                    attach_in(d, &mut g, *id, pl, false)?;
                     (pl, g.offset(pl))
                 }
             };
@@ -725,13 +725,18 @@ fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let fallback = plane_param(&grid_of(&s.doc()?.doc), p, C).ok();
     let (perp, copy) = (bool_or(p, "perpendicular", false), bool_or(p, "copy", false));
+    // Snap to Grid: a correction for the objects on the first one's plane and depth.
+    let fix = if perp { None } else { super::perspgrid::snap_fix(&s.doc()?.doc, &ids, p, (from, to)) };
+    let snapped = move |pl: Plane, depth: f64, dv: vectorcraft_geom::Vec2| {
+        dv + fix.filter(|f| f.0 == pl && f.1 == depth).map_or(vectorcraft_geom::Vec2::ZERO, |f| f.2)
+    };
     // In-plane: the plane-space offset under the pointer; perpendicular: the depth it reaches.
     let step = |g: &PerspectiveGrid, pl: Plane, depth: f64| -> Result<(Homography, f64)> {
         if perp {
             let to_depth = g.depth_at(pl, depth, from, to).ok_or_else(beyond_horizon)?;
             Ok((g.transform_map(pl, depth, Affine::IDENTITY, to_depth - depth).ok_or_else(beyond_horizon)?, to_depth))
         } else {
-            let dv = g.plane_delta(pl, depth, from, to).ok_or_else(beyond_horizon)?;
+            let dv = snapped(pl, depth, g.plane_delta(pl, depth, from, to).ok_or_else(beyond_horizon)?);
             Ok((g.transform_map(pl, depth, Affine::translate(dv), 0.0).ok_or_else(beyond_horizon)?, depth))
         }
     };
@@ -742,7 +747,9 @@ fn persp_move(s: &mut Session, p: &Value) -> Result<Value> {
         let g = grid_of(&s.doc()?.doc);
         let again = match perp {
             true => g.depth_at(pl, depth, from, to).map(|d| json!({"matrix": matrix_json(Affine::IDENTITY), "depth": d - depth, "copy": copy})),
-            false => g.plane_delta(pl, depth, from, to).map(|dv| json!({"matrix": matrix_json(Affine::translate(dv)), "copy": copy})),
+            false => {
+                g.plane_delta(pl, depth, from, to).map(|dv| json!({"matrix": matrix_json(Affine::translate(snapped(pl, depth, dv))), "copy": copy}))
+            }
         };
         if let Some(a) = again {
             record_again(s, a)?;
@@ -871,11 +878,12 @@ fn persp_draw(s: &mut Session, p: &Value) -> Result<Value> {
     let params = p.get("params").cloned().unwrap_or_else(|| json!({}));
     let mut g = grid_of(&s.doc()?.doc);
     let plane = plane_param(&g, p, C)?;
+    let snap = bool_or(p, "snap", g.snap);
     let undo_before = s.doc()?.history.undo.len();
     let r = s.execute(&command, &params)?;
     let id = r.get("id").and_then(Value::as_u64).map(NodeId).ok_or_else(|| EngineError::Other(format!("{command} didn't create an object")))?;
     let res = s.edit("Draw in Perspective", |d, _| {
-        attach_in(d, &mut g, id, plane)?;
+        attach_in(d, &mut g, id, plane, snap)?;
         store_grid(d, &g);
         Ok(())
     });

@@ -208,3 +208,145 @@ fn presets_export_import_and_live_in_the_preferences() {
     assert_eq!(back.perspective_presets, t.prefs.perspective_presets);
     assert!(serde_json::from_value::<Prefs>(json!({})).unwrap().perspective_presets.is_empty());
 }
+
+// ---------- M8.10: view options ----------
+
+use vectorcraft_geom::Point;
+use vectorcraft_tools::distort::perspective::Plane;
+use vectorcraft_tools::{Overlay, PointerEvent, PointerKind};
+
+fn drag(s: &mut Session, tool: &str, from: Point, to: Point) {
+    let v = ViewInfo::default();
+    s.select_tool(tool, v).unwrap();
+    for (k, p) in [(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+        s.pointer(&PointerEvent::new(k, p.x, p.y), v).unwrap();
+    }
+}
+
+#[test]
+fn view_options_toggle_without_undo_steps_and_survive_presets() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let n = undo_len(&s);
+    let g = grid(&s);
+    assert!(g.snap && !g.locked && !g.lock_station && !g.rulers, "Snap to Grid is on by default");
+    for (id, on) in
+        [("perspective.grid.lock", true), ("perspective.grid.lockStation", true), ("perspective.grid.snap", false), ("perspective.grid.rulers", true)]
+    {
+        assert_eq!(run(&mut s, id, json!({})), json!({"on": on}), "{id} toggles");
+    }
+    assert_eq!(run(&mut s, "perspective.grid.rulers", json!({"on": true})), json!({"on": true}));
+    assert_eq!(undo_len(&s), n);
+    run(&mut s, "perspective.grid.preset", json!({"name": "[2P-High View]"}));
+    let g = grid(&s);
+    assert!(g.locked && g.lock_station && !g.snap && g.rulers, "a preset keeps the view options");
+    // Saved with the document.
+    let doc = s.doc().unwrap().doc.clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(PerspectiveGrid::from_doc(&back), Some(g));
+}
+
+#[test]
+fn lock_grid_keeps_the_widgets_still_but_planes_switch() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    run(&mut s, "perspective.grid.lock", json!({"on": true}));
+    let g = grid(&s);
+    let n = undo_len(&s);
+    drag(&mut s, "perspectiveGrid", Point::new(g.vp_left, g.horizon), Point::new(g.vp_left - 50.0, g.horizon));
+    assert_eq!((grid(&s).vp_left, undo_len(&s)), (g.vp_left, n));
+    let (faces, _) = g.widget(&s.doc().unwrap().doc, 1.0);
+    let q = faces[2].1;
+    let c = Point::new((q[0].x + q[2].x) / 2.0, (q[0].y + q[2].y) / 2.0);
+    drag(&mut s, "perspectiveGrid", c, c);
+    assert_eq!(grid(&s).plane, Plane::Ground);
+    run(&mut s, "perspective.grid.lock", json!({"on": false}));
+    drag(&mut s, "perspectiveGrid", Point::new(g.vp_left, g.horizon), Point::new(g.vp_left - 50.0, g.horizon));
+    assert!((grid(&s).vp_left - (g.vp_left - 50.0)).abs() < 1e-6);
+}
+
+#[test]
+fn lock_station_point_swings_the_other_vanishing_point() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let g = grid(&s);
+    let st = g.station();
+    // Unlocked: only the dragged point moves (the viewing angle stays).
+    drag(&mut s, "perspectiveGrid", Point::new(g.vp_left, g.horizon), Point::new(g.vp_left - 60.0, g.horizon));
+    assert_eq!(grid(&s).vp_right, g.vp_right);
+    s.execute("edit.undo", &json!({})).unwrap();
+    run(&mut s, "perspective.grid.lockStation", json!({"on": true}));
+    drag(&mut s, "perspectiveGrid", Point::new(g.vp_left, g.horizon), Point::new(g.vp_left - 60.0, g.horizon));
+    let n = grid(&s);
+    assert!((n.vp_left - (g.vp_left - 60.0)).abs() < 1e-6);
+    assert!(n.vp_right < g.vp_right, "the right vanishing point comes in");
+    let st2 = n.station();
+    assert!((st2.x - st.x).abs() < 1e-6 && (st2.distance - st.distance).abs() < 1e-6, "the viewer stays put");
+    assert!(n.viewing_angle() < 45.0);
+}
+
+#[test]
+fn snap_to_grid_lands_drawn_and_moved_art_on_gridlines() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let g = grid(&s);
+    let on_line = |v: f64| (v / g.cell - (v / g.cell).round()).abs() < 1e-6;
+    // A corner a little off the gridlines (within a quarter cell) is drawn on them.
+    let a = g.to_page(Plane::Left, Point::new(2.0 * g.cell + 3.0, g.cell - 2.0)).unwrap();
+    let b = g.to_page(Plane::Left, Point::new(4.0 * g.cell - 1.0, 3.0 * g.cell + 4.0)).unwrap();
+    let rect = json!({"x": a.x.min(b.x), "y": a.y.min(b.y), "width": (a.x - b.x).abs(), "height": (a.y - b.y).abs()});
+    let r = run(&mut s, "perspective.draw", json!({"command": "shape.rectangle", "params": rect, "plane": "left"}));
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let corners = |s: &Session| -> Vec<Point> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone();
+        n.anchors().map(|(_, _, an)| g.to_plane(Plane::Left, an.p).unwrap()).collect()
+    };
+    assert!(corners(&s).iter().all(|q| on_line(q.x) && on_line(q.y)), "{:?}", corners(&s));
+    // Moved a cell and a bit: it lands a whole cell over.
+    let from = g.to_page(Plane::Left, Point::new(3.0 * g.cell, 2.0 * g.cell)).unwrap();
+    let to = g.to_page(Plane::Left, Point::new(4.0 * g.cell + 2.0, 2.0 * g.cell)).unwrap();
+    run(&mut s, "perspective.move", json!({"ids": [id.0], "from": [from.x, from.y], "to": [to.x, to.y]}));
+    assert!(corners(&s).iter().all(|q| on_line(q.x) && on_line(q.y)), "{:?}", corners(&s));
+    // Without snapping it moves exactly.
+    let before = corners(&s);
+    run(&mut s, "perspective.move", json!({"ids": [id.0], "from": [from.x, from.y], "to": [to.x, to.y], "snap": false}));
+    for (p, q) in before.iter().zip(corners(&s)) {
+        assert!((q.x - p.x - (g.cell + 2.0)).abs() < 1e-6 && (q.y - p.y).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn grid_overlays_use_the_colours_opacity_and_rulers() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    run(&mut s, "perspective.grid.define", json!({"leftColor": "#102030", "opacity": 20}));
+    let ov = s.overlays(ViewInfo::default());
+    assert!(ov.iter().any(|o| matches!(o, Overlay::GridLine { color: [0x10, 0x20, 0x30, 51], .. })));
+    let labels = |ov: &[Overlay]| ov.iter().filter(|o| matches!(o, Overlay::Label { .. })).count();
+    assert_eq!(labels(&ov), 0);
+    run(&mut s, "perspective.grid.rulers", json!({"on": true}));
+    assert!(labels(&s.overlays(ViewInfo::default())) > 2);
+}
+
+#[test]
+fn snapped_moves_keep_objects_on_a_plane_together() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let g = grid(&s);
+    let rect_at = |s: &mut Session, u: f64, v: f64| {
+        let (a, b) = (g.to_page(Plane::Left, Point::new(u, v)).unwrap(), g.to_page(Plane::Left, Point::new(u + g.cell, v + g.cell)).unwrap());
+        let p = json!({"x": a.x.min(b.x), "y": a.y.min(b.y), "width": (a.x - b.x).abs(), "height": (a.y - b.y).abs()});
+        NodeId(run(s, "perspective.draw", json!({"command": "shape.rectangle", "params": p, "plane": "left"}))["id"].as_u64().unwrap())
+    };
+    let (a, b) = (rect_at(&mut s, 2.0 * g.cell, g.cell), rect_at(&mut s, 4.0 * g.cell + 7.0, g.cell));
+    let left = |s: &Session, id: NodeId| {
+        let p = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone();
+        p.anchors().map(|(_, _, an)| g.to_plane(Plane::Left, an.p).unwrap().x).fold(f64::MAX, f64::min)
+    };
+    let gap = left(&s, b) - left(&s, a);
+    let from = g.to_page(Plane::Left, Point::new(3.0 * g.cell, 2.0 * g.cell)).unwrap();
+    let to = g.to_page(Plane::Left, Point::new(4.0 * g.cell + 3.0, 2.0 * g.cell)).unwrap();
+    run(&mut s, "perspective.move", json!({"ids": [a.0, b.0], "from": [from.x, from.y], "to": [to.x, to.y]}));
+    assert!(near(left(&s, b) - left(&s, a), gap), "they move by the same amount");
+    assert!(near(left(&s, a), 3.0 * g.cell), "the joint bounds land on a gridline");
+}
