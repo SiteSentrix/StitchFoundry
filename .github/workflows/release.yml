@@ -232,6 +232,56 @@ jobs:
           path: dist/release/*
           if-no-files-found: error
 
+  freebsd:
+    name: FreeBSD x86_64
+    needs: version
+    # GitHub has no FreeBSD runners: build in a FreeBSD 14.3 VM (same image as freebsd.yml).
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    environment: release
+    env:
+      VECTORCRAFT_VERSION: ${{ needs.version.outputs.version }}
+      VECTORCRAFT_BUILD_DATE: ${{ needs.version.outputs.date }}
+    steps:
+      - uses: actions/checkout@v4
+      # Japanese UI/document fonts, embedded by crates/text/build.rs (CRAFT_FONTS_DIR in the VM).
+      # Bump the commit deliberately; see craftrules standards/fonts.md.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: storytold/craft-fonts
+          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+        if: inputs.version != ''
+      - name: Apply version override
+        if: inputs.version != ''
+        run: cargo xtask version set "$VECTORCRAFT_VERSION"
+      - name: Build and package in a FreeBSD VM
+        # v1.5.9, pinned by commit.
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc
+        with:
+          release: "14.3"
+          usesh: true
+          mem: 12288
+          # Passed through by name; never templated into the script.
+          envs: "VECTORCRAFT_VERSION VECTORCRAFT_BUILD_DATE VECTORCRAFT_BUILD_SHA"
+          prepare: |
+            pkg install -y bash curl git pkgconf cmake python3 libxkbcommon wayland libX11 libXcursor libXrandr libXi libxcb mesa-libs vulkan-loader gtk3 fontconfig freetype2 alsa-lib
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          run: |
+            . "$HOME/.cargo/env"
+            git config --global --add safe.directory "$PWD"
+            # Build outside the checkout so only dist/ is copied back out of the VM.
+            # The craft-fonts checkout is synced into the VM with the workspace.
+            export CRAFT_FONTS_DIR="$PWD/craft-fonts" CRAFT_FONTS_REQUIRED=1
+            export CARGO_TARGET_DIR=/var/tmp/vectorcraft-target CARGO_BUILD_JOBS=4
+            bash packaging/freebsd/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-freebsd
+          path: dist/release/*
+          if-no-files-found: error
+
   web:
     name: Web (wasm)
     needs: version
@@ -277,7 +327,7 @@ jobs:
 
   release:
     name: Draft GitHub Release
-    needs: [version, macos, windows, linux, web]
+    needs: [version, macos, windows, linux, freebsd, web]
     runs-on: ubuntu-latest
     environment: release
     permissions:
