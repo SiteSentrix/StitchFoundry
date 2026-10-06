@@ -399,8 +399,10 @@ fn envelope_release_and_expand() {
     s.execute("object.envelope.expand", &json!({})).unwrap();
     let g = node(&s, e);
     assert!(matches!(g.kind, NodeKind::Group { .. }));
-    let p = g.children().unwrap()[0].path_data().unwrap().anchor_count();
-    assert!(p > 4);
+    // (Distort Appearance, on for new envelopes, expands the stroke too: the fill comes first.)
+    let mut fill = None;
+    g.walk(&mut |c| fill = fill.or_else(|| c.path_data().map(|p| p.anchor_count())));
+    assert!(fill.unwrap() > 4);
 }
 
 #[test]

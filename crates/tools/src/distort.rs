@@ -20,7 +20,7 @@ mod width;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::{Affine, Point, Vec2};
+use vectorcraft_geom::Point;
 
 use crate::Tool;
 
@@ -79,14 +79,7 @@ pub fn warp_node_with(n: &mut Node, f: &dyn Fn(Point) -> Point) {
     n.appearance.warp_gradients(&|p| affine_near(f, p, eps));
 }
 
-/// The affine map that best matches `f` near `p` (finite differences with step `eps`).
-pub fn affine_near(f: &dyn Fn(Point) -> Point, p: Point, eps: f64) -> Affine {
-    let o = f(p);
-    let ex = (f(p + Vec2::new(eps, 0.0)) - f(p - Vec2::new(eps, 0.0))) / (2.0 * eps);
-    let ey = (f(p + Vec2::new(0.0, eps)) - f(p - Vec2::new(0.0, eps))) / (2.0 * eps);
-    let lin = Affine::new([ex.x, ex.y, ey.x, ey.y, 0.0, 0.0]);
-    Affine::translate(o.to_vec2()) * lin * Affine::translate(-p.to_vec2())
-}
+pub use vectorcraft_doc::live::affine_near;
 
 /// Every anchor and handle position in `n` (for meshes and bounds).
 pub fn collect_points(n: &Node, out: &mut Vec<Point>) {
@@ -127,7 +120,7 @@ mod tests {
     use super::*;
     use vectorcraft_color::{Gradient, GradientPaint, Paint};
     use vectorcraft_doc::Appearance;
-    use vectorcraft_geom::{PathData, Rect, shapes};
+    use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
     #[test]
     fn create_covers_all_distort_tools() {

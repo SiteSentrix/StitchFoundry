@@ -96,7 +96,7 @@ fn reset_with_warp_and_mesh_switch_the_kind_and_keep_the_content() {
     assert!(s.execute("object.envelope.resetWithWarp", &json!({"style": "nope"})).is_err());
     // Back to a mesh that keeps the arch's shape: the top middle point is where the warp put it.
     s.execute("object.envelope.resetWithWarp", &json!({"style": "arch", "bend": 50, "horizontal": true})).unwrap();
-    let top = live::envelope_surface(&node(&s, e).children().unwrap().clone(), &kind(&s, e), 2, 2, vectorcraft_color::Color::BLACK).unwrap();
+    let top = live::EnvelopeMap::of(&node(&s, e)).unwrap().surface_mesh(2, 2, vectorcraft_color::Color::BLACK);
     s.execute("object.envelope.resetWithMesh", &json!({"rows": 2, "cols": 2})).unwrap();
     let EnvelopeKind::Mesh { rows: 2, cols: 2, points } = kind(&s, e) else { panic!("{:?}", kind(&s, e)) };
     assert!(points[1].distance(top.points[1].p) < 1e-9 && points[1].y < 99.0, "{:?}", points[1]);

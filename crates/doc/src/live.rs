@@ -22,7 +22,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_geom::{Affine, Anchor, BezPath, CubicBez, ParamCurve, PathData, Point, Rect, Shape, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, FillLayer};
-use crate::node::{Node, NodeId, NodeKind};
+use crate::node::{ImageObject, Node, NodeId, NodeKind};
 
 fn yes() -> bool {
     true
@@ -539,9 +539,11 @@ impl Coons {
         Some(Self { top, right, bottom, left })
     }
 
+    /// The point at `u` along a side; past its ends the end segments go on straight (art an
+    /// envelope bends can reach past the content's box: outlined strokes).
     fn sample(side: &[Point], u: f64) -> Point {
-        let s = u.clamp(0.0, 1.0) * (side.len() - 1) as f64;
-        let i = (s.floor() as usize).min(side.len() - 2);
+        let s = u * (side.len() - 1) as f64;
+        let i = (s.floor().max(0.0) as usize).min(side.len() - 2);
         side[i].lerp(side[i + 1], s - i as f64)
     }
 
@@ -1023,7 +1025,7 @@ fn catmull(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: f64) -> Vec2 {
 }
 
 /// Point map from the unit square onto a point grid (tensor-product Catmull-Rom; linear
-/// extrapolation at the borders so an undistorted grid is the identity).
+/// extrapolation at the borders so an undistorted grid is the identity, also past the square).
 fn grid_eval(rows: usize, cols: usize, pts: &[Point], u: f64, v: f64) -> Point {
     let at = |r: i64, c: i64| -> Vec2 {
         let rr = r.clamp(0, rows as i64);
@@ -1043,9 +1045,9 @@ fn grid_eval(rows: usize, cols: usize, pts: &[Point], u: f64, v: f64) -> Point {
         }
         p
     };
-    let su = (u.clamp(0.0, 1.0) * cols as f64).min(cols as f64 - 1e-9);
-    let sv = (v.clamp(0.0, 1.0) * rows as f64).min(rows as f64 - 1e-9);
-    let (ci, ri) = (su.floor() as i64, sv.floor() as i64);
+    // Past the grid's edges the outer patches go on (art can reach past the content's box).
+    let (su, sv) = (u * cols as f64, v * rows as f64);
+    let (ci, ri) = ((su.floor() as i64).clamp(0, cols as i64 - 1), (sv.floor() as i64).clamp(0, rows as i64 - 1));
     let (fu, fv) = (su - ci as f64, sv - ri as f64);
     let mut rowsv = [Vec2::ZERO; 4];
     for (k, rv) in rowsv.iter_mut().enumerate() {
@@ -1055,113 +1057,416 @@ fn grid_eval(rows: usize, cols: usize, pts: &[Point], u: f64, v: f64) -> Point {
     catmull(rowsv[0], rowsv[1], rowsv[2], rowsv[3], fv).to_point()
 }
 
-/// The envelope's point map for content whose bounding box is `src`.
-pub fn envelope_mapper<'a>(kind: &'a EnvelopeKind, src: Rect) -> Box<dyn Fn(Point) -> Point + 'a> {
-    let w = src.width().max(1e-9);
-    let h = src.height().max(1e-9);
+/// The surface (u, v ∈ [0,1]) an envelope of `kind` maps content onto, for content whose bounds in
+/// the envelope's own `frame` (its axes → the document) are `src`: a warp bends along the frame's
+/// axes; a mesh's points and a top object's path are in the document already.
+fn surface_of<'a>(kind: &'a EnvelopeKind, src: Rect, frame: Affine) -> Box<dyn Fn(f64, f64) -> Point + 'a> {
+    let flat = move |u: f64, v: f64| frame * Point::new(src.x0 + u * src.width(), src.y0 + v * src.height());
     match kind {
         EnvelopeKind::Warp { style, bend, h: dh, v: dv, horizontal } => {
             let st = WarpStyle::from_id(style).unwrap_or(WarpStyle::Arc);
             let b = bend.clamp(-100.0, 100.0) / 100.0;
             let (dh, dv) = (dh.clamp(-100.0, 100.0) / 100.0, dv.clamp(-100.0, 100.0) / 100.0);
             let c = src.center();
-            let (hw, hh) = (w / 2.0, h / 2.0);
+            let (hw, hh) = (src.width() / 2.0, src.height() / 2.0);
             let horizontal = *horizontal;
-            Box::new(move |q: Point| {
-                let (x, y) = ((q.x - c.x) / hw, (q.y - c.y) / hh);
+            Box::new(move |u: f64, v: f64| {
+                let (x, y) = (2.0 * u - 1.0, 2.0 * v - 1.0);
                 let (x2, y2) = if horizontal {
                     warp_point(st, b, dh, dv, x, y)
                 } else {
                     let (a, b2) = warp_point(st, b, dh, dv, y, x);
                     (b2, a)
                 };
-                Point::new(c.x + x2 * hw, c.y + y2 * hh)
+                frame * Point::new(c.x + x2 * hw, c.y + y2 * hh)
             })
         }
         EnvelopeKind::Mesh { rows, cols, points } => {
             let (rows, cols) = (*rows as usize, *cols as usize);
             if rows == 0 || cols == 0 || points.len() != (rows + 1) * (cols + 1) {
-                return Box::new(|q| q);
+                return Box::new(flat);
             }
-            Box::new(move |q: Point| grid_eval(rows, cols, points, (q.x - src.x0) / w, (q.y - src.y0) / h))
+            Box::new(move |u: f64, v: f64| grid_eval(rows, cols, points, u, v))
         }
         EnvelopeKind::TopObject { path } => match Coons::from_path(path) {
-            Some(co) => Box::new(move |q: Point| co.eval((q.x - src.x0) / w, (q.y - src.y0) / h)),
-            None => Box::new(|q| q),
+            Some(co) => Box::new(move |u: f64, v: f64| co.eval(u, v)),
+            None => Box::new(flat),
         },
+    }
+}
+
+/// The envelope's point map for content whose bounding box is `src` (page axes).
+pub fn envelope_mapper<'a>(kind: &'a EnvelopeKind, src: Rect) -> Box<dyn Fn(Point) -> Point + 'a> {
+    let s = surface_of(kind, src, Affine::IDENTITY);
+    let (w, h) = (src.width().max(1e-9), src.height().max(1e-9));
+    Box::new(move |q: Point| s((q.x - src.x0) / w, (q.y - src.y0) / h))
+}
+
+/// The frame an envelope keeps after transform `m` (its frame so far composed with the
+/// transform): identity when its axes stay square to the page, unflipped, since evaluating on
+/// the page axes gives the same result then.
+pub fn envelope_frame(m: Affine) -> Affine {
+    let [a, b, c, d, _, _] = m.as_coeffs();
+    if b.abs() < 1e-12 && c.abs() < 1e-12 && a > 0.0 && d > 0.0 { Affine::IDENTITY } else { m }
+}
+
+/// An envelope's point map: content placed in the envelope's own frame maps, by its bounds there,
+/// onto the unit square and from there onto the envelope's surface ([`surface_of`]).
+pub struct EnvelopeMap<'a> {
+    src: Rect,
+    frame: Affine,
+    to_frame: Affine,
+    surface: Box<dyn Fn(f64, f64) -> Point + 'a>,
+}
+
+impl<'a> EnvelopeMap<'a> {
+    /// The map of an envelope of `kind` around `content` with `frame`. `None` when the content
+    /// has no bounds.
+    pub fn new(content: &[Arc<Node>], kind: &'a EnvelopeKind, frame: Affine) -> Option<Self> {
+        let frame = if frame.is_finite() && frame.determinant().abs() > 1e-12 { frame } else { Affine::IDENTITY };
+        let to_frame = frame.inverse();
+        let src = if frame == Affine::IDENTITY {
+            nodes_bounds(content)?
+        } else {
+            content.iter().try_fold(None, |acc, c| {
+                let mut m = (**c).clone();
+                m.transform(to_frame, false);
+                Some(vectorcraft_geom::union_opt(acc, m.geometric_bounds()))
+            })??
+        };
+        Some(Self { src, frame, to_frame, surface: surface_of(kind, src, frame) })
+    }
+
+    /// The map of envelope node `n` (`None` for other nodes).
+    pub fn of(n: &'a Node) -> Option<Self> {
+        match &n.kind {
+            NodeKind::Envelope { content, kind, frame, .. } => Self::new(content, kind, *frame),
+            _ => None,
+        }
+    }
+
+    /// The content's bounds in the envelope's frame.
+    pub fn src(&self) -> Rect {
+        self.src
+    }
+
+    /// The surface point at (u, v) ∈ [0,1]².
+    pub fn at(&self, u: f64, v: f64) -> Point {
+        (self.surface)(u, v)
+    }
+
+    /// Where the envelope puts document point `p`.
+    pub fn map(&self, p: Point) -> Point {
+        let q = self.to_frame * p;
+        let (w, h) = (self.src.width().max(1e-9), self.src.height().max(1e-9));
+        self.at((q.x - self.src.x0) / w, (q.y - self.src.y0) / h)
+    }
+
+    /// A flat `(rows+1)×(cols+1)` grid over the content, in the envelope's frame (row-major).
+    pub fn grid(&self, rows: u32, cols: u32) -> Vec<Point> {
+        grid_points(self.src, rows, cols).into_iter().map(|p| self.frame * p).collect()
+    }
+
+    /// The surface sampled on a `rows`×`cols` grid as a mesh whose handles follow it and whose
+    /// points are `color`: Release gives it back as the envelope's shape, Reset with Mesh starts
+    /// from it.
+    pub fn surface_mesh(&self, rows: u32, cols: u32, color: Color) -> GradientMesh {
+        GradientMesh::from_surface(rows, cols, &|u, v| self.at(u, v), &|_, _| color)
+    }
+
+    /// The surface's bounds (sampled; a mesh's points and a top object's path bound it exactly).
+    fn bounds(&self) -> Option<Rect> {
+        const N: usize = 16;
+        let mut r: Option<Rect> = None;
+        for j in 0..=N {
+            for i in 0..=N {
+                let q = self.at(i as f64 / N as f64, j as f64 / N as f64);
+                r = Some(r.map_or(Rect::from_points(q, q), |r| r.union_pt(q)));
+            }
+        }
+        r
     }
 }
 
 /// Optional hook that converts nodes the pure evaluation can't map (text) to outlines.
 pub type Outliner<'a> = Option<&'a dyn Fn(&Node) -> Option<Node>>;
 
-fn map_node(n: &Node, f: &dyn Fn(Point) -> Point, piece: f64, outline: Outliner) -> Node {
+/// Distort Pattern Fills: the tiles pattern swatch `name` painted with placement `xf` lays over
+/// `region` (see [`crate::PatternDef::instances_in`]); `None` without such a swatch.
+pub type PatternTiles<'a> = &'a dyn Fn(&str, Affine, Rect) -> Option<Vec<Node>>;
+
+/// What live evaluation asks of the crates above this one (`vectorcraft-effects` supplies them).
+#[derive(Clone, Copy, Default)]
+pub struct Hooks<'a> {
+    /// Type as its glyph outlines, a symbol instance as its art (see [`Outliner`]).
+    pub outline: Outliner<'a>,
+    /// Distort Appearance: a path's strokes and geometry effects baked into filled art (`None`
+    /// when it has none to bake).
+    pub appearance: Outliner<'a>,
+    /// Distort Pattern Fills: the tiles a pattern fill lays (see [`PatternTiles`]).
+    pub pattern: Option<PatternTiles<'a>>,
+}
+
+impl<'a> From<Outliner<'a>> for Hooks<'a> {
+    fn from(outline: Outliner<'a>) -> Self {
+        Self { outline, ..Default::default() }
+    }
+}
+
+/// The affine map that best matches `f` near `p` (finite differences with step `eps`).
+pub fn affine_near(f: &dyn Fn(Point) -> Point, p: Point, eps: f64) -> Affine {
+    let o = f(p);
+    let ex = (f(p + Vec2::new(eps, 0.0)) - f(p - Vec2::new(eps, 0.0))) / (2.0 * eps);
+    let ey = (f(p + Vec2::new(0.0, eps)) - f(p - Vec2::new(0.0, eps))) / (2.0 * eps);
+    let lin = Affine::new([ex.x, ex.y, ey.x, ey.y, 0.0, 0.0]);
+    Affine::translate(o.to_vec2()) * lin * Affine::translate(-p.to_vec2())
+}
+
+/// How deep hooks may nest art inside art (symbols in symbols, envelopes in envelopes) before
+/// the rest is left as it is: a file can make a symbol contain itself.
+const MAX_HOOK_DEPTH: u32 = 16;
+
+/// How an envelope pushes art through its point map.
+#[derive(Clone, Copy)]
+struct Warper<'a> {
+    f: &'a dyn Fn(Point) -> Point,
+    /// Longest piece a segment is cut into before mapping.
+    piece: f64,
+    /// Finite-difference step for the local affine maps gradients follow.
+    eps: f64,
+    /// Rows and columns of the pieces an image is cut into.
+    cells: usize,
+    hooks: Hooks<'a>,
+    options: EnvelopeOptions,
+    /// How many hooks the art being mapped came through.
+    depth: u32,
+}
+
+impl Warper<'_> {
+    /// This warper one hook deeper (`None` past [`MAX_HOOK_DEPTH`]).
+    fn deeper(&self) -> Option<Self> {
+        (self.depth < MAX_HOOK_DEPTH).then_some(Self { depth: self.depth + 1, ..*self })
+    }
+}
+
+/// `to` (art standing in for `from`: its outlines, its art) with `from`'s name, transparency,
+/// opacity mask and effects.
+fn carry_look(from: &Node, mut to: Node) -> Node {
+    to.name = from.name.clone();
+    to.opacity = from.opacity;
+    to.blend = from.blend;
+    to.isolate = from.isolate;
+    to.knockout = from.knockout;
+    to.knockout_shape = from.knockout_shape;
+    to.mask = from.mask.clone();
+    to.appearance.effects = from.appearance.effects.clone();
+    to
+}
+
+fn map_node(n: &Node, w: &Warper) -> Node {
+    let deeper = w.deeper();
+    // Distort Appearance: strokes and geometry effects bend with the art.
+    if w.options.distort_appearance
+        && let Some(d) = &deeper
+        && let Some(o) = w.hooks.appearance.and_then(|h| h(n))
+    {
+        return map_node(&o, d);
+    }
+    // Distort Pattern Fills: the tiles bend with the art (not the patterns inside them).
+    if w.options.patterns()
+        && let Some(d) = &deeper
+        && let Some(o) = w.hooks.pattern.and_then(|p| pattern_art(n, p))
+    {
+        let inner = Warper { options: EnvelopeOptions { distort_pattern_fills: false, ..d.options }, ..*d };
+        return map_node(&o, &inner);
+    }
     let mut out = n.clone();
+    // Distort Linear Gradients: the gradient vectors follow the warp where they sit.
+    if w.options.gradients()
+        && let Some(b) = n.geometric_bounds()
+    {
+        out.appearance.warp_linear_gradients(b, &|p| affine_near(w.f, p, w.eps));
+    }
+    if let Some(m) = &mut out.mask {
+        m.art = Arc::new(map_node(&m.art, w));
+    }
     match &mut out.kind {
         NodeKind::Path { path, live, .. } => {
-            *path = map_nonlinear(path, piece, f);
+            *path = map_nonlinear(path, w.piece, w.f);
             *live = None;
         }
         NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
             for c in children.iter_mut() {
-                *c = Arc::new(map_node(c, f, piece, outline));
+                *c = Arc::new(map_node(c, w));
             }
         }
-        NodeKind::Mesh(m) => m.map(f),
+        NodeKind::Mesh(m) => m.map(w.f),
         NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
-            let g = expanded_group(n, outline);
-            return map_node(&g, f, piece, outline);
-        }
-        NodeKind::Text(_) => {
-            if let Some(o) = outline.and_then(|h| h(n)) {
-                return map_node(&o, f, piece, outline);
+            if let Some(d) = &deeper {
+                return map_node(&expanded_group_hooks(n, w.hooks), d);
             }
         }
-        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {}
+        NodeKind::Text(_) | NodeKind::SymbolInstance { .. } => {
+            if let Some(d) = &deeper
+                && let Some(o) = w.hooks.outline.and_then(|h| h(n))
+            {
+                return map_node(&carry_look(n, o), d);
+            }
+        }
+        NodeKind::Image(im) => {
+            let im = im.clone();
+            return warp_image(&out, &im, w);
+        }
     }
     out
 }
 
-/// Evaluate an envelope: its content mapped through the envelope.
+/// The affine map taking triangle `s` to triangle `d` (`None` when `s` is degenerate).
+fn affine_between(s: [Point; 3], d: [Point; 3]) -> Option<Affine> {
+    let basis = |p: [Point; 3]| Affine::new([p[1].x - p[0].x, p[1].y - p[0].y, p[2].x - p[0].x, p[2].y - p[0].y, p[0].x, p[0].y]);
+    let bs = basis(s);
+    if bs.determinant().abs() < 1e-12 {
+        return None;
+    }
+    let a = basis(d) * bs.inverse();
+    a.is_finite().then_some(a)
+}
+
+/// Image `n` (`im`) pushed through the warp as a raster mesh warp: its frame cut into
+/// `w.cells`² cells of two triangles, each a clip group showing the image under the affine map
+/// that takes the triangle where the warp takes its corners. Each piece reaches a little past its
+/// edges (at most half a point) so neighbours overlap and no seams show.
+fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
+    let k = w.cells.max(1);
+    let (pw, ph) = (im.width as f64, im.height as f64);
+    let at = |i: usize, j: usize| Point::new(pw * i as f64 / k as f64, ph * j as f64 / k as f64);
+    let mut pieces = Vec::with_capacity(2 * k * k);
+    for j in 0..k {
+        for i in 0..k {
+            let s = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+            let d = s.map(|p| (w.f)(im.xf * p));
+            for t in [[0, 1, 2], [0, 2, 3]] {
+                let (st, dt) = (t.map(|v| s[v]), t.map(|v| d[v]));
+                let Some(xf) = affine_between(st, dt) else { continue };
+                let c = Point::new((dt[0].x + dt[1].x + dt[2].x) / 3.0, (dt[0].y + dt[1].y + dt[2].y) / 3.0);
+                let grow = (dt[0].distance(dt[1]).max(dt[1].distance(dt[2])) * 0.02).min(0.5);
+                let tri: Vec<Point> = dt
+                    .iter()
+                    .map(|p| {
+                        let v = *p - c;
+                        let len = v.hypot();
+                        if len > 1e-12 { *p + v * (grow / len) } else { *p }
+                    })
+                    .collect();
+                let mut clip = Node::path(n.id, PathData::single(SubPath::polyline(&tri, true)), Appearance::default());
+                if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+                    *clipping = true;
+                }
+                let image = Node::new(n.id, NodeKind::Image(ImageObject { xf, ..im.clone() }));
+                pieces.push(Arc::new(Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })));
+            }
+        }
+    }
+    let mut g = n.clone();
+    g.kind = NodeKind::Group { children: pieces, clip: false };
+    g
+}
+
+/// Distort Pattern Fills: path or compound path `n` with each visible pattern fill turned into the
+/// tiles it paints in a clip group shaped like `n` (with the fill's opacity and blend mode), its
+/// other fills and strokes on copies of it, in paint order, under `n`'s transparency. `None`
+/// without a pattern fill whose definition `pattern` finds.
+fn pattern_art(n: &Node, tiles: PatternTiles) -> Option<Node> {
+    let (path, rule, _) = crate::blend::node_path(n)?;
+    let pattern_fill = |i: &AppearanceItem| matches!(i, AppearanceItem::Fill(f) if f.visible && matches!(f.paint, Paint::Pattern { .. }));
+    if !n.appearance.items.iter().any(pattern_fill) {
+        return None;
+    }
+    let bounds = path.bounds()?;
+    let def = |i: &AppearanceItem| match i {
+        AppearanceItem::Fill(f) if f.visible => match &f.paint {
+            Paint::Pattern { pattern: name, xf } => tiles(name, *xf, bounds).map(|t| (t, f.opacity, f.blend)),
+            _ => None,
+        },
+        _ => None,
+    };
+    let plain = |items: Vec<AppearanceItem>| {
+        Arc::new(Node {
+            appearance: Appearance { items, ..Default::default() },
+            opacity: 1.0,
+            blend: Default::default(),
+            isolate: false,
+            knockout: Default::default(),
+            knockout_shape: false,
+            mask: None,
+            name: None,
+            ..n.clone()
+        })
+    };
+    let mut pieces = vec![];
+    let mut rest = vec![];
+    for i in &n.appearance.items {
+        let Some((tiles, opacity, blend)) = def(i) else {
+            rest.push(i.clone());
+            continue;
+        };
+        if !rest.is_empty() {
+            pieces.push(plain(std::mem::take(&mut rest)));
+        }
+        let mut clip = Node::path(n.id, path.clone(), Appearance::default());
+        if let NodeKind::Path { clipping, rule: r, .. } = &mut clip.kind {
+            (*clipping, *r) = (true, rule);
+        }
+        let children = std::iter::once(clip).chain(tiles).map(Arc::new).collect();
+        let mut g = Node::new(n.id, NodeKind::Group { children, clip: true });
+        g.opacity = opacity;
+        g.blend = blend;
+        pieces.push(Arc::new(g));
+    }
+    if !rest.is_empty() {
+        pieces.push(plain(rest));
+    }
+    Some(Node {
+        kind: NodeKind::Group { children: pieces, clip: false },
+        appearance: Appearance { effects: n.appearance.effects.clone(), ..Default::default() },
+        ..n.clone()
+    })
+}
+
+/// Evaluate an envelope of `kind` around `content` on the page axes with the options envelopes
+/// had before Envelope Options (see [`expand_live_hooks`] for an envelope node).
 pub fn envelope_expand(content: &[Arc<Node>], kind: &EnvelopeKind, fidelity: f64, outline: Outliner) -> Vec<Node> {
-    let Some(src) = nodes_bounds(content) else { return content.iter().map(|c| (**c).clone()).collect() };
-    let f = envelope_mapper(kind, src);
-    let diag = src.width().hypot(src.height()).max(1e-6);
-    let piece = diag / (8.0 + fidelity.clamp(0.0, 100.0) / 100.0 * 56.0);
-    content.iter().map(|c| map_node(c, &*f, piece, outline)).collect()
+    expand_envelope(content, kind, fidelity, EnvelopeOptions::default(), Affine::IDENTITY, outline.into())
 }
 
-/// The surface an envelope maps `content` onto, sampled on a `rows`×`cols` grid as a mesh whose
-/// handles follow the surface and whose points are `color`: Release gives it back as the
-/// envelope's shape and Reset with Mesh starts from it. `None` when the content has no bounds.
-pub fn envelope_surface(content: &[Arc<Node>], kind: &EnvelopeKind, rows: u32, cols: u32, color: Color) -> Option<GradientMesh> {
-    let src = nodes_bounds(content)?;
-    let f = envelope_mapper(kind, src);
-    let at = |u: f64, v: f64| f(Point::new(src.x0 + u * src.width(), src.y0 + v * src.height()));
-    Some(GradientMesh::from_surface(rows, cols, &at, &|_, _| color))
+/// An envelope's content pushed through its map: Fidelity sets how finely curves are cut (and
+/// into how many pieces images are), the options what bends with the art.
+fn expand_envelope(content: &[Arc<Node>], kind: &EnvelopeKind, fidelity: f64, options: EnvelopeOptions, frame: Affine, hooks: Hooks) -> Vec<Node> {
+    let Some(map) = EnvelopeMap::new(content, kind, frame) else { return content.iter().map(|c| (**c).clone()).collect() };
+    let src = map.src();
+    let fid = if fidelity.is_finite() { fidelity.clamp(0.0, 100.0) / 100.0 } else { 0.5 };
+    let f = |p: Point| map.map(p);
+    let w = Warper {
+        f: &f,
+        piece: src.width().hypot(src.height()).max(1e-6) / (8.0 + fid * 56.0),
+        eps: (src.width().max(src.height()) * 0.05).max(0.5),
+        cells: (4.0 + fid * 12.0).round() as usize,
+        hooks,
+        options,
+        depth: 0,
+    };
+    content.iter().map(|c| map_node(c, &w)).collect()
 }
 
-/// Envelope bounds (the image of the content box, sampled).
-pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind) -> Option<Rect> {
+/// Envelope bounds: a mesh's points, a top object's path, the warp's surface (sampled).
+pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine) -> Option<Rect> {
     match kind {
         EnvelopeKind::Mesh { points, .. } => {
             let first = *points.first()?;
             Some(points.iter().fold(Rect::from_points(first, first), |r, p| r.union_pt(*p)))
         }
         EnvelopeKind::TopObject { path } => path.bounds(),
-        EnvelopeKind::Warp { .. } => {
-            let src = nodes_bounds(content)?;
-            let f = envelope_mapper(kind, src);
-            const N: usize = 16;
-            let mut r: Option<Rect> = None;
-            for j in 0..=N {
-                for i in 0..=N {
-                    let q = f(Point::new(src.x0 + src.width() * i as f64 / N as f64, src.y0 + src.height() * j as f64 / N as f64));
-                    r = Some(r.map_or(Rect::from_points(q, q), |r| r.union_pt(q)));
-                }
-            }
-            r
-        }
+        EnvelopeKind::Warp { .. } => EnvelopeMap::new(content, kind, frame)?.bounds(),
     }
 }
 
@@ -1195,9 +1500,14 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
 }
 
 pub fn expand_live_with(n: &Node, outline: Outliner) -> Vec<Node> {
+    expand_live_hooks(n, outline.into())
+}
+
+/// [`expand_live_with`] with everything an envelope can ask of the crates above (see [`Hooks`]).
+pub fn expand_live_hooks(n: &Node, hooks: Hooks) -> Vec<Node> {
     match &n.kind {
         NodeKind::Blend { children, spec } => blend_expand(children, spec),
-        NodeKind::Envelope { content, kind, fidelity, .. } => envelope_expand(content, kind, *fidelity, outline),
+        NodeKind::Envelope { content, kind, fidelity, options, frame, .. } => expand_envelope(content, kind, *fidelity, *options, *frame, hooks),
         NodeKind::Mesh(m) => mesh_quad_nodes(m, 8),
         NodeKind::Repeat(r) => r.expand(),
         _ => vec![n.clone()],
@@ -1206,7 +1516,12 @@ pub fn expand_live_with(n: &Node, outline: Outliner) -> Vec<Node> {
 
 /// A live object evaluated into a plain group (keeping the object's id, name and transparency).
 pub fn expanded_group(n: &Node, outline: Outliner) -> Node {
-    let children = expand_live_with(n, outline).into_iter().map(Arc::new).collect();
+    expanded_group_hooks(n, outline.into())
+}
+
+/// [`expanded_group`] with [`Hooks`].
+pub fn expanded_group_hooks(n: &Node, hooks: Hooks) -> Node {
+    let children = expand_live_hooks(n, hooks).into_iter().map(Arc::new).collect();
     let mut g = Node::new(n.id, NodeKind::Group { children, clip: false });
     g.name = n.name.clone();
     g.visible = n.visible;
@@ -1226,11 +1541,16 @@ pub fn expanded_group(n: &Node, outline: Outliner) -> Node {
 
 /// Recursively replace every live object in `n` by plain geometry (for exporters).
 pub fn expand_deep(n: &Node, outline: Outliner) -> Node {
-    let mut out = if is_live(n) { expanded_group(n, outline) } else { n.clone() };
+    expand_deep_hooks(n, outline.into())
+}
+
+/// [`expand_deep`] with [`Hooks`].
+pub fn expand_deep_hooks(n: &Node, hooks: Hooks) -> Node {
+    let mut out = if is_live(n) { expanded_group_hooks(n, hooks) } else { n.clone() };
     if let Some(ch) = out.children_mut() {
         for c in ch.iter_mut() {
             if subtree_has_live(c) {
-                *c = Arc::new(expand_deep(c, outline));
+                *c = Arc::new(expand_deep_hooks(c, hooks));
             }
         }
     }
@@ -1286,6 +1606,16 @@ mod tests {
         let c = Coons::from_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0))).unwrap();
         let p = c.eval(0.25, 0.5);
         assert!((p.x - 25.0).abs() < 1e-6 && (p.y - 25.0).abs() < 1e-6, "{p:?}");
+    }
+
+    #[test]
+    fn maps_go_on_past_the_content_box() {
+        // A stroke outline reaches past the box: a flat mesh and a rectangle stay the identity there.
+        let r = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let p = grid_eval(2, 2, &grid_points(r, 2, 2), -0.05, 1.1);
+        assert!((p.x + 5.0).abs() < 1e-6 && (p.y - 110.0).abs() < 1e-6, "{p:?}");
+        let c = Coons::from_path(&shapes::rectangle(r)).unwrap().eval(1.05, -0.1);
+        assert!((c.x - 105.0).abs() < 1e-6 && (c.y + 10.0).abs() < 1e-6, "{c:?}");
     }
 
     #[test]

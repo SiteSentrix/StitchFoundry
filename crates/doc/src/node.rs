@@ -275,6 +275,11 @@ pub enum NodeKind {
         /// Envelope Options besides Fidelity.
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
         options: crate::live::EnvelopeOptions,
+        /// The envelope's own axes (→ the document): the transforms it took since it was made that
+        /// the page axes can't stand for (rotation, shear, reflection). The content maps from its
+        /// bounds in this frame, and a warp bends along it.
+        #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+        frame: Affine,
     },
     /// Gradient mesh.
     Mesh(GradientMesh),
@@ -536,7 +541,7 @@ impl Node {
                 let b = crate::live::nodes_bounds(children);
                 vectorcraft_geom::union_opt(b, spec.spine.as_ref().and_then(|s| s.bounds()))
             }
-            NodeKind::Envelope { content, kind, .. } => crate::live::envelope_bounds(content, kind),
+            NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, *frame),
             NodeKind::Mesh(m) => m.bounds(),
             NodeKind::Repeat(r) => r.bounds(),
         }
@@ -639,10 +644,11 @@ impl Node {
                     s.transform(a);
                 }
             }
-            NodeKind::Envelope { content, kind, .. } => {
+            NodeKind::Envelope { content, kind, frame, .. } => {
                 for c in content.iter_mut() {
                     Arc::make_mut(c).transform_scaled(a, sc);
                 }
+                *frame = crate::live::envelope_frame(a * *frame);
                 match kind {
                     EnvelopeKind::Mesh { points, .. } => {
                         for p in points.iter_mut() {

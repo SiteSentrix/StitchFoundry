@@ -1829,6 +1829,12 @@ envelopes, the path for a top-object envelope); the content keeps the envelope's
 opacity mask.
 Type inside an envelope distorts as its glyph outlines, run by run in each run's paint, on the canvas and in every
 export (SVG, PDF, EPS, EMF/WMF, DXF).
+Everything inside bends with the envelope: images as a raster mesh warp (cut into pieces by Fidelity, each a clipped
+image under its own affine map; SVG shares the pixels between the pieces), symbol instances as their symbol's art,
+and with Distort Appearance strokes (as their filled outlines) and geometry effects; with it, Distort Linear Gradients
+bends linear gradients and Distort Pattern Fills the pattern tiles. A transformed envelope keeps its warp in its own
+frame (`kind.frame` in `document.inspect`; rotating a warp envelope turns the warp with it), and move and scale keep
+it square to the page.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.envelope.makeWithWarp","params":{"style":"arch","bend":40}}}
