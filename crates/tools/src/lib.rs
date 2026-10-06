@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, NodeId, Selection, Unit};
-use vectorcraft_geom::{BezPath, Point, Rect};
+use vectorcraft_geom::{BezPath, Point, Rect, Vec2};
 
 pub use catalog::{TOOL_GROUPS, ToolInfo, tool_info};
 
@@ -182,6 +182,26 @@ impl Default for PaintDefaults {
     }
 }
 
+/// The document window on screen, in document coordinates: widgets that stay put on screen (the
+/// Plane Switching Widget) are placed with it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScreenFrame {
+    /// The window's top-left corner.
+    pub origin: Point,
+    /// One screen pixel to the right and one down.
+    pub right: Vec2,
+    pub down: Vec2,
+    /// The window's size in screen pixels.
+    pub size: (f64, f64),
+}
+
+impl ScreenFrame {
+    /// The document point `x`, `y` screen pixels from the window's top-left corner.
+    pub fn at(&self, x: f64, y: f64) -> Point {
+        self.origin + self.right * x + self.down * y
+    }
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
@@ -229,6 +249,10 @@ pub struct ToolContext<'a> {
     pub slices_hidden: bool,
     /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
     pub slices_locked: bool,
+    /// The document window (none headless): screen-fixed widgets sit in it.
+    pub screen: Option<ScreenFrame>,
+    /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
+    pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
 }
 
 impl ToolContext<'_> {
@@ -467,6 +491,8 @@ pub(crate) mod testutil {
             paste_plain_text: false,
             slices_hidden: false,
             slices_locked: false,
+            screen: None,
+            plane_widget: Some(Default::default()),
         }
     }
 }

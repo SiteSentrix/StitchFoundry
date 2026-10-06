@@ -252,6 +252,28 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             return;
         }
     }
+    // Digits the active tool or the perspective grid takes (1–4 pick the plane while it shows).
+    if !(m.command || m.alt || m.ctrl) {
+        let digits: Vec<(u8, Key)> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Key { key, pressed: true, .. } => digit_of(*key).map(|d| (d, *key)),
+                    _ => None,
+                })
+                .collect()
+        });
+        for (d, k) in digits {
+            if app.session.tool_claims_key(ToolKey::Digit(d), view) && ctx.input_mut(|i| i.consume_key(m, k)) {
+                // The digit's text is the key's too: no single-key shortcut sees it.
+                let text = d.to_string();
+                ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Text(t) if *t == text)));
+                let r = app.session.tool_key(ToolKey::Digit(d), crate::canvas::mods(m, false), view);
+                crate::canvas::apply_requests(app, r);
+                return;
+            }
+        }
+    }
     // Command shortcuts.
     let mut fire = None;
     for (sc, id, p) in all_shortcuts() {

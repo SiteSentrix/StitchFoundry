@@ -27,6 +27,7 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 
 pub mod define;
 pub mod view;
+pub mod widget;
 pub use define::{GridDefinition, Rgb, Station};
 
 /// Key under `Document.unknown`.
@@ -165,6 +166,9 @@ pub struct PerspectiveGrid {
     /// Show Rulers: a ruler up the line where the planes meet.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub rulers: bool,
+    /// Horizontal extent of the right plane (points, plane units); None: `extent`, as the left.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extent_right: Option<f64>,
 }
 
 impl PerspectiveGrid {
@@ -205,6 +209,7 @@ impl PerspectiveGrid {
             lock_station: false,
             snap: true,
             rulers: false,
+            extent_right: None,
         }
     }
 
@@ -458,12 +463,26 @@ impl PerspectiveGrid {
         out
     }
 
-    /// Plane-coordinate extent of a plane.
+    /// Plane-coordinate extent of a plane: the left plane is `extent` wide, the right one
+    /// [`Self::right_extent`]; the ground spans both (one-point: the front plane's width by the
+    /// side wall's depth).
     pub fn domain(&self, plane: Plane) -> Rect {
-        match plane {
-            Plane::Ground => Rect::new(0.0, 0.0, self.extent, self.extent),
+        match (plane, self.kind) {
+            (Plane::Ground, 1) => Rect::new(0.0, 0.0, self.extent, self.right_extent()),
+            (Plane::Ground, _) => Rect::new(0.0, 0.0, self.right_extent(), self.extent),
+            (Plane::Right, _) => Rect::new(0.0, 0.0, self.right_extent(), self.height),
             _ => Rect::new(0.0, 0.0, self.extent, self.height),
         }
+    }
+
+    /// The right plane's horizontal extent.
+    pub fn right_extent(&self) -> f64 {
+        self.extent_right.unwrap_or(self.extent)
+    }
+
+    /// Is the grid drawn (shown, or a perspective tool active)?
+    pub fn shown(&self, tool_id: &str) -> bool {
+        self.visible || matches!(tool_id, "perspectiveGrid" | "perspectiveSelection")
     }
 
     /// Page → plane coordinates.
@@ -560,18 +579,10 @@ impl PerspectiveGrid {
         out
     }
 
-    /// Plane Switching widget geometry: (plane, quad) faces and the "no plane" circle (centre, r).
+    /// Plane Switching widget geometry in the first artboard's top-left corner (headless): (plane,
+    /// quad) faces and the "no plane" circle (centre, r). See [`Self::widget_at`].
     pub fn widget(&self, doc: &Document, tol: f64) -> WidgetGeom {
-        let ab = doc.artboards.first().map(|a| a.rect).unwrap_or(Rect::new(0.0, 0.0, 612.0, 792.0));
-        let s = 40.0 * tol;
-        let (cx, cy) = (ab.x0 + 10.0 * tol + s / 2.0, ab.y0 + 10.0 * tol + s / 2.0);
-        let p = |dx: f64, dy: f64| Point::new(cx + dx * s, cy + dy * s);
-        let faces = vec![
-            (Plane::Left, [p(-0.5, -0.25), p(0.0, 0.0), p(0.0, 0.5), p(-0.5, 0.25)]),
-            (Plane::Right, [p(0.0, 0.0), p(0.5, -0.25), p(0.5, 0.25), p(0.0, 0.5)]),
-            (Plane::Ground, [p(0.0, -0.5), p(0.5, -0.25), p(0.0, 0.0), p(-0.5, -0.25)]),
-        ];
-        (faces, (p(0.62, 0.62), 0.12 * s))
+        self.widget_at(doc, tol, widget::WidgetPlace::default())
     }
 
     /// Which widget control is at `p`.
@@ -753,9 +764,13 @@ fn in_quad(q: &[Point; 4], p: Point) -> bool {
 /// Grid overlays (lines, horizon, vanishing points, widget) drawn whenever the grid is visible or
 /// a perspective tool is active. `tol` = document units per screen pixel.
 pub fn grid_overlays(doc: &Document, tol: f64, tool_id: &str) -> Vec<Overlay> {
+    grid_overlays_in(doc, tol, tool_id, Some(widget::WidgetPlace::default()))
+}
+
+/// [`grid_overlays`] with the Plane Switching Widget at `place` (None: hidden).
+pub fn grid_overlays_in(doc: &Document, tol: f64, tool_id: &str, place: Option<widget::WidgetPlace>) -> Vec<Overlay> {
     let g = PerspectiveGrid::current(doc);
-    let tool = matches!(tool_id, "perspectiveGrid" | "perspectiveSelection");
-    if !g.visible && !tool {
+    if !g.shown(tool_id) {
         return vec![];
     }
     let mut out = vec![];
@@ -782,7 +797,8 @@ pub fn grid_overlays(doc: &Document, tol: f64, tool_id: &str) -> Vec<Overlay> {
         out.extend(g.ruler_overlays(tol));
     }
     // Widget.
-    let (faces, (c, r)) = g.widget(doc, tol);
+    let Some(place) = place else { return out };
+    let (faces, (c, r)) = g.widget_at(doc, tol, place);
     for (pl, q) in faces {
         let [cr, cg, cb] = pl.color();
         out.push(Overlay::Highlight { quad: q, color: [cr, cg, cb, if pl == g.plane { 230 } else { 70 }] });
@@ -810,9 +826,25 @@ enum Handle {
     ExtentLeft,
     ExtentRight,
     Height,
+    /// The left and right ground-level points: they move the whole grid.
+    GroundLeft,
+    GroundRight,
+    /// The grid cell size widget, `n` cells up the line where the planes meet.
+    Cell,
 }
 
-fn handles(g: &PerspectiveGrid) -> Vec<(Handle, Point)> {
+/// The ground-level points and the cell widget sit at least this far (screen pixels) from the
+/// origin.
+const NEAR_ORIGIN_PX: f64 = 24.0;
+
+/// How many cells up the cell widget sits so it stays clear of the origin (`tol` = document units
+/// per screen pixel).
+fn cell_steps(g: &PerspectiveGrid, tol: f64) -> f64 {
+    (NEAR_ORIGIN_PX * tol / g.cell.max(1e-9)).ceil().clamp(1.0, 1.0e6)
+}
+
+fn handles(g: &PerspectiveGrid, tol: f64) -> Vec<(Handle, Point)> {
+    let o = Point::new(g.origin[0], g.origin[1]);
     let mut v = vec![(Handle::VpLeft, Point::new(g.vp_left, g.horizon))];
     if g.kind != 1 {
         v.push((Handle::VpRight, Point::new(g.vp_right, g.horizon)));
@@ -820,48 +852,103 @@ fn handles(g: &PerspectiveGrid) -> Vec<(Handle, Point)> {
     if g.kind == 3 {
         v.push((Handle::VpVertical, Point::new(g.vp_vertical[0], g.vp_vertical[1])));
     }
-    v.push((Handle::Origin, Point::new(g.origin[0], g.origin[1])));
-    let (lp, rp) = (Plane::Left, Plane::Right);
-    if let Some(p) = g.to_page(lp, Point::new(g.extent, 0.0)) {
-        v.push((Handle::ExtentLeft, p));
-    }
-    if let Some(p) = g.to_page(rp, Point::new(g.extent, 0.0)) {
-        v.push((Handle::ExtentRight, p));
-    }
-    if let Some(p) = g.to_page(Plane::Left, Point::new(0.0, g.height)) {
-        v.push((Handle::Height, p));
+    v.push((Handle::Origin, o));
+    let mut at = |h: Handle, pl: Plane, q: Point| {
+        if let Some(p) = g.to_page(pl, q) {
+            v.push((h, p));
+        }
+    };
+    at(Handle::ExtentLeft, Plane::Left, Point::new(g.extent, 0.0));
+    at(Handle::ExtentRight, Plane::Right, Point::new(g.right_extent(), 0.0));
+    at(Handle::Height, Plane::Left, Point::new(0.0, g.height));
+    at(Handle::Cell, Plane::Left, Point::new(0.0, g.cell * cell_steps(g, tol)));
+    // The ground-level points: a little way from the origin along each wall's ground line.
+    for (h, pl) in [(Handle::GroundLeft, Plane::Left), (Handle::GroundRight, Plane::Right)] {
+        if let Some(p) = g.to_page(pl, Point::new(g.cell, 0.0)).filter(|p| p.distance(o) > 1e-9) {
+            v.push((h, o + (p - o).normalize() * (NEAR_ORIGIN_PX * tol)));
+        }
     }
     // The horizon handle sits on the horizon above the origin.
     v.push((Handle::Horizon, Point::new(g.origin[0], g.horizon)));
     v
 }
 
-/// Apply a handle drag to a copy of the grid.
-fn drag_handle(g: &PerspectiveGrid, h: Handle, p: Point) -> PerspectiveGrid {
+/// A widget drag: the widget, the grid and the pointer when it was pressed, and the cell widget's
+/// steps then.
+struct Press {
+    handle: Handle,
+    grid: PerspectiveGrid,
+    at: Point,
+    steps: f64,
+}
+
+/// `g` moved by `d`: the whole grid, vanishing points and horizon too.
+fn translated(g: &PerspectiveGrid, d: Vec2) -> PerspectiveGrid {
     let mut n = g.clone();
+    n.origin = [g.origin[0] + d.x, g.origin[1] + d.y];
+    n.horizon += d.y;
+    n.vp_left += d.x;
+    n.vp_right += d.x;
+    n.vp_vertical = [g.vp_vertical[0] + d.x, g.vp_vertical[1] + d.y];
+    n
+}
+
+/// The grid with a widget dragged to `p`. Shift constrains: a vanishing point keeps the horizon,
+/// the ground-level points and the origin move along one axis, extents and the height go by whole
+/// cells. Alt drags both extents together.
+fn drag_handle(press: &Press, p: Point, mods: Mods) -> PerspectiveGrid {
+    let g = &press.grid;
+    let mut n = g.clone();
+    let along_axis = |p: Point| {
+        let d = p - press.at;
+        if !mods.shift {
+            d
+        } else if d.x.abs() >= d.y.abs() {
+            Vec2::new(d.x, 0.0)
+        } else {
+            Vec2::new(0.0, d.y)
+        }
+    };
+    let cells = |v: f64| if mods.shift { (v / g.cell).round().max(1.0) * g.cell } else { v.max(g.cell) };
+    let h = press.handle;
     match h {
-        Handle::VpLeft | Handle::VpRight if g.lock_station && g.kind != 1 => {
-            n.horizon = p.y;
-            n.swing(h == Handle::VpLeft, p.x);
-        }
-        Handle::VpLeft => {
-            n.vp_left = p.x;
-            n.horizon = p.y;
-        }
-        Handle::VpRight => {
-            n.vp_right = p.x;
-            n.horizon = p.y;
+        Handle::VpLeft | Handle::VpRight => {
+            if !mods.shift {
+                n.horizon = p.y;
+            }
+            match (h == Handle::VpLeft, g.lock_station && g.kind != 1) {
+                (left, true) => n.swing(left, p.x),
+                (true, false) => n.vp_left = p.x,
+                (false, false) => n.vp_right = p.x,
+            }
         }
         Handle::VpVertical => n.vp_vertical = [p.x, p.y],
         Handle::Horizon => n.horizon = p.y,
-        Handle::Origin => n.origin = [p.x, p.y],
-        Handle::ExtentLeft | Handle::ExtentRight | Handle::Height => {
+        Handle::Origin => {
+            let d = along_axis(p);
+            n.origin = [g.origin[0] + d.x, g.origin[1] + d.y];
+        }
+        Handle::GroundLeft | Handle::GroundRight => n = translated(g, along_axis(p)),
+        Handle::ExtentLeft | Handle::ExtentRight => {
             let pl = if h == Handle::ExtentRight { Plane::Right } else { Plane::Left };
             if let Some(q) = g.to_plane(pl, p) {
-                match h {
-                    Handle::Height => n.height = q.y.max(g.cell),
-                    _ => n.extent = q.x.max(g.cell),
+                let e = cells(q.x);
+                if h == Handle::ExtentLeft || mods.alt {
+                    n.extent = e;
                 }
+                if h == Handle::ExtentRight || mods.alt {
+                    n.extent_right = Some(e);
+                }
+            }
+        }
+        Handle::Height => {
+            if let Some(q) = g.to_plane(Plane::Left, p) {
+                n.height = cells(q.y);
+            }
+        }
+        Handle::Cell => {
+            if let Some(q) = g.to_plane(Plane::Left, p) {
+                n.cell = (q.y / press.steps).max(0.5);
             }
         }
     }
@@ -870,7 +957,7 @@ fn drag_handle(g: &PerspectiveGrid, h: Handle, p: Point) -> PerspectiveGrid {
 
 #[derive(Default)]
 pub struct PerspectiveGridTool {
-    drag: Option<Handle>,
+    drag: Option<Press>,
     /// Dragging a plane widget.
     plane: Option<PlaneDrag>,
 }
@@ -888,7 +975,7 @@ impl Tool for PerspectiveGridTool {
                 if !g.visible {
                     pre.push(Action::Exec("perspective.grid.show".into(), json!({"visible": true})));
                 }
-                if let Some(pl) = g.widget_hit(cx.doc, cx.tol(1.0), p) {
+                if let Some(pl) = g.widget_hit_cx(cx, p) {
                     pre.push(Action::Exec("perspective.plane.set".into(), json!({"plane": pl.id()})));
                     return pre;
                 }
@@ -899,17 +986,20 @@ impl Tool for PerspectiveGridTool {
                 }
                 let tol = cx.tol(6.0);
                 if !g.locked
-                    && let Some((h, _)) =
-                        handles(&g).into_iter().filter(|(_, q)| q.distance(p) <= tol).min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p)))
+                    && let Some((h, _)) = handles(&g, cx.tol(1.0))
+                        .into_iter()
+                        .filter(|(_, q)| q.distance(p) <= tol)
+                        .min_by(|a, b| a.1.distance(p).total_cmp(&b.1.distance(p)))
                 {
-                    self.drag = Some(h);
+                    let steps = cell_steps(&g, cx.tol(1.0));
+                    self.drag = Some(Press { handle: h, grid: g, at: p, steps });
                     pre.push(Action::Begin("Edit Perspective Grid".into()));
                 }
                 pre
             }
             PointerKind::Drag if self.plane.is_some() => self.plane.and_then(|d| d.preview(&g, p, ev.mods)).into_iter().collect(),
-            PointerKind::Drag => match self.drag {
-                Some(h) => vec![Action::Preview("perspective.grid.set".into(), drag_handle(&g, h, p).definition_json())],
+            PointerKind::Drag => match &self.drag {
+                Some(press) => vec![Action::Preview("perspective.grid.set".into(), drag_handle(press, p, ev.mods).definition_json())],
                 None => vec![],
             },
             PointerKind::Up => match (self.drag.take(), self.plane.take()) {
@@ -922,11 +1012,14 @@ impl Tool for PerspectiveGridTool {
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let g = PerspectiveGrid::current(cx.doc);
-        handles(&g)
+        let ink = [0x20, 0x20, 0x20];
+        handles(&g, cx.tol(1.0))
             .into_iter()
             .map(|(h, p)| match h {
-                Handle::VpLeft | Handle::VpRight | Handle::VpVertical => Overlay::Anchor { p, color: [0x20, 0x20, 0x20], filled: true, size: 7.0 },
-                _ => Overlay::Anchor { p, color: [0x20, 0x20, 0x20], filled: false, size: 6.0 },
+                Handle::VpLeft | Handle::VpRight | Handle::VpVertical => Overlay::Anchor { p, color: ink, filled: true, size: 7.0 },
+                Handle::GroundLeft | Handle::GroundRight => Overlay::Anchor { p, color: ink, filled: true, size: 5.0 },
+                Handle::Cell => Overlay::Handle { p, color: ink },
+                _ => Overlay::Anchor { p, color: ink, filled: false, size: 6.0 },
             })
             .collect()
     }
@@ -939,8 +1032,8 @@ impl Tool for PerspectiveGridTool {
         if g.locked {
             return Cursor::Arrow;
         }
-        match handles(&g).into_iter().find(|(_, q)| q.distance(p) <= tol).map(|h| h.0) {
-            Some(Handle::Horizon | Handle::Height) => Cursor::ResizeV,
+        match handles(&g, cx.tol(1.0)).into_iter().find(|(_, q)| q.distance(p) <= tol).map(|h| h.0) {
+            Some(Handle::Horizon | Handle::Height | Handle::Cell) => Cursor::ResizeV,
             Some(Handle::ExtentLeft | Handle::ExtentRight) => Cursor::ResizeH,
             Some(_) => Cursor::Move,
             None => Cursor::Arrow,
@@ -1038,9 +1131,7 @@ impl Tool for PerspectiveSelectionTool {
         match (ev.kind, std::mem::take(&mut self.drag)) {
             (PointerKind::Down, _) => {
                 self.measure = None;
-                if g.visible
-                    && let Some(pl) = g.widget_hit(cx.doc, cx.tol(1.0), p)
-                {
+                if let Some(pl) = g.widget_hit_cx(cx, p) {
                     return vec![Action::Exec("perspective.plane.set".into(), json!({"plane": pl.id()}))];
                 }
                 if let Some(d) = PlaneDrag::hit(&g, cx.tol(6.0), p) {

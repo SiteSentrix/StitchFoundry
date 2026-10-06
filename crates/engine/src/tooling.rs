@@ -2,6 +2,7 @@
 
 use serde_json::{Map, Value};
 use vectorcraft_geom::Point;
+use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
 use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
 
 use crate::{EngineError, Prefs, Result, Session};
@@ -20,6 +21,8 @@ pub struct ViewInfo {
     pub snap_to_point: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
+    /// The document window (none headless): screen-fixed widgets sit in it.
+    pub screen: Option<vectorcraft_tools::ScreenFrame>,
 }
 
 impl Default for ViewInfo {
@@ -33,6 +36,7 @@ impl Default for ViewInfo {
             snap_to_pixel: false,
             snap_to_point: true,
             corner_widgets: true,
+            screen: None,
         }
     }
 }
@@ -134,6 +138,8 @@ impl Session {
             paste_plain_text: self.prefs.paste_text_formatting == "plain",
             slices_hidden: self.menu.slices_hidden,
             slices_locked: self.menu.slices_locked,
+            screen: view.screen,
+            plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -157,6 +163,10 @@ impl Session {
     /// Feed a pointer event to the active tool. Returns requests for the UI.
     pub fn pointer(&mut self, ev: &PointerEvent, view: ViewInfo) -> Result<Vec<UiRequest>> {
         self.last_view = view;
+        // The Plane Switching Widget takes its clicks whatever the tool.
+        if let Some(r) = self.plane_widget_pointer(ev, view) {
+            return r;
+        }
         let acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         self.take_tool_panic()?;
         // A gesture may change options (Alt-drag sizes a Liquify brush): keep them.
@@ -183,6 +193,11 @@ impl Session {
     }
 
     pub fn tool_key(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        // 1–4 pick the active perspective plane while the grid is shown.
+        if let Some(plane) = self.plane_key(key) {
+            self.execute("perspective.plane.set", &serde_json::json!({ "plane": plane.id() }))?;
+            return Ok(vec![]);
+        }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
         self.apply_actions(acts)
@@ -205,13 +220,15 @@ impl Session {
 
     /// Does the active tool take `key` ahead of the shortcuts bound to it (see `Tool::claims_key`)?
     pub fn tool_claims_key(&mut self, key: ToolKey, view: ViewInfo) -> bool {
-        self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
+        self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
         let mut v = self.with_tool_cx(view, |t, cx| t.overlays(cx));
         if let Some(d) = self.active() {
-            v.splice(0..0, vectorcraft_tools::distort::perspective::grid_overlays(&d.doc, 1.0 / view.zoom.max(1e-9), self.tool.id()));
+            let w = self.prefs.perspective_widget;
+            let place = w.show.then_some(WidgetPlace { screen: view.screen.as_ref(), corner: w.position });
+            v.splice(0..0, vectorcraft_tools::distort::perspective::grid_overlays_in(&d.doc, 1.0 / view.zoom.max(1e-9), self.tool.id(), place));
         }
         v
     }

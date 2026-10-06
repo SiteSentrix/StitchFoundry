@@ -40,6 +40,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     },
     ok: None,
     min_width: 600.0,
+    max_width: Some(600.0),
     ..DialogSpec::FORM
 };
 

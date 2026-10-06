@@ -1154,7 +1154,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
 
 /// The active document's perspective grid (View → Perspective Grid toggles).
 fn perspective_grid(app: &VectorcraftApp) -> Option<vectorcraft_tools::distort::perspective::PerspectiveGrid> {
-    app.session.active().map(|d| vectorcraft_tools::distort::perspective::PerspectiveGrid::effective(&d.doc))
+    app.session.active().map(|d| vectorcraft_tools::distort::perspective::PerspectiveGrid::current(&d.doc))
 }
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).

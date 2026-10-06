@@ -323,6 +323,9 @@ impl PerspectiveGrid {
         if !(0.0..=100.0).contains(&self.opacity) {
             return Err("opacity must be 0–100".into());
         }
+        if self.extent_right.is_some_and(|e| !(e > 0.0 && e <= MAX_LEN)) {
+            return Err("extentRight must be positive".into());
+        }
         Ok(())
     }
 

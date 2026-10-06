@@ -321,7 +321,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     color(ui, d, "leftColor", "Left Grid:");
     color(ui, d, "rightColor", "Right Grid:");
     color(ui, d, "groundColor", "Horizontal Grid:");
-    let track = |x: f32| egui::Color32::from_gray((60.0 + x * 160.0) as u8);
-    form::slider_w(ui, d, ("opacity", "Opacity:", LABEL), 0.0..=100.0, "%", &track);
+    // Opacity: a slider and its field, in the label column the rows above use.
+    widgets::label_row(ui, "Opacity:", LABEL, |ui| {
+        let v = d.f64("opacity", 50.0).clamp(0.0, 100.0);
+        let track = |x: f32| egui::Color32::from_gray((60.0 + x * 160.0) as u8);
+        let mut new =
+            widgets::color_slider(ui, "persp-opacity", (v / 100.0) as f32, form::SLIDER_WIDTH, &track).0.map(|x| (f64::from(x) * 100.0).round());
+        if let Some(x) = widgets::plain_field(ui, "persp-opacity-field", v, "%", 0, 52.0) {
+            new = Some(x.round().clamp(0.0, 100.0));
+        }
+        if let Some(n) = new.filter(|n| *n != v) {
+            d.fields.insert("opacity".into(), json!(n));
+        }
+    });
     false
 }

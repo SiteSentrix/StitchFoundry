@@ -183,3 +183,45 @@ fn perspective_grid_view_toggles_flip_their_labels_and_checks() {
     let labels: Vec<&str> = entries.iter().filter(|e| e.path.last().is_some_and(|p| p == "Perspective Grid")).map(|e| e.label.as_str()).collect();
     assert_eq!(&labels[..6], ["Hide Grid", "Hide Rulers", "Snap to Grid", "Unlock Grid", "Lock Station Point", "Define Grid…"]);
 }
+
+#[test]
+fn double_clicking_the_tool_opens_perspective_grid_options() {
+    let mut app = app();
+    let r = app.run("tool.options", json!({"tool": "perspectiveGrid"})).unwrap();
+    assert_eq!(r["dialog"], json!(super::perspective_options::KIND));
+    assert_eq!((field(&app, "show"), field(&app, "position")), (json!(true), json!("topLeft")));
+    frame(&mut app);
+    set(&mut app, "position", json!("bottomLeft"));
+    frame(&mut app);
+    super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), None);
+    assert_eq!(app.session.prefs.perspective_widget.position.id(), "bottomLeft");
+    app.run("tool.options", json!({"tool": "perspectiveGrid"})).unwrap();
+    set(&mut app, "show", json!(false));
+    super::confirm(&mut app).unwrap();
+    assert!(!app.session.prefs.perspective_widget.show);
+}
+
+#[test]
+fn digit_keys_switch_planes_and_the_widget_follows_the_window() {
+    let mut app = app();
+    app.run("perspective.grid.preset", json!({"kind": 2})).unwrap();
+    let key = |app: &mut VectorcraftApp, k: egui::Key| {
+        let ctx = egui::Context::default();
+        let press = egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let input = egui::RawInput { events: vec![press], ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| crate::shortcuts::handle(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    key(&mut app, egui::Key::Num3);
+    assert_eq!(grid(&app).plane.id(), "right");
+    key(&mut app, egui::Key::Num2);
+    assert_eq!(grid(&app).plane.id(), "ground");
+    // The window the widget stays in: none before the canvas is laid out.
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0)));
+    let f = app.screen_frame().unwrap();
+    assert_eq!(f.size, (800.0, 600.0));
+    let z = app.view().unwrap().zoom;
+    assert!((f.right.x - 1.0 / z).abs() < 1e-9 && f.right.y.abs() < 1e-9);
+    assert_eq!(app.view_info().screen, Some(f));
+}
