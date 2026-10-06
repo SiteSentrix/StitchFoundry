@@ -157,7 +157,7 @@ fn el_points(el: &kurbo::PathEl) -> impl Iterator<Item = Point> {
 /// handle within `eps` of its anchor's height is levelled with it (no y-extremum is left in a
 /// sub-`eps` sliver of a curve). Anchors move by less than `eps` and handles by less than `2·eps`,
 /// the order of the sweep's own tolerance.
-fn snap_horizontals(paths: &mut [&mut BezPath], eps: f64) {
+pub(crate) fn snap_horizontals(paths: &mut [&mut BezPath], eps: f64) {
     use kurbo::PathEl::*;
     let mut ys: Vec<f64> = paths.iter().flat_map(|p| p.elements().iter().filter_map(kurbo::PathEl::end_point)).map(|p| p.y).collect();
     ys.sort_by(f64::total_cmp);
@@ -339,7 +339,7 @@ pub(crate) fn all_contours_to_path(c: &Contours, tidy: &Tidy) -> PathData {
 /// Contours whose mean width (2·area / perimeter) is below `precision` are numerical debris
 /// (e.g. the lens left between two coincident curves) and are dropped, like Illustrator's
 /// Pathfinder precision setting does.
-fn is_sliver(bp: &BezPath, precision: f64) -> bool {
+pub(crate) fn is_sliver(bp: &BezPath, precision: f64) -> bool {
     let a = bp.area().abs();
     let per = bp.perimeter(1e-6);
     per <= 0.0 || 2.0 * a / per < precision
