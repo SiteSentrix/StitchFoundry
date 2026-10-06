@@ -153,11 +153,16 @@ struct CatalogFamily {
 /// [`FontDb::face`] does). Always empty on wasm, which has no system fonts.
 type Catalog = HashMap<String, CatalogFamily>;
 
+/// The installed faces' (family, style) by ASCII-lowercased PostScript name.
+type PostScriptNames = HashMap<String, (String, String)>;
+
 /// Process-wide font database.
 pub struct FontDb {
     faces: RwLock<Vec<Arc<FontFace>>>,
     outlines: Mutex<HashMap<(u32, u32), Arc<BezPath>>>,
     catalog: RwLock<Catalog>,
+    /// The installed faces by PostScript name (documents name fonts so: PDF, EPS, .ai).
+    postscript: RwLock<PostScriptNames>,
     /// The folders the system font scan reads (the platform's font folders for [`FontDb::global`]).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     font_dirs: Vec<PathBuf>,
@@ -224,6 +229,13 @@ fn face_names(f: &skrifa::FontRef<'_>) -> Option<(String, String)> {
     Some((family, style))
 }
 
+/// A face's (family, style, PostScript name).
+#[cfg(not(target_arch = "wasm32"))]
+fn face_names_ps(f: &skrifa::FontRef<'_>) -> Option<(String, String, Option<String>)> {
+    let (family, style) = face_names(f)?;
+    Some((family, style, name(f, &[StringId::POSTSCRIPT_NAME])))
+}
+
 /// Parse every face in `data` (a font file or collection). Returns `(index, family, style)`.
 fn enumerate_faces(data: &[u8]) -> Vec<(u32, String, String)> {
     let count = match FileRef::new(data) {
@@ -239,10 +251,11 @@ fn enumerate_faces(data: &[u8]) -> Vec<(u32, String, String)> {
         .collect()
 }
 
-/// (family, style) of every face in the font file at `path`, reading only its table directories
-/// and `name` tables: a scan opens hundreds of font files, many of them megabytes long.
+/// (family, style, PostScript name) of every face in the font file at `path`, reading only its
+/// table directories and `name` tables: a scan opens hundreds of font files, many of them
+/// megabytes long.
 #[cfg(not(target_arch = "wasm32"))]
-fn file_face_names(path: &Path) -> Vec<(String, String)> {
+fn file_face_names(path: &Path) -> Vec<(String, String, Option<String>)> {
     use std::io::{Read, Seek, SeekFrom};
     /// Caps on what a (possibly damaged) file can make the scan read.
     const MAX_FACES: u32 = 256;
@@ -284,7 +297,7 @@ fn file_face_names(path: &Path) -> Vec<(String, String)> {
                 font.extend_from_slice(&u32::to_be_bytes(v));
             }
             font.extend_from_slice(&table);
-            face_names(&skrifa::FontRef::new(&font).ok()?)
+            face_names_ps(&skrifa::FontRef::new(&font).ok()?)
         })
         .collect()
 }
@@ -397,6 +410,7 @@ impl FontDb {
             faces: RwLock::new(faces),
             outlines: Mutex::new(HashMap::new()),
             catalog: RwLock::new(Catalog::new()),
+            postscript: RwLock::new(PostScriptNames::new()),
             font_dirs,
             #[cfg(not(target_arch = "wasm32"))]
             cataloged: std::sync::OnceLock::new(),
@@ -543,6 +557,7 @@ impl FontDb {
     #[cfg(not(target_arch = "wasm32"))]
     fn scan_font_dirs(&self) -> usize {
         let mut catalog = Catalog::new();
+        let mut postscript = PostScriptNames::new();
         let mut n = 0;
         let mut stack = self.font_dirs.clone();
         // Each folder once, however links lead back to it.
@@ -562,7 +577,10 @@ impl FontDb {
                 if !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
                     continue;
                 }
-                for (family, style) in file_face_names(&p) {
+                for (family, style, ps) in file_face_names(&p) {
+                    if let Some(ps) = ps {
+                        postscript.insert(ps.to_ascii_lowercase(), (family.clone(), style.clone()));
+                    }
                     let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
                     if entry.name.is_empty() {
                         entry.name = family;
@@ -574,8 +592,17 @@ impl FontDb {
         }
         log::debug!("cataloged {n} system font faces");
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
+        *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
         self.changed();
         n
+    }
+
+    /// The (family, style) of the installed face whose PostScript name is `name` (ignoring ASCII
+    /// case). Documents name fonts this way, and a family can hold hyphens
+    /// ("Rounded-X-Mplus-1c-black" is Rounded-X M+ 1c, black), so the name can't be split.
+    pub fn by_postscript_name(&self, name: &str) -> Option<(String, String)> {
+        self.ensure_catalog();
+        self.postscript.read().unwrap_or_else(|e| e.into_inner()).get(&name.to_ascii_lowercase()).cloned()
     }
 
     /// Load the files of the installed `family`. Returns whether any face was added.
