@@ -207,13 +207,19 @@ fn puppet_tool_drag_warps_selection() {
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     let v = ViewInfo::default();
     s.select_tool("puppetWarp", v).unwrap();
-    // First click seeds pins and adds one at the right end, then drag it.
-    s.pointer(&PointerEvent::new(PointerKind::Down, 385.0, 150.0), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, 385.0, 150.0), v).unwrap();
+    // The automatic pins show at once, one in the middle of each end: drag the right end's up.
+    let pins = s.execute("object.puppetWarp.pins", &json!({})).unwrap()["moved"].clone();
+    let right = pins
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap()))
+        .fold((0.0, 0.0), |a, q| if q.0 > a.0 { q } else { a });
+    assert!(right.0 > 350.0, "{pins}");
     let n = undo_len(&s);
-    s.pointer(&PointerEvent::new(PointerKind::Down, 385.0, 150.0), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Drag, 385.0, 120.0), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, 385.0, 120.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, right.0, right.1), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, right.0, right.1 - 30.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, right.0, right.1 - 30.0), v).unwrap();
     assert_eq!(undo_len(&s), n + 1);
     assert_eq!(s.journal.last().unwrap().0, "object.puppetWarp");
     assert!(path(&s, a).bounds().unwrap().y0 < 95.0);

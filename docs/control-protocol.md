@@ -437,12 +437,17 @@ agent can call directly. Mirror & Cut's tool options (`tool.setOption`, shown in
 (`free` | `vertical` | `horizontal`; a constrained axis follows the pointer and a click places it) and `keep`
 (`left` | `right` | `top` | `bottom`); Alt on release keeps the other side.
 
-Puppet Warp (`puppetWarp`): with art selected, `ui.pointer` clicks on the art add pins (each new pin is selected;
-Shift-click adds a pin to the selection or takes it out), dragging a pin moves every selected pin and warps the art,
-and Alt-dragging near (not on) a selected pin turns the art around it. `ui.key` Delete or Backspace removes the
-selected pins. Each drag is one undo step running `object.puppetWarp`. Its tool options (`tool.setOption`, shown in
-the Control bar) are `expand` (Expand Mesh, points, 0 allowed), `showMesh` (on by default) and `selectAllPins`
-(`true` selects every pin, `false` none); `ui.inspect` → `toolOptions` lists `pins` and the `selected` ones.
+Puppet Warp (`puppetWarp`): with art selected, the tool shows pins at once (automatic ones at the centre and the end
+of each limb until pins are placed). `ui.pointer` clicks on the art add pins (each new pin is selected; Shift-click
+adds a pin to the selection or takes it out), dragging a pin moves every selected pin and warps the art, and
+Alt-dragging near (not on) a selected pin turns the art around it. A click off the mesh adds nothing: the cursor shows
+not-allowed there and the canvas says so. `ui.key` Delete or Backspace removes the selected pins. Adding, deleting and
+each drag are one undo step each, running `object.puppetWarp {rest: true, …}`; the pins live in the document, so
+Undo/Redo take them back with the art, they stay across tool switches while the selection is unchanged, and another
+selection starts afresh. `object.puppetWarp.pins` reads them. Its tool options (`tool.setOption`, shown in the
+Control bar) are `expand` (Expand Mesh, points, 0 allowed), `showMesh` (on by default) and `selectAllPins` (`true`
+selects every pin, `false` none); `ui.inspect` → `toolOptions` lists the `pins` the tool last showed and the
+`selected` ones.
 
 Colour adjustment effects (Effect → Color Adjustments) open the `effect` dialog like the other effects
 (`effect.dialog {effect: "adjust.hueSaturation"}`): its fields are the effect's parameters (sliders for the amounts,
