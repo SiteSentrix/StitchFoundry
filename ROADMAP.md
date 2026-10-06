@@ -4,7 +4,7 @@ VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adob
 
 This file tracks **how far we are and what's left**. Time estimates are wall-clock hours of continuous Claude Opus 5.5 agent work (including builds and the CI gate), given both for **one agent** and for **4–6 parallel agents** on disjoint crates. They are counted from the remaining work (see [Parity estimate](#parity-estimate)), calibrated against measured throughput, and updated as work lands.
 
-_Last updated: 2026-10-05 (after M4.14–M4.98 and M14.4–M14.6; see [Honest assessment](#honest-assessment-2026-10-05))._
+_Last updated: 2026-10-06 (after M4.14–M4.98, M8.1–M8.20 and M14.4–M14.7; see [Honest assessment](#honest-assessment-2026-10-05))._
 
 ## Where we are
 
@@ -12,10 +12,10 @@ _Last updated: 2026-10-05 (after M4.14–M4.98 and M14.4–M14.6; see [Honest as
 |---|---|
 | Infrastructure (engine, command registry, history, render, formats, MCP, web, packaging, tests) | **~90%** |
 | Look & feel vs Illustrator 2026 default workspace (measured) | **~75–80%** |
-| Feature surface vs full Illustrator (weighted, see below) | **~74%** on the rubric · **68–74%** honest range (self-graded, see [Honest assessment](#honest-assessment-2026-10-05)) |
+| Feature surface vs full Illustrator (weighted, see below) | **~75%** on the rubric · **69–75%** honest range (self-graded, see [Honest assessment](#honest-assessment-2026-10-05)) |
 | Parity including interaction fidelity and hardening ("a power user can't tell the difference, but faster") | **~40–55%** |
-| Time to **feature parity** (every menu item, tool, panel, effect and dialog functional) | **~230–350 h** one agent · **~60–100 h** with 4–6 agents |
-| Time to **full parity** (feature parity + interaction-fidelity pass + hardening) | **~335–520 h** one agent · **~85–150 h** with 4–6 agents |
+| Time to **feature parity** (every menu item, tool, panel, effect and dialog functional) | **~225–345 h** one agent · **~60–100 h** with 4–6 agents |
+| Time to **full parity** (feature parity + interaction-fidelity pass + hardening) | **~330–515 h** one agent · **~85–150 h** with 4–6 agents |
 
 ## Honest assessment (2026-10-05)
 
@@ -34,7 +34,7 @@ since 2026-10-01.
 | Dimension | Estimate | Evidence and what's missing |
 |---|---|---|
 | **Breadth:** menus, tools and panels exist | ~90% | 18 menu items still stubbed; every tool implemented except Touch Type and vertical type ×3; 51 panel modules |
-| **Depth:** each feature behaves like Illustrator | ~68–74% | Strong: paint, appearance and colour (M3), Pathfinder and booleans, selection, drawing, files (M4). Weak: advanced type (~35%), brushes and symbols (in progress), raster effects (~20%) |
+| **Depth:** each feature behaves like Illustrator | ~69–75% | Strong: paint, appearance and colour (M3), Pathfinder and booleans, selection, drawing, files (M4). Weak: advanced type (~35%), brushes and symbols (in progress), raster effects (~20%) |
 | **Large missing subsystems** | 0–20% | 3D & Materials (0%), Photoshop-style raster effects and the Effect Gallery (~1 of ~56 filters), SVG Filters, vertical/CJK type, Variables (data merge), scripting |
 | **Interaction fidelity:** modifiers, cursors, small behaviours | ~30–40% | The dedicated pass hasn't started, and there has been no side-by-side session with Illustrator yet. A power user notices this first |
 | **Look & feel** | ~75–80% | Measured against Illustrator 2026 screenshots (2026-10-02); the panels added since haven't been re-measured |
@@ -112,7 +112,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - Live effects with previewing dialogs: Distort & Transform, Path, Convert to Shape, 15 Warp styles, Round Corners, Scribble, Effect → Pathfinder (all 10 operations, live on groups), Color Adjustments (Brightness/Contrast, Curves, Levels, Hue/Saturation, Shift to Color, Temperature/Tint, on vectors, live type and embedded images), and raster drop shadow, glows and feather. SVG and PDF export keep live effects (geometry baked; SVG raster effects as filters).
 - **Type:** Text Wrap, Type on a Path effects (Rainbow/Skew/3D Ribbon/Stair Step/Gravity), Character and Paragraph Styles (override-preserving redefine), Area Type Options (rows/columns/inset/first baseline), threaded text across any closed shapes, Fit Headline.
 - **Transparency:** opacity masks (clip/invert/disable/link), exported as SVG `<mask>` and PDF soft masks.
-- **Advanced art:** live Blends (steps/distance/smooth colour, spine), Envelope Distort (warp/mesh/top object), Gradient Mesh, Shape Builder, Live Paint, Image Trace (12 presets), pattern swatches with pattern editing mode, live Repeat (radial/grid/mirror).
+- **Advanced art:** live Blends (steps/distance/smooth colour, editable spine, anchor-targeted Blend tool, faithful interpolation, knockout), Envelope Distort (warp/mesh/top object, Reset, full Envelope Options, mesh handles, Edit Contents; type, images, symbols, gradients, patterns and appearance distorted everywhere), Liquify tools with options and pen pressure, Puppet Warp with rotating pins, Perspective Grid with presets, movable planes and projected type, Gradient Mesh, Shape Builder, Live Paint, Image Trace (12 presets), pattern swatches with pattern editing mode, live Repeat (radial/grid/mirror).
 - **Paint and appearance (M3):**
   - **Swatches:** names follow the colour model and are unique; Swatch Options (process/spot, Global, Gray/RGB/HSB/CMYK/Web, live preview); editing a global or spot swatch recolours every linked fill, stroke and text run in one undo step; multi-select and delete with confirmation; New Swatch and New Color Group dialogs (a group from the selected artwork's colours); swatches in colour groups convert, separate and count like any other. The Swatches panel selects ranges and whole groups, has a find field, and drags swatches to reorder, regroup or paint art; Add Used Colors, Select All Unused, Merge, Ungroup and Sort by Kind; a CMYK document keeps applied colours in CMYK. Swatch libraries: nine generated colour libraries and five gradient libraries in a library panel, saved and loaded as `.vcswatches`, `.gpl` or CSS. Tints of global and spot colours ("Name 40%") stay linked and separate as a percentage of their plate. Spot colours can be defined in Lab (Spot Colors options). A built-in [Registration] swatch prints on every plate.
   - **Colour:** a Color Picker (colour field, H/S/B/R/G/B channel slider, HSB/RGB/Lab/CMYK fields, hex, web-only snapping, out-of-gamut correction); the Color panel follows each colour's own model and Alt-click paints the other proxy; proxies look through groups and show "?" for mixed paint; Invert, Complement, Apply Last Color (`,`) and Apply Last Gradient (`.`) keep the colour model; every paint command feeds the recent colours. The Color Guide has 21 harmony rules, Steps and Variation options and Limit to Library. Adjust Color Balance (its Global mode shifts tints) and Saturate preview live; Edit Colors and Recolor also reach meshes, images and patterns. Recolor Artwork has colour reduction, five recolour methods, presets, Limit to Library, a colour-wheel Edit tab and Edit Color Group; a local Color Themes panel saves five-colour themes. Fill/Stroke chips open swatch and mixer popovers, panels have their shortcuts, and Eyedropper Options pick up and apply chosen attributes (Alt and Shift+Alt, image pixels). Fills and strokes can overprint (Attributes panel, Overprint Black options), and CMYK documents blend in inks on screen, in PDF and when flattening.
@@ -144,7 +144,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
 | M5 | Performance | 🟡 background render + caches + MT done; `vectorcraft-cli bench` and `vectorcraft-cli perf` (budget suite); file format v2 opens 3× faster (50k paths: 722 → 244 ms); raster effects (glows, shadows, blur, feather) no longer force the whole frame single-threaded (filtered offscreen per effect, verified equal to the single-threaded reference); effect-heavy demos need a clean-machine benchmark; dirty-region rendering, GPU backend spike pending | 15–25 |
 | M6 | Path operations (Pathfinder, Shape Builder, offset…) | ✅ mostly done (Boolean precision on almost-horizontal edges fixed and the property tests made deterministic; Shape Builder edge erase, large-offset bug open) | 3–6 |
 | M7 | Type (point/area/path, editing, styles, OpenType, threading, glyphs) | 🟡 Character/Paragraph Styles, Area Type Options, threaded text, Fit Headline, Glyphs, OpenType panel, Find Font, installed system fonts in every font menu (searchable) and found by name on open/import, CJK names in the UI, Text Wrap (offset, invert, both sides of an object; follows edits), Type on a Path effects, tab stops + Tabs panel done; tab leaders, spell check, vertical type pending | 45–60 |
-| M8 | Transform & distort (Puppet Warp, Liquify tools, Envelopes, Blends, Perspective Grid) | 🟡 live Blends, Envelopes (warp/mesh/top object), Width tool, Liquify tools, Puppet Warp and Perspective Grid landed; fidelity pass under way (M8.2 tool options persist and Liquify tools share one brush, M8.1 Delete removes Width points and Puppet Warp pins, not the art, M8.8 Define Grid dialog with viewing angle, units, colours, M8.15 Envelope dialogs, Reset with Warp/Mesh, full Envelope Options, M8.16 enveloped type exports distorted, M8.5 Puppet Warp pins rotate, multi-select, Control bar, M8.3 Liquify Tool Options, pen pressure, Brush Affects, M8.9 perspective grid presets and manager, M8.16 test fix (EPS dates), M8.12 Perspective Selection scales, copies, moves perpendicular, Transform Again, M8.18 Blend Options dialog, anchor-targeted Blend tool, add keys, M8.19 blend spine and keys editable on canvas, Release keeps spine, M8.6 Puppet Warp pins appear at once, warp from rest shape, follow Undo, M8.13 movable perspective planes, plane dialog, Move Plane to Match Object, M8.10 perspective Lock Grid, Lock Station Point, Snap to Grid, Show Rulers, M8.4 Liquify hold-to-apply, safe scope, incremental strokes, M8.7 Width tool on compound paths, every subpath, cursors, M8.20 blend interpolation fidelity, knockout, Expand/Release keep attributes, M8.16 envelopes bend images, symbols, gradients, patterns, appearance; warps keep their frame, M8.14 type and symbols really projected with Edit Text, attachments survive copies, M8.11 grid widgets, screen-fixed Plane Switching Widget with 1-4 keys) | 8–12 |
+| M8 | Transform & distort (Puppet Warp, Liquify tools, Envelopes, Blends, Perspective Grid) | ✅ done (M8.1–M8.20 on 2026-10-06, fidelity pass): Liquify Tool Options with one shared brush, pen pressure, hold-to-apply, a safe scope and incremental strokes; tool options that last; Puppet Warp rotation, multi-select, Control bar and a rest-shape session that follows Undo; Width tool on compound paths; Envelope dialogs with preview, Reset with Warp/Mesh, full Envelope Options, type/images/symbols/appearance/gradients/patterns distorted on canvas and in every export, warps that keep their frame, Edit Contents, mesh handles and Control bar; Blend Options, anchor-targeted Blend tool, editable spine, keys picked on the canvas, faithful interpolation and knockout; Perspective Grid with Define Grid, presets, lock/snap/rulers, widgets, the 1–4 plane switch, movable planes, Perspective Selection scale/copy/perpendicular/Transform Again, and type and symbols truly projected with Edit Text. Left: Anti-Alias and Preserve Shape output, warp-envelope point editing, brush interpolation in blends, Free Transform/Scale/Reflect along a rotated box | 2–4 |
 | M9 | Live effects (+ 3D & Materials) | 🟡 2D effects done incl. Effect → Pathfinder and Color Adjustments; SVG Filters, Document Raster Effects Settings, 3D pending | 86–135 |
 | M10 | Brushes, symbols, patterns, Repeat | 🟡 pattern swatches (5 tile types, Pattern Options, editing mode, SVG `<pattern>`/PDF export) and live Repeat (radial/grid/mirror) done; brushes/symbols in progress | 23–37 |
 | M11 | Artboards & views (artboard panel/tool, Trim View, middle-button pan and print tiling done; multiple windows, presentation polish) | 🟡 | 15–25 |
@@ -153,7 +153,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
 | M14 | 1.0 polish (preferences, shortcut editor, workspaces, accessibility, packaging for all OSes) | 🟡 Preferences, shortcut editor, workspaces, a custom title bar on Windows/Linux with a Home button, content-sized dialogs and menus that scroll when longer than the window done; accessibility, Windows/Linux packaging pending | 18–28 |
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance) | ⬜ | 60–90 |
 | — | Hardening at scale (big-file corpus, fuzzing, cross-platform + browser QA) | 🟡 | 50–80 |
-| | **Total to full parity** (one agent; re-derived from the [Parity estimate](#parity-estimate) table) | | **~335–520** |
+| | **Total to full parity** (one agent; re-derived from the [Parity estimate](#parity-estimate) table) | | **~330–515** |
 
 ## Parity estimate
 
@@ -180,7 +180,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | 3D and Materials | 4 | 0% | Extrude & Bevel, Revolve, Inflate, Rotate, lighting, materials (software renderer) | 50–80 |
 | Type core | 9 | 78% | composer/hyphenation options, Optical Margin Alignment, hidden characters | 15–20 |
 | Type advanced | 4 | 35% | vertical type/CJK, tab leaders, spell check (open dictionary), Touch Type, Retype | 26–35 |
-| Symbols, blends, envelopes, Repeat, perspective | 5 | 75% | symbol libraries (original), dynamic symbols, perspective edge cases | 8–12 |
+| Symbols, blends, envelopes, Repeat, perspective | 5 | 88% | symbol libraries (original), dynamic symbols, envelope Anti-Alias/Preserve Shape output and warp point editing, brush interpolation in blends (M8 fidelity pass done) | 5–8 |
 | Image Trace, graphs, image tools | 3 | 70% | graph Design/Column/Marker, Create Object Mosaic, Crop Image polish (Vector Halftone is done) | 6–10 |
 | Layers, artboards, document setup | 5 | 80% | Layers panel options depth, artboard presets/rearrange polish (Document Setup and New Document are done) | 5–8 |
 | View & navigation | 3 | 70% | New View/Edit Views, multiple windows/arrange, Snap to Pixel/Glyph (print tiling is done) | 9–14 |
@@ -191,10 +191,10 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Automation | 3 | 60% | Variables (data merge), scripting surface, batch | 8–12 |
 | UI chrome (panels, contextual Properties, workspaces, prefs) | 6 | 78% | Variables, SVG Interactivity, Properties per context, Consolidate All Windows (Links, Asset Export, CSS Properties, Attributes are done) | 15–25 |
 | Libraries, Links, Package | 2 | 50% | a local Libraries panel (no cloud by design); Links and Package are done | 5–8 |
-| **Feature parity** | **103** | **~74%** | | **~230–350** |
+| **Feature parity** | **103** | **~75%** | | **~225–345** |
 | Interaction-fidelity pass (side by side with Illustrator: every tool modifier, cursor, dialog, Properties context) | | | | 60–90 |
 | Hardening (big-file corpus, fuzzing, cross-platform and browser QA, accessibility, packaging) | | | | 50–80 |
-| **Full parity** | | **~55%** | | **~335–520** |
+| **Full parity** | | **~56%** | | **~330–515** |
 
 With 4–6 agents working on disjoint crates (as the layering allows) the wall-clock time divides by roughly 3.5–4
 (integration, review and shared files such as `menus.rs` serialize some work): **~60–100 h** to feature parity,
