@@ -1372,7 +1372,21 @@ pub fn shortcut_of(id: &str) -> Option<&'static str> {
 }
 
 /// Is a command currently enabled?
+/// Commands that would act on the text being typed, held back while an IME composes in the Type
+/// tool (its marked text isn't committed yet): Undo/Redo — the native menu takes ⌘Z ahead of the
+/// IME —, the clipboard and the selection.
+pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
+    app.session.tool_composing()
+        && (matches!(
+            id,
+            "edit.undo" | "edit.redo" | "edit.cut" | "edit.copy" | "edit.clear" | "edit.duplicate" | "select.all" | "select.none" | "select.inverse"
+        ) || id.starts_with("edit.paste"))
+}
+
 pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    if waits_for_ime(app, id) {
+        return false;
+    }
     if let Some(c) = vectorcraft_engine::find_command(id) {
         // The system clipboard's contents can be pasted with an empty internal clipboard.
         return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
@@ -2232,6 +2246,9 @@ fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
 
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
+    if waits_for_ime(app, id) {
+        return;
+    }
     if let Some((kind, fields)) = menu_dialog(id)
         && p.as_object().is_none_or(|o| o.is_empty())
     {

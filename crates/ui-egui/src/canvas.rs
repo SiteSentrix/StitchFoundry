@@ -330,6 +330,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let overlays = app.session.overlays(view_info);
         draw_overlays(&painter, &xf, &overlays, &t);
     }
+    ime_output(app, ui.ctx(), &xf);
     crate::place::paint_drop_highlight(app, ui.ctx(), &painter, rect);
 
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
@@ -1144,6 +1145,28 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     }
 }
 
+/// While the Type tool edits, let the system IME compose (egui-winit allows it only in frames that
+/// set `ime`) and keep its candidate window under the caret.
+fn ime_output(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) {
+    let ours = app.session.tool_wants_text() && !ctx.egui_wants_keyboard_input() && app.ui.dialog.is_none() && !app.ui.palette_open;
+    let caret = if ours { app.session.tool_ime_caret(app.view_info()) } else { None };
+    let Some((a, b)) = caret else {
+        // The IME goes away with its marked text: keep that text as typed, like a click away.
+        crate::shortcuts::keep_marked_text(app);
+        return;
+    };
+    let r = egui::Rect::from_two_pos(xf.to_screen(a), xf.to_screen(b)).expand2(vec2(1.0, 0.0));
+    // The tool ended the composition itself: the IME must drop what it still has marked.
+    let interrupt = app.ime_marked.is_some() && !app.session.tool_composing();
+    if interrupt {
+        app.ime_marked = None;
+        app.ime_discard = true;
+    }
+    ctx.output_mut(|o| {
+        o.ime = Some(egui::output::IMEOutput { purpose: egui::IMEPurpose::Normal, rect: r, cursor_rect: r, should_interrupt_composition: interrupt });
+    });
+}
+
 fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
     for o in overlays {
         match o {
@@ -1516,5 +1539,137 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!(*st.doc, *before);
         assert_eq!(st.history.undo.len(), undo);
+    }
+
+    /// One frame of keyboard handling and canvas, as the app runs them; returns the IME output.
+    fn typing_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Option<egui::output::IMEOutput> {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            crate::shortcuts::handle(app, ui.ctx());
+            show(app, ui);
+        });
+        out.textures_delta.clear();
+        out.platform_output.ime
+    }
+
+    fn preedit(t: &str, chars: usize) -> egui::Event {
+        egui::Event::Ime(egui::ImeEvent::Preedit { text: t.into(), active_range_chars: Some(chars..chars) })
+    }
+
+    fn plain(app: &VectorcraftApp, id: u64) -> String {
+        match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        }
+    }
+
+    #[test]
+    fn japanese_ime_composes_on_the_canvas_with_its_window_at_the_caret() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        // Not editing: the IME stays off (single-key tool shortcuts keep working).
+        assert!(typing_frame(&mut app, &ctx, vec![]).is_none());
+        app.select_tool("type");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(100.0, 100.0));
+        let click =
+            |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        typing_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+        typing_frame(&mut app, &ctx, vec![click(at, false)]);
+        assert!(app.session.tool_wants_text());
+        let id = app.session.active().unwrap().selection.objects[0].0;
+        // Editing: the IME is allowed, its window at the caret (the text's baseline at y = 100).
+        let ime = typing_frame(&mut app, &ctx, vec![]).expect("IME allowed while editing");
+        assert!(ime.rect.contains(pos2(ime.rect.center().x, at.y)) && (ime.rect.center().x - at.x).abs() < 2.0, "{:?} vs {at:?}", ime.rect);
+        assert!(!ime.should_interrupt_composition);
+        // gagaku → がが → 雅楽, then commit (the macOS sequence).
+        typing_frame(&mut app, &ctx, vec![preedit("g", 1)]);
+        typing_frame(&mut app, &ctx, vec![preedit("が", 1), preedit("がg", 2)]);
+        typing_frame(&mut app, &ctx, vec![preedit("ががく", 3)]);
+        assert_eq!(plain(&app, id), "ががく");
+        // While composing: plain text events, the clipboard and Undo (the native menu's ⌘Z
+        // reaches `menus::invoke`) all wait.
+        typing_frame(&mut app, &ctx, vec![egui::Event::Text("x".into()), egui::Event::Paste("y".into())]);
+        crate::menus::invoke(&mut app, "edit.undo", json!({}));
+        assert!(!crate::menus::enabled(&app, "edit.undo"));
+        assert_eq!(plain(&app, id), "ががく");
+        let ime2 =
+            typing_frame(&mut app, &ctx, vec![egui::Event::Ime(egui::ImeEvent::Preedit { text: "雅楽".into(), active_range_chars: Some(0..2) })])
+                .unwrap();
+        assert!(ime2.rect.center().x <= ime.rect.center().x + 1.0, "the window stays at the clause being converted");
+        typing_frame(&mut app, &ctx, vec![preedit("", 0), egui::Event::Ime(egui::ImeEvent::Commit("雅楽".into()))]);
+        assert_eq!(plain(&app, id), "雅楽");
+        assert!(!app.session.tool_composing());
+        // After the commit, text and Undo work again.
+        typing_frame(&mut app, &ctx, vec![egui::Event::Text("!".into())]);
+        assert_eq!(plain(&app, id), "雅楽!");
+        crate::menus::invoke(&mut app, "edit.undo", json!({}));
+        assert_eq!(plain(&app, id), "");
+    }
+
+    #[test]
+    fn clicking_away_mid_composition_keeps_the_text_and_interrupts_the_ime() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        typing_frame(&mut app, &ctx, vec![]);
+        app.select_tool("type");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let (a, b) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(300.0, 250.0)));
+        let click =
+            |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        typing_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(a), click(a, true)]);
+        typing_frame(&mut app, &ctx, vec![click(a, false)]);
+        let id = app.session.active().unwrap().selection.objects[0].0;
+        typing_frame(&mut app, &ctx, vec![preedit("しょうこ", 4)]);
+        // macOS sends nothing for a click away; the tool keeps the marked text and the IME is
+        // told to drop its composition.
+        typing_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(b), click(b, true)]);
+        let ime = typing_frame(&mut app, &ctx, vec![click(b, false)]);
+        assert_eq!(plain(&app, id), "しょうこ");
+        assert!(!app.session.tool_composing());
+        assert!(ime.expect("editing the new text").should_interrupt_composition);
+        assert!(app.ime_marked.is_none());
+        assert!(app.take_ime_discard(), "the host tells the system IME to drop its marked text");
+        // Interrupted once, not every frame.
+        assert!(!typing_frame(&mut app, &ctx, vec![]).unwrap().should_interrupt_composition);
+        assert!(!app.take_ime_discard());
+    }
+
+    #[test]
+    fn ime_edge_orders_never_eat_committed_text_or_lose_the_composition() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        typing_frame(&mut app, &ctx, vec![]);
+        app.select_tool("type");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let at = xf.to_screen(Point::new(100.0, 100.0));
+        let click =
+            |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        typing_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+        typing_frame(&mut app, &ctx, vec![click(at, false)]);
+        let id = app.session.active().unwrap().selection.objects[0].0;
+        typing_frame(&mut app, &ctx, vec![egui::Event::Text("雅".into())]);
+        let backspace =
+            |pressed| egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        // The IME empties its marked text and the Backspace comes in the same frame.
+        typing_frame(&mut app, &ctx, vec![preedit("が", 1)]);
+        typing_frame(&mut app, &ctx, vec![preedit("", 0), backspace(true), backspace(false)]);
+        assert_eq!(plain(&app, id), "雅", "the committed character stays");
+        // A bare line-break commit ends the composition with the marked text, no newline.
+        typing_frame(&mut app, &ctx, vec![preedit("がく", 2)]);
+        typing_frame(&mut app, &ctx, vec![egui::Event::Ime(egui::ImeEvent::Commit("\n".into()))]);
+        assert!(!app.session.tool_composing());
+        assert_eq!(plain(&app, id), "雅がく");
+        assert!(app.take_ime_discard());
+        // Switching apps mid-composition: the composition goes on when the window comes back.
+        typing_frame(&mut app, &ctx, vec![preedit("らく", 2)]);
+        typing_frame(&mut app, &ctx, vec![egui::Event::WindowFocused(false)]);
+        typing_frame(&mut app, &ctx, vec![egui::Event::WindowFocused(true), preedit("らくか", 3)]);
+        assert!(app.session.tool_composing());
+        assert!(!app.take_ime_discard());
+        assert_eq!(plain(&app, id), "雅がくらくか");
     }
 }
