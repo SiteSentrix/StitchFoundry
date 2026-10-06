@@ -397,6 +397,167 @@ fn text_and_multiline_text() {
     assert!((leading - 3.5 * 5.0 / 3.0).abs() < 1e-9, "{leading}");
 }
 
+/// Where the first line's baseline starts and ends, in document coordinates.
+fn baseline_ends(t: &TextObject) -> (Point, Point) {
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let l = &layout.lines[0];
+    (t.xf * Point::new(l.x0, l.baseline), t.xf * Point::new(l.x1, l.baseline))
+}
+
+#[test]
+fn fit_and_aligned_text_span_their_two_points() {
+    // Millimetres: red lines at x = 10 and 90, fit and aligned text between them, and the same
+    // text left-justified for its natural size.
+    let e = [
+        (0, "LINE"),
+        (62, "1"),
+        (10, "10"),
+        (20, "0"),
+        (11, "10"),
+        (21, "60"),
+        (0, "LINE"),
+        (62, "1"),
+        (10, "90"),
+        (20, "0"),
+        (11, "90"),
+        (21, "60"),
+        (0, "TEXT"),
+        (10, "10"),
+        (20, "40"),
+        (40, "5"),
+        (1, "FIT BETWEEN"),
+        (72, "5"),
+        (11, "90"),
+        (21, "40"),
+        (0, "TEXT"),
+        (10, "10"),
+        (20, "10"),
+        (40, "5"),
+        (41, "0.8"),
+        (1, "ALIGNED"),
+        (72, "3"),
+        (11, "90"),
+        (21, "10"),
+        (0, "TEXT"),
+        (10, "10"),
+        (20, "25"),
+        (40, "5"),
+        (1, "FIT BETWEEN"),
+        (0, "TEXT"),
+        (10, "10"),
+        (20, "50"),
+        (40, "5"),
+        (41, "0.8"),
+        (1, "ALIGNED"),
+    ];
+    let o = ImportOptions { center: false, ..ImportOptions::default() };
+    let doc = open(&drawing(&[(9, "$INSUNITS"), (70, "4")], &[], &[], &e), &o).document;
+    let [left, right, fit, aligned, fit_natural, aligned_natural] = &leaves(&doc)[..] else { panic!() };
+    let (x10, x90) = (bounds(left).center().x, bounds(right).center().x);
+    for n in [fit, aligned] {
+        let (a, b) = baseline_ends(text_of(n));
+        assert!((a.x - x10).abs() < 1e-3 && (b.x - x90).abs() < 1e-3, "{a:?} to {b:?}, not {x10} to {x90}");
+        assert!((a.y - b.y).abs() < 1e-9, "level");
+    }
+    // Fit keeps its height and stretches across.
+    let (st, natural) = (text_of(fit).first_style(), text_of(fit_natural).first_style());
+    assert_eq!(st.size, natural.size);
+    assert!(st.h_scale > 100.0, "{}", st.h_scale);
+    // Aligned grows as a whole, its width factor kept.
+    let (a, b) = baseline_ends(text_of(aligned_natural));
+    let k = (x90 - x10) / (b.x - a.x);
+    let (st, natural) = (text_of(aligned).first_style(), text_of(aligned_natural).first_style());
+    assert!((st.size - natural.size * k).abs() < 1e-6 && k > 2.0, "{} vs {} × {k}", st.size, natural.size);
+    assert!((st.h_scale - 80.0).abs() < 1e-9 && (natural.h_scale - 80.0).abs() < 1e-9);
+}
+
+#[test]
+fn fit_and_aligned_text_without_a_second_point_keep_their_size() {
+    for h in ["3", "5"] {
+        let e = [
+            (0, "TEXT"),
+            (10, "10"),
+            (20, "10"),
+            (40, "7"),
+            (1, "Gap"),
+            (72, h),
+            (0, "TEXT"),
+            (10, "10"),
+            (20, "30"),
+            (40, "7"),
+            (1, "Gap"),
+            (72, h),
+            (11, "10"),
+            (21, "30"),
+        ];
+        let doc = open(&entities(&e), &points()).document;
+        let top = height(&doc);
+        for (n, y) in leaves(&doc).iter().zip([10.0, 30.0]) {
+            let t = text_of(n);
+            let st = t.first_style();
+            assert!((st.size - 10.0).abs() < 1e-9 && st.h_scale == 100.0, "{} at {}%", st.size, st.h_scale);
+            assert!((t.xf * Point::ZERO).distance(Point::new(10.0, top - y)) < 1e-9);
+        }
+    }
+}
+
+#[test]
+fn fit_and_aligned_text_scale_within_limits() {
+    // A span a billion units long and one a millionth of a unit long.
+    let e = [
+        (0, "TEXT"),
+        (10, "0"),
+        (20, "0"),
+        (40, "7"),
+        (1, "X"),
+        (72, "5"),
+        (11, "1e9"),
+        (21, "0"),
+        (0, "TEXT"),
+        (10, "0"),
+        (20, "10"),
+        (40, "7"),
+        (1, "X"),
+        (72, "3"),
+        (11, "1e-6"),
+        (21, "10"),
+    ];
+    let doc = open(&entities(&e), &points()).document;
+    let [fit, aligned] = &leaves(&doc)[..] else { panic!() };
+    let st = text_of(fit).first_style();
+    assert!((st.size - 10.0).abs() < 1e-9 && (st.h_scale - 10_000.0).abs() < 1e-6, "{} at {}%", st.size, st.h_scale);
+    let st = text_of(aligned).first_style();
+    assert!((st.size - 0.1).abs() < 1e-9 && st.h_scale == 100.0, "{} at {}%", st.size, st.h_scale);
+}
+
+#[test]
+fn fit_attributes_span_their_two_points() {
+    let inserts = [
+        (0, "INSERT"),
+        (66, "1"),
+        (2, "Door"),
+        (10, "0"),
+        (20, "0"),
+        (0, "ATTRIB"),
+        (10, "10"),
+        (20, "20"),
+        (40, "7"),
+        (1, "D-01"),
+        (2, "TAG"),
+        (70, "0"),
+        (72, "5"),
+        (74, "0"),
+        (11, "90"),
+        (21, "20"),
+        (0, "SEQEND"),
+    ];
+    let doc = open(&with_door(DOOR_LINE, &inserts), &points()).document;
+    let tag = leaves(&doc).into_iter().find(|n| matches!(n.kind, NodeKind::Text(_))).unwrap();
+    let (a, b) = baseline_ends(text_of(&tag));
+    assert!((a.x - 10.0).abs() < 1e-3 && (b.x - 90.0).abs() < 1e-3, "{a:?} to {b:?}");
+    assert_eq!(text_of(&tag).first_style().size, 10.0);
+}
+
 /// A block "Door" (base point 5, 5) holding `block_art`, and `inserts`.
 fn with_door(block_art: &[(i32, &'static str)], inserts: &[(i32, &'static str)]) -> Vec<u8> {
     let mut blocks = vec![(0, "BLOCK"), (8, "0"), (2, "Door"), (70, "0"), (10, "5"), (20, "5"), (3, "Door")];
