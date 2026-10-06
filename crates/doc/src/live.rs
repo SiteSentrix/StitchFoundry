@@ -256,7 +256,9 @@ pub fn default_fidelity() -> f64 {
 // Blends (evaluation in `crate::blend`)
 // =====================================================================================
 
-pub use crate::blend::{Spine, blend_expand, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path};
+pub use crate::blend::{
+    Spine, blend_expand, blend_spine, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path, pin_spine,
+};
 
 // =====================================================================================
 // Warp maps (shared with vectorcraft-effects' Warp effects)
@@ -372,7 +374,7 @@ fn poly_len(c: &CubicBez) -> f64 {
 }
 
 /// Running length along a polyline: `0, |p0p1|, |p0p1| + |p1p2|, …` (one entry per point).
-pub(crate) fn cumulative_lengths(pts: &[Point]) -> Vec<f64> {
+fn cumulative_lengths(pts: &[Point]) -> Vec<f64> {
     let mut total = 0.0;
     let mut cum = Vec::with_capacity(pts.len());
     cum.push(0.0);
@@ -433,7 +435,7 @@ pub fn map_nonlinear(path: &PathData, max_piece: f64, f: impl Fn(Point) -> Point
 // Coons patches from outlines
 // =====================================================================================
 
-pub(crate) fn flatten_subpath(sp: &SubPath, tol: f64) -> Vec<Point> {
+fn flatten_subpath(sp: &SubPath, tol: f64) -> Vec<Point> {
     let mut bp = BezPath::new();
     sp.to_bezpath_into(&mut bp);
     let mut pts: Vec<Point> = Vec::new();
