@@ -258,6 +258,7 @@ pub fn default_fidelity() -> f64 {
 
 pub use crate::blend::{
     Spine, blend_expand, blend_spine, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path, pin_spine,
+    steps_knockout_shows,
 };
 
 // =====================================================================================
@@ -1214,6 +1215,10 @@ pub fn expanded_group(n: &Node, outline: Outliner) -> Node {
     g.blend = n.blend;
     g.isolate = n.isolate;
     g.knockout = n.knockout;
+    // Knocking out opaque blend steps changes nothing: don't make the outputs work for it.
+    if matches!(n.kind, NodeKind::Blend { .. }) && g.knockout == crate::Knockout::On && !crate::blend::knockout_shows(&g) {
+        g.knockout = crate::Knockout::Off;
+    }
     g.knockout_shape = n.knockout_shape;
     g.mask = n.mask.clone();
     g

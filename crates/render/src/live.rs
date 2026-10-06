@@ -92,7 +92,13 @@ impl Renderer {
         let stamp = self.stamp;
         self.live.tick(stamp);
         let opacity = self.opacity_of(a);
-        if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate) {
+        // A knockout blend's steps knock each other out, as in the exports (opaque ones can't show it).
+        let knockout = !f.opts.outline
+            && matches!(a.kind, NodeKind::Blend { .. })
+            && a.knockout.resolve(self.knockout)
+            && vectorcraft_doc::live::steps_knockout_shows(&self.live_expanded(a, true));
+        let enclosing = std::mem::replace(&mut self.knockout, knockout);
+        if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate || knockout) {
             let blends = self.blends_through(a);
             let bounds = if blends { self.bounds_of(a) } else { None };
             let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
@@ -100,6 +106,7 @@ impl Renderer {
         } else {
             self.draw_live_body(ctx, f, a, true);
         }
+        self.knockout = enclosing;
         self.stats.drawn += 1;
     }
 
@@ -109,8 +116,13 @@ impl Renderer {
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
             NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => {
                 let items = self.live_expanded(a, cache);
-                for c in items.iter() {
-                    self.draw_arc(ctx, f, c);
+                // The flag holds while this blend is drawn (see `draw_live`).
+                if self.knockout && matches!(a.kind, NodeKind::Blend { .. }) {
+                    self.draw_knockout(ctx, f, &items);
+                } else {
+                    for c in items.iter() {
+                        self.draw_arc(ctx, f, c);
+                    }
                 }
             }
             _ => {}

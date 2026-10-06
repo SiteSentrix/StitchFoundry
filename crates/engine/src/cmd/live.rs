@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release",
             ["Object", "Blend"],
             Some("Cmd+Alt+Shift+B"),
-            "{} release the selected blends: the key objects come back and the spine stays as a path with no fill or stroke, below them → {ids (the keys), spines: [ids]}",
+            "{} release the selected blends: the key objects come back and the spine stays as a path with no fill or stroke, below them; a blend with a name, opacity, blend mode, isolation, opacity mask or appearance of its own comes back as a group keeping them (and its knockout) → {ids (the keys), spines: [ids], groups: [ids]}",
             has_blend,
             blend_release
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand",
             ["Object", "Blend"],
             None,
-            "{} replace the selected blends by groups of their steps → {ids}",
+            "{} replace the selected blends by groups of their keys and steps, each keeping the blend's id, name, transparency (knockout and isolation included), opacity mask and appearance → {ids}",
             has_blend,
             blend_expand
         ),
@@ -513,8 +513,13 @@ fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
     let id = s.edit("Make Blend", |d, sel| {
         wrap(d, sel, &roots, |id, nodes| {
             let (children, starts) = merge_keys(nodes, &starts);
-            // A blend taking more keys keeps its name, transparency and spine.
-            let mut n = base.unwrap_or_else(|| Node::new(id, NodeKind::Group { children: vec![], clip: false }));
+            // A blend taking more keys keeps its name, transparency and spine; a new one is a
+            // knockout group, so translucent steps don't show through each other.
+            let mut n = base.unwrap_or_else(|| {
+                let mut n = Node::new(id, NodeKind::Group { children: vec![], clip: false });
+                n.knockout = vectorcraft_doc::Knockout::On;
+                n
+            });
             let mut spec = BlendSpec { spacing, orientation, starts, ..Default::default() };
             if let NodeKind::Blend { children: old, spec: old_spec } = &n.kind {
                 extend_spine(&mut spec, old, old_spec, &children);
@@ -529,8 +534,8 @@ fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn blend_release(s: &mut Session, _: &Value) -> Result<Value> {
     let blends = selected_of(s, is_blend);
-    let (ids, spines) = s.edit("Release Blend", |d, sel| {
-        let (mut keys, mut spines) = (vec![], vec![]);
+    let (ids, spines, groups) = s.edit("Release Blend", |d, sel| {
+        let (mut keys, mut spines, mut groups) = (vec![], vec![], vec![]);
         for b in &blends {
             let Some(n) = d.node(*b).cloned() else { continue };
             let NodeKind::Blend { children, spec } = &n.kind else { continue };
@@ -543,13 +548,32 @@ fn blend_release(s: &mut Session, _: &Value) -> Result<Value> {
             }
             keys.extend(children.iter().map(|c| c.id));
             nodes.extend(children.iter().map(|c| (**c).clone()));
+            // What the blend itself carries stays on a group around what it gave back.
+            if n.name.is_some()
+                || n.opacity < 1.0
+                || n.blend != vectorcraft_color::BlendMode::Normal
+                || n.isolate
+                || n.mask.is_some()
+                || !n.appearance.items.is_empty()
+                || !n.appearance.effects.is_empty()
+            {
+                let mut g = n.clone();
+                g.kind = NodeKind::Group { children: nodes.into_iter().map(Arc::new).collect(), clip: false };
+                groups.push(g.id);
+                nodes = vec![g];
+            }
             replace_with(d, *b, nodes)?;
         }
-        sel.set(spines.iter().chain(&keys).copied());
-        Ok((keys, spines))
+        if groups.is_empty() {
+            sel.set(spines.iter().chain(&keys).copied());
+        } else {
+            sel.set(groups.iter().copied());
+        }
+        Ok((keys, spines, groups))
     })?;
     let mut r = ids_json(&ids);
     r["spines"] = json!(spines.iter().map(|i| i.0).collect::<Vec<_>>());
+    r["groups"] = json!(groups.iter().map(|i| i.0).collect::<Vec<_>>());
     Ok(r)
 }
 
@@ -732,21 +756,44 @@ fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
 fn blend_expand(s: &mut Session, _: &Value) -> Result<Value> {
     let blends = selected_of(s, is_blend);
     let ids = s.edit("Expand Blend", |d, sel| {
-        let mut out = vec![];
         for b in &blends {
-            let Some(n) = d.node(*b).cloned() else { continue };
-            let children = vectorcraft_render::expand_live(&n).into_iter().map(Arc::new).collect();
-            let mut g = Node::new(n.id, NodeKind::Group { children, clip: false });
-            g.opacity = n.opacity;
-            g.blend = n.blend;
-            g.visible = n.visible;
-            fix_ids(d, &mut g);
-            out.extend(replace_with(d, *b, vec![g])?);
+            expand_blend(d, *b)?;
         }
-        sel.set(out.iter().copied());
-        Ok(out)
+        sel.set(blends.iter().copied());
+        Ok(blends.clone())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Replace blend `id` by a group of its keys and steps in place, keeping everything about the
+/// blend itself: id, name, visibility, lock, transparency (knockout and isolation included),
+/// opacity mask and appearance.
+fn expand_blend(d: &mut Document, id: NodeId) -> Result<()> {
+    let Some(n) = d.node(id).filter(|n| is_blend(n)).cloned() else { return Ok(()) };
+    let mut g = n.clone();
+    g.kind = NodeKind::Group { children: vectorcraft_render::expand_live(&n).into_iter().map(Arc::new).collect(), clip: false };
+    fix_ids(d, &mut g);
+    *d.node_mut(id).ok_or(EngineError::NoNode(id))? = g;
+    Ok(())
+}
+
+/// Object › Expand: every blend in the subtrees of `roots` (outer ones first) becomes a group of
+/// its steps ([`expand_blend`]). Returns how many.
+pub(crate) fn expand_blends(d: &mut Document, roots: &[NodeId]) -> Result<usize> {
+    let mut blends = vec![];
+    for r in roots {
+        if let Some(n) = d.node(*r) {
+            n.walk(&mut |c| {
+                if is_blend(c) {
+                    blends.push(c.id);
+                }
+            });
+        }
+    }
+    for b in &blends {
+        expand_blend(d, *b)?;
+    }
+    Ok(blends.len())
 }
 
 /// Move the keys onto their spine positions (so what's stored matches what's drawn): onto their

@@ -1,24 +1,31 @@
 //! Live blends: interpolating key objects and laying the steps out along the spine.
 //!
-//! Key objects are matched anchor by anchor ([`PathPair`]): subpaths paired in order (a missing
-//! one grows out of a point) and resampled to equal anchor counts, closed ones turned to the same
-//! winding; the Blend tool's clicks on anchor points choose where each path starts. Paints,
-//! strokes and opacity interpolate. A blend prepares each pair of keys once ([`Lerp`]) and only
-//! interpolates per step.
-//!
-//! The spine ([`blend_spine`]) is the straight lines between the key centres until it is edited
-//! or replaced; then a path whose anchors the keys sit on (`key_anchors`). Steps follow it by arc
-//! length; Align to Path turns them to its direction.
+//! - **Paths** are matched anchor by anchor ([`PathPair`]): subpaths paired in order (a missing
+//!   one grows out of a point), resampled to equal anchor counts, closed ones turned to the same
+//!   winding and to the start points that keep them from twisting, or to the anchors the Blend
+//!   tool clicked.
+//! - **Paint**: colours, gradients (stops resampled to a common set when their counts differ),
+//!   opacity, stroke weight, dashes, miter limit and width profiles interpolate; what can't
+//!   (caps, joins, brushes, fonts, symbols, text content) switches halfway.
+//! - **Groups** pair their children in stacking order; the children one group has more of grow
+//!   out of the other group's centre. Compound paths stay compound paths.
+//! - **Text, symbols and images** interpolate their transforms (rotation, scale, shear and
+//!   position separately); text interpolates its colours and sizes run by run.
+//! - **Spine** ([`blend_spine`]): the straight lines between the key centres until it is edited
+//!   or replaced; then a path whose anchors the keys sit on (`key_anchors`). Steps follow it by
+//!   arc length; Align to Path turns them to its direction.
 
+use std::f64::consts::PI;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
-use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, SubPath};
+use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, SubPath, Vec2};
 
-use crate::appearance::{Appearance, AppearanceItem};
+use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
 use crate::node::{Node, NodeId, NodeKind};
+use crate::text::TextObject;
 
 // =====================================================================================
 // Colour / paint interpolation
@@ -52,11 +59,54 @@ fn solid_gradient(c: Color, like: &Gradient) -> Gradient {
     g
 }
 
-fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<GradientPaint> {
-    if a.gradient.kind != b.gradient.kind || a.gradient.stops.len() != b.gradient.stops.len() {
+/// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred).
+fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
+    let mut out = g.clone();
+    out.stops = offsets
+        .iter()
+        .map(|&o| {
+            let (color, opacity) = g.sample_with(o, lerp_color);
+            GradientStop { opacity, ..GradientStop::new(o, color) }
+        })
+        .collect();
+    out
+}
+
+/// Where a gradient changes: its stop offsets and its off-centre midpoints.
+fn gradient_breaks(g: &Gradient, out: &mut Vec<f32>) {
+    for (i, s) in g.stops.iter().enumerate() {
+        out.push(s.offset);
+        if let Some(n) = g.stops.get(i + 1)
+            && (s.midpoint - 0.5).abs() > 1e-3
+        {
+            out.push(s.offset + (n.offset - s.offset) * s.midpoint);
+        }
+    }
+}
+
+/// Two gradients of one kind with the same number of stops: as they are when the counts match,
+/// else both resampled at every place either changes.
+fn common_stops(a: &Gradient, b: &Gradient) -> Option<(Gradient, Gradient)> {
+    if a.kind != b.kind {
         return None;
     }
-    let (ga, gb) = (&a.gradient, &b.gradient);
+    if a.stops.len() == b.stops.len() {
+        return Some((a.clone(), b.clone()));
+    }
+    if a.stops.is_empty() || b.stops.is_empty() {
+        return None;
+    }
+    let mut offs = Vec::with_capacity(2 * (a.stops.len() + b.stops.len()));
+    gradient_breaks(a, &mut offs);
+    gradient_breaks(b, &mut offs);
+    offs.retain(|o| o.is_finite());
+    offs.sort_by(f32::total_cmp);
+    offs.dedup_by(|x, y| (*x - *y).abs() < 1e-4);
+    Some((resample_stops(a, &offs), resample_stops(b, &offs)))
+}
+
+fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<GradientPaint> {
+    let (ga, gb) = common_stops(&a.gradient, &b.gradient)?;
     let mut out = if t < 0.5 { a.clone() } else { b.clone() };
     out.gradient.stops = ga
         .stops
@@ -83,7 +133,8 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
     Some(out)
 }
 
-/// Interpolate paints: solid↔solid, compatible gradients, solid↔gradient; otherwise switch halfway.
+/// Interpolate paints: solid↔solid, gradients of one kind (stops resampled to a common set),
+/// solid↔gradient; otherwise switch halfway.
 pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
     match (a, b) {
         (Paint::Solid { color: x, .. }, Paint::Solid { color: y, .. }) => Paint::solid(lerp_color(x, y, t)),
@@ -103,6 +154,74 @@ pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
     }
 }
 
+/// Interpolate dash patterns. A solid stroke counts as the other's pattern with its gaps closed,
+/// so dashes open out of a solid line; patterns of different lengths repeat to a common one.
+fn lerp_dash(x: Option<&Dash>, y: Option<&Dash>, t: f64) -> Option<Dash> {
+    let solid_like = |d: &Dash| Dash {
+        pattern: d.pattern.chunks(2).flat_map(|c| [c.iter().sum::<f64>(), 0.0]).take(d.pattern.len().max(2)).collect(),
+        offset: d.offset,
+        align_corners: d.align_corners,
+    };
+    let (x, y) = match (x.filter(|d| d.is_dashed()), y.filter(|d| d.is_dashed())) {
+        (None, None) => return None,
+        (Some(d), None) => (d.clone(), solid_like(d)),
+        (None, Some(d)) => (solid_like(d), d.clone()),
+        (Some(a), Some(b)) => (a.clone(), b.clone()),
+    };
+    // An odd pattern repeats twice per period (dash, gap, dash / gap, dash, gap).
+    let even = |p: &[f64]| if p.len() % 2 == 1 { p.repeat(2) } else { p.to_vec() };
+    let (pa, pb) = (even(&x.pattern), even(&y.pattern));
+    let n = if pa.is_empty() || pb.is_empty() { 0 } else { lcm(pa.len(), pb.len()).min(12) };
+    let at = |p: &[f64], i: usize| p.get(i % p.len().max(1)).copied().unwrap_or(0.0);
+    Some(Dash {
+        pattern: (0..n).map(|i| lerp_f64(at(&pa, i), at(&pb, i), t)).collect(),
+        offset: lerp_f64(x.offset, y.offset, t),
+        align_corners: if t < 0.5 { x.align_corners } else { y.align_corners },
+    })
+}
+
+fn lcm(a: usize, b: usize) -> usize {
+    let (mut x, mut y) = (a, b);
+    while y != 0 {
+        (x, y) = (y, x % y);
+    }
+    a.checked_div(x).map_or(0, |q| q * b)
+}
+
+/// Interpolate width profiles (none is uniform) at every position either has a width point.
+fn lerp_profile(x: Option<&WidthProfile>, y: Option<&WidthProfile>, t: f64) -> Option<WidthProfile> {
+    if x.is_none() && y.is_none() {
+        return None;
+    }
+    let uniform = WidthProfile { points: vec![(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)] };
+    let (x, y) = (x.unwrap_or(&uniform), y.unwrap_or(&uniform));
+    let mut at: Vec<f64> = x.points.iter().chain(&y.points).map(|p| p.0).filter(|p| p.is_finite()).collect();
+    at.sort_by(f64::total_cmp);
+    at.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    let points = at
+        .into_iter()
+        .map(|p| {
+            let ((l1, r1), (l2, r2)) = (x.at(p), y.at(p));
+            (p, lerp_f64(l1, l2, t), lerp_f64(r1, r2, t))
+        })
+        .collect();
+    Some(WidthProfile { points })
+}
+
+/// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale and width
+/// profile into `o` (a copy of the nearer stroke, so caps, joins, alignment, arrowheads and
+/// brushes switch halfway).
+fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
+    let tf = t as f32;
+    o.paint = lerp_paint(&x.paint, &y.paint, tf);
+    o.width = lerp_f64(x.width, y.width, t);
+    o.opacity = lerp_f32(x.opacity, y.opacity, tf);
+    o.miter_limit = lerp_f64(x.miter_limit, y.miter_limit, t);
+    o.dash = lerp_dash(x.dash.as_ref(), y.dash.as_ref(), t);
+    o.arrow_scale = (lerp_f64(x.arrow_scale.0, y.arrow_scale.0, t), lerp_f64(x.arrow_scale.1, y.arrow_scale.1, t));
+    o.profile = lerp_profile(x.profile.as_ref(), y.profile.as_ref(), t);
+}
+
 /// Interpolate appearance stacks: item by item when their structure matches, else the top fill
 /// and stroke only (on the structure of the nearer key).
 pub fn lerp_appearance(a: &Appearance, b: &Appearance, t: f64) -> Appearance {
@@ -119,11 +238,7 @@ pub fn lerp_appearance(a: &Appearance, b: &Appearance, t: f64) -> Appearance {
                     o.paint = lerp_paint(&x.paint, &y.paint, tf);
                     o.opacity = lerp_f32(x.opacity, y.opacity, tf);
                 }
-                (AppearanceItem::Stroke(o), AppearanceItem::Stroke(x), AppearanceItem::Stroke(y)) => {
-                    o.paint = lerp_paint(&x.paint, &y.paint, tf);
-                    o.width = lerp_f64(x.width, y.width, t);
-                    o.opacity = lerp_f32(x.opacity, y.opacity, tf);
-                }
+                (AppearanceItem::Stroke(o), AppearanceItem::Stroke(x), AppearanceItem::Stroke(y)) => lerp_stroke(o, x, y, t),
                 _ => {}
             }
         }
@@ -137,11 +252,45 @@ pub fn lerp_appearance(a: &Appearance, b: &Appearance, t: f64) -> Appearance {
     if !(sa.is_none() && sb.is_none()) {
         out.set_stroke(lerp_paint(&sa, &sb, tf));
         let w = a.stroke_width() + (b.stroke_width() - a.stroke_width()) * t;
+        let (xs, ys) = (a.stroke().cloned(), b.stroke().cloned());
         if let Some(s) = out.stroke_mut() {
+            if let (Some(x), Some(y)) = (&xs, &ys) {
+                lerp_stroke(s, x, y, t);
+            }
             s.width = w;
         }
     }
     out
+}
+
+// =====================================================================================
+// Transforms
+// =====================================================================================
+
+/// An affine split into translation, rotation, x scale, shear and y scale (`R · [sx sh; 0 sy]`).
+fn decompose(m: Affine) -> [f64; 6] {
+    let [a, b, c, d, e, f] = m.as_coeffs();
+    let sx = a.hypot(b);
+    let ang = if sx > 1e-12 { b.atan2(a) } else { 0.0 };
+    let (s, co) = ang.sin_cos();
+    [e, f, ang, sx, co * c + s * d, -s * c + co * d]
+}
+
+fn compose([e, f, ang, sx, sh, sy]: [f64; 6]) -> Affine {
+    let (s, co) = ang.sin_cos();
+    Affine::new([co * sx, s * sx, co * sh - s * sy, s * sh + co * sy, e, f])
+}
+
+/// Interpolate two transforms by their parts: the rotation takes the shorter way round.
+pub fn lerp_affine(x: Affine, y: Affine, t: f64) -> Affine {
+    let (p, mut q) = (decompose(x), decompose(y));
+    let turn = q[2] - p[2];
+    q[2] = p[2] + (turn + PI).rem_euclid(2.0 * PI) - PI;
+    let mut out = [0.0; 6];
+    for (o, (a, b)) in out.iter_mut().zip(p.iter().zip(&q)) {
+        *o = lerp_f64(*a, *b, t);
+    }
+    compose(out)
 }
 
 // =====================================================================================
@@ -194,8 +343,39 @@ fn reverse_closed(sp: &mut SubPath) {
     sp.anchors.rotate_right(1);
 }
 
+/// Anchor positions of a subpath relative to its box, scaled to unit size.
+fn normalised(sp: &SubPath) -> Vec<Vec2> {
+    let pts = sp.anchors.iter().map(|a| a.p);
+    let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
+    for p in pts.clone() {
+        lo = Point::new(lo.x.min(p.x), lo.y.min(p.y));
+        hi = Point::new(hi.x.max(p.x), hi.y.max(p.y));
+    }
+    let c = lo.midpoint(hi);
+    let s = (hi.x - lo.x).max(hi.y - lo.y).max(1e-9);
+    pts.map(|p| (p - c) / s).collect()
+}
+
+/// The rotation of `b`'s anchors that best matches `a`'s (least squared distance between
+/// corresponding anchors, each shape centred and scaled to unit size): the start point that keeps
+/// a closed blend from twisting. Long subpaths try every few rotations first, then refine.
+fn best_rotation(a: &SubPath, b: &SubPath) -> usize {
+    let (qa, qb) = (normalised(a), normalised(b));
+    let m = qa.len().min(qb.len());
+    if m < 2 {
+        return 0;
+    }
+    let cost = |s: usize| -> f64 { (0..m).map(|j| (qa[j] - qb[(j + s) % m]).hypot2()).sum() };
+    let stride = m.div_ceil(512);
+    let mut best = (0..m).step_by(stride).min_by(|x, y| cost(*x).total_cmp(&cost(*y))).unwrap_or(0);
+    if stride > 1 {
+        best = (best + m - stride..=best + m + stride).map(|s| s % m).min_by(|x, y| cost(*x).total_cmp(&cost(*y))).unwrap_or(best);
+    }
+    best
+}
+
 /// Two paths prepared for interpolation: subpaths paired in order, with equal anchor counts, the
-/// same winding and the clicked start points.
+/// same winding and matching start points.
 #[derive(Clone, Debug)]
 pub struct PathPair {
     a: Vec<SubPath>,
@@ -204,7 +384,7 @@ pub struct PathPair {
 
 impl PathPair {
     /// `starts`: the anchor of each path's first subpath its blend starts from (the Blend tool's
-    /// clicks).
+    /// clicks); with neither, closed subpaths start where they twist least.
     pub fn new(a: &PathData, b: &PathData, starts: (Option<usize>, Option<usize>)) -> Self {
         let n = a.subpaths.len().max(b.subpaths.len());
         let ca = a.bounds().map(|r| r.center()).unwrap_or_default();
@@ -218,7 +398,8 @@ impl PathPair {
                 (None, Some(y)) => (degenerate(y, ca), y.clone()),
                 (None, None) => continue,
             };
-            if i == 0 {
+            let explicit = i == 0 && (starts.0.is_some() || starts.1.is_some());
+            if explicit {
                 if let Some(s) = starts.0 {
                     start_at(&mut sa, s);
                 }
@@ -233,6 +414,10 @@ impl PathPair {
             let m = sa.anchors.len().max(sb.anchors.len());
             grow(&mut sa, m);
             grow(&mut sb, m);
+            if closed && !explicit {
+                let r = best_rotation(&sa, &sb);
+                sb.anchors.rotate_left(r);
+            }
             va.push(sa);
             vb.push(sb);
         }
@@ -252,6 +437,11 @@ impl PathPair {
             .collect();
         PathData::new(subs)
     }
+
+    /// Subpaths at `t`, in order (see [`Self::at`]).
+    fn len(&self) -> usize {
+        self.a.len()
+    }
 }
 
 /// Interpolate two paths anchor-by-anchor (see [`PathPair`]).
@@ -259,13 +449,16 @@ pub fn lerp_path(a: &PathData, b: &PathData, t: f64) -> PathData {
     PathPair::new(a, b, (None, None)).at(t)
 }
 
-/// Path data of a path or compound path node (compound children concatenated).
-fn node_path(n: &Node) -> Option<(PathData, FillRule)> {
+/// Path data of a path or compound path node (compound children concatenated), its fill rule and
+/// the number of subpaths each compound member holds.
+fn node_path(n: &Node) -> Option<(PathData, FillRule, Option<Vec<usize>>)> {
     match &n.kind {
-        NodeKind::Path { path, rule, .. } => Some((path.clone(), *rule)),
+        NodeKind::Path { path, rule, .. } => Some((path.clone(), *rule, None)),
         NodeKind::Compound { children, rule } => {
-            let subs = children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect();
-            Some((PathData::new(subs), *rule))
+            let members: Vec<&PathData> = children.iter().filter_map(|c| c.path_data()).collect();
+            let counts = members.iter().map(|p| p.subpaths.len()).collect();
+            let subs = members.iter().flat_map(|p| p.subpaths.iter().cloned()).collect();
+            Some((PathData::new(subs), *rule, Some(counts)))
         }
         _ => None,
     }
@@ -278,12 +471,15 @@ fn node_path(n: &Node) -> Option<(PathData, FillRule)> {
 /// How two key objects interpolate.
 #[derive(Clone, Debug)]
 enum Shape {
-    /// Groups with as many children: children paired in stacking order.
+    /// Groups of one kind: children paired in stacking order.
     Group { children: Vec<Lerp>, clip: bool },
     /// Gradient meshes with the same grid.
     Mesh,
-    /// Paths and compound paths.
-    Path { pair: PathPair, rules: (FillRule, FillRule) },
+    /// Paths and compound paths; `members`: the subpath count of each member when both keys are
+    /// compound paths.
+    Path { pair: PathPair, rules: (FillRule, FillRule), members: Option<(Vec<usize>, Vec<usize>)> },
+    /// Text, symbols and images: their transforms interpolate.
+    Placed,
     /// Anything else: a copy of the nearer key moved and scaled into the interpolated box.
     Other,
 }
@@ -296,6 +492,15 @@ pub struct Lerp {
     shape: Shape,
 }
 
+/// `n` shrunk to a point at `c`: the counterpart of an object only one of two groups has.
+fn collapsed(n: &Node, c: Point) -> Node {
+    let mut x = n.clone();
+    if let Some(b) = n.geometric_bounds() {
+        x.transform(Affine::translate(c.to_vec2()) * Affine::scale(1e-6) * Affine::translate(-b.center().to_vec2()), false);
+    }
+    x
+}
+
 fn center_of(n: &Node) -> Point {
     n.geometric_bounds().map(|b| b.center()).unwrap_or_default()
 }
@@ -304,12 +509,29 @@ impl Lerp {
     /// Prepare `a` → `b`; `starts` as in [`PathPair::new`].
     pub fn new(a: &Node, b: &Node, starts: (Option<usize>, Option<usize>)) -> Self {
         let shape = match (&a.kind, &b.kind) {
-            (NodeKind::Group { children: ca, clip: k1 }, NodeKind::Group { children: cb, clip: k2 }) if ca.len() == cb.len() && k1 == k2 => {
-                Shape::Group { children: ca.iter().zip(cb).map(|(x, y)| Lerp::new(x, y, (None, None))).collect(), clip: *k1 }
+            (NodeKind::Group { children: ca, clip: k1 }, NodeKind::Group { children: cb, clip: k2 })
+                if k1 == k2 && !(*k1 && ca.len() != cb.len()) =>
+            {
+                let (oa, ob) = (center_of(a), center_of(b));
+                let n = ca.len().max(cb.len());
+                let children = (0..n)
+                    .filter_map(|i| match (ca.get(i), cb.get(i)) {
+                        (Some(x), Some(y)) => Some(Lerp::new(x, y, (None, None))),
+                        (Some(x), None) => Some(Lerp::new(x, &collapsed(x, ob), (None, None))),
+                        (None, Some(y)) => Some(Lerp::new(&collapsed(y, oa), y, (None, None))),
+                        (None, None) => None,
+                    })
+                    .collect();
+                Shape::Group { children, clip: *k1 }
             }
             (NodeKind::Mesh(ma), NodeKind::Mesh(mb)) if ma.rows == mb.rows && ma.cols == mb.cols && ma.points.len() == mb.points.len() => Shape::Mesh,
+            (NodeKind::Text(_), NodeKind::Text(_))
+            | (NodeKind::SymbolInstance { .. }, NodeKind::SymbolInstance { .. })
+            | (NodeKind::Image(_), NodeKind::Image(_)) => Shape::Placed,
             _ => match (node_path(a), node_path(b)) {
-                (Some((pa, ra)), Some((pb, rb))) => Shape::Path { pair: PathPair::new(&pa, &pb, starts), rules: (ra, rb) },
+                (Some((pa, ra, ma)), Some((pb, rb, mb))) => {
+                    Shape::Path { pair: PathPair::new(&pa, &pb, starts), rules: (ra, rb), members: ma.zip(mb) }
+                }
                 _ => Shape::Other,
             },
         };
@@ -322,7 +544,10 @@ impl Lerp {
         let base = if t < 0.5 { a } else { b };
         let mut n = match &self.shape {
             Shape::Group { children, clip } => {
-                Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at(t))).collect(), clip: *clip })
+                let mut g = Node::new(NodeId(0), NodeKind::Group { children: children.iter().map(|c| Arc::new(c.at(t))).collect(), clip: *clip });
+                g.isolate = base.isolate;
+                g.knockout = base.knockout;
+                g
             }
             Shape::Mesh => {
                 let mut n = base.clone();
@@ -336,13 +561,34 @@ impl Lerp {
                         }
                     }
                 }
+                n.mask = None;
                 n
             }
-            Shape::Path { pair, rules } => {
-                let mut n = Node::path(NodeId(0), pair.at(t), Appearance::default());
-                if let NodeKind::Path { rule, .. } = &mut n.kind {
-                    *rule = if t < 0.5 { rules.0 } else { rules.1 };
+            Shape::Path { pair, rules, members } => {
+                let path = pair.at(t);
+                let rule = if t < 0.5 { rules.0 } else { rules.1 };
+                match members {
+                    Some((ma, mb)) => compound(path, rule, if t < 0.5 { ma } else { mb }, pair.len()),
+                    None => {
+                        let mut n = Node::path(NodeId(0), path, Appearance::default());
+                        if let NodeKind::Path { rule: r, .. } = &mut n.kind {
+                            *r = rule;
+                        }
+                        n
+                    }
                 }
+            }
+            Shape::Placed => {
+                let mut n = base.clone();
+                match (&mut n.kind, &a.kind, &b.kind) {
+                    (NodeKind::Text(o), NodeKind::Text(x), NodeKind::Text(y)) => lerp_text(o, x, y, t),
+                    (NodeKind::SymbolInstance { xf: o, .. }, NodeKind::SymbolInstance { xf: x, .. }, NodeKind::SymbolInstance { xf: y, .. }) => {
+                        *o = lerp_affine(*x, *y, t)
+                    }
+                    (NodeKind::Image(o), NodeKind::Image(x), NodeKind::Image(y)) => o.xf = lerp_affine(x.xf, y.xf, t),
+                    _ => {}
+                }
+                n.mask = None;
                 n
             }
             Shape::Other => {
@@ -362,6 +608,11 @@ impl Lerp {
                 if let NodeKind::Path { live, .. } = &mut n.kind {
                     *live = None;
                 }
+                // A copy's members are new objects too.
+                for c in n.children_mut().into_iter().flatten() {
+                    zero_ids(Arc::make_mut(c));
+                }
+                n.mask = None;
                 n
             }
         };
@@ -370,7 +621,72 @@ impl Lerp {
         n.opacity = lerp_f32(a.opacity, b.opacity, t as f32);
         n.blend = base.blend;
         n.visible = true;
+        n.locked = false;
+        n.name = None;
         n
+    }
+}
+
+/// `n` and its descendants with id 0 (generated objects).
+fn zero_ids(n: &mut Node) {
+    n.id = NodeId(0);
+    for c in n.children_mut().into_iter().flatten() {
+        zero_ids(Arc::make_mut(c));
+    }
+}
+
+/// A compound path of `path`'s subpaths, split into members as `counts` says (one member per
+/// subpath when the counts don't add up to `total`).
+fn compound(path: PathData, rule: FillRule, counts: &[usize], total: usize) -> Node {
+    let mut subs = path.subpaths.into_iter();
+    let counts: Vec<usize> = if counts.iter().sum::<usize>() == total && !counts.contains(&0) { counts.to_vec() } else { vec![1; total] };
+    let children =
+        counts.iter().map(|&c| Arc::new(Node::path(NodeId(0), PathData::new(subs.by_ref().take(c).collect()), Appearance::default()))).collect();
+    Node::new(NodeId(0), NodeKind::Compound { children, rule })
+}
+
+/// Interpolate text `x` → `y` into `o` (a copy of the nearer): the transform by its parts, an
+/// area frame anchor by anchor, and each run's colours, stroke weight and size from the runs at
+/// the same place (by character) of both.
+fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64) {
+    o.xf = lerp_affine(x.xf, y.xf, t);
+    if let (crate::text::TextKind::Area { frame: f }, crate::text::TextKind::Area { frame: fx }, crate::text::TextKind::Area { frame: fy }) =
+        (&mut o.kind, &x.kind, &y.kind)
+    {
+        *f = lerp_path(fx, fy, t);
+    }
+    // The run of `of` at fraction `u` of its characters.
+    fn run_at(of: &TextObject, u: f64) -> Option<&crate::text::TextRun> {
+        let total: usize = of.runs.iter().map(|r| r.text.chars().count()).sum();
+        let target = (u * total as f64) as usize;
+        let mut seen = 0;
+        for r in &of.runs {
+            seen += r.text.chars().count();
+            if seen > target {
+                return Some(r);
+            }
+        }
+        of.runs.last()
+    }
+    let total: usize = o.runs.iter().map(|r| r.text.chars().count()).sum::<usize>().max(1);
+    let mut start = 0usize;
+    let tf = t as f32;
+    let mut resized = false;
+    for r in &mut o.runs {
+        let len = r.text.chars().count();
+        let u = (start as f64 + len as f64 / 2.0) / total as f64;
+        start += len;
+        let (Some(rx), Some(ry)) = (run_at(x, u), run_at(y, u)) else { continue };
+        let (sx, sy) = (&rx.style, &ry.style);
+        r.style.fill = lerp_paint(&sx.fill, &sy.fill, tf);
+        r.style.stroke = lerp_paint(&sx.stroke, &sy.stroke, tf);
+        r.style.stroke_width = lerp_f64(sx.stroke_width, sy.stroke_width, t);
+        let size = lerp_f64(sx.size, sy.size, t);
+        resized |= size != r.style.size;
+        r.style.size = size;
+    }
+    if resized {
+        o.cached_bounds = None;
     }
 }
 
@@ -665,6 +981,36 @@ impl Rail {
 // Blend evaluation
 // =====================================================================================
 
+/// Whether `n`, every part of it, paints opaquely with Normal blending and no opacity mask or
+/// effect: knocking such objects out of each other changes nothing.
+fn paints_opaquely(n: &Node) -> bool {
+    let paint = |p: &Paint| match p {
+        Paint::Gradient(g) => g.gradient.stops.iter().all(|s| s.opacity >= 1.0),
+        Paint::Pattern { .. } => false,
+        _ => true,
+    };
+    n.opacity >= 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && n.mask.is_none()
+        && n.appearance.effects.is_empty()
+        && n.appearance
+            .items
+            .iter()
+            .all(|i| i.opacity() >= 1.0 && i.blend() == vectorcraft_color::BlendMode::Normal && i.effects().is_empty() && paint(i.paint()))
+        && n.children().is_none_or(|c| c.iter().all(|c| paints_opaquely(c)))
+}
+
+/// Whether knocking out the children of `n` (a blend's evaluated steps) shows: some step is
+/// translucent or blends.
+pub fn knockout_shows(n: &Node) -> bool {
+    n.children().is_some_and(|c| !c.iter().all(|c| paints_opaquely(c)))
+}
+
+/// [`knockout_shows`] for evaluated steps.
+pub fn steps_knockout_shows(steps: &[Arc<Node>]) -> bool {
+    !steps.iter().all(|c| paints_opaquely(c))
+}
+
 /// Evaluate a blend: the keys and generated steps in paint order.
 pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
     let k = keys.len();
@@ -705,8 +1051,9 @@ mod tests {
         let a = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
         let mut b = shapes::rectangle(Rect::new(100.0, 0.0, 110.0, 10.0));
         b.subpaths[0].anchors.rotate_left(2);
-        // Each anchor of `a` meets the opposite corner of `b`: the middle step shrinks to a point.
-        assert!(PathPair::new(&a, &b, (None, None)).at(0.5).bounds().unwrap().height() < 1e-6);
+        // Starting both at their anchor 0 pairs each corner of `a` with the opposite one of `b`:
+        // the middle step shrinks to a point.
+        assert!(PathPair::new(&a, &b, (Some(0), Some(0))).at(0.5).bounds().unwrap().height() < 1e-6);
         // Starting `b` at its anchor 2 (its first corner again) pairs like corners.
         let r = PathPair::new(&a, &b, (Some(0), Some(2))).at(0.5).bounds().unwrap();
         assert!((r.width() - 10.0).abs() < 1e-6 && (r.height() - 10.0).abs() < 1e-6, "{r:?}");
@@ -744,5 +1091,65 @@ mod tests {
         let mid = out[1].geometric_bounds().unwrap().center();
         assert!(mid.distance(Point::new(55.0, -95.0)) < 1e-6, "{mid:?}");
         assert_eq!(out[0].geometric_bounds().unwrap().center(), Point::new(5.0, 5.0), "keys stay put");
+    }
+
+    #[test]
+    fn affine_lerp_turns_the_short_way() {
+        let x = Affine::rotate(170f64.to_radians());
+        let y = Affine::rotate(-170f64.to_radians());
+        let m = lerp_affine(x, y, 0.5);
+        let ang = decompose(m)[2].to_degrees();
+        assert!((ang.abs() - 180.0).abs() < 1e-6, "{ang}");
+        let s = lerp_affine(Affine::scale(1.0), Affine::translate((10.0, 0.0)) * Affine::scale(3.0), 0.5);
+        assert!((s.as_coeffs()[0] - 2.0).abs() < 1e-9 && (s.as_coeffs()[4] - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn closed_paths_start_where_they_twist_least() {
+        let a = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+        let mut b = shapes::rectangle(Rect::new(100.0, 0.0, 110.0, 10.0));
+        b.subpaths[0].anchors.rotate_left(2);
+        let mid = lerp_path(&a, &b, 0.5);
+        let r = mid.bounds().unwrap();
+        assert!((r.width() - 10.0).abs() < 1e-6 && (r.height() - 10.0).abs() < 1e-6, "no twist: {r:?}");
+        // Clicked start points win over the automatic match.
+        let pair = PathPair::new(&a, &b, (Some(0), Some(0)));
+        assert!(pair.at(0.5).bounds().unwrap().height() < 1e-6, "the clicked anchors pair up");
+    }
+
+    #[test]
+    fn gradients_with_different_stop_counts_interpolate() {
+        let g = |stops: &[(f32, Color)]| {
+            let gradient = Gradient { stops: stops.iter().map(|(o, c)| GradientStop::new(*o, *c)).collect(), ..Gradient::default() };
+            Paint::Gradient(Box::new(GradientPaint::new(gradient)))
+        };
+        let a = g(&[(0.0, Color::BLACK), (1.0, Color::BLACK)]);
+        let b = g(&[(0.0, Color::WHITE), (0.5, Color::WHITE), (1.0, Color::WHITE)]);
+        let Paint::Gradient(m) = lerp_paint(&a, &b, 0.25) else { panic!() };
+        assert_eq!(m.gradient.stops.len(), 3);
+        assert!(m.gradient.stops.iter().all(|s| (s.color.to_rgb()[0] - 0.25).abs() < 1e-4), "{:?}", m.gradient.stops);
+    }
+
+    #[test]
+    fn dashes_and_profiles_interpolate() {
+        let d = lerp_dash(Some(&Dash { pattern: vec![10.0, 10.0], ..Default::default() }), None, 0.5).unwrap();
+        assert_eq!(d.pattern, vec![15.0, 5.0]);
+        let d =
+            lerp_dash(Some(&Dash { pattern: vec![4.0], ..Default::default() }), Some(&Dash { pattern: vec![2.0, 6.0], ..Default::default() }), 0.5);
+        assert_eq!(d.unwrap().pattern, vec![3.0, 5.0]);
+        let p = lerp_profile(Some(&WidthProfile::lens()), None, 0.5).unwrap();
+        assert_eq!(p.at(0.0), (0.5, 0.5));
+        assert_eq!(p.at(0.5), (1.0, 1.0));
+    }
+
+    #[test]
+    fn copied_steps_get_new_members() {
+        let rect = |x: f64| Arc::new(Node::path(NodeId(7), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default()));
+        let a = Node::new(NodeId(1), NodeKind::Group { children: vec![rect(0.0), rect(20.0)], clip: true });
+        let b = Node::new(NodeId(2), NodeKind::Group { children: vec![rect(100.0)], clip: true });
+        let mid = lerp_node(&a, &b, 0.4);
+        let mut ids = vec![];
+        mid.walk(&mut |n| ids.push(n.id));
+        assert!(ids.iter().all(|i| *i == NodeId(0)), "{ids:?}");
     }
 }

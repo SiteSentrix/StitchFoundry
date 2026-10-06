@@ -1927,3 +1927,14 @@ sits on; the first edit turns the spine into a path. Moving a key moves its end 
 {"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
 ```
 
+
+How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; strokes
+interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale
+and width profiles, while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
+different stop counts resample to a common set of stops. Groups pair their members in stacking order (members only
+one group has grow out of the other's centre), compound paths stay compound paths, and type, symbol instances and
+images interpolate their transforms (type also its colours, stroke weight and size run by run; the words and the
+symbol switch halfway). New blends are knockout groups (`object.setProps {knockout}` changes it), drawn on the
+canvas as they export. `object.blend.expand` and `object.blend.release` keep the blend's name, transparency,
+opacity mask and appearance (Release on a group around the keys and spine when the blend has any), and
+`object.expand` with `object: true` expands the blends in the selection.
