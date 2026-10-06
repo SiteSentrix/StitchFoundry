@@ -444,3 +444,8 @@ Colour adjustment effects (Effect → Color Adjustments) open the `effect` dialo
 Halftone… (`engine.execute {command: "ui.menuDialog", params: {command: "object.vectorHalftone"}}`) opens the
 `vectorHalftone` dialog (fields `shape`, `frequency`, `angle`, `mode`, `color`, `invert`, `clip`, `keepOriginal`,
 `preview`): it previews live and `ui.dialog.confirm` keeps the halftone as one undo step.
+
+Tool options last: `tool.setOption {key, value}` or `{values: {…}}` (and `tool` to set another tool's) sets them, and
+the options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, Symbolism, drawing tools) stay
+when you switch tools or documents and are saved with the preferences. The Liquify tools share their Global Brush
+Dimensions (`width`, `height`, `angle`, `intensity`).

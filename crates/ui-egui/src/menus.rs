@@ -170,7 +170,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.workspace.list", "List Workspaces", "", "{}"),
     ("window.newWindow", "New Window", "", "{}"),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
-    ("tool.setOption", "Tool Option", "", "{key, value}"),
+    (
+        "tool.setOption",
+        "Tool Option",
+        "",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+    ),
     (
         "effect.dialog",
         "Effect…",
@@ -786,11 +791,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
-        "tool.setOption" => {
-            let k = s("key").unwrap_or_default();
-            app.session.set_tool_option(&k, p.get("value").unwrap_or(&Value::Null));
-            Ok(app.session.tool_options())
-        }
+        "tool.setOption" => app.session.set_tool_option_cmd(p),
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.paramDialog" => {

@@ -157,6 +157,16 @@ impl LiquifyParams {
         v
     }
 
+    /// Every option, whichever tool these are (the tool's options: [`Self::to_json`] gives only
+    /// the parameters its kind uses).
+    pub fn options_json(&self) -> Value {
+        let mut v = self.to_json();
+        for (k, x) in [("rate", self.rate), ("complexity", self.complexity), ("horizontal", self.horizontal), ("vertical", self.vertical)] {
+            v[k] = json!(x);
+        }
+        v
+    }
+
     fn radii(&self) -> (f64, f64) {
         (self.width / 2.0, self.height / 2.0)
     }
@@ -528,7 +538,7 @@ impl Tool for LiquifyTool {
         Cursor::Crosshair
     }
     fn options(&self) -> Value {
-        self.params.to_json()
+        self.params.options_json()
     }
     fn set_option(&mut self, key: &str, value: &Value) {
         let mut v = self.params.to_json();
