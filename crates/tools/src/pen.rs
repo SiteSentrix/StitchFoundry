@@ -2,7 +2,8 @@
 //!
 //! Click adds a corner anchor; click-drag adds a smooth anchor with symmetric handles (Alt breaks
 //! them: the incoming handle stays where it was when Alt went down and only the outgoing one
-//! follows the pointer); Shift constrains to 45°. Clicking the first anchor closes the path.
+//! follows the pointer; Space held moves the anchor, handles and all); Shift constrains to 45°.
+//! Clicking the first anchor closes the path.
 //! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
 //! it. The rubber-band preview shows the next segment. On a selected blend's spine a click adds a
 //! point (on a point no key object sits on: deletes it).
@@ -21,6 +22,8 @@ pub struct PenTool {
     hover: Option<Point>,
     /// The incoming handle of the anchor being dragged out, as last previewed.
     in_h: Point,
+    /// The pointer at the last button-down or drag: Space held moves the anchor as far as it moves.
+    last: Point,
 }
 
 /// The open path the pen is extending: the single selected open path.
@@ -61,6 +64,7 @@ impl Tool for PenTool {
                 vec![]
             }
             PointerKind::Down => {
+                self.last = ev.pos;
                 if let Some((id, first, last, _)) = active {
                     if ev.mods.shift {
                         p = last + vectorcraft_geom::constrain_angle(p - last, 45.0);
@@ -91,7 +95,15 @@ impl Tool for PenTool {
                 vec![Action::Begin("Pen".into()), Action::Preview("path.create".into(), json!({"anchors": [{"x": p.x, "y": p.y}]}))]
             }
             PointerKind::Drag => {
-                let Some((a, closing)) = self.drag else { return vec![] };
+                let Some((mut a, closing)) = self.drag else { return vec![] };
+                // Space held moves the anchor being placed, handles and all.
+                if ev.mods.space && !closing {
+                    let d = ev.pos - self.last;
+                    a += d;
+                    self.in_h += d;
+                    self.drag = Some((a, closing));
+                }
+                self.last = ev.pos;
                 let mut out_h = ev.pos;
                 if ev.mods.shift {
                     out_h = a + vectorcraft_geom::constrain_angle(ev.pos - a, 45.0);
@@ -247,6 +259,49 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 440.0).with_mods(alt));
         let drag = PointerEvent::new(PointerKind::Drag, 340.0, 440.0).with_mods(alt);
         assert_eq!(handles(t.pointer(&cx, &drag)), (json!([300.0, 440.0]), json!([340.0, 440.0])));
+    }
+
+    #[test]
+    fn space_moves_the_anchor_being_placed() {
+        let (mut d, _) = doc_with_rect();
+        let space = Mods { space: true, ..Mods::default() };
+        // The first anchor of a new path.
+        let (s, p) = (Selection::default(), paint());
+        let cx0 = cx(&d, &s, &p);
+        let mut t = PenTool::default();
+        t.pointer(&cx0, &PointerEvent::new(PointerKind::Down, 400.0, 420.0));
+        t.pointer(&cx0, &PointerEvent::new(PointerKind::Drag, 450.0, 420.0));
+        let created = |acts: Vec<Action>| match acts.as_slice() {
+            [Action::Preview(c, v)] if c == "path.create" => v["anchors"][0].clone(),
+            other => panic!("not a create preview: {other:?}"),
+        };
+        let a = created(t.pointer(&cx0, &PointerEvent::new(PointerKind::Drag, 450.0, 380.0).with_mods(space)));
+        assert_eq!(a, json!({"x": 400.0, "y": 380.0, "out": [450.0, 380.0], "in": [350.0, 380.0]}), "moved, handles and all");
+        // Space released: the drag shapes the handles round the anchor's new place.
+        let a = created(t.pointer(&cx0, &PointerEvent::new(PointerKind::Drag, 460.0, 380.0)));
+        assert_eq!(a, json!({"x": 400.0, "y": 380.0, "out": [460.0, 380.0], "in": [340.0, 380.0]}));
+        // An anchor added to an open path, its handles broken by Alt: the kept incoming handle
+        // moves with it.
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let line = vectorcraft_geom::shapes::line(Point::new(10.0, 300.0), Point::new(60.0, 300.0));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        let alt = Mods { alt: true, ..Mods::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 420.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 420.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 470.0).with_mods(alt));
+        let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 450.0, 450.0).with_mods(Mods { space: true, ..alt }));
+        assert_eq!(
+            acts,
+            vec![Action::Preview(
+                "path.appendAnchor".into(),
+                json!({"id": id.0, "x": 400.0, "y": 400.0, "in": [350.0, 400.0], "out": [450.0, 450.0]})
+            )]
+        );
     }
 
     #[test]
