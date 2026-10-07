@@ -250,6 +250,9 @@ pub struct ToolContext<'a> {
     pub slices_hidden: bool,
     /// View → Lock Slices: the Slice Selection tool leaves locked slices alone.
     pub slices_locked: bool,
+    /// General → Disable Auto Add/Delete is off: the Pen adds an anchor on a selected path's
+    /// segment and deletes one of its anchors.
+    pub auto_add_delete: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
@@ -520,6 +523,7 @@ pub(crate) mod testutil {
             paste_plain_text: false,
             slices_hidden: false,
             slices_locked: false,
+            auto_add_delete: true,
             screen: None,
             plane_widget: Some(Default::default()),
         }

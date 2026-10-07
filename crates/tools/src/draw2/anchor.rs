@@ -10,7 +10,7 @@ use serde_json::json;
 use vectorcraft_doc::NodeId;
 use vectorcraft_geom::Point;
 
-use super::{hit_anchor, hit_segment};
+use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
 use crate::{Action, Cursor, Mods, PointerEvent, PointerKind, Tool, ToolContext};
 
 #[derive(Clone, Copy, Debug)]
@@ -38,17 +38,11 @@ impl AnchorTool {
     }
 
     fn add(cx: &ToolContext, p: Point) -> Vec<Action> {
-        match hit_segment(cx, p, cx.tol(4.0)) {
-            Some((id, si, seg, t)) => vec![Action::Exec("path.insertAnchor".into(), json!({"id": id.0, "subpath": si, "segment": seg, "t": t}))],
-            None => vec![],
-        }
+        hit_segment(cx, p, cx.tol(4.0)).map(insert_anchor).into_iter().collect()
     }
 
     fn delete(cx: &ToolContext, p: Point) -> Vec<Action> {
-        match hit_anchor(cx, p, cx.tol(4.0)) {
-            Some((id, si, ai)) => vec![Action::Exec("path.removeAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))],
-            None => vec![],
-        }
+        hit_anchor(cx, p, cx.tol(4.0)).map(remove_anchor).into_iter().collect()
     }
 }
 

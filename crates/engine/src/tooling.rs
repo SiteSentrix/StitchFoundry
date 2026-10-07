@@ -138,6 +138,7 @@ impl Session {
             paste_plain_text: self.prefs.paste_text_formatting == "plain",
             slices_hidden: self.menu.slices_hidden,
             slices_locked: self.menu.slices_locked,
+            auto_add_delete: !self.prefs.disable_auto_add_delete,
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
         };

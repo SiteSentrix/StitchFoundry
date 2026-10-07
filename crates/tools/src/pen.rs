@@ -6,8 +6,10 @@
 //! Clicking the first anchor closes the path. Clicking the last one retracts its outgoing handle, so
 //! the next segment leaves it as a corner; dragging from it pulls a new one out on its own.
 //! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
-//! it. The rubber-band preview shows the next segment. On a selected blend's spine a click adds a
-//! point (on a point no key object sits on: deletes it).
+//! it. The rubber-band preview shows the next segment. Auto Add/Delete: between paths, a click on a
+//! segment of a selected path adds an anchor there and a click on one of its anchors deletes it
+//! (Shift held or General → Disable Auto Add/Delete starts a new path instead). On a selected
+//! blend's spine a click adds a point (on a point no key object sits on: deletes it).
 
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
@@ -118,6 +120,9 @@ impl Tool for PenTool {
                     }
                     return vec![];
                 }
+                if let Some(act) = auto_add_delete(cx, ev.pos, ev.mods, tol) {
+                    return vec![act];
+                }
                 self.drawing = true;
                 self.drag = Some((p, false));
                 vec![Action::Begin("Pen".into()), Action::Preview("path.create".into(), json!({"anchors": [{"x": p.x, "y": p.y}]}))]
@@ -210,7 +215,7 @@ impl Tool for PenTool {
         let c = cx.doc.layer_color(id);
         vec![Overlay::Path { path: bp, color: c, width: 1.0, dashed: false }]
     }
-    fn cursor(&self, cx: &ToolContext, p: Point, _m: Mods) -> Cursor {
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         if !self.drawing {
             match spine_click(cx, p, cx.tol(5.0)).as_deref() {
                 Some([Action::Exec(c, _)]) if c == "object.blend.spine.removeAnchor" => return Cursor::PenDelete,
@@ -230,8 +235,33 @@ impl Tool for PenTool {
                 return Cursor::PenContinue;
             }
         }
+        if !self.drawing {
+            match auto_add_delete(cx, p, m, cx.tol(5.0)) {
+                Some(Action::Exec(c, _)) if c == "path.removeAnchor" => return Cursor::PenDelete,
+                Some(_) => return Cursor::PenAdd,
+                None => {}
+            }
+        }
         Cursor::Pen
     }
+}
+
+/// Auto Add/Delete: what a click at `p` does to a selected path. On one of its anchors it deletes
+/// it; else, where one of its segments passes within `tol`, it adds an anchor. None when the
+/// preference turns it off, Shift is held, or no selected path is there.
+fn auto_add_delete(cx: &ToolContext, p: Point, m: Mods, tol: f64) -> Option<Action> {
+    if !cx.auto_add_delete || m.shift {
+        return None;
+    }
+    let paths = || {
+        cx.selection
+            .objects
+            .iter()
+            .copied()
+            .filter(|&id| cx.doc.is_editable(id) && cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })))
+    };
+    let anchor = crate::draw2::anchor_in(cx, paths(), p, tol).map(crate::draw2::remove_anchor);
+    anchor.or_else(|| crate::draw2::segment_in(cx, paths(), p, tol).map(crate::draw2::insert_anchor))
 }
 
 /// A click on a selected blend's spine: delete the point under `p` when no key object sits on it
@@ -425,5 +455,50 @@ mod tests {
         assert_eq!(a, vec![Action::Exec("object.blend.spine.addAnchor".into(), json!({"id": g.0, "x": 160.0, "y": 310.0}))]);
         // A key's own point is left alone (the click snaps to the spine line).
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 310.0)), vec![]);
+    }
+
+    fn click(t: &mut PenTool, cx: &ToolContext, x: f64, y: f64, m: Mods) -> Vec<Action> {
+        let acts = t.pointer(cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(m));
+        t.pointer(cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(m));
+        acts
+    }
+
+    #[test]
+    fn clicking_a_selected_path_adds_or_deletes_an_anchor() {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let pts = [Point::new(300.0, 400.0), Point::new(350.0, 300.0), Point::new(400.0, 400.0)];
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let off = ToolContext { auto_add_delete: false, ..cx(&d, &s, &p) };
+        let cx = cx(&d, &s, &p);
+        let none = Mods::default();
+        let mut t = PenTool::default();
+        // On a segment: add an anchor there.
+        assert_eq!(t.cursor(&cx, Point::new(325.0, 351.0), none), Cursor::PenAdd);
+        let a = click(&mut t, &cx, 325.0, 351.0, none);
+        assert!(matches!(&a[..], [Action::Exec(c, v)] if c == "path.insertAnchor" && v["id"] == id.0 && v["segment"] == 0), "{a:?}");
+        // On an anchor: delete it.
+        assert_eq!(t.cursor(&cx, Point::new(350.0, 302.0), none), Cursor::PenDelete);
+        let a = click(&mut t, &cx, 350.0, 302.0, none);
+        assert_eq!(a, vec![Action::Exec("path.removeAnchor".into(), json!({"id": id.0, "subpath": 0, "anchor": 1}))]);
+        // An end still continues the path.
+        assert_eq!(t.cursor(&cx, Point::new(400.0, 400.0), none), Cursor::PenContinue);
+        // Shift, or the preference turned off, starts a new path instead.
+        let shift = Mods { shift: true, ..Mods::default() };
+        assert_eq!(t.cursor(&cx, Point::new(325.0, 351.0), shift), Cursor::Pen);
+        assert_eq!(t.cursor(&off, Point::new(350.0, 302.0), none), Cursor::Pen);
+        let a = click(&mut t, &off, 350.0, 302.0, none);
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"), "{a:?}");
+        // While a path is being drawn, a click goes on drawing it.
+        let a = click(&mut t, &cx, 325.0, 351.0, none);
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.appendAnchor"), "{a:?}");
+        let mut t = PenTool::default();
+        let a = click(&mut t, &cx, 325.0, 351.0, shift);
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"), "{a:?}");
     }
 }
