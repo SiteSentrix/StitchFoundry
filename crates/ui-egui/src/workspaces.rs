@@ -23,6 +23,8 @@ pub struct Workspace {
     pub task_bar: bool,
     pub dock: bool,
     pub dock_tab: DockTab,
+    /// The dock's tabbed group is collapsed to icons (built-in workspaces: expanded).
+    pub dock_collapsed: bool,
     pub open_panel: Option<String>,
     pub status_bar: bool,
 }
@@ -115,6 +117,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         task_bar: ui.task_bar,
         dock: ui.dock,
         dock_tab: ui.dock_tab,
+        dock_collapsed: ui.dock_collapsed,
         open_panel: ui.open_panel.clone(),
         status_bar: ui.status_bar,
     }
@@ -130,6 +133,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.task_bar = w.task_bar;
     ui.dock = w.dock;
     ui.dock_tab = w.dock_tab;
+    ui.dock_collapsed = w.dock_collapsed;
     ui.open_panel = w.open_panel.clone();
     ui.status_bar = w.status_bar;
     ui.flyout = None;
