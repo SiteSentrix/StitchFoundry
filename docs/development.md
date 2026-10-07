@@ -74,12 +74,10 @@ text at render time from one catalog per language (`i18n/<code>.tsv`; the format
 always use the English ids and labels, so agents and scripts never see translated text.
 
 Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, complete, in the vocabulary used
-in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Japanese (`ja`, complete),
-Czech (`cs`, every menu label) and Brazilian Portuguese (`pt-br`, every menu label and every `tl!` literal).
-Untranslated text falls back to English until its rows are
-added. Simplified Chinese locales
-(`zh-CN`, `zh-SG`, `zh-Hans`) fall back to English until a `zh-hans` catalog is registered: the resolver already
-tells the two scripts apart, so the Traditional catalog is never shown to a Simplified locale.
+in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Simplified Chinese (`zh-hans`,
+complete, in the vocabulary used in mainland China; `zh-CN`, `zh-SG`, `zh-Hans-*` and a bare `zh` resolve to it,
+so the two scripts never mix), Japanese (`ja`, complete), Czech (`cs`, every menu label) and Brazilian Portuguese
+(`pt-br`, every menu label and every `tl!` literal). Untranslated text falls back to English until its rows are added.
 
 - `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a
   `&str`. `tr(lang, s)` takes the language; `tr_ctx` when one English word needs different translations;

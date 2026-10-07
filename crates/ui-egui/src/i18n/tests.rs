@@ -247,6 +247,67 @@ fn zh_hant_has_no_simplified_characters() {
     assert!(bad.is_empty(), "simplified characters in zh-hant.tsv:\n{}", bad.join("\n"));
 }
 
+/// The Simplified Chinese catalog is written in Simplified characters and in the vocabulary of the
+/// mainland: Taiwan's terms (and a converted Traditional row) would read as foreign to its users.
+#[test]
+fn zh_hans_is_simplified_and_mainland() {
+    const TRADITIONAL_ONLY: &str = "們這為來時間個說對會發現過還沒動開關圖層選設項編輯顯視幫刪預覽導節線連擇報錯誤處據庫經體應該樣點擊確認標記錄輸進轉換調約維護啟閉鎖義類網絡頁顏繪畫寬長邊緣縮鏡複貼漸濾筆鋼區飽參數變號單雙屬組齊徑錨輪陰陽實際讓從產東車門問閃並堅測試運術壓縮疊飾夠亞質紙張檔認識";
+    const TAIWAN_TERMS: &[&str] = &[
+        "档案",
+        "资料夹",
+        "快速键",
+        "按一下",
+        "按两下",
+        "描述档",
+        "品质",
+        "贴上",
+        "功能表",
+        "物件",
+        "工作区域",
+        "遮色片",
+        "影像",
+        "列印",
+        "印表机",
+        "字型",
+        "视窗",
+        "滑鼠",
+        "游标",
+        "程式",
+        "软体",
+        "偏好设定",
+        "色票",
+        "渐层",
+        "笔刷",
+        "尺标",
+        "字元",
+        "汇出",
+        "汇入",
+        "连结",
+        "解析度",
+        "点阵图",
+        "介面",
+        "自订",
+        "对话方块",
+        "预设值",
+        "储存",
+        "套用",
+        "「",
+        "」",
+    ];
+    let lang = Lang::from_code("zh-hans").expect("zh-hans registered");
+    let (entries, _) = parse_entries(lang.0.source);
+    let mut bad = Vec::new();
+    for (ctx, src, tr) in entries {
+        if let Some(c) = tr.chars().find(|c| TRADITIONAL_ONLY.contains(*c)) {
+            bad.push(format!("{ctx} {src:?} → {tr:?} has {c:?}"));
+        }
+        if let Some(w) = TAIWAN_TERMS.iter().find(|w| tr.contains(**w)) {
+            bad.push(format!("{ctx} {src:?} → {tr:?} has the Taiwan term {w:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "in zh-hans.tsv:\n{}", bad.join("\n"));
+}
+
 /// Every menu string (top-level titles, submenu names, item labels, section headers, UI and
 /// engine command labels and menu paths) has an entry in each language that claims complete menus.
 #[test]

@@ -88,6 +88,8 @@ pub static LANGUAGES: [LangInfo; 6] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    // Simplified Chinese in the vocabulary used in mainland China; `zh-CN`, `zh-SG`, `zh-Hans-*` and a
+    // bare `zh` resolve here (see `candidates`).
     LangInfo {
         code: "zh-hans",
         name: "简体中文",
