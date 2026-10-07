@@ -1,11 +1,16 @@
-//! Vertical type (bundled fonts only: `§` and `×` stand upright like CJK, letters lie on their side).
+//! Vertical type (bundled fonts: `§` and `×` stand upright like CJK, letters lie on their side;
+//! Japanese text only with craft-fonts' faces, skipped without them).
 use super::*;
 use kurbo::Shape;
-use vectorcraft_doc::{CharStyle, TextKind};
+use vectorcraft_doc::{CharStyle, Justify, TextKind};
 use vectorcraft_geom::PathData;
 
 fn vertical(text: &str) -> TextObject {
-    let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+    vertical_styled(text, CharStyle { size: 20.0, ..CharStyle::default() })
+}
+
+fn vertical_styled(text: &str, style: CharStyle) -> TextObject {
+    let mut t = TextObject::point(Point::ZERO, text, style);
     t.xf = Affine::IDENTITY;
     t.vertical = true;
     t
@@ -126,5 +131,133 @@ fn kinsoku_keeps_closing_marks_off_line_starts_and_opening_brackets_off_line_end
             let last = line.chars().last().unwrap_or(' ');
             assert!(!crate::shape::no_line_end(last), "line {i} ends with {last}: {lines:?}");
         }
+    }
+}
+
+/// Each glyph's cell down the (single) column: from its origin over its advance. A glyph that
+/// doesn't advance (the rest of a tate-chu-yoko block) shares the cell of the glyph before it.
+fn column_cells(l: &TextLayout) -> Vec<(f64, f64)> {
+    let mut cells: Vec<(f64, f64)> = Vec::with_capacity(l.glyphs.len());
+    for g in &l.glyphs {
+        let cell = match cells.last() {
+            Some(&prev) if g.advance == 0.0 => prev,
+            _ => (g.origin.y, g.origin.y + g.advance),
+        };
+        cells.push(cell);
+    }
+    cells
+}
+
+/// One column, cells one after the other, each glyph's ink inside its own cell (within `tol`)
+/// and no two glyphs' ink overlapping.
+fn assert_own_cells(l: &TextLayout, text: &str, tol: f64) {
+    let label = |i: usize| &text[l.glyphs[i].byte..l.glyphs[i].byte + l.glyphs[i].len];
+    let cells = column_cells(l);
+    for (i, g) in l.glyphs.iter().enumerate() {
+        assert!((g.origin.x - l.glyphs[0].origin.x).abs() < 1e-9, "{:?} leaves the column: {g:?}", label(i));
+        if let Some(next) = l.glyphs.get(i + 1) {
+            assert!((next.origin.y - (g.origin.y + g.advance)).abs() < 1e-9, "{:?} starts where {:?} ends", label(i + 1), label(i));
+        }
+        if g.outline.elements().is_empty() {
+            continue;
+        }
+        let (r, (top, bottom)) = (ink(l, i), cells[i]);
+        assert!(r.y0 >= top - tol && r.y1 <= bottom + tol, "{:?}: ink {r:?} outside its cell {top}..{bottom}", label(i));
+        for j in (0..i).filter(|&j| !l.glyphs[j].outline.elements().is_empty()) {
+            let o = ink(l, j);
+            let (ox, oy) = (r.x1.min(o.x1) - r.x0.max(o.x0), r.y1.min(o.y1) - r.y0.max(o.y0));
+            assert!(ox <= tol || oy <= tol, "{:?} {r:?} overlaps {:?} {o:?}", label(i), label(j));
+        }
+    }
+}
+
+/// Index of the glyph of `needle`'s first byte in `text`.
+fn glyph_of(l: &TextLayout, text: &str, needle: &str) -> usize {
+    let b = text.find(needle).unwrap();
+    l.glyphs.iter().position(|g| g.byte == b).unwrap()
+}
+
+/// Issue #260 with bundled glyphs (`§` stands in for the upright CJK characters).
+#[test]
+fn numbers_keep_their_own_cells_down_the_column() {
+    let text = "§§ §§§ 10§22§§ 1§ 100§ 2026§";
+    let l = layout(FontDb::global(), &vertical(text));
+    assert_own_cells(&l, text, 0.25);
+    // Tate-chu-yoko: one em of the column, centred on the column's centre line (x = 0), the next
+    // character right after it.
+    for block in ["10§", "22§", "100§"] {
+        let first = glyph_of(&l, text, block);
+        let digits = block.len() - '§'.len_utf8();
+        let after = first + digits;
+        let g = &l.glyphs[first];
+        assert!((g.advance - 20.0).abs() < 1e-9, "{block}: {g:?}");
+        assert!(l.glyphs[first + 1..after].iter().all(|d| d.advance == 0.0), "{block}");
+        assert!((l.glyphs[after].origin.y - (g.origin.y + 20.0)).abs() < 1e-9, "{block}: the next character follows the block's em");
+        let inks = (first..after).map(|i| ink(&l, i)).reduce(|a, b| a.union(b)).unwrap();
+        assert!(inks.center().x.abs() < 1.0, "{block} centred on the column: {inks:?}");
+        assert!((inks.center().y - (g.origin.y + 10.0)).abs() < 1.5, "{block} centred in its em: {inks:?} {g:?}");
+    }
+    // A single digit and longer numbers lie on their side, advancing by their own length.
+    let one = glyph_of(&l, text, "1§");
+    let r = ink(&l, one);
+    assert!(r.width() > r.height() && l.glyphs[one].advance < 20.0, "1 on its side: {r:?}");
+    let year = glyph_of(&l, text, "2026");
+    let len: f64 = l.glyphs[year..year + 4].iter().map(|g| g.advance).sum();
+    assert!(len > 30.0 && (l.glyphs[year + 4].origin.y - l.glyphs[year].origin.y - len).abs() < 1e-9, "2026 takes its length: {len}");
+    // Half-width spaces take their own (narrow) width.
+    for (i, g) in l.glyphs.iter().enumerate().filter(|(_, g)| text[g.byte..].starts_with(' ')) {
+        assert!(g.advance > 2.0 && g.advance < 10.0, "space {i}: {g:?}");
+    }
+}
+
+#[test]
+fn justified_columns_keep_tate_chu_yoko_blocks_whole_and_marks_centred() {
+    let text = "§10§§";
+    let mut t = vertical(text);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 40.0, 200.0).to_path(0.1)) };
+    t.para.justify = Justify::JustifyAll;
+    let l = layout(FontDb::global(), &t);
+    assert_eq!(l.lines.len(), 1);
+    // 200 pt of column, four 20 pt cells: three gaps of 40 pt between them, none inside "10".
+    let (one, zero) = (ink(&l, 1), ink(&l, 2));
+    assert!((one.center().y - zero.center().y).abs() < 0.5 && zero.x0 > one.x1, "10 side by side: {one:?} {zero:?}");
+    let marks: Vec<Rect> = [0, 3, 4].iter().map(|&i| ink(&l, i)).collect();
+    assert!((marks[1].center().y - marks[0].center().y - 120.0).abs() < 1e-6, "{marks:?}");
+    assert!((marks[2].center().y - marks[1].center().y - 60.0).abs() < 1e-6, "{marks:?}");
+    assert!(marks.iter().all(|m| (m.center().x - marks[0].center().x).abs() < 1e-6), "upright marks stay on the centre line: {marks:?}");
+    assert!(marks[2].y1 <= 200.0 + 1e-6, "inside the frame: {marks:?}");
+}
+
+#[test]
+fn tracking_spaces_upright_marks_without_moving_them_off_the_centre_line() {
+    let plain = layout(FontDb::global(), &vertical("§§"));
+    let tracked = layout(FontDb::global(), &vertical_styled("§§", CharStyle { size: 20.0, tracking: 200.0, ..CharStyle::default() }));
+    for i in 0..2 {
+        assert!((ink(&tracked, i).center().x - ink(&plain, i).center().x).abs() < 1e-6, "{:?} {:?}", ink(&tracked, i), ink(&plain, i));
+    }
+    let step = ink(&tracked, 1).center().y - ink(&tracked, 0).center().y;
+    assert!((step - 24.0).abs() < 1e-6, "one em plus 200/1000 em of tracking: {step}");
+}
+
+/// Issue #260 as reported, with a Japanese face of craft-fonts (whose own digits are proportional).
+#[test]
+fn japanese_numbers_keep_their_own_cells_down_the_column() {
+    let Some(face) = crate::craft_fonts::japanese_ui_fonts(false).into_iter().next() else {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    };
+    let db = FontDb::with_font_dirs(vec![]);
+    let text = "はただ商店 秋のセール 10月22日まで";
+    let t = vertical_styled(text, CharStyle { size: 28.0, font_family: face.family.into(), font_style: face.style.into(), ..CharStyle::default() });
+    let l = layout(&db, &t);
+    assert!(l.glyphs.iter().filter(|g| !text[g.byte..].starts_with(' ')).all(|g| g.gid != 0), "real glyphs, no tofu");
+    assert_own_cells(&l, text, 0.5);
+    for block in ["10月", "22日"] {
+        let first = glyph_of(&l, text, block);
+        let g = &l.glyphs[first];
+        assert!((g.advance - 28.0).abs() < 1e-9 && l.glyphs[first + 1].advance == 0.0, "{block}: one em");
+        assert!((l.glyphs[first + 2].origin.y - (g.origin.y + 28.0)).abs() < 1e-9, "{block}: the next character follows the em");
+        let inks = ink(&l, first).union(ink(&l, first + 1));
+        assert!(inks.center().x.abs() < 2.8, "{block} centred on the column: {inks:?}");
     }
 }
