@@ -110,38 +110,46 @@ impl Interp<'_> {
                 let category = self.pop()?;
                 let v = self.pop()?;
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", "defineresource".into()))?;
-                let dict = if category.text().as_deref() == Some("Font") { self.fonts.clone() } else { self.category(&category)? };
-                dict.borrow_mut().insert(k, v.clone());
+                // A category is defined by its implementation dictionary.
+                if category.text().as_deref() == Some("Category") && !matches!(v, Obj::Dict(_)) {
+                    return ps_err("typecheck", "defineresource");
+                }
+                self.instances(&category)?.borrow_mut().insert(k, v.clone());
                 self.push(v)?;
+            }
+            UndefineResource => {
+                let category = self.pop()?;
+                let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", "undefineresource".into()))?;
+                self.instances(&category)?.borrow_mut().remove(&k);
             }
             ResourceStatus => {
                 let category = self.pop()?;
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", "resourcestatus".into()))?;
-                let dict = if category.text().as_deref() == Some("Font") { self.fonts.clone() } else { self.category(&category)? };
-                let known = dict.borrow().contains_key(&k);
+                let known = self.instances(&category)?.borrow().contains_key(&k);
                 if known {
                     self.push(Obj::Int(1))?;
                     self.push(Obj::Int(0))?;
                 }
                 self.push(Obj::Bool(known))?;
             }
+            ResourceForAll => self.resource_for_all()?,
             Show => {
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 self.show(&s)?;
             }
             AShow => {
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 self.nums::<2>()?;
                 self.show(&s)?;
             }
             WidthShow => {
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 self.pop()?;
                 self.nums::<2>()?;
                 self.show(&s)?;
             }
             AWidthShow => {
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 self.nums::<2>()?;
                 self.pop()?;
                 self.nums::<2>()?;
@@ -149,11 +157,11 @@ impl Interp<'_> {
             }
             XShow | YShow | XYShow => {
                 self.pop()?;
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 self.show(&s)?;
             }
             KShow => {
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 self.pop()?;
                 self.show(&s)?;
             }
@@ -163,14 +171,14 @@ impl Interp<'_> {
                 self.show(ch.encode_utf8(&mut [0; 4]).as_bytes())?;
             }
             StringWidth => {
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 let (_, _, v) = self.set_type(&s, Point::ZERO)?;
                 self.push_num(v.x)?;
                 self.push_num(v.y)?;
             }
             CharPath => {
                 self.pop_bool()?;
-                let s = self.pop_str()?.borrow().clone();
+                let s = self.pop_str()?.to_vec();
                 self.char_path(&s)?;
             }
             SetCacheDevice => {

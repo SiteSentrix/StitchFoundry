@@ -192,7 +192,10 @@ fn finish(mut out: Out) -> Imported {
 
 /// A document of `frame`'s size showing TIFF preview `tiff` stretched over it.
 fn preview(tiff: &[u8], frame: Rect) -> Option<Document> {
-    let img = image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff).ok()?.to_rgba8();
+    let img = match image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff) {
+        Ok(img) => img.to_rgba8(),
+        Err(_) => crate::tiff::palette_rgba(tiff)?,
+    };
     let (w, h) = img.dimensions();
     if w == 0 || h == 0 {
         return None;

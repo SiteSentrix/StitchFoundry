@@ -1679,14 +1679,16 @@ PostScript is read instead and the first warning says why.
 
 Other files are run through a small PostScript interpreter (Level 3, first page only): paths, fills and strokes with
 their width, caps, joins, miter limit and dashes (a fill and a stroke of the same path become one object), grey, RGB,
-CMYK, indexed and spot colours (a Separation ink becomes a spot swatch, painted at its tint), clips (clipping groups),
-`gsave`/`grestore`, `save`/`restore`, transforms, procedures with `bind def`, loops and dictionaries, axial and radial
-shadings and shading patterns (gradients), images and image masks (data in the file through ASCII85, hex, run-length,
-Flate, LZW or DCT filters, or from procedures), and type as point type in the font the file names (embedded font
-programs are skipped). The artboard is the `%%HiResBoundingBox` (else `%%BoundingBox`; a letter page without one).
-A program the interpreter can't run (an operator it doesn't know, an error, a runaway loop) or that draws nothing comes
-in as its TIFF preview with a warning; without a preview, the art drawn up to the error is kept with a warning, and a
-file with none is refused with a message saying why.
+CMYK, indexed and spot colours (a Separation ink becomes a spot swatch, painted at its tint), clips (clipping groups;
+`clipsave`/`cliprestore`), `gsave`/`grestore`, `save`/`restore`, transforms, procedures with `bind def`, loops,
+dictionaries, arrays and strings whose intervals share storage, resources (categories made from `Generic`,
+`resourceforall`), axial and radial shadings and shading patterns (gradients), images and image masks (data in the
+file through ASCII85, hex, run-length, Flate, LZW or DCT filters, or from procedures), and type as point type in the
+font the file names (embedded font programs are skipped). The artboard is the `%%HiResBoundingBox` (else
+`%%BoundingBox`; a letter page without one). A program the interpreter can't run (an operator it doesn't know, an
+error, a runaway loop) or that draws nothing comes in as its TIFF preview (palette previews with an alpha channel too)
+with a warning; without a preview, the art drawn up to the error is kept with a warning, and a file with none is
+refused with a message saying why.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/logo.eps"}}}
