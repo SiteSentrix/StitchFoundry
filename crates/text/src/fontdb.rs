@@ -7,11 +7,11 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use kurbo::BezPath;
-use skrifa::instance::{LocationRef, Size};
+use skrifa::instance::{Location, LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::raw::FileRef;
 use skrifa::string::StringId;
-use skrifa::{GlyphId, MetadataProvider};
+use skrifa::{GlyphId, MetadataProvider, Tag};
 
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
@@ -27,6 +27,14 @@ static BUNDLED: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"),
     include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
 ];
+
+/// An axis setting of a variable font: the axis tag (`wght`) and its value in user units (700).
+pub type Variation = ([u8; 4], f32);
+
+/// Caps on what a (possibly damaged) variable font can make the database read: axes per font and
+/// named instances listed per face.
+const MAX_AXES: usize = 64;
+const MAX_INSTANCES: usize = 512;
 
 enum FontBytes {
     Static(&'static [u8]),
@@ -60,6 +68,13 @@ pub struct FontFace {
     pub(crate) cap_height: f64,
     pub(crate) x_height: f64,
     pub(crate) shaper: harfrust::ShaperData,
+    /// The axis settings of the variable font's named instance this face is (user units: `wght`
+    /// 700); empty for a static face or a variable font's default instance.
+    variations: Vec<Variation>,
+    /// [`Self::variations`] in the font's normalized design space (outlines and metrics).
+    location: Location,
+    /// [`Self::variations`] for the shaper (advances, kerning, feature variations).
+    pub(crate) instance: Option<harfrust::ShaperInstance>,
 }
 
 impl std::fmt::Debug for FontFace {
@@ -84,6 +99,17 @@ impl FontFace {
     /// The face's index in its font file (collections hold several).
     pub(crate) fn index(&self) -> u32 {
         self.index
+    }
+    /// Where in a variable font's design space the face's outlines and metrics are taken (the
+    /// default location for a static face).
+    pub(crate) fn location(&self) -> LocationRef<'_> {
+        LocationRef::from(&self.location)
+    }
+    /// The axis settings of the variable font's named instance this face is (`wght` 700 for
+    /// Bold), in user units; empty for a static face and a variable font's default instance.
+    /// The face's file holds the whole variable font: exporters that embed it pass these on.
+    pub fn variations(&self) -> &[Variation] {
+        &self.variations
     }
     /// Unique id of this face within the process.
     pub fn id(&self) -> u32 {
@@ -112,7 +138,7 @@ impl FontFace {
     /// Advance width of glyph `gid` in font units.
     pub fn advance(&self, gid: u32) -> f64 {
         self.skrifa()
-            .and_then(|f| f.glyph_metrics(Size::unscaled(), LocationRef::default()).advance_width(GlyphId::new(gid)))
+            .and_then(|f| f.glyph_metrics(Size::unscaled(), self.location()).advance_width(GlyphId::new(gid)))
             .map(|a| a as f64)
             .unwrap_or(self.upem * 0.5)
     }
@@ -147,8 +173,18 @@ impl FontFace {
 #[derive(Debug, Default)]
 struct CatalogFamily {
     name: String,
-    /// (style, file) of each face.
-    faces: Vec<(String, PathBuf)>,
+    faces: Vec<CatalogFace>,
+}
+
+/// One style of an installed family: a face, or a named instance of a variable font.
+#[derive(Debug)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+struct CatalogFace {
+    style: String,
+    path: PathBuf,
+    /// Weight and italic as the style lists them (by its name, or a named instance's axes).
+    weight: f32,
+    italic: bool,
 }
 
 /// The installed fonts by ASCII-lowercased family name (lookups ignore ASCII case, as
@@ -344,26 +380,103 @@ fn face_names(f: &skrifa::FontRef<'_>) -> Option<(String, String)> {
     Some((family, style))
 }
 
-/// Parse every face in `data` (a font file or collection). Returns `(index, family, style)`.
-fn enumerate_faces(data: &[u8]) -> Vec<(u32, String, String)> {
+/// One style a font file offers: one of its faces, or a named instance of a variable font
+/// (Figtree's `Figtree[wght].ttf` holds Light, the default, and Regular to Black as instances).
+#[derive(Clone, Debug)]
+pub(crate) struct FaceStyle {
+    family: String,
+    style: String,
+    keys: FaceKeys,
+    /// A named instance's axis settings (user units); empty for the face itself.
+    variations: Vec<Variation>,
+    /// A named instance's weight (its `wght` setting); `None` for the face itself (its OS/2 table
+    /// says) or an instance of a font without a weight axis.
+    weight: Option<f32>,
+    /// A named instance is italic (by its `ital` or `slnt` setting, or its name).
+    italic: bool,
+}
+
+/// The styles of a face: the face itself, then its named instances when it is a variable font.
+pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
+    let Some((family, style)) = face_names(f) else { return vec![] };
+    let mut keys = FaceKeys::of(f, &family, &style);
+    let instances = named_instances(f, &family, &style, &mut keys);
+    let face = FaceStyle { family, style, keys, variations: vec![], weight: None, italic: false };
+    std::iter::once(face).chain(instances).collect()
+}
+
+/// The named instances of a variable font face (its `fvar` table) as styles of the face's family,
+/// named by their subfamily names, without the default instance (the face itself) and without
+/// names already taken. The default instance's name, when it isn't the face's style name (a face
+/// `Regular` whose default instance is `Book`), names the face too (`keys`). Damaged tables give
+/// fewer instances or none; the counts read are capped.
+fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mut FaceKeys) -> Vec<FaceStyle> {
+    let axes = f.axes();
+    if axes.is_empty() || axes.len() > MAX_AXES {
+        return vec![];
+    }
+    let tags: Vec<Tag> = axes.iter().map(|a| a.tag()).collect();
+    let defaults: Vec<f32> = axes.iter().map(|a| a.default_value()).collect();
+    // Instances without a PostScript name of their own are named `<prefix>-<style>` (Adobe
+    // Technical Note #5902), as PDF and `.ai` files name them.
+    let prefix = name(f, &[StringId::VARIATIONS_POSTSCRIPT_NAME_PREFIX]).unwrap_or_else(|| family.to_string());
+    let mut taken = vec![norm(style)];
+    let mut out = Vec::new();
+    for inst in f.named_instances().iter().take(MAX_INSTANCES) {
+        let coords: Vec<f32> = inst.user_coords().take(MAX_AXES).collect();
+        if coords.len() != tags.len() || coords.iter().any(|c| !c.is_finite()) {
+            continue;
+        }
+        let Some(style) = name(f, &[inst.subfamily_name_id()]) else { continue };
+        let ns = norm(&style);
+        if ns.is_empty() || taken.contains(&ns) {
+            continue;
+        }
+        // The default instance is the face itself.
+        if coords.iter().zip(&defaults).all(|(c, d)| (c - d).abs() < 1e-3) {
+            keys.styles.push(ns.clone());
+            keys.postscript.push(norm(&format!("{prefix}{style}")));
+            taken.push(ns);
+            continue;
+        }
+        taken.push(ns);
+        let axis = |tag: &[u8; 4]| tags.iter().zip(&coords).find(|(t, _)| t.to_be_bytes() == *tag).map(|(_, v)| *v);
+        let weight = axis(b"wght").map(|w| w.clamp(1.0, 1000.0));
+        let italic = style_italic(&style) || axis(b"ital").is_some_and(|v| v >= 0.5) || axis(b"slnt").is_some_and(|v| v != 0.0);
+        let mut styles: Vec<String> = std::iter::once(style.clone()).chain(all_names(f, inst.subfamily_name_id())).map(|s| norm(&s)).collect();
+        let mut postscript: Vec<String> = inst.postscript_name_id().map(|id| all_names(f, id)).unwrap_or_default().iter().map(|n| norm(n)).collect();
+        postscript.push(norm(&format!("{prefix}{style}")));
+        for v in [&mut styles, &mut postscript] {
+            v.retain(|k| !k.is_empty());
+            v.sort();
+            v.dedup();
+        }
+        let keys = FaceKeys { families: keys.families.clone(), styles, legacy: vec![], postscript };
+        let variations = tags.iter().zip(&coords).map(|(t, v)| (t.to_be_bytes(), *v)).collect();
+        out.push(FaceStyle { family: family.to_string(), style, keys, variations, weight, italic });
+    }
+    out
+}
+
+/// Parse every face in `data` (a font file or collection) and the named instances of its variable
+/// ones. Returns each style with the index of its face.
+fn enumerate_faces(data: &[u8]) -> Vec<(u32, FaceStyle)> {
     let count = match FileRef::new(data) {
         Ok(FileRef::Font(_)) => 1,
         Ok(FileRef::Collection(c)) => c.len(),
         Err(_) => 0,
     };
     (0..count)
-        .filter_map(|i| {
-            let (family, style) = face_names(&skrifa::FontRef::from_index(data, i).ok()?)?;
-            Some((i, family, style))
-        })
+        .filter_map(|i| Some((i, skrifa::FontRef::from_index(data, i).ok()?)))
+        .flat_map(|(i, f)| face_styles(&f).into_iter().map(move |s| (i, s)))
         .collect()
 }
 
-/// (family, style, PostScript name) of every face in the font file at `path`, reading only its
-/// table directories and `name` tables: a scan opens hundreds of font files, many of them
+/// The styles of every face in the font file at `path` ([`face_styles`]), reading only its table
+/// directories and `name` and `fvar` tables: a scan opens hundreds of font files, many of them
 /// megabytes long.
 #[cfg(not(target_arch = "wasm32"))]
-fn file_face_names(path: &Path) -> Vec<(String, String, FaceKeys)> {
+fn file_face_names(path: &Path) -> Vec<FaceStyle> {
     use std::io::{Read, Seek, SeekFrom};
     /// Caps on what a (possibly damaged) file can make the scan read.
     const MAX_FACES: u32 = 256;
@@ -390,27 +503,53 @@ fn file_face_names(path: &Path) -> Vec<(String, String, FaceKeys)> {
             let dir = read_at(start.into(), 12)?;
             let tables = u16::from_be_bytes(dir.get(4..6)?.try_into().ok()?) as usize;
             let records = read_at(u64::from(start) + 12, tables * 16)?;
-            let rec: &[u8] = records.as_chunks::<16>().0.iter().find(|r| r.starts_with(b"name"))?;
-            let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?);
-            if len > MAX_NAME_TABLE {
-                return None;
+            let mut table = |tag: &[u8; 4]| -> Option<Vec<u8>> {
+                let rec: &[u8] = records.as_chunks::<16>().0.iter().find(|r| r.starts_with(tag))?;
+                let (offset, len) = (be32(rec, 8)?, be32(rec, 12)?);
+                if len > MAX_NAME_TABLE {
+                    return None;
+                }
+                read_at(offset.into(), len as usize)
+            };
+            let name = table(b"name")?;
+            // A variable font's named instances are styles too.
+            let fvar = table(b"fvar");
+            // A font holding just these tables, to read them as the font itself would.
+            let mut tables: Vec<(&[u8; 4], &[u8])> = vec![(b"name", &name)];
+            if let Some(fvar) = &fvar {
+                tables.push((b"fvar", fvar));
             }
-            let table = read_at(offset.into(), len as usize)?;
-            // A one-table font holding just the `name` table, to read it as the font itself would.
-            let mut font = Vec::with_capacity(28 + table.len());
-            font.extend_from_slice(&0x0001_0000_u32.to_be_bytes());
-            font.extend_from_slice(&[0, 1, 0, 16, 0, 0, 0, 0]);
-            font.extend_from_slice(b"name");
-            for v in [0, 28, len] {
-                font.extend_from_slice(&u32::to_be_bytes(v));
-            }
-            font.extend_from_slice(&table);
-            let f = skrifa::FontRef::new(&font).ok()?;
-            let (family, style) = face_names(&f)?;
-            let keys = FaceKeys::of(&f, &family, &style);
-            Some((family, style, keys))
+            let font = sfnt_of(&tables)?;
+            Some(face_styles(&skrifa::FontRef::new(&font).ok()?))
         })
+        .flatten()
         .collect()
+}
+
+/// A font file holding `tables` (tag, data), sorted by tag as table directories are.
+#[cfg(any(test, not(target_arch = "wasm32")))]
+pub(crate) fn sfnt_of(tables: &[(&[u8; 4], &[u8])]) -> Option<Vec<u8>> {
+    let mut tables = tables.to_vec();
+    tables.sort_by_key(|t| *t.0);
+    let n = u16::try_from(tables.len()).ok()?;
+    let mut font = Vec::new();
+    font.extend_from_slice(&0x0001_0000_u32.to_be_bytes());
+    for v in [n, 0, 0, 0] {
+        font.extend_from_slice(&v.to_be_bytes());
+    }
+    let mut offset = 12 + 16 * tables.len();
+    for (tag, data) in &tables {
+        font.extend_from_slice(*tag);
+        for v in [0, u32::try_from(offset).ok()?, u32::try_from(data.len()).ok()?] {
+            font.extend_from_slice(&v.to_be_bytes());
+        }
+        offset += data.len().next_multiple_of(4);
+    }
+    for (_, data) in &tables {
+        font.extend_from_slice(data);
+        font.resize(font.len().next_multiple_of(4), 0);
+    }
+    Some(font)
 }
 
 /// The platform's font folders (the system's and the user's), scanned by [`FontDb::global`].
@@ -448,23 +587,31 @@ pub fn system_font_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-fn make_face(bytes: FontBytes, index: u32, family: String, style: String, path: Option<std::path::PathBuf>) -> Option<FontFace> {
+fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::path::PathBuf>) -> Option<FontFace> {
     let data: &[u8] = match &bytes {
         FontBytes::Static(b) => b,
         FontBytes::Owned(v) => v.as_slice(),
     };
     let f = skrifa::FontRef::from_index(data, index).ok()?;
-    let m = f.metrics(Size::unscaled(), LocationRef::default());
+    let FaceStyle { family, style, keys, variations, weight, italic } = spec;
+    // A named instance: outlines, metrics and advances at its axis settings.
+    let location = if variations.is_empty() { Location::default() } else { f.axes().location(variations.iter().map(|(t, v)| (Tag::new(t), *v))) };
+    let m = f.metrics(Size::unscaled(), &location);
     let a = f.attributes();
-    let shaper = harfrust::ShaperData::new(&harfrust::FontRef::from_index(data, index).ok()?);
-    let keys = FaceKeys::of(&f, &family, &style);
+    let hb = harfrust::FontRef::from_index(data, index).ok()?;
+    let shaper = harfrust::ShaperData::new(&hb);
+    let instance =
+        (!variations.is_empty()).then(|| harfrust::ShaperInstance::from_variations(&hb, variations.iter().map(|(t, v)| (harfrust::Tag::new(t), *v))));
     Some(FontFace {
         keys,
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         family,
         style,
-        weight: a.weight.value(),
-        italic: !matches!(a.style, skrifa::attribute::Style::Normal),
+        weight: weight.unwrap_or(a.weight.value()),
+        italic: italic || !matches!(a.style, skrifa::attribute::Style::Normal),
+        variations,
+        location,
+        instance,
         upem: m.units_per_em.max(1) as f64,
         ascent: m.ascent as f64,
         descent: -(m.descent as f64),
@@ -523,8 +670,8 @@ impl FontDb {
         // first: fallbacks for Japanese text after the requested and bundled fonts.
         let craft = crate::craft_fonts::japanese_document_fonts().into_iter().map(|f| f.bytes);
         for data in BUNDLED.iter().copied().chain(craft) {
-            for (i, family, style) in enumerate_faces(data) {
-                if let Some(f) = make_face(FontBytes::Static(data), i, family, style, None) {
+            for (i, spec) in enumerate_faces(data) {
+                if let Some(f) = make_face(FontBytes::Static(data), i, spec, None) {
                     faces.push(Arc::new(f));
                 }
             }
@@ -631,9 +778,9 @@ impl FontDb {
         let mut v: Vec<(bool, f32, String)> =
             self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)).map(|f| (f.italic, f.weight, f.style.clone())).collect();
         if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
-            for (style, _) in &c.faces {
-                if !v.iter().any(|(_, _, s)| s.eq_ignore_ascii_case(style)) {
-                    v.push((style_italic(style), style_weight(style), style.clone()));
+            for cf in &c.faces {
+                if !v.iter().any(|(_, _, s)| s.eq_ignore_ascii_case(&cf.style)) {
+                    v.push((cf.italic, cf.weight, cf.style.clone()));
                 }
             }
         }
@@ -652,11 +799,11 @@ impl FontDb {
     fn add_font_from(&self, bytes: Vec<u8>, path: Option<&Path>) -> usize {
         let data = Arc::new(bytes);
         let mut added = 0;
-        for (i, family, style) in enumerate_faces(&data) {
-            if self.read_faces().iter().any(|f| f.family.eq_ignore_ascii_case(&family) && f.style.eq_ignore_ascii_case(&style)) {
+        for (i, spec) in enumerate_faces(&data) {
+            if self.read_faces().iter().any(|f| f.family.eq_ignore_ascii_case(&spec.family) && f.style.eq_ignore_ascii_case(&spec.style)) {
                 continue;
             }
-            if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, family, style, path.map(Path::to_path_buf)) {
+            if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, spec, path.map(Path::to_path_buf)) {
                 self.faces.write().unwrap_or_else(|e| e.into_inner()).push(Arc::new(f));
                 added += 1;
             }
@@ -722,7 +869,7 @@ impl FontDb {
                 if !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
                     continue;
                 }
-                for (family, style, keys) in file_face_names(&p) {
+                for FaceStyle { family, style, keys, weight, italic, .. } in file_face_names(&p) {
                     for (k, a) in Alias::of(&family, &style, &keys) {
                         aliases.entry(k).or_default().push(a);
                     }
@@ -734,7 +881,8 @@ impl FontDb {
                     if entry.name.is_empty() {
                         entry.name = family;
                     }
-                    entry.faces.push((style, p.clone()));
+                    let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
+                    entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });
                     n += 1;
                 }
             }
@@ -824,7 +972,7 @@ impl FontDb {
     #[cfg(not(target_arch = "wasm32"))]
     fn load_cataloged(&self, family: &str) -> bool {
         let mut paths: Vec<PathBuf> =
-            self.read_catalog().get(&family.to_ascii_lowercase()).map(|c| c.faces.iter().map(|(_, p)| p.clone()).collect()).unwrap_or_default();
+            self.read_catalog().get(&family.to_ascii_lowercase()).map(|c| c.faces.iter().map(|cf| cf.path.clone()).collect()).unwrap_or_default();
         paths.sort();
         paths.dedup();
         let mut any = false;
@@ -867,7 +1015,7 @@ impl FontDb {
     #[cfg(not(target_arch = "wasm32"))]
     fn is_cataloged(&self, family: &str, style: &str) -> bool {
         let ns = norm(style);
-        self.read_catalog().get(&family.to_ascii_lowercase()).is_some_and(|c| c.faces.iter().any(|(s, _)| norm(s) == ns))
+        self.read_catalog().get(&family.to_ascii_lowercase()).is_some_and(|c| c.faces.iter().any(|cf| norm(&cf.style) == ns))
     }
 
     /// The loaded face with [`FontFace::id`] `id` (the face a laid-out glyph came from).
@@ -899,6 +1047,11 @@ impl FontDb {
         }
         let ns = norm(style);
         if let Some(f) = cands.iter().find(|f| norm(&f.style) == ns) {
+            return Some((*f).clone());
+        }
+        // Another of a face's style names: in another language, or a variable font's default
+        // instance's name.
+        if let Some(f) = cands.iter().find(|f| f.keys.styles.contains(&ns)) {
             return Some((*f).clone());
         }
         let (tw, ti) = (style_weight(style), style_italic(style));
@@ -958,7 +1111,7 @@ impl FontDb {
                 return true;
             }
         }
-        let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|(_, p)| p.clone())).collect();
+        let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
         paths.sort();
         paths.dedup();
         for p in paths {
@@ -966,8 +1119,7 @@ impl FontDb {
                 continue;
             }
             let Ok(data) = std::fs::read(&p) else { continue };
-            let hit =
-                enumerate_faces(&data).iter().any(|(i, _, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
+            let hit = enumerate_faces(&data).iter().any(|(i, _)| skrifa::FontRef::from_index(&data, *i).is_ok_and(|f| f.charmap().map(c).is_some()));
             if hit && self.add_font_from(data, Some(&p)) > 0 && covered(self) {
                 return true;
             }
@@ -986,7 +1138,7 @@ impl FontDb {
         if let Some(f) = face.skrifa()
             && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
         {
-            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), LocationRef::default()), &mut pen);
+            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
         }
         let p = Arc::new(pen.0);
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());

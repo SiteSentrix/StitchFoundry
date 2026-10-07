@@ -216,6 +216,31 @@ fn embedded_fonts_hold_only_the_glyphs_used() {
     assert!(!export_full(&d, &ExportOptions { embed_fonts: true, outline_text: true, ..Default::default() }, None).svg.contains("@font-face"));
 }
 
+/// A named instance of a variable font embeds as a static font of that instance: the variable
+/// file would show its default instance in browsers (#296).
+#[test]
+fn variable_font_instances_embed_as_themselves() {
+    use vectorcraft_text::test_fonts::{VARIABLE_FAMILY, variable_font};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(variable_font().unwrap());
+    let mut d = Document::new(300.0, 200.0);
+    add(&mut d, text(Point::new(20.0, 60.0), &[("ll", style(VARIABLE_FAMILY, "Regular")), ("ll", style(VARIABLE_FAMILY, "Bold"))]));
+    let o = export_full(&d, &ExportOptions { embed_fonts: true, ..Default::default() }, None);
+    let fonts = embedded(&o.svg);
+    assert_eq!(fonts.iter().map(|f| f.1).collect::<Vec<_>>(), [400, 700], "{:?}", o.warnings);
+    let mut advances = vec![];
+    for ((_, w, data), style) in fonts.iter().zip(["Regular", "Bold"]) {
+        let f = skrifa::FontRef::new(data).unwrap();
+        assert!(f.fvar().is_err() && f.gvar().is_err(), "{w}: a static font");
+        let gid = f.cmap().unwrap().map_codepoint('l').unwrap();
+        let adv = f.hmtx().unwrap().advance(gid).unwrap();
+        let face = db.face(VARIABLE_FAMILY, style).unwrap();
+        assert_eq!(f64::from(adv), face.advance(face.glyph_for('l')).round(), "{style}");
+        advances.push(adv);
+    }
+    assert!(advances[1] > advances[0], "{advances:?}");
+}
+
 /// The bundled Source Sans 3 Regular renamed `family` (13 characters, as long as the original
 /// name) with OS/2 `fsType` set to `fs_type`.
 fn licensed_font(family: &str, fs_type: u16) -> Vec<u8> {

@@ -15,5 +15,16 @@ kurbo = { workspace = true }
 skrifa = { workspace = true }
 harfrust = { workspace = true }
 log = { workspace = true }
-# Font subsets for embedding (SVG @font-face); MIT OR Apache-2.0, already used by the PDF writer.
-subsetter = { version = "0.2", default-features = false }
+# Font subsets for embedding (SVG @font-face); MIT OR Apache-2.0, already used by the PDF writer
+# (which turns on `variable-fonts` too: named instances of variable fonts are instanced).
+subsetter = { version = "0.2", default-features = false, features = ["variable-fonts"] }
+# Builds a small variable font for tests (`test_fonts`; no font file is committed). MIT OR
+# Apache-2.0, already in the build through subsetter.
+write-fonts = { version = "0.48", optional = true }
+
+[features]
+# `vectorcraft_text::test_fonts` for other crates' tests (dev-dependencies only).
+test-fonts = ["dep:write-fonts"]
+
+[dev-dependencies]
+write-fonts = "0.48"
