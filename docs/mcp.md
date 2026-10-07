@@ -370,8 +370,10 @@ What a PDF holds comes in as editable art: soft masks become opacity masks (an a
 the backdrop colour gives Clip, an inverting transfer function Invert), transparency groups keep isolation and knockout,
 tiling patterns become pattern swatches, patch and triangle mesh shadings become gradient meshes, and gradients keep
 their stop opacity and stop where the shading doesn't extend. Text becomes point type, one object per run of a line in
-the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font) —
-`textAs: "outlines"` keeps glyph outlines instead. Optional content groups (the layers of PDF and PDF-compatible `.ai`
+the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font, and
+every export that draws that type — PDF, EPS, EMF/WMF, raster images, SVG with outlined or embedded fonts — says in
+its `warnings` that it wrote the fallback font) — `textAs: "outlines"` keeps the glyph outlines the file draws instead
+(its embedded fonts, installed or not). Optional content groups (the layers of PDF and PDF-compatible `.ai`
 files) become layers with their name, visibility, print state and lock, art that is off coming in as a hidden layer;
 art outside them goes to a layer per page (except the opaque white page a `.ai` paints under its layers, which isn't art). `layers: false` gives one layer per page of only what shows:
 

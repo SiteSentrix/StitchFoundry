@@ -355,7 +355,8 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
 }
 
 /// Like [`encode`], also returning the encoder's warnings (PDF and SVG: options not applied yet,
-/// features approximated or left out; the other formats have none).
+/// features approximated or left out; every format that draws type: fonts written in the fallback
+/// font).
 pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
     let f = super::writable(C, Some(format), None)?;
     encode_all(doc, f.id, p)?.single(f)
@@ -364,6 +365,19 @@ pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(
 /// [`encode`], with every file the export writes.
 pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     let f = super::writable(C, Some(format), None)?;
+    let mut enc = encode_files(doc, f, p)?;
+    // Formats that draw type: missing fonts come out in the fallback font (PDF and SVG say so
+    // themselves: SVG only when it outlines or embeds fonts).
+    if (f.raster || matches!(f.id, "eps" | "emf" | "wmf"))
+        && let Some(w) = crate::cmd::fonts::substitution_warning(doc)
+    {
+        enc.warnings.push(w);
+    }
+    Ok(enc)
+}
+
+/// [`encode_all`] without the font substitution warning.
+fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     // SVG reads its own `useArtboards` (an SVG option).
@@ -374,7 +388,7 @@ pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
         if let Some(o) = q.as_object_mut() {
             o.remove("useArtboards");
         }
-        return encode_all(&single_artboard(doc, bounds, "Art"), f.id, &q);
+        return encode_files(&single_artboard(doc, bounds, "Art"), f, &q);
     }
     let bytes = match f.id {
         "vectorcraft" => super::native::encode(C, f, doc, p)?,

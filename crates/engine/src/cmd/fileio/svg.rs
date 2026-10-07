@@ -166,5 +166,11 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
         }
         enc.files.push((artboard, if compressed { vectorcraft_svg::compress_bytes(&bytes) } else { bytes }));
     }
+    // Live type names its fonts; outlines and embedded fonts are the fallback font's.
+    if (opts.outline_text || opts.embed_fonts)
+        && let Some(w) = crate::cmd::fonts::substitution_warning(doc)
+    {
+        enc.warnings.push(w);
+    }
     Ok(enc)
 }

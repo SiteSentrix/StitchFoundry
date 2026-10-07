@@ -67,3 +67,40 @@ fn load_options_read_text_and_layers() {
     let d = LoadOptions::default();
     assert_eq!((d.text_as, d.layers, d.is_partial()), (TextAs::Text, true, false));
 }
+
+#[test]
+fn exports_that_draw_type_in_a_missing_font_say_it_is_the_fallback_font() {
+    let page = PdfPage {
+        resources: "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Zyxwvu-Serif >> >>".into(),
+        ..PdfPage::new(200.0, 100.0, "BT /F1 12 Tf 10 50 Td (Hello) Tj ET")
+    };
+    let mut s = Session::new();
+    let r = open(&mut s, &pdf(&[page], None), json!({})).unwrap();
+    let fonts = s.execute("text.fonts", &json!({})).unwrap();
+    let family = fonts[0]["family"].as_str().unwrap().to_string();
+    assert_eq!(fonts[0]["status"], "missing", "{fonts}");
+    assert!(r["warnings"].to_string().contains(&family), "opening lists it: {r}");
+    let warned = |s: &mut Session, p: Value| {
+        let w = s.execute("document.serialize", &p).unwrap()["warnings"].to_string();
+        w.contains(&family) && w.contains(vectorcraft_text::FALLBACK_FAMILY)
+    };
+    for p in [
+        json!({"format": "pdf"}),
+        json!({"format": "pdf", "advanced": {"outlineText": false}}),
+        json!({"format": "png"}),
+        json!({"format": "eps"}),
+        json!({"format": "emf"}),
+        json!({"format": "svg", "outlineText": true}),
+        json!({"format": "svg", "embedFonts": true}),
+    ] {
+        assert!(warned(&mut s, p.clone()), "{p}");
+    }
+    // Live SVG type and the native file name the font itself.
+    for p in [json!({"format": "svg", "outlineText": false}), json!({"format": "vectorcraft"}), json!({"format": "txt"})] {
+        assert!(!warned(&mut s, p.clone()), "{p}");
+    }
+    let pdf_export = s.execute("document.exportPdf", &json!({})).unwrap();
+    assert!(pdf_export["warnings"].to_string().contains(&family), "{pdf_export}");
+    s.execute("text.replaceFont", &json!({"from": {"family": family}, "to": {"family": "Source Serif 4"}})).unwrap();
+    assert!(!warned(&mut s, json!({"format": "pdf"})), "replaced: nothing is substituted");
+}

@@ -2,10 +2,10 @@
 //! another everywhere or in the selection, and selecting the text that uses a font. Also the fonts
 //! available (the bundled and installed ones) and rescanning the installed fonts.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, NodeId, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::typecmd::refresh_bounds;
 use super::*;
@@ -83,6 +83,41 @@ fn scope(s: &Session, selection_only: bool) -> Result<Vec<NodeId>> {
         }
     }
     Ok(v)
+}
+
+/// The fonts (family, style) of the type in the layers and symbols of `d`.
+pub(super) fn used_fonts(d: &Document) -> BTreeSet<(String, String)> {
+    let mut fonts = BTreeSet::new();
+    let mut add = |n: &Node| {
+        if let NodeKind::Text(t) = &n.kind {
+            fonts.extend(t.runs.iter().map(|r| (r.style.font_family.clone(), r.style.font_style.clone())));
+        }
+    };
+    d.walk(&mut add);
+    for s in &d.symbols {
+        s.art.walk(&mut add);
+    }
+    fonts
+}
+
+/// What an export that draws type (as outlines, embedded fonts or pixels) says when `d` uses font
+/// families that aren't available: their type is drawn in the fallback font, not the font it names.
+pub(super) fn substitution_warning(d: &Document) -> Option<String> {
+    let db = vectorcraft_text::FontDb::global();
+    let mut missing: Vec<String> = used_fonts(d)
+        .into_iter()
+        .filter(|(family, style)| db.resolve(family, style).is_none_or(|(_, m)| m == vectorcraft_text::FontMatch::Missing))
+        .map(|(family, _)| family)
+        .collect();
+    // Sorted by family: its styles are neighbours.
+    missing.dedup();
+    (!missing.is_empty()).then(|| {
+        format!(
+            "fonts that aren't available were written in the fallback font, {}: {} (install them, or replace them with Find Font)",
+            vectorcraft_text::FALLBACK_FAMILY,
+            missing.join(", ")
+        )
+    })
 }
 
 fn text(d: &Document, id: NodeId) -> Option<&vectorcraft_doc::TextObject> {

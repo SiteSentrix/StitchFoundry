@@ -276,6 +276,7 @@ pub(super) fn encode_carrying(cmd: &str, doc: &Document, p: &Value, native: impl
     }
     let r = super::super::rasterfx::export_pdf_with_report(flat.as_ref().unwrap_or(doc), &opts).map_err(|e| pdf_error(cmd, e))?;
     warnings.extend(r.warnings);
+    warnings.extend(crate::cmd::fonts::substitution_warning(doc));
     Ok((r.bytes, warnings))
 }
 
