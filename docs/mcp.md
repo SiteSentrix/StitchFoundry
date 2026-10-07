@@ -147,7 +147,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 |---|---|---|
 | `list_commands` | `{filter?, enabledOnly?}` | The command catalogue: id, label, menu, shortcut, params doc, enablement. |
 | `run_command` | `{command, params?}` | Runs any command. Use it for everything without a dedicated tool. |
-| `inspect_document` | `{}` | Artboards, layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. |
+| `inspect_document` | `{}` | Artboards, layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
 | `pointer_gesture` | `{events:[{kind,x,y,mods?}], tool?, mods?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. Events go through the same path as the mouse. |
@@ -755,8 +755,9 @@ fills and strokes become objects among its members, and its members are expanded
 
 A colour linked to a global or spot swatch has a tint (the reference app's T slider): `paint.setFill {swatch,
 tint?: 0..100}` (and `paint.setStroke`) applies the swatch at that percentage, linked, so `swatch.edit` recolours it
-at its own tint. `paint.proxies` and `document.inspect` show the paint as `{type: "solid", color, swatch, tint}`
-(`tint` 0..1, left out at 100 %). `swatch.new {tint?}` with the current fill (or `swatch`) saves a tint swatch,
+at its own tint. `paint.proxies` shows the paint as `{type: "solid", color, swatch, tint}` (`tint` 0..1, left out at
+100 %); `document.inspect` reports it as a label, the swatch name, the tint below 100 % and the colour it gives
+(`"G1 40% (#ff9999)"`, `"G1 (#ff0000)"`). `swatch.new {tint?}` with the current fill (or `swatch`) saves a tint swatch,
 "Name 40%": `swatch.list` reports it with `tintOf` and `tint`, applying it links to its base at that tint, and it
 follows edits of its base. A spot tint prints that percentage of its plate (Separations Preview, PDF Separation
 value). `edit.colors.adjustBalance {tint: -100..100}` (Global mode) shifts the tints of the selection's linked
