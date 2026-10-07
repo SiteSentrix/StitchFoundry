@@ -255,8 +255,8 @@ Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors. Required noti
 
 Bundled fonts, icons, images and other assets keep their own open licenses; each one is listed
 with its author, source and license in [ASSETS.md](ASSETS.md). Release builds also embed the
-Japanese fonts of [craft-fonts](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md)
-(SIL Open Font License 1.1).
+fonts of [craft-fonts](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md) (Japanese,
+Simplified Chinese and Arabic faces; SIL Open Font License 1.1).
 
 The app icon (an engraved dragon on VectorCraft red, `#e8573f`) is the owner's original artwork; its
 palette and files are in [`assets/app-icon/`](assets/app-icon/README.md).
