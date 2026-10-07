@@ -2306,6 +2306,32 @@ begins or ends, dragging the centre bracket slides the type along its path and, 
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
 ```
 
+## Paragraph attributes per paragraph
+
+Each paragraph (text split at `\n`) has its own alignment, indents, space before and after, hyphenation,
+punctuation spacing (`mojikumi`), hanging punctuation (`burasagari`), direction, leading model, tab stops and
+paragraph style. `text.setStyle {justify}`, `text.setFormat {leftIndent, rightIndent, firstLineIndent,
+spaceBefore, spaceAfter, hyphenate, mojikumi, burasagari, direction, leadingModel}`, `text.tabs.set` / `text.tabs.clear` and `paraStyle.apply` take optional
+`start` / `end` byte offsets of the plain text (as `text.setRangeStyle` does): they change the paragraphs the range
+touches (a caret, `start == end`, touches its paragraph). Without a range they change every paragraph of the
+targeted objects, as before. With a range, the character attributes of `text.setStyle` and `text.setFormat` style
+that range of characters. `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
+paragraph at `start`; `paraStyle.list` counts paragraphs as uses. A Return the Type tool types (or `text.editRange`
+inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
+`text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
+the story re-flows (a paragraph split between frames has them in both).
+
+In the native file a text object's `para` holds the first paragraph's attributes and `paras` (left out when every
+paragraph is alike) one entry per paragraph, so older readers keep the first paragraph's. SVG export anchors each
+centred or right-aligned line on its own (`<tspan text-anchor>`), and SVG import gives each line's paragraph its
+alignment back, with indents that keep it in place.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setStyle","params":{"id":42,"justify":"center","start":0,"end":0}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"ids":[42],"spaceBefore":6,"start":12,"end":30}}}
+{"name":"run_command","arguments":{"command":"paraStyle.apply","params":{"name":"Heading","id":42,"start":0,"end":0}}}
+```
+
 ## Constrain proportions
 
 The link between W and H in the Transform panel, the Properties panel and the Control bar is the

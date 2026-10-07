@@ -210,6 +210,27 @@ fn indents_and_paragraph_spacing() {
 }
 
 #[test]
+fn each_paragraph_has_its_own_attributes() {
+    let frame = Rect::new(0.0, 0.0, 200.0, 400.0);
+    let mut t = area("left\ncentred\nright", style(10.0), frame, Justify::Left);
+    let centred = vectorcraft_doc::ParaStyle { justify: Justify::Center, space_before: 20.0, ..Default::default() };
+    let right = vectorcraft_doc::ParaStyle { justify: Justify::Right, left_indent: 7.0, ..Default::default() };
+    t.set_paragraph_styles(vec![t.para.clone(), centred, right]);
+    let l = layout(db(), &t);
+    assert_eq!(l.lines.len(), 3);
+    assert!(l.lines[0].x0.abs() < 1e-9, "the first paragraph stays left");
+    let mid = (l.lines[1].x0 + l.lines[1].x1) / 2.0;
+    assert!((mid - 100.0).abs() < 1e-6, "the second is centred: {mid}");
+    assert!((l.lines[2].x1 - 200.0).abs() < 1e-6, "the third is right-aligned");
+    // Space before applies to the second paragraph only (leading 12 + 20).
+    assert!((l.lines[1].baseline - l.lines[0].baseline - 32.0).abs() < 1e-9);
+    assert!((l.lines[2].baseline - l.lines[1].baseline - 12.0).abs() < 1e-9);
+    // Paragraph 0's style is `para` (what readers that predate per-paragraph styles see).
+    assert_eq!(t.paras.len(), 3);
+    assert_eq!(t.para_at(0), &t.para);
+}
+
+#[test]
 fn non_rect_frame_narrows_lines() {
     // Triangle pointing up: lines get wider towards the bottom.
     let tri = PathData::from_bezpath(&{
@@ -556,6 +577,46 @@ fn em_box_top_leading_hangs_lines_from_the_line_above() {
         "the big line's leading, below it: {} vs {want}",
         em.lines[1].baseline - em.lines[0].baseline
     );
+}
+
+/// The leading model is a paragraph attribute: in "大 / 小 / 大 / 小" (40 pt over 20 pt) with
+/// only the second paragraph top-to-top, its line hangs from the big line's em box (the big
+/// line's leading, below it) while the fourth, baseline to baseline, takes its own leading above
+/// it; in area type a top-to-top first paragraph puts its em box on the frame's top.
+#[test]
+fn leading_model_is_per_paragraph() {
+    use vectorcraft_doc::{LeadingModel, ParaStyle, TextRun};
+    let st = |size: f64| CharStyle { size, leading: Some(size * 1.5), ..style(size) };
+    let model = |m: LeadingModel| ParaStyle { leading_model: m, ..ParaStyle::default() };
+    let top = |size: f64| 0.88 * size;
+    let mut t = point("", st(40.0));
+    t.runs = vec![
+        TextRun { text: "大\n".into(), style: st(40.0) },
+        TextRun { text: "小\n".into(), style: st(20.0) },
+        TextRun { text: "大\n".into(), style: st(40.0) },
+        TextRun { text: "小".into(), style: st(20.0) },
+    ];
+    t.set_paragraph_styles(vec![
+        model(LeadingModel::RomanBaseline),
+        model(LeadingModel::EmBoxTop),
+        model(LeadingModel::RomanBaseline),
+        model(LeadingModel::RomanBaseline),
+    ]);
+    assert_eq!(t.paras.len(), 4);
+    let l = layout(db(), &t);
+    let gap = |i: usize| l.lines[i].baseline - l.lines[i - 1].baseline;
+    let em = -top(40.0) + 60.0 + top(20.0);
+    assert!((gap(1) - em).abs() < 0.01, "top to top: {} vs {em}", gap(1));
+    assert!((gap(3) - 30.0).abs() < 0.01, "baseline to baseline: {}", gap(3));
+    // Area type: only a top-to-top first paragraph moves the first line up to the frame's top.
+    let mut a = area("一\n二", st(20.0), Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
+    a.set_paragraph_styles(vec![model(LeadingModel::RomanBaseline), model(LeadingModel::EmBoxTop)]);
+    let roman_first = layout(db(), &a).lines[0].baseline;
+    a.set_paragraph_styles(vec![model(LeadingModel::EmBoxTop), model(LeadingModel::RomanBaseline)]);
+    let em_first = layout(db(), &a);
+    assert!((em_first.lines[0].baseline - top(20.0)).abs() < 0.01, "{}", em_first.lines[0].baseline);
+    assert!((roman_first - em_first.lines[0].baseline).abs() > 0.5);
+    assert!((em_first.lines[1].baseline - em_first.lines[0].baseline - 30.0).abs() < 0.01);
 }
 
 /// Character Alignment: a 20 pt character next to a 40 pt one lines its em box top, centre or

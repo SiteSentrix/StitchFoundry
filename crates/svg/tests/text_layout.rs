@@ -200,3 +200,37 @@ fn a_viewer_draws_the_text_where_the_canvas_does() {
         }
     }
 }
+
+#[test]
+fn paragraphs_aligned_differently_keep_their_alignment() {
+    let mut t = TextObject::point(Point::new(20.0, 20.0), "Left words here\nCentred line\nRight line", style(14.0));
+    t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 160.0)) };
+    let para = |j| vectorcraft_doc::ParaStyle { justify: j, ..Default::default() };
+    t.set_paragraph_styles(vec![para(Justify::Left), para(Justify::Center), para(Justify::Right)]);
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    for fewer_tspans in [false, true] {
+        let svg = export(&d, &ExportOptions { fewer_tspans, ..Default::default() });
+        // Each anchored line carries its own anchor (the <text> has none).
+        assert!(svg.contains("text-anchor=\"middle\"") && svg.contains("text-anchor=\"end\""), "{svg}");
+        assert!(!svg.contains("<text text-anchor"), "{svg}");
+        // A viewer draws each line where the canvas does.
+        let mut viewer = Document::new(300.0, 200.0);
+        let vl = viewer.layers[0].id;
+        for bp in viewer_outlines(&svg) {
+            let ap = vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+            let n = Node::path(viewer.alloc_id(), PathData::from_bezpath(&bp), ap);
+            viewer.insert(Some(vl), usize::MAX, n).unwrap();
+        }
+        assert_similar(&render_artboard(&d), &render_artboard(&viewer), 40.0, 0.01);
+        // Read back: one paragraph per line, each with its alignment, drawn where it was.
+        let back = vectorcraft_svg::import(&svg).unwrap();
+        let text =
+            back.layers[0].children().unwrap().iter().find_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.clone()) } else { None }).unwrap();
+        let js: Vec<Justify> = text.paragraph_styles().iter().map(|p| p.justify).collect();
+        assert_eq!(js, [Justify::Left, Justify::Center, Justify::Right], "{svg}");
+        assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.01);
+    }
+}
