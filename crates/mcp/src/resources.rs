@@ -44,7 +44,7 @@ pub static TEMPLATES: &[Template] = &[
         uri: "vectorcraft://object/{id}",
         name: "object",
         title: "One layer or object",
-        description: "The layer or object with this id, with its children, bounds and paint (document.node {summary: true})",
+        description: "The layer or object with this id, with its children, bounds and paint (document.node {summary: true}). Large containers can be sliced with run_command document.node {id, summary, depth, childLimit}: truncated levels report childCount",
         mime: "application/json",
         live: Live::Objects,
     },

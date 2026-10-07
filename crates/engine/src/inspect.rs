@@ -12,8 +12,23 @@ fn rect_json(r: Option<vectorcraft_geom::Rect>) -> Value {
     }
 }
 
-/// Compact tree summary of a node (for `document.inspect`).
+/// How much of the subtree a node summary carries.
+#[derive(Clone, Copy, Default)]
+pub struct SummaryOpts {
+    /// Child levels to include (`None`: the whole subtree). `0` is the node alone.
+    pub depth: Option<u64>,
+    /// Children shown per node (`None`: all, top of the stack first). A level that shows
+    /// fewer children than it has reports `childCount`, so truncation is never silent.
+    pub child_limit: Option<u64>,
+}
+
+/// Compact tree summary of a node (for `document.inspect`): the whole subtree.
 pub fn node_summary(n: &Node) -> Value {
+    node_summary_opts(n, SummaryOpts::default())
+}
+
+/// The same summary with [`SummaryOpts`] applied.
+pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
     let mut v = json!({
         "id": n.id.0,
         "name": n.display_name(),
@@ -69,7 +84,15 @@ pub fn node_summary(n: &Node) -> Value {
         _ => {}
     }
     if let Some(ch) = n.children() {
-        v["children"] = Value::Array(ch.iter().rev().map(|c| node_summary(c)).collect());
+        let total = ch.len();
+        let take_n = opts.child_limit.map_or(total, |l| l.min(total as u64) as usize);
+        if opts.depth.is_none_or(|d| d > 0) {
+            let next = SummaryOpts { depth: opts.depth.map(|d| d.saturating_sub(1)), child_limit: opts.child_limit };
+            v["children"] = Value::Array(ch.iter().rev().take(take_n).map(|c| node_summary_opts(c, next)).collect());
+        }
+        if take_n < total || v.get("children").is_none() {
+            v["childCount"] = json!(total);
+        }
     }
     v
 }

@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("file.close", "Close", ["File"], Some("Cmd+W"), "{index?}", has_doc, file_close),
         cmd!("document.activate", "Activate Document", [], None, "{index}", always, doc_activate),
         cmd!(query "document.inspect", "Inspect Document", [], None, "{} → layer tree, artboards, selection, history", has_doc, |s, _| Ok(inspect::document(s))),
-        cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: the compact document.inspect-style summary instead of the full object JSON} → one object", has_doc, doc_node),
+        cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
         cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
         cmd!(
             "document.setUnits",
@@ -106,7 +106,18 @@ fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
     let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
-    if bool_or(p, "summary", false) { Ok(inspect::node_summary(n)) } else { Ok(serde_json::to_value(n).unwrap_or(Value::Null)) }
+    if bool_or(p, "summary", false) { Ok(inspect::node_summary_opts(n, slice_opts(p)?)) } else { Ok(serde_json::to_value(n).unwrap_or(Value::Null)) }
+}
+
+/// `depth` / `childLimit` for a summary read: absent (or null) means no limit.
+/// A present value that is not a non-negative integer is rejected rather than
+/// silently reinterpreted.
+fn slice_opts(p: &Value) -> Result<inspect::SummaryOpts> {
+    let opt = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("document.node", format!("`{key}` must be a non-negative integer"))),
+    };
+    Ok(inspect::SummaryOpts { depth: opt("depth")?, child_limit: opt("childLimit")? })
 }
 
 /// Document Setup's units (also `document.setup {units}`).

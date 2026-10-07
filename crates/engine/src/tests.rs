@@ -364,6 +364,47 @@ fn document_node_summary_matches_inspect() {
     assert!(s.execute("document.node", &json!({"id": 999999, "summary": true})).is_err());
 }
 
+/// `depth` and `childLimit` slice a summary read; a level that shows fewer children
+/// than it has reports `childCount`, and invalid values are rejected, not reinterpreted.
+#[test]
+fn document_node_summary_slices_with_depth_and_limit() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    s.execute("select.all", &json!({})).unwrap();
+    let inner = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    s.execute("select.all", &json!({})).unwrap();
+    let outer = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let mut read = |p: Value| s.execute("document.node", &p).unwrap();
+
+    let g = read(json!({"id": outer, "summary": true}));
+    assert_eq!(g["children"].as_array().map(Vec::len), Some(2));
+    assert!(g.get("childCount").is_none(), "nothing truncated: {g}");
+
+    let one = read(json!({"id": outer, "summary": true, "childLimit": 1}));
+    assert_eq!(one["children"].as_array().map(Vec::len), Some(1));
+    assert_eq!(one["childCount"], 2);
+
+    let flat = read(json!({"id": outer, "summary": true, "depth": 0}));
+    assert!(flat.get("children").is_none(), "{flat}");
+    assert_eq!(flat["childCount"], 2);
+
+    // Limits compose per level: the outer children show; the inner group's own
+    // children don't, and it says so.
+    let shallow = read(json!({"id": outer, "summary": true, "depth": 1}));
+    let kids = shallow["children"].as_array().unwrap();
+    assert_eq!(kids.len(), 2);
+    assert!(shallow.get("childCount").is_none(), "{shallow}");
+    let nested = kids.iter().find(|n| n["id"] == inner).unwrap();
+    assert!(nested.get("children").is_none(), "{nested}");
+    assert_eq!(nested["childCount"], 2);
+
+    for bad in [json!({"id": outer, "summary": true, "depth": -1}), json!({"id": outer, "summary": true, "childLimit": "many"})] {
+        assert!(s.execute("document.node", &bad).is_err(), "{bad}");
+    }
+}
+
 /// Type reports the paint its characters show, and its own object-level paint apart from it.
 #[test]
 fn inspect_reports_the_paint_of_types_characters() {

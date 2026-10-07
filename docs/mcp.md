@@ -75,7 +75,7 @@ is thousands of lines an agent pays for again on every change.
 
 | `uriTemplate` | Reads |
 |---|---|
-| `vectorcraft://object/{id}` | One layer or object with its children, bounds and paint: `document.node {id, summary: true}`, the node as `document.inspect` lists it |
+| `vectorcraft://object/{id}` | One layer or object with its children, bounds and paint: `document.node {id, summary: true}`, the node as `document.inspect` lists it. A large container can be sliced with `run_command document.node {id, summary: true, depth?, childLimit?}` (a level that shows fewer children reports `childCount`) |
 | `vectorcraft://command/{id}` | One command: label, menu path, shortcut, parameter description, enablement |
 | `vectorcraft://effect/{id}` | One live effect with its parameters and defaults |
 | `vectorcraft://swatch/{name}` | One swatch, colour, gradient or pattern swatch (percent-encode spaces) |
