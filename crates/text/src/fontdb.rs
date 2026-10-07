@@ -145,7 +145,7 @@ impl FontFace {
             .unwrap_or(self.upem * 0.5)
     }
     /// Glyph `gid` set upright in vertical type, from the font's vertical metrics: (its advance down
-    /// the column, the height of its vertical origin, the top of its cell, above the baseline), in
+    /// the column, the height above the baseline of its vertical origin, the top of its cell), in
     /// font units. The origin is the `VORG` table's, else the glyph's top plus its top side bearing.
     /// `None` when the font has no vertical metrics (`vhea`/`vmtx`), or they make no sense.
     pub fn vertical_glyph(&self, gid: u32) -> Option<(f64, f64)> {
