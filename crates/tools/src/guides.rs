@@ -15,6 +15,7 @@ enum Kind {
     Center,
     Edge,
     Artboard,
+    Bleed,
 }
 
 impl Kind {
@@ -24,6 +25,7 @@ impl Kind {
             Kind::Center => "center",
             Kind::Edge => "path",
             Kind::Artboard => "artboard",
+            Kind::Bleed => "bleed",
         }
     }
 }
@@ -56,12 +58,18 @@ impl Targets {
                 t.xs.push((p.x, p, kind));
                 t.ys.push((p.y, p, kind));
             }
-            t.points.push((c, Kind::Center));
-            t.xs.push((c.x, c, Kind::Center));
-            t.ys.push((c.y, c, Kind::Center));
+            // A bleed shares its artboard's centre.
+            if kind != Kind::Bleed {
+                t.points.push((c, Kind::Center));
+                t.xs.push((c.x, c, Kind::Center));
+                t.ys.push((c.y, c, Kind::Center));
+            }
         };
         for (_, ab) in doc.artboards.iter().enumerate().filter(|(i, _)| Some(*i) != skip_artboard) {
             add_rect(&mut t, ab.rect, Kind::Artboard);
+            if doc.setup.has_bleed() {
+                add_rect(&mut t, doc.setup.bleed_rect(ab.rect), Kind::Bleed);
+            }
         }
         let mut budget = 20_000usize;
         doc.walk(|n| {
@@ -133,30 +141,49 @@ impl Targets {
         (out, ov)
     }
 
+    /// Snap a dragged point that carries others along at `offsets` (a resize handle and the
+    /// bleed edge beyond it): onto an anchor or centre near the point itself, otherwise into line
+    /// with targets, each axis on whichever of them comes nearest.
+    pub fn snap_point_with(&self, p: Point, offsets: &[Vec2], tol: f64) -> (Point, Vec<Overlay>) {
+        if self.points.iter().any(|(q, _)| q.distance(p) <= tol) {
+            return self.snap_point(p, tol);
+        }
+        let rects: Vec<Rect> = std::iter::once(Vec2::ZERO).chain(offsets.iter().copied()).map(|o| Rect::from_points(p + o, p + o)).collect();
+        let (adj, mut ov) = self.snap_rects(&rects, tol);
+        let out = p + adj;
+        if !ov.is_empty() {
+            ov.push(Overlay::Label { p: out, text: "align".into(), color: MAGENTA });
+        }
+        (out, ov)
+    }
+
     /// Snap a moving rectangle (selection bounds after a move by `d`): tries its corners/edges/centre.
     pub fn snap_rect(&self, r: Rect, tol: f64) -> (Vec2, Vec<Overlay>) {
-        let c = r.center();
-        let xs = [r.x0, c.x, r.x1];
-        let ys = [r.y0, c.y, r.y1];
-        let best_x = xs
-            .iter()
-            .flat_map(|x| self.xs.iter().map(move |(t, from, _)| (t - x, *from, *x)))
-            .filter(|(d, _, _)| d.abs() <= tol)
-            .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()));
-        let best_y = ys
-            .iter()
-            .flat_map(|y| self.ys.iter().map(move |(t, from, _)| (t - y, *from, *y)))
-            .filter(|(d, _, _)| d.abs() <= tol)
-            .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()));
+        self.snap_rects(&[r], tol)
+    }
+
+    /// Snap rectangles that move together (an artboard and its bleed): the edge or centre of any
+    /// of them nearest a target, per axis. Returns the shift and the guides.
+    pub fn snap_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>) {
+        let nearest = |targets: &[(f64, Point, Kind)], along: fn(&Rect) -> [f64; 3]| {
+            rects
+                .iter()
+                .flat_map(|r| along(r).into_iter().map(move |v| (v, *r)))
+                .flat_map(|(v, r)| targets.iter().map(move |(t, from, _)| (t - v, *from, v, r)))
+                .filter(|(d, ..)| d.abs() <= tol)
+                .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
+        };
+        let best_x = nearest(&self.xs, |r| [r.x0, r.center().x, r.x1]);
+        let best_y = nearest(&self.ys, |r| [r.y0, r.center().y, r.y1]);
         let mut d = Vec2::ZERO;
         let mut ov = vec![];
-        if let Some((dx, from, x)) = best_x {
+        if let Some((dx, from, x, r)) = best_x {
             d.x = dx;
             let x = x + dx;
             let (y0, y1) = (from.y.min(r.y0), from.y.max(r.y1));
             ov.push(Overlay::Line { a: Point::new(x, y0), b: Point::new(x, y1), color: MAGENTA, dashed: false });
         }
-        if let Some((dy, from, y)) = best_y {
+        if let Some((dy, from, y, r)) = best_y {
             d.y = dy;
             let y = y + dy;
             let (x0, x1) = (from.x.min(r.x0), from.x.max(r.x1));
@@ -198,6 +225,16 @@ pub fn snap_pick(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
 mod tests {
     use super::*;
     use crate::testutil::*;
+
+    #[test]
+    fn artboard_bleed_is_a_target() {
+        let (mut d, _) = doc_with_rect();
+        let t = Targets::collect(&d, &[], None);
+        assert_eq!(t.snap_point(Point::new(512.0, 300.0), 4.0).0.x, 512.0, "no bleed, nothing near");
+        d.setup.bleed = [10.0; 4];
+        let t = Targets::collect(&d, &[], None);
+        assert_eq!(t.snap_point(Point::new(512.0, 300.0), 4.0).0.x, 510.0);
+    }
 
     #[test]
     fn snaps_to_anchor_and_alignment() {

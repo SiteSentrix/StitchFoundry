@@ -4,8 +4,9 @@
 //! it (with its artwork when the `moveArt` option is on, Shift constrains), drag a handle resizes it
 //! (Shift proportional, Alt from centre), drag on the pasteboard draws a new artboard, Delete removes
 //! the active one and Escape returns to the Selection tool. Moving and resizing snap like drawing
-//! does: to whole pixels, to the grid, or with Smart Guides to other artboards and objects (never to
-//! the dragged artboard or the art moving with it).
+//! does: to whole pixels, to the grid, or with Smart Guides to other artboards, their bleed and
+//! objects (never to the dragged artboard or the art moving with it); the artboard's own bleed edges
+//! snap too.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect, Vec2};
@@ -81,8 +82,8 @@ impl ArtboardTool {
     }
 
     /// Snap a dragged handle: to whole pixels, the grid, or Smart Guides (in that order, as when
-    /// drawing).
-    fn snap_point(&mut self, cx: &ToolContext, p: Point) -> Point {
+    /// drawing). With Smart Guides the bleed edge `bleed` beyond the handle may snap instead.
+    fn snap_handle(&mut self, cx: &ToolContext, p: Point, bleed: Vec2) -> Point {
         self.guides.clear();
         if cx.snap_to_pixel {
             return Point::new(p.x.round(), p.y.round());
@@ -91,7 +92,8 @@ impl ArtboardTool {
             return vectorcraft_geom::snap::snap_point_to_grid(p, grid_step(cx));
         }
         let Some(t) = &self.targets else { return p };
-        let (q, ov) = t.snap_point(p, cx.tol(5.0));
+        let offsets: &[Vec2] = if bleed == Vec2::ZERO { &[] } else { &[bleed] };
+        let (q, ov) = t.snap_point_with(p, offsets, cx.tol(5.0));
         self.guides = ov;
         q
     }
@@ -108,7 +110,12 @@ impl ArtboardTool {
             return vectorcraft_geom::snap::snap_point_to_grid(tl + d, grid_step(cx)) - tl;
         }
         let Some(t) = &self.targets else { return d };
-        let (adj, ov) = t.snap_rect(rect + d, cx.tol(5.0));
+        let moved = rect + d;
+        let (adj, ov) = if cx.doc.setup.has_bleed() {
+            t.snap_rects(&[moved, cx.doc.setup.bleed_rect(moved)], cx.tol(5.0))
+        } else {
+            t.snap_rect(moved, cx.tol(5.0))
+        };
         self.guides = ov;
         d + adj
     }
@@ -119,6 +126,13 @@ impl ArtboardTool {
         self.targets = None;
         self.guides.clear();
     }
+}
+
+/// Where the bleed edge lies beyond a handle, along the axes the handle moves.
+fn bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle) -> Vec2 {
+    let d = handle.pos(cx.doc.setup.bleed_rect(rect)) - handle.pos(rect);
+    let (ax, ay) = handle.axes();
+    Vec2::new(if ax { d.x } else { 0.0 }, if ay { d.y } else { 0.0 })
 }
 
 /// The grid's snapping step (gridline spacing over subdivisions), as `guides::snap_draw` uses.
@@ -179,7 +193,7 @@ impl Tool for ArtboardTool {
                     self.begin_snapping(cx, index, false);
                 }
                 self.drag = Some(Drag::Resize { index, handle, rect, grab, began: true });
-                let h = self.snap_point(cx, p + grab);
+                let h = self.snap_handle(cx, p + grab, bleed_offset(cx, rect, handle));
                 let nr = scale_for_drag(rect, handle, h, m.shift, m.alt).transform_rect_bbox(rect);
                 self.preview = Some(nr);
                 out.push(Action::Preview("artboard.setProps".into(), rect_json(index, nr)));
@@ -437,6 +451,23 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 798.0, 100.0));
         let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 808.0, 100.0)));
         assert_eq!(v["width"].as_f64(), Some(210.0));
+    }
+
+    #[test]
+    fn bleed_edges_snap_to_bleed_edges() {
+        let mut d = two_boards();
+        d.setup.bleed = [10.0; 4];
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = ArtboardTool::default();
+        // Artboard 2's bleed (left edge 590) lands on artboard 1's bleed (right edge 510): dragged
+        // 77 pt left it's 3 pt off, nothing else is within reach.
+        assert_eq!(drag_board2(&c, &mut t, -77.0, 0.0)["dx"], -80.0);
+        t.pointer(&c, &ev(PointerKind::Up, 623.0, 100.0));
+        // Resizing: the left handle's bleed edge snaps the same way.
+        t.pointer(&c, &ev(PointerKind::Down, 600.0, 100.0));
+        let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 523.0, 100.0)));
+        assert_eq!((v["x"].as_f64(), v["width"].as_f64()), (Some(520.0), Some(280.0)));
     }
 
     #[test]

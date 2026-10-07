@@ -1,9 +1,11 @@
 //! Transform panel: reference point, X/Y/W/H with the constrain link, rotate and shear, flips,
-//! live-shape properties and the Scale Corners / Scale Strokes & Effects options.
+//! live-shape properties and the Scale Corners / Scale Strokes & Effects options. While the
+//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead.
 
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
+use vectorcraft_geom::Rect;
 
 use super::{first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
@@ -21,10 +23,78 @@ pub fn constrained(w: f64, h: f64, new_w: Option<f64>, new_h: Option<f64>) -> (f
     }
 }
 
+/// The artboard the Artboard tool has active, while that tool is in use.
+fn tool_artboard(app: &VectorcraftApp) -> Option<(usize, Rect)> {
+    if app.session.tool_id() != "artboard" {
+        return None;
+    }
+    let i = usize::try_from(app.session.tool_options().get("active")?.as_u64()?).ok()?;
+    app.session.active()?.doc.artboards.get(i).map(|a| (i, a.rect))
+}
+
+/// Where an artboard goes when the panel sets its X, Y, W or H: the reference point `refi` moves to
+/// the new X/Y or stays put while the size changes (both sides together when `link` is on).
+pub fn artboard_rect(r: Rect, refi: usize, x: Option<f64>, y: Option<f64>, w: Option<f64>, h: Option<f64>, link: bool) -> Rect {
+    let rp = vectorcraft_geom::reference_point(r, refi);
+    let (w0, h0) = (r.width(), r.height());
+    let (nw, nh) = if link { constrained(w0, h0, w, h) } else { (w.unwrap_or(w0), h.unwrap_or(h0)) };
+    // Where the reference point sits across the box (0, ½ or 1 of each side).
+    let fx = if w0 > 1e-9 { (rp.x - r.x0) / w0 } else { 0.0 };
+    let fy = if h0 > 1e-9 { (rp.y - r.y0) / h0 } else { 0.0 };
+    let (x0, y0) = (x.unwrap_or(rp.x) - fx * nw, y.unwrap_or(rp.y) - fy * nh);
+    Rect::new(x0, y0, x0 + nw, y0 + nh)
+}
+
+/// The Artboard tool's view of the panel: the active artboard's position and size.
+fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect) {
+    let units = app.session.general_unit();
+    let refi: usize = ui.data(|d| d.get_temp(egui::Id::new("refpt"))).unwrap_or(4);
+    let link = app.session.prefs.constrain_proportions;
+    let rp = vectorcraft_geom::reference_point(r, refi);
+    let set = |app: &mut VectorcraftApp, x, y, w, h| {
+        let n = artboard_rect(r, refi, x, y, w, h, link);
+        let p = json!({"index": index, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height()});
+        if let Err(e) = app.run("artboard.setProps", p) {
+            app.status(e);
+        }
+    };
+    ui.horizontal(|ui| {
+        if let Some(i) = widgets::reference_point(ui, refi) {
+            ui.data_mut(|d| d.insert_temp(egui::Id::new("refpt"), i));
+        }
+        ui.add_space(4.0);
+        egui::Grid::new("xfp-ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+            widgets::dim_label(ui, "X:");
+            if let Some(v) = widgets::num_field(ui, "xfp-ab-x", Some(rp.x), units, 80.0) {
+                set(app, Some(v), None, None, None);
+            }
+            widgets::dim_label(ui, "W:");
+            if let Some(v) = widgets::num_field(ui, "xfp-ab-w", Some(r.width()), units, 80.0) {
+                set(app, None, None, Some(v), None);
+            }
+            ui.end_row();
+            widgets::dim_label(ui, "Y:");
+            if let Some(v) = widgets::num_field(ui, "xfp-ab-y", Some(rp.y), units, 80.0) {
+                set(app, None, Some(v), None, None);
+            }
+            widgets::dim_label(ui, "H:");
+            if let Some(v) = widgets::num_field(ui, "xfp-ab-h", Some(r.height()), units, 80.0) {
+                set(app, None, None, None, Some(v));
+            }
+            ui.end_row();
+        });
+        constrain_link(app, ui);
+    });
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     if app.session.active().is_none() {
         widgets::dim_label(ui, tl!("No document"));
+        return;
+    }
+    if let Some((i, r)) = tool_artboard(app) {
+        artboard_fields(app, ui, i, r);
         return;
     }
     let units = app.session.general_unit();
@@ -228,6 +298,33 @@ mod tests {
         app.run("object.resetBoundingBox", json!({})).unwrap();
         let shown = texts(&mut app, show);
         assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
+    }
+
+    #[test]
+    fn the_artboard_tool_shows_the_active_artboard() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
+        assert!(texts(&mut app, show).iter().any(|t| t == "40 pt"), "the selection first");
+        app.run("tool.select", json!({"tool": "artboard"})).unwrap();
+        let shown = texts(&mut app, show);
+        // Centre reference point: X 150, Y 100, W 300, H 200; no rotate/shear for artboards.
+        for v in ["150 pt", "100 pt", "300 pt", "200 pt"] {
+            assert!(shown.iter().any(|t| t == v), "{v} in {shown:?}");
+        }
+        assert!(!shown.iter().any(|t| t == "40 pt" || t == "0°"), "{shown:?}");
+    }
+
+    #[test]
+    fn artboard_fields_keep_the_reference_point() {
+        let r = Rect::new(0.0, 0.0, 300.0, 200.0);
+        // Centre: a new X centres it there, a new W grows it both ways.
+        assert_eq!(artboard_rect(r, 4, Some(200.0), None, None, None, false), Rect::new(50.0, 0.0, 350.0, 200.0));
+        assert_eq!(artboard_rect(r, 4, None, None, Some(400.0), None, false), Rect::new(-50.0, 0.0, 350.0, 200.0));
+        // Top-left: a new W keeps the left edge; linked, H follows.
+        assert_eq!(artboard_rect(r, 0, None, None, Some(600.0), None, true), Rect::new(0.0, 0.0, 600.0, 400.0));
+        // Bottom-right: a new Y puts the bottom edge there.
+        assert_eq!(artboard_rect(r, 8, None, Some(500.0), None, None, false), Rect::new(0.0, 300.0, 300.0, 500.0));
     }
 
     #[test]
