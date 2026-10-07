@@ -42,11 +42,13 @@ struct Entry {
     haystack: String,
 }
 
-/// The palette's entries in `lang`. They are built when the language or the installed plug-ins
-/// change, not on every frame while a query is typed.
+/// The palette's entries in `lang`. They are built when the language, the installed plug-ins or
+/// the keyboard shortcuts (shown beside each entry) change, not on every frame while a query is
+/// typed.
 fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
-    type Cached = ((&'static str, u64), Arc<Vec<Entry>>);
-    let key = (lang.code(), menus::plugin_revision());
+    type Cached = ((&'static str, u64, u64), Arc<Vec<Entry>>);
+    let shortcuts = crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed);
+    let key = (lang.code(), menus::plugin_revision(), shortcuts);
     let id = egui::Id::new("palette-entries");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
         && k == key
@@ -123,6 +125,9 @@ mod tests {
         assert!(Arc::ptr_eq(&en, &entries(&ctx, Lang::EN)), "kept while the language stays");
         let zh_entries = entries(&ctx, zh);
         assert!(!Arc::ptr_eq(&en, &zh_entries), "rebuilt for another language");
+        // Editing a shortcut rebuilds them, so the palette shows the new one.
+        crate::shortcut_editor::GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        assert!(!Arc::ptr_eq(&zh_entries, &entries(&ctx, zh)), "rebuilt after a shortcut edit");
         let group = zh_entries.iter().find(|e| e.id == "object.group").unwrap();
         assert!(group.shown.ends_with(crate::i18n::tr(zh, "Group")), "{}", group.shown);
         // A query matches the English label, the shown label or the id.
