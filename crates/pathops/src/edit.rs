@@ -1,11 +1,11 @@
 //! Object → Path commands: Simplify, Smooth, Remove redundant points, Add Anchor Points, Average,
 //! Join, Split Into Grid.
 
-use kurbo::{ParamCurveArclen, Point, Rect, Vec2};
+use kurbo::{CubicBez, ParamCurveArclen, Point, Rect, Vec2};
 use vectorcraft_geom::{Anchor, PathData, SubPath};
 
 use crate::boolean::{Seg, segs_to_subpath};
-use crate::fit::{end_tangent, fit_cubics, fit_single, is_straight, sample, start_tangent};
+use crate::fit::{end_tangent, fit_cubics, fit_single, fit_single_from, is_straight, sample, start_tangent};
 
 /// Options for [`simplify_with`].
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -224,6 +224,75 @@ fn merge_pair(a: &Seg, b: &Seg, tol: f64) -> Option<Seg> {
     sample(&b.c, 16, &mut pts, false);
     let (c, err, _) = fit_single(&pts, start_tangent(&a.c), end_tangent(&b.c));
     (err <= tol).then_some(Seg { c, line: false })
+}
+
+/// Remove anchor `index` without opening the path (the Delete Anchor Point tool and Object → Path
+/// → Remove Anchor Points). Its neighbours keep their handle directions and their facing handles
+/// are refitted so one cubic follows the two segments that met there; two straight segments
+/// become one. Removing an end of an open path drops its segment. Returns false, leaving `sp`
+/// alone, when `index` is out of range.
+pub fn remove_anchor(sp: &mut SubPath, index: usize) -> bool {
+    let n = sp.anchors.len();
+    if index >= n {
+        return false;
+    }
+    if (sp.closed || (index > 0 && index + 1 < n)) && n >= 3 {
+        let (pi, ni) = ((index + n - 1) % n, (index + 1) % n);
+        if !(sp.segment_is_line(pi) && sp.segment_is_line(index)) {
+            let (left, right) = (sp.segment(pi), sp.segment(index));
+            const N: usize = 16;
+            let mut pts = Vec::with_capacity(2 * N + 1);
+            sample(&left, N, &mut pts, true);
+            sample(&right, N, &mut pts, false);
+            let (t0, t1) = (start_tangent(&left), end_tangent(&right));
+            // The new curve passes the removed point at some parameter k: the left samples sit
+            // at k·i/N, the right ones at k + (1 − k)·i/N. Search k for the closest fit.
+            let fit = |k: f64| {
+                let u = (0..=N).map(|i| k * i as f64 / N as f64).chain((1..=N).map(|i| k + (1.0 - k) * i as f64 / N as f64)).collect();
+                fit_single_from(&pts, u, t0, t1)
+            };
+            let (c, _, _) = golden_min(fit, 0.0, 1.0);
+            if c.p1.is_finite() && c.p2.is_finite() {
+                sp.anchors[pi].h_out = c.p1;
+                sp.anchors[ni].h_in = c.p2;
+            }
+        }
+    }
+    sp.anchors.remove(index);
+    if !sp.closed {
+        // A new end has nothing beyond it.
+        if let Some(a) = sp.anchors.first_mut() {
+            a.h_in = a.p;
+        }
+        if let Some(a) = sp.anchors.last_mut() {
+            a.h_out = a.p;
+        }
+    }
+    if sp.anchors.len() < 3 {
+        sp.closed = sp.closed && sp.anchors.len() == 2 && sp.anchors.iter().any(|a| a.has_in() || a.has_out());
+    }
+    true
+}
+
+/// The fit `f` (curve, error, worst point) with the least error for an argument in `[a, b]`, by a
+/// golden-section search (a bounded number of steps).
+fn golden_min(f: impl Fn(f64) -> (CubicBez, f64, usize), mut a: f64, mut b: f64) -> (CubicBez, f64, usize) {
+    const R: f64 = 0.618_033_988_749_895;
+    let (mut x1, mut x2) = (b - R * (b - a), a + R * (b - a));
+    let (mut f1, mut f2) = (f(x1), f(x2));
+    for _ in 0..40 {
+        // A NaN error never wins.
+        if f1.1 < f2.1 || f2.1.is_nan() {
+            (b, x2, f2) = (x2, x1, f1);
+            x1 = b - R * (b - a);
+            f1 = f(x1);
+        } else {
+            (a, x1, f1) = (x1, x2, f2);
+            x2 = a + R * (b - a);
+            f2 = f(x2);
+        }
+    }
+    if f1.1 <= f2.1 { f1 } else { f2 }
 }
 
 /// Object → Path → Add Anchor Points: one new anchor at the middle (t = 0.5) of every segment.

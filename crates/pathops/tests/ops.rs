@@ -437,3 +437,49 @@ fn timing_unite_1000_circles() {
     println!("unite 1000 circles: {} ms, {} anchors", t.elapsed().as_millis(), r[0].path.anchor_count());
     assert!(!r.is_empty());
 }
+
+#[test]
+fn remove_anchor_refits_the_curve_round_it() {
+    use vectorcraft_geom::Anchor;
+    let (p0, p3) = (Point::new(0.0, 0.0), Point::new(100.0, 0.0));
+    let original =
+        SubPath::new(vec![Anchor::with_handles(p0, p0, Point::new(30.0, 80.0)), Anchor::with_handles(p3, Point::new(70.0, 80.0), p3)], false);
+    let mut sp = original.clone();
+    let i = sp.insert_anchor(0, 0.4);
+    assert!(remove_anchor(&mut sp, i));
+    assert_eq!(sp.anchors.len(), 2);
+    assert!(sp.anchors[0].h_out.distance(original.anchors[0].h_out) < 0.5, "{:?}", sp.anchors[0].h_out);
+    assert!(sp.anchors[1].h_in.distance(original.anchors[1].h_in) < 0.5, "{:?}", sp.anchors[1].h_in);
+    // A circle stays closed and round with one anchor fewer.
+    let mut c = circle(0.0, 0.0, 50.0).subpaths.remove(0);
+    let n = c.anchors.len();
+    assert!(remove_anchor(&mut c, 1));
+    assert!(c.closed && c.anchors.len() == n - 1);
+    let a = ar(&PathData::single(c));
+    assert!(close(a, PI * 2500.0, 0.03), "{a}");
+}
+
+#[test]
+fn remove_anchor_between_straight_sides_draws_a_straight_one() {
+    let mut sp = rect(0.0, 0.0, 100.0, 80.0).subpaths.remove(0);
+    let n = sp.anchors.len();
+    assert!(remove_anchor(&mut sp, 0));
+    assert!(sp.closed && sp.anchors.len() == n - 1);
+    assert!(!sp.anchors.iter().any(|a| a.has_in() || a.has_out()), "{sp:?}");
+    let mut line = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(40.0, 30.0), Point::new(100.0, 0.0)], false);
+    assert!(remove_anchor(&mut line, 1));
+    assert!(line.anchors.len() == 2 && line.segment_is_line(0));
+}
+
+#[test]
+fn remove_anchor_at_an_end_drops_its_segment_and_rejects_bad_input() {
+    let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(20.0, 5.0)], false);
+    assert!(!remove_anchor(&mut sp, 3));
+    assert!(remove_anchor(&mut sp, 0));
+    assert_eq!(sp.anchors[0].p, Point::new(10.0, 0.0));
+    // Non-finite points never panic.
+    let mut bad = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(f64::NAN, 1.0), Point::new(f64::INFINITY, 0.0)], false);
+    bad.anchors[0].h_out = Point::new(5.0, f64::NAN);
+    assert!(remove_anchor(&mut bad, 1));
+    assert_eq!(bad.anchors.len(), 2);
+}

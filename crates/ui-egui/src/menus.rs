@@ -1813,7 +1813,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         Sep,
                         c("Simplify…", "object.path.simplify"),
                         c("Add Anchor Points", "object.path.addAnchorPoints"),
-                        c("Remove Anchor Points", "path.deleteAnchors"),
+                        c("Remove Anchor Points", "path.removeAnchors"),
                         c("Divide Objects Below", "object.path.divideObjectsBelow"),
                         c("Split Into Grid…", "object.path.splitIntoGrid"),
                         Sep,
@@ -2313,6 +2313,9 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         let paths = any(|k| matches!(k, NodeKind::Path { .. }));
         if paths {
             v.extend([c("Join", "path.join"), c("Average…", "path.average")]);
+        }
+        if !st.selection.anchors.is_empty() {
+            v.push(c("Remove Anchor Points", "path.removeAnchors"));
         }
         if several {
             v.push(c("Make Clipping Mask", "object.clippingMask.make"));

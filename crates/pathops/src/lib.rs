@@ -15,7 +15,8 @@ mod planar;
 
 pub use boolean::{BoolOp, DEFAULT_PRECISION, area, boolean, boolean_n, normalize, try_boolean, try_normalize, unite_all};
 pub use edit::{
-    AverageAxis, SimplifyOptions, add_anchor_points, average, join, remove_redundant_points, simplify, simplify_with, smooth, split_into_grid,
+    AverageAxis, SimplifyOptions, add_anchor_points, average, join, remove_anchor, remove_redundant_points, simplify, simplify_with, smooth,
+    split_into_grid,
 };
 pub use offset::{Cap, Join, offset_path, outline_stroke, stroke_region};
 pub use pathfinder::{PathfinderOp, Region, Shape, merge_regions, pathfinder, region_at, regions};

@@ -16,6 +16,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let n_sel = st.selection.len();
+    let anchor_mode = !st.selection.anchors.is_empty();
     let first = first_selected(app);
     let label = match (&first, n_sel) {
         (None, _) => tl!("Document").to_string(),
@@ -96,6 +97,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if multi_color(app, ui.ctx()) {
         actions.push((tl!("Recolor"), "ui.recolorDialog"));
+    }
+    // One column: the label is wider than half of the narrowest dock.
+    if anchor_mode && widgets::flat_button(ui, "Remove Anchor Points", ui.available_width()).clicked() {
+        crate::menus::invoke(app, "path.removeAnchors", json!({}));
     }
     actions.push((tl!("Offset Path"), "object.path.offsetPath"));
     actions.push((tl!("Simplify"), "object.path.simplify"));

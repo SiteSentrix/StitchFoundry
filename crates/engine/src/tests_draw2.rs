@@ -375,6 +375,7 @@ fn draw2_commands_reject_bad_params() {
         ("path.freehand", json!({"points": [[1, 2]]})),
         ("path.curvature", json!({"points": []})),
         ("path.removeAnchor", json!({"id": id.0, "anchor": 99})),
+        ("path.removeAnchors", json!({})),
         ("path.convertAnchor", json!({"id": 9999, "anchor": 0, "to": "corner"})),
         ("path.reshapeSegment", json!({"id": id.0, "segment": 42})),
         ("path.split", json!({"id": id.0})),
@@ -479,4 +480,57 @@ fn shift_drag_keeps_a_smooth_anchor_smooth_and_alt_breaks_it() {
             assert_eq!(a.h_in, Point::new(150.0, 100.0), "{mods:?}");
         }
     }
+}
+
+#[test]
+fn removing_an_anchor_refits_a_split_curve_and_undo_restores_it() {
+    let mut s = session();
+    let made = s
+        .execute(
+            "path.create",
+            &json!({"anchors": [
+                {"x": 0, "y": 0, "out": [30, 80]},
+                {"x": 100, "y": 0, "in": [70, 80]}
+            ]}),
+        )
+        .unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    let before = path(&s, id);
+    let inserted = s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 0, "t": 0.4})).unwrap();
+    let ai = inserted["anchor"].as_u64().unwrap();
+    s.execute("path.removeAnchor", &json!({"id": id.0, "anchor": ai})).unwrap();
+    let after = path(&s, id);
+    assert_eq!(after.subpaths[0].anchors.len(), 2);
+    let (got, orig) = (&after.subpaths[0].anchors, &before.subpaths[0].anchors);
+    assert!(got[0].h_out.distance(orig[0].h_out) < 0.5, "{:?}", got[0].h_out);
+    assert!(got[1].h_in.distance(orig[1].h_in) < 0.5, "{:?}", got[1].h_in);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 3);
+}
+
+#[test]
+fn remove_anchor_points_keeps_the_paths_closed() {
+    // Object › Path › Remove Anchor Points, unlike the Delete key: a rectangle loses a corner and
+    // stays closed, a straight-sided triangle; a curve keeps its shape round a removed point.
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 80.0);
+    let made = s.execute("path.create", &json!({"anchors": [{"x": 300, "y": 0, "out": [330, 80]}, {"x": 400, "y": 0, "in": [370, 80]}]})).unwrap();
+    let c = NodeId(made["id"].as_u64().unwrap());
+    let before = path(&s, c).subpaths[0].segment(0);
+    s.execute("path.insertAnchor", &json!({"id": c.0, "segment": 0, "t": 0.5})).unwrap();
+    s.execute("select.anchors", &json!({"id": r.0, "anchors": [[0, 0]]})).unwrap();
+    s.execute("select.anchors", &json!({"id": c.0, "anchors": [[0, 1]], "mode": "add"})).unwrap();
+    assert_eq!(s.execute("path.removeAnchors", &json!({})).unwrap()["removedObjects"], 0);
+    let sp = &path(&s, r).subpaths[0];
+    assert!(sp.closed && sp.anchors.len() == 3, "{sp:?}");
+    assert!(!sp.anchors.iter().any(|a| a.has_in() || a.has_out()), "straight sides stay straight: {sp:?}");
+    let after = path(&s, c).subpaths[0].segment(0);
+    assert_eq!(path(&s, c).subpaths[0].anchors.len(), 2);
+    assert!(after.p1.distance(before.p1) < 0.5 && after.p2.distance(before.p2) < 0.5, "{after:?}");
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Remove Anchor Points");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, r).subpaths[0].anchors.len(), 4);
+    assert_eq!(path(&s, c).subpaths[0].anchors.len(), 3);
+    let spec = find_command("path.removeAnchors").unwrap();
+    assert_eq!(spec.menu, &["Object", "Path"][..]);
 }
