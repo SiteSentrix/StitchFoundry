@@ -387,8 +387,11 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let s = tx.first_style();
     section_header(ui, tl!("Character"));
-    if let Some(f) = widgets::font_dropdown(ui, "font", &s.font_family, ui.available_width() - 4.0) {
-        app.run("text.setStyle", json!({ "font": f })).ok();
+    let sample = crate::font_menu::sample_text(app);
+    if let Some(pick) =
+        crate::font_menu::font_menu(ui, "font", &s.font_family, ui.available_width() - 4.0, sample.as_deref(), crate::font_menu::MenuLook::of(app))
+    {
+        crate::font_menu::apply(app, ui.ctx(), pick);
     }
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Size"));

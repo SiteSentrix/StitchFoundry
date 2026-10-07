@@ -241,8 +241,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let w = ui.available_width();
-    if let Some(f) = widgets::font_dropdown(ui, "ch-font", &s.font_family, w - 4.0) {
-        style(app, json!({ "font": f }));
+    let sample = crate::font_menu::sample_text(app);
+    if let Some(pick) = crate::font_menu::font_menu(ui, "ch-font", &s.font_family, w - 4.0, sample.as_deref(), crate::font_menu::MenuLook::of(app)) {
+        crate::font_menu::apply(app, ui.ctx(), pick);
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
     let snames: Vec<&str> = styles.iter().map(String::as_str).collect();

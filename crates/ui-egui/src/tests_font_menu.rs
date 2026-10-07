@@ -1,0 +1,180 @@
+//! The font menu's samples, ↑/↓ highlight with live preview, and applying or undoing the preview.
+
+use serde_json::json;
+use vectorcraft_doc::NodeKind;
+use vectorcraft_engine::Session;
+use vectorcraft_text::FontDb;
+
+use crate::VectorcraftApp;
+use crate::font_menu::{FontPick, MenuLook, font_menu};
+
+fn key(k: egui::Key) -> Vec<egui::Event> {
+    [true, false].map(|pressed| egui::Event::Key { key: k, physical_key: None, pressed, repeat: false, modifiers: Default::default() }).to_vec()
+}
+
+#[test]
+fn arrows_preview_the_next_family_and_enter_applies_it() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+        let (mut at, mut picked) = (egui::Pos2::ZERO, None);
+        let mut out = ctx.run_ui(input, |ui| {
+            at = ui.next_widget_position();
+            picked = font_menu(ui, "test-menu", "Inter", 260.0, Some("Gagaku"), MenuLook::default());
+        });
+        out.textures_delta.clear();
+        (at, picked)
+    };
+    let (at, _) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    frame(vec![button(false)]);
+    for _ in 0..5 {
+        frame(vec![]);
+    }
+    let families = FontDb::global().families();
+    let inter = families.iter().position(|f| f == "Inter").unwrap();
+    let next = families[inter + 1].clone();
+    let (_, picked) = frame(key(egui::Key::ArrowDown));
+    assert_eq!(picked, Some(FontPick::Preview(next.clone(), None)), "↓ previews the family below the current one");
+    let (_, picked) = frame(key(egui::Key::ArrowUp));
+    assert_eq!(picked, Some(FontPick::EndPreview), "back on the current family, the preview goes");
+    frame(key(egui::Key::ArrowDown));
+    let (_, picked) = frame(key(egui::Key::Enter));
+    assert_eq!(picked, Some(FontPick::Chosen(next, None)));
+}
+
+#[test]
+fn escape_closes_the_menu_and_ends_the_preview() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+        let (mut at, mut picked) = (egui::Pos2::ZERO, None);
+        let mut out = ctx.run_ui(input, |ui| {
+            at = ui.next_widget_position();
+            picked = font_menu(ui, "test-esc", "Inter", 260.0, None, MenuLook::default());
+        });
+        out.textures_delta.clear();
+        (at, picked)
+    };
+    let (at, _) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    frame(vec![button(false)]);
+    for _ in 0..5 {
+        frame(vec![]);
+    }
+    assert!(matches!(frame(key(egui::Key::ArrowDown)).1, Some(FontPick::Preview(..))));
+    let mut ended = false;
+    for events in [key(egui::Key::Escape), vec![], vec![], vec![]] {
+        ended |= frame(events).1 == Some(FontPick::EndPreview);
+    }
+    assert!(ended, "closing without a choice ends the preview");
+}
+
+#[test]
+fn samples_show_the_text_in_the_family_or_a_generic_sample() {
+    let latin = crate::font_menu::render_sample_for_test("Source Serif 4", "Gagaku", 24).unwrap();
+    assert_eq!(latin.size[1], 24);
+    assert!(latin.pixels.iter().any(|p| p.a() > 0), "ink");
+    // Japanese text in a Latin font: the generic sample, not glyphs from another font.
+    let ja = crate::font_menu::render_sample_for_test("Source Serif 4", "雅楽", 24).unwrap();
+    let sample = crate::font_menu::render_sample_for_test("Source Serif 4", "Sample", 24).unwrap();
+    assert_eq!(ja.size, sample.size);
+}
+
+#[test]
+fn preview_changes_the_text_live_and_only_a_choice_is_a_step() {
+    let ctx = egui::Context::default();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let font = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.first_style().font_family,
+        _ => String::new(),
+    };
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    assert_eq!(crate::font_menu::sample_text(&app).as_deref(), Some("Gagaku"));
+    let before = steps(&app);
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Preview("Source Serif 4".into(), None));
+    assert_eq!(font(&app), "Source Serif 4", "previewed on the text");
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Preview("Source Sans 3".into(), None));
+    assert_eq!(font(&app), "Source Sans 3");
+    crate::font_menu::apply(&mut app, &ctx, FontPick::EndPreview);
+    assert_eq!((font(&app), steps(&app)), ("Inter".to_string(), before), "the preview leaves nothing behind");
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Preview("Source Serif 4".into(), None));
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Chosen("Source Serif 4".into(), None));
+    assert_eq!((font(&app), steps(&app)), ("Source Serif 4".to_string(), before + 1), "one step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(font(&app), "Inter");
+}
+
+#[test]
+fn bundled_families_are_classified() {
+    use vectorcraft_text::FontClass;
+    let db = FontDb::global();
+    let class = |f: &str| db.family_traits(f).class;
+    assert_eq!(class("JetBrains Mono"), FontClass::Monospaced);
+    assert_eq!(class("Source Serif 4"), FontClass::Serif);
+    assert_eq!(class("Source Sans 3"), FontClass::Sans);
+    assert!(!db.family_traits("Inter").japanese);
+}
+
+#[test]
+fn right_arrow_lists_a_familys_styles_and_they_preview() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+        let (mut at, mut picked) = (egui::Pos2::ZERO, None);
+        let mut out = ctx.run_ui(input, |ui| {
+            at = ui.next_widget_position();
+            picked = font_menu(ui, "test-styles", "Source Sans 3", 260.0, None, MenuLook::default());
+        });
+        out.textures_delta.clear();
+        (at, picked)
+    };
+    let (at, _) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    frame(vec![button(false)]);
+    for _ in 0..5 {
+        frame(vec![]);
+    }
+    let styles = FontDb::global().styles("Source Sans 3");
+    assert!(styles.len() > 1);
+    frame(key(egui::Key::ArrowRight));
+    let (_, picked) = frame(key(egui::Key::ArrowDown));
+    assert_eq!(picked, Some(FontPick::Preview("Source Sans 3".into(), Some(styles[0].clone()))), "the first style under the family");
+    let (_, picked) = frame(key(egui::Key::ArrowDown));
+    assert_eq!(picked, Some(FontPick::Preview("Source Sans 3".into(), Some(styles[1].clone()))));
+    let (_, picked) = frame(key(egui::Key::Enter));
+    assert_eq!(picked, Some(FontPick::Chosen("Source Sans 3".into(), Some(styles[1].clone()))));
+}
+
+#[test]
+fn stars_mark_favourites_and_the_preferences_size_the_rows() {
+    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Favorite("Inter".into()));
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Favorite("Source Serif 4".into()));
+    assert_eq!(app.ui.favorite_fonts, ["Inter", "Source Serif 4"]);
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Favorite("inter".into()));
+    assert_eq!(app.ui.favorite_fonts, ["Source Serif 4"], "a second click takes the star off (any case)");
+    let saved: crate::state::UiState = serde_json::from_str(&serde_json::to_string(&app.ui).unwrap()).unwrap();
+    assert_eq!(saved.favorite_fonts, ["Source Serif 4"], "favourites are kept with the UI state");
+    let look = MenuLook::of(&app);
+    assert!(look.samples && look.row == 24.0);
+    app.run("prefs.set", json!({"values": {"fontPreviewSize": "large", "fontPreview": false}})).unwrap();
+    let look = MenuLook::of(&app);
+    assert!(!look.samples && look.row > 24.0, "Font Preview Size and Enable in-menu font previews");
+}

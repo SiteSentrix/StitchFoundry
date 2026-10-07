@@ -45,6 +45,8 @@ enum FontBytes {
 pub struct FontFace {
     /// Every name the face answers to (normalized), in every language its name table has.
     keys: FaceKeys,
+    /// Its kind, for font menus' filters.
+    pub traits: FontTraits,
     id: u32,
     /// Typographic family name (e.g. "Source Sans 3").
     pub family: String,
@@ -203,6 +205,8 @@ impl FontFace {
 struct CatalogFamily {
     name: String,
     faces: Vec<CatalogFace>,
+    /// The family's kind (from its first face found).
+    traits: Option<FontTraits>,
 }
 
 /// One style of an installed family: a face, or a named instance of a variable font.
@@ -355,6 +359,164 @@ impl FaceKeys {
     }
 }
 
+/// A font's kind, for filtering font menus: the classification of its OS/2 table (IBM family
+/// class, PANOSE) and, for CJK fonts whose tables seldom say, its names (明朝, ゴシック, 丸…).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum FontClass {
+    /// Serif (Latin) or Mincho (CJK).
+    Serif,
+    /// Sans serif (Latin) or Gothic (CJK).
+    Sans,
+    /// Rounded sans / Maru Gothic.
+    Rounded,
+    /// Script, handwriting, brush (楷書・行書・教科書…).
+    Script,
+    Monospaced,
+    /// Decorative, display, symbol and pictorial fonts.
+    Decorative,
+    #[default]
+    Other,
+}
+
+impl FontClass {
+    pub const ALL: [FontClass; 6] =
+        [FontClass::Serif, FontClass::Sans, FontClass::Rounded, FontClass::Script, FontClass::Monospaced, FontClass::Decorative];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FontClass::Serif => "Serif / Mincho",
+            FontClass::Sans => "Sans Serif / Gothic",
+            FontClass::Rounded => "Rounded",
+            FontClass::Script => "Script / Brush",
+            FontClass::Monospaced => "Monospaced",
+            FontClass::Decorative => "Decorative",
+            FontClass::Other => "Other",
+        }
+    }
+}
+
+/// What a font menu filters on: whether a family sets Japanese, and its kind.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FontTraits {
+    pub japanese: bool,
+    pub class: FontClass,
+}
+
+impl FontTraits {
+    /// From a face's OS/2 table (when it has one) and names.
+    fn of(font: &skrifa::FontRef<'_>, keys: &FaceKeys) -> Self {
+        use skrifa::raw::TableProvider;
+        let os2 = font.os2().ok();
+        let names: Vec<&str> = keys.families.iter().chain(&keys.postscript).map(String::as_str).collect();
+        let named = |words: &[&str]| names.iter().any(|n| words.iter().any(|w| n.contains(w)));
+        let has_japanese_name = keys.families.iter().any(|k| k.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF | 0x4E00..=0x9FFF)));
+        let (class_id, panose, ranges2, codepages) = match &os2 {
+            Some(o) => (o.s_family_class(), o.panose_10().to_vec(), o.ul_unicode_range_2(), o.ul_code_page_range_1().unwrap_or(0)),
+            None => (0, vec![], 0, 0),
+        };
+        // Hiragana (bit 49) or Katakana (bit 50) in the Unicode ranges, or the JIS code page.
+        let japanese = ranges2 & (0b11 << 17) != 0 || codepages & (1 << 17) != 0 || has_japanese_name;
+        let family_type = panose.first().copied().unwrap_or(0);
+        let serif_style = panose.get(1).copied().unwrap_or(0);
+        let proportion = panose.get(3).copied().unwrap_or(0);
+        let ibm = (class_id >> 8) as u8;
+        let class = if named(&["丸", "maru", "rounded", "round"]) || japanese && named(&["jun"]) {
+            FontClass::Rounded
+        } else if named(&[
+            "楷書",
+            "行書",
+            "草書",
+            "隷書",
+            "教科書",
+            "毛筆",
+            "筆",
+            "kaisho",
+            "gyosho",
+            "sosho",
+            "reisho",
+            "kyokasho",
+            "brush",
+            "script",
+            "hand",
+            "kaiti",
+            "xingkai",
+            "libian",
+        ]) {
+            FontClass::Script
+        } else if named(&["mono", "code", "courier", "menlo", "consol"]) {
+            FontClass::Monospaced
+        } else if named(&[
+            "明朝",
+            "mincho",
+            "ryumin",
+            "hiramin",
+            "yumin",
+            "kozmin",
+            "serif",
+            "songti",
+            "simsun",
+            "stsong",
+            "fangsong",
+            "myungjo",
+            "times",
+            "georgia",
+            "garamond",
+            "baskerville",
+            "bodoni",
+            "caslon",
+            "palatino",
+            "didot",
+            "century",
+            "cambria",
+            "minion",
+            "charter",
+            "hoefler",
+        ]) && !named(&["sansserif", "sans"])
+        {
+            FontClass::Serif
+        } else if named(&[
+            "ゴシック",
+            "gothic",
+            "goth",
+            "sans",
+            "kakugo",
+            "kaku",
+            "heiti",
+            "helvetica",
+            "arial",
+            "grotesk",
+            "grotesque",
+            "futura",
+            "gill",
+            "verdana",
+            "tahoma",
+            "frutiger",
+            "avenir",
+            "geneva",
+            "lucidagrande",
+            "inter",
+            "roboto",
+            "optima",
+            "pingfang",
+        ]) {
+            FontClass::Sans
+        } else if family_type == 2 && proportion == 9 {
+            FontClass::Monospaced
+        } else if family_type == 3 || ibm == 10 {
+            FontClass::Script
+        } else if family_type == 4 || family_type == 5 || ibm == 9 || ibm == 12 {
+            FontClass::Decorative
+        } else if matches!(ibm, 1..=5 | 7) || family_type == 2 && (2..=10).contains(&serif_style) {
+            FontClass::Serif
+        } else if ibm == 8 || family_type == 2 && (11..=13).contains(&serif_style) {
+            FontClass::Sans
+        } else {
+            FontClass::Other
+        };
+        FontTraits { japanese, class }
+    }
+}
+
 /// What a name other than a family's own one stands for ([`FontDb::canonical`]).
 #[derive(Clone, Debug)]
 struct Alias {
@@ -423,14 +585,20 @@ pub(crate) struct FaceStyle {
     weight: Option<f32>,
     /// A named instance is italic (by its `ital` or `slnt` setting, or its name).
     italic: bool,
+    /// Its kind, for font menus' filters (the face's, shared by its named instances).
+    traits: FontTraits,
 }
 
 /// The styles of a face: the face itself, then its named instances when it is a variable font.
 pub(crate) fn face_styles(f: &skrifa::FontRef<'_>) -> Vec<FaceStyle> {
     let Some((family, style)) = face_names(f) else { return vec![] };
     let mut keys = FaceKeys::of(f, &family, &style);
-    let instances = named_instances(f, &family, &style, &mut keys);
-    let face = FaceStyle { family, style, keys, variations: vec![], weight: None, italic: false };
+    let traits = FontTraits::of(f, &keys);
+    let mut instances = named_instances(f, &family, &style, &mut keys);
+    for i in &mut instances {
+        i.traits = traits;
+    }
+    let face = FaceStyle { family, style, keys, variations: vec![], weight: None, italic: false, traits };
     std::iter::once(face).chain(instances).collect()
 }
 
@@ -482,7 +650,7 @@ fn named_instances(f: &skrifa::FontRef<'_>, family: &str, style: &str, keys: &mu
         }
         let keys = FaceKeys { families: keys.families.clone(), styles, legacy: vec![], postscript };
         let variations = tags.iter().zip(&coords).map(|(t, v)| (t.to_be_bytes(), *v)).collect();
-        out.push(FaceStyle { family: family.to_string(), style, keys, variations, weight, italic });
+        out.push(FaceStyle { family: family.to_string(), style, keys, variations, weight, italic, traits: FontTraits::default() });
     }
     out
 }
@@ -543,10 +711,15 @@ fn file_face_names(path: &Path) -> Vec<FaceStyle> {
             let name = table(b"name")?;
             // A variable font's named instances are styles too.
             let fvar = table(b"fvar");
+            // Its OS/2 table (the font's classification, for the menus' filters), when it has one.
+            let os2 = table(b"OS/2");
             // A font holding just these tables, to read them as the font itself would.
             let mut tables: Vec<(&[u8; 4], &[u8])> = vec![(b"name", &name)];
             if let Some(fvar) = &fvar {
                 tables.push((b"fvar", fvar));
+            }
+            if let Some(os2) = &os2 {
+                tables.push((b"OS/2", os2));
             }
             let font = sfnt_of(&tables)?;
             Some(face_styles(&skrifa::FontRef::new(&font).ok()?))
@@ -622,7 +795,7 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         FontBytes::Owned(v) => v.as_slice(),
     };
     let f = skrifa::FontRef::from_index(data, index).ok()?;
-    let FaceStyle { family, style, keys, variations, weight, italic } = spec;
+    let FaceStyle { family, style, keys, variations, weight, italic, traits } = spec;
     // A named instance: outlines, metrics and advances at its axis settings.
     let location = if variations.is_empty() { Location::default() } else { f.axes().location(variations.iter().map(|(t, v)| (Tag::new(t), *v))) };
     let m = f.metrics(Size::unscaled(), &location);
@@ -633,6 +806,7 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         (!variations.is_empty()).then(|| harfrust::ShaperInstance::from_variations(&hb, variations.iter().map(|(t, v)| (harfrust::Tag::new(t), *v))));
     Some(FontFace {
         keys,
+        traits,
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         family,
         style,
@@ -898,7 +1072,7 @@ impl FontDb {
                 if !matches!(ext.as_deref(), Some("ttf" | "otf" | "ttc" | "otc")) {
                     continue;
                 }
-                for FaceStyle { family, style, keys, weight, italic, .. } in file_face_names(&p) {
+                for FaceStyle { family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
                     for (k, a) in Alias::of(&family, &style, &keys) {
                         aliases.entry(k).or_default().push(a);
                     }
@@ -907,6 +1081,7 @@ impl FontDb {
                         postscript.insert(ps.clone(), (family.clone(), style.clone()));
                     }
                     let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
+                    entry.traits.get_or_insert(traits);
                     if entry.name.is_empty() {
                         entry.name = family;
                     }
@@ -952,6 +1127,15 @@ impl FontDb {
             Some(a) => (a.family.clone(), style.to_string()),
             None => (family.to_string(), style.to_string()),
         }
+    }
+
+    /// The kind of `family` (whether it sets Japanese, its class), for font menu filters: from a
+    /// loaded face, else from the system font scan. Cheap: no font file is read.
+    pub fn family_traits(&self, family: &str) -> FontTraits {
+        if let Some(f) = self.read_faces().iter().find(|f| f.family.eq_ignore_ascii_case(family)) {
+            return f.traits;
+        }
+        self.read_catalog().get(&family.to_ascii_lowercase()).and_then(|c| c.traits).unwrap_or_default()
     }
 
     /// [`face`](Self::face) by any of the family's names ([`canonical`](Self::canonical)), and how

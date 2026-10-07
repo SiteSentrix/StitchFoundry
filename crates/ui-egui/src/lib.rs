@@ -23,6 +23,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 pub mod find_font;
+pub mod font_menu;
 pub mod i18n;
 pub mod icon_data;
 pub mod icons;
@@ -63,6 +64,8 @@ mod tests_cut;
 mod tests_distortkeys;
 #[cfg(test)]
 mod tests_docsetup;
+#[cfg(test)]
+mod tests_font_menu;
 #[cfg(test)]
 mod tests_fonts;
 #[cfg(test)]

@@ -298,6 +298,9 @@ pub struct UiState {
     /// Type → Recent Fonts, most recent first.
     #[serde(default)]
     pub recent_fonts: Vec<String>,
+    /// Families starred in the font menus (the ★ filter shows only these).
+    #[serde(default)]
+    pub favorite_fonts: Vec<String>,
     /// Engine preferences (Edit → Preferences), persisted alongside the UI state.
     #[serde(default)]
     pub engine_prefs: Value,
@@ -416,6 +419,7 @@ impl Default for UiState {
             custom_workspaces: vec![],
             recent_files: vec![],
             recent_fonts: vec![],
+            favorite_fonts: vec![],
             engine_prefs: Value::Null,
             color_guide: Default::default(),
             library_panel: None,
