@@ -26,7 +26,7 @@ use std::str::FromStr;
 
 use usvg::roxmltree;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, StrokeLayer, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, ParaDirection, StrokeLayer, TextKind, TextObject, TextRun};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect};
 use vectorcraft_text::{FontDb, TextLayout};
@@ -612,6 +612,13 @@ impl Ctx {
         }
         let (runs, servers) = assemble(&cells, &breaks).0;
         obj.runs = runs;
+        // SVG text runs left to right unless `direction: rtl` says otherwise, whatever its first
+        // strong character: pinned when that would read as right to left.
+        if self.css.prop(t, "direction").is_some_and(|d| d.trim() == "rtl") {
+            obj.para.direction = Some(ParaDirection::RightToLeft);
+        } else if obj.plain_text().split('\n').any(|p| vectorcraft_text::paragraph_is_rtl(p, None)) {
+            obj.para.direction = Some(ParaDirection::LeftToRight);
+        }
         // The placeholder covers the text (laid out when a paint server needs its bounding box).
         let b = if paints.is_empty() { obj.bounds() } else { Some(obj.xf.transform_rect_bbox(measure(&obj).bounds)) }.unwrap_or_default();
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));

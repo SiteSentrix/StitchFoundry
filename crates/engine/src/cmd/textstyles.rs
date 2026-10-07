@@ -115,12 +115,20 @@ pub fn specs() -> Vec<CommandSpec> {
 
 // ---------- attribute plumbing ----------
 
+/// `v` as a JSON map with one key per attribute: Auto alignment, which files save as its
+/// direction's alignment plus `justify_auto` (see `vectorcraft_doc::ParaStyle`), is `"justify":
+/// "Auto"`, so a style's `justify` replaces it.
+fn to_map<T: Serialize>(v: &T) -> Option<Map<String, Value>> {
+    let Ok(Value::Object(mut m)) = serde_json::to_value(v) else { return None };
+    if m.remove("justify_auto") == Some(Value::Bool(true)) {
+        m.insert("justify".into(), Value::from("Auto"));
+    }
+    Some(m)
+}
+
 /// A style's attributes as a JSON map, without the style name.
 fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
-    let mut m = match serde_json::to_value(v) {
-        Ok(Value::Object(m)) => m,
-        _ => Map::new(),
-    };
+    let mut m = to_map(v).unwrap_or_default();
     m.remove("style_name");
     m
 }
@@ -128,7 +136,7 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
 /// `base` with `attrs` written over it (unknown or ill-typed attributes are an error).
 fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Value>, cmd: &str) -> Result<T> {
     let mut m = to_attrs(base);
-    if let Ok(Value::Object(full)) = serde_json::to_value(base) {
+    if let Some(full) = to_map(base) {
         m.insert("style_name".into(), full.get("style_name").cloned().unwrap_or(Value::Null));
     }
     for (k, v) in attrs {
@@ -144,7 +152,7 @@ fn with_attrs<T: Serialize + DeserializeOwned>(base: &T, attrs: &Map<String, Val
 /// value (or not set by it) take the new value; overrides stay. Unchanged if the style doesn't
 /// round-trip through JSON.
 fn restyle<T: Serialize + DeserializeOwned + Clone>(cur: &T, old: &Map<String, Value>, new: &Map<String, Value>) -> T {
-    let Ok(Value::Object(mut m)) = serde_json::to_value(cur) else { return cur.clone() };
+    let Some(mut m) = to_map(cur) else { return cur.clone() };
     for (k, v) in new {
         if old.get(k).is_none_or(|o| m.get(k) == Some(o)) {
             m.insert(k.clone(), v.clone());

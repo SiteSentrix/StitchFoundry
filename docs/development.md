@@ -179,3 +179,25 @@ Untrusted input has property tests that must never panic:
 CI runs a few dozen cases each. Before touching an importer, run a deeper search, e.g.
 `PROPTEST_CASES=20000 cargo test --release -p vectorcraft-engine --test import_fuzz`. When it finds a
 panic, fix the code and add the input as a regular test.
+
+## Bidirectional type
+
+Point, area and path type lay out Hebrew and Arabic with the Unicode bidirectional algorithm
+(`unicode-bidi`, in `crates/text/src/layout.rs`). Each paragraph's base direction is its
+`ParaStyle::direction` (Paragraph panel › Left-to-Right / Right-to-Left Paragraph Direction, shown
+with Preferences › Type › Show Indic Options; `text.setFormat {direction}`), else its first strong
+character. Text is shaped in logical order, right-to-left runs right to left (`shape.rs` splits
+segments by bidi level and script), lines are broken in logical order and then each line's whole
+shaping clusters are put in visual order. Stored text, undo and style ranges stay logical; the
+caret, selection, hit testing and arrow keys follow the visual order. A paragraph with nothing
+right to left in it skips the algorithm, so plain text pays nothing for it.
+
+Alignment buttons are physical (Align Left is left in either direction). New type
+(`text.create`, the Type tools) is aligned `Justify::Auto`, the start of each paragraph's direction:
+Hebrew grows to the left of a point type's anchor. Imported text keeps its own alignment, and SVG
+import pins the direction SVG implies (left to right unless `direction: rtl`).
+
+Vertical type keeps its logical order down the column. SVG export outlines text with right-to-left
+lines (with a warning) until it is written with `direction`/`unicode-bidi`; PDF and raster exports
+use the laid-out glyphs. No font is bundled for these scripts: the installed fonts' fallback
+covers them (the web build needs a font with that coverage).

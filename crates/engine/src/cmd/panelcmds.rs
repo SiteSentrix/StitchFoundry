@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing)}",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character)}",
             has_doc,
             set_format
         ),
@@ -112,6 +112,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "spaceAfter",
         "hyphenate",
         "mojikumi",
+        "direction",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         return Err(bad(C, "nothing to change"));
@@ -123,6 +124,15 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             Some("none") => vectorcraft_doc::Mojikumi::None,
             Some("lineEndHalf") => vectorcraft_doc::Mojikumi::LineEndHalf,
             _ => return Err(bad(C, "`mojikumi` must be \"none\" or \"lineEndHalf\"")),
+        }),
+    };
+    let direction = match p.get("direction") {
+        None => None,
+        Some(v) => Some(match v.as_str() {
+            Some("auto") => None,
+            Some("leftToRight") => Some(vectorcraft_doc::ParaDirection::LeftToRight),
+            Some("rightToLeft") => Some(vectorcraft_doc::ParaDirection::RightToLeft),
+            _ => return Err(bad(C, "`direction` must be \"auto\", \"leftToRight\" or \"rightToLeft\"")),
         }),
     };
     s.edit("Character", |d, _| {
@@ -182,6 +192,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(v) = mojikumi {
                 para.mojikumi = v;
+            }
+            if let Some(v) = direction {
+                para.direction = v;
             }
             super::typecmd::refresh_bounds(t);
         }

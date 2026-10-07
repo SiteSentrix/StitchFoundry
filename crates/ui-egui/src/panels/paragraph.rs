@@ -1,8 +1,9 @@
-//! Paragraph panel: seven alignment buttons, indents, space before/after and Hyphenate.
+//! Paragraph panel: seven alignment buttons, Paragraph Direction (with the Indic options), indents,
+//! space before/after, Hyphenate and Mojikumi Set (with the East Asian options).
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::Justify;
+use vectorcraft_doc::{Justify, NodeKind, ParaDirection, ParaStyle};
 
 use super::character::text_style;
 use super::{pstate, set_pstate};
@@ -33,17 +34,53 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
     app.run(cmd, p).ok();
 }
 
+/// Does the paragraph being edited (at the caret), else the selected text's first paragraph, run
+/// right to left: its Paragraph Direction, else from its first strong character?
+fn resolved_rtl(app: &VectorcraftApp, para: &ParaStyle) -> bool {
+    let editing = super::character::text_editing(app);
+    let selected = super::first_selected(app);
+    let node = editing.and_then(|(id, _, _)| app.session.active().and_then(|d| d.doc.node(id))).or(selected.as_ref());
+    let Some(NodeKind::Text(t)) = node.map(|n| &n.kind) else { return para.direction == Some(ParaDirection::RightToLeft) };
+    let plain = t.plain_text();
+    let paragraph = vectorcraft_text::edit::paragraph_at(&plain, editing.map_or(0, |(_, a, _)| a));
+    vectorcraft_text::paragraph_is_rtl(plain.get(paragraph).unwrap_or_default(), para.direction)
+}
+
+/// The alignment button that shows `justify` in a paragraph running right to left (`rtl`) or not:
+/// Auto aligns to the start of its direction.
+fn shown_alignment(justify: Justify, rtl: bool) -> Justify {
+    match justify {
+        Justify::Auto if rtl => Justify::Right,
+        Justify::Auto => Justify::Left,
+        j => j,
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((_, para)) = text_style(app) else {
         super::empty_state(ui, "pilcrow", tl!("No text selected"), tl!("Select a text object to edit its paragraph attributes."));
         return;
     };
+    let rtl = resolved_rtl(app, &para);
+    let shown = shown_alignment(para.justify, rtl);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
         for (j, icon, tip, id) in ALIGNMENTS {
-            if widgets::icon_button(ui, icon, tip, para.justify == j, 28.0).clicked() {
+            if widgets::icon_button(ui, icon, tip, shown == j, 28.0).clicked() {
                 para_cmd(app, "text.setStyle", json!({"justify": id}));
+            }
+        }
+        // Paragraph direction, with the Middle Eastern (Indic) options.
+        if app.session.prefs.show_indic_options {
+            ui.add_space(6.0);
+            for (to_rtl, icon, tip, id) in [
+                (false, "dc-para-ltr", tl!("Left-to-Right Paragraph Direction"), "leftToRight"),
+                (true, "dc-para-rtl", tl!("Right-to-Left Paragraph Direction"), "rightToLeft"),
+            ] {
+                if widgets::icon_button(ui, icon, tip, rtl == to_rtl, 28.0).clicked() {
+                    format(app, json!({"direction": id}));
+                }
             }
         }
     });
@@ -117,7 +154,47 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     menu_item(ui, tl!("Every-line Composer"), false, true);
     ui.separator();
     if menu_item(ui, tl!("Reset Panel"), has, false) {
-        para_cmd(app, "text.setStyle", json!({"justify": "left"}));
-        format(app, json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false}));
+        para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
+        format(
+            app,
+            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto"}),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_engine::Session;
+
+    /// New Hebrew type aligns to the start of its direction (Align Right shows), an explicit
+    /// alignment stays as chosen, and Paragraph Direction (with the Indic options) sets the
+    /// direction: Auto then follows it.
+    #[test]
+    fn alignment_buttons_show_the_resolved_alignment_and_direction_sets_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+        app.session.execute("text.create", &json!({"x": 200, "y": 50, "text": "שלום"})).unwrap();
+        let shown = |app: &VectorcraftApp| {
+            let para = text_style(app).unwrap().1;
+            shown_alignment(para.justify, resolved_rtl(app, &para))
+        };
+        assert_eq!(shown(&app), Justify::Right);
+        app.session.execute("text.setStyle", &json!({"justify": "left"})).unwrap();
+        assert_eq!(shown(&app), Justify::Left);
+        app.session.execute("text.setStyle", &json!({"justify": "auto"})).unwrap();
+        app.session.execute("text.setFormat", &json!({"direction": "leftToRight"})).unwrap();
+        assert_eq!(shown(&app), Justify::Left);
+        // The direction buttons show with the Indic options only.
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let tips = |app: &mut VectorcraftApp| {
+            let ctx = egui::Context::default();
+            let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+            frame.textures_delta.clear();
+            frame.shapes.len()
+        };
+        let without = tips(&mut app);
+        app.session.prefs.show_indic_options = true;
+        assert!(tips(&mut app) > without, "two more buttons");
     }
 }

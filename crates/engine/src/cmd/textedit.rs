@@ -372,13 +372,12 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         kind,
         xf: Affine::IDENTITY,
         runs: vec![TextRun { text, style }],
-        para: Default::default(),
+        para: super::create::new_type_para(),
         area: Default::default(),
         path_effect: Default::default(),
         wrap: Vec::new(),
         cached_bounds: None,
     };
-    t.para.mojikumi = vectorcraft_doc::Mojikumi::LineEndHalf;
     refresh_bounds(&mut t);
     let id = s.edit(if on_path { "Type on a Path" } else { "Area Type" }, |d, sel| {
         let (par, idx, _) = d.position(pid).ok_or(EngineError::NoNode(pid))?;

@@ -77,8 +77,8 @@ pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
 pub use text::{
-    AreaOptions, CharPosition, CharStyle, FirstBaseline, Justify, Mojikumi, ParaStyle, PathEffect, ScriptMetrics, TabAlign, TabStop, TextKind,
-    TextObject, TextRun, TextStyleDef, TextWrap, WrapShape,
+    AreaOptions, CharPosition, CharStyle, FirstBaseline, Justify, Mojikumi, ParaDirection, ParaStyle, PathEffect, ScriptMetrics, TabAlign, TabStop,
+    TextKind, TextObject, TextRun, TextStyleDef, TextWrap, WrapShape,
 };
 pub use vectorcraft_color as color;
 pub use vectorcraft_geom as geom;

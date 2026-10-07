@@ -1642,10 +1642,17 @@ impl Writer<'_> {
     /// (`text-anchor`) at their centre or right end, so they stay aligned in a viewer whose font
     /// differs; other lines are placed where each style run (and, justified, each word) starts.
     fn text(&mut self, n: &Node, t: &TextObject) {
+        // Live SVG text is written in logical order from left-aligned pieces: bidirectional text
+        // (and right-to-left paragraphs) keep their look as outlines until it is written with
+        // `direction`/`unicode-bidi`.
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        if lay.glyphs.iter().any(|g| g.rtl) || lay.lines.iter().any(|l| l.rtl) {
+            self.warn("bidirectional text is outlined to preserve shaping and visual order");
+            return self.text_outlines(n, t);
+        }
         if let TextKind::OnPath { path, start } = &t.kind {
             return self.text_on_path(n, t, path, *start);
         }
-        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         self.note_fonts(t, &lay);
         let lines = text_lines(t, &lay, self.opts.fewer_tspans);
         // A tab starts a new chunk at its stop: only lines without tabs can be anchored.
@@ -1911,7 +1918,7 @@ struct Segment {
 /// caps are upper case.
 fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Vec<Segment>> {
     let plain = t.plain_text();
-    let split_words = !fewer && !matches!(t.para.justify, Justify::Left | Justify::Center | Justify::Right);
+    let split_words = !fewer && !matches!(t.para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
     let mut lines = Vec::with_capacity(lay.lines.len());
     for line in &lay.lines {
         let mut segs: Vec<Segment> = Vec::new();

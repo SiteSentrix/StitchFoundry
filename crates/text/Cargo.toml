@@ -18,6 +18,9 @@ log = { workspace = true }
 # Font subsets for embedding (SVG @font-face); MIT OR Apache-2.0, already used by the PDF writer
 # (which turns on `variable-fonts` too: named instances of variable fonts are instanced).
 subsetter = { version = "0.2", default-features = false, features = ["variable-fonts"] }
+unicode-bidi = "0.3.18"
+unicode-general-category = "1"
+unicode-script = "0.5"
 # Builds a small variable font for tests (`test_fonts`; no font file is committed). MIT OR
 # Apache-2.0, already in the build through subsetter.
 write-fonts = { version = "0.48", optional = true }

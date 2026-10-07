@@ -3,7 +3,8 @@
 use std::ops::Range;
 
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen, PathEl, PathSeg, Point, Rect, Shape, Vec2};
-use vectorcraft_doc::{CharStyle, Justify, Mojikumi, ParaStyle, PathEffect, TextKind, TextObject};
+use unicode_bidi::{BidiInfo, Level};
+use vectorcraft_doc::{CharStyle, Justify, Mojikumi, ParaDirection, ParaStyle, PathEffect, TextKind, TextObject};
 
 use crate::composer::{Breakpoint, compose};
 use crate::fontdb::FontDb;
@@ -33,9 +34,11 @@ impl Ctx<'_> {
         find(b).or_else(|| b.checked_sub(1).and_then(find)).or_else(|| self.runs.first().map(|(_, s)| *s)).unwrap_or(&self.default)
     }
 
-    fn shape_para(&self, r: Range<usize>) -> Vec<SGlyph> {
+    /// Shape paragraph `r` (its bidi resolution `bidi`).
+    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
-        shape_range(self.db, self.text, r, &self.runs, &self.opts.features, &mut v);
+        let levels = bidi.map_or(&[][..], |b| &b.levels);
+        shape_range(self.db, self.text, r, &self.runs, &self.opts.features, levels, &mut v);
         if self.vertical {
             tate_chu_yoko(&mut v, |g| self.style_at(g.byte).size);
             // An upright glyph advances down the column by its vertical advance (the font's vertical
@@ -104,6 +107,8 @@ impl Ctx<'_> {
             font_id,
             gid: g.gid,
             xf: m,
+            // Vertical type keeps its logical order down the column.
+            rtl: g.level.is_rtl() && !self.vertical,
         });
     }
 }
@@ -848,7 +853,7 @@ fn candidates(text: &str, g: &[SGlyph], hyphenate: bool) -> Vec<Breakpoint> {
 /// Every-line composition of paragraph glyphs `sg` if applicable (justified area text with uniform
 /// line metrics); `None` falls back to the greedy single-line composer.
 fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) -> Option<Vec<(usize, bool)>> {
-    let justified = !matches!(para.justify, Justify::Left | Justify::Center | Justify::Right);
+    let justified = !matches!(para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
     if cx.opts.composer != Composer::EveryLine || !justified || pen.regions.is_none() || sg.len() < 2 {
         return None;
     }
@@ -884,7 +889,10 @@ fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) ->
 fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Option<&[Region]>) {
     let mut pen = Pen { regions, ri: 0, prev: None, pending: 0.0, fb: cx.opts.first_baseline, fb_min: cx.opts.first_baseline_min, queued: vec![] };
     'paras: for (pi, pr) in paras.iter().enumerate() {
-        let mut sg = cx.shape_para(pr.clone());
+        let text = cx.text;
+        let bidi = para_bidi(text.get(pr.clone()).unwrap_or_default(), para.direction);
+        let rtl = is_rtl(bidi.as_ref());
+        let mut sg = cx.shape_para(pr.clone(), bidi.as_ref());
         // Japanese composition: consecutive punctuation shares one half-em space.
         let compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
         // …and a quarter em between Japanese and Latin text.
@@ -957,6 +965,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             };
             let w: f64 = sg[i..trimmed].iter().map(|g| g.adv).sum::<f64>() + hyphen.as_ref().map_or(0.0, |h| h.adv) - end_trim;
             let (align, justify) = match para.justify {
+                Justify::Auto => (if rtl { 2 } else { 0 }, false),
                 Justify::Left => (0, false),
                 Justify::Center => (1, false),
                 Justify::Right => (2, false),
@@ -1011,11 +1020,20 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             };
             let li = cx.out.lines.len();
             let glyph_start = cx.out.glyphs.len();
-            let mut x = start_x;
             let mut x_end = start_x;
             // Tab stops are measured from the frame's left edge (point type: the origin).
             let tab_origin = if regions.is_some() { x0 } else { 0.0 };
-            for (j, g) in sg.iter().enumerate().take(end).skip(i) {
+            let line_start = sg.get(i).map_or(pr.start, |g| g.byte);
+            let line_end = sg.get(end).map_or(pr.end, |g| g.byte);
+            let order = visual_order(bidi.as_ref().filter(|_| !cx.vertical), pr.start, line_start..line_end, &sg[i..end]);
+            // RTL's logical trailing spaces precede the visible content. Keep them outside
+            // the aligned content extent, just as LTR trailing spaces extend to its right.
+            let leading_space_width: f64 =
+                order.iter().take_while(|&&offset| i + offset >= trimmed).filter_map(|&offset| sg.get(i + offset)).map(|g| g.adv).sum();
+            let mut x = start_x - leading_space_width;
+            for offset in order {
+                let j = i + offset;
+                let Some(g) = sg.get(j) else { continue };
                 let mut adv = g.adv;
                 if j + 1 == trimmed {
                     adv -= end_trim;
@@ -1036,7 +1054,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 }
                 cx.emit(g, Affine::translate((x, baseline)), Point::new(x, baseline), 0.0, adv, li);
                 x += adv;
-                if j + 1 == trimmed {
+                if j < trimmed {
                     x_end = x;
                 }
             }
@@ -1047,6 +1065,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 x_end = hx + h.adv;
             }
             cx.out.lines.push(LineInfo {
+                rtl: rtl && !cx.vertical,
                 baseline,
                 x0: start_x,
                 x1: x_end,
@@ -1111,9 +1130,20 @@ impl ArcPath {
 fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &BezPath, start: f64, closed: bool, effect: PathEffect) {
     cx.out.on_path = true;
     let mut sg = Vec::new();
+    // The first paragraph's direction aligns the line (Auto) and sets the caret's.
+    let mut rtl = None;
     for pr in paras {
-        sg.extend(cx.shape_para(pr.clone()));
+        let text = cx.text;
+        let bidi = para_bidi(text.get(pr.clone()).unwrap_or_default(), para.direction);
+        rtl.get_or_insert(is_rtl(bidi.as_ref()) && !cx.vertical);
+        let shaped = cx.shape_para(pr.clone(), bidi.as_ref());
+        for i in visual_order(bidi.as_ref().filter(|_| !cx.vertical), pr.start, pr.clone(), &shaped) {
+            if let Some(g) = shaped.get(i) {
+                sg.push(g.clone());
+            }
+        }
     }
+    let rtl = rtl.unwrap_or(false);
     let ap = ArcPath::new(path);
     let m = Metrics::max(&sg).map(|m| (m.asc, m.desc)).unwrap_or_else(|| {
         let s = style_metrics(cx.db, cx.style_at(0));
@@ -1123,6 +1153,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
     if ap.segs.is_empty() {
         cx.out.overflow = !sg.is_empty();
         cx.out.lines.push(LineInfo {
+            rtl,
             baseline: 0.0,
             x0: 0.0,
             x1: 0.0,
@@ -1141,6 +1172,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
     let avail = if closed { ap.len } else { ap.len - s_start };
     let w: f64 = sg.iter().map(|g| g.adv).sum();
     let s0 = match para.justify {
+        Justify::Auto if rtl => s_start + (avail - w).max(0.0),
         Justify::Center | Justify::JustifyCenter => s_start + ((avail - w) * 0.5).max(0.0),
         Justify::Right | Justify::JustifyRight => s_start + (avail - w).max(0.0),
         _ => s_start,
@@ -1195,6 +1227,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
     let (ps, _) = ap.at(if closed { s0.rem_euclid(ap.len) } else { s0 });
     let (pe, _) = ap.at(if closed { (s0 + x).rem_euclid(ap.len) } else { s0 + x });
     cx.out.lines.push(LineInfo {
+        rtl,
         baseline: ps.y,
         x0: ps.x,
         x1: pe.x,
@@ -1206,4 +1239,51 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
         glyph_end: cx.out.glyphs.len(),
         avail: (0.0, ap.len),
     });
+}
+
+/// The bidirectional resolution (UAX #9) of paragraph `text`, its base direction `direction` or,
+/// without one, from its first strong character. `None` for the usual paragraph with nothing right
+/// to left in it (no right-to-left character or direction), which skips the algorithm.
+pub(crate) fn para_bidi(text: &str, direction: Option<ParaDirection>) -> Option<BidiInfo<'_>> {
+    use unicode_bidi::BidiClass::{AL, AN, FSI, R, RLE, RLI, RLO};
+    let rtl_set = direction == Some(ParaDirection::RightToLeft);
+    if !rtl_set && !text.chars().any(|c| matches!(unicode_bidi::bidi_class(c), R | AL | AN | RLE | RLO | RLI | FSI)) {
+        return None;
+    }
+    let level = direction.map(|d| if d == ParaDirection::RightToLeft { Level::rtl() } else { Level::ltr() });
+    Some(BidiInfo::new(text, level))
+}
+
+/// Does the paragraph run right to left ([`para_bidi`])?
+pub(crate) fn is_rtl(bidi: Option<&BidiInfo<'_>>) -> bool {
+    bidi.and_then(|b| b.paragraphs.first()).is_some_and(|p| p.level.is_rtl())
+}
+
+/// The visual order of a line's `glyphs` (indices into them), whole shaping clusters reordered
+/// (UAX #9 L1–L2) for the line `line` (bytes of the text) of the paragraph starting at byte
+/// `paragraph_start`; their own order when nothing is right to left (`bidi` None).
+fn visual_order(bidi: Option<&BidiInfo<'_>>, paragraph_start: usize, line: Range<usize>, glyphs: &[SGlyph]) -> Vec<usize> {
+    let Some((bidi, para)) = bidi.filter(|b| b.has_rtl()).and_then(|b| Some((b, b.paragraphs.first()?))) else {
+        return (0..glyphs.len()).collect();
+    };
+    if glyphs.is_empty() {
+        return vec![];
+    }
+    let levels = bidi.reordered_levels(para, line.start.saturating_sub(paragraph_start)..line.end.saturating_sub(paragraph_start));
+    let mut clusters: Vec<Range<usize>> = Vec::new();
+    for (i, g) in glyphs.iter().enumerate() {
+        if i > 0 && glyphs.get(i - 1).is_some_and(|p| p.byte == g.byte) {
+            if let Some(c) = clusters.last_mut() {
+                c.end = i + 1;
+            }
+        } else {
+            clusters.push(i..i + 1);
+        }
+    }
+    let cluster_levels: Vec<_> = clusters
+        .iter()
+        .filter_map(|c| glyphs.get(c.start))
+        .map(|g| levels.get(g.byte.saturating_sub(paragraph_start)).copied().unwrap_or(g.level))
+        .collect();
+    unicode_bidi::BidiInfo::reorder_visual(&cluster_levels).into_iter().filter_map(|i| clusters.get(i)).flat_map(|c| c.clone()).collect()
 }
