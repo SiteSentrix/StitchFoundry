@@ -111,7 +111,16 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts);
         b.begin_page(scan);
         interpret_page(page, &mut ctx, &mut b);
-        let parts = b.end_page();
+        let mut parts = b.end_page();
+        // A file with several artboards writes, on each page, the art of its neighbours that
+        // reaches into the page's box: art lying wholly outside this page is theirs (each page
+        // draws it shifted by its own artboard spacing), so keep it only where it belongs.
+        if picked.len() > 1 {
+            for (_, art) in &mut parts {
+                art.retain(|n| n.visual_bounds().is_none_or(|r| r.x0 <= ab.x1 && r.x1 >= ab.x0 && r.y0 <= ab.y1 && r.y1 >= ab.y0));
+            }
+            parts.retain(|(_, art)| !art.is_empty());
+        }
         let children: Vec<Arc<Node>> = parts.iter().flat_map(|(_, v)| v.iter().cloned()).collect();
         placeholder &= crate::pages::has_private_data(page) && only_text(&children);
         let mut right = ab.x1;

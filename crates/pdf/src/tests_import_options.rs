@@ -107,6 +107,19 @@ fn bounding_boxes_of_several_pages_do_not_overlap() {
 }
 
 #[test]
+fn art_of_neighbouring_artboards_off_a_page_is_left_to_its_own_page() {
+    // Page 2 also draws page 1's square, off to its left (outside its box), as files with several
+    // artboards are written: only page 1 keeps it, so it doesn't come back twice.
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 10 10 20 20 re f"), PdfPage::new(100.0, 100.0, "0 g -90 10 20 20 re f 1 0 0 rg 50 10 20 20 re f")];
+    let d = open(&pdf(&pages, None), ImportOptions::default());
+    let count = |i: usize| d.layers[i].children().map_or(0, |c| c.len());
+    assert_eq!((count(0), count(1)), (1, 1));
+    // A single page keeps its art off the page (the pasteboard).
+    let d = open(&pdf(&pages[1..], None), ImportOptions::default());
+    assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 2);
+}
+
+#[test]
 fn an_encrypted_pdf_opens_with_its_password_only() {
     let bytes = pdf(&[PdfPage::new(200.0, 100.0, "1 0 0 rg 10 10 50 50 re f")], Some("secret"));
     assert_eq!(import_with_report(&bytes, &ImportOptions::default()).unwrap_err(), PdfError::NeedsPassword);
