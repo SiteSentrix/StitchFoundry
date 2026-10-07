@@ -31,7 +31,10 @@ clipboard-win = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = { version = "0.21", default-features = false }
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSTextInputContext"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSTextInputContext"] }
+# Files opened from Finder and the Dock (src/open_documents.rs); both already come with winit, muda and rfd.
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSNotification", "NSOperation", "NSString", "NSURL"] }
+block2 = "0.6"
 
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.

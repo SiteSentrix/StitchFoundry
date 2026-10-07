@@ -67,7 +67,13 @@ The rules are in craftrules `standards/fonts.md`, the build option in
 
 - `Info.plist` is generated from `Info.plist.in` (bundle id `ai.storyteller.vectorcraft`,
   `LSMinimumSystemVersion` 11.0, the version and the build commit). The icon is
-  `assets/app-icon/vectorcraft.icns`.
+  `assets/app-icon/vectorcraft.icns`. `cargo xtask bundle` fills in the same template for its
+  development app.
+- **Document types:** `Info.plist.in` declares every format File › Open reads, so Finder opens
+  them with VectorCraft (double-click, Open With, a drop on the Dock icon). VectorCraft owns its own
+  formats and is an alternate for the others. A test keeps the list in step with the engine's
+  `OPEN_EXTS`. AppKit hands the files to the app as open-document events, which
+  `apps/vectorcraft/src/open_documents.rs` opens like files named on the command line.
 - **Signing** goes inside-out with the hardened runtime and a secure timestamp: the executable
   first, then the bundle, with no `--deep` on the final signature. The entitlements
   (`entitlements.plist`) are deliberately empty.

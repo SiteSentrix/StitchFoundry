@@ -11,6 +11,8 @@ mod clipboard;
 mod control_server;
 #[cfg(target_os = "macos")]
 mod native_menu;
+#[cfg(target_os = "macos")]
+mod open_documents;
 mod printing;
 mod window;
 
@@ -30,6 +32,7 @@ impl eframe::App for App {
             if let Some(m) = &mut self.1 {
                 m.poll(&mut self.0);
             }
+            open_files(&mut self.0, open_documents::take());
         }
         self.0.logic(ctx);
         window::track(ctx, &mut self.0.ui.window);
@@ -49,6 +52,17 @@ impl eframe::App for App {
     }
     fn on_exit(&mut self) {
         save_prefs(&self.0);
+    }
+}
+
+/// Open files handed to the app (command line, macOS Finder and Dock) as documents. A file that
+/// can't be opened is reported in the status bar and on stderr; the others still open.
+fn open_files(app: &mut VectorcraftApp, files: Vec<String>) {
+    for f in files {
+        if let Err(e) = vectorcraft_ui_egui::io::open_path(app, &f) {
+            eprintln!("vectorcraft: {f}: {e}");
+            app.status(format!("Couldn't open {}: {e}", fileio::file_name(&f)));
+        }
     }
 }
 
@@ -302,6 +316,9 @@ fn main() -> eframe::Result {
     if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
         create.power_preference = power;
     }
+    // Files opened from Finder and the Dock arrive as events, not arguments.
+    #[cfg(target_os = "macos")]
+    open_documents::install();
     eframe::run_native(
         "VectorCraft",
         options,
@@ -334,11 +351,9 @@ fn main() -> eframe::Result {
                 let rx = control_server::start(port, cc.egui_ctx.clone());
                 app = app.with_control(rx);
             }
-            for f in files {
-                if let Err(e) = vectorcraft_ui_egui::io::open_path(&mut app, &f) {
-                    eprintln!("vectorcraft: {f}: {e}");
-                }
-            }
+            #[cfg(target_os = "macos")]
+            open_documents::set_ui(&cc.egui_ctx);
+            open_files(&mut app, files);
             Ok(Box::new(App(
                 app,
                 #[cfg(target_os = "macos")]
@@ -365,6 +380,35 @@ mod tests {
         assert_eq!(power_preference(Some("powerSaving"), Some(PowerPreference::HighPerformance)), PowerPreference::HighPerformance);
         assert_eq!(power_preference(Some("highPerformance"), Some(PowerPreference::LowPower)), PowerPreference::LowPower);
         assert_eq!(power_preference(None, Some(PowerPreference::None)), PowerPreference::None);
+    }
+
+    /// The file extensions the macOS bundle declares: its document types and its own exported type.
+    fn plist_extensions(plist: &str) -> Vec<&str> {
+        ["<key>CFBundleTypeExtensions</key>", "<key>public.filename-extension</key>"]
+            .iter()
+            .flat_map(|key| plist.split(key).skip(1))
+            .filter_map(|rest| rest.split("</array>").next())
+            .flat_map(|array| array.split("<string>").skip(1))
+            .filter_map(|s| s.split("</string>").next())
+            .collect()
+    }
+
+    /// Finder offers the app for every file File › Open reads (#295, #354), takes over no other
+    /// app's files, and hands them to the app rather than to AppKit's document machinery.
+    #[test]
+    fn the_macos_bundle_opens_every_readable_format() {
+        let plist = include_str!("../../../packaging/macos/Info.plist.in");
+        let declared = plist_extensions(plist);
+        for e in fileio::OPEN_EXTS {
+            assert!(declared.contains(e), "Info.plist.in doesn't declare .{e}");
+        }
+        for e in &declared {
+            assert!(fileio::OPEN_EXTS.contains(e), "Info.plist.in declares .{e}, which the app doesn't open");
+        }
+        assert!(!plist.contains("<key>NSDocumentClass</key>"), "not an NSDocument app: AppKit would refuse the files");
+        let types = plist.matches("<key>CFBundleTypeName</key>").count();
+        assert!(types > 1 && plist.matches("<key>LSHandlerRank</key>").count() == types, "every document type has a rank");
+        assert_eq!(plist.matches("<string>Owner</string>").count(), 2, "only VectorCraft documents and templates are owned");
     }
 
     /// The preference the engine saves is the one the app reads back before the window opens.
