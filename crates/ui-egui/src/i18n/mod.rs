@@ -168,6 +168,19 @@ pub fn lang_from_tag(tag: &str) -> Option<Lang> {
     cands.iter().find_map(|c| Lang::from_code(c))
 }
 
+/// Work out the system language on a background thread, so the first frame doesn't wait for the
+/// locale probe (which runs `reg.exe` on Windows and `defaults` on macOS). Call it at startup; a
+/// frame that needs the language before the probe finishes waits for it. A no-op on wasm.
+pub fn detect_system_lang_in_background() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // A failed spawn leaves the probe to the first frame that needs it.
+        let _ = std::thread::Builder::new().name("locale-probe".into()).spawn(|| {
+            system_lang();
+        });
+    }
+}
+
 /// The system language (cached). English when it can't be determined.
 pub fn system_lang() -> Lang {
     // Tests drive the UI by its English labels whatever the developer's locale is.
@@ -297,6 +310,14 @@ pub fn trn(lang: Lang, n: u64, one: &str, other: &str) -> String {
     let idx = (lang.0.plural)(n);
     let text = lang.catalog().plural(one, other, idx).unwrap_or(if n == 1 { one } else { other });
     fmt(text, &[("n", &n.to_string())])
+}
+
+/// An entry of a list that mixes interface labels with names (user, file or system data) as
+/// shown: a built-in entry in `lang`, a name exactly as it is (a library the user calls "Layers"
+/// stays "Layers"). Show the result with the non-translating widgets (`dropdown_names`,
+/// `menu_item_name`, `dim_name`).
+pub fn label_or_name(lang: Lang, s: &str, built_in: bool) -> &str {
+    if built_in { tr(lang, s) } else { s }
 }
 
 /// [`trn`] in the current language.

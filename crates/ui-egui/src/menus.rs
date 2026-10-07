@@ -1258,9 +1258,29 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
     }
 }
 
+/// Does the menu item `id` show a name that is user, file or system data rather than an interface
+/// label: a recent file, a saved view, a font, a user library or preset, a custom workspace, a
+/// plug-in? Such names are shown as they are, never translated (a workspace the user calls
+/// "Layers" stays "Layers").
+fn shows_a_name(id: &str, label: &str) -> bool {
+    const SLOTS: [&str; 6] = [
+        "file.openRecent",
+        "view.goto",
+        "type.recentFont",
+        crate::panels::swatches::USER_SLOT,
+        crate::panels::graphic_styles::USER_SLOT,
+        crate::dialogs::perspective_presets::SLOT,
+    ];
+    SLOTS.iter().any(|s| id.starts_with(s))
+        || matches!(id, "text.setStyle" | "plugin.dialog")
+        || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
+        || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
+}
+
 /// The label of a menu item as drawn: [`dynamic_label`] in the UI language. Labels assembled
 /// around a name (Undo *Move*, Reset *Essentials*, Last Effect: *Drop Shadow*) are translated as
-/// templates so the name can move; names that are user data (files, views, fonts) pass through.
+/// templates so the name can move; names that are user data (files, views, fonts, custom
+/// workspaces, plug-ins: [`shows_a_name`]) pass through.
 pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
     let lang = crate::i18n::current();
     let fmt = crate::i18n::fmt;
@@ -1273,7 +1293,10 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
                 None => tl!(if id == "edit.undo" { "Undo" } else { "Redo" }).to_string(),
             }
         }
-        "window.workspace.reset" => fmt(tl!("Reset {name}"), &[("name", tl!(&app.ui.workspace))]),
+        "window.workspace.reset" => {
+            let name = &app.ui.workspace;
+            fmt(tl!("Reset {name}"), &[("name", if crate::workspaces::is_builtin(name) { tl!(name) } else { name })])
+        }
         "effect.last" => match &app.last_effect {
             Some((e, _)) => {
                 let name = vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str());
@@ -1281,7 +1304,10 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
             }
             None => crate::i18n::tr_id(lang, id, label).to_string(),
         },
-        _ => crate::i18n::tr_id(lang, id, &dynamic_label(app, id, label)).to_string(),
+        _ => {
+            let shown = dynamic_label(app, id, label);
+            if shows_a_name(id, &shown) { shown } else { crate::i18n::tr_id(lang, id, &shown).to_string() }
+        }
     }
 }
 
@@ -2895,6 +2921,24 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_in_menus_are_not_interface_labels() {
+        for (id, label) in [
+            ("file.openRecent1", "Layers.svg"),
+            ("view.goto2", "Layers"),
+            ("type.recentFont1", "Regular"),
+            ("text.setStyle", "Black"),
+            ("window.workspace", "Layers"),
+            ("plugin.dialog", "Group"),
+            ("window.userSwatchLibrary3", "Default"),
+        ] {
+            assert!(shows_a_name(id, label), "{id} {label}");
+        }
+        for (id, label) in [("object.group", "Group"), ("window.workspace", "Essentials"), ("effect.apply", "Drop Shadow")] {
+            assert!(!shows_a_name(id, label), "{id} {label}");
+        }
+    }
 
     #[test]
     fn last_effect_dialog_and_view_toggles() {

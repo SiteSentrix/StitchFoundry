@@ -140,7 +140,7 @@ fn recent_urls(app: &mut VectorcraftApp, ui: &mut Ui) {
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(220.0);
         for u in &app.session.recent_urls {
-            if menu_item(ui, u, true, false) {
+            if widgets::menu_item_name(ui, u, true, false) {
                 chosen = Some(u.clone());
             }
         }

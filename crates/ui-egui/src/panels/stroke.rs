@@ -405,7 +405,8 @@ pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, cur: Option<&W
                 ui.painter().text(
                     row.left_center() + vec2(84.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    tl!(e.label),
+                    // A saved profile's name is the user's.
+                    super::label_or_name(e.label, e.built_in),
                     egui::FontId::proportional(11.5),
                     t.text,
                 );

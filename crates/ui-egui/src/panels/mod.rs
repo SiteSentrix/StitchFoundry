@@ -372,6 +372,11 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(("panel-state", key)), v));
 }
 
+/// [`crate::i18n::label_or_name`] in the UI language.
+pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
+    crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
+}
+
 /// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
 /// command feeds); clicking one applies it to the active proxy (Alt: the inactive one).
 pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {

@@ -20,9 +20,12 @@ use crate::{VectorcraftApp, widgets};
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| heading_label(d), body, confirm, preview: true, ..DialogSpec::FORM };
 
 /// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
-/// without its trailing ellipsis.
+/// without its trailing ellipsis. A plug-in effect's name is shown as it is.
 fn heading_label(d: &Dialog) -> String {
     let label = d.str("__label");
+    if vectorcraft_plugins::effect::plugin_id(&d.str("__effect")).is_some() {
+        return label;
+    }
     let dotted = format!("{label}…");
     let shown = tl!(&dotted);
     if shown != dotted { shown.trim_end_matches('…').to_string() } else { tl!(&label).to_string() }

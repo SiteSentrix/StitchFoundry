@@ -50,6 +50,13 @@ pub(super) const SECTIONS: [&str; 7] = ["General", "Compression", "Marks and Ble
 /// The default settings as JSON: what a field an agent left out reads as.
 static DEFAULTS: LazyLock<Value> = LazyLock::new(|| serde_json::to_value(PdfSettings::default()).unwrap_or_default());
 
+/// Is `name` a built-in PDF preset's? Those are ours (translated where listed); the saved ones are
+/// names.
+pub(super) fn is_builtin_preset(name: &str) -> bool {
+    static NAMES: LazyLock<Vec<String>> = LazyLock::new(|| vectorcraft_pdf::builtin_presets().into_iter().map(|p| p.name).collect());
+    NAMES.iter().any(|n| n == name)
+}
+
 /// Trim mark weights offered (pt).
 const WEIGHTS: [f64; 3] = [0.125, 0.25, 0.5];
 const WEIGHT_LABELS: [&str; 3] = ["0.125 pt", "0.25 pt", "0.5 pt"];
@@ -394,7 +401,11 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     row_with(ui, tl!("Preset:"), TOP_LABEL_WIDTH, |ui| {
         let presets = pdf::presets(&app.session);
         let names: Vec<&str> = presets.iter().map(String::as_str).collect();
-        let chosen = widgets::dropdown(ui, "pdf-preset", &d.str("preset"), &names, 300.0).and_then(|i| names.get(i)).map(|p| p.to_string());
+        // The built-in presets come first (translated); the saved ones are names.
+        let builtins = names.len().saturating_sub(app.session.prefs.pdf_presets.len());
+        let chosen = super::mixed_dropdown(ui, "pdf-preset", &d.str("preset"), &names, 300.0, |k| k < builtins)
+            .and_then(|i| names.get(i))
+            .map(|p| p.to_string());
         if let Some(name) = chosen {
             apply_preset(app, d, &name);
         }
@@ -560,12 +571,13 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
 }
 
 /// A dropdown of names such as colour profiles or flattener presets (`names`, the first one
-/// standing for "" at `path`), showing the name at `path` (one that isn't among them too).
-pub(super) fn profile_pick(ui: &mut egui::Ui, d: &mut Dialog, path: &str, names: &[&str], enabled: bool) {
+/// standing for "" at `path`), showing the name at `path` (one that isn't among them too). The
+/// first `builtins` entries are ours (translated); the others (profiles, saved presets) are names.
+pub(super) fn profile_pick(ui: &mut egui::Ui, d: &mut Dialog, path: &str, names: &[&str], builtins: usize, enabled: bool) {
     let blank = names.first().copied().unwrap_or_default();
     let current = get(d, path).as_str().filter(|s| !s.is_empty()).unwrap_or(blank).to_string();
     ui.add_enabled_ui(enabled, |ui| {
-        if let Some(i) = widgets::dropdown(ui, path, &current, names, 300.0) {
+        if let Some(i) = super::mixed_dropdown(ui, path, &current, names, 300.0, |k| k < builtins) {
             set(d, path, json!(if i == 0 { "" } else { names.get(i).copied().unwrap_or_default() }));
         }
     });
@@ -581,7 +593,7 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     });
     // PDF/X-1a converts to CMYK even without a conversion.
     let converting = get(d, "output.conversion") != ColorConversion::None.id() || standard.cmyk_only();
-    row(ui, tl!("Destination:"), |ui| profile_pick(ui, d, "output.destination", &names(DOCUMENT_PROFILE), converting));
+    row(ui, tl!("Destination:"), |ui| profile_pick(ui, d, "output.destination", &names(DOCUMENT_PROFILE), 1, converting));
     row(ui, tl!("Profile inclusion:"), |ui| {
         // A standard decides whether colours are tagged.
         ui.add_enabled_ui(standard == Standard::None, |ui| pick::<ProfileInclusion>(ui, d, "output.profiles", 300.0, |_| true));
@@ -595,7 +607,7 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     // PDF/A files carry their own output intent; PDF/X files always have one.
     let own = standard != Standard::PdfA2b;
     let blank = if standard.is_pdfx() { PDFX_INTENT } else { NO_PROFILE };
-    row(ui, tl!("Output intent profile:"), |ui| profile_pick(ui, d, "output.outputIntent", &names(blank), own));
+    row(ui, tl!("Output intent profile:"), |ui| profile_pick(ui, d, "output.outputIntent", &names(blank), 1, own));
     for (p, label) in [
         ("output.outputCondition", tl!("Output condition:")),
         ("output.outputConditionId", tl!("Condition identifier:")),
@@ -627,11 +639,13 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     row(ui, tl!("Flattener preset:"), |ui| {
         let presets = app.session.flattener_presets();
         let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
+        // The built-in presets come first (translated); the saved ones are names.
+        let builtins = names.len().saturating_sub(app.session.prefs.flattener_presets.len());
         let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
         // A built-in preset named by id (`high`) shows as its name.
         let current = FlattenOptions::preset_label(&name.to_ascii_lowercase()).unwrap_or(name).to_string();
         ui.add_enabled_ui(flat, |ui| {
-            if let Some(n) = widgets::dropdown(ui, "flattenerPreset", &current, &names, 200.0).and_then(|i| names.get(i)) {
+            if let Some(n) = super::mixed_dropdown(ui, "flattenerPreset", &current, &names, 200.0, |k| k < builtins).and_then(|i| names.get(i)) {
                 set(d, "flattenerPreset", json!(n));
             }
         });
@@ -800,6 +814,13 @@ mod tests {
     use crate::Services;
 
     type Log = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
+
+    /// The built-in presets are told from saved ones by name (only theirs are translated).
+    #[test]
+    fn built_in_presets_are_known_by_name() {
+        assert!(vectorcraft_pdf::builtin_presets().iter().all(|p| is_builtin_preset(&p.name)));
+        assert!(is_builtin_preset(pdf::DEFAULT_PRESET) && !is_builtin_preset("Default") && !is_builtin_preset("My Preset"));
+    }
 
     /// An app with two artboards whose writer and URL opener record what they get.
     fn app() -> (VectorcraftApp, Log, Log) {

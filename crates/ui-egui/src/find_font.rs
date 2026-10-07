@@ -76,10 +76,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     d.fields.insert("style".into(), json!(""));
                 }
                 let styles = vectorcraft_text::FontDb::global().styles(&d.str("family"));
-                let mut opts: Vec<&str> = vec!["(closest)"];
+                // "(closest)" is ours; the font's style names are shown as they are.
+                let closest = tl!("(closest)");
+                let mut opts: Vec<&str> = vec![closest];
                 opts.extend(styles.iter().map(String::as_str));
-                let cur = if d.str("style").is_empty() { "(closest)".to_string() } else { d.str("style") };
-                if let Some(i) = widgets::dropdown(ui, "ff-style", &cur, &opts, 120.0) {
+                let style = d.str("style");
+                let cur = if style.is_empty() { closest } else { style.as_str() };
+                if let Some(i) = widgets::dropdown_names(ui, "ff-style", cur, &opts, 120.0) {
                     d.fields.insert("style".into(), json!(if i == 0 { String::new() } else { styles[i - 1].clone() }));
                 }
             });

@@ -73,11 +73,13 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
 }
 
+/// A dropdown of the `kind` profiles after `extra` (a built-in entry, shown in the UI language);
+/// profile names are shown as they are. Returns the chosen name.
 fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, extra: Option<&str>) -> Option<String> {
     let names: Vec<String> =
         extra.map(str::to_string).into_iter().chain(cms::profiles().into_iter().filter(|p| p.kind == kind).map(|p| p.name)).collect();
-    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    widgets::dropdown(ui, id, current, &refs, 210.0).map(|i| names[i].clone())
+    let refs: Vec<&str> = names.iter().map(|n| super::label_or_name(n, extra == Some(n.as_str()))).collect();
+    widgets::dropdown_names(ui, id, super::label_or_name(current, extra == Some(current)), &refs, 210.0).and_then(|i| names.get(i).cloned())
 }
 
 fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -143,9 +145,10 @@ fn proof_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let v = proof::view();
     widgets::section_header(ui, tl!("Proof Setup"));
     let cur = v.setup.target.id();
-    let label = PROOF_TARGETS.iter().find(|(id, _)| *id == cur).map_or(cur.as_str(), |(_, l)| l);
-    let labels: Vec<&str> = PROOF_TARGETS.iter().map(|(_, l)| *l).collect();
-    if let Some(i) = widgets::dropdown(ui, "proof-target", label, &labels, 230.0) {
+    // A target that isn't one of ours (a loaded profile) shows its name as it is.
+    let label = PROOF_TARGETS.iter().find(|(id, _)| *id == cur).map_or(cur.as_str(), |(_, l)| tl!(*l));
+    let labels: Vec<&str> = PROOF_TARGETS.iter().map(|(_, l)| tl!(*l)).collect();
+    if let Some(i) = widgets::dropdown_names(ui, "proof-target", label, &labels, 230.0) {
         run(app, "view.proofSetup", json!({"target": PROOF_TARGETS[i].0}));
     }
     ui.horizontal(|ui| {

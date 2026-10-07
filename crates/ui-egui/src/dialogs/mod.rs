@@ -108,7 +108,8 @@ const EDGE_GAP: f32 = 8.0;
 pub(crate) struct DialogSpec {
     /// Draws its own window instead of the shared frame (the frame fields below are then unused).
     pub window: Option<fn(&mut VectorcraftApp, &egui::Context)>,
-    /// The heading (and window title).
+    /// The heading (and window title), in the UI language: the spec translates its own text and
+    /// leaves names in it (a document's, a plug-in's) as they are.
     pub heading: fn(&Dialog) -> String,
     /// Draws the fields. Returns true to close the dialog as Cancel would.
     pub body: fn(&mut VectorcraftApp, &mut egui::Ui, &mut Dialog) -> bool,
@@ -131,7 +132,7 @@ impl DialogSpec {
     /// A text field per value; OK just closes. Also the fallback for unregistered kinds.
     pub const FORM: Self = Self {
         window: None,
-        heading: |_| "Dialog".into(),
+        heading: |_| tl!("Dialog").into(),
         body: |app, ui, d| {
             form::grid(ui, d, app.session.general_unit());
             false
@@ -340,7 +341,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
             ui.set_min_width(spec.min_width.min(room));
             ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
-            ui.label(egui::RichText::new(tl!(heading.as_str())).font(theme::semibold(16.0)).color(t.text));
+            ui.label(egui::RichText::new(heading.as_str()).font(theme::semibold(16.0)).color(t.text));
             ui.add_space(12.0);
             cancel = (spec.body)(app, ui, &mut d);
             ui.add_space(16.0);
@@ -377,6 +378,28 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     } else if ok && let Err(e) = confirm(app) {
         app.status(e);
     }
+}
+
+/// What a dropdown shows for `names`, a list mixing built-in labels (`builtin(index)`: translated
+/// into `lang`) with names the user saved or a file or the system supplied (shown as they are).
+pub(crate) fn shown_names<'a>(lang: crate::i18n::Lang, names: &[&'a str], builtin: impl Fn(usize) -> bool) -> Vec<&'a str> {
+    names.iter().enumerate().map(|(k, n)| crate::i18n::label_or_name(lang, n, builtin(k))).collect()
+}
+
+/// [`widgets::dropdown_names`] over such a mixed list ([`shown_names`] in the UI language), showing
+/// `current` as its entry reads; a `current` that isn't among `names` is shown as given (a caller
+/// translates its own [Custom]). Returns the index chosen in `names`.
+pub(crate) fn mixed_dropdown(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    current: &str,
+    names: &[&str],
+    width: f32,
+    builtin: impl Fn(usize) -> bool,
+) -> Option<usize> {
+    let shown = shown_names(crate::i18n::current(), names, builtin);
+    let current = names.iter().position(|n| *n == current).and_then(|i| shown.get(i).copied()).unwrap_or(current);
+    widgets::dropdown_names(ui, id, current, &shown, width)
 }
 
 #[cfg(test)]

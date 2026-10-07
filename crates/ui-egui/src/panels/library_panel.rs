@@ -113,6 +113,17 @@ pub(crate) fn submenu(category: &str) -> Option<&'static str> {
     }
 }
 
+/// Is library `id` built in? A library the user saved to the User Defined folder or loaded from a
+/// file (`user/…`, `loaded/…` ids) is named by its file.
+fn builtin_library(id: &str) -> bool {
+    !(id.starts_with("user/") || id.starts_with("loaded/"))
+}
+
+/// Library `id`'s name as shown: a built-in library's in the UI language, any other's as it is.
+pub(crate) fn library_name<'a>(id: &str, name: &'a str) -> &'a str {
+    super::label_or_name(name, builtin_library(id))
+}
+
 /// The opener of library `K`'s libraries (`window.swatchLibrary {library}`): open library `library`
 /// (an id or a name; `list`: the command listing them) in the panel, `null` closing it. `found`
 /// looks a library up: its id, name and item count. → {open, name, count}
@@ -174,8 +185,9 @@ fn window<K: LibraryKind>(app: &mut VectorcraftApp, ctx: &egui::Context, id: &st
             ui.set_width(256.0);
             let (strip, _) = ui.allocate_exact_size(vec2(256.0, 26.0), Sense::hover());
             ui.painter().rect_filled(strip, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, t.panel_darker);
-            let label = egui::RichText::new(tl!(&name)).font(theme::semibold(12.0));
-            let galley = ui.painter().layout_no_wrap(tl!(&name).to_string(), theme::semibold(12.0), t.text);
+            let name = library_name(id, &name);
+            let label = egui::RichText::new(name).font(theme::semibold(12.0));
+            let galley = ui.painter().layout_no_wrap(name.to_string(), theme::semibold(12.0), t.text);
             let tab = Rect::from_min_size(strip.min, vec2((galley.size().x + 24.0).min(190.0), 26.0));
             ui.painter().rect_filled(tab, CornerRadius { nw: 4, ne: 0, sw: 0, se: 0 }, t.panel);
             ui.put(tab.shrink2(vec2(12.0, 0.0)), egui::Label::new(label.color(t.text)).truncate().selectable(false));
@@ -359,7 +371,7 @@ pub(crate) fn library_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui
 pub(crate) fn library_items(ui: &mut Ui, libs: &[LibraryRef], current: Option<&str>) -> Option<String> {
     let mut chosen = None;
     let mut item = |ui: &mut Ui, l: &LibraryRef| {
-        if menu_item(ui, &l.name, true, current == Some(l.id.as_str())) {
+        if widgets::menu_item_name(ui, library_name(&l.id, &l.name), true, current == Some(l.id.as_str())) {
             chosen = Some(l.id.clone());
         }
     };
@@ -598,5 +610,10 @@ mod tests {
         assert_eq!(app.session.documents().len(), 1, "not opened as a document");
         let other = SwatchLibraries::list(&app).into_iter().find(|l| l.id == open.id).unwrap();
         assert_eq!(other.submenu, Some("Other Libraries"));
+        // Built-in libraries' names are interface labels; a file's is shown as it is.
+        for l in SwatchLibraries::list(&app) {
+            assert_eq!(builtin_library(&l.id), !matches!(l.submenu, Some("User Defined" | "Other Libraries")), "{}", l.id);
+        }
+        assert!(!builtin_library(&open.id) && builtin_library(vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES));
     }
 }

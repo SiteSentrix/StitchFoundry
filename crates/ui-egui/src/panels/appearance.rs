@@ -154,6 +154,20 @@ pub fn effect_label(id: &str) -> String {
         .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string())
 }
 
+/// Is `id` one of our own effects? A plug-in's effect name and parameters come from the plug-in
+/// and are shown as they are.
+fn built_in_effect(id: &str) -> bool {
+    catalog().iter().any(|c| c.0 == id)
+}
+
+/// [`effect_label`] as shown: a built-in effect's in the UI language, a plug-in's as it is.
+fn shown_effect_label(id: &str) -> String {
+    match catalog().iter().find(|c| c.0 == id) {
+        Some(c) => tl!(&c.1).to_string(),
+        None => effect_label(id),
+    }
+}
+
 /// "Opacity: Default" or "Opacity: 50% Multiply".
 pub fn opacity_text(opacity: f32, blend: BlendMode) -> String {
     if (opacity - 1.0).abs() < 1e-4 && blend == BlendMode::Normal {
@@ -320,7 +334,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fx = |ui: &mut Ui, e: &Effect, id: (Option<usize>, usize)| {
         let (r, _) = row(ui, false);
         eye(ui, r, ("ap-def-fx", id), e.visible, false);
-        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), tl!(&effect_label(&e.id)), false);
+        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &shown_effect_label(&e.id), false);
         icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     };
     for (i, it) in ap.items.iter().enumerate().rev() {
@@ -686,7 +700,7 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
         set_pstate(ui.ctx(), &open_key, !open);
     }
     let lx = r.left() + EYE_W + 24.0;
-    if link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), tl!(&effect_label(&e.id))) {
+    if link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &shown_effect_label(&e.id)) {
         select_row(app, ui.ctx(), this);
         if has_options(&e.id) {
             app.run("effect.dialog", json!({"effect": e.id, "index": k, "item": item})).ok();
@@ -724,6 +738,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
         }
     }
     let mut change: Option<(String, Value)> = None;
+    let built_in = built_in_effect(&e.id);
     let (unit, relative) = (app.session.general_unit(), params.get("relative").and_then(Value::as_bool).unwrap_or(false));
     egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin { left: (EYE_W + 12.0) as i8, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
@@ -732,8 +747,10 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
         }
         for (key, v) in &params {
             ui.horizontal(|ui| {
+                // A plug-in's parameter names are its own.
                 let label = humanize(key);
-                ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(tl!(&label)).size(11.5).color(t.text)).truncate());
+                let label = super::label_or_name(&label, built_in);
+                ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(label).size(11.5).color(t.text)).truncate());
                 if let Some(cur) = widgets::blend_param(key, v) {
                     if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
                         change = Some((key.clone(), m));
@@ -874,18 +891,20 @@ fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: 
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
     let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
-    for (id, label, menu) in catalog().iter().chain(&plugins) {
+    // Built-in effects in the UI language; a plug-in's by the name it gives.
+    let built_in = catalog().iter().map(|(id, label, menu)| (id, tl!(label), menu));
+    for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.as_str(), menu))) {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());
         match groups.iter_mut().find(|(n, _)| *n == g) {
-            Some((_, v)) => v.push((id.clone(), label.clone())),
-            None => groups.push((g, vec![(id.clone(), label.clone())])),
+            Some((_, v)) => v.push((id.clone(), label.to_string())),
+            None => groups.push((g, vec![(id.clone(), label.to_string())])),
         }
     }
     for (g, items) in groups {
         ui.menu_button(tl!(&g), |ui| {
             crate::widgets::menu_scroll(ui, |ui| {
                 for (id, label) in items {
-                    if ui.button(format!("{}…", tl!(&label))).clicked() {
+                    if ui.button(format!("{label}…")).clicked() {
                         app.run("effect.dialog", json!({"effect": id})).ok();
                         ui.close();
                     }
@@ -932,7 +951,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let redefine = style
         .as_ref()
         .map_or_else(|| tl!("Redefine Graphic Style").into(), |n| crate::i18n::fmt(tl!("Redefine Graphic Style “{name}”"), &[("name", n)]));
-    if menu_item(ui, &redefine, style.is_some(), false) {
+    // Translated above, around the style's name.
+    if widgets::menu_item_name(ui, &redefine, style.is_some(), false) {
         app.run("graphicStyle.redefine", json!({})).ok();
     }
     if menu_item(ui, tl!("Show All Hidden Attributes"), node.as_ref().is_some_and(|n| n.appearance.has_hidden()), false) {
@@ -957,6 +977,9 @@ mod tests {
         assert_eq!(humanize("blur"), "Blur");
         assert!(!effect_label("stylize.dropShadow").contains('…'));
         assert_eq!(effect_label("x.unknownThing"), "unknownThing");
+        // Only our own effects are interface labels; a plug-in's name is its own.
+        assert!(built_in_effect("stylize.dropShadow") && !built_in_effect("plugin.example.glow"));
+        assert_eq!(shown_effect_label("plugin.example.glow"), effect_label("plugin.example.glow"));
     }
 
     #[test]

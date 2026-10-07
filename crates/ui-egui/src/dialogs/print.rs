@@ -264,8 +264,9 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let asking = d.fields.contains_key(SAVE_AS);
     let mut ask = false;
     row_with(ui, tl!("Print Preset:"), TOP_LABEL_WIDTH, |ui| {
-        picked =
-            widgets::dropdown(ui, "print-preset", if same { &name } else { CUSTOM }, &names, 300.0).and_then(|i| names.get(i)).map(|n| n.to_string());
+        // [Default] is ours (translated); the saved presets are names.
+        let current = if same { name.as_str() } else { tl!(CUSTOM) };
+        picked = super::mixed_dropdown(ui, "print-preset", current, &names, 300.0, |k| k == 0).and_then(|i| names.get(i)).map(|n| n.to_string());
         let save = ui.add_enabled_ui(!asking, |ui| widgets::flat_button(ui, tl!("Save Preset…"), 96.0)).inner;
         ask = save.on_hover_text(tl!("Save these settings as a print preset")).clicked();
     });
@@ -317,23 +318,25 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         entries.push(Destination::Default);
     }
     entries.push(Destination::File);
-    let label = |e: &Destination| match e {
-        Destination::Printer(name) => name.clone(),
-        Destination::Default => DEFAULT_PRINTER.into(),
-        Destination::File => PDF_FILE.into(),
-    };
-    let labels: Vec<String> = entries.iter().map(label).collect();
+    // The system's printers by their names; the default printer and PDF File are ours.
+    let options: Vec<&str> = entries
+        .iter()
+        .map(|e| match e {
+            Destination::Printer(name) => name.as_str(),
+            Destination::Default => tl!(DEFAULT_PRINTER),
+            Destination::File => tl!(PDF_FILE),
+        })
+        .collect();
     let printer = d.str("printer");
     let current = if d.bool("toFile") {
-        PDF_FILE
+        tl!(PDF_FILE)
     } else if printer.is_empty() {
-        DEFAULT_PRINTER
+        tl!(DEFAULT_PRINTER)
     } else {
         printer.as_str()
     };
     row_with(ui, tl!("Printer:"), TOP_LABEL_WIDTH, |ui| {
-        let options: Vec<&str> = labels.iter().map(String::as_str).collect();
-        match widgets::dropdown(ui, "print-printer", current, &options, 300.0).and_then(|i| entries.get(i)) {
+        match widgets::dropdown_names(ui, "print-printer", current, &options, 300.0).and_then(|i| entries.get(i)) {
             Some(Destination::Printer(name)) => {
                 d.fields.insert("printer".into(), json!(name));
                 d.fields.insert("toFile".into(), json!(false));
@@ -733,7 +736,7 @@ fn graphics(ui: &mut egui::Ui, d: &mut Dialog) {
 fn color(ui: &mut egui::Ui, d: &mut Dialog) {
     let profiles = vectorcraft_color::cms::profiles();
     let names: Vec<&str> = std::iter::once(SAME_AS_SOURCE).chain(profiles.iter().map(|p| p.name.as_str())).collect();
-    row(ui, tl!("Printer profile:"), |ui| super::save_pdf::profile_pick(ui, d, "color.profile", &names, true));
+    row(ui, tl!("Printer profile:"), |ui| super::save_pdf::profile_pick(ui, d, "color.profile", &names, 1, true));
     note(ui, tl!("Composite colours are converted to it; separations separate with it when it is a CMYK profile."));
     row(ui, tl!("Rendering intent:"), |ui| {
         let current = serde_json::from_value::<Intent>(get(d, "color.intent").clone()).unwrap_or_default();
@@ -760,7 +763,9 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     let presets = app.session.flattener_presets();
     let names: Vec<&str> = std::iter::once(KEEP_TRANSPARENCY).chain(presets.iter().map(|p| p.name.as_str())).collect();
-    row(ui, tl!("Preset:"), |ui| super::save_pdf::profile_pick(ui, d, "advanced.flattenerPreset", &names, true));
+    // None and the built-in presets are ours; the saved presets are names.
+    let builtins = names.len().saturating_sub(app.session.prefs.flattener_presets.len());
+    row(ui, tl!("Preset:"), |ui| super::save_pdf::profile_pick(ui, d, "advanced.flattenerPreset", &names, builtins, true));
     note(
         ui,
         tl!(

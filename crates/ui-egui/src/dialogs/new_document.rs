@@ -252,10 +252,22 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// Is `name` a built-in preset's? Those are ours (translated); Recent and Saved hold the names of
+/// the user's documents and presets, shown as they are.
+fn is_builtin_preset(name: &str) -> bool {
+    newdoc::CATEGORIES.iter().any(|(_, _, _, presets)| presets.iter().any(|(n, ..)| *n == name))
+}
+
+/// A preset's name as shown: a built-in one translated, the user's as it is.
+fn preset_name(name: &str) -> &str {
+    if is_builtin_preset(name) { tl!(name) } else { name }
+}
+
 /// A preset card: a page-proportioned thumbnail, the name and the size (New Document, the Home
 /// screen). Returns the card's response.
 pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool) -> egui::Response {
     let t = Tokens::get(ui.ctx());
+    let label = preset_name(&s.name);
     let (r, resp) = ui.allocate_exact_size(egui::vec2(146.0, 150.0), egui::Sense::click());
     let p = ui.painter();
     p.rect_filled(r, egui::CornerRadius::same(6), if resp.hovered() || selected { t.hover } else { t.panel_darker });
@@ -271,7 +283,7 @@ pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool) -> egui::
     p.rect_filled(page, 0.0, egui::Color32::WHITE);
     // The name on up to two lines, then the size.
     let mut job = egui::text::LayoutJob::single_section(
-        tl!(&s.name).to_string(),
+        label.to_string(),
         egui::TextFormat { font_id: theme::semibold(11.5), color: t.text_strong, ..Default::default() },
     );
     job.halign = egui::Align::Center;
@@ -280,7 +292,7 @@ pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool) -> egui::
     let name_h = name.size().y;
     p.galley(egui::pos2(r.center().x, r.top() + 94.0), name, t.text_strong);
     p.text(egui::pos2(r.center().x, r.top() + 98.0 + name_h), egui::Align2::CENTER_TOP, s.size_label(), egui::FontId::proportional(11.0), t.text_dim);
-    resp.on_hover_text(tl!(&s.name))
+    resp.on_hover_text(label)
 }
 
 /// The Preset Details column.
@@ -535,8 +547,9 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let size_names: Vec<&str> = sizes.iter().map(|s| s.name.as_str()).collect();
         let preset = d.str("preset");
         widgets::label_row(ui, tl!("Size:"), L, |ui| {
-            let shown = if preset.is_empty() { "Custom" } else { preset.as_str() };
-            if let Some(s) = widgets::dropdown(ui, "newdoc-size", shown, &size_names, 220.0).and_then(|i| sizes.get(i)) {
+            // The profile's sizes are built in; the preset may be one the user saved.
+            let shown = if preset.is_empty() { tl!("Custom") } else { preset_name(&preset) };
+            if let Some(s) = super::mixed_dropdown(ui, "newdoc-size", shown, &size_names, 220.0, |_| true).and_then(|i| sizes.get(i)) {
                 apply(&mut d, s);
             }
         });
@@ -588,6 +601,14 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use crate::VectorcraftApp;
+
+    /// Cards translate the built-in presets' names only: Recent and Saved show the user's names.
+    #[test]
+    fn only_built_in_preset_names_are_translated() {
+        assert!(super::is_builtin_preset("Letter") && super::is_builtin_preset("Phone 390×844"));
+        assert!(!super::is_builtin_preset("Black") && !super::is_builtin_preset("Untitled-1"));
+        assert_eq!(super::preset_name("Black"), "Black");
+    }
 
     fn frame(app: &mut VectorcraftApp) -> egui::FullOutput {
         let ctx = egui::Context::default();

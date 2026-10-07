@@ -570,10 +570,13 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: O
     let saved = app.session.prefs.web_export_presets.len();
     let current = s.and_then(|s| presets.iter().rposition(|p| p.settings == *s));
     let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
+    // The built-in presets come first (translated); the saved ones are names.
+    let builtins = presets.len().saturating_sub(saved);
+    let labels = super::shown_names(crate::i18n::current(), &names, |k| k < builtins);
     let mut run: Option<(&str, Value)> = None;
     widgets::label_row(ui, tl!("Preset:"), LABEL_W, |ui| {
-        let shown = current.and_then(|i| names.get(i).copied()).unwrap_or(tl!("[Unnamed]"));
-        if let Some(i) = widgets::dropdown(ui, "sfw-preset", shown, &names, FIELD_W - 60.0)
+        let shown = current.and_then(|i| labels.get(i).copied()).unwrap_or(tl!("[Unnamed]"));
+        if let Some(i) = widgets::dropdown_names(ui, "sfw-preset", shown, &labels, FIELD_W - 60.0)
             && let Some(p) = presets.get(i)
         {
             d.fields.extend(settings_fields(&p.settings));
@@ -828,7 +831,7 @@ fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option
         let names: Vec<&str> = boards.iter().map(|a| a.name.as_str()).collect();
         let at = s.and_then(|s| s.artboard).unwrap_or(0).min(names.len() - 1);
         widgets::label_row(ui, tl!("Artboard:"), LABEL_W, |ui| {
-            if let Some(i) = widgets::dropdown(ui, "sfw-artboard", names.get(at).copied().unwrap_or_default(), &names, FIELD_W) {
+            if let Some(i) = widgets::dropdown_names(ui, "sfw-artboard", names.get(at).copied().unwrap_or_default(), &names, FIELD_W) {
                 d.fields.insert("artboard".into(), json!(i));
             }
         });

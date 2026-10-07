@@ -246,7 +246,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
     let snames: Vec<&str> = styles.iter().map(String::as_str).collect();
-    if let Some(i) = widgets::dropdown(ui, "ch-style", &s.font_style, &snames, w - 4.0) {
+    if let Some(i) = widgets::dropdown_names(ui, "ch-style", &s.font_style, &snames, w - 4.0) {
         style(app, json!({"style": snames[i]}));
     }
     ui.add_space(2.0);
