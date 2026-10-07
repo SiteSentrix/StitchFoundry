@@ -21,35 +21,20 @@ pub fn run(root: &Path) -> Result<(), String> {
     std::fs::copy(target.join("release/vectorcraft"), app.join("MacOS/VectorCraft")).map_err(|e| format!("copy app: {e}"))?;
     std::fs::copy(target.join("release/vectorcraft-cli"), app.join("MacOS/vectorcraft-cli")).map_err(|e| format!("copy cli: {e}"))?;
     std::fs::copy(root.join("assets/app-icon/vectorcraft.icns"), app.join("Resources/VectorCraft.icns")).map_err(|e| format!("copy icon: {e}"))?;
-    std::fs::write(app.join("Info.plist"), info_plist(env!("CARGO_PKG_VERSION"))).map_err(|e| e.to_string())?;
+    let sha = std::env::var("VECTORCRAFT_BUILD_SHA").unwrap_or_else(|_| "unknown".into());
+    std::fs::write(app.join("Info.plist"), info_plist(env!("CARGO_PKG_VERSION"), &sha)).map_err(|e| e.to_string())?;
     println!("built {}", root.join("dist/VectorCraft.app").display());
     Ok(())
 }
 
-/// The development bundle's `Info.plist`.
-fn info_plist(version: &str) -> String {
-    format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleName</key><string>VectorCraft</string>
-<key>CFBundleDisplayName</key><string>VectorCraft</string>
-<key>CFBundleIdentifier</key><string>ai.storyteller.vectorcraft</string>
-<key>CFBundleExecutable</key><string>VectorCraft</string>
-<key>CFBundleIconFile</key><string>VectorCraft</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>{version}</string>
-<key>CFBundleVersion</key><string>{version}</string>
-<key>NSHighResolutionCapable</key><true/>
-<key>LSMinimumSystemVersion</key><string>11.0</string>
-<key>CFBundleDocumentTypes</key><array>
- <dict><key>CFBundleTypeName</key><string>VectorCraft Document</string><key>CFBundleTypeExtensions</key><array><string>vectorcraft</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
- <dict><key>CFBundleTypeName</key><string>SVG</string><key>CFBundleTypeExtensions</key><array><string>svg</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>
- <dict><key>CFBundleTypeName</key><string>PDF Document</string><key>CFBundleTypeExtensions</key><array><string>pdf</string><string>ai</string></array><key>CFBundleTypeRole</key><string>Viewer</string></dict>
-</array>
-</dict></plist>
-"#
-    )
+/// The release `Info.plist` template, which `packaging/macos/package.sh` fills in the same way: the
+/// development bundle declares the same document types (Finder opens them with the app).
+const INFO_PLIST: &str = include_str!("../../packaging/macos/Info.plist.in");
+
+/// The bundle's `Info.plist`: [`INFO_PLIST`] for `version` and the build commit `sha`.
+fn info_plist(version: &str, sha: &str) -> String {
+    let short = version.split('-').next().unwrap_or(version);
+    INFO_PLIST.replace("@VERSION@", version).replace("@SHORT_VERSION@", short).replace("@BUILD_SHA@", sha)
 }
 
 #[cfg(test)]
@@ -88,9 +73,11 @@ mod tests {
     }
 
     #[test]
-    fn dev_bundle_plist_names_types_neutrally() {
-        let p = info_plist("1.2.3");
-        assert!(p.contains("<key>CFBundleShortVersionString</key><string>1.2.3</string>"));
-        assert!(p.contains("<string>VectorCraft Document</string>") && p.contains("<string>PDF Document</string>"));
+    fn dev_bundle_plist_is_the_release_one() {
+        let p = info_plist("1.2.3-rc.1", "abc123");
+        assert!(p.contains("<string>1.2.3</string>") && p.contains("<string>1.2.3-rc.1</string>"), "{p}");
+        assert!(p.contains("<string>abc123</string>"));
+        assert!(!p.contains('@'), "every placeholder filled");
+        assert!(p.contains("<key>CFBundleDocumentTypes</key>") && p.contains("<string>pdf</string>"), "Finder opens files with it");
     }
 }

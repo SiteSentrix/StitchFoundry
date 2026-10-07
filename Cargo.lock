@@ -4251,6 +4251,7 @@ name = "vectorcraft"
 version = "0.4.0"
 dependencies = [
  "arboard",
+ "block2 0.6.2",
  "clipboard-win",
  "eframe",
  "egui",
@@ -4259,6 +4260,7 @@ dependencies = [
  "muda",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
  "rfd",
  "serde_json",
  "vectorcraft-engine",
