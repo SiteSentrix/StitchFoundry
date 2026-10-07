@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath};
 
-use crate::{Tool, ToolContext};
+use crate::{Action, Tool, ToolContext};
 
 pub use anchor::AnchorTool;
 pub use curvature::CurvatureTool;
@@ -96,8 +96,13 @@ fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
 
 /// Nearest anchor within `tol`: (path, subpath, anchor).
 pub(crate) fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize)> {
+    anchor_in(cx, candidate_paths(cx), p, tol)
+}
+
+/// Nearest anchor within `tol` on the first of `ids` that has one: (path, subpath, anchor).
+pub(crate) fn anchor_in(cx: &ToolContext, ids: impl IntoIterator<Item = NodeId>, p: Point, tol: f64) -> Option<(NodeId, usize, usize)> {
     let mut best: Option<((NodeId, usize, usize), f64)> = None;
-    for id in candidate_paths(cx) {
+    for id in ids {
         let Some(pd) = cx.doc.node(id).and_then(|n| n.path_data()) else { continue };
         for (si, ai, a) in pd.anchors() {
             let d = a.p.distance(p);
@@ -114,7 +119,13 @@ pub(crate) fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId
 
 /// Nearest point on a path segment within `tol`: (path, subpath, segment, t).
 pub(crate) fn hit_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, f64)> {
-    for id in candidate_paths(cx) {
+    segment_in(cx, candidate_paths(cx), p, tol)
+}
+
+/// Nearest point within `tol` on a segment of the first of `ids` that passes there: (path,
+/// subpath, segment, t).
+pub(crate) fn segment_in(cx: &ToolContext, ids: impl IntoIterator<Item = NodeId>, p: Point, tol: f64) -> Option<(NodeId, usize, usize, f64)> {
+    for id in ids {
         let Some(pd) = cx.doc.node(id).and_then(|n| n.path_data()) else { continue };
         if let Some((si, seg, t, _, d)) = pd.nearest(p)
             && d <= tol
@@ -123,6 +134,16 @@ pub(crate) fn hit_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeI
         }
     }
     None
+}
+
+/// Add an anchor where [`hit_segment`] or [`segment_in`] found a segment.
+pub(crate) fn insert_anchor((id, si, seg, t): (NodeId, usize, usize, f64)) -> Action {
+    Action::Exec("path.insertAnchor".into(), json!({"id": id.0, "subpath": si, "segment": seg, "t": t}))
+}
+
+/// Delete the anchor [`hit_anchor`] or [`anchor_in`] found.
+pub(crate) fn remove_anchor((id, si, ai): (NodeId, usize, usize)) -> Action {
+    Action::Exec("path.removeAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))
 }
 
 #[cfg(test)]

@@ -13,7 +13,7 @@
 
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
-use vectorcraft_geom::{BezPath, PathData, Point};
+use vectorcraft_geom::{BezPath, Point};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -253,32 +253,15 @@ fn auto_add_delete(cx: &ToolContext, p: Point, m: Mods, tol: f64) -> Option<Acti
     if !cx.auto_add_delete || m.shift {
         return None;
     }
-    let paths: Vec<(NodeId, &PathData)> = cx
-        .selection
-        .objects
-        .iter()
-        .filter(|id| cx.doc.is_editable(**id))
-        .filter_map(|&id| match &cx.doc.node(id)?.kind {
-            NodeKind::Path { path, guide: false, .. } => Some((id, path)),
-            _ => None,
-        })
-        .collect();
-    let mut best: Option<(NodeId, usize, usize, f64)> = None;
-    for (id, path) in &paths {
-        for (si, ai, a) in path.anchors() {
-            let d = a.p.distance(p);
-            if d <= tol && best.is_none_or(|b| d < b.3) {
-                best = Some((*id, si, ai, d));
-            }
-        }
-    }
-    if let Some((id, si, ai, _)) = best {
-        return Some(Action::Exec("path.removeAnchor".into(), json!({"id": id.0, "subpath": si, "anchor": ai})));
-    }
-    paths.iter().find_map(|(id, path)| {
-        let (si, seg, t, _, d) = path.nearest(p)?;
-        (d <= tol).then(|| Action::Exec("path.insertAnchor".into(), json!({"id": id.0, "subpath": si, "segment": seg, "t": t})))
-    })
+    let paths = || {
+        cx.selection
+            .objects
+            .iter()
+            .copied()
+            .filter(|&id| cx.doc.is_editable(id) && cx.doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })))
+    };
+    let anchor = crate::draw2::anchor_in(cx, paths(), p, tol).map(crate::draw2::remove_anchor);
+    anchor.or_else(|| crate::draw2::segment_in(cx, paths(), p, tol).map(crate::draw2::insert_anchor))
 }
 
 /// A click on a selected blend's spine: delete the point under `p` when no key object sits on it
@@ -486,7 +469,7 @@ mod tests {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         let pts = [Point::new(300.0, 400.0), Point::new(350.0, 300.0), Point::new(400.0, 400.0)];
-        let path = PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false));
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false));
         d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
         let mut s = Selection::default();
         s.set([id]);
