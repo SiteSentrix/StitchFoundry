@@ -412,8 +412,8 @@ fn toggled_labels() -> Vec<String> {
     labels
 }
 
-/// Czech and Japanese cover every menu label, the Show/Hide pairs and the canvas context menu
-/// included (panels and dialogs not yet).
+/// Czech, Japanese and Brazilian Portuguese cover every menu label, the Show/Hide pairs and the
+/// canvas context menu included (panels and dialogs not yet).
 #[test]
 fn menu_catalogs_translate_every_menu_label() {
     let labels = menu_labels();
@@ -430,7 +430,7 @@ fn menu_catalogs_translate_every_menu_label() {
     all.extend(crate::menus::CONTEXT_LABELS.iter().map(|l| l.to_string()));
     all.sort();
     all.dedup();
-    for code in ["cs", "ja"] {
+    for code in ["cs", "ja", "pt-br"] {
         let lang = Lang::from_code(code).expect("registered");
         let missing: Vec<&String> = all.iter().filter(|l| !has(lang, l)).collect();
         assert!(missing.is_empty(), "{code}: untranslated menu labels: {missing:?}");
@@ -441,6 +441,7 @@ fn menu_catalogs_translate_every_menu_label() {
     }
     assert_eq!(tr(cs(), "File"), "Soubor");
     assert_eq!(tr(Lang::from_code("ja").expect("ja"), "File"), "ファイル");
+    assert_eq!(tr(Lang::from_code("pt-br").expect("pt-br"), "File"), "Arquivo");
 }
 
 #[test]
@@ -475,7 +476,7 @@ fn czech_glyphs_are_available_without_system_fonts() {
 /// the `interfaceLanguage` preference, and isn't written back.
 #[test]
 fn a_language_saved_by_an_older_version_carries_over() {
-    for (saved, want) in [("ja", "ja"), ("cs", "cs"), ("en", "auto"), ("xx", "auto")] {
+    for (saved, want) in [("ja", "ja"), ("cs", "cs"), ("pt-br", "pt-br"), ("en", "auto"), ("xx", "auto")] {
         let ui: crate::state::UiState = serde_json::from_value(serde_json::json!({"language": saved})).unwrap();
         let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
         app.ui = ui;
