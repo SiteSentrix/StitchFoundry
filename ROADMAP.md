@@ -106,7 +106,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
 - **Tools:**
   - **Selection:** Selection, Direct/Group Selection, Magic Wand, Lasso.
   - **Drawing:** Pen, Curvature, anchor tools, Pencil, Paintbrush, Blob Brush, Smooth, Path Eraser, Join. Direction handles dragged with Direct Selection or the Anchor Point tool snap to smart guides, and Shift keeps them at 45° steps from their anchor.
-  - **Shapes:** all shape tools (including Flare) and the line, arc, spiral and grid tools. Space held while dragging out a shape, line, arc, spiral or grid moves it at its current size.
+  - **Shapes:** all shape tools (including Flare) and the line, arc, spiral and grid tools. Space held while dragging out a shape, line, arc, spiral or grid moves it at its current size. While a grid is dragged out, Up/Down change its rows (concentric dividers) and Left/Right its columns (radial dividers).
   - **Cutting:** Eraser, Scissors, Knife, Mirror & Cut, Line Cut and Rectangle Cut (real geometry, compound paths keep their holes).
   - **Transform:** Rotate, Reflect, Scale, Shear (click or Alt-click snaps the reference point to anchors and centres), Reshape, Free Transform (free and perspective distort and shear, switched by the keys held during a handle drag).
   - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout. Corners stay circular when the rectangle is scaled unevenly or along its own sides when rotated (the radius keeps its size, or scales by the mean scale with Scale Corners on); only a shear distorts them.

@@ -280,7 +280,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::menus::invoke(app, id, json!({}));
     }
     if busy {
-        for (k, tk) in [(Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down)] {
+        // The arrows while dragging: a polygon's sides, a grid's rows (↑/↓) and columns (←/→)…
+        let arrows =
+            [(Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down), (Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right)];
+        for (k, tk) in arrows {
             if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k)) {
                 let _ = app.session.tool_key(tk, Mods::default(), view);
             }
@@ -445,6 +448,34 @@ mod tests {
         // Plain text is not art: nothing is pasted from it (the internal clipboard is reused).
         frame(&mut app, vec![egui::Event::Paste("hello".into())]);
         assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 8);
+    }
+
+    /// While a grid is dragged out, ↑/↓ change its rows and ←/→ its columns.
+    #[test]
+    fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangularGrid");
+        let view = app.view_info();
+        // Drag a grid out, pressing `keys` on the way: its (horizontal, vertical) dividers.
+        let grid = |app: &mut VectorcraftApp, keys: &[Key]| {
+            app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
+            app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+            for &key in keys {
+                let press = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+                frame(app, vec![press]);
+            }
+            app.session.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 220.0), view).unwrap();
+            let d = &app.session.doc().unwrap().doc;
+            let g = d.layers[0].children().unwrap().last().unwrap().clone();
+            let vectorcraft_doc::NodeKind::Group { children, .. } = &g.kind else { panic!("not a grid: {:?}", g.kind) };
+            let bounds: Vec<_> = children.iter().filter_map(|c| c.geometric_bounds()).collect();
+            (bounds.iter().filter(|b| b.height() < 0.5).count(), bounds.iter().filter(|b| b.width() < 0.5).count())
+        };
+        let (rows, columns) = grid(&mut app, &[]);
+        assert_eq!(grid(&mut app, &[Key::ArrowRight, Key::ArrowRight, Key::ArrowUp]), (rows + 1, columns + 2));
+        assert_eq!(grid(&mut app, &[Key::ArrowLeft, Key::ArrowDown]), (rows, columns + 1));
     }
 
     #[test]
