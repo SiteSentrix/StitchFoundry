@@ -38,6 +38,8 @@ pub(crate) struct Interp<'a> {
     global: DictRef,
     status: DictRef,
     error: DictRef,
+    /// `internaldict`'s dictionary, for font programs.
+    internal: DictRef,
     /// `FontDirectory`: fonts defined with `definefont`.
     pub fonts: DictRef,
     /// Resources by category (`defineresource`).
@@ -89,8 +91,24 @@ impl<'a> Interp<'a> {
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
-        system.borrow_mut().insert(Key::name("GlobalFontDirectory"), Obj::Dict(fonts.clone()));
-        let (user, global) = (new_dict(), new_dict());
+        for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
+            system.borrow_mut().insert(Key::name(name), Obj::Dict(fonts.clone()));
+        }
+        let (user, global, status, error) = (new_dict(), new_dict(), new_dict(), new_dict());
+        // Errors don't reach the program's handler, but prologs wrap the one they find.
+        error.borrow_mut().insert(Key::name("handleerror"), Obj::proc(vec![]));
+        // The standard dictionaries are values in systemdict, so `get`, `load` and `where` find
+        // them as dictionaries (`/globaldict where { /globaldict get begin } if`).
+        for (name, d) in [
+            ("systemdict", &system),
+            ("userdict", &user),
+            ("globaldict", &global),
+            ("statusdict", &status),
+            ("errordict", &error),
+            ("$error", &error),
+        ] {
+            system.borrow_mut().insert(Key::name(name), Obj::Dict(d.clone()));
+        }
         Self {
             lex: Lexer::new(src),
             stack: vec![],
@@ -98,8 +116,9 @@ impl<'a> Interp<'a> {
             system,
             user,
             global,
-            status: new_dict(),
-            error: new_dict(),
+            status,
+            error,
+            internal: new_dict(),
             fonts,
             resources,
             depth: 0,
@@ -121,6 +140,18 @@ impl<'a> Interp<'a> {
                 r => r?,
             }
         }
+    }
+
+    /// Empty the standard dictionaries, so the memory they hold is freed with the interpreter:
+    /// systemdict holds itself, and programs link dictionaries into each other.
+    pub fn release(&mut self) {
+        for d in [&self.system, &self.user, &self.global, &self.status, &self.error, &self.internal, &self.fonts, &self.resources] {
+            if let Ok(mut d) = d.try_borrow_mut() {
+                d.clear();
+            }
+        }
+        self.dicts.clear();
+        self.stack.clear();
     }
 
     // ---------- the operand stack ----------
@@ -262,6 +293,7 @@ impl<'a> Interp<'a> {
     pub fn call(&mut self, v: Obj) -> Res {
         match v {
             Obj::Array { items, exec: true } => self.run_proc(&items),
+            Obj::File { stream, exec: true } => self.run_file(&stream),
             Obj::Op(op) => self.op(op),
             Obj::Exec(name) => {
                 self.enter()?;
@@ -287,6 +319,26 @@ impl<'a> Interp<'a> {
     fn run_proc(&mut self, items: &Shared<Obj>) -> Res {
         self.enter()?;
         let r = self.run_items(items);
+        self.depth -= 1;
+        r
+    }
+
+    /// Run what is left of an executable file as a program, token by token.
+    fn run_file(&mut self, f: &Rc<RefCell<super::data::Stream>>) -> Res {
+        let Some(program) = self.program_of(f)? else { return Ok(()) };
+        self.enter()?;
+        let mut lex = Lexer::new(&program);
+        let r = loop {
+            match lex.next() {
+                Ok(Some(o)) => {
+                    if let Err(e) = self.exec_token(o) {
+                        break Err(e);
+                    }
+                }
+                Ok(None) => break Ok(()),
+                Err(e) => break Err(e),
+            }
+        };
         self.depth -= 1;
         r
     }
@@ -620,6 +672,7 @@ impl<'a> Interp<'a> {
             Cvx => {
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => Obj::Array { items, exec: true },
+                    Obj::File { stream, .. } => Obj::File { stream, exec: true },
                     Obj::Name(n) => Obj::Exec(n),
                     o => o,
                 };
@@ -628,6 +681,7 @@ impl<'a> Interp<'a> {
             Cvlit => {
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => Obj::Array { items, exec: false },
+                    Obj::File { stream, .. } => Obj::File { stream, exec: false },
                     Obj::Exec(n) => Obj::Name(n),
                     o => o,
                 };
@@ -635,7 +689,7 @@ impl<'a> Interp<'a> {
             }
             Xcheck => {
                 let o = self.pop()?;
-                self.push(Obj::Bool(matches!(o, Obj::Array { exec: true, .. } | Obj::Exec(_) | Obj::Op(_))))?;
+                self.push(Obj::Bool(matches!(o, Obj::Array { exec: true, .. } | Obj::File { exec: true, .. } | Obj::Exec(_) | Obj::Op(_))))?;
             }
             Cvn => {
                 let s = self.pop_str()?;
@@ -853,11 +907,23 @@ impl<'a> Interp<'a> {
                 self.push(Obj::Dict(d))?;
             }
             CountDictStack => self.push(Obj::Int(self.dicts.len() as i64))?,
+            DictStack => {
+                // The dictionary stack, bottom first, stored into the array's start.
+                let items = self.pop_array()?;
+                let dicts: Vec<Obj> = self.dicts.iter().map(|d| Obj::Dict(d.clone())).collect();
+                let part = items.sub(0, dicts.len()).filter(|p| p.write(0, &dicts)).ok_or(PsError::Ps("rangecheck", String::new()))?;
+                self.push(Obj::Array { items: part, exec: false })?;
+            }
             SystemDict => self.push(Obj::Dict(self.system.clone()))?,
             UserDict => self.push(Obj::Dict(self.user.clone()))?,
             GlobalDict => self.push(Obj::Dict(self.global.clone()))?,
             StatusDict => self.push(Obj::Dict(self.status.clone()))?,
             ErrorDict | DollarError => self.push(Obj::Dict(self.error.clone()))?,
+            InternalDict => {
+                // The operand is a password that every interpreter accepts.
+                self.pop_int()?;
+                self.push(Obj::Dict(self.internal.clone()))?;
+            }
             Bind => {
                 let o = self.pop()?;
                 if let Obj::Array { items, .. } = &o {

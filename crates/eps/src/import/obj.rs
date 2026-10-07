@@ -40,7 +40,11 @@ pub(crate) enum Obj {
     Dict(DictRef),
     Op(Op),
     Mark,
-    File(Rc<RefCell<Stream>>),
+    /// A file; executable ones run their data as a program (`cvx exec`).
+    File {
+        stream: Rc<RefCell<Stream>>,
+        exec: bool,
+    },
     /// A `save` level (the graphics state depth it restores to).
     Save(usize),
     /// A graphics state object (`gstate`, `currentgstate`).
@@ -118,7 +122,7 @@ impl Obj {
             Self::Dict(_) => "dicttype",
             Self::Op(_) => "operatortype",
             Self::Mark => "marktype",
-            Self::File(_) => "filetype",
+            Self::File { .. } => "filetype",
             Self::Save(_) => "savetype",
             Self::GState(_) => "gstatetype",
         }
@@ -270,8 +274,8 @@ ops! {
     // Dictionaries.
     NewDict = "dict", MaxLength = "maxlength", Begin = "begin", End = "end", Def = "def", Load = "load", Store = "store",
     Known = "known", Where = "where", Undef = "undef", CurrentDict = "currentdict", CountDictStack = "countdictstack",
-    SystemDict = "systemdict", UserDict = "userdict", GlobalDict = "globaldict", StatusDict = "statusdict",
-    ErrorDict = "errordict", DollarError = "$error", Bind = "bind",
+    DictStack = "dictstack", SystemDict = "systemdict", UserDict = "userdict", GlobalDict = "globaldict", StatusDict = "statusdict",
+    ErrorDict = "errordict", DollarError = "$error", InternalDict = "internaldict", Bind = "bind",
     // Virtual memory and the environment.
     Save = "save", Restore = "restore", SetGlobal = "setglobal", CurrentGlobal = "currentglobal", VmStatus = "vmstatus",
     Version = "version", Product = "product", RealTime = "realtime", UserTime = "usertime",
@@ -292,6 +296,7 @@ ops! {
     SetUnderColorRemoval = "setundercolorremoval", SetColorRendering = "setcolorrendering", SetSmoothness = "setsmoothness",
     SetStrokeAdjust = "setstrokeadjust", CurrentStrokeAdjust = "currentstrokeadjust", SetPageDevice = "setpagedevice",
     CurrentPageDevice = "currentpagedevice", SetUserParams = "setuserparams", SetSystemParams = "setsystemparams",
+    CurrentUserParams = "currentuserparams", CurrentSystemParams = "currentsystemparams",
     SetObjectFormat = "setobjectformat", ShowPage = "showpage", CopyPage = "copypage", ErasePage = "erasepage",
     CurrentScreen = "currentscreen", SetColorScreen = "setcolorscreen", CurrentHalftone = "currenthalftone",
     CurrentTransfer = "currenttransfer", CurrentColorTransfer = "currentcolortransfer",
@@ -320,6 +325,6 @@ ops! {
     DefineResource = "defineresource", UndefineResource = "undefineresource", ResourceStatus = "resourcestatus",
     ResourceForAll = "resourceforall", Show = "show", AShow = "ashow",
     WidthShow = "widthshow", AWidthShow = "awidthshow", XShow = "xshow", YShow = "yshow", XYShow = "xyshow",
-    KShow = "kshow", GlyphShow = "glyphshow", StringWidth = "stringwidth", CharPath = "charpath",
+    KShow = "kshow", CShow = "cshow", GlyphShow = "glyphshow", StringWidth = "stringwidth", CharPath = "charpath",
     SetCacheDevice = "setcachedevice", SetCharWidth = "setcharwidth",
 }

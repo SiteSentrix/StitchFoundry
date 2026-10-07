@@ -946,6 +946,16 @@ impl Interp<'_> {
                 d.insert(Key::name("PageSize"), Obj::array(vec![Obj::Real(f.width()), Obj::Real(f.height())]));
                 self.push(Obj::dict(d))?;
             }
+            // The cache and stack sizes programs read (they `get` them without asking first).
+            CurrentUserParams | CurrentSystemParams => {
+                let keys: &[&str] = if op == CurrentUserParams {
+                    &["MaxFontItem", "MaxFormItem", "MaxPatternItem", "MaxUPathItem", "MaxOpStack", "MaxDictStack", "MaxExecStack"]
+                } else {
+                    &["MaxFontCache", "MaxFormCache", "MaxPatternCache", "MaxUPathCache", "MaxScreenStorage", "MaxDisplayList"]
+                };
+                let d: super::obj::Dict = keys.iter().map(|k| (Key::name(k), Obj::Int(1 << 20))).collect();
+                self.push(Obj::dict(d))?;
+            }
             ShowPage => return Err(PsError::Quit),
             CopyPage | ErasePage => {}
             Matrix => self.push(matrix_obj(Affine::IDENTITY))?,
