@@ -32,6 +32,103 @@ Other clients use the same command in their JSON config:
 
 For a live session, start the app first: `cargo run --release -p vectorcraft -- --control 7979`.
 
+## Protocol
+
+Newline-delimited JSON-RPC 2.0 on stdio. The revision is **`2025-06-18`**; `2025-03-26` and `2024-11-05` are
+accepted too, and `initialize` answers with whichever of those the client asked for. The specs' own
+`resultType` fields and the `2026-07-28` revision are not implemented — see
+[Not implemented](#not-implemented).
+
+`initialize` advertises:
+
+| Capability | What it covers |
+|---|---|
+| `tools` | The 25 tools below |
+| `resources` | Two fixed documents and four templates |
+| `prompts` | Five ready-made workflows |
+| `completions` | `completion/complete` for prompt arguments and template variables |
+| `logging` | `logging/setLevel` and `notifications/message` |
+
+### Prompts
+
+`prompts/list` offers five workflows; `prompts/get` returns one templated user message with its
+arguments filled in. A missing required argument is `-32602`.
+
+| Prompt | Arguments (required first) |
+|---|---|
+| `poster` | `brief`, `palette`, `text` |
+| `icon-set` | `subject`, `count`, `detail` |
+| `recolor` | `palette`, `method` |
+| `trace-and-style` | `path`, `preset`, `effect` |
+| `export-set` | `formats`, `directory`, `scale` |
+
+```sh
+echo '{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"poster","arguments":{"brief":"a jazz festival"}}}' \
+  | vectorcraft-cli mcp --headless
+```
+
+### Resource templates
+
+`vectorcraft://document` (summary) and `vectorcraft://document/json` (the whole model) are the fixed
+resources. The templates read one thing at a time, which matters on a real document: the full model
+is thousands of lines an agent pays for again on every change.
+
+| `uriTemplate` | Reads |
+|---|---|
+| `vectorcraft://object/{id}` | One layer or object with its children, bounds and paint |
+| `vectorcraft://command/{id}` | One command: label, menu path, shortcut, parameter description, enablement |
+| `vectorcraft://effect/{id}` | One live effect with its parameters and defaults |
+| `vectorcraft://swatch/{name}` | One swatch, colour, gradient or pattern swatch (percent-encode spaces) |
+
+An unknown URI is `-32002`; a template with no value, or a value that names nothing, is `-32602`.
+
+### Completions
+
+`completion/complete` answers for a prompt argument (`ref/prompt`) or a template variable
+(`ref/resource`), ranked by prefix and then by substring, capped at 100 values with `total` and
+`hasMore`. The values are read from the live catalogues, so they follow the app: `formats` suggests
+what the engine writes, `preset` the Image Trace presets, `effect` the effect ids, `{id}` the layer
+and object ids in the document, `{name}` its swatch names. An unknown reference comes back empty
+rather than as an error, since a completion is asked for mid-typing.
+
+### Logging
+
+`logging/setLevel` accepts any RFC 5424 severity — `debug`, `info`, `notice`, `warning`, `error`,
+`critical`, `alert`, `emergency` — and an unknown one is `-32602` with the previous level left in
+place. From then on the engine's own `log` records arrive as `notifications/message` with `level`,
+`logger` and `data`. A `null` level turns it back off. Nothing is sent before the client asks, and
+records queued at the old level are dropped rather than replayed at the new one.
+
+Installing the logger that receives those records is `vectorcraft-cli`'s job, not the library's: a
+crate that installed one would override whatever logger an embedder had already set up. Embedding
+`vectorcraft-mcp` directly means calling `vectorcraft_mcp::logging::install()` yourself if you want
+log records to reach your client.
+
+### Not implemented
+
+Everything below needs the same thing first: the server reads one line at a time and answers it with
+one reply, so **while a `tools/call` is running it neither reads an incoming line nor writes an
+outgoing one.** Progress and cancellation are therefore both meaningless as they stand, and a
+subscription could only ever be checked between calls — which is not what a client asking to be told
+about a change expects.
+
+- **`resources/subscribe` / `notifications/resources/updated`.** It would also have to be honest about
+  *whose* edits it sees: comparing the undo history's length misses edits made in the app window,
+  which is the main reason to run against a live document. `document.inspect`'s `revision` is the
+  right signal — it is monotonic and already bumped when a document is replaced — but noticing an
+  edit still means someone asking.
+- **`notifications/progress`.** It would have to be written *before* the reply it belongs to, since a
+  progress token stops meaning anything once the request has completed.
+- **`notifications/cancelled`.** It would have to be read *during* the call it cancels.
+- **`sampling/createMessage` and `elicitation/create`.** Both are server→client requests, blocked by
+  the same one-line-one-reply loop. Supporting them means being able to suspend a tool call
+  mid-flight, which is what the `2026-07-28` revision's input-requests mechanism exists for.
+- **Streamable HTTP / SSE.** stdio only.
+
+`completion/complete` covers the "what could I pass here" half of the same problem, which is why it
+is here and subscriptions are not. The fix for the rest is a reader thread (or an event loop) around
+the transport — a design change rather than a feature, so it is not in this crate yet.
+
 ## Tools
 
 Coordinates are points in document space: y points down, the origin is the first artboard's top-left, and a new

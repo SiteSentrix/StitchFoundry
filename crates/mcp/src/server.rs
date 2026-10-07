@@ -1,10 +1,12 @@
-//! JSON-RPC 2.0 framing and the MCP lifecycle / tools / resources methods.
+//! JSON-RPC 2.0 framing and the MCP lifecycle / tools / resources / prompts methods.
 
 use std::io::{BufRead, Write};
 
 use serde_json::{Value, json};
 
 use crate::backend::Backend;
+use crate::prompts;
+use crate::resources;
 use crate::tools::{call_tool, tool_definitions};
 
 /// The MCP revision we implement.
@@ -18,15 +20,14 @@ const INVALID_PARAMS: i64 = -32602;
 const INTERNAL_ERROR: i64 = -32603;
 const RESOURCE_NOT_FOUND: i64 = -32002;
 
-const INSTRUCTIONS: &str = "VectorCraft is a professional vector illustration app. Coordinates are points in \
-document space (y down, origin at the first artboard's top-left; a new document is 612×792). Draw with draw_shape / \
-draw_path, change colours with set_paint, look with screenshot and inspect_document. Every menu action is a command: \
-find it with list_commands and run it with run_command. New objects become the selection, and most commands act on the \
-selection (or on explicit `ids`).";
-
-/// Resource URIs.
-pub const DOC_URI: &str = "vectorcraft://document";
-pub const DOC_JSON_URI: &str = "vectorcraft://document/json";
+const INSTRUCTIONS: &str = "VectorCraft is a professional vector illustration app. Coordinates are \
+points in document space (y down, origin at the first artboard's top-left; a new document is 612×792). \
+Draw with draw_shape / draw_path, change colours with set_paint, look with screenshot and inspect_document. \
+Every menu action is a command: find it with list_commands and run it with run_command. New objects become \
+the selection, and most commands act on the selection (or on explicit `ids`). prompts/list has ready-made \
+workflows, completion/complete finishes a command id, a format, an effect or a swatch name, and \
+vectorcraft://object/{id}, vectorcraft://command/{id}, vectorcraft://effect/{id} and \
+vectorcraft://swatch/{name} read one thing at a time instead of the whole document.";
 
 /// An MCP server bound to one backend.
 pub struct Server {
@@ -56,16 +57,30 @@ impl Server {
         self.initialized
     }
 
+    /// The `notifications/message` records queued since the last call.
+    ///
+    /// Log records belong to no particular request, so these go out after the reply to whatever
+    /// line produced them rather than before it. [`serve`] drains this itself; a caller driving
+    /// [`handle_line`] by hand does the same.
+    pub fn take_notifications(&mut self) -> Vec<String> {
+        crate::logging::drain()
+            .into_iter()
+            .map(|record| json!({"jsonrpc": "2.0", "method": "notifications/message", "params": record}).to_string())
+            .collect()
+    }
+
     /// Serve newline-delimited JSON-RPC until `input` closes. Logs go to stderr only (stdout is
     /// the protocol stream).
     pub fn serve(&mut self, input: impl BufRead, mut output: impl Write) -> std::io::Result<()> {
         for line in input.lines() {
             let line = line?;
-            if let Some(reply) = self.handle_line(&line) {
-                output.write_all(reply.as_bytes())?;
+            let reply = self.handle_line(&line);
+            let notes = self.take_notifications();
+            for line in reply.iter().chain(notes.iter()) {
+                output.write_all(line.as_bytes())?;
                 output.write_all(b"\n")?;
-                output.flush()?;
             }
+            output.flush()?;
         }
         Ok(())
     }
@@ -135,7 +150,13 @@ impl Server {
                 let version = if SUPPORTED_VERSIONS.contains(&asked) { asked } else { PROTOCOL_VERSION };
                 Ok(json!({
                     "protocolVersion": version,
-                    "capabilities": {"tools": {}, "resources": {}},
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {},
+                        "prompts": {"listChanged": false},
+                        "completions": {},
+                        "logging": {},
+                    },
                     "serverInfo": {"name": "vectorcraft", "title": "VectorCraft", "version": env!("CARGO_PKG_VERSION")},
                     "instructions": format!("{INSTRUCTIONS} Backend: {}.", self.backend.describe()),
                 }))
@@ -147,20 +168,37 @@ impl Server {
                 let args = params.get("arguments").cloned().unwrap_or(Value::Null);
                 Ok(call_tool(self.backend.as_mut(), name, &args).to_value())
             }
-            "resources/list" => Ok(json!({"resources": [
-                {"uri": DOC_URI, "name": "document", "title": "Active document (summary)", "description": "Layer tree, artboards, selection and history of the active document (document.inspect)", "mimeType": "application/json"},
-                {"uri": DOC_JSON_URI, "name": "document-json", "title": "Active document (full model)", "description": "The complete document model as JSON (document.json)", "mimeType": "application/json"},
-            ]})),
-            "resources/templates/list" => Ok(json!({"resourceTemplates": []})),
+            "resources/list" => Ok(resources::list()),
+            "resources/templates/list" => Ok(resources::templates()),
             "resources/read" => {
                 let uri = params.get("uri").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing `uri`".to_string()))?;
-                let v = match uri {
-                    DOC_URI => self.backend.call("document.inspect", json!({})),
-                    DOC_JSON_URI => self.backend.call("engine.execute", json!({"command": "document.json", "params": {}})),
-                    _ => return Err((RESOURCE_NOT_FOUND, format!("resource not found: {uri}"))),
-                }
-                .map_err(|e| (INTERNAL_ERROR, e))?;
+                let v = resources::read(self.backend.as_mut(), uri).map_err(|e| match e {
+                    resources::ReadError::NotFound(uri) => (RESOURCE_NOT_FOUND, format!("resource not found: {uri}")),
+                    resources::ReadError::Invalid(why) => (INVALID_PARAMS, why),
+                    resources::ReadError::Backend(why) => (INTERNAL_ERROR, why),
+                })?;
                 Ok(json!({"contents": [{"uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&v).unwrap_or_default()}]}))
+            }
+            "prompts/list" => Ok(prompts::list()),
+            "prompts/get" => {
+                let name = params.get("name").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing prompt `name`".to_string()))?;
+                let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+                prompts::get(name, &args).map_err(|e| (INVALID_PARAMS, e))
+            }
+            "completion/complete" => Ok(prompts::complete(self.backend.as_mut(), params)),
+            "logging/setLevel" => {
+                // `level` is required. A null level is our own way of turning logging back off,
+                // which the spec has no method for and a long session needs.
+                let Some(asked) = params.get("level") else {
+                    return Err((INVALID_PARAMS, "missing `level`".into()));
+                };
+                let level = if asked.is_null() { None } else { asked.as_str() };
+                crate::logging::set_level(level).map_err(|_| match level {
+                    Some(given) => (INVALID_PARAMS, format!("unknown level `{given}`")),
+                    None => (INVALID_PARAMS, "`level` must be a severity name or null".to_string()),
+                })?;
+                log::debug!("client set logging to {}", level.unwrap_or("off"));
+                Ok(json!({}))
             }
             other => Err((METHOD_NOT_FOUND, format!("method not found: {other}"))),
         }

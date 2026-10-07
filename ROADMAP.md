@@ -4,7 +4,7 @@ VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adob
 
 This file tracks **how far we are and what's left**. Time estimates are wall-clock hours of continuous Claude Opus 5.5 agent work (including builds and the CI gate), given both for **one agent** and for **4–6 parallel agents** on disjoint crates. They are counted from the remaining work (see [Parity estimate](#parity-estimate)), calibrated against measured throughput, and updated as work lands.
 
-_Last updated: 2026-10-06 (after M4.14–M4.98, M8.1–M8.20 and M14.4–M14.7; see [Honest assessment](#honest-assessment-2026-10-05))._
+_Last updated: 2026-10-07 (after M4.14–M4.98, M8.1–M8.20, M14.4–M14.7 and the MCP prompts, resource templates, completions and logging; see [Honest assessment](#honest-assessment-2026-10-05))._
 
 ## Where we are
 
@@ -89,6 +89,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - Actions panel (record/playback, persisted), generic parameter dialogs for every "…" command.
   - JSON-lines control channel with real egui pointer and keyboard injection.
   - MCP server with 25 tools (drawing, text, effects, Pathfinder, transforms, graphs, text wrap, export, screenshots, any command), attached to the running app or headless.
+  - MCP protocol: five prompts (`prompts/list` / `prompts/get`: poster, icon set, recolour, trace-and-style, export set), `completion/complete` for prompt arguments and template variables read from the live catalogues (formats, effect ids, command ids, trace presets, swatch and object ids), four resource templates (`vectorcraft://object/{id}`, `//command/{id}`, `//effect/{id}`, `//swatch/{name}`) so an agent reads one thing instead of the whole document, and `logging/setLevel` with `notifications/message`. `docs/mcp.md` has a Protocol section covering the capability table and what is deliberately absent (subscriptions, progress, cancellation, sampling, elicitation, Streamable HTTP — all of which need the transport to interleave reads).
   - Headless CLI (`vectorcraft-cli run`, `convert`, `info`, `bench`, `perf`, `mcp`).
   - Actions panel that records and plays back commands.
 - **UI:** Illustrator 2026 layout restyled to measured values:

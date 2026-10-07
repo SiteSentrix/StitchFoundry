@@ -16,11 +16,16 @@
 
 mod backend;
 mod headless;
+pub mod logging;
+mod prompts;
+mod resources;
 mod server;
 mod tools;
 
 pub use backend::{Backend, Remote};
 pub use headless::Headless;
+pub use prompts::{PROMPTS, PromptArg, PromptDef};
+pub use resources::{DOC_JSON_URI, DOC_URI, TEMPLATES};
 pub use server::{PROTOCOL_VERSION, Server};
 pub use tools::{ToolResult, call_tool, tool_definitions};
 
@@ -47,5 +52,7 @@ mod tests_liquify;
 mod tests_persp;
 #[cfg(test)]
 mod tests_place;
+#[cfg(test)]
+mod tests_protocol;
 #[cfg(test)]
 mod tests_svg;

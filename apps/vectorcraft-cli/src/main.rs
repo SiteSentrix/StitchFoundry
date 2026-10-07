@@ -142,6 +142,9 @@ fn mcp(args: &[String]) -> Result<(), String> {
         }
     };
     eprintln!("vectorcraft-cli: MCP server on stdio ({})", backend.describe());
+    // The binary owns the logger, not the library: installing one here keeps an embedder that
+    // uses `vectorcraft_mcp` free to bring its own. Silent until a client sends logging/setLevel.
+    vectorcraft_mcp::logging::install();
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     Server::new(backend).serve(stdin.lock(), stdout.lock()).map_err(|e| e.to_string())

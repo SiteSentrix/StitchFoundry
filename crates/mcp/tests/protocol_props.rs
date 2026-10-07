@@ -182,6 +182,237 @@ fn resources_are_json() {
     }
 }
 
+// ---------- prompts, completions, templates, subscriptions ----------
+
+/// Every prompt is well formed and renders whatever it is handed.
+#[test]
+fn prompts_are_valid_and_render_with_junk_arguments() {
+    let mut s = server();
+    let listed = rpc(&mut s, 1, "prompts/list", json!({}));
+    let prompts = listed["result"]["prompts"].as_array().unwrap();
+    assert!(!prompts.is_empty());
+    let mut failures = vec![];
+    for p in prompts {
+        let name = p["name"].as_str().unwrap();
+        assert!(p["description"].as_str().unwrap().len() > 20, "{name}");
+        let args: Vec<&str> = p["arguments"].as_array().map_or(&[][..], Vec::as_slice).iter().filter_map(|a| a["name"].as_str()).collect();
+        // Missing, empty, junk and hostile arguments all either render or fail cleanly.
+        let mut cases = vec![json!({}), Value::Null, json!([]), json!("x")];
+        for a in &args {
+            for v in junk_values() {
+                cases.push(json!({ *a: v }));
+                cases.push(json!({ *a: { "nested": v.clone() } }));
+                cases.push(json!({ *a: [v.clone()] }));
+            }
+        }
+        // Filled with every argument, the prompt must render.
+        let full: Value = json!(args.iter().map(|a| (*a, "value")).collect::<std::collections::BTreeMap<_, _>>());
+        cases.push(full);
+        for arguments in cases {
+            let r = catch_quiet(|| rpc(&mut s, 2, "prompts/get", json!({"name": name, "arguments": arguments.clone()})));
+            match r {
+                Err(p) => failures.push(format!("PANIC {name} {arguments}: {p}")),
+                Ok(v) => {
+                    assert!(v["result"].is_object() || v["error"]["code"] == -32602, "{name} {arguments}: {v}");
+                    // Whatever it returned is valid JSON text in a message.
+                    if let Some(messages) = v["result"]["messages"].as_array() {
+                        for m in messages {
+                            assert!(["user", "assistant"].contains(&m["role"].as_str().unwrap()), "{m}");
+                            assert!(m["content"]["text"].is_string(), "{m}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// `completion/complete` answers for every prompt argument and never panics on junk.
+#[test]
+fn completions_are_well_formed_and_survive_junk() {
+    let mut s = server();
+    let listed = rpc(&mut s, 1, "prompts/list", json!({}));
+    let mut cases = vec![];
+    for p in listed["result"]["prompts"].as_array().unwrap() {
+        let name = p["name"].as_str().unwrap();
+        for a in p["arguments"].as_array().map_or(&[][..], Vec::as_slice) {
+            let arg = a["name"].as_str().unwrap();
+            for value in ["", "a", "svg", "%20", "..", &"x".repeat(300)] {
+                cases.push(json!({"ref": {"type": "ref/prompt", "name": name}, "argument": {"name": arg, "value": value}}));
+            }
+        }
+        // An argument the prompt does not have, and a prompt that does not exist.
+        cases.push(json!({"ref": {"type": "ref/prompt", "name": name}, "argument": {"name": "nope", "value": ""}}));
+        cases.push(json!({"ref": {"type": "ref/prompt", "name": "nope"}, "argument": {"name": "x", "value": ""}}));
+    }
+    for t in templates(&mut s) {
+        for v in ["", "1", "%", "vectorcraft://x"] {
+            cases.push(json!({"ref": {"type": "ref/resource", "uri": t["uriTemplate"]}, "argument": {"name": "id", "value": v}}));
+        }
+    }
+    // And malformed references of every shape.
+    for junk in [json!({}), json!(null), json!([]), json!("x")] {
+        cases.push(junk);
+    }
+    for junk in junk_values().into_iter().take(12) {
+        cases.push(junk);
+    }
+
+    let mut failures = vec![];
+    for params in cases {
+        let r = catch_quiet(|| rpc(&mut s, 2, "completion/complete", params.clone()));
+        match r {
+            Err(p) => failures.push(format!("PANIC {params}: {p}")),
+            Ok(v) => {
+                assert!(v.get("error").is_none(), "{params}: {v}");
+                let completion = &v["result"]["completion"];
+                let values = completion["values"].as_array().unwrap_or_else(|| panic!("{params}: no values"));
+                assert!(values.len() <= 100, "{params}: {} values", values.len());
+                assert!(values.iter().all(Value::is_string), "{params}: {v}");
+                if let Some(total) = completion["total"].as_u64() {
+                    assert!(total >= values.len() as u64, "{params}: {v}");
+                }
+                assert_eq!(completion["hasMore"], total_exceeds(completion), "{params}: {v}");
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// `hasMore` is set exactly when the catalogue held more than we sent.
+fn total_exceeds(completion: &Value) -> Value {
+    let sent = completion["values"].as_array().map_or(0, Vec::len);
+    json!(completion["total"].as_u64().is_some_and(|t| t > sent as u64))
+}
+
+fn templates(s: &mut Server) -> Vec<Value> {
+    rpc(s, 9, "resources/templates/list", json!({}))["result"]["resourceTemplates"].as_array().unwrap().clone()
+}
+
+/// Every template lists with a variable, and reading it answers JSON or a clean error.
+#[test]
+fn resource_templates_are_addressable() {
+    let mut s = server();
+    let mut failures = vec![];
+    for t in templates(&mut s) {
+        let uri = t["uriTemplate"].as_str().unwrap();
+        assert!(uri.contains('{') && uri.ends_with('}'), "{t}");
+        assert!(t["description"].as_str().unwrap().len() > 20, "{t}");
+        assert!(t["mimeType"].is_string(), "{t}");
+        // A template with its variable left empty, filled with junk, and with a real value.
+        let prefix = uri.split('{').next().unwrap();
+        let mut uris = vec![prefix.to_string(), format!("{prefix}{{"), format!("{prefix}%20"), format!("{prefix}-1")];
+        let made = call(&mut s, "draw_shape", json!({"shape": "rectangle", "x": 1, "y": 1, "width": 20, "height": 20}));
+        if let Some(id) =
+            made["result"]["content"][0]["text"].as_str().and_then(|t| serde_json::from_str::<Value>(t).ok()).and_then(|v| v["id"].as_i64())
+        {
+            uris.push(format!("{prefix}{id}"));
+        }
+        for uri in uris {
+            let r = catch_quiet(|| rpc(&mut s, 10, "resources/read", json!({"uri": uri.clone()})));
+            match r {
+                Err(p) => failures.push(format!("PANIC {uri}: {p}")),
+                Ok(v) => {
+                    if let Some(text) = v["result"]["contents"][0]["text"].as_str() {
+                        serde_json::from_str::<Value>(text).unwrap_or_else(|e| panic!("{uri} is not JSON: {e}"));
+                    } else {
+                        let code = v["error"]["code"].as_i64().unwrap_or_default();
+                        assert!(code == -32602 || code == -32002, "{uri}: {v}");
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Anything a client may send for the prompts, completion, logging and template methods leaves the
+/// server answering and the document valid.
+#[test]
+fn the_new_methods_survive_junk_and_keep_the_document_valid() {
+    let mut failures = vec![];
+    let mut s = server();
+    rpc(&mut s, 1, "tools/call", json!({"name": "draw_shape", "arguments": {"shape": "rectangle", "x": 0, "y": 0, "width": 30, "height": 20}}));
+    let before = doc_json(&document(&mut s));
+
+    let mut cases: Vec<(&str, Value)> = vec![];
+    for uri in ["vectorcraft://document", "vectorcraft://object/1", "vectorcraft://nope", "", "x://y", "%"] {
+        cases.push(("resources/read", json!({"uri": uri})));
+        cases.push(("resources/read", json!({})));
+        cases.push(("resources/read", json!({"uri": 5})));
+    }
+    for level in [json!("debug"), json!("emergency"), json!(null), json!("shouty"), json!(5), json!([]), json!({})] {
+        cases.push(("logging/setLevel", json!({"level": level})));
+    }
+    cases.push(("logging/setLevel", json!({})));
+    for name in [json!("poster"), json!("nope"), json!(""), json!(5), json!(null), json!([])] {
+        cases.push(("prompts/get", json!({"name": name})));
+        cases.push(("prompts/get", json!({"name": name, "arguments": []})));
+    }
+    for ref_ in [
+        json!({"type": "ref/prompt", "name": "poster"}),
+        json!({"type": "ref/resource", "uri": "vectorcraft://object/{id}"}),
+        json!({"type": "ref/other"}),
+        json!("x"),
+        json!([]),
+    ] {
+        cases.push(("completion/complete", json!({"ref": ref_, "argument": {"name": "brief", "value": ""}})));
+        cases.push(("completion/complete", json!({"ref": ref_})));
+    }
+
+    for (method, params) in cases {
+        let r = catch_quiet(|| rpc(&mut s, 11, method, params.clone()));
+        match r {
+            Err(p) => failures.push(format!("PANIC {method} {params}: {p}")),
+            Ok(v) => {
+                assert!(v.get("result").is_some() != v.get("error").is_some(), "{method} {params}: {v}");
+                // Whatever it answered, every notification it queued is a JSON-RPC message.
+                for line in s.take_notifications() {
+                    let n: Value = serde_json::from_str(&line).unwrap_or_else(|e| panic!("bad notification {line}: {e}"));
+                    assert_eq!(n["jsonrpc"], "2.0", "{n}");
+                    assert_eq!(n["method"], "notifications/message", "{n}");
+                    assert!(n["params"]["level"].is_string() && n["params"]["data"].is_string(), "{n}");
+                }
+                check_document(&document(&mut s)).unwrap_or_else(|e| failures.push(format!("{method} {params}: {e}")));
+            }
+        }
+    }
+    // None of these edit the document, so it must be exactly as it was.
+    assert_eq!(doc_json(&document(&mut s)), before, "a read-only method changed the document");
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// Every capability the server advertises is one it actually answers.
+#[test]
+fn advertised_capabilities_all_answer() {
+    let mut s = server();
+    let caps = rpc(&mut s, 1, "initialize", json!({}))["result"]["capabilities"].clone();
+    let checks: Vec<(&str, &str, Value)> = vec![
+        ("tools", "tools/list", json!({})),
+        ("prompts", "prompts/list", json!({})),
+        ("completions", "completion/complete", json!({"ref": {"type": "ref/prompt", "name": "poster"}, "argument": {"name": "brief", "value": ""}})),
+        ("logging", "logging/setLevel", json!({"level": null})),
+        ("resources", "resources/list", json!({})),
+        ("resources", "resources/templates/list", json!({})),
+        ("resources", "resources/read", json!({"uri": doc_uri_json(&mut s)})),
+    ];
+    for (capability, method, params) in checks {
+        assert!(caps[capability].is_object(), "{capability} is not advertised: {caps}");
+        assert!(rpc(&mut s, 2, method, params).get("error").is_none(), "{method} is advertised but does not answer");
+    }
+    // And nothing is advertised that the server does not answer.
+    assert!(caps["resources"].get("subscribe").is_none(), "subscribe is advertised but not implemented: {caps}");
+    assert_eq!(err_code(&mut s, 3, "resources/subscribe", json!({"uri": "vectorcraft://document"})), -32601);
+}
+
+/// A capability the server advertises must be one it answers, and one it does not advertise must
+/// not be there.
+fn err_code(s: &mut Server, id: u64, method: &str, params: Value) -> i64 {
+    let v = rpc(s, id, method, params);
+    v.get("error").and_then(|e| e["code"].as_i64()).unwrap_or_else(|| panic!("{method} should have failed: {v}"))
+}
+
 #[test]
 fn undo_redo_tools_restore_documents() {
     let mut s = server();
