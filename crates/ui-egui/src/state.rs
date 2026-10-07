@@ -76,6 +76,24 @@ pub enum DockTab {
     Libraries,
 }
 
+impl DockTab {
+    /// The tab's panel id (`window.panel`), English label and icon (when the dock is collapsed).
+    pub fn info(self) -> (&'static str, &'static str, &'static str) {
+        match self {
+            DockTab::Properties => ("properties", "Properties", "dc-options"),
+            DockTab::Layers => ("layers", "Layers", "layers"),
+            DockTab::Libraries => ("libraries", "Libraries", "library"),
+        }
+    }
+
+    pub const ALL: [DockTab; 3] = [DockTab::Properties, DockTab::Layers, DockTab::Libraries];
+
+    /// The tab whose panel id is `id`.
+    pub fn from_id(id: &str) -> Option<DockTab> {
+        DockTab::ALL.into_iter().find(|t| t.info().0 == id)
+    }
+}
+
 /// Panels that live as collapsed icons in the dock (Essentials Classic).
 pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("color", "Color", "palette"),
@@ -219,7 +237,12 @@ pub struct UiState {
     pub legacy_language: Option<String>,
     pub brightness: Brightness,
     pub dock_tab: DockTab,
-    /// Icon panel currently popped out of the collapsed column.
+    /// The dock's tabbed group (Properties | Layers | Libraries) is collapsed to icons at the top of
+    /// the icon column (the dock's double arrow, `window.collapseDock`).
+    #[serde(default)]
+    pub dock_collapsed: bool,
+    /// Icon panel currently popped out of the collapsed column (also `properties`, `layers` or
+    /// `libraries` while the dock is collapsed).
     pub open_panel: Option<String>,
     pub control_bar: bool,
     pub toolbar: bool,
@@ -358,6 +381,7 @@ impl Default for UiState {
             legacy_language: None,
             brightness: Brightness::MediumDark,
             dock_tab: DockTab::Properties,
+            dock_collapsed: false,
             open_panel: None,
             control_bar: false,
             toolbar: true,

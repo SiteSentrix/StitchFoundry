@@ -95,6 +95,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
 - **UI:** Illustrator 2026 layout restyled to measured values:
   - Medium Dark theme, categorized and Advanced toolbars, 35 pt document tabs, 33 pt panel tabs.
   - Hint bar, contextual task bar, 19 dock panels with ≡ menus.
+  - The dock's double arrow collapses Properties, Layers and Libraries to icons at the top of the icon column, popping out like the other icon panels, and expands them again (`window.collapseDock`, kept with the preferences and in saved workspaces). The icon column's own arrow (expanding the icon panels into a full column) is not done.
   - Localised UI: menus (in-window and native), panels, dialogs, toolbar and Preferences read from per-language catalogs (`crates/ui-egui/src/i18n`, see `docs/development.md`); Traditional Chinese (Taiwan) ships complete, and Czech and Japanese cover every menu label, with system-locale detection on macOS, Windows and Linux, a VectorCraft ▸ Language menu and a Language preference. Names are never translated (fonts and their styles, layers, artboards, saved presets, user libraries, custom workspaces, recent files, plug-ins).
   - Native macOS menu bar, vector tool cursors, a ⌘K command palette, middle-button panning with any tool.
   - A canvas context menu: right-click selects the object under the pointer and lists what applies to the selection (Undo/Redo, clipboard, group, isolation, join, masks, compound paths, guides, Transform, Arrange, Select, Export Selection), or the view commands on empty canvas.

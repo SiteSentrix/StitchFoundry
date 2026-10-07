@@ -362,6 +362,8 @@
 	CMYK	CMYK
 	CMYK Color	CMYK 色彩
 	CMYK colours print with their own values; off, they go through the colour settings too.	CMYK 顏色以其本身的數值列印；關閉時，也會經過色彩設定處理。
+	Collapse Panels to Icons	將面板收合為圖示
+	Collapse to Icons	收合為圖示
 	Collate	逐份列印
 	Collect for Export	收集以供匯出
 	Collect in New Layer	收集至新圖層
@@ -816,6 +818,7 @@
 	Expand Gradient Mesh	展開漸層網格
 	Expand Gradient To	展開漸層為
 	Expand Options	展開選項
+	Expand Panels	展開面板
 	Expand Repeat	展開重複
 	Expand Shape	展開形狀
 	Expand:	展開：
