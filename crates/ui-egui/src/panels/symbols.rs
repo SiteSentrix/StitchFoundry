@@ -11,7 +11,7 @@ use vectorcraft_doc::{Document, Node, NodeKind};
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
+use crate::widgets::{self, PanelDrag, menu_item};
 
 /// A thumbnail of symbol `name` (an instance at its natural size), cached by the art's identity.
 fn thumb(ui: &Ui, doc: &Document, name: &str, size: f32) -> Option<egui::TextureHandle> {
@@ -50,6 +50,24 @@ fn thumb(ui: &Ui, doc: &Document, name: &str, size: f32) -> Option<egui::Texture
     Some(tex)
 }
 
+/// Symbol `name`'s thumbnail on white in `r` (the panel's tiles and the chip a dragged symbol
+/// shows at the pointer).
+pub(crate) fn chip(ui: &Ui, doc: &Document, r: egui::Rect, name: &str) {
+    ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
+    if let Some(tex) = thumb(ui, doc, name, r.width()) {
+        ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+    }
+}
+
+/// Art dragged off the canvas over the symbol list: outline it; dropped, the art becomes a new
+/// symbol (`ids`).
+fn art_drop(ui: &Ui, zone: &egui::Response) -> Option<Vec<u64>> {
+    let drag = zone.dnd_hover_payload::<PanelDrag>()?;
+    let PanelDrag::Art(ids) = &*drag else { return None };
+    ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
+    zone.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
+}
+
 fn current(app: &mut VectorcraftApp) -> Option<String> {
     app.run("symbol.list", json!({})).ok().and_then(|v| v["current"].as_str().map(str::to_string))
 }
@@ -73,28 +91,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let list: bool = pstate(ui.ctx(), "sym-list");
     let sel = current(app);
     let mut clicked: Option<(String, bool)> = None;
-    widgets::list_box(ui, |ui| {
+    let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
         if names.is_empty() {
             super::empty_state(ui, "spray-can", tl!("No symbols in this document"), tl!("Select art and click New Symbol to make one."));
-            return;
+            return ui.min_rect();
         }
-        let paint_thumb = |ui: &Ui, r: egui::Rect, n: &str| {
-            ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-            if let Some(tex) = thumb(ui, &doc, n, r.width()) {
-                ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
-            }
-        };
         if list {
             for n in &names {
-                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click());
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click_and_drag());
+                // Dragged onto the canvas, the symbol is placed there.
+                widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
                 if sel.as_deref() == Some(n.as_str()) {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
                 } else if resp.hovered() {
                     ui.painter().rect_filled(r, 0.0, t.hover);
                 }
-                paint_thumb(ui, egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(22.0, 22.0)), n);
+                chip(ui, &doc, egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(22.0, 22.0)), n);
                 ui.painter().text(r.left_center() + vec2(32.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(12.5), t.text);
                 if resp.double_clicked() {
                     clicked = Some((n.clone(), true));
@@ -105,8 +119,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else {
             ui.horizontal_wrapped(|ui| {
                 for n in &names {
-                    let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click());
-                    paint_thumb(ui, r.shrink(2.0), n);
+                    let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
+                    widgets::drag_source(ui, &resp, || PanelDrag::Symbol(n.clone()));
+                    chip(ui, &doc, r.shrink(2.0), n);
                     let on = sel.as_deref() == Some(n.as_str());
                     ui.painter().rect_stroke(
                         r,
@@ -123,7 +138,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         }
+        ui.min_rect()
     });
+    let zone = ui.interact(list_rect, ui.id().with("symbols-drop"), Sense::hover());
+    if let Some(ids) = art_drop(ui, &zone)
+        && let Err(e) = app.run("symbol.new", json!({ "ids": ids }))
+    {
+        app.status(e);
+    }
     if let Some((n, place)) = clicked {
         app.run("symbol.setCurrent", json!({"name": n})).ok();
         if place {
@@ -180,5 +202,56 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("List View"), true, list) {
         set_pstate(ui.ctx(), "sym-list", true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use egui::{Pos2, Rect, pos2};
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    /// One headless frame of the panel, 236 pt wide as in the dock.
+    fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    }
+
+    fn button(at: Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    }
+
+    fn symbols(app: &mut VectorcraftApp) -> Vec<String> {
+        let list = app.run("symbol.list", json!({})).unwrap();
+        list["symbols"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap_or_default().to_string()).collect()
+    }
+
+    #[test]
+    fn art_dropped_on_the_panel_becomes_a_symbol_and_a_symbol_drags_out() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        // Selected, as art dragged off the canvas is.
+        let ctx = egui::Context::default();
+        frame(&ctx, &mut app, vec![]);
+        // Art dragged off the canvas and released over the list.
+        let over = pos2(100.0, 50.0);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![NodeId(id)]));
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(over), button(over, false)]);
+        let names = symbols(&mut app);
+        assert_eq!(names.len(), 1, "{names:?}");
+        let doc = &app.session.active().unwrap().doc;
+        let first = doc.layers[0].children().unwrap().first().unwrap();
+        assert!(matches!(first.kind, NodeKind::SymbolInstance { .. }), "the art became an instance");
+        // Dragging the symbol's tile out of the panel carries the symbol.
+        frame(&ctx, &mut app, vec![]);
+        let tile = pos2(26.0, 26.0);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol(names[0].clone())));
     }
 }

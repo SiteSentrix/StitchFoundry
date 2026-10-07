@@ -1140,8 +1140,12 @@ pub enum PanelDrag {
     /// `ids`); the panel moves it to where it is dropped.
     GraphicStyle(String),
     /// The selected art, dragged off the canvas with the Selection tool: the Graphic Styles panel
-    /// makes a style of the first object (`graphicStyle.new`).
+    /// makes a style of the first object (`graphicStyle.new`), the Symbols panel a symbol of it all
+    /// (`symbol.new`).
     Art(Vec<vectorcraft_doc::NodeId>),
+    /// A Symbols panel symbol: the canvas places an instance of it centred where it is dropped
+    /// (`symbol.place`).
+    Symbol(String),
 }
 
 /// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour

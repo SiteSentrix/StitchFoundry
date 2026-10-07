@@ -112,6 +112,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
   - **Editing type:** double-clicking type with a selection tool switches to the Type tool with the caret where it was clicked.
   - **Temporary tools:** Cmd with any other tool drags with the selection tool used last (Selection, Direct Selection or Group Selection). Held Space pans and Cmd+Space zooms (Cmd+Alt+Space out) whatever the tool.
+  - **Panel drag and drop:** art dragged off the canvas onto the Symbols panel becomes a symbol, and a symbol dragged onto the canvas places an instance where it is dropped.
   - **Tool double-clicks:** double-clicking a tool's button opens its options: Hand fits the artboard in the window, Zoom shows 100 %, Rotate, Scale, Reflect and Shear open their Object › Transform dialogs, Gradient, Eyedropper, Blend and the Liquify tools their panels or options.
 - **Drawing aids:** Smart Guides and snapping, guides dragged out of the rulers, and Draw Normal / Behind / Inside modes.
 - **Views:** the status bar's artboard navigator (first, previous, next, last; `view.goToArtboard`) goes to an artboard and fits it, and Fit Artboard in Window and Actual Size show the navigator's artboard.

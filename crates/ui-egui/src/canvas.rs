@@ -926,6 +926,14 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
         return;
     }
     let Some(d) = resp.dnd_release_payload::<widgets::PanelDrag>() else { return };
+    // A symbol from the Symbols panel: an instance centred where it is dropped, on art or not.
+    if let widgets::PanelDrag::Symbol(name) = &*d {
+        let at = xf.to_doc(pos);
+        if let Err(e) = app.run("symbol.place", json!({"name": name, "x": at.x, "y": at.y})) {
+            app.status(e);
+        }
+        return;
+    }
     let Some(hit) = hit_at(app, xf.to_doc(pos), xf.zoom) else { return };
     let Some(st) = app.session.active() else { return };
     let (cmd, params) = match &*d {
@@ -950,8 +958,9 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
             let add = ui.input(|i| i.modifiers.alt);
             ("graphicStyle.apply", json!({"name": name, "ids": [hit.top_object(st.isolation).0], "add": add}))
         }
-        // Art dragged back onto the canvas: its move was already dropped.
-        widgets::PanelDrag::Art(_) => return,
+        // Art dragged back onto the canvas: its move was already dropped. (A symbol was placed
+        // above.)
+        widgets::PanelDrag::Art(_) | widgets::PanelDrag::Symbol(_) => return,
     };
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
@@ -1683,6 +1692,29 @@ mod tests {
         app.session.tool_text("X", app.view_info()).unwrap();
         let t = text(&app);
         assert_eq!((t.len(), t.find('X')), (12, Some(caret as usize)), "{t}");
+    }
+
+    #[test]
+    fn a_symbol_dropped_on_the_canvas_is_placed_there() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+        let name = app.session.execute("symbol.new", &json!({})).unwrap()["name"].as_str().unwrap().to_string();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        // Released over empty canvas: an instance centred there.
+        let at = xf.to_screen(Point::new(250.0, 180.0));
+        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Symbol(name.clone()));
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+        let st = app.session.active().unwrap();
+        let placed = st.selection.objects.first().copied().unwrap();
+        let n = st.doc.node(placed).unwrap();
+        assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if *symbol == name));
+        let c = n.geometric_bounds().unwrap().center();
+        assert!((c - xf.to_doc(at)).hypot() < 1e-6, "{c:?}");
     }
 
     #[test]
