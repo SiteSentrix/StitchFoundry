@@ -1,42 +1,571 @@
 # Japanese (ja) catalog. Same format as zh-hant.tsv:  context <TAB> source <TAB> translation
 # (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" forms).
 #
-# Coverage: the main menus. Untranslated text falls back to English, so rows can be added one at a
-# time; set `complete_menus` in i18n/mod.rs once every menu string and `tl!` literal has a row.
-# Every row's source must be a string the UI shows (menu label or `tl!` literal): tested.
-	Copy	コピー
-	Color	カラー
-	Cut	切り取り
-	Deselect	選択を解除
-	Edit	編集
-	Effect	効果
-	Export	書き出し
-	Export As…	形式を指定して書き出し…
-	File	ファイル
-	Help	ヘルプ
-	History	履歴
-	Horizontal	横書き
+# Clean-room: menu and feature names follow the names Japanese users of vector illustration
+# software know, written from the meaning of VectorCraft's English labels; no other application's
+# Japanese localisation was copied. Toggles read as their action (「…を表示」「…を隠す」).
+#
+# Coverage: every menu label (tested: `menu_catalogs_translate_every_menu_label`); panels and
+# dialogs fall back to English. Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the
+# product name, language names, OpenType, the built-in workspace names and the bracketed perspective
+# grid preset names. Set `complete_menus` in i18n/mod.rs once every `tl!` literal has a row too.
+	About VectorCraft	VectorCraft について
+	Join Our Discord	Discord に参加
+	Settings…	環境設定…
 	Language	表示言語
-	Layers	レイヤー
+	UI Brightness	UI の明るさ
+	Dark	暗い
+	Medium Dark	やや暗い
+	Medium Light	やや明るい
+	Light	明るい
+	Quit VectorCraft	VectorCraft を終了
+	File	ファイル
 	New…	新規…
-	Object	オブジェクト
+	New from Template…	テンプレートから新規…
 	Open…	開く…
-	Paste	貼り付け
-	Preferences…	環境設定…
-	Print…	印刷…
-	Properties	プロパティ
-	Redo	やり直し
-	Revert	保存済みの状態に戻す
+	Open Recent Files	最近使用したファイルを開く
+	Clear Recent Files	最近使用したファイルを消去
+	Show in Folder	フォルダーに表示
+	Close	閉じる
+	Close All	すべてを閉じる
 	Save	保存
 	Save As…	別名で保存…
-	Select	選択
-	Settings…	環境設定…
-	Tools	ツール
-	Type	書式
-	Type Orientation	組み方向
+	Save a Copy…	コピーを保存…
+	Save as Template…	テンプレートとして保存…
+	Save as PDF…	PDF として保存…
+	Save for Office Documents…	Office 用に保存…
+	Revert	保存済みの状態に戻す
+	Place…	配置…
+	Export	書き出し
+	Export for Screens…	スクリーン用に書き出し…
+	Export As…	形式を指定して書き出し…
+	Export As SVG…	SVG として書き出し…
+	Export As PNG…	PNG として書き出し…
+	Save for Web (Legacy)…	Web 用に保存…
+	Export Selection…	選択範囲を書き出し…
+	Package…	パッケージ…
+	Scripts	スクリプト
+	Other Script…	その他のスクリプト…
+	Document Setup…	ドキュメント設定…
+	Document Color Mode	ドキュメントのカラーモード
+	CMYK Color	CMYK カラー
+	RGB Color	RGB カラー
+	File Info…	ファイル情報…
+	Print…	印刷…
+	Edit	編集
 	Undo	取り消し
+	Redo	やり直し
+	Cut	切り取り
+	Copy	コピー
+	Paste	貼り付け
+	Paste in Front	前面へペースト
+	Paste in Back	背面へペースト
+	Paste in Place	同じ位置にペースト
+	Paste on All Artboards	すべてのアートボードにペースト
+	Paste without Formatting	書式なしでペースト
+	Clear	消去
+	Find and Replace…	検索と置換…
+	Find Next	次を検索
+	Spelling	スペルチェック
+	Auto Spell Check	自動スペルチェック
+	Check Spelling…	スペルチェック…
+	Edit Custom Dictionary…	カスタム辞書を編集…
+	Edit Colors	カラーを編集
+	Recolor Artwork…	オブジェクトを再配色…
+	Recolor with Preset	プリセットで再配色
+	1 Color Job…	1 色ジョブ…
+	2 Color Job…	2 色ジョブ…
+	3 Color Job…	3 色ジョブ…
+	Color Library…	カラーライブラリ…
+	Adjust Color Balance…	カラーバランス調整…
+	Blend Front to Back	前後にブレンド
+	Blend Horizontally	左右にブレンド
+	Blend Vertically	上下にブレンド
+	Convert to CMYK	CMYK に変換
+	Convert to Grayscale	グレースケールに変換
+	Convert to RGB	RGB に変換
+	Invert Colors	カラー反転
+	Overprint Black…	オーバープリントブラック…
+	Saturate…	彩度調整…
+	Edit Original	オリジナルを編集
+	Transparency Flattener Presets…	透明の分割・統合プリセット…
+	Print Presets…	プリントプリセット…
+	PDF Presets…	PDF プリセット…
+	Perspective Grid Presets…	遠近グリッドプリセット…
+	Color Settings…	カラー設定…
+	Assign Profile…	プロファイルの指定…
+	Keyboard Shortcuts…	キーボードショートカット…
+	Preferences…	環境設定…
+	Object	オブジェクト
+	Transform	変形
+	Transform Again	変形の繰り返し
+	Move…	移動…
+	Rotate…	回転…
+	Reflect…	リフレクト…
+	Scale…	拡大・縮小…
+	Shear…	シアー…
+	Transform Each…	個別に変形…
+	Reset Bounding Box	バウンディングボックスのリセット
+	Arrange	重ね順
+	Bring to Front	最前面へ
+	Bring Forward	前面へ
+	Send Backward	背面へ
+	Send to Back	最背面へ
+	Send to Current Layer	現在のレイヤーへ送る
+	Align	整列
+	Horizontal Align Left	水平方向左に整列
+	Horizontal Align Center	水平方向中央に整列
+	Horizontal Align Right	水平方向右に整列
+	Vertical Align Top	垂直方向上に整列
+	Vertical Align Center	垂直方向中央に整列
+	Vertical Align Bottom	垂直方向下に整列
+	Group	グループ
+	Ungroup	グループ解除
+	Lock	ロック
+	Selection	選択
+	All Artwork Above	前面のすべてのアートワーク
+	Other Layers	その他のレイヤー
+	Unlock All	すべてをロック解除
+	Hide	隠す
+	Show All	すべてを表示
+	Expand…	分割・拡張…
+	Expand Appearance	アピアランスを分割
+	Crop Image	画像の切り抜き
+	Rasterize…	ラスタライズ…
+	Create Gradient Mesh…	グラデーションメッシュを作成…
+	Create Object Mosaic…	モザイクオブジェクトを作成…
+	Vector Halftone…	ベクターハーフトーン…
+	Create Trim Marks	トリムマークを作成
+	Flatten Transparency…	透明部分を分割・統合…
+	Make Pixel Perfect	ピクセルグリッドに最適化
+	Slice	スライス
+	Make	作成
+	Release	解除
+	Create from Guides	ガイドから作成
+	Create from Selection	選択範囲から作成
+	Duplicate Slice	スライスを複製
+	Combine Slices	スライスを結合
+	Divide Slices…	スライスを分割…
+	Delete All	すべてを削除
+	Slice Options…	スライスオプション…
+	Clip to Artboard	アートボードサイズでクリップ
+	Path	パス
+	Join	連結
+	Average…	平均…
+	Outline Stroke	パスのアウトライン
+	Offset Path…	パスのオフセット…
+	Reverse Path Direction	パスの方向反転
+	Simplify…	単純化…
+	Add Anchor Points	アンカーポイントの追加
+	Remove Anchor Points	アンカーポイントの削除
+	Divide Objects Below	背面のオブジェクトで型抜き
+	Split Into Grid…	グリッドに分割…
+	Clean Up…	余分なポイントを削除…
+	Shape	シェイプ
+	Convert to Shape	シェイプに変換
+	Expand Shape	シェイプを拡張
+	Pattern	パターン
+	Edit Pattern	パターンを編集
+	Tile Edge Color…	タイルの境界線のカラー…
+	Repeat	リピート
+	Radial	ラジアル
+	Grid	グリッド
+	Mirror	ミラー
+	Options…	オプション…
+	Blend	ブレンド
+	Blend Options…	ブレンドオプション…
+	Expand	拡張
+	Replace Spine	ブレンド軸を置き換え
+	Reverse Spine	ブレンド軸を反転
+	Reverse Front to Back	前後を反転
+	Envelope Distort	エンベロープ
+	Make with Warp…	ワープで作成…
+	Reset with Warp…	ワープでリセット…
+	Make with Mesh…	メッシュで作成…
+	Reset with Mesh…	メッシュでリセット…
+	Make with Top Object	最前面のオブジェクトで作成
+	Envelope Options…	エンベロープオプション…
+	Edit Contents	内容を編集
+	Perspective	遠近
+	Attach to Active Plane	現在の面に配置
+	Release with Perspective	遠近を解除
+	Move Plane to Match Object	オブジェクトに合わせて面を移動
+	Edit Text	テキストを編集
+	Live Paint	ライブペイント
+	Merge	結合
+	Gap Options…	間隔オプション…
+	Image Trace	画像トレース
+	Make…	作成…
+	Make and Expand…	作成して拡張…
+	Text Wrap	テキストの回り込み
+	Text Wrap Options…	テキストの回り込みオプション…
+	Clipping Mask	クリッピングマスク
+	Edit Clipping Path	クリッピングパスを編集
+	Compound Path	複合パス
+	Artboards	アートボード
+	Convert to Artboards	アートボードに変換
+	Rearrange All Artboards…	すべてのアートボードを再配置…
+	Fit to Artwork Bounds	アートワーク境界に合わせる
+	Fit to Selected Art	選択オブジェクトに合わせる
+	Graph	グラフ
+	Type…	種類…
+	Data…	データ…
+	Design…	デザイン…
+	Column…	棒グラフ…
+	Marker…	マーカー…
+	Collect for Export	書き出し用に追加
+	As Single Asset	単一アセットとして
+	As Multiple Assets	複数アセットとして
+	Plug-ins	プラグイン
+	No filter plug-ins installed	フィルタープラグインはインストールされていません
+	Install Plug-in…	プラグインをインストール…
+	Reload Plug-ins	プラグインを再読み込み
+	Type	書式
+	Font	フォント
+	Recent Fonts	最近使用したフォント
+	Size	サイズ
+	Glyphs	字形
+	Insert Special Character	特殊文字を挿入
+	Bullet	箇条書き記号
+	Copyright Symbol	著作権記号
+	Ellipsis	省略記号
+	Paragraph Symbol	段落記号
+	Registered Trademark Symbol	登録商標記号
+	Section Symbol	セクション記号
+	Trademark Symbol	商標記号
+	Em Dash	EM ダッシュ
+	En Dash	EN ダッシュ
+	Discretionary Hyphen	任意ハイフン
+	Nonbreaking Hyphen	分散禁止ハイフン
+	Double Left Quotation Marks	左二重引用符
+	Double Right Quotation Marks	右二重引用符
+	Single Left Quotation Mark	左一重引用符
+	Single Right Quotation Mark	右一重引用符
+	Insert Whitespace Character	空白文字を挿入
+	Em Space	EM スペース
+	En Space	EN スペース
+	Hair Space	極細スペース
+	Sixth Space	1/6 スペース
+	Thin Space	細いスペース
+	Nonbreaking Space	改行なしスペース
+	Figure Space	数字スペース
+	Punctuation Space	句読点スペース
+	Third Space	1/3 スペース
+	Quarter Space	1/4 スペース
+	Insert Break Character	分割文字を挿入
+	Forced Line Break	強制改行
+	Tab	タブ
+	Convert To Area Type	エリア内文字に切り換え
+	Convert To Point Type	ポイント文字に切り換え
+	Area Type Options…	エリア内文字オプション…
+	Type on a Path	パス上文字オプション
+	Rainbow	虹
+	Skew	歪み
+	3D Ribbon	3D リボン
+	Stair Step	階段
+	Gravity	引力
+	Type on a Path Options…	パス上文字オプション…
+	Threaded Text	スレッドテキストオプション
+	Create	作成
+	Release Selection	選択部分をリリース
+	Remove Threading	スレッドを解除
+	Fit Headline	ヘッドラインを合わせる
+	Find Font…	フォントの検索と置換…
+	Change Case	大文字と小文字の変更
+	UPPERCASE	すべて大文字
+	lowercase	すべて小文字
+	Title Case	単語の先頭のみ大文字
+	Sentence case	文頭のみ大文字
+	Smart Punctuation…	欧文用字形の自動置換…
+	Create Outlines	アウトラインを作成
+	Optical Margin Alignment	最適なマージン揃え
+	Fill with Placeholder Text	サンプルテキストの割り付け
+	Show Hidden Characters	制御文字を表示
+	Type Orientation	組み方向
+	Horizontal	横書き
 	Vertical	縦書き
+	Select	選択
+	All	すべてを選択
+	All on Active Artboard	作業アートボードのすべてを選択
+	Deselect	選択を解除
+	Reselect	再選択
+	Inverse	選択範囲を反転
+	Next Object Above	前面のオブジェクト
+	Next Object Below	背面のオブジェクト
+	Same	共通
+	Appearance	アピアランス
+	Appearance Attribute	アピアランス属性
+	Blending Mode	描画モード
+	Fill & Stroke	塗りと線
+	Fill Color	カラー (塗り)
+	Opacity	不透明度
+	Stroke Color	カラー (線)
+	Stroke Weight	線幅
+	Graphic Style	グラフィックスタイル
+	Symbol Instance	シンボルインスタンス
+	Font Family	フォントファミリー
+	Font Family & Style	フォントファミリー (スタイル)
+	Font Family, Style & Size	フォントファミリー (スタイルとサイズ)
+	Font Size	フォントサイズ
+	Text Fill Color	テキストカラー (塗り)
+	Text Stroke Color	テキストカラー (線)
+	All on Same Layers	同じレイヤー上のすべて
+	Direction Handles	方向線ハンドル
+	Brush Strokes	ブラシストローク
+	Bristle Brush Strokes	絵筆ブラシストローク
+	Clipping Masks	クリッピングマスク
+	Slices	スライス
+	Stray Points	余分なポイント
+	Open Paths	オープンパス
+	All Text Objects	すべてのテキストオブジェクト
+	Point Text Objects	ポイント文字オブジェクト
+	Area Text Objects	エリア内文字オブジェクト
+	Start Global Edit	グローバル編集を開始
+	Save Selection…	選択範囲を保存…
+	Edit Selection…	選択範囲を編集…
+	Effect	効果
+	Apply Last Effect	前回の効果を適用
+	Last Effect…	前回の効果…
+	Document Raster Effects Settings…	ドキュメントのラスタライズ効果設定…
+	Vector Effects	ベクター効果
+	3D and Materials	3D とマテリアル
+	Extrude & Bevel…	押し出しとベベル…
+	Revolve…	回転体…
+	Inflate…	膨張…
+	Materials…	マテリアル…
+	Color Adjustments	色調補正
+	Brightness/Contrast…	明るさ・コントラスト…
+	Curves…	トーンカーブ…
+	Hue/Saturation…	色相・彩度…
+	Levels…	レベル補正…
+	Shift to Color…	カラーに変更…
+	Temperature/Tint…	色温度・色かぶり…
+	Rectangle…	長方形…
+	Rounded Rectangle…	角丸長方形…
+	Ellipse…	楕円形…
+	Crop Marks	トリムマーク
+	Distort & Transform	パスの変形
+	Free Distort…	パスの自由変形…
+	Pucker & Bloat…	パンク・膨張…
+	Roughen…	ラフ…
+	Transform…	変形…
+	Tweak…	ランダム・ひねり…
+	Twist…	旋回…
+	Zig Zag…	ジグザグ…
+	Pathfinder	パスファインダー
+	Add	追加
+	Intersect	交差
+	Exclude	中マド
+	Subtract	前面オブジェクトで型抜き
+	Minus Back	背面オブジェクトで型抜き
+	Divide	分割
+	Trim	刈り込み
+	Crop	切り抜き
+	Outline	アウトライン
+	Stylize	スタイライズ
+	Round Corners…	角を丸くする…
+	Scribble…	落書き…
+	Drop Shadow…	ドロップシャドウ…
+	Inner Glow…	光彩 (内側)…
+	Outer Glow…	光彩 (外側)…
+	Feather…	ぼかし…
+	SVG Filters	SVG フィルター
+	Apply SVG Filter…	SVG フィルターを適用…
+	Warp	ワープ
+	Arc…	円弧…
+	Arc Lower…	円弧 (下弦)…
+	Arc Upper…	円弧 (上弦)…
+	Arch…	アーチ…
+	Bulge…	でこぼこ…
+	Shell Lower…	貝殻 (下向き)…
+	Shell Upper…	貝殻 (上向き)…
+	Flag…	旗…
+	Wave…	波形…
+	Fish…	魚形…
+	Rise…	上昇…
+	Fisheye…	魚眼レンズ…
+	Squeeze…	絞り込み…
+	Raster Effects	ラスター効果
+	Blur	ぼかし
+	Gaussian Blur…	ぼかし (ガウス)…
 	View	表示
-	Window	ウィンドウ
+	Overprint Preview	オーバープリントプレビュー
+	Pixel Preview	ピクセルプレビュー
+	Trim View	トリミング表示
+	Presentation Mode	プレゼンテーションモード
+	Screen Mode	スクリーンモード
+	Normal Screen Mode	標準スクリーンモード
+	Full Screen Mode with Menu Bar	メニュー付きフルスクリーンモード
+	Full Screen Mode	フルスクリーンモード
+	Proof Setup	校正設定
+	Working CMYK	作業用 CMYK
+	Legacy Macintosh RGB (Gamma 1.8)	従来の Macintosh RGB（ガンマ 1.8）
+	Internet Standard RGB (sRGB)	インターネット標準 RGB（sRGB）
+	Monitor RGB	モニター RGB
+	Color blindness – Protanopia-type	P 型（1 型）色覚
+	Color blindness – Deuteranopia-type	D 型（2 型）色覚
+	Customize…	カスタマイズ…
+	Proof Colors	色の校正
 	Zoom In	ズームイン
 	Zoom Out	ズームアウト
+	Fit Artboard in Window	アートボードを全体表示
+	Fit All in Window	すべてのアートボードを全体表示
+	Actual Size	100% 表示
+	Reset Rotate View	ビューを回転の初期化
+	Hide Edges	エッジを隠す
+	Hide Artboards	アートボードを隠す
+	Show Print Tiling	プリント分割を表示
+	Hide Slices	スライスを隠す
+	Lock Slices	スライスをロック
+	Rulers	定規
+	Show Rulers	定規を表示
+	Change to Global Rulers	グローバル定規に変更
+	Show Video Rulers	ビデオ定規を表示
+	Hide Bounding Box	バウンディングボックスを隠す
+	Show Transparency Grid	透明グリッドを表示
+	Hide Text Threads	テキストのスレッドを隠す
+	Hide Gradient Annotator	グラデーションガイドを隠す
+	Hide Corner Widget	コーナーウィジェットを隠す
+	Guides	ガイド
+	Hide Guides	ガイドを隠す
+	Lock Guides	ガイドをロック
+	Make Guides	ガイドを作成
+	Release Guides	ガイドを解除
+	Clear Guides	ガイドを消去
+	Smart Guides	スマートガイド
+	Perspective Grid	遠近グリッド
+	Show Grid	グリッドを表示
+	Snap to Grid	グリッドにスナップ
+	Lock Grid	グリッドをロック
+	Lock Station Point	視点をロック
+	Define Grid…	グリッドを定義…
+	One Point Perspective	1 点遠近法
+	Two Point Perspective	2 点遠近法
+	Three Point Perspective	3 点遠近法
+	Save Grid as Preset…	グリッドをプリセットとして保存…
+	Snap to Pixel	ピクセルにスナップ
+	Snap to Point	ポイントにスナップ
+	Snap to Glyph	グリフにスナップ
+	New View…	新規表示…
+	Edit Views…	表示の編集…
+	Saved View 1	保存した表示 1
+	Saved View 2	保存した表示 2
+	Saved View 3	保存した表示 3
+	Saved View 4	保存した表示 4
+	Saved View 5	保存した表示 5
+	Saved View 6	保存した表示 6
+	Saved View 7	保存した表示 7
+	Saved View 8	保存した表示 8
+	Saved View 9	保存した表示 9
+	Saved View 10	保存した表示 10
+	Window	ウィンドウ
+	New Window	新規ウィンドウ
+	Cascade	重ねて表示
+	Tile	並べて表示
+	Float in Window	ウィンドウを分離
+	Consolidate All Windows	すべてのウィンドウを統合
+	Workspace	ワークスペース
+	Reset Essentials	初期設定をリセット
+	New Workspace…	新規ワークスペース…
+	Manage Workspaces…	ワークスペースを管理…
+	Control	コントロール
+	Contextual Task Bar	コンテキストタスクバー
+	Tools	ツール
+	Toolbars	ツールバー
+	Advanced	詳細
+	Single / Double Column	1 列／2 列
+	Actions	アクション
+	Asset Export	アセットの書き出し
+	Attributes	属性
+	Brushes	ブラシ
+	Color	カラー
+	Color Guide	カラーガイド
+	Color Themes	カラーテーマ
+	CSS Properties	CSS プロパティ
+	Document Info	ドキュメント情報
+	Flattener Preview	分割・統合プレビュー
+	Gradient	グラデーション
+	Graphic Styles	グラフィックスタイル
+	History	履歴
+	Info	情報
+	Layers	レイヤー
+	Libraries	ライブラリ
+	Links	リンク
+	Magic Wand	自動選択
+	Navigator	ナビゲーター
+	Pattern Options	パターンオプション
+	Properties	プロパティ
+	Separations Preview	分版プレビュー
+	Stroke	線
+	SVG Interactivity	SVG インタラクティビティ
+	Swatches	スウォッチ
+	Symbols	シンボル
+	Transparency	透明
+	Character	文字
+	Character Styles	文字スタイル
+	Paragraph	段落
+	Paragraph Styles	段落スタイル
+	Tabs	タブ
+	Variables	変数
+	Brush Libraries	ブラシライブラリ
+	Built-in Libraries	内蔵ライブラリ
+	User Defined	ユーザー定義
+	Other Library…	その他のライブラリ…
+	Graphic Style Libraries	グラフィックスタイルライブラリ
+	Shadows and Glows	シャドウと光彩
+	Outlines and Rules	アウトラインと罫線
+	Hand-Drawn	手描き風
+	Gradient Finishes	グラデーション仕上げ
+	Shape Effects	シェイプ効果
+	Blends and Transparency	ブレンドと透明
+	Save Graphic Style Library…	グラフィックスタイルライブラリを保存…
+	Swatch Libraries	スウォッチライブラリ
+	Default Swatches	初期設定スウォッチ
+	Web Safe 216	Web セーフ 216
+	Grays and Neutrals	グレーとニュートラル
+	Earth Tones	アーストーン
+	Skin Tone Ramps	肌色のグラデーション
+	Pastels	パステル
+	Brights	ビビッド
+	Metallic Gradients	メタリックグラデーション
+	Perceptual Scales	知覚的カラースケール
+	Harmony Sets	ハーモニーセット
+	Gradients	グラデーション
+	Spectrum Gradients	スペクトルグラデーション
+	Sky Gradients	空のグラデーション
+	Neutral Gradients	ニュートラルグラデーション
+	Duotone Gradients	ダブルトーングラデーション
+	Radial Glows	円形グロー
+	Save Swatch Library…	スウォッチライブラリを保存…
+	Symbol Libraries	シンボルライブラリ
+	Help	ヘルプ
+	ArtCraft Website	ArtCraft の Web サイト
+	VectorCraft on getartcraft.com	getartcraft.com の VectorCraft
+	VectorCraft on GitHub	GitHub の VectorCraft
+	Search Commands…	コマンドを検索…
+	VectorCraft Help…	VectorCraft ヘルプ…
+	Preview	プレビュー
+	Show Edges	エッジを表示
+	Show Corner Widget	コーナーウィジェットを表示
+	Show Text Threads	テキストのスレッドを表示
+	Hide Hidden Characters	制御文字を隠す
+	Show Gradient Annotator	グラデーションガイドを表示
+	Show Artboards	アートボードを表示
+	Hide Rulers	定規を隠す
+	Show Bounding Box	バウンディングボックスを表示
+	Hide Transparency Grid	透明グリッドを隠す
+	Show Guides	ガイドを表示
+	Hide Grid	グリッドを隠す
+	Unlock Guides	ガイドをロック解除
+	Show Slices	スライスを表示
+	Hide Print Tiling	プリント分割を隠す
+	Unlock Grid	グリッドをロック解除
+	Edit Envelope	エンベロープを編集
+	Automatic	自動
+	Isolate Selected Group	選択したグループを分離
+	Exit Isolation Mode	分離モードを終了
+	Make Clipping Mask	クリッピングマスクを作成
+	Release Clipping Mask	クリッピングマスクを解除
+	Make Compound Path	複合パスを作成
+	Release Compound Path	複合パスを解除
+	Select All	すべてを選択

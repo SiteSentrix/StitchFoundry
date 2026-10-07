@@ -62,10 +62,10 @@ fn plural_czech(n: u64) -> usize {
 /// The registry. English first: it is the fallback and the source language.
 pub static LANGUAGES: [LangInfo; 4] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
-    // Japanese: the main menus so far (untranslated text stays English); `complete_menus` once the
-    // catalog covers every menu string and `tl!` literal.
+    // Japanese: every menu label (`menu_catalogs_translate_every_menu_label`); panels and dialogs
+    // not yet. `complete_menus` once the catalog covers every menu string and `tl!` literal.
     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, complete_menus: false, catalog: OnceLock::new() },
-    // Czech: every menu label (`czech_translates_every_menu_label`); panels and dialogs not yet.
+    // Czech: every menu label (`menu_catalogs_translate_every_menu_label`); panels and dialogs not yet.
     LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_czech, complete_menus: false, catalog: OnceLock::new() },
     // Traditional Chinese in the vocabulary used in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*`
     // locales all resolve here (see `candidates`).

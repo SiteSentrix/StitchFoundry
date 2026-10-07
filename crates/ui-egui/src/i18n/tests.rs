@@ -322,10 +322,10 @@ fn cs() -> Lang {
     Lang::from_code("cs").expect("cs registered")
 }
 
-/// Menu labels Czech shows as they are: the product name, a format name, the built-in workspace
+/// Menu labels the menu-complete catalogs (Czech, Japanese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
 /// Each language's own name in the Language menu is left alone too.
-const CZECH_KEEP_AS_IS: &[&str] = &[
+const MENU_KEEP_AS_IS: &[&str] = &[
     "VectorCraft",
     "OpenType",
     "Essentials",
@@ -412,9 +412,10 @@ fn toggled_labels() -> Vec<String> {
     labels
 }
 
-/// Czech covers every menu label, the Show/Hide pairs included (panels and dialogs not yet).
+/// Czech and Japanese cover every menu label, the Show/Hide pairs and the canvas context menu
+/// included (panels and dialogs not yet).
 #[test]
-fn czech_translates_every_menu_label() {
+fn menu_catalogs_translate_every_menu_label() {
     let labels = menu_labels();
     // What the menus show (recent files and fonts, user presets and libraries show their names).
     let shown = crate::menus::menu_strings();
@@ -422,20 +423,24 @@ fn czech_translates_every_menu_label() {
     // Font names and sizes, and installed plug-ins' own names, are not interface text.
     let interface = |(label, id, p): &(&str, &str, serde_json::Value)| {
         let plugin = *id == "plugin.dialog" || p.get("effect").and_then(serde_json::Value::as_str).is_some_and(|e| e.starts_with("plugin."));
-        *id != "text.setStyle" && !plugin && shown.contains(*label) && !CZECH_KEEP_AS_IS.contains(label) && !language_name(label)
+        *id != "text.setStyle" && !plugin && shown.contains(*label) && !MENU_KEEP_AS_IS.contains(label) && !language_name(label)
     };
-    let mut missing: Vec<String> = labels.iter().filter(|l| interface(l)).map(|(l, ..)| l.to_string()).collect();
-    missing.extend(toggled_labels());
-    missing.extend(crate::menus::CONTEXT_LABELS.iter().map(|l| l.to_string()));
-    missing.retain(|l| !has(cs(), l));
-    missing.sort();
-    missing.dedup();
-    assert!(missing.is_empty(), "untranslated Czech menu labels: {missing:?}");
-    for keep in CZECH_KEEP_AS_IS {
-        assert!(labels.iter().any(|(l, ..)| l == keep), "`{keep}` isn't a menu label");
-        assert!(!has(cs(), keep), "`{keep}` is both kept and translated");
+    let mut all: Vec<String> = labels.iter().filter(|l| interface(l)).map(|(l, ..)| l.to_string()).collect();
+    all.extend(toggled_labels());
+    all.extend(crate::menus::CONTEXT_LABELS.iter().map(|l| l.to_string()));
+    all.sort();
+    all.dedup();
+    for code in ["cs", "ja"] {
+        let lang = Lang::from_code(code).expect("registered");
+        let missing: Vec<&String> = all.iter().filter(|l| !has(lang, l)).collect();
+        assert!(missing.is_empty(), "{code}: untranslated menu labels: {missing:?}");
+        for keep in MENU_KEEP_AS_IS {
+            assert!(labels.iter().any(|(l, ..)| l == keep), "`{keep}` isn't a menu label");
+            assert!(!has(lang, keep), "{code}: `{keep}` is both kept and translated");
+        }
     }
     assert_eq!(tr(cs(), "File"), "Soubor");
+    assert_eq!(tr(Lang::from_code("ja").expect("ja"), "File"), "ファイル");
 }
 
 #[test]

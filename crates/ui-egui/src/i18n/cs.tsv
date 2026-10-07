@@ -5,8 +5,8 @@
 # common Czech desktop-software conventions (commands in the infinitive, menus as nouns); no other
 # application's Czech localisation was consulted or copied.
 #
-# Coverage: every menu label (tested: `czech_translates_every_menu_label`); panels and dialogs fall
-# back to English. Left in English on purpose (`CZECH_KEEP_AS_IS` in the tests): the product name,
+# Coverage: every menu label (tested: `menu_catalogs_translate_every_menu_label`); panels and dialogs fall
+# back to English. Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name,
 # language names, OpenType, the built-in workspace names and the bracketed perspective grid preset
 # names.
 	About VectorCraft	O aplikaci VectorCraft
