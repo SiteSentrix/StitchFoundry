@@ -268,38 +268,120 @@ fn default_align_on() -> char {
 pub const DEFAULT_TAB_INTERVAL: f64 = 36.0;
 
 /// Paragraph attributes (the Paragraph panel).
+///
+/// Saved through [`ParaStyleFile`], which keeps files with text openable by builds from before
+/// [`Justify::Auto`].
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(from = "ParaStyleFile", into = "ParaStyleFile")]
 pub struct ParaStyle {
-    #[serde(default)]
     pub justify: Justify,
-    #[serde(default)]
     pub left_indent: f64,
-    #[serde(default)]
     pub right_indent: f64,
-    #[serde(default)]
     pub first_line_indent: f64,
-    #[serde(default)]
     pub space_before: f64,
-    #[serde(default)]
     pub space_after: f64,
-    #[serde(default)]
     pub hyphenate: bool,
     /// Tab stops (Tabs panel), sorted by position.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tabs: Vec<TabStop>,
     /// Paragraph style (Paragraph Styles panel) these attributes come from; None = Normal.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style_name: Option<String>,
     /// Japanese composition: the spacing of punctuation (Paragraph panel › Mojikumi). Type made
     /// with the Type tools and `text.create` takes [`Mojikumi::LineEndHalf`]; documents from before
     /// it and imported text (already set) keep [`Mojikumi::None`].
-    #[serde(default, skip_serializing_if = "Mojikumi::is_none")]
     pub mojikumi: Mojikumi,
     /// Paragraph direction (Paragraph panel): the base direction of each paragraph for
     /// bidirectional text (UAX #9). None: from each paragraph's first strong character (Hebrew or
     /// Arabic: right to left).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub direction: Option<ParaDirection>,
+}
+
+/// [`ParaStyle`] as saved. [`Justify::Auto`] is written as the alignment it has in the paragraph
+/// direction (`Right` for right to left, else `Left`) with `justify_auto` set: builds without Auto
+/// read the alignment and ignore the flag, and builds with it read Auto back.
+#[derive(Serialize, Deserialize)]
+struct ParaStyleFile {
+    #[serde(default)]
+    justify: Justify,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    justify_auto: bool,
+    #[serde(default)]
+    left_indent: f64,
+    #[serde(default)]
+    right_indent: f64,
+    #[serde(default)]
+    first_line_indent: f64,
+    #[serde(default)]
+    space_before: f64,
+    #[serde(default)]
+    space_after: f64,
+    #[serde(default)]
+    hyphenate: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tabs: Vec<TabStop>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    style_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Mojikumi::is_none")]
+    mojikumi: Mojikumi,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    direction: Option<ParaDirection>,
+}
+
+impl From<ParaStyle> for ParaStyleFile {
+    fn from(p: ParaStyle) -> Self {
+        let justify_auto = p.justify == Justify::Auto;
+        let justify = match p.justify {
+            Justify::Auto if p.direction == Some(ParaDirection::RightToLeft) => Justify::Right,
+            Justify::Auto => Justify::Left,
+            j => j,
+        };
+        let ParaStyle {
+            left_indent,
+            right_indent,
+            first_line_indent,
+            space_before,
+            space_after,
+            hyphenate,
+            tabs,
+            style_name,
+            mojikumi,
+            direction,
+            ..
+        } = p;
+        Self {
+            justify,
+            justify_auto,
+            left_indent,
+            right_indent,
+            first_line_indent,
+            space_before,
+            space_after,
+            hyphenate,
+            tabs,
+            style_name,
+            mojikumi,
+            direction,
+        }
+    }
+}
+
+impl From<ParaStyleFile> for ParaStyle {
+    fn from(f: ParaStyleFile) -> Self {
+        let justify = if f.justify_auto { Justify::Auto } else { f.justify };
+        let ParaStyleFile {
+            left_indent,
+            right_indent,
+            first_line_indent,
+            space_before,
+            space_after,
+            hyphenate,
+            tabs,
+            style_name,
+            mojikumi,
+            direction,
+            ..
+        } = f;
+        Self { justify, left_indent, right_indent, first_line_indent, space_before, space_after, hyphenate, tabs, style_name, mojikumi, direction }
+    }
 }
 
 /// A paragraph's base direction ([`ParaStyle::direction`]).
@@ -633,5 +715,46 @@ mod tests {
         assert!(!t.move_area_anchors(&[(0, 1), (0, 9)], Vec2::new(5.0, 5.0)));
         assert!(!t.move_area_anchors(&[(3, 0)], Vec2::new(5.0, 5.0)));
         assert_eq!(t, before);
+    }
+
+    /// Builds from before [`Justify::Auto`] read new type's alignment as Left or Right (and ignore
+    /// `justify_auto`); this build reads Auto back.
+    #[test]
+    fn auto_alignment_saves_readable_by_older_builds() {
+        #[derive(Deserialize, Debug, PartialEq)]
+        enum OldJustify {
+            Left,
+            Center,
+            Right,
+            JustifyLeft,
+            JustifyCenter,
+            JustifyRight,
+            JustifyAll,
+        }
+        #[derive(Deserialize)]
+        struct OldPara {
+            justify: OldJustify,
+        }
+        #[derive(Deserialize)]
+        struct OldText {
+            para: OldPara,
+        }
+        for (direction, physical) in
+            [(Some(ParaDirection::RightToLeft), OldJustify::Right), (Some(ParaDirection::LeftToRight), OldJustify::Left), (None, OldJustify::Left)]
+        {
+            let mut t = TextObject::point(Point::ZERO, "שלום", CharStyle::default());
+            t.para = ParaStyle { justify: Justify::Auto, direction, ..Default::default() };
+            let json = serde_json::to_string(&t).unwrap();
+            let old: OldText = serde_json::from_str(&json).unwrap();
+            assert_eq!(old.para.justify, physical, "{json}");
+            assert_eq!(serde_json::from_str::<TextObject>(&json).unwrap(), t);
+        }
+        // Other alignments save as before, without the flag.
+        let p = ParaStyle { justify: Justify::Right, ..Default::default() };
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(!json.contains("justify_auto"), "{json}");
+        assert_eq!(serde_json::from_str::<ParaStyle>(&json).unwrap(), p);
+        // Files from before the flag keep their alignment.
+        assert_eq!(serde_json::from_str::<ParaStyle>(r#"{"justify":"Center"}"#).unwrap().justify, Justify::Center);
     }
 }

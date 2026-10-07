@@ -550,6 +550,7 @@ fn automatic_alignment_updates_during_edits_and_can_be_overridden() {
     assert_eq!(restored.para.justify, vectorcraft_doc::Justify::Auto);
     // Legacy documents with explicit alignment retain that choice.
     let mut legacy = serde_json::to_value(t).unwrap();
+    legacy["para"].as_object_mut().unwrap().remove("justify_auto");
     legacy["para"]["justify"] = json!("Left");
     assert_eq!(serde_json::from_value::<TextObject>(legacy).unwrap().para.justify, vectorcraft_doc::Justify::Left);
 }
