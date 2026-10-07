@@ -609,6 +609,23 @@ fn flushfile_skips_the_data_of_a_filter() {
     blue("currentfile 0 (%%EndPacket) /SubFileDecode filter flushfile\n<?xml version=\"1.0\"?><x a=\"(\"/>\n%%EndPacket\n0 0 1 setrgbcolor");
 }
 
+/// Executable files are untrusted programs too: running one inside itself stops at the nesting
+/// limit, and the program's own file runs once. Type laid out in a loop (`cshow` on a long
+/// string, `stringwidth` in `loop`) counts against the operation budget like the loop itself.
+#[test]
+fn hostile_executable_files_and_type_loops_are_refused() {
+    let refused = |body: &str, why: &str| {
+        let e = import(&eps(body)).err().unwrap_or_default();
+        assert!(e.contains(why), "{body}: {e}");
+    };
+    refused("/p { (p) 0 () /SubFileDecode filter cvx exec } def p", "too deeply");
+    refused("/p { (p) 0 () /SubFileDecode filter cvx exec } def { p } stopped pop p", "too deeply");
+    refused("/a { (b) 0 () /SubFileDecode filter cvx exec } def /b { (a) 0 () /SubFileDecode filter cvx exec } def a", "too deeply");
+    refused("/Helvetica findfont 10 scalefont setfont { pop pop pop } 1000000 string cshow", "too long");
+    // The program's own file, made executable, is already running.
+    blue("currentfile cvx exec currentfile flushfile 0 0 1 setrgbcolor");
+}
+
 #[test]
 fn cshow_runs_its_procedure_for_each_character() {
     check("/n 0 def { pop pop pop /n n 1 add def } (abc) cshow n 3 eq");
