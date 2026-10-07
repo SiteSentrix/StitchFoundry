@@ -23,7 +23,7 @@ fn tags_map_to_languages() {
     // Simplified Chinese locales never pick up the Traditional catalog (they resolve to a
     // `zh-hans` catalog once one is registered, and to English until then).
     for tag in ["zh-CN", "zh_CN.UTF-8", "zh_SG", "zh-Hans", "zh-Hans-CN", "zh"] {
-        assert_ne!(lang_from_tag(tag), Some(ZH()), "{tag}");
+        assert_eq!(lang_from_tag(tag), Lang::from_code("zh-hans"), "{tag}");
     }
     assert_eq!(lang_from_tag(""), None);
     assert_eq!(lang_from_tag("_"), None);
@@ -51,6 +51,7 @@ fn os_language_lists_are_parsed() {
 
 #[test]
 fn preferences_resolve_with_fallback() {
+    assert_eq!(Lang::from_pref("zh-Hans"), Lang::from_code("zh-hans").unwrap());
     assert_eq!(Lang::from_pref("zh-hant"), ZH());
     assert_eq!(Lang::from_pref("ZH-Hant"), ZH());
     assert_eq!(Lang::from_pref("en"), Lang::EN);
