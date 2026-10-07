@@ -1,4 +1,7 @@
-# Windows 7 x64 compatibility build (experimental)
+# Windows 7 x64 compatibility build (experimental, unsupported)
+
+Windows 7 is not a supported platform. This build is experimental and community-maintained,
+and the VectorCraft maintainers have not verified it on Windows 7.
 
 This separate build targets **64-bit Windows 7 SP1**. It uses OpenGL instead of wgpu,
 and omits the native AccessKit accessibility adapter. Printer discovery supports the
@@ -9,7 +12,8 @@ in Preferences and `WGPU_POWER_PREF` do not control this OpenGL build.
 
 ## Build or download
 
-In your GitHub fork, open **Actions → Windows 7 x64 compatibility → Run workflow**.
+In your GitHub fork, open **Actions → Windows 7 x64 compatibility → Run workflow** (it
+also runs weekly, never on pull requests).
 When it succeeds, download the `vectorcraft-windows7-x64-portable` artifact, extract the
 contained portable ZIP, then run `vectorcraft.exe` on Windows 7. The CLI is included.
 No MSI is provided: the existing installer remains for modern Windows.
@@ -22,6 +26,8 @@ Prompt for VS 2022**, change to your clone's repository root (the directory cont
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging/windows/windows7.ps1
 ```
+
+Add `-Test` to also run the app and CLI tests on the build computer.
 
 Output: `dist/release/vectorcraft-windows7-x64-portable.zip`. The script installs the pinned
 nightly compiler and `rust-src`, rebuilds the standard library for
@@ -42,16 +48,21 @@ regression check, not an exhaustive audit of every Windows API.
 
 The small vendored `windows-link` patch routes `CoTaskMemFree` to its documented
 `ole32.dll` export on the Windows 7 target; the newer binding otherwise imports
-`combase.dll`, which is absent on Windows 7. Other targets keep upstream behavior.
+`combase.dll`, which is absent on Windows 7. Only this script uses it: it passes
+`--config "patch.crates-io.windows-link.path='vendor/windows-link'"` to Cargo, so every other
+build, including the normal Windows one, keeps the checksum-verified crates.io crate. Cargo
+records the patch in `Cargo.lock`, so the script resolves once, fails if anything other than
+windows-link's source changed, builds with `--locked`, and then restores `Cargo.lock`.
 
 ## Runtime validation
 
-A user confirmed that the portable x64 compatibility build runs on Windows 7 SP1
+The contributor reports that a user ran the portable x64 compatibility build on Windows 7 SP1
 with an NVIDIA graphics card. Their original build failed at startup with
 `GetSystemTimePreciseAsFileTime` missing from `kernel32.dll`; the compatibility
 build resolved that failure. The tested build was based on upstream commit
 `1f7873273b67007b0aefc63313e0d34a39f45453`. The exact GPU/driver version and completion
-of every checklist item below were not recorded, so support remains experimental.
+of every checklist item below were not recorded, and the maintainers have not reproduced it,
+so the build remains experimental and unsupported.
 
 ## Runtime acceptance checklist
 
