@@ -189,6 +189,12 @@ pub fn format(sc: &KeyboardShortcut) -> String {
     }
     let k = sc.logical_key;
     let name = match k {
+        // A shifted punctuation key is recorded as the key, not the character it types.
+        Key::CloseCurlyBracket if m.shift => "]",
+        Key::OpenCurlyBracket if m.shift => "[",
+        Key::Questionmark if m.shift => "/",
+        Key::Colon if m.shift => ";",
+        Key::Pipe if m.shift => "\\",
         Key::CloseBracket => "]",
         Key::OpenBracket => "[",
         Key::Semicolon => ";",

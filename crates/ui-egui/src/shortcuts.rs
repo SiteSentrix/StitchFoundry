@@ -75,7 +75,22 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
 /// is ignored). `native`: the system menu already handles the chord as written, so only that
 /// alias is left to match here.
 pub(crate) fn consume(i: &mut egui::InputState, sc: &KeyboardShortcut, native: bool) -> bool {
-    (!native && i.consume_shortcut(sc)) || (sc.logical_key == Key::Equals && i.consume_key(sc.modifiers, Key::Plus))
+    (!native && i.consume_shortcut(sc))
+        || (sc.logical_key == Key::Equals && i.consume_key(sc.modifiers, Key::Plus))
+        || (sc.modifiers.shift && shifted(sc.logical_key).is_some_and(|k| i.consume_key(sc.modifiers, k)))
+}
+
+/// The key a shifted punctuation key arrives as: egui reports the character typed, so Cmd+Shift+[
+/// comes in as Cmd+Shift+`{` (US-style layouts).
+fn shifted(k: Key) -> Option<Key> {
+    Some(match k {
+        Key::OpenBracket => Key::OpenCurlyBracket,
+        Key::CloseBracket => Key::CloseCurlyBracket,
+        Key::Slash => Key::Questionmark,
+        Key::Semicolon => Key::Colon,
+        Key::Backslash => Key::Pipe,
+        _ => return None,
+    })
 }
 
 /// Keys that paste with Cmd, or alone. (Shift+Insert is left out: Ctrl+Insert copies.)
@@ -371,12 +386,16 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         let upper = text.to_uppercase();
         let key = if m.shift && text.chars().all(|c| c.is_alphabetic()) { format!("Shift+{upper}") } else { upper.clone() };
+        // A shifted punctuation character can also be written with its Shift (the Curvature tool's
+        // Shift+~ arrives as `~`).
+        let shifted = m.shift.then(|| format!("Shift+{text}"));
+        let lookup = |find: fn(&str) -> Option<&'static str>| find(&key).or_else(|| find(&text)).or_else(|| shifted.as_deref().and_then(find));
         // Single-key command shortcuts (X, Shift+X, D, /, Shift+D, F, Shift+F by default).
-        if let Some(id) = crate::shortcut_editor::command_for_key(&key).or_else(|| crate::shortcut_editor::command_for_key(&text)) {
+        if let Some(id) = lookup(crate::shortcut_editor::command_for_key) {
             let _ = app.run(id, json!({}));
             continue;
         }
-        if let Some(t) = crate::shortcut_editor::tool_for_key(&key).or_else(|| crate::shortcut_editor::tool_for_key(&text)) {
+        if let Some(t) = lookup(crate::shortcut_editor::tool_for_key) {
             app.select_tool(t);
         }
     }
@@ -440,6 +459,36 @@ mod tests {
         assert!(matches!(fill(&app), vectorcraft_color::Paint::Gradient(_)), "`.` applies the last gradient");
         frame(&mut app, vec![egui::Event::Text(",".into())]);
         assert_eq!(fill(&app).color().unwrap().to_hex(), "#336699", "`,` applies the last colour");
+    }
+
+    #[test]
+    fn shifted_punctuation_shortcuts_work_as_typed() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let a = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].clone();
+        let b = app.session.execute("shape.ellipse", &json!({"x": 20, "y": 20, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [a]})).unwrap();
+        let order =
+            |app: &VectorcraftApp| -> Vec<u64> { app.session.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id.0).collect() };
+        let (a, b) = (a.as_u64().unwrap(), b.as_u64().unwrap());
+        assert_eq!(order(&app), [a, b]);
+        let press = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+        // Recorded in the Keyboard Shortcuts editor, they read as the keys (and so conflict).
+        assert_eq!(crate::shortcut_editor::chord_from_event(Key::CloseCurlyBracket, cmd_shift).as_deref(), Some("Cmd+Shift+]"));
+        assert_eq!(crate::shortcut_editor::chord_from_event(Key::Questionmark, cmd_shift).as_deref(), Some("Cmd+Shift+/"));
+        // Cmd+Shift+] arrives as Cmd+Shift+`}`, Cmd+Shift+[ as Cmd+Shift+`{`.
+        frame(&mut app, vec![press(Key::CloseCurlyBracket, cmd_shift)]);
+        assert_eq!(order(&app), [b, a], "Bring to Front");
+        frame(&mut app, vec![press(Key::OpenCurlyBracket, cmd_shift)]);
+        assert_eq!(order(&app), [a, b], "Send to Back");
+        // Cmd+Shift+/ arrives as Cmd+Shift+`?`: Search Commands.
+        frame(&mut app, vec![press(Key::Questionmark, cmd_shift)]);
+        assert!(app.ui.palette_open, "Search Commands");
+        app.ui.palette_open = false;
+        // The Curvature tool's Shift+~ arrives as the text `~` with Shift.
+        frame(&mut app, vec![egui::Event::ModifiersChanged(Modifiers::SHIFT), egui::Event::Text("~".into())]);
+        assert_eq!(app.session.tool_id(), "curvature");
     }
 
     #[test]
