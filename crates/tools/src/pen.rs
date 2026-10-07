@@ -1,7 +1,8 @@
 //! The Pen tool (P).
 //!
-//! Click adds a corner anchor; click-drag adds a smooth anchor with symmetric handles (Alt-drag
-//! breaks the handles); Shift constrains to 45°. Clicking the first anchor closes the path.
+//! Click adds a corner anchor; click-drag adds a smooth anchor with symmetric handles (Alt breaks
+//! them: the incoming handle stays where it was when Alt went down and only the outgoing one
+//! follows the pointer); Shift constrains to 45°. Clicking the first anchor closes the path.
 //! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
 //! it. The rubber-band preview shows the next segment. On a selected blend's spine a click adds a
 //! point (on a point no key object sits on: deletes it).
@@ -18,6 +19,8 @@ pub struct PenTool {
     drawing: bool,
     drag: Option<(Point, bool)>,
     hover: Option<Point>,
+    /// The incoming handle of the anchor being dragged out, as last previewed.
+    in_h: Point,
 }
 
 /// The open path the pen is extending: the single selected open path.
@@ -67,6 +70,7 @@ impl Tool for PenTool {
                         return vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0}))];
                     }
                     self.drag = Some((p, false));
+                    self.in_h = p;
                     return vec![Action::Begin("Pen".into()), Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": p.x, "y": p.y}))];
                 }
                 if let Some(acts) = spine_click(cx, p, tol) {
@@ -107,7 +111,10 @@ impl Tool for PenTool {
                         json!({"id": id.0, "in": [2.0 * a.x - out_h.x, 2.0 * a.y - out_h.y], "independent": alt}),
                     )];
                 }
-                let in_h = if alt { a } else { a - (out_h - a) };
+                // Alt pressed mid-drag keeps the curve already shaped into the anchor: only the
+                // outgoing handle follows. Held from the start, the incoming handle stays retracted.
+                let in_h = if alt { self.in_h } else { a - (out_h - a) };
+                self.in_h = in_h;
                 vec![Action::Preview(
                     "path.appendAnchor".into(),
                     json!({"id": id.0, "x": a.x, "y": a.y, "in": [in_h.x, in_h.y], "out": [out_h.x, out_h.y]}),
@@ -208,6 +215,38 @@ mod tests {
         assert_eq!(a[0], Action::Begin("Pen".into()));
         assert!(matches!(&a[1], Action::Preview(c, _) if c == "path.create"));
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn alt_pressed_mid_drag_keeps_the_incoming_handle() {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let line = vectorcraft_geom::shapes::line(Point::new(10.0, 300.0), Point::new(60.0, 300.0));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        let alt = Mods { alt: true, ..Mods::default() };
+        let handles = |acts: Vec<Action>| match acts.as_slice() {
+            [Action::Preview(c, v)] if c == "path.appendAnchor" => (v["in"].clone(), v["out"].clone()),
+            other => panic!("not an anchor preview: {other:?}"),
+        };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 420.0));
+        let drag = PointerEvent::new(PointerKind::Drag, 450.0, 420.0);
+        assert_eq!(handles(t.pointer(&cx, &drag)), (json!([350.0, 420.0]), json!([450.0, 420.0])));
+        // Alt goes down: the curve shaped so far stays, and only the outgoing handle moves on.
+        let drag = PointerEvent::new(PointerKind::Drag, 450.0, 470.0).with_mods(alt);
+        assert_eq!(handles(t.pointer(&cx, &drag)), (json!([350.0, 420.0]), json!([450.0, 470.0])));
+        let drag = PointerEvent::new(PointerKind::Drag, 400.0, 480.0).with_mods(alt);
+        assert_eq!(handles(t.pointer(&cx, &drag)), (json!([350.0, 420.0]), json!([400.0, 480.0])));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 400.0, 480.0).with_mods(alt)), vec![Action::Commit]);
+        // Alt held from the start: the new anchor gets an outgoing handle only.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 440.0).with_mods(alt));
+        let drag = PointerEvent::new(PointerKind::Drag, 340.0, 440.0).with_mods(alt);
+        assert_eq!(handles(t.pointer(&cx, &drag)), (json!([300.0, 440.0]), json!([340.0, 440.0])));
     }
 
     #[test]

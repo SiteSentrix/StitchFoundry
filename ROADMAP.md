@@ -4,7 +4,7 @@ VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adob
 
 This file tracks **how far we are and what's left**. Time estimates are wall-clock hours of continuous Claude Opus 5.5 agent work (including builds and the CI gate), given both for **one agent** and for **4–6 parallel agents** on disjoint crates. They are counted from the remaining work (see [Parity estimate](#parity-estimate)), calibrated against measured throughput, and updated as work lands.
 
-_Last updated: 2026-10-07 (after M4.14–M4.98, M8.1–M8.20, M14.4–M14.7, the MCP prompts, resource templates, completions and logging, the 2026-10-07 issue fixes and the Layers panel rework; see [Honest assessment](#honest-assessment-2026-10-05))._
+_Last updated: 2026-10-08 (after M4.14–M4.98, M8.1–M8.20, M14.4–M14.7, the MCP prompts, resource templates, completions and logging, the 2026-10-07 issue fixes, the Layers panel rework and the Pen and shape-tool modifier fixes; see [Honest assessment](#honest-assessment-2026-10-05))._
 
 ## Where we are
 
@@ -109,6 +109,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - **Cutting:** Eraser, Scissors, Knife, Mirror & Cut, Line Cut and Rectangle Cut (real geometry, compound paths keep their holes).
   - **Transform:** Rotate, Reflect, Scale, Shear (click or Alt-click snaps the reference point to anchors and centres), Reshape, Free Transform (free and perspective distort and shear, switched by the keys held during a handle drag).
   - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout. Corners stay circular when the rectangle is scaled unevenly or along its own sides when rotated (the radius keeps its size, or scales by the mean scale with Scale Corners on); only a shear distorts them.
+  - **Pen:** Alt pressed in the middle of dragging out an anchor splits its handles and keeps the curve already shaped into it (only the outgoing handle follows the pointer).
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
   - **Editing type:** double-clicking type with a selection tool switches to the Type tool with the caret where it was clicked.
