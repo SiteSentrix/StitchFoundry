@@ -140,7 +140,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let has = text_style(app).is_some();
+    let style = text_style(app);
+    let has = style.is_some();
     let hidden: bool = pstate(ui.ctx(), "pa-hide-options");
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "pa-hide-options", !hidden);
@@ -148,6 +149,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     for l in [tl!("Roman Hanging Punctuation"), tl!("Justification…"), tl!("Hyphenation…")] {
         menu_item(ui, l, false, false);
+    }
+    ui.separator();
+    // How leading is measured (Japanese layout measures it from em box top to em box top).
+    let top_to_top = style.as_ref().is_some_and(|(_, p)| p.leading_model == vectorcraft_doc::LeadingModel::EmBoxTop);
+    if menu_item(ui, tl!("Top-to-Top Leading"), has, top_to_top) {
+        format(app, json!({"leadingModel": "emBoxTop"}));
+    }
+    if menu_item(ui, tl!("Bottom-to-Bottom Leading"), has, has && !top_to_top) {
+        format(app, json!({"leadingModel": "romanBaseline"}));
     }
     ui.separator();
     menu_item(ui, tl!("Single-line Composer"), false, false);
