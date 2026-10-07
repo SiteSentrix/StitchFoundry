@@ -248,6 +248,42 @@ fn grid_show_and_plane_are_view_state() {
 }
 
 #[test]
+fn the_grid_hides_while_a_perspective_tool_is_chosen() {
+    // #321: choosing the Perspective Grid tool showed the grid for good.
+    let mut s = session();
+    let v = ViewInfo::default();
+    for tool in ["perspectiveGrid", "perspectiveSelection"] {
+        s.select_tool(tool, v).unwrap();
+        assert!(s.overlays(v).len() > 20, "{tool}");
+        let n = undo_len(&s);
+        assert_eq!(s.execute("perspective.grid.show", &json!({})).unwrap(), json!({"visible": false}));
+        assert!(s.overlays(v).is_empty(), "{tool}: the hidden grid still draws");
+        assert_eq!(undo_len(&s), n);
+        // Choosing the tool again shows it again.
+        s.select_tool(tool, v).unwrap();
+        assert!(s.overlays(v).len() > 20, "{tool}");
+        s.execute("perspective.grid.show", &json!({"visible": false})).unwrap();
+        s.select_tool("selection", v).unwrap();
+    }
+}
+
+#[test]
+fn a_hidden_grid_stays_hidden_back_from_a_temporary_tool() {
+    // Cmd-dragging with a perspective tool borrows the Selection tool; going back to the
+    // perspective tool is not choosing it, so the grid hidden meanwhile stays hidden.
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("perspectiveGrid", v).unwrap();
+    s.execute("perspective.grid.show", &json!({"visible": false})).unwrap();
+    s.switch_tool("selection", v).unwrap();
+    s.switch_tool("perspectiveGrid", v).unwrap();
+    assert!(s.overlays(v).is_empty());
+    s.select_tool("selection", v).unwrap();
+    s.select_tool("perspectiveGrid", v).unwrap();
+    assert!(s.overlays(v).len() > 20, "choosing it shows the grid");
+}
+
+#[test]
 fn grid_preset_and_set_are_undoable() {
     let mut s = session();
     s.execute("perspective.grid.preset", &json!({"kind": 3})).unwrap();

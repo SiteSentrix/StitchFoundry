@@ -452,7 +452,7 @@ impl Session {
                 let w = self.prefs.perspective_widget;
                 let st = self.active().filter(|_| w.show)?;
                 let g = PerspectiveGrid::current(&st.doc);
-                if !g.shown(self.tool_id()) {
+                if !g.visible {
                     return None;
                 }
                 let place = WidgetPlace { screen: view.screen.as_ref(), corner: w.position };
@@ -476,6 +476,6 @@ impl Session {
             ToolKey::Digit(4) => Plane::None,
             _ => return None,
         };
-        PerspectiveGrid::current(&self.active()?.doc).shown(self.tool_id()).then_some(plane)
+        PerspectiveGrid::current(&self.active()?.doc).visible.then_some(plane)
     }
 }

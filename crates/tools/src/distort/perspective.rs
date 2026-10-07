@@ -480,11 +480,6 @@ impl PerspectiveGrid {
         self.extent_right.unwrap_or(self.extent)
     }
 
-    /// Is the grid drawn (shown, or a perspective tool active)?
-    pub fn shown(&self, tool_id: &str) -> bool {
-        self.visible || matches!(tool_id, "perspectiveGrid" | "perspectiveSelection")
-    }
-
     /// Page → plane coordinates.
     pub fn to_plane(&self, plane: Plane, p: Point) -> Option<Point> {
         self.homography(plane)?.inverse()?.apply(p)
@@ -761,16 +756,16 @@ fn in_quad(q: &[Point; 4], p: Point) -> bool {
     true
 }
 
-/// Grid overlays (lines, horizon, vanishing points, widget) drawn whenever the grid is visible or
-/// a perspective tool is active. `tol` = document units per screen pixel.
-pub fn grid_overlays(doc: &Document, tol: f64, tool_id: &str) -> Vec<Overlay> {
-    grid_overlays_in(doc, tol, tool_id, Some(widget::WidgetPlace::default()))
+/// Grid overlays (lines, horizon, vanishing points, widget) drawn whenever the grid is visible
+/// (selecting a perspective tool shows it). `tol` = document units per screen pixel.
+pub fn grid_overlays(doc: &Document, tol: f64) -> Vec<Overlay> {
+    grid_overlays_in(doc, tol, Some(widget::WidgetPlace::default()))
 }
 
 /// [`grid_overlays`] with the Plane Switching Widget at `place` (None: hidden).
-pub fn grid_overlays_in(doc: &Document, tol: f64, tool_id: &str, place: Option<widget::WidgetPlace>) -> Vec<Overlay> {
+pub fn grid_overlays_in(doc: &Document, tol: f64, place: Option<widget::WidgetPlace>) -> Vec<Overlay> {
     let g = PerspectiveGrid::current(doc);
-    if !g.shown(tool_id) {
+    if !g.visible {
         return vec![];
     }
     let mut out = vec![];
@@ -1012,6 +1007,10 @@ impl Tool for PerspectiveGridTool {
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let g = PerspectiveGrid::current(cx.doc);
+        // The grid's handles hide with it.
+        if !g.visible {
+            return vec![];
+        }
         let ink = [0x20, 0x20, 0x20];
         handles(&g, cx.tol(1.0))
             .into_iter()
@@ -1412,7 +1411,7 @@ mod tests {
         assert_eq!(cmd, "perspective.grid.set");
         assert_eq!(v["vpLeft"], json!(g.vp_left - 40.0));
         assert_eq!(v["horizon"], json!(g.horizon + 10.0));
-        assert!(!grid_overlays(&d, 1.0, "selection").is_empty());
+        assert!(!grid_overlays(&d, 1.0).is_empty());
     }
 
     #[test]

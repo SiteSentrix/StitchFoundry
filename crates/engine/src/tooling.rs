@@ -56,8 +56,21 @@ impl Session {
         self.tool.id()
     }
 
-    /// Switch tools (finishing any pending tool work first).
+    /// Choose a tool (the toolbar, its shortcut, MCP), finishing any pending tool work first.
     pub fn select_tool(&mut self, id: &str, view: ViewInfo) -> Result<()> {
+        // Choosing a perspective tool shows the document's perspective grid; Hide Grid hides it
+        // again, the tool staying chosen.
+        if matches!(id, "perspectiveGrid" | "perspectiveSelection")
+            && self.active().is_some_and(|d| !vectorcraft_tools::distort::perspective::PerspectiveGrid::current(&d.doc).visible)
+        {
+            crate::cmd::distortcmds::silent(self, |g| g.visible = true)?;
+        }
+        self.switch_tool(id, view)
+    }
+
+    /// Switch to tool `id` without choosing it afresh (back from a temporary tool: a hidden
+    /// perspective grid stays hidden), finishing any pending tool work first.
+    pub fn switch_tool(&mut self, id: &str, view: ViewInfo) -> Result<()> {
         if self.tool.id() == id {
             return Ok(());
         }
@@ -247,7 +260,7 @@ impl Session {
         if let Some(d) = self.active() {
             let w = self.prefs.perspective_widget;
             let place = w.show.then_some(WidgetPlace { screen: view.screen.as_ref(), corner: w.position });
-            v.splice(0..0, vectorcraft_tools::distort::perspective::grid_overlays_in(&d.doc, 1.0 / view.zoom.max(1e-9), self.tool.id(), place));
+            v.splice(0..0, vectorcraft_tools::distort::perspective::grid_overlays_in(&d.doc, 1.0 / view.zoom.max(1e-9), place));
         }
         v
     }
