@@ -725,6 +725,7 @@
 	Edit Pattern	編輯圖樣
 	Edit PDF Preset	編輯 PDF 預設集
 	Edit Print Preset	編輯列印預設集
+	Edit Selection	編輯選取範圍
 	Edit Selection…	編輯選取範圍…
 	Edit Symbol	編輯符號
 	Edit Text	編輯文字
@@ -2130,6 +2131,31 @@
 	SAVED	已儲存
 	Saved	已儲存
 	Saved recovery data for {title}	已儲存 {title} 的復原資料
+	Saved Selection 1	已儲存的選取範圍 1
+	Saved Selection 10	已儲存的選取範圍 10
+	Saved Selection 11	已儲存的選取範圍 11
+	Saved Selection 12	已儲存的選取範圍 12
+	Saved Selection 13	已儲存的選取範圍 13
+	Saved Selection 14	已儲存的選取範圍 14
+	Saved Selection 15	已儲存的選取範圍 15
+	Saved Selection 16	已儲存的選取範圍 16
+	Saved Selection 17	已儲存的選取範圍 17
+	Saved Selection 18	已儲存的選取範圍 18
+	Saved Selection 19	已儲存的選取範圍 19
+	Saved Selection 2	已儲存的選取範圍 2
+	Saved Selection 20	已儲存的選取範圍 20
+	Saved Selection 21	已儲存的選取範圍 21
+	Saved Selection 22	已儲存的選取範圍 22
+	Saved Selection 23	已儲存的選取範圍 23
+	Saved Selection 24	已儲存的選取範圍 24
+	Saved Selection 25	已儲存的選取範圍 25
+	Saved Selection 3	已儲存的選取範圍 3
+	Saved Selection 4	已儲存的選取範圍 4
+	Saved Selection 5	已儲存的選取範圍 5
+	Saved Selection 6	已儲存的選取範圍 6
+	Saved Selection 7	已儲存的選取範圍 7
+	Saved Selection 8	已儲存的選取範圍 8
+	Saved Selection 9	已儲存的選取範圍 9
 	Saved Selections	已儲存的選取範圍
 	Saved to User Defined: {}	已儲存至使用者自訂：{}
 	Saved View 1	已儲存的檢視 1

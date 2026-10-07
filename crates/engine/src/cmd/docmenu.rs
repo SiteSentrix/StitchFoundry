@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, TextKind};
+use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, TextKind};
 
 use super::edit::selected_roots;
 use super::*;
@@ -93,15 +93,30 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Selection…",
             ["Select"],
             None,
-            "{name?} remember the current selection for this session (default name \"Selection N\") → {name}",
+            "{name?} save the current selection under a name, in the document (default \"Selection N\"; an existing name is replaced; at most 25) → {name}",
             has_selection,
             save_selection
         ),
-        cmd!("select.recall", "Recall Selection", ["Select"], None, "{name} → {count}", has_doc, recall_selection),
-        cmd!("select.editSaved", "Edit Selection…", ["Select"], None, "{name, newName?: rename, delete?: bool}", has_doc, edit_saved),
+        cmd!(
+            "select.recall",
+            "Recall Selection",
+            ["Select"],
+            None,
+            "{name} select the objects of a saved selection (those since deleted are left out) → {count}",
+            has_saved_selection,
+            recall_selection
+        ),
+        cmd!(
+            "select.editSaved",
+            "Edit Selection…",
+            ["Select"],
+            None,
+            "{name, newName?: rename, delete?: bool} | {edits: [{name, newName?, delete?}…]} rename or delete saved selections, all in one undo step; names are those before the edit and must stay unique",
+            has_saved_selection,
+            edit_saved
+        ),
         cmd!(query "select.savedList", "Saved Selections", [], None, "{} → [name…] for the active document", has_doc, |s, _| {
-            let t = s.doc()?.title();
-            Ok(json!(s.menu.saved_selections.iter().filter(|x| x.0 == t).map(|x| x.1.clone()).collect::<Vec<_>>()))
+            Ok(json!(s.doc()?.doc.saved_selections.iter().map(|x| x.name.clone()).collect::<Vec<_>>()))
         }),
         cmd!(
             "view.guides.make",
@@ -258,44 +273,80 @@ fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "anchors": total }))
 }
 
+/// Illustrator-style saved selections per document, as many as the Select menu lists.
+pub const MAX_SAVED_SELECTIONS: usize = 25;
+
 fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.save";
     let st = s.doc()?;
-    let title = st.title();
     let ids = st.selection.objects.clone();
-    let name = match str_param(p, "name").filter(|n| !n.trim().is_empty()) {
-        Some(n) => n.trim().to_string(),
-        None => {
-            let mut i = 1;
-            while s.menu.saved_selections.iter().any(|x| x.0 == title && x.1 == format!("Selection {i}")) {
-                i += 1;
-            }
-            format!("Selection {i}")
-        }
+    let saved = &st.doc.saved_selections;
+    let name = match str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()) {
+        Some(n) => n.to_string(),
+        None => (1..).map(|i| format!("Selection {i}")).find(|n| !saved.iter().any(|x| &x.name == n)).unwrap_or_default(),
     };
-    s.menu.saved_selections.retain(|x| !(x.0 == title && x.1 == name));
-    s.menu.saved_selections.push((title, name.clone(), ids));
+    let existing = saved.iter().position(|x| x.name == name);
+    if existing.is_none() && saved.len() >= MAX_SAVED_SELECTIONS {
+        return Err(bad(C, format!("a document keeps at most {MAX_SAVED_SELECTIONS} saved selections")));
+    }
+    s.edit("Save Selection", |d, _| {
+        let entry = SavedSelection { name: name.clone(), objects: ids };
+        match existing.and_then(|i| d.saved_selections.get_mut(i)) {
+            Some(x) => *x = entry,
+            None => d.saved_selections.push(entry),
+        }
+        Ok(())
+    })?;
     Ok(json!({ "name": name }))
 }
 
-fn saved_index(s: &Session, p: &Value, cmd: &str) -> Result<usize> {
-    let name = str_param(p, "name").ok_or_else(|| bad(cmd, "missing name"))?;
-    let t = s.doc()?.title();
-    s.menu.saved_selections.iter().position(|x| x.0 == t && x.1 == name).ok_or_else(|| bad(cmd, format!("no saved selection `{name}`")))
-}
-
 fn recall_selection(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = saved_index(s, p, "select.recall")?;
-    let ids = s.menu.saved_selections[i].2.clone();
+    const C: &str = "select.recall";
+    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing name"))?;
+    let ids = s.doc()?.doc.saved_selections.iter().find(|x| x.name == name).map(|x| x.objects.clone());
+    let ids = ids.ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
     s.select(|d, sel| sel.set(ids.into_iter().filter(|id| d.node(*id).is_some())))?;
     Ok(json!({ "count": s.doc()?.selection.len() }))
 }
 
+/// Recall and Edit Selection… need a document with at least one saved selection.
+fn has_saved_selection(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if st.doc.saved_selections.is_empty() { Err("no saved selections".into()) } else { Ok(()) }
+}
+
 fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = saved_index(s, p, "select.editSaved")?;
-    if bool_or(p, "delete", false) {
-        s.menu.saved_selections.remove(i);
-    } else if let Some(n) = str_param(p, "newName").filter(|n| !n.trim().is_empty()) {
-        s.menu.saved_selections[i].1 = n.trim().to_string();
+    const C: &str = "select.editSaved";
+    let edits = match p.get("edits").and_then(Value::as_array) {
+        Some(list) => list.as_slice(),
+        None => std::slice::from_ref(p),
+    };
+    let before = s.doc()?.doc.saved_selections.clone();
+    // Edits name the selections as they are now, so they don't depend on each other's order.
+    let mut after: Vec<Option<SavedSelection>> = before.iter().cloned().map(Some).collect();
+    for e in edits {
+        let name = str_param(e, "name").ok_or_else(|| bad(C, "missing name"))?;
+        let i = before.iter().position(|x| x.name == name).ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
+        let Some(slot) = after.get_mut(i) else { continue };
+        if bool_or(e, "delete", false) {
+            *slot = None;
+        } else if let Some(n) = str_param(e, "newName").map(str::trim).filter(|n| !n.is_empty())
+            && let Some(x) = slot
+        {
+            x.name = n.to_string();
+        }
+    }
+    let after: Vec<SavedSelection> = after.into_iter().flatten().collect();
+    for (i, x) in after.iter().enumerate() {
+        if after.iter().take(i).any(|y| y.name == x.name) {
+            return Err(bad(C, format!("two saved selections would be named `{}`", x.name)));
+        }
+    }
+    if after != before {
+        s.edit("Edit Selection", |d, _| {
+            d.saved_selections = after;
+            Ok(())
+        })?;
     }
     ok()
 }

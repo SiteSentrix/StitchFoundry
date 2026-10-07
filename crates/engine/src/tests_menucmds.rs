@@ -526,6 +526,92 @@ fn save_and_recall_selection() {
     assert!(s.execute("select.recall", &json!({"name": "Pair"})).is_err());
 }
 
+#[test]
+fn edit_selection_needs_a_saved_selection_and_a_free_name() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a]);
+    // Edit Selection… is off until something is saved.
+    assert!(s.execute("select.editSaved", &json!({"name": "Selection 1", "newName": "A"})).is_err());
+    s.execute("select.save", &json!({"name": "One"})).unwrap();
+    s.execute("select.save", &json!({"name": "Two"})).unwrap();
+    // A name already saved can't be taken; both selections keep theirs.
+    assert!(s.execute("select.editSaved", &json!({"name": "One", "newName": " Two "})).is_err());
+    assert_eq!(s.execute("select.savedList", &json!({})).unwrap(), json!(["One", "Two"]));
+    // Renaming to its own name, or a blank name, changes nothing; a free name renames.
+    s.execute("select.editSaved", &json!({"name": "One", "newName": "One"})).unwrap();
+    s.execute("select.editSaved", &json!({"name": "One", "newName": "  "})).unwrap();
+    s.execute("select.editSaved", &json!({"name": "One", "newName": " Uno "})).unwrap();
+    assert_eq!(s.execute("select.savedList", &json!({})).unwrap(), json!(["Uno", "Two"]));
+}
+
+#[test]
+fn saved_selections_live_in_the_document() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let list = |s: &mut Session| s.execute("select.savedList", &json!({})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("select.save", &json!({"name": "A"})).unwrap();
+    sel(&mut s, &[a, b]);
+    s.execute("select.save", &json!({"name": "Both"})).unwrap();
+    // They travel with the file.
+    let loaded = vectorcraft_format::load(&vectorcraft_format::save_file(&s.doc().unwrap().doc)).unwrap();
+    assert_eq!(loaded.saved_selections.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), ["A", "Both"]);
+    // Saving is an undo step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(list(&mut s), json!(["A"]));
+    // An existing name is replaced by the current selection.
+    sel(&mut s, &[b]);
+    s.execute("select.save", &json!({"name": "A"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.recall", &json!({"name": "A"})).unwrap()["count"], 1);
+    assert_eq!(selected(&s), vec![b]);
+    // Objects deleted since are left out of a recall.
+    sel(&mut s, &[a, b]);
+    s.execute("select.save", &json!({"name": "Pair"})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert_eq!(s.execute("select.recall", &json!({"name": "Pair"})).unwrap()["count"], 1);
+}
+
+#[test]
+fn edit_selection_applies_several_edits_as_one_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a]);
+    for n in ["A", "B", "C"] {
+        s.execute("select.save", &json!({ "name": n })).unwrap();
+    }
+    let list = |s: &mut Session| s.execute("select.savedList", &json!({})).unwrap();
+    // Edits name the selections as they are, so two can swap names; a delete goes with them.
+    s.execute("select.editSaved", &json!({"edits": [{"name": "A", "newName": "B"}, {"name": "B", "newName": "A"}, {"name": "C", "delete": true}]}))
+        .unwrap();
+    assert_eq!(list(&mut s), json!(["B", "A"]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(list(&mut s), json!(["A", "B", "C"]));
+    // Two ending with one name, or an unknown name, change nothing.
+    assert!(s.execute("select.editSaved", &json!({"edits": [{"name": "A", "newName": "B"}]})).is_err());
+    assert!(s.execute("select.editSaved", &json!({"edits": [{"name": "Z", "delete": true}]})).is_err());
+    assert_eq!(list(&mut s), json!(["A", "B", "C"]));
+}
+
+#[test]
+fn a_document_keeps_at_most_25_saved_selections() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a]);
+    for i in 0..25 {
+        s.execute("select.save", &json!({ "name": format!("S{i}") })).unwrap();
+    }
+    assert!(s.execute("select.save", &json!({"name": "One too many"})).is_err());
+    // A name already saved is replaced even when the list is full.
+    s.execute("select.save", &json!({"name": "S3"})).unwrap();
+    // Unnamed saves take the first free "Selection N".
+    s.execute("select.editSaved", &json!({"name": "S0", "delete": true})).unwrap();
+    assert_eq!(s.execute("select.save", &json!({})).unwrap()["name"], "Selection 1");
+}
+
 // ---------- Type ----------
 
 #[test]

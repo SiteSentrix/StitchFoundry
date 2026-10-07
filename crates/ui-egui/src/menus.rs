@@ -89,6 +89,31 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.goto8", "Saved View 8", "", "{} go to the 8. saved view"),
     ("view.goto9", "Saved View 9", "", "{} go to the 9. saved view"),
     ("view.goto10", "Saved View 10", "", "{} go to the 10. saved view"),
+    ("select.recall1", "Saved Selection 1", "", "{} select the 1. saved selection"),
+    ("select.recall2", "Saved Selection 2", "", "{} select the 2. saved selection"),
+    ("select.recall3", "Saved Selection 3", "", "{} select the 3. saved selection"),
+    ("select.recall4", "Saved Selection 4", "", "{} select the 4. saved selection"),
+    ("select.recall5", "Saved Selection 5", "", "{} select the 5. saved selection"),
+    ("select.recall6", "Saved Selection 6", "", "{} select the 6. saved selection"),
+    ("select.recall7", "Saved Selection 7", "", "{} select the 7. saved selection"),
+    ("select.recall8", "Saved Selection 8", "", "{} select the 8. saved selection"),
+    ("select.recall9", "Saved Selection 9", "", "{} select the 9. saved selection"),
+    ("select.recall10", "Saved Selection 10", "", "{} select the 10. saved selection"),
+    ("select.recall11", "Saved Selection 11", "", "{} select the 11. saved selection"),
+    ("select.recall12", "Saved Selection 12", "", "{} select the 12. saved selection"),
+    ("select.recall13", "Saved Selection 13", "", "{} select the 13. saved selection"),
+    ("select.recall14", "Saved Selection 14", "", "{} select the 14. saved selection"),
+    ("select.recall15", "Saved Selection 15", "", "{} select the 15. saved selection"),
+    ("select.recall16", "Saved Selection 16", "", "{} select the 16. saved selection"),
+    ("select.recall17", "Saved Selection 17", "", "{} select the 17. saved selection"),
+    ("select.recall18", "Saved Selection 18", "", "{} select the 18. saved selection"),
+    ("select.recall19", "Saved Selection 19", "", "{} select the 19. saved selection"),
+    ("select.recall20", "Saved Selection 20", "", "{} select the 20. saved selection"),
+    ("select.recall21", "Saved Selection 21", "", "{} select the 21. saved selection"),
+    ("select.recall22", "Saved Selection 22", "", "{} select the 22. saved selection"),
+    ("select.recall23", "Saved Selection 23", "", "{} select the 23. saved selection"),
+    ("select.recall24", "Saved Selection 24", "", "{} select the 24. saved selection"),
+    ("select.recall25", "Saved Selection 25", "", "{} select the 25. saved selection"),
     ("type.recentFont1", "Recent Font 1", "", "{} apply the 1. most recently used font"),
     ("type.recentFont2", "Recent Font 2", "", "{} apply the 2. most recently used font"),
     ("type.recentFont3", "Recent Font 3", "", "{} apply the 3. most recently used font"),
@@ -803,6 +828,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 _ => Err("no such view".into()),
             }
         }
+        id if saved_selection_slot(id).is_some() => match saved_selection_name(app, id) {
+            Some(name) => app.run("select.recall", json!({ "name": name })),
+            None => Err("no such saved selection".into()),
+        },
         "view.snapToPixel" => flag(&mut app.ui.view.snap_to_pixel),
         "view.textThreads" => flag(&mut app.ui.view.text_threads),
         "type.hiddenCharacters" => flag(&mut app.ui.view.hidden_chars),
@@ -1247,6 +1276,7 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
             let n: usize = id["view.goto".len()..].parse().unwrap_or(0);
             app.session.active().and_then(|d| n.checked_sub(1).and_then(|i| d.doc.views.get(i)).map(|v| v.name.clone())).unwrap_or_else(|| "—".into())
         }
+        id if saved_selection_slot(id).is_some() => saved_selection_name(app, id).unwrap_or_else(|| "—".into()),
         "view.artboards" => if v.artboards { "Hide Artboards" } else { "Show Artboards" }.into(),
         "view.rulers" => if v.rulers { "Hide Rulers" } else { "Show Rulers" }.into(),
         "view.boundingBox" => if v.bounding_box { "Hide Bounding Box" } else { "Show Bounding Box" }.into(),
@@ -1304,6 +1334,7 @@ fn shows_a_name(id: &str, label: &str) -> bool {
         crate::dialogs::perspective_presets::SLOT,
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
+        || saved_selection_slot(id).is_some()
         || matches!(id, "text.setStyle" | "plugin.dialog")
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
@@ -1347,6 +1378,7 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
 /// User Defined swatch and graphic style libraries).
 fn hidden_when_disabled(id: &str) -> bool {
     id.starts_with("view.goto")
+        || saved_selection_slot(id).is_some()
         || id.starts_with("file.openRecent")
         || id.starts_with(crate::panels::swatches::USER_SLOT)
         || id.starts_with(crate::panels::graphic_styles::USER_SLOT)
@@ -1398,6 +1430,12 @@ const RECENT_IDS: [&str; io::MAX_RECENT_FILES] = [
     "file.openRecent30",
 ];
 
+/// The saved selection a `select.recallN` slot names (none past the document's last).
+fn saved_selection_name(app: &VectorcraftApp, id: &str) -> Option<String> {
+    let n = saved_selection_slot(id)?.checked_sub(1)?;
+    app.session.active()?.doc.saved_selections.get(n).map(|x| x.name.clone())
+}
+
 /// The recent file a `file.openRecentN` slot names (none past the preference's count).
 fn recent_slot<'a>(app: &'a VectorcraftApp, id: &str) -> Option<&'a String> {
     let n: usize = id.strip_prefix("file.openRecent")?.parse().ok()?;
@@ -1417,6 +1455,7 @@ pub fn listed_slots(app: &VectorcraftApp) -> usize {
     let user = |libs: Vec<swatchlib::LibraryInfo>| libs.iter().filter(|l| l.category == "user").count().min(10);
     let views = app.session.active().map_or(0, |d| d.doc.views.len().min(10));
     views
+        + app.session.active().map_or(0, |d| d.doc.saved_selections.len().min(SAVED_SELECTION_IDS.len()))
         + io::recent_files(app).len().min(RECENT_IDS.len())
         + user(swatchlib::libraries(&app.session))
         + user(stylelib::libraries(&app.session))
@@ -1453,6 +1492,40 @@ const PERSPECTIVE_SLOTS: [[&str; crate::dialogs::perspective_presets::SLOTS]; 3]
         "ui.perspectiveUserPreset3.5",
     ],
 ];
+
+/// Select → saved selections: the n-th saved selection of the active document.
+const SAVED_SELECTION_IDS: [&str; 25] = [
+    "select.recall1",
+    "select.recall2",
+    "select.recall3",
+    "select.recall4",
+    "select.recall5",
+    "select.recall6",
+    "select.recall7",
+    "select.recall8",
+    "select.recall9",
+    "select.recall10",
+    "select.recall11",
+    "select.recall12",
+    "select.recall13",
+    "select.recall14",
+    "select.recall15",
+    "select.recall16",
+    "select.recall17",
+    "select.recall18",
+    "select.recall19",
+    "select.recall20",
+    "select.recall21",
+    "select.recall22",
+    "select.recall23",
+    "select.recall24",
+    "select.recall25",
+];
+
+/// The 1-based slot a `select.recallN` id stands for.
+fn saved_selection_slot(id: &str) -> Option<usize> {
+    id.strip_prefix("select.recall")?.parse().ok()
+}
 
 /// Type → Recent Fonts slots.
 const RECENT_FONT_IDS: [&str; 10] = [
@@ -1513,6 +1586,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if id.starts_with("type.recentFont") => {
             id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.ui.recent_fonts.len()) && app.session.active().is_some()
         }
+        id if saved_selection_slot(id).is_some() => saved_selection_name(app, id).is_some(),
         id if id.starts_with("view.goto") => {
             id["view.goto".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && app.session.active().is_some_and(|d| n <= d.doc.views.len()))
         }
@@ -1956,9 +2030,8 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 sub("Type Orientation", vec![c("Horizontal", "type.orientation.horizontal"), c("Vertical", "type.orientation.vertical")]),
             ],
         ),
-        (
-            "Select",
-            vec![
+        ("Select", {
+            let mut v = vec![
                 c("All", "select.all"),
                 c("All on Active Artboard", "select.allOnArtboard"),
                 c("Deselect", "select.none"),
@@ -2013,9 +2086,12 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 todo("Start Global Edit"),
                 Sep,
                 c("Save Selection…", "select.save"),
-                todo("Edit Selection…"),
-            ],
-        ),
+                c("Edit Selection…", "select.editSaved"),
+                Sep,
+            ];
+            v.extend(SAVED_SELECTION_IDS.iter().map(|id| c("Saved Selection", id)));
+            v
+        }),
         ("Effect", effect_menu()),
         (
             "View",
@@ -2527,6 +2603,21 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
+    // Save Selection…: a name dialog, starting from the first free "Selection N".
+    if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
+        let taken = app.session.execute("select.savedList", &json!({})).ok().unwrap_or_default();
+        let taken: Vec<&str> = taken.as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+        let name = (1..).map(|i| format!("Selection {i}")).find(|n| !taken.contains(&n.as_str())).unwrap_or_default();
+        let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Save Selection", "params": {"name": name}}));
+        return;
+    }
+    // Edit Selection…: the saved selections in a list, to rename or delete.
+    if id == "select.editSaved" && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::edit_selection::open(app) {
+            app.status(e);
+        }
+        return;
+    }
     // Document Raster Effects Settings and File Info: their dialogs.
     if matches!(id, "document.rasterEffectsSettings" | "file.info") && p.as_object().is_none_or(|o| o.is_empty()) {
         let r = if id == "file.info" { crate::dialogs::file_info::open(app) } else { crate::dialogs::raster_effects::open(app) };
@@ -3013,6 +3104,77 @@ mod tests {
         assert_eq!((v.zoom, v.center.x, v.center.y), (3.0, 120.0, 80.0));
         // Unused slots stay out of the menu listing agents see.
         assert!(!menu_entries(&app).iter().any(|e| e.command.as_deref() == Some("view.goto2")));
+    }
+
+    fn app_with_a_rectangle() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app
+    }
+
+    #[test]
+    fn save_selection_asks_for_a_name() {
+        let mut app = app_with_a_rectangle();
+        invoke(&mut app, "select.save", json!({}));
+        let d = app.ui.dialog.clone().expect("Save Selection dialog");
+        assert_eq!(
+            (d.kind.as_str(), d.str("__command"), d.str("__label"), d.str("name")),
+            ("command", "select.save".into(), "Save Selection".into(), "Selection 1".into())
+        );
+        // OK saves under the name typed.
+        let mut d = d;
+        d.fields.insert("name".into(), json!("Logo"));
+        app.ui.dialog = Some(d);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.run("select.savedList", json!({})).unwrap(), json!(["Logo"]));
+        // The next one starts from the first free name.
+        invoke(&mut app, "select.save", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("name")), Some("Selection 1".into()));
+    }
+
+    #[test]
+    fn saved_selections_are_listed_at_the_bottom_of_the_select_menu() {
+        let mut app = app_with_a_rectangle();
+        app.run("shape.ellipse", json!({"x": 40, "y": 0, "width": 10, "height": 10})).unwrap();
+        // Nothing saved: no slot is listed or enabled.
+        assert!(!enabled(&app, "select.recall1"));
+        assert!(!menu_entries(&app).iter().any(|e| e.command.as_deref() == Some("select.recall1")));
+        app.run("select.save", json!({"name": "Ellipse"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("select.save", json!({"name": "Everything"})).unwrap();
+        assert!(enabled(&app, "select.recall1") && enabled(&app, "select.recall2") && !enabled(&app, "select.recall3"));
+        assert_eq!(dynamic_label(&app, "select.recall2", "Saved Selection"), "Everything");
+        // A name is shown as it is, not translated.
+        assert_eq!(display_label(&app, "select.recall2", "Saved Selection"), "Everything");
+        assert!(menu_entries(&app).iter().any(|e| e.command.as_deref() == Some("select.recall2")));
+        assert!(!menu_entries(&app).iter().any(|e| e.command.as_deref() == Some("select.recall3")));
+        // Choosing one selects its objects again.
+        app.run("select.none", json!({})).unwrap();
+        let r = app.run("select.recall2", json!({})).unwrap();
+        assert!(r["count"].as_u64().unwrap() >= 1);
+        assert_eq!(app.session.active().unwrap().selection.len(), 2);
+        // The native menu is rebuilt when the number of slots changes.
+        let listed = listed_slots(&app);
+        app.run("select.editSaved", json!({"name": "Ellipse", "delete": true})).unwrap();
+        assert_eq!(listed_slots(&app), listed - 1);
+        assert!(!enabled(&app, "select.recall2"));
+    }
+
+    #[test]
+    fn edit_selection_opens_its_dialog_on_the_saved_selections() {
+        let mut app = app_with_a_rectangle();
+        // Nothing saved yet: the item is off, and invoking it (palette, shortcut) only says so.
+        assert!(!enabled(&app, "select.editSaved"));
+        invoke(&mut app, "select.editSaved", json!({}));
+        assert!(app.ui.dialog.is_none());
+        assert!(app.ui.status.contains("No saved selections"), "{}", app.ui.status);
+        app.run("select.save", json!({"name": "Logo"})).unwrap();
+        assert!(enabled(&app, "select.editSaved"));
+        invoke(&mut app, "select.editSaved", json!({}));
+        let d = app.ui.dialog.clone().expect("Edit Selection dialog");
+        assert_eq!((d.kind.as_str(), d.str("orig0"), d.str("name0")), (crate::dialogs::edit_selection::KIND, "Logo".into(), "Logo".into()));
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub mod confirm;
 mod document_setup;
 pub mod dxf_import;
 pub mod dxf_options;
+pub mod edit_selection;
 mod effect;
 pub mod envelope;
 pub mod eps_options;
@@ -266,6 +267,7 @@ registry! {
     PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
+    EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
 }
 

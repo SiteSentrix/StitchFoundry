@@ -18,8 +18,6 @@ use super::*;
 /// Session-level (not saved) state owned by the menu commands.
 #[derive(Clone, Debug, Default)]
 pub struct MenuState {
-    /// Saved selections: (document title, name, object ids).
-    pub saved_selections: Vec<(String, String, Vec<NodeId>)>,
     /// View → Guides → Lock Guides.
     pub guides_locked: bool,
     /// Transparency panel menu: "New Opacity Masks Are Clipping" turned off.
