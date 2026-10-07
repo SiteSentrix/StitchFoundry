@@ -92,6 +92,11 @@ fn temp_tool_id() -> egui::Id {
     egui::Id::new("canvas-temp-tool")
 }
 
+/// Selection, Direct Selection and Group Selection: the tools Cmd switches to for a drag.
+pub(crate) fn is_selection_tool(id: &str) -> bool {
+    matches!(id, "selection" | "directSelection" | "groupSelection")
+}
+
 /// The pen pressure (0..1) of the press in progress: the force of this frame's pen or touch
 /// input, else the last one seen since the press (`pressed`: a new press, whose mouse has none
 /// until a pen reports it). A mouse presses fully (1).
@@ -464,11 +469,12 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
             let c = rect.center();
             Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation }
         } else {
-            let selection_family = matches!(tool, "selection" | "directSelection" | "groupSelection");
             let mut kind = Drag::Tool;
-            if m.command && !selection_family {
+            // Cmd with another tool: drag with the selection tool used last.
+            if m.command && !is_selection_tool(tool) {
                 ui.data_mut(|d| d.insert_temp(temp_tool_id(), tool.to_string()));
-                app.select_tool("selection");
+                let last = app.ui.last_selection_tool.clone();
+                app.select_tool(if is_selection_tool(&last) { &last } else { "selection" });
                 kind = Drag::TempSelect;
             }
             let ev = PointerEvent { kind: PointerKind::Down, pos: xf.to_doc(p), mods: mods(m, space), pressure: pen_pressure(ui, true) };
@@ -1548,6 +1554,49 @@ mod tests {
         drag(&mut app, pos2(rect.center().x, rect.top() - RULER / 2.0), pos2(rect.center().x + 40.0, rect.top() - 4.0));
         assert_eq!(guides(&app).len(), 2);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the tool drew nothing");
+    }
+
+    #[test]
+    fn cmd_with_another_tool_drags_with_the_selection_tool_used_last() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let cmd_frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+            let events = std::iter::once(egui::Event::ModifiersChanged(egui::Modifiers::COMMAND)).chain(events).collect();
+            let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        let button =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::COMMAND };
+        // A Cmd drag from `a` to `b` with the Pen tool; → the tool that did it.
+        let cmd_drag = |app: &mut VectorcraftApp, a: Pos2, b: Pos2| {
+            app.select_tool("pen");
+            cmd_frame(app, vec![egui::Event::PointerMoved(a), button(a, true)]);
+            let used = app.session.tool_id().to_string();
+            cmd_frame(app, vec![egui::Event::PointerMoved(b)]);
+            cmd_frame(app, vec![button(b, false)]);
+            assert_eq!(app.session.tool_id(), "pen", "back to the Pen tool");
+            used
+        };
+        let bounds = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        // Direct Selection used last: the drag moves the rectangle's bottom-right corner only.
+        app.select_tool("directSelection");
+        let corner = xf.to_screen(Point::new(200.0, 150.0));
+        assert_eq!(cmd_drag(&mut app, corner, corner + vec2(20.0, 20.0)), "directSelection");
+        let b = bounds(&app);
+        assert_eq!((b.x0, b.y0), (100.0, 100.0));
+        assert!((b.x1 - xf.to_doc(corner + vec2(20.0, 20.0)).x).abs() < 1e-6, "{b:?}");
+        // Group Selection, then Selection: each is the one used.
+        app.select_tool("groupSelection");
+        let inside = xf.to_screen(Point::new(130.0, 120.0));
+        assert_eq!(cmd_drag(&mut app, inside, inside), "groupSelection");
+        app.select_tool("selection");
+        assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
     }
 
     #[test]
