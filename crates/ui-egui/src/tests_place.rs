@@ -115,6 +115,53 @@ fn files_dropped_off_the_canvas_or_with_no_document_open_and_are_recent() {
     assert_eq!(app.session.documents().len(), 2);
 }
 
+/// The images in open document `i`.
+fn images(app: &VectorcraftApp, i: usize) -> usize {
+    let mut n = 0;
+    app.session.documents()[i].doc.walk(|node| n += usize::from(matches!(node.kind, NodeKind::Image(_))));
+    n
+}
+
+/// The web reads dropped files asynchronously (#359): a file that arrives after another document
+/// became active still lands where it was dropped, and is dropped itself when that document closed.
+#[test]
+fn a_file_read_after_another_document_became_active_lands_where_it_was_dropped() {
+    let mut app = app();
+    let inbox = crate::place::PlaceInbox::default();
+    app.services.place_inbox = Some(inbox.clone());
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![], &[], false);
+    frame(&mut app, &ctx, vec![], &[], false);
+    let rect = app.canvas_rect.expect("the canvas is laid out");
+    let pos = rect.center() + vec2(60.0, -40.0);
+    let drop_on_active = |app: &VectorcraftApp| match app.drop_target(Some(pos), false) {
+        crate::place::DropTarget::Place(d) => d,
+        t => panic!("{t:?}"),
+    };
+    let arrive =
+        |name: &str, drop| inbox.lock().unwrap().push(crate::place::PlaceArrival { name: name.into(), bytes: png(20, 10, 72.0), drop: Some(drop) });
+    // Dropped on A; another document opens while the file is read.
+    let on_a = drop_on_active(&app);
+    let want = Xf::new(rect, app.view().unwrap()).to_doc(pos);
+    app.run("file.new", json!({"width": 600, "height": 500})).unwrap();
+    assert_eq!(app.session.active_index(), Some(1));
+    arrive("late.png", on_a);
+    frame(&mut app, &ctx, vec![], &[], false);
+    assert_eq!(app.session.active_index(), Some(0), "the document it was dropped on is active again");
+    assert_eq!((images(&app, 0), images(&app, 1)), (1, 0));
+    let c = selected_image(&app).geometric_bounds().unwrap().center();
+    assert!((c.x - want.x).abs() < 1e-6 && (c.y - want.y).abs() < 1e-6, "where it was dropped: {c:?} vs {want:?}");
+    // Dropped on B, which closes before the file arrives: nothing is placed.
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let on_b = drop_on_active(&app);
+    app.run("file.close", json!({})).unwrap();
+    assert_eq!(app.session.documents().len(), 1);
+    arrive("orphan.png", on_b);
+    frame(&mut app, &ctx, vec![], &[], false);
+    assert_eq!(images(&app, 0), 1, "not placed in the document left open");
+    assert!(app.ui.status.contains("orphan.png") && app.ui.status.contains("closed"), "{}", app.ui.status);
+}
+
 #[test]
 fn the_place_dialog_lists_the_files_and_loads_the_cursor_with_several() {
     let mut app = app();

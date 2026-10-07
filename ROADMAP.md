@@ -42,7 +42,7 @@ since 2026-10-01.
 | **Bundled content:** brush, symbol, style and swatch libraries | ~30% | Ours are original and generated in code, and far fewer than Illustrator ships; brush and symbol libraries are still missing |
 | **Performance** | unverified | Multithreaded, off-thread rendering and caches are in place. The last budget run (2026-10-01, loaded machine) measured 290 ms for a 50k-path fit against a 16 ms budget. Re-run `vectorcraft-cli perf` on an idle machine |
 | **Robustness** | good, new | ~2,840 tests, property tests, no panics in shipped code (lints, the `guard` safety net, import fuzzing), Data Recovery. Missing: a corpus of real-world files, Windows/Linux/browser QA |
-| **Platforms and 1.0 polish** | ~60% | The macOS app and the web build work; hybrid-graphics laptops render on the power-saving GPU by default (#306); Windows/Linux packaging and accessibility are pending |
+| **Platforms and 1.0 polish** | ~60% | The macOS app and the web build work; hybrid-graphics laptops render on the power-saving GPU by default (#306); web drops land in the document they were dropped on (#359); Windows/Linux packaging and accessibility are pending |
 | **Agent automation** | beyond Illustrator | Every command, gesture and dialog is drivable over MCP, the CLI and the control channel |
 
 ### Where we're lacking (in priority order)
