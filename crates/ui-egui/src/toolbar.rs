@@ -218,19 +218,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// the Gradient panel, the Eyedropper's the Eyedropper Options dialog, a Liquify tool's its Tool
 /// Options dialog, the Blend tool's Blend
 /// Options; the Print Tiling tool's resets the print tiling. As in the reference app, the Hand
-/// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, and the Rotate, Scale,
-/// Reflect and Shear tools' are their Object › Transform dialogs.
+/// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, the Rotate, Scale,
+/// Reflect and Shear tools' are their Object › Transform dialogs, and the selection tools' are the
+/// Move dialog.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "hand" => app.run("view.fitArtboard", json!({})),
         "zoom" => app.run("view.actualSize", json!({})),
-        "rotate" | "scale" | "reflect" | "shear" => {
-            let id = format!("object.{tool}");
+        "rotate" | "scale" | "reflect" | "shear" | "selection" | "directSelection" | "groupSelection" => {
+            let dialog = if crate::canvas::is_selection_tool(tool) { "move" } else { tool };
+            let id = format!("object.{dialog}");
             if let Some(c) = vectorcraft_engine::find_command(&id) {
                 (c.enabled)(&app.session)?;
             }
             crate::menus::invoke(app, &id, json!({}));
-            Ok(json!({ "dialog": tool }))
+            Ok(json!({ "dialog": dialog }))
         }
         "gradient" if app.ui.open_panel.as_deref() == Some("gradient") => Ok(json!({ "open": "gradient" })),
         "gradient" => app.run("window.panel", json!({ "panel": "gradient" })),
@@ -536,6 +538,33 @@ pub(crate) mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
         assert!((b.x0 - 20.0).abs() < 1e-9 && (b.y0 - 0.0).abs() < 1e-9 && (b.width() - 20.0).abs() < 1e-9, "{b:?}");
+    }
+
+    #[test]
+    fn double_clicking_a_selection_tool_opens_the_move_dialog() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        // The Selection tool's button is the first one.
+        let selection = frame(&mut app, &ctx, 0.0, vec![])[0];
+        // Nothing selected: Move is disabled, so nothing opens.
+        double_click(&mut app, &ctx, 1.0, selection.center());
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.run("tool.options", json!({"tool": "directSelection"})), Err("nothing selected".into()));
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        double_click(&mut app, &ctx, 2.0, selection.center());
+        assert_eq!(app.ui.dialog.take().map(|d| d.kind), Some("move".to_string()));
+        // The Direct Selection and Group Selection tools open it too.
+        for tool in ["directSelection", "groupSelection"] {
+            app.run("tool.options", json!({"tool": tool})).unwrap();
+            assert_eq!(app.ui.dialog.take().map(|d| d.kind), Some("move".to_string()), "{tool}");
+        }
+        // OK moves the selection by what was typed.
+        app.run("tool.options", json!({"tool": "selection"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("dx".into(), json!("25 pt"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        assert_eq!((b.x0, b.y0), (35.0, 10.0));
     }
 
     #[test]
