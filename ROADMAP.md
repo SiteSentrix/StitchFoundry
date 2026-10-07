@@ -102,7 +102,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - A canvas context menu: right-click selects the object under the pointer and lists what applies to the selection (Undo/Redo, clipboard, group, isolation, join, Remove Anchor Points when anchors are selected, masks, compound paths, guides, Transform, Arrange, Select, Export Selection), or the view commands on empty canvas.
   - Save / Don't Save / Cancel before closing or quitting with unsaved documents (tabs, Close, Close All, Quit, window close).
   - Four brightness themes, persistent preferences.
-  - Dialogs open with their first field focused and its value selected: type a value and press Enter (Move, Rotate, Scale…).
+  - Dialogs open with their first field focused and its value selected: type a value and press Enter (Move, Rotate, Scale…). Number fields in panels and dialogs step with Up/Down (Shift: ten, Ctrl/Cmd: a tenth of their unit), applied at once.
   - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content. As on a native menu bar, once one menu is open, moving the pointer onto another title opens that one.
 - **Tools:**
   - **Selection:** Selection, Direct/Group Selection, Magic Wand, Lasso. Dragging a path segment with Direct Selection bends it when it's curved (its anchors stay) and moves its two anchors when it's straight, one undo step; the fill, Shift or Alt still pick the whole path (Alt-drag copies it).

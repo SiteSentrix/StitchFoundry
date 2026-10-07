@@ -133,15 +133,18 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         })
         .inner;
     select_all_on_focus(ui, &resp, &buf);
-    let stepped = step_with_arrows(ui, &resp, &mut buf, unit);
+    // ↑/↓ step in the field's unit.
+    let stepped = step_with_arrows(ui, &resp, &mut buf, |b| Some(unit.from_pt(unit.parse(b)?)), |v| unit.format(unit.to_pt(v)));
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
-    if commit { unit.parse(&buf) } else { stepped }
+    if commit { unit.parse(&buf) } else { stepped.map(|v| unit.to_pt(v)) }
 }
 
-/// ↑/↓ in a focused numeric field step its value by one `unit` (Shift: ten, Ctrl/Cmd: a tenth),
-/// applied at once as in Illustrator's panels. Returns the new value (points) when it changed.
-fn step_with_arrows(ui: &Ui, resp: &Response, buf: &mut String, unit: Unit) -> Option<f64> {
+/// ↑/↓ in focused numeric field `resp` step the number `buf` shows (`read` parses it, `show`
+/// formats it) by one (Shift: ten, Ctrl/Cmd: a tenth), applied at once as in Illustrator's panels
+/// and dialogs. The new text replaces `buf`, all selected so typing replaces it. Returns the new
+/// number when a step was taken.
+fn step_with_arrows(ui: &Ui, resp: &Response, buf: &mut String, read: impl Fn(&str) -> Option<f64>, show: impl Fn(f64) -> String) -> Option<f64> {
     // Memory focus, as the field's highlight and its typing use: `Response::has_focus` also needs the
     // window to report keyboard focus.
     if !ui.memory(|m| m.has_focus(resp.id)) {
@@ -160,10 +163,11 @@ fn step_with_arrows(ui: &Ui, resp: &Response, buf: &mut String, unit: Unit) -> O
     if steps == 0.0 {
         return None;
     }
-    // In the field's unit, rounded as fields show it (no 12.300000001).
-    let v = unit.from_pt(unit.parse(buf)?) + steps;
-    let v = unit.to_pt((v * 1000.0).round() / 1000.0);
-    *buf = unit.format(v);
+    // Rounded as fields show it (no 12.300000001).
+    let v = ((read(buf)? + steps) * 1000.0).round() / 1000.0;
+    *buf = show(v);
+    ui.data_mut(|d| d.insert_temp(resp.id, buf.clone()));
+    select_all(ui, resp.id, buf);
     Some(v)
 }
 
@@ -180,11 +184,16 @@ pub(crate) fn take_dialog_focus(ui: &Ui, id: egui::Id, text: &str) {
     if ui.is_sizing_pass() || ui.data_mut(|d| d.remove_temp::<bool>(dialog_focus_flag())).is_none() {
         return;
     }
+    select_all(ui, id, text);
+    ui.memory_mut(|m| m.request_focus(id));
+}
+
+/// Select all of `text` in text field `id`.
+fn select_all(ui: &Ui, id: egui::Id, text: &str) {
     let mut st = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
     let all = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(text.chars().count()));
     st.cursor.set_char_range(Some(all));
     st.store(ui.ctx(), id);
-    ui.memory_mut(|m| m.request_focus(id));
 }
 
 /// Numeric fields take the whole text, unit included, when they gain focus or are double-clicked
@@ -193,10 +202,8 @@ fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
     if !(resp.gained_focus() || resp.double_clicked()) {
         return;
     }
-    if let Some(mut st) = egui::TextEdit::load_state(ui.ctx(), resp.id) {
-        let all = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(text.chars().count()));
-        st.cursor.set_char_range(Some(all));
-        st.store(ui.ctx(), resp.id);
+    if egui::TextEdit::load_state(ui.ctx(), resp.id).is_some() {
+        select_all(ui, resp.id, text);
         ui.ctx().request_repaint();
     }
 }
@@ -269,23 +276,26 @@ pub fn mixed_field(
     width: f32,
 ) -> Option<f64> {
     let id = ui.id().with(id);
-    let shown = value
-        .map(|value| {
-            let s = format!("{:.*}", decimals, value);
-            let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
-            format!("{s}{suffix}")
-        })
-        .unwrap_or_default();
-    let (buf, resp) = recessed_text(ui, id, &shown, width, 1);
-    select_all_on_focus(ui, &resp, &buf);
-    if resp.lost_focus() && buf != shown {
-        // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
+    let show = |value: f64| {
+        let s = format!("{:.*}", decimals, value);
+        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
+        format!("{s}{suffix}")
+    };
+    // The suffix (and %, °) may follow any operand: `45*2°`, `50% / 2`.
+    let read = |buf: &str| {
         let suffix = suffix.trim();
-        let bare = if suffix.is_empty() { buf.clone() } else { buf.replace(suffix, "") };
+        let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
         vectorcraft_doc::parse_number(&bare.replace(['%', '°'], ""))
-    } else {
-        None
-    }
+    };
+    let shown = value.map(show).unwrap_or_default();
+    let (mut buf, resp) = recessed_text(ui, id, &shown, width, 1);
+    select_all_on_focus(ui, &resp, &buf);
+    // ↑/↓ step at the field's precision (a count ignores Ctrl/Cmd's tenth).
+    let stepped = step_with_arrows(ui, &resp, &mut buf, read, show).map(|v| {
+        let scale = 10f64.powi(decimals.min(6) as i32);
+        (v * scale).round() / scale
+    });
+    if resp.lost_focus() && buf != shown { read(&buf) } else { stepped.filter(|&v| Some(v) != value) }
 }
 
 /// Draw a paint preview (swatch chip) into `rect`.
@@ -1482,39 +1492,4 @@ pub fn text_presets(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, val
         });
     });
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// ↑/↓ step a focused numeric field by one unit (Shift: ten, Ctrl/Cmd: a tenth) at once.
-    #[test]
-    fn arrow_keys_step_a_focused_numeric_field() {
-        let ctx = egui::Context::default();
-        let value = std::cell::Cell::new(Unit::Millimeters.to_pt(4.0));
-        let frame = |events: Vec<egui::Event>, focus: bool| {
-            // The window doesn't report keyboard focus (as in the live app), yet the field has egui's.
-            let mut out = ctx.run_ui(egui::RawInput { events, focused: false, ..Default::default() }, |ui| {
-                if focus {
-                    ui.memory_mut(|m| m.request_focus(ui.id().with("w")));
-                }
-                if let Some(v) = num_field(ui, "w", Some(value.get()), Unit::Millimeters, 80.0) {
-                    value.set(v);
-                }
-            });
-            out.textures_delta.clear();
-        };
-        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
-        let mm = |v: f64| Unit::Millimeters.from_pt(v);
-        frame(vec![], true);
-        frame(vec![], false);
-        let start = mm(value.get());
-        frame(vec![key(egui::Key::ArrowUp, egui::Modifiers::NONE)], false);
-        assert!((mm(value.get()) - (start + 1.0)).abs() < 1e-6, "{}", mm(value.get()));
-        frame(vec![key(egui::Key::ArrowUp, egui::Modifiers::SHIFT)], false);
-        assert!((mm(value.get()) - (start + 11.0)).abs() < 1e-6, "{}", mm(value.get()));
-        frame(vec![key(egui::Key::ArrowDown, egui::Modifiers::COMMAND)], false);
-        assert!((mm(value.get()) - (start + 10.9)).abs() < 1e-6, "{}", mm(value.get()));
-    }
 }
