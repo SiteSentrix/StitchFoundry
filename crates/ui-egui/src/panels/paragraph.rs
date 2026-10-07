@@ -85,6 +85,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !pstate::<bool>(ui.ctx(), "pa-hide-options") && widgets::check(ui, tl!("Hyphenate"), para.hyphenate, true) {
         format(app, json!({"hyphenate": !para.hyphenate}));
     }
+    // Japanese composition: how punctuation is spaced (JLREQ 3.1).
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Mojikumi"));
+        let sets = [tl!("None"), tl!("Line-end Punctuation Half Width")];
+        let current = if para.mojikumi == vectorcraft_doc::Mojikumi::LineEndHalf { sets[1] } else { sets[0] };
+        // Already translated: shown as they are.
+        if let Some(i) = widgets::dropdown_names(ui, "pa-mojikumi", current, &sets, ui.available_width() - 4.0) {
+            format(app, json!({"mojikumi": if i == 1 { "lineEndHalf" } else { "none" }}));
+        }
+    });
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {

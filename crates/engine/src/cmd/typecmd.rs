@@ -408,6 +408,31 @@ mod area_tests {
     use super::*;
 
     #[test]
+    fn new_type_is_composed_with_line_end_half_width_punctuation() {
+        use vectorcraft_doc::Mojikumi;
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "雅楽。"})).unwrap()["id"].as_u64().unwrap();
+        let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.para.clone(),
+            _ => panic!("text"),
+        };
+        assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        assert!(s.execute("text.setFormat", &json!({"mojikumi": "everything"})).is_err());
+        s.execute("text.setFormat", &json!({"mojikumi": "none"})).unwrap();
+        assert_eq!(para(&s).mojikumi, Mojikumi::None);
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
+        // Saved only when set; documents from before it read as None.
+        let json = serde_json::to_value(para(&s)).unwrap();
+        assert_eq!(json["mojikumi"], "lineEndHalf");
+        let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+        assert_eq!(old.mojikumi, Mojikumi::None);
+        assert!(serde_json::to_value(&old).unwrap().get("mojikumi").is_none());
+    }
+
+    #[test]
     fn vertical_point_type_keeps_its_anchor_on_the_column_centre_line() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();

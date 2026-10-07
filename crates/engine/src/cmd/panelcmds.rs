@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool}",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing)}",
             has_doc,
             set_format
         ),
@@ -101,11 +101,20 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "spaceBefore",
         "spaceAfter",
         "hyphenate",
+        "mojikumi",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         return Err(bad(C, "nothing to change"));
     }
     let (position, small_caps) = super::docsetup::script_params(p, &s.doc()?.doc.setup, C)?;
+    let mojikumi = match p.get("mojikumi") {
+        None => None,
+        Some(v) => Some(match v.as_str() {
+            Some("none") => vectorcraft_doc::Mojikumi::None,
+            Some("lineEndHalf") => vectorcraft_doc::Mojikumi::LineEndHalf,
+            _ => return Err(bad(C, "`mojikumi` must be \"none\" or \"lineEndHalf\"")),
+        }),
+    };
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
@@ -160,6 +169,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(v) = flag("hyphenate") {
                 para.hyphenate = v;
+            }
+            if let Some(v) = mojikumi {
+                para.mojikumi = v;
             }
             super::typecmd::refresh_bounds(t);
         }

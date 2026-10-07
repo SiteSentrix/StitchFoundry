@@ -402,6 +402,8 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let text = str_param(p, "text").unwrap_or("");
     let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p));
     t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
+    // New type is composed the Japanese way (punctuation spacing), as the Type tools set it.
+    t.para.mojikumi = vectorcraft_doc::Mojikumi::LineEndHalf;
     if let Some(a) = p.get("area") {
         let w = f64_or(a, "width", 200.0);
         let h = f64_or(a, "height", 100.0);

@@ -1260,6 +1260,7 @@
 	Line Segment	線段
 	Line Segment Tool	線段工具
 	Line Segment Tool Options	線段工具選項
+	Line-end Punctuation Half Width	行尾標點半形
 	Linear Gradient	線性漸層
 	Lines	直線
 	Lines: clicks add points joined by a line	線條：每次點擊會新增以線連接的點
@@ -1397,6 +1398,7 @@
 	Modified since it was read: {path}	讀取後已被修改：{path}
 	Modified:	修改時間：
 	Modify	修改
+	Mojikumi	標點間距
 	Monitor RGB	顯示器 RGB
 	Mono	單色
 	Monochrome images	單色影像
