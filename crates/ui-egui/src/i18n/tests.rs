@@ -324,12 +324,12 @@ fn cs() -> Lang {
     Lang::from_code("cs").expect("cs registered")
 }
 
-/// Menu labels the menu-complete catalogs (Czech, Japanese) show as they are: the product name, a format name, the built-in workspace
-/// names and the perspective grid presets (names, shown untranslated wherever else they appear).
-/// Each language's own name in the Language menu is left alone too.
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
 const KEEPS_MENU_NAMES: [&str; 2] = ["cs", "ja"];
 
+/// Menu labels the menu-complete catalogs (Czech, Japanese) show as they are: the product name, a format name, the built-in workspace
+/// names and the perspective grid presets (names, shown untranslated wherever else they appear).
+/// Each language's own name in the Language menu is left alone too.
 const MENU_KEEP_AS_IS: &[&str] = &[
     "VectorCraft",
     "OpenType",
