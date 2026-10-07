@@ -236,8 +236,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
             row(ui, &view, l, 0, false, expanded, &mut out);
         }
-        // Room below the last row: a click there leaves the rows as they are.
-        ui.allocate_space(vec2(ui.available_width(), (ui.available_height() - 2.0).max(0.0)));
     });
     let list_rect = list.inner_rect;
     resolve_click(ui, &view, &mut out);
@@ -1369,5 +1367,45 @@ mod tests {
         ] {
             assert!(texts.iter().any(|(t, _)| t.trim() == label), "{label} missing from {texts:?}");
         }
+    }
+
+    /// With the dock collapsed, Layers shows in a floating flyout: its rows work there too.
+    #[test]
+    fn rows_work_in_the_floating_flyout() {
+        let (mut app, [_, sub, ..]) = nested();
+        app.ui.dock_collapsed = true;
+        app.ui.open_panel = Some("layers".into());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1600.0, 1000.0));
+        let mut time = 0.0;
+        let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            time += 0.05;
+            let input = egui::RawInput { time: Some(time), events, screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| crate::dock::floating_panel(app, ui.ctx()));
+            out.textures_delta.clear();
+            let mut c: Vec<egui::Pos2> = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Circle(cs) if cs.radius == 5.0 => Some(cs.center),
+                    _ => None,
+                })
+                .collect();
+            c.sort_by(|a, b| a.y.total_cmp(&b.y));
+            c
+        };
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        let circles = frame(&mut app, vec![]);
+        assert_eq!(circles.len(), 6, "every row shows in the flyout");
+        assert!(circles.iter().all(|c| screen.contains(*c)));
+        let at = circles[1] - vec2(120.0, 0.0);
+        frame(&mut app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+        frame(&mut app, vec![button(at, false)]);
+        frame(&mut app, vec![]);
+        assert_eq!(rows_of(&app), vec![sub]);
+        assert_eq!(app.session.active().unwrap().current_layer(), Some(sub));
     }
 }
