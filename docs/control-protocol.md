@@ -179,6 +179,7 @@ forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel
 a swatch clicked there runs `paint.setFill` / `paint.setStroke`. Panel keys (Color F6, Color Guide Shift+F3,
 Appearance Shift+F6, Graphic Styles Shift+F5, Stroke Cmd+F10, Gradient Cmd+F9, Transparency Cmd+Shift+F10) run
 `window.panel {panel}` and can be pressed with `ui.key`; `ui.menu.list` shows them on the Window menu's items.
+`window.panel` takes a panel id in any case or the panel's display label (`"Layers"`, `"Color Guide"`).
 
 Collapsing the dock: `window.collapseDock {collapsed?}` (the » at the top of the dock; omitted toggles) hides the
 Properties | Layers | Libraries group and puts its three panels as icons at the top of the icon column, under a «

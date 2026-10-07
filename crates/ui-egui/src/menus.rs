@@ -736,26 +736,14 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Canonical panel id for `window.panel`: the dock tabs (`properties`, `layers`, `libraries`)
-/// and every `ICON_PANELS` id, matched case-insensitively. Each icon panel's display label
-/// is accepted too, so `"Layers"` and `"Swatches"` work the way agents write them.
+/// Canonical panel id for `window.panel`: a dock tab's or an icon panel's id or display label,
+/// matched case-insensitively (`"Layers"`, `"swatches"`, `"Color Guide"`).
 fn normalize_panel(input: &str) -> Option<&'static str> {
     let name = input.trim();
-    if name.eq_ignore_ascii_case("properties") {
-        return Some("properties");
-    }
-    if name.eq_ignore_ascii_case("layers") {
-        return Some("layers");
-    }
-    if name.eq_ignore_ascii_case("libraries") {
-        return Some("libraries");
-    }
-    for &(id, label, _) in ICON_PANELS.iter() {
-        if name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label) {
-            return Some(id);
-        }
-    }
-    None
+    let tabs = DockTab::ALL.into_iter().map(|t| (t.info().0, t.info().1));
+    tabs.chain(ICON_PANELS.iter().map(|&(id, label, _)| (id, label)))
+        .find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label))
+        .map(|(id, _)| id)
 }
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
