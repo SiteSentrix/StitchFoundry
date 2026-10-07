@@ -33,6 +33,9 @@ vectorcraft://swatch/{name} read one thing at a time instead of the whole docume
 pub struct Server {
     backend: Box<dyn Backend>,
     initialized: bool,
+    /// Whether this server's client asked for log records (`logging/setLevel`). The queue is
+    /// process-wide, so a server whose client didn't ask leaves it to the one that did.
+    logging: bool,
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -45,7 +48,7 @@ fn error(id: Value, code: i64, message: impl Into<String>) -> Value {
 
 impl Server {
     pub fn new(backend: Box<dyn Backend>) -> Self {
-        Self { backend, initialized: false }
+        Self { backend, initialized: false, logging: false }
     }
 
     pub fn backend(&mut self) -> &mut dyn Backend {
@@ -63,6 +66,9 @@ impl Server {
     /// line produced them rather than before it. [`serve`] drains this itself; a caller driving
     /// [`handle_line`] by hand does the same.
     pub fn take_notifications(&mut self) -> Vec<String> {
+        if !self.logging {
+            return vec![];
+        }
         crate::logging::drain()
             .into_iter()
             .map(|record| json!({"jsonrpc": "2.0", "method": "notifications/message", "params": record}).to_string())
@@ -197,6 +203,7 @@ impl Server {
                     Some(given) => (INVALID_PARAMS, format!("unknown level `{given}`")),
                     None => (INVALID_PARAMS, "`level` must be a severity name or null".to_string()),
                 })?;
+                self.logging = level.is_some();
                 log::debug!("client set logging to {}", level.unwrap_or("off"));
                 Ok(json!({}))
             }
