@@ -389,3 +389,94 @@ fn draw2_commands_reject_bad_params() {
         assert_eq!(s.doc().unwrap().history.undo.len(), before, "{cmd} left an undo step");
     }
 }
+
+/// A curve from (100, 100) to (300, 100) whose first anchor has an out handle at (150, 100).
+fn curve(s: &mut Session) -> NodeId {
+    let anchors = json!([{"x": 100, "y": 100, "out": [150, 100]}, {"x": 300, "y": 100, "in": [250, 100]}]);
+    NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// Drag the out handle of path `id`'s first anchor with `tool` to `to`, holding `mods`. Direct
+/// Selection clicks the anchor first, so its handles show.
+fn drag_handle(s: &mut Session, tool: &str, id: NodeId, to: (f64, f64), mods: Mods, v: ViewInfo) {
+    let from = path(s, id).subpaths[0].anchors[0].h_out;
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool(tool, v).unwrap();
+    if tool == "directSelection" {
+        s.execute("select.none", &json!({})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 100.0, 100.0), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Down, from.x, from.y).with_mods(mods), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1).with_mods(mods), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1).with_mods(mods), v).unwrap();
+    assert!(!s.in_interaction());
+}
+
+/// The out handle of path `id`'s first anchor.
+fn out_handle(s: &Session, id: NodeId) -> Point {
+    path(s, id).subpaths[0].anchors[0].h_out
+}
+
+#[test]
+fn shift_keeps_a_dragged_handle_at_45_degree_steps() {
+    // #322.
+    let shift = Mods { shift: true, ..Mods::default() };
+    for tool in ["directSelection", "anchorPoint"] {
+        let mut s = session();
+        let id = curve(&mut s);
+        drag_handle(&mut s, tool, id, (190.0, 130.0), shift, view());
+        let h = out_handle(&s, id);
+        assert!(near(h, Point::new(100.0 + 90.0f64.hypot(30.0), 100.0)), "{tool}: {h:?}");
+        drag_handle(&mut s, tool, id, (160.0, 155.0), shift, view());
+        let h = out_handle(&s, id);
+        assert!((h.x - h.y).abs() < 1e-6 && h.x > 100.0, "{tool}: 45°: {h:?}");
+        // Without Shift the handle goes where it is dragged.
+        drag_handle(&mut s, tool, id, (190.0, 130.0), Mods::default(), view());
+        assert_eq!(out_handle(&s, id), Point::new(190.0, 130.0), "{tool}");
+    }
+}
+
+#[test]
+fn a_dragged_handle_snaps_to_smart_guides() {
+    // #322: in line with the other anchor, with smart guides on.
+    for tool in ["directSelection", "anchorPoint"] {
+        let mut s = session();
+        let id = curve(&mut s);
+        drag_handle(&mut s, tool, id, (298.0, 160.0), Mods::default(), ViewInfo::default());
+        assert_eq!(out_handle(&s, id), Point::new(300.0, 160.0), "{tool}");
+        drag_handle(&mut s, tool, id, (298.0, 170.0), Mods::default(), view());
+        assert_eq!(out_handle(&s, id), Point::new(298.0, 170.0), "{tool}: smart guides off");
+    }
+}
+
+#[test]
+fn shift_drag_keeps_a_smooth_anchor_smooth_and_alt_breaks_it() {
+    // #322: the opposite handle of a smooth anchor turns with the constrained one; Alt still
+    // moves the dragged handle alone.
+    let shift = Mods { shift: true, ..Mods::default() };
+    let shift_alt = Mods { shift: true, alt: true, ..Mods::default() };
+    for (mods, opposite_follows) in [(shift, true), (shift_alt, false)] {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 200}, {"x": 200, "y": 100, "in": [150, 100], "out": [250, 100]}, {"x": 300, "y": 200}]);
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        s.select_tool("directSelection", view()).unwrap();
+        for (kind, x, y, m) in [
+            (PointerKind::Down, 200.0, 100.0, Mods::default()),
+            (PointerKind::Up, 200.0, 100.0, Mods::default()),
+            (PointerKind::Down, 250.0, 100.0, mods),
+            (PointerKind::Drag, 275.0, 165.0, mods),
+            (PointerKind::Up, 275.0, 165.0, mods),
+        ] {
+            s.pointer(&PointerEvent::new(kind, x, y).with_mods(m), view()).unwrap();
+        }
+        let a = path(&s, id).subpaths[0].anchors[1];
+        let (o, i) = (a.h_out - a.p, a.h_in - a.p);
+        assert!((o.x - o.y).abs() < 1e-6 && o.x > 0.0, "{mods:?}: 45°: {o:?}");
+        if opposite_follows {
+            assert!(near(a.h_in, a.p - o.normalize() * 50.0), "{mods:?}: {i:?}");
+        } else {
+            assert_eq!(a.h_in, Point::new(150.0, 100.0), "{mods:?}");
+        }
+    }
+}
