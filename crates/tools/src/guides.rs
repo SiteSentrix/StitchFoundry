@@ -171,6 +171,19 @@ pub fn snap_draw(cx: &ToolContext, p: Point, exclude: &[NodeId]) -> (Point, Vec<
     Targets::collect(cx.doc, exclude, None).snap_point(p, cx.tol(5.0))
 }
 
+/// Where a dragged direction handle of anchor `ai` of subpath `si` of path `id` goes for the
+/// pointer at `p`: with Shift at a multiple of 45° from its anchor (as the Pen draws them), else
+/// snapped as a drawn point is (smart guides, the grid, pixels).
+pub fn snap_handle(cx: &ToolContext, (id, si, ai): (NodeId, usize, usize), p: Point, shift: bool) -> (Point, Vec<Overlay>) {
+    if shift {
+        let anchor = cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai).map(|a| a.p));
+        if let Some(a) = anchor {
+            return (a + vectorcraft_geom::constrain_angle(p - a, 45.0), vec![]);
+        }
+    }
+    snap_draw(cx, p, &[])
+}
+
 /// Snap a picked point (a transform tool's reference point) to the nearest anchor or centre of the
 /// selection or of the object under the pointer, when Snap to Point or Smart Guides is on.
 pub fn snap_pick(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {

@@ -77,11 +77,13 @@ pub struct DirectSelectionTool {
     /// The spine point last clicked (blend, anchor): its handles show and can be dragged.
     spine: Option<(NodeId, usize)>,
     mesh: MeshEdit,
+    /// Smart guides of the handle being dragged.
+    guides: Vec<Overlay>,
 }
 
 impl DirectSelectionTool {
     pub fn new(group: bool) -> Self {
-        Self { group, state: State::Idle, spine: None, mesh: MeshEdit::default() }
+        Self { group, state: State::Idle, spine: None, mesh: MeshEdit::default(), guides: vec![] }
     }
 }
 
@@ -320,9 +322,11 @@ impl Tool for DirectSelectionTool {
                 out
             }
             (PointerKind::Drag, State::Handle { id, si, ai, out }) => {
+                let (q, guides) = crate::guides::snap_handle(cx, (id, si, ai), p, ev.mods.shift);
+                self.guides = guides;
                 vec![Action::Preview(
                     "path.setHandle".into(),
-                    json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": p.x, "y": p.y, "independent": ev.mods.alt}),
+                    json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": q.x, "y": q.y, "independent": ev.mods.alt}),
                 )]
             }
             (PointerKind::Drag, State::SpinePoint { id, anchor, from, start, began }) => {
@@ -369,6 +373,7 @@ impl Tool for DirectSelectionTool {
             }
             (PointerKind::Up, State::Handle { .. } | State::SpineHandle { .. }) => {
                 self.state = State::Idle;
+                self.guides.clear();
                 vec![Action::Commit]
             }
             (PointerKind::Up, State::Marquee { start, add, .. }) => {
@@ -398,6 +403,7 @@ impl Tool for DirectSelectionTool {
         match &self.state {
             State::Marquee { start, cur, .. } => vec![Overlay::Marquee(Rect::from_points(*start, *cur))],
             State::Corner(c) => c.overlays(cx),
+            State::Handle { .. } => self.guides.clone(),
             _ => {
                 let mut out = self.spine_overlays(cx);
                 out.extend(self.mesh.overlays(cx));

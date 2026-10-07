@@ -11,7 +11,7 @@ use vectorcraft_doc::NodeId;
 use vectorcraft_geom::Point;
 
 use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
-use crate::{Action, Cursor, Mods, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
 #[derive(Clone, Copy, Debug)]
 enum State {
@@ -24,6 +24,8 @@ enum State {
 pub struct AnchorTool {
     id: &'static str,
     state: State,
+    /// Smart guides of the handle being dragged.
+    guides: Vec<Overlay>,
 }
 
 impl AnchorTool {
@@ -34,7 +36,7 @@ impl AnchorTool {
             "scissors" => "scissors",
             _ => "addAnchor",
         };
-        Self { id, state: State::Idle }
+        Self { id, state: State::Idle, guides: vec![] }
     }
 
     fn add(cx: &ToolContext, p: Point) -> Vec<Action> {
@@ -128,10 +130,14 @@ impl Tool for AnchorTool {
                         "path.convertAnchor".into(),
                         json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
                     ),
-                    State::Handle { id, si, ai, out, .. } => Action::Preview(
-                        "path.setHandle".into(),
-                        json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": p.x, "y": p.y, "independent": true}),
-                    ),
+                    State::Handle { id, si, ai, out, .. } => {
+                        let (q, guides) = crate::guides::snap_handle(cx, (id, si, ai), p, ev.mods.shift);
+                        self.guides = guides;
+                        Action::Preview(
+                            "path.setHandle".into(),
+                            json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" }, "x": q.x, "y": q.y, "independent": true}),
+                        )
+                    }
                     State::Reshape { id, si, seg, t, start, .. } => Action::Preview(
                         "path.reshapeSegment".into(),
                         json!({"id": id.0, "subpath": si, "segment": seg, "t": t, "dx": p.x - start.x, "dy": p.y - start.y}),
@@ -141,6 +147,7 @@ impl Tool for AnchorTool {
                 out
             }
             ("anchorPoint", PointerKind::Up) => {
+                self.guides.clear();
                 let st = std::mem::replace(&mut self.state, State::Idle);
                 match st {
                     State::Convert { began: true, .. } | State::Handle { began: true, .. } | State::Reshape { began: true, .. } => {
@@ -171,6 +178,9 @@ impl Tool for AnchorTool {
             State::Convert { began: true, .. } | State::Handle { began: true, .. } | State::Reshape { began: true, .. } => vec![Action::Commit],
             _ => vec![],
         }
+    }
+    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
+        if matches!(self.state, State::Handle { .. }) { self.guides.clone() } else { vec![] }
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         match self.id {
