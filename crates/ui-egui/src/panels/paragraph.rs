@@ -33,21 +33,42 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
     app.run(cmd, p).ok();
 }
 
+fn effective_alignment(app: &VectorcraftApp, alignment: Justify) -> Justify {
+    if alignment != Justify::Auto {
+        return alignment;
+    }
+    let editing = super::character::text_editing(app);
+    let selected = super::first_selected(app);
+    let node = editing.and_then(|(id, _, _)| app.session.active().and_then(|d| d.doc.node(id))).or(selected.as_ref());
+    let Some(vectorcraft_doc::NodeKind::Text(t)) = node.map(|n| &n.kind) else { return Justify::Left };
+    let plain = t.plain_text();
+    let paragraph = vectorcraft_text::edit::paragraph_at(&plain, editing.map_or(0, |(_, a, _)| a));
+    vectorcraft_text::automatic_alignment(plain.get(paragraph).unwrap_or_default())
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((_, para)) = text_style(app) else {
         super::empty_state(ui, "pilcrow", tl!("No text selected"), tl!("Select a text object to edit its paragraph attributes."));
         return;
     };
+    let resolved = effective_alignment(app, para.justify);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
         for (j, icon, tip, id) in ALIGNMENTS {
-            if widgets::icon_button(ui, icon, tip, para.justify == j, 28.0).clicked() {
+            if widgets::icon_button(ui, icon, tip, resolved == j, 28.0).clicked() {
                 para_cmd(app, "text.setStyle", json!({"justify": id}));
             }
         }
     });
     ui.add_space(4.0);
+    if widgets::check(ui, tl!("Automatic alignment"), para.justify == Justify::Auto, true) {
+        para_cmd(
+            app,
+            "text.setStyle",
+            json!({"justify": if para.justify != Justify::Auto { "auto" } else if resolved == Justify::Right { "right" } else { "left" }}),
+        );
+    }
     let fw = ((ui.available_width() - 66.0) / 2.0).clamp(60.0, 100.0);
     // Indents and paragraph spacing are distances (General); type sizes follow Units ▸ Type.
     let unit = app.session.general_unit();
@@ -117,7 +138,38 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     menu_item(ui, tl!("Every-line Composer"), false, true);
     ui.separator();
     if menu_item(ui, tl!("Reset Panel"), has, false) {
-        para_cmd(app, "text.setStyle", json!({"justify": "left"}));
+        para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
         format(app, json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false}));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_engine::Session;
+
+    #[test]
+    fn panel_shows_automatic_alignment_and_resolves_the_selected_text() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+        app.session.execute("text.create", &json!({"x": 200, "y": 50, "text": "שלום"})).unwrap();
+        assert_eq!(effective_alignment(&app, Justify::Auto), Justify::Right);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let ctx = egui::Context::default();
+        let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        // This headless frame inspects shapes without uploading textures to a renderer.
+        frame.textures_delta.clear();
+        fn has_label(shape: &egui::Shape) -> bool {
+            match shape {
+                egui::Shape::Text(t) => t.galley.text() == "Automatic alignment",
+                egui::Shape::Vec(shapes) => shapes.iter().any(has_label),
+                _ => false,
+            }
+        }
+        assert!(frame.shapes.iter().any(|shape| has_label(&shape.shape)));
+        app.session.execute("text.setStyle", &json!({"justify": "left"})).unwrap();
+        assert_eq!(effective_alignment(&app, text_style(&app).unwrap().1.justify), Justify::Left);
+        app.session.execute("text.setStyle", &json!({"justify": "auto"})).unwrap();
+        assert_eq!(effective_alignment(&app, text_style(&app).unwrap().1.justify), Justify::Right);
     }
 }

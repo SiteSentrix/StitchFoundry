@@ -104,6 +104,7 @@ impl Ctx<'_> {
             font_id,
             gid: g.gid,
             xf: m,
+            rtl: g.level.is_rtl(),
         });
     }
 }
@@ -848,7 +849,7 @@ fn candidates(text: &str, g: &[SGlyph], hyphenate: bool) -> Vec<Breakpoint> {
 /// Every-line composition of paragraph glyphs `sg` if applicable (justified area text with uniform
 /// line metrics); `None` falls back to the greedy single-line composer.
 fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) -> Option<Vec<(usize, bool)>> {
-    let justified = !matches!(para.justify, Justify::Left | Justify::Center | Justify::Right);
+    let justified = !matches!(para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
     if cx.opts.composer != Composer::EveryLine || !justified || pen.regions.is_none() || sg.len() < 2 {
         return None;
     }
@@ -889,6 +890,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
         let compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
         // …and a quarter em between Japanese and Latin text.
         let wakan = if para.mojikumi == Mojikumi::LineEndHalf { space_japanese_and_latin(&mut sg) } else { vec![] };
+        let bidi = unicode_bidi::BidiInfo::new(cx.text.get(pr.clone()).unwrap_or_default(), None);
         let pm = {
             let (asc, desc, lead) = style_metrics(cx.db, cx.style_at(pr.start));
             let (cap, xh) = cap_x_heights(cx.db, cx.style_at(pr.start));
@@ -957,6 +959,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             };
             let w: f64 = sg[i..trimmed].iter().map(|g| g.adv).sum::<f64>() + hyphen.as_ref().map_or(0.0, |h| h.adv) - end_trim;
             let (align, justify) = match para.justify {
+                Justify::Auto => (if bidi.paragraphs.first().is_some_and(|p| p.level.is_rtl()) { 2 } else { 0 }, false),
                 Justify::Left => (0, false),
                 Justify::Center => (1, false),
                 Justify::Right => (2, false),
@@ -1011,11 +1014,20 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             };
             let li = cx.out.lines.len();
             let glyph_start = cx.out.glyphs.len();
-            let mut x = start_x;
             let mut x_end = start_x;
             // Tab stops are measured from the frame's left edge (point type: the origin).
             let tab_origin = if regions.is_some() { x0 } else { 0.0 };
-            for (j, g) in sg.iter().enumerate().take(end).skip(i) {
+            let line_start = sg.get(i).map_or(pr.start, |g| g.byte);
+            let line_end = sg.get(end).map_or(pr.end, |g| g.byte);
+            let order = visual_order(&bidi, pr.start, line_start..line_end, &sg[i..end], cx.vertical);
+            // RTL's logical trailing spaces precede the visible content. Keep them outside
+            // the aligned content extent, just as LTR trailing spaces extend to its right.
+            let leading_space_width: f64 =
+                order.iter().take_while(|&&offset| i + offset >= trimmed).filter_map(|&offset| sg.get(i + offset)).map(|g| g.adv).sum();
+            let mut x = start_x - leading_space_width;
+            for offset in order {
+                let j = i + offset;
+                let Some(g) = sg.get(j) else { continue };
                 let mut adv = g.adv;
                 if j + 1 == trimmed {
                     adv -= end_trim;
@@ -1036,7 +1048,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 }
                 cx.emit(g, Affine::translate((x, baseline)), Point::new(x, baseline), 0.0, adv, li);
                 x += adv;
-                if j + 1 == trimmed {
+                if j < trimmed {
                     x_end = x;
                 }
             }
@@ -1047,6 +1059,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 x_end = hx + h.adv;
             }
             cx.out.lines.push(LineInfo {
+                rtl: bidi.paragraphs.first().is_some_and(|p| p.level.is_rtl()),
                 baseline,
                 x0: start_x,
                 x1: x_end,
@@ -1112,7 +1125,13 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
     cx.out.on_path = true;
     let mut sg = Vec::new();
     for pr in paras {
-        sg.extend(cx.shape_para(pr.clone()));
+        let shaped = cx.shape_para(pr.clone());
+        let bidi = unicode_bidi::BidiInfo::new(cx.text.get(pr.clone()).unwrap_or_default(), None);
+        for i in visual_order(&bidi, pr.start, pr.clone(), &shaped, cx.vertical) {
+            if let Some(g) = shaped.get(i) {
+                sg.push(g.clone());
+            }
+        }
     }
     let ap = ArcPath::new(path);
     let m = Metrics::max(&sg).map(|m| (m.asc, m.desc)).unwrap_or_else(|| {
@@ -1123,6 +1142,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
     if ap.segs.is_empty() {
         cx.out.overflow = !sg.is_empty();
         cx.out.lines.push(LineInfo {
+            rtl: unicode_bidi::BidiInfo::new(cx.text, None).paragraphs.first().is_some_and(|p| p.level.is_rtl()),
             baseline: 0.0,
             x0: 0.0,
             x1: 0.0,
@@ -1141,6 +1161,9 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
     let avail = if closed { ap.len } else { ap.len - s_start };
     let w: f64 = sg.iter().map(|g| g.adv).sum();
     let s0 = match para.justify {
+        Justify::Auto if unicode_bidi::BidiInfo::new(cx.text, None).paragraphs.first().is_some_and(|p| p.level.is_rtl()) => {
+            s_start + (avail - w).max(0.0)
+        }
         Justify::Center | Justify::JustifyCenter => s_start + ((avail - w) * 0.5).max(0.0),
         Justify::Right | Justify::JustifyRight => s_start + (avail - w).max(0.0),
         _ => s_start,
@@ -1195,6 +1218,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
     let (ps, _) = ap.at(if closed { s0.rem_euclid(ap.len) } else { s0 });
     let (pe, _) = ap.at(if closed { (s0 + x).rem_euclid(ap.len) } else { s0 + x });
     cx.out.lines.push(LineInfo {
+        rtl: unicode_bidi::BidiInfo::new(cx.text, None).paragraphs.first().is_some_and(|p| p.level.is_rtl()),
         baseline: ps.y,
         x0: ps.x,
         x1: pe.x,
@@ -1206,4 +1230,29 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
         glyph_end: cx.out.glyphs.len(),
         avail: (0.0, ap.len),
     });
+}
+
+/// Reorder whole shaping clusters after wrapping, including Unicode L1 whitespace reset.
+fn visual_order(bidi: &unicode_bidi::BidiInfo<'_>, paragraph_start: usize, line: Range<usize>, glyphs: &[SGlyph], vertical: bool) -> Vec<usize> {
+    if vertical || glyphs.is_empty() || !bidi.has_rtl() {
+        return (0..glyphs.len()).collect();
+    }
+    let Some(para) = bidi.paragraphs.first() else { return (0..glyphs.len()).collect() };
+    let levels = bidi.reordered_levels(para, line.start.saturating_sub(paragraph_start)..line.end.saturating_sub(paragraph_start));
+    let mut clusters: Vec<Range<usize>> = Vec::new();
+    for (i, g) in glyphs.iter().enumerate() {
+        if i > 0 && glyphs.get(i - 1).is_some_and(|p| p.byte == g.byte) {
+            if let Some(c) = clusters.last_mut() {
+                c.end = i + 1;
+            }
+        } else {
+            clusters.push(i..i + 1);
+        }
+    }
+    let cluster_levels: Vec<_> = clusters
+        .iter()
+        .filter_map(|c| glyphs.get(c.start))
+        .map(|g| levels.get(g.byte.saturating_sub(paragraph_start)).copied().unwrap_or(g.level))
+        .collect();
+    unicode_bidi::BidiInfo::reorder_visual(&cluster_levels).into_iter().filter_map(|i| clusters.get(i)).flat_map(|c| c.clone()).collect()
 }

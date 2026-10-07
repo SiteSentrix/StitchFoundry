@@ -506,3 +506,50 @@ fn vertical_text_creation_orientation_and_persistence() {
     let old: TextObject = serde_json::from_value(old).unwrap();
     assert!(!old.vertical);
 }
+
+#[test]
+fn rtl_edit_commands_and_undo_preserve_logical_source_and_style_ranges() {
+    let mut s = session();
+    let id = text(&mut s, "שלום Rust 123");
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 8, "insert": "مرحبا"})).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "مرحبا Rust 123");
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!(lay.glyphs.iter().any(|g| g.rtl));
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 10, "size": 30})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].text, "مرحبا");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "שלום Rust 123");
+}
+
+#[test]
+fn automatic_alignment_updates_during_edits_and_can_be_overridden() {
+    let mut s = session();
+    let id = text(&mut s, "English");
+    let db = vectorcraft_text::FontDb::global();
+    assert_eq!(obj(&s, id).para.justify, vectorcraft_doc::Justify::Auto);
+    for content in ["שלום", "مرحبا", "English"] {
+        let len = obj(&s, id).plain_text().len();
+        s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": len, "insert": content})).unwrap();
+        let t = obj(&s, id);
+        let l = vectorcraft_text::layout(db, &t);
+        if content == "English" {
+            assert_eq!(l.lines[0].x0, 0.0);
+        } else {
+            assert!(l.lines[0].x1.abs() < 1e-6);
+        }
+    }
+    s.execute("text.setStyle", &json!({"id": id.0, "justify": "center"})).unwrap();
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 7, "insert": "שלום"})).unwrap();
+    assert_eq!(obj(&s, id).para.justify, vectorcraft_doc::Justify::Center);
+    s.execute("text.setStyle", &json!({"id": id.0, "justify": "auto"})).unwrap();
+    let t = obj(&s, id);
+    assert!(vectorcraft_text::layout(db, &t).lines[0].x1.abs() < 1e-6);
+    let restored: TextObject = serde_json::from_value(serde_json::to_value(&t).unwrap()).unwrap();
+    assert_eq!(restored.para.justify, vectorcraft_doc::Justify::Auto);
+    // Legacy documents with explicit alignment retain that choice.
+    let mut legacy = serde_json::to_value(t).unwrap();
+    legacy["para"]["justify"] = json!("Left");
+    assert_eq!(serde_json::from_value::<TextObject>(legacy).unwrap().para.justify, vectorcraft_doc::Justify::Left);
+}

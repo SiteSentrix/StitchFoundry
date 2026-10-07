@@ -179,3 +179,27 @@ Untrusted input has property tests that must never panic:
 CI runs a few dozen cases each. Before touching an importer, run a deeper search, e.g.
 `PROPTEST_CASES=20000 cargo test --release -p vectorcraft-engine --test import_fuzz`. When it finds a
 panic, fix the code and add the input as a regular test.
+
+## Bidirectional type (M7.RTL)
+
+Horizontal point, area and path text automatically resolve paragraph direction using Unicode
+first-strong detection. Hebrew and Arabic runs shape right to left; embedded Latin and numbers
+retain their direction. Wrapping happens in logical order, followed by visual ordering of whole
+shaping clusters. Text commands, pasted text and the Type tool use the same layout; stored text,
+undo and style byte ranges remain in logical order. New text defaults to automatic alignment:
+Hebrew/Arabic paragraphs align right and grow left from a point anchor, while LTR paragraphs
+align left. Alignment is resolved again during edits and independently for each paragraph.
+The Paragraph panel highlights the resolved alignment and provides an Automatic alignment toggle.
+Explicit Left/Center/Right choices override detection; `text.setStyle {justify: "auto"}` restores
+automatic mode. Saved documents retain the mode; existing explicit alignments are preserved.
+
+Combining marks stay with their bases and Arabic uses the font's contextual forms and ligatures.
+Use an installed font covering the script; no new fonts are bundled. Web builds need a font with
+Hebrew/Arabic coverage supplied through the existing font setup. SVG export outlines bidirectional
+text to preserve its appearance; native files retain editable text. PDF and raster exports use the
+same positioned glyphs as the canvas.
+
+Remaining refinements: explicit paragraph direction overrides, dual caret affinity at mixed-direction
+boundaries, RTL tab-stop conventions, and editable bidirectional SVG export. Vertical type retains
+its existing logical column order. Unicode direction detection is script based, not a language or
+keyboard-layout classifier.

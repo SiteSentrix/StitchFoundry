@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType}",
+            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\"|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType}",
             has_doc,
             set_style
         ),
@@ -190,6 +190,7 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn justify_param(v: &str) -> Option<Justify> {
     Some(match v.to_ascii_lowercase().as_str() {
+        "auto" => Justify::Auto,
         "left" => Justify::Left,
         "center" => Justify::Center,
         "right" => Justify::Right,
@@ -216,7 +217,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let tracking = num_param(p, "tracking");
     let justify = match str_param(p, "justify") {
-        Some(j) => Some(justify_param(j).ok_or_else(|| bad(C, "justify must be left|center|right|justifyAll"))?),
+        Some(j) => Some(justify_param(j).ok_or_else(|| bad(C, "justify must be auto|left|center|right|justifyAll"))?),
         None => None,
     };
     let fill = match p.get("fill") {

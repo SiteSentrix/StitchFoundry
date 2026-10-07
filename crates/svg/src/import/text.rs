@@ -566,6 +566,9 @@ impl Ctx {
         });
         let vertical = self.css.prop(t, "writing-mode").is_some_and(|m| m.starts_with("tb") || m.starts_with("vertical"));
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
+        // Imported SVG anchors are resolved into positions below, including textPath offsets.
+        // Keep their explicit placement instead of applying the new-text automatic alignment.
+        obj.para.justify = Justify::Left;
         let mut breaks: Vec<Break> = vec![];
         if let Some((tp, bp)) = path {
             // Along the path: dx is extra advance, dy shifts off the path.
@@ -768,6 +771,7 @@ fn lines(
 /// A left-aligned point text of `runs` at the origin (for measuring).
 fn with_runs(runs: Vec<TextRun>) -> TextObject {
     let mut t = TextObject::point(Point::ZERO, "", CharStyle::default());
+    t.para.justify = Justify::Left;
     t.runs = runs;
     t
 }

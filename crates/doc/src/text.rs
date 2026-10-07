@@ -8,6 +8,8 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Justify {
+    /// Align each paragraph to its automatically detected reading direction.
+    Auto,
     #[default]
     Left,
     Center,
@@ -469,7 +471,7 @@ impl TextObject {
             kind: TextKind::Point,
             xf: Affine::translate(origin.to_vec2()),
             runs: vec![TextRun { text: text.into(), style }],
-            para: ParaStyle::default(),
+            para: ParaStyle { justify: Justify::Auto, ..ParaStyle::default() },
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
             wrap: Vec::new(),

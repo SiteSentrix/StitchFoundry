@@ -275,6 +275,7 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             let (sl, sr) = match t.para.justify {
                 Justify::Center | Justify::JustifyCenter => (slack * 0.5, slack * 0.5),
                 Justify::Right | Justify::JustifyRight => (slack, 0.0),
+                Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => (slack, 0.0),
                 _ => (0.0, slack),
             };
             let frame = Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0));
@@ -330,6 +331,7 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             let ox = match t.para.justify {
                 Justify::Center | Justify::JustifyCenter => (x0 + x1) * 0.5,
                 Justify::Right | Justify::JustifyRight => x1,
+                Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => x1,
                 _ => x0,
             };
             t.kind = TextKind::Point;

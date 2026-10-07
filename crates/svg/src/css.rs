@@ -545,7 +545,7 @@ impl Rules<'_> {
             art.props.push(("line-height", self.len(l)));
         }
         let align = match t.para.justify {
-            Justify::Left => None,
+            Justify::Auto | Justify::Left => None,
             Justify::Center => Some("center"),
             Justify::Right => Some("right"),
             Justify::JustifyLeft | Justify::JustifyCenter | Justify::JustifyRight | Justify::JustifyAll => Some("justify"),

@@ -100,9 +100,10 @@ fn type_picks_up_font_and_size() {
     assert!(width(&s, dst) > before, "laid out again at the new size");
     // Without character or paragraph attributes only the paints go.
     let dst2 = id_of(s.execute("text.create", &json!({"x": 10, "y": 500, "text": "Other"})).unwrap());
+    let preserved_alignment = style(&s, dst2).1;
     s.execute("appearance.copyFrom", &json!({"source": src.0, "pickUp": {"character": false, "paragraph": false}})).unwrap();
     let (st, justify) = style(&s, dst2);
-    assert_eq!((st.size, justify, st.fill.color().unwrap().to_hex()), (12.0, Justify::Left, "#00ff00".into()));
+    assert_eq!((st.size, justify, st.fill.color().unwrap().to_hex()), (12.0, preserved_alignment, "#00ff00".into()));
 }
 
 #[test]

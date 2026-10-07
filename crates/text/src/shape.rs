@@ -2,6 +2,7 @@
 
 use std::ops::Range;
 use std::sync::Arc;
+use unicode_script::{Script, UnicodeScript};
 
 use harfrust::{Direction, Feature, ShapeOptions, UnicodeBuffer};
 use skrifa::MetadataProvider;
@@ -45,6 +46,8 @@ pub(crate) struct SGlyph {
     /// Japanese composition: the space taken off before the glyph (an opening bracket after
     /// another, see [`crate::layout`]); the glyph is drawn that much earlier on the line.
     pub lead: f64,
+    /// Resolved Unicode bidi embedding level (logical source order).
+    pub level: unicode_bidi::Level,
 }
 
 /// A glyph's place in a tate-chu-yoko block: the block takes one em of the column, its glyphs side
@@ -188,6 +191,9 @@ pub(crate) fn shape_range(
     feats: &OtFeatures,
     out: &mut Vec<SGlyph>,
 ) {
+    let Some(part) = text.get(range.clone()) else { return };
+    let bidi = unicode_bidi::BidiInfo::new(part, None);
+    let output_start = out.len();
     for (ri, (rr, st)) in runs.iter().enumerate() {
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
@@ -199,10 +205,19 @@ pub(crate) fn shape_range(
         // Synthesized Small Caps shape lowercase letters separately (as smaller capitals).
         let small_caps = st.small_caps.is_some() && !st.all_caps;
         // Split into segments by font coverage (and case, for Small Caps).
-        let mut seg = Segment { range: a..a, run: ri, st, face: primary.clone(), small: false };
+        let mut seg = Segment {
+            range: a..a,
+            run: ri,
+            st,
+            face: primary.clone(),
+            small: false,
+            level: bidi.levels.get(a - range.start).copied().unwrap_or(unicode_bidi::Level::ltr()),
+        };
         let mut cache: Vec<(char, Arc<FontFace>)> = Vec::new();
+        let mut script = Script::Common;
         for (i, c) in text[a..b].char_indices() {
             let i = a + i;
+            let level = bidi.levels.get(i - range.start).copied().unwrap_or(unicode_bidi::Level::ltr());
             let covered = c.is_whitespace() || c.is_control() || pmap.as_ref().is_none_or(|m| m.map(c).is_some());
             let face = if covered {
                 primary.clone()
@@ -214,13 +229,19 @@ pub(crate) fn shape_range(
                 f
             };
             let small = small_caps && c.is_lowercase();
+            let next_script = c.script();
+            let strong_script = !matches!(next_script, Script::Common | Script::Inherited);
+            let script_change = strong_script && script != Script::Common && script != next_script;
             // Combining marks stay with their base.
-            if (face.id() != seg.face.id() || small != seg.small) && !is_mark(c) {
+            if (face.id() != seg.face.id() || small != seg.small || level != seg.level || script_change) && !is_mark(c) {
                 if i > seg.range.start {
                     seg.range.end = i;
                     shape_segment(text, &seg, feats, out);
                 }
-                seg = Segment { range: i..i, face, small, ..seg };
+                seg = Segment { range: i..i, face, small, level, ..seg };
+            }
+            if strong_script {
+                script = next_script;
             }
         }
         if b > seg.range.start {
@@ -228,6 +249,8 @@ pub(crate) fn shape_range(
             shape_segment(text, &seg, feats, out);
         }
     }
+    // Line breaking works in logical order; visual ordering happens after wrapping.
+    out[output_start..].sort_by_key(|g| g.byte);
 }
 
 /// A piece of one run shaped in one go: one face and, for Small Caps, one case.
@@ -238,14 +261,17 @@ struct Segment<'a> {
     face: Arc<FontFace>,
     /// Lowercase letters drawn as synthesized small capitals.
     small: bool,
+    level: unicode_bidi::Level,
 }
 
 fn is_mark(c: char) -> bool {
-    matches!(c as u32, 0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F | 0x200D | 0xFE00..=0xFE0F)
+    use unicode_general_category::{GeneralCategory, get_general_category};
+    matches!(get_general_category(c), GeneralCategory::NonspacingMark | GeneralCategory::SpacingMark | GeneralCategory::EnclosingMark)
+        || matches!(c, '\u{200D}' | '\u{FE00}'..='\u{FE0F}')
 }
 
 fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
-    let Segment { range, run, st, face, small } = seg;
+    let Segment { range, run, st, face, small, level } = seg;
     let (range, run, small) = (range.clone(), *run, *small);
     let text_seg = &text[range.clone()];
     let full = st.size.max(0.0);
@@ -281,7 +307,7 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
                 buf.add(c, cl);
             }
         }
-        buf.set_direction(Direction::LeftToRight);
+        buf.set_direction(if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight });
         buf.guess_segment_properties();
         let feats: Vec<Feature> = feats.resolve(st);
         let gb = shaper.shape(buf, ShapeOptions::new().features(&feats));
@@ -305,11 +331,14 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
             }
         }
     }
+    let mut cluster_starts: Vec<usize> = raw.iter().map(|r| r.1 as usize).collect();
+    cluster_starts.sort_unstable();
+    cluster_starts.dedup();
     let n = raw.len();
     for (gi, &(gid, cl, xa, xo, yo)) in raw.iter().enumerate() {
         let cl = cl as usize;
         // Cluster end: the next larger cluster value in the segment, else the segment end.
-        let end = raw[gi + 1..].iter().map(|r| r.1 as usize).find(|&c| c > cl).unwrap_or(range.end);
+        let end = cluster_starts.get(cluster_starts.partition_point(|&c| c <= cl)).copied().unwrap_or(range.end);
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
@@ -339,6 +368,7 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
             ch,
             tcy: None,
             lead: 0.0,
+            level: *level,
         });
     }
 }

@@ -868,3 +868,16 @@ fn outline_text_writes_glyph_paths() {
     let b = art(&back).iter().filter_map(|n| n.geometric_bounds()).reduce(|a, b| a.union(b)).unwrap();
     assert!(b.width() > 80.0 && b.x0 >= 9.0, "{b:?}");
 }
+
+#[test]
+fn bidirectional_svg_export_preserves_shaped_appearance_as_outlines() {
+    let t = TextObject::point(Point::new(10.0, 40.0), "שלום Rust 123 مرحبا", CharStyle::default());
+    let expected =
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).glyphs.iter().filter(|g| !g.outline.elements().is_empty()).count();
+    assert!(expected > 0);
+    let d = doc_with(vec![Node::new(NodeId(100), NodeKind::Text(Box::new(t)))]);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("<text"), "visual clusters must not be emitted as reversed live text");
+    assert!(svg.contains("<path"));
+    assert!(import(&svg).is_ok());
+}

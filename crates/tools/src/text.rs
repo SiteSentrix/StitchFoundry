@@ -486,21 +486,41 @@ impl Tool for TypeTool {
             }
             ToolKey::Left => {
                 let to = if a != b && !mods.shift {
-                    a
+                    if lay.glyphs.iter().any(|g| g.rtl)
+                        && vectorcraft_text::caret_position(&lay, a).0.x > vectorcraft_text::caret_position(&lay, b).0.x
+                    {
+                        b
+                    } else {
+                        a
+                    }
                 } else if word {
                     edit::prev_word(&text, self.caret)
                 } else {
-                    edit::prev_char(&text, self.caret)
+                    if lay.glyphs.iter().any(|g| g.rtl) {
+                        vectorcraft_text::caret_horizontal(&lay, self.caret, false)
+                    } else {
+                        edit::prev_char(&text, self.caret)
+                    }
                 };
                 self.move_to(to, mods.shift)
             }
             ToolKey::Right => {
                 let to = if a != b && !mods.shift {
-                    b
+                    if lay.glyphs.iter().any(|g| g.rtl)
+                        && vectorcraft_text::caret_position(&lay, a).0.x > vectorcraft_text::caret_position(&lay, b).0.x
+                    {
+                        a
+                    } else {
+                        b
+                    }
                 } else if word {
                     edit::next_word(&text, self.caret)
                 } else {
-                    edit::next_char(&text, self.caret)
+                    if lay.glyphs.iter().any(|g| g.rtl) {
+                        vectorcraft_text::caret_horizontal(&lay, self.caret, true)
+                    } else {
+                        edit::next_char(&text, self.caret)
+                    }
                 };
                 self.move_to(to, mods.shift)
             }

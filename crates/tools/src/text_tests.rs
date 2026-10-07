@@ -319,3 +319,19 @@ fn arrows_follow_the_columns_of_vertical_type() {
     key(&mut tool, &d, ToolKey::Up, Mods::default());
     assert_eq!(tool.caret, 0);
 }
+
+#[test]
+fn hebrew_typing_and_visual_arrows_keep_logical_text() {
+    let (mut d, id, mut tool) = editing("");
+    let snap = d.clone();
+    let (sel, p) = (Selection::default(), paint());
+    let actions = tool.text_input(&cx(&d, &sel, &p), "שלום");
+    apply(&mut d, &snap, &actions);
+    assert_eq!(tool.caret, "שלום".len());
+    key(&mut tool, &d, ToolKey::Right, Mods::default());
+    assert_eq!(tool.caret, 6, "Right moves toward the logical start in Hebrew");
+    key(&mut tool, &d, ToolKey::Left, Mods::default());
+    assert_eq!(tool.caret, 8);
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
+    assert_eq!(t.plain_text(), "שלום");
+}
