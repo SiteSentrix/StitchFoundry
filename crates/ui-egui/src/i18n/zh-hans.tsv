@@ -1956,7 +1956,7 @@
 	Relink…	重新链接…
 	Reload Plug-ins	重新载入增效工具
 	Remove	移除
-	Remove Anchor Points	删除锚点
+	Remove Anchor Points	移除锚点
 	Remove Asset	移除资源
 	Remove blank lines between paragraphs	移除段落之间的空行
 	Remove Brush Stroke	移除画笔描边
@@ -3170,3 +3170,36 @@
 	Select Art	选择图稿
 	Show All Layers	显示所有图层
 	Unlock All Layers	解锁所有图层
+
+# Anchor points, saved selections, paragraph direction and mojikumi (landed alongside the catalog).
+	Delete Anchor Points	删除锚点
+	Edit Selection	编辑所选对象
+	Left-to-Right Paragraph Direction	从左到右段落方向
+	Right-to-Left Paragraph Direction	从右到左段落方向
+	Line-end Punctuation Half Width	行尾标点半角
+	Mojikumi Set	标点挤压集
+	Saved Selection 1	已保存的选区 1
+	Saved Selection 2	已保存的选区 2
+	Saved Selection 3	已保存的选区 3
+	Saved Selection 4	已保存的选区 4
+	Saved Selection 5	已保存的选区 5
+	Saved Selection 6	已保存的选区 6
+	Saved Selection 7	已保存的选区 7
+	Saved Selection 8	已保存的选区 8
+	Saved Selection 9	已保存的选区 9
+	Saved Selection 10	已保存的选区 10
+	Saved Selection 11	已保存的选区 11
+	Saved Selection 12	已保存的选区 12
+	Saved Selection 13	已保存的选区 13
+	Saved Selection 14	已保存的选区 14
+	Saved Selection 15	已保存的选区 15
+	Saved Selection 16	已保存的选区 16
+	Saved Selection 17	已保存的选区 17
+	Saved Selection 18	已保存的选区 18
+	Saved Selection 19	已保存的选区 19
+	Saved Selection 20	已保存的选区 20
+	Saved Selection 21	已保存的选区 21
+	Saved Selection 22	已保存的选区 22
+	Saved Selection 23	已保存的选区 23
+	Saved Selection 24	已保存的选区 24
+	Saved Selection 25	已保存的选区 25
