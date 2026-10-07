@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character)}",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt, hyphenate?: bool, mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top)}",
             has_doc,
             set_format
         ),
@@ -113,6 +113,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "hyphenate",
         "mojikumi",
         "direction",
+        "leadingModel",
     ];
     if !keys.iter().any(|k| p.get(*k).is_some()) {
         return Err(bad(C, "nothing to change"));
@@ -133,6 +134,14 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             Some("leftToRight") => Some(vectorcraft_doc::ParaDirection::LeftToRight),
             Some("rightToLeft") => Some(vectorcraft_doc::ParaDirection::RightToLeft),
             _ => return Err(bad(C, "`direction` must be \"auto\", \"leftToRight\" or \"rightToLeft\"")),
+        }),
+    };
+    let leading_model = match p.get("leadingModel") {
+        None => None,
+        Some(v) => Some(match v.as_str() {
+            Some("romanBaseline") => vectorcraft_doc::LeadingModel::RomanBaseline,
+            Some("emBoxTop") => vectorcraft_doc::LeadingModel::EmBoxTop,
+            _ => return Err(bad(C, "`leadingModel` must be \"romanBaseline\" or \"emBoxTop\"")),
         }),
     };
     s.edit("Character", |d, _| {
@@ -195,6 +204,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(v) = direction {
                 para.direction = v;
+            }
+            if let Some(v) = leading_model {
+                para.leading_model = v;
             }
             super::typecmd::refresh_bounds(t);
         }

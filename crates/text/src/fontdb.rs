@@ -77,6 +77,8 @@ pub struct FontFace {
     location: Location,
     /// [`Self::variations`] for the shaper (advances, kerning, feature variations).
     pub(crate) instance: Option<harfrust::ShaperInstance>,
+    /// [`Self::ideographic_centre`], read once: layout asks for it per glyph.
+    ideographic_centre: std::sync::OnceLock<f64>,
 }
 
 impl std::fmt::Debug for FontFace {
@@ -170,8 +172,10 @@ impl FontFace {
     /// vertical metrics (an ideograph's cell), else the usual 0.38 (the box running from 0.12 em
     /// below the baseline to 0.88 em above it).
     pub fn ideographic_centre(&self) -> f64 {
-        let gid = ['国', 'あ', '一'].into_iter().map(|c| self.glyph_for(c)).find(|g| *g != 0);
-        gid.and_then(|g| self.vertical_glyph(g)).map_or(0.38, |(advance, origin)| (origin - advance * 0.5) / self.upem)
+        *self.ideographic_centre.get_or_init(|| {
+            let gid = ['国', 'あ', '一'].into_iter().map(|c| self.glyph_for(c)).find(|g| *g != 0);
+            gid.and_then(|g| self.vertical_glyph(g)).map_or(0.38, |(advance, origin)| (origin - advance * 0.5) / self.upem)
+        })
     }
     /// Glyph id for `c` (0 = .notdef).
     pub fn glyph_for(&self, c: char) -> u32 {
@@ -813,6 +817,7 @@ fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::pa
         bytes,
         index,
         path,
+        ideographic_centre: std::sync::OnceLock::new(),
     })
 }
 

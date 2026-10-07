@@ -2953,3 +2953,7 @@
 	  — {n} characters from another font	  — {n} caracteres de otra fuente
 	[Normal Character Style]	[Estilo de carácter normal]
 	[Normal Paragraph Style]	[Estilo de párrafo normal]
+
+# Leading model (Paragraph panel menu, East Asian options).
+	Top-to-Top Leading	Interlineado de superior a superior
+	Bottom-to-Bottom Leading	Interlineado de inferior a inferior

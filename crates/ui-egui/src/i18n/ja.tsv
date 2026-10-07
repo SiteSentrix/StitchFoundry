@@ -11,6 +11,7 @@
 	About VectorCraft	VectorCraft について
 	All Scripts	すべての文字
 	Any Kind	すべての種類
+	Bottom-to-Bottom Leading	欧文ベースライン基準の行送り
 	Decorative	装飾
 	Favorites	お気に入り
 	Japanese	日本語
@@ -25,6 +26,7 @@
 	Serif / Mincho	明朝・セリフ
 	Settings…	環境設定…
 	Language	表示言語
+	Top-to-Top Leading	仮想ボディの上基準の行送り
 	UI Brightness	UI の明るさ
 	Dark	暗い
 	Medium Dark	やや暗い

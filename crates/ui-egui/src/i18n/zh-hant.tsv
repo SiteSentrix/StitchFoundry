@@ -254,6 +254,7 @@
 	Blur	模糊
 	Bottom	下
 	Bottom in Front	下方置前
+	Bottom-to-Bottom Leading	基線至基線行距
 	Bottom:	下：
 	Bounds	邊界
 	Bounds (Fill Proportionally)	邊界 (按比例填滿)
@@ -2647,6 +2648,7 @@
 	Tools	工具
 	Top	上
 	Top in Front	上方在前
+	Top-to-Top Leading	上緣至上緣行距
 	Top:	上：
 	Total Width:	總寬度：
 	Touch Type Tool	觸控文字工具

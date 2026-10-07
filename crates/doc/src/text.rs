@@ -293,6 +293,9 @@ pub struct ParaStyle {
     /// bidirectional text (UAX #9). None: from each paragraph's first strong character (Hebrew or
     /// Arabic: right to left).
     pub direction: Option<ParaDirection>,
+    /// How leading is measured (Paragraph panel menu): from baseline to baseline, or from the top
+    /// of one line's ideographic em box to the next.
+    pub leading_model: LeadingModel,
 }
 
 /// [`ParaStyle`] as saved. [`Justify::Auto`] is written as the alignment it has in the paragraph
@@ -324,6 +327,8 @@ struct ParaStyleFile {
     mojikumi: Mojikumi,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     direction: Option<ParaDirection>,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    leading_model: LeadingModel,
 }
 
 impl From<ParaStyle> for ParaStyleFile {
@@ -345,6 +350,7 @@ impl From<ParaStyle> for ParaStyleFile {
             style_name,
             mojikumi,
             direction,
+            leading_model,
             ..
         } = p;
         Self {
@@ -360,6 +366,7 @@ impl From<ParaStyle> for ParaStyleFile {
             style_name,
             mojikumi,
             direction,
+            leading_model,
         }
     }
 }
@@ -378,9 +385,23 @@ impl From<ParaStyleFile> for ParaStyle {
             style_name,
             mojikumi,
             direction,
+            leading_model,
             ..
         } = f;
-        Self { justify, left_indent, right_indent, first_line_indent, space_before, space_after, hyphenate, tabs, style_name, mojikumi, direction }
+        Self {
+            justify,
+            left_indent,
+            right_indent,
+            first_line_indent,
+            space_before,
+            space_after,
+            hyphenate,
+            tabs,
+            style_name,
+            mojikumi,
+            direction,
+            leading_model,
+        }
     }
 }
 
@@ -390,6 +411,20 @@ impl From<ParaStyleFile> for ParaStyle {
 pub enum ParaDirection {
     LeftToRight,
     RightToLeft,
+}
+
+/// How a paragraph's leading is measured.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LeadingModel {
+    /// From one line's baseline to the next's: a line's leading is the space above it, and area
+    /// type's first baseline follows Area Type Options › First Baseline.
+    #[default]
+    RomanBaseline,
+    /// From the top of one line's ideographic em box (the right side, in vertical type) to the
+    /// next's: a line's leading is the space below it, and area type's first line touches the top
+    /// of the frame. Japanese layout's usual model.
+    EmBoxTop,
 }
 
 /// How Japanese punctuation is spaced (JLREQ 3.1). Full-width punctuation is half a glyph and half

@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen, PathEl, PathSeg, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
-use vectorcraft_doc::{CharStyle, Justify, Mojikumi, ParaDirection, ParaStyle, PathEffect, TextKind, TextObject};
+use vectorcraft_doc::{CharStyle, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathEffect, TextKind, TextObject};
 
 use crate::composer::{Breakpoint, compose};
 use crate::fontdb::FontDb;
@@ -581,11 +581,14 @@ struct Metrics {
     lead: f64,
     cap: f64,
     xh: f64,
+    /// Height of the top of the ideographic em box above the baseline.
+    top: f64,
 }
 
 impl Metrics {
     fn of(g: &SGlyph) -> Self {
-        Self { asc: g.ascent, desc: g.descent, lead: g.leading, cap: g.cap, xh: g.xh }
+        let em = g.face.units_per_em() * g.sy;
+        Self { asc: g.ascent, desc: g.descent, lead: g.leading, cap: g.cap, xh: g.xh, top: (g.face.ideographic_centre() + 0.5) * em }
     }
     fn max(g: &[SGlyph]) -> Option<Self> {
         let mut it = g.iter();
@@ -596,6 +599,7 @@ impl Metrics {
             lead: m.lead.max(g.leading),
             cap: m.cap.max(g.cap),
             xh: m.xh.max(g.xh),
+            top: m.top.max(Self::of(g).top),
         }))
     }
     /// Distance from the frame top to the first baseline.
@@ -622,6 +626,9 @@ struct Pen<'r> {
     fb_min: f64,
     /// Further spans at the current baseline (text wrapping on both sides of an object).
     queued: Vec<(f64, f64, f64)>,
+    /// Leading measured from em box top to em box top: where the next line's em box top goes.
+    model: LeadingModel,
+    next_top: Option<f64>,
 }
 
 impl Pen<'_> {
@@ -630,7 +637,7 @@ impl Pen<'_> {
     /// The `bool` is true for a further span at the previous line's baseline.
     fn place(&mut self, est: Metrics, ind_l: f64, ind_r: f64) -> Option<(f64, f64, f64, bool)> {
         let Some(regions) = self.regions else {
-            let b = self.prev.map_or(0.0, |b| b + est.lead + self.pending);
+            let b = self.prev.map_or(0.0, |b| self.next_baseline(b, est));
             return Some((b, f64::NEG_INFINITY, f64::INFINITY, false));
         };
         if !self.queued.is_empty() {
@@ -640,8 +647,9 @@ impl Pen<'_> {
         loop {
             let r = regions.get(self.ri)?;
             let mut baseline = match self.prev {
+                None if self.model == LeadingModel::EmBoxTop => r.top() + est.top.max(self.fb_min),
                 None => r.top() + est.first_baseline(self.fb, self.fb_min),
-                Some(b) => b + est.lead + self.pending,
+                Some(b) => self.next_baseline(b, est),
             };
             loop {
                 if baseline + est.desc > r.bottom() + 0.01 {
@@ -674,6 +682,18 @@ impl Pen<'_> {
     }
     fn bottom(&self) -> f64 {
         self.regions.and_then(|r| r.get(self.ri)).map_or(f64::INFINITY, |r| r.bottom())
+    }
+    /// The baseline of the line after the one at `prev`, for a line of metrics `est`.
+    fn next_baseline(&self, prev: f64, est: Metrics) -> f64 {
+        match (self.model, self.next_top) {
+            (LeadingModel::EmBoxTop, Some(top)) => top + est.top + self.pending,
+            _ => prev + est.lead + self.pending,
+        }
+    }
+    /// A line was set at `baseline` with metrics `m`: where the next one goes from.
+    fn settled(&mut self, baseline: f64, m: Metrics) {
+        self.prev = Some(baseline);
+        self.next_top = Some(baseline - m.top + m.lead);
     }
 }
 
@@ -873,7 +893,7 @@ fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) ->
         let w = x1 - x0 - ind_l - para.right_indent;
         widths.push(w);
         acc += w.max(1.0);
-        sim.prev = Some(b);
+        sim.settled(b, m);
         sim.pending = 0.0;
         if acc > total * 1.6 + 4.0 * w.max(1.0) {
             break;
@@ -887,7 +907,17 @@ fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) ->
 }
 
 fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Option<&[Region]>) {
-    let mut pen = Pen { regions, ri: 0, prev: None, pending: 0.0, fb: cx.opts.first_baseline, fb_min: cx.opts.first_baseline_min, queued: vec![] };
+    let mut pen = Pen {
+        regions,
+        ri: 0,
+        prev: None,
+        pending: 0.0,
+        fb: cx.opts.first_baseline,
+        fb_min: cx.opts.first_baseline_min,
+        queued: vec![],
+        model: para.leading_model,
+        next_top: None,
+    };
     'paras: for (pi, pr) in paras.iter().enumerate() {
         let text = cx.text;
         let bidi = para_bidi(text.get(pr.clone()).unwrap_or_default(), para.direction);
@@ -899,8 +929,10 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
         let wakan = if para.mojikumi == Mojikumi::LineEndHalf { space_japanese_and_latin(&mut sg) } else { vec![] };
         let pm = {
             let (asc, desc, lead) = style_metrics(cx.db, cx.style_at(pr.start));
-            let (cap, xh) = cap_x_heights(cx.db, cx.style_at(pr.start));
-            Metrics { asc, desc, lead, cap, xh }
+            let st = cx.style_at(pr.start);
+            let (cap, xh) = cap_x_heights(cx.db, st);
+            let centre = cx.db.face(&st.font_family, &st.font_style).map_or(EM_CENTER, |f| f.ideographic_centre());
+            Metrics { asc, desc, lead, cap, xh, top: (centre + 0.5) * st.size * st.v_scale / 100.0 }
         };
         if pi > 0 {
             pen.pending += para.space_before;
@@ -930,6 +962,10 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 let m = Metrics::max(&sg[i..end]).unwrap_or(pm);
                 baseline += if same_baseline || (pen.regions.is_none() && first_in_region) {
                     0.0
+                } else if pen.model == LeadingModel::EmBoxTop {
+                    // The em box top is fixed (the frame's top, or the line above's): the baseline
+                    // hangs from it by this line's tallest em box.
+                    if first_in_region { m.top.max(pen.fb_min) - est.top.max(pen.fb_min) } else { m.top - est.top }
                 } else if first_in_region {
                     m.first_baseline(pen.fb, pen.fb_min) - est.first_baseline(pen.fb, pen.fb_min)
                 } else {
@@ -1077,7 +1113,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 glyph_end: cx.out.glyphs.len(),
                 avail: if regions.is_some() { (ax0, ax1) } else { (start_x, x_end) },
             });
-            pen.prev = Some(baseline);
+            pen.settled(baseline, m);
             // Further spans of this line band share the settled baseline.
             for q in &mut pen.queued {
                 q.0 = baseline;
