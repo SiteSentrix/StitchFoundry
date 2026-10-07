@@ -165,6 +165,20 @@ impl Interp<'_> {
                 self.pop()?;
                 self.show(&s)?;
             }
+            CShow => {
+                // The procedure shows or places each character: it gets its code and width.
+                let s = self.pop_str()?.to_vec();
+                let proc = self.pop_proc()?;
+                for b in s {
+                    let (_, _, v) = self.set_type(&[b], Point::ZERO)?;
+                    self.push(Obj::Int(i64::from(b)))?;
+                    self.push_num(v.x)?;
+                    self.push_num(v.y)?;
+                    if !self.body(&proc)? {
+                        break;
+                    }
+                }
+            }
             GlyphShow => {
                 let name = self.pop()?.text().unwrap_or_else(|| Rc::from(""));
                 let ch = glyph_char(&name);

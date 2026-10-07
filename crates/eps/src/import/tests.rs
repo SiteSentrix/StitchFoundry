@@ -569,6 +569,57 @@ fn resourceforall_enumerates_matching_names() {
     check("/n 0 def (Gen*) { pop /n n 1 add def } 16 string /Category resourceforall n 1 eq");
 }
 
+#[test]
+fn the_standard_dictionaries_are_dictionaries_in_systemdict() {
+    // The reference app's EPS prolog looks them up by name rather than running them.
+    check("systemdict /userdict get type /dicttype eq");
+    check("/globaldict where { /globaldict get begin currentdict globaldict eq end } { false } ifelse");
+    check("systemdict /systemdict get systemdict eq systemdict /statusdict known and");
+    check("userdict /x 5 put systemdict /userdict get /x get 5 eq");
+    check("/errordict load /handleerror known errordict $error eq and");
+    check("SharedFontDirectory type /dicttype eq");
+}
+
+#[test]
+fn dictstack_and_internaldict_answer() {
+    check("10 array dictstack length countdictstack eq");
+    check("userdict begin 10 array dictstack dup length 1 sub get userdict eq end");
+    check("{ 1 array dictstack } stopped");
+    check("1183615869 internaldict /k 1 put 1183615869 internaldict /k get 1 eq");
+    check("currentsystemparams /MaxPatternCache get type /integertype eq");
+    check("<< /MaxPatternItem currentsystemparams /MaxPatternCache get >> setuserparams currentuserparams /MaxFontItem known");
+}
+
+#[test]
+fn an_executable_filter_runs_its_data_as_a_program() {
+    // A string run as a program through a filter (0 and an empty string set no end of data).
+    check("(1 2 add) 0 () /SubFileDecode filter cvx exec 3 eq");
+    check("(1 2 add) 0 () /SubFileDecode filter dup xcheck not exch cvx xcheck and");
+    check("(abcd) 2 () /SubFileDecode filter 8 string readstring pop (ab) eq");
+    check("{ (1 add) 0 () /SubFileDecode filter cvx exec } stopped");
+    // The data following it in the file: `74727565` is `true`.
+    check("currentfile /ASCIIHexDecode filter cvx exec 74727565>");
+    // A literal file is only pushed.
+    check("(1 2 add) 0 () /SubFileDecode filter exec type /filetype eq");
+}
+
+#[test]
+fn flushfile_skips_the_data_of_a_filter() {
+    // Metadata that isn't PostScript, skipped up to its end marker.
+    blue("currentfile 0 (%%EndPacket) /SubFileDecode filter flushfile\n<?xml version=\"1.0\"?><x a=\"(\"/>\n%%EndPacket\n0 0 1 setrgbcolor");
+}
+
+#[test]
+fn cshow_runs_its_procedure_for_each_character() {
+    check("/n 0 def { pop pop pop /n n 1 add def } (abc) cshow n 3 eq");
+    // Each call gets the character's code and width.
+    check("/c 0 def { pop pop /c exch def } (A) cshow c 65 eq");
+    check(
+        "/Helvetica findfont 10 scalefont setfont /w 0 def { pop w add /w exch def pop } (ab) cshow \
+         (ab) stringwidth pop w sub abs 0.001 lt",
+    );
+}
+
 /// A `w` × `h` 8-bit palette TIFF with an alpha sample (`ExtraSamples` [1]), uncompressed in
 /// strips of `per` rows, in either byte order, as the reference app writes its EPS previews:
 /// pixel (x, y) is entry `(x + y) % 3` of a red, green, blue map, at alpha `12 x`.

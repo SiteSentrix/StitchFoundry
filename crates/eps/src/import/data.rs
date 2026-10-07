@@ -185,7 +185,8 @@ fn decode(f: &Filter, raw: &[u8]) -> Res<(Vec<u8>, usize, Option<u8>)> {
         "SubFileDecode" => {
             let (count, eod) = &f.sub;
             if eod.is_empty() {
-                let n = (*count).min(raw.len());
+                // A count of 0 without an end string sets no end: the data passes through whole.
+                let n = if *count == 0 { raw.len() } else { (*count).min(raw.len()) };
                 (raw.get(..n).unwrap_or_default().to_vec(), n)
             } else {
                 let (mut at, mut seen) = (0, 0);
@@ -218,11 +219,11 @@ impl Interp<'_> {
     pub fn data_op(&mut self, op: Op) -> Res {
         use Op::*;
         match op {
-            CurrentFile => self.push(Obj::File(Rc::new(RefCell::new(Stream::Current))))?,
+            CurrentFile => self.push(Obj::File { stream: Rc::new(RefCell::new(Stream::Current)), exec: false })?,
             Filter => self.filter()?,
             ReadHexString | ReadString => {
                 let s = self.pop_str()?;
-                let Obj::File(f) = self.pop()? else { return ps_err("typecheck", "") };
+                let Obj::File { stream: f, .. } = self.pop()? else { return ps_err("typecheck", "") };
                 let n = s.len();
                 let got = if op == ReadString { self.read(&f, n)? } else { self.read_hex(&f, n)? };
                 self.fill(s, &got)?;
@@ -230,7 +231,7 @@ impl Interp<'_> {
             }
             ReadLine => {
                 let s = self.pop_str()?;
-                let Obj::File(f) = self.pop()? else { return ps_err("typecheck", "") };
+                let Obj::File { stream: f, .. } = self.pop()? else { return ps_err("typecheck", "") };
                 let n = s.len();
                 let mut line = vec![];
                 let mut ended = false;
@@ -250,7 +251,14 @@ impl Interp<'_> {
                 self.fill(s, &line)?;
                 self.push(Obj::Bool(ended))?;
             }
-            FlushFile | CloseFile => {
+            FlushFile => {
+                // An input file is read to its end: a filter over the program's data skips it
+                // (metadata read with `flushfile`). The program's own file goes on being run.
+                if let Obj::File { stream, .. } = self.pop()? {
+                    self.materialize(&stream)?;
+                }
+            }
+            CloseFile => {
                 self.pop()?;
             }
             File => {
@@ -329,7 +337,7 @@ impl Interp<'_> {
         }
         let spec = Filter { name, sub };
         let stream = match self.pop()? {
-            Obj::File(f) => {
+            Obj::File { stream: f, .. } => {
                 if let Stream::Buf { data, pos, .. } = &*f.borrow() {
                     self.alloc(data.len().saturating_sub(*pos))?;
                 }
@@ -340,6 +348,11 @@ impl Interp<'_> {
                 };
                 match chain {
                     Some(mut c) => {
+                        // The new filter reads a pending one's data: it has none left of its own
+                        // (`flushfile` on it skips nothing more).
+                        if !c.is_empty() {
+                            *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
+                        }
                         c.push(spec);
                         Stream::Pending(c)
                     }
@@ -364,7 +377,16 @@ impl Interp<'_> {
             }
             _ => return ps_err("typecheck", "filter"),
         };
-        self.push(Obj::File(Rc::new(RefCell::new(stream))))
+        self.push(Obj::File { stream: Rc::new(RefCell::new(stream)), exec: false })
+    }
+
+    /// The data an executable file runs as a program: what is left of it. `None` for the
+    /// program's own file, which is being run already.
+    pub(super) fn program_of(&mut self, f: &Rc<RefCell<Stream>>) -> Res<Option<Vec<u8>>> {
+        if matches!(&*f.borrow(), Stream::Current) {
+            return Ok(None);
+        }
+        self.read(f, MAX_DATA).map(Some)
     }
 
     /// Decode the filters a file waits to run over the program's data, from where it is now.
@@ -688,7 +710,7 @@ struct Pixels {
 
 fn source(o: &Obj) -> Res<Source> {
     Ok(match o {
-        Obj::File(f) => Source::File(f.clone()),
+        Obj::File { stream: f, .. } => Source::File(f.clone()),
         Obj::Str(s) => Source::Str(s.to_vec()),
         Obj::Array { items, .. } => Source::Proc(Obj::Array { items: items.clone(), exec: true }),
         _ => return ps_err("typecheck", "DataSource"),

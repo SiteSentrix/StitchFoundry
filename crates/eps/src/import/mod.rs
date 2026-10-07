@@ -137,6 +137,7 @@ pub fn import(bytes: &[u8]) -> Result<Imported, String> {
     let page = Affine::new([1.0, 0.0, 0.0, -1.0, -llx, ury]);
     let mut it = Interp::new(ps, GState::default(), Out::new(doc, page, frame));
     let result = it.run();
+    it.release();
     let mut out = it.out;
     if let Some(n) = dsc.pages.filter(|n| *n > 1) {
         out.warn(&format!("only the first of the file's {n} pages was read"));
