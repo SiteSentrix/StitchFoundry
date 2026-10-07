@@ -23,10 +23,10 @@ pub const OPTIONS: &str = "sliceOptions";
 pub const DIVIDE: &str = "divideSlices";
 
 pub(super) const OPTIONS_SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Slice Options".into(), body: options_body, confirm: options_confirm, min_width: 380.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Slice Options").into(), body: options_body, confirm: options_confirm, min_width: 380.0, ..DialogSpec::FORM };
 
 pub(super) const DIVIDE_SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Divide Slices".into(), body: divide_body, confirm: divide_confirm, min_width: 320.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Divide Slices").into(), body: divide_body, confirm: divide_confirm, min_width: 320.0, ..DialogSpec::FORM };
 
 /// Label column and field widths of the dialogs.
 const LABEL_W: f32 = 110.0;
@@ -61,29 +61,31 @@ fn pairs<T: Copy>(all: &[T], key: fn(T) -> &'static str, label: fn(T) -> &'stati
 
 fn options_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let kinds: Vec<_> = SliceKind::ALL.iter().filter(|k| **k != SliceKind::HtmlText || d.bool("__html")).copied().collect();
-    form::choice(ui, d, "kind", "Slice Type:", (LABEL_W, FIELD_W), &pairs(&kinds, SliceKind::key, SliceKind::label));
+    form::choice(ui, d, "kind", tl!("Slice Type:"), (LABEL_W, FIELD_W), &pairs(&kinds, SliceKind::key, SliceKind::label));
     ui.add_space(6.0);
     let kind = SliceKind::parse(&d.str("kind")).unwrap_or_default();
     match kind {
         SliceKind::Image => {
-            for (key, label) in [("name", "Name:"), ("url", "URL:"), ("target", "Target:"), ("message", "Message:"), ("alt", "Alt:")] {
+            for (key, label) in
+                [("name", tl!("Name:")), ("url", tl!("URL:")), ("target", tl!("Target:")), ("message", tl!("Message:")), ("alt", tl!("Alt:"))]
+            {
                 widgets::label_row(ui, label, LABEL_W, |ui| {
                     form::text(ui, d, key, FIELD_W - 12.0);
                 });
             }
         }
         SliceKind::NoImage => {
-            widgets::dim_label(ui, "Text Displayed in Cell:");
+            widgets::dim_label(ui, tl!("Text Displayed in Cell:"));
             form::text_area(ui, d, "text", LABEL_W + FIELD_W - 12.0, 4);
         }
         SliceKind::HtmlText => {
-            widgets::dim_label(ui, "The cell shows the type object's text as HTML.");
+            widgets::dim_label(ui, tl!("The cell shows the type object's text as HTML."));
         }
     }
     if kind != SliceKind::Image {
         ui.add_space(6.0);
-        form::choice(ui, d, "hAlign", "Horizontal:", (LABEL_W, FIELD_W), &pairs(CellAlign::ALL, CellAlign::key, CellAlign::label));
-        form::choice(ui, d, "vAlign", "Vertical:", (LABEL_W, FIELD_W), &pairs(CellVAlign::ALL, CellVAlign::key, CellVAlign::label));
+        form::choice(ui, d, "hAlign", tl!("Horizontal:"), (LABEL_W, FIELD_W), &pairs(CellAlign::ALL, CellAlign::key, CellAlign::label));
+        form::choice(ui, d, "vAlign", tl!("Vertical:"), (LABEL_W, FIELD_W), &pairs(CellVAlign::ALL, CellVAlign::key, CellVAlign::label));
     }
     ui.add_space(6.0);
     background_row(ui, d);
@@ -101,7 +103,7 @@ fn background_row(ui: &mut egui::Ui, d: &mut Dialog) {
         "#000000" => 3,
         _ => 4,
     };
-    widgets::label_row(ui, "Background:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Background:"), LABEL_W, |ui| {
         if let Some(i) = widgets::dropdown(ui, "slice-background", NAMES[shown], &NAMES, 120.0) {
             let v = match i {
                 0 => "",
@@ -152,16 +154,22 @@ fn divide_section(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, keys:
                     d.fields.insert(mode.into(), json!("size"));
                 }
                 form::length(ui, d, size, app.session.general_unit(), 70.0);
-                widgets::dim_label(ui, "per slice");
+                widgets::dim_label(ui, tl!("per slice"));
             });
         });
     });
 }
 
 fn divide_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    divide_section(app, ui, d, ["divideRows", "rows", "rowMode", "rowHeight"], ["Divide Horizontally Into", "slices down, evenly spaced"]);
+    divide_section(app, ui, d, ["divideRows", "rows", "rowMode", "rowHeight"], [tl!("Divide Horizontally Into"), tl!("slices down, evenly spaced")]);
     ui.add_space(8.0);
-    divide_section(app, ui, d, ["divideColumns", "columns", "columnMode", "columnWidth"], ["Divide Vertically Into", "slices across, evenly spaced"]);
+    divide_section(
+        app,
+        ui,
+        d,
+        ["divideColumns", "columns", "columnMode", "columnWidth"],
+        [tl!("Divide Vertically Into"), tl!("slices across, evenly spaced")],
+    );
     false
 }
 

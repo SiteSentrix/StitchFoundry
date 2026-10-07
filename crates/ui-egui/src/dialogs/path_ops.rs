@@ -10,10 +10,10 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).int
 
 fn title(kind: &str) -> &'static str {
     match kind {
-        "average" => "Average",
-        "offsetPath" => "Offset Path",
-        "simplify" => "Simplify",
-        _ => "Split Into Grid",
+        "average" => tl!("Average"),
+        "offsetPath" => tl!("Offset Path"),
+        "simplify" => tl!("Simplify"),
+        _ => tl!("Split Into Grid"),
     }
 }
 

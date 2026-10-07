@@ -17,7 +17,8 @@ use crate::theme::Tokens;
 /// The dialog kind of Color Guide Options.
 pub const KIND: &str = "colorGuideOptions";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Color Guide Options".into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading: |_| tl!("Color Guide Options").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
 
 /// Open the dialog with the panel's current options.
 pub fn open(app: &mut VectorcraftApp) {
@@ -38,14 +39,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let v = (60.0 + 160.0 * x) as u8;
         egui::Color32::from_rgb(v, v, v)
     };
-    form::slider(ui, d, "steps", "Steps:", 1.0..=max, "", &ramp);
-    form::slider(ui, d, "amount", "Variation:", 0.0..=100.0, "%", &ramp);
+    form::slider(ui, d, "steps", tl!("Steps:"), 1.0..=max, "", &ramp);
+    form::slider(ui, d, "amount", tl!("Variation:"), 0.0..=100.0, "%", &ramp);
     ui.horizontal(|ui| {
         ui.add_space(form::SLIDER_LABEL + ui.spacing().item_spacing.x);
         let (r, _) = ui.allocate_exact_size(vec2(form::SLIDER_WIDTH, 14.0), Sense::hover());
         let font = egui::FontId::proportional(11.0);
-        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, "Less", font.clone(), t.text_dim);
-        ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, "More", font, t.text_dim);
+        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, tl!("Less"), font.clone(), t.text_dim);
+        ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, tl!("More"), font, t.text_dim);
     });
     ui.add_space(10.0);
     // Preview: the base colour's row of variations.

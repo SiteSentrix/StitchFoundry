@@ -18,7 +18,7 @@ use crate::state::Dialog;
 pub const KIND: &str = "saveGraphicStyleLibrary";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Save Graphic Style Library".into(), body, confirm, min_width: 360.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Save Graphic Style Library").into(), body, confirm, min_width: 360.0, ..DialogSpec::FORM };
 
 /// Open Save Graphic Style Library for the document's styles (`names`: the ones selected in the
 /// panel).
@@ -31,7 +31,7 @@ pub fn open(app: &mut VectorcraftApp, names: Vec<String>) -> Result<Value, Strin
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     grid(ui, |ui| {
         name_row(ui, d);
-        destination(ui, d, "Selected Styles Only");
+        destination(ui, d, tl!("Selected Styles Only"));
     });
     false
 }

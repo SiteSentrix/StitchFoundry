@@ -16,7 +16,7 @@ pub const KIND: &str = "saturate";
 
 const CMD: &str = "edit.colors.saturate";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Saturate".into(), body, confirm, preview: true, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Saturate").into(), body, confirm, preview: true, ..DialogSpec::FORM };
 
 pub fn open(app: &mut VectorcraftApp) {
     app.ui.dialog = Some(Dialog::new(KIND, json!({"intensity": 0, "preview": true})));
@@ -28,7 +28,7 @@ fn params(d: &Dialog) -> Value {
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     // The rail runs from grey to a fully saturated colour.
-    form::slider(ui, d, "intensity", "Intensity:", -100.0..=100.0, "%", &|x| c32(&Color::from_hsb(12.0, x, 0.85)));
+    form::slider(ui, d, "intensity", tl!("Intensity:"), -100.0..=100.0, "%", &|x| c32(&Color::from_hsb(12.0, x, 0.85)));
     let p = params(d);
     form::preview(app, ui, d, "Saturate", CMD, p);
     false

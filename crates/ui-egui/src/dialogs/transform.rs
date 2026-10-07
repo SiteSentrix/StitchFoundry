@@ -11,11 +11,11 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).int
 
 fn title(kind: &str) -> &'static str {
     match kind {
-        "move" => "Move",
-        "rotate" => "Rotate",
-        "scale" => "Scale",
-        "reflect" => "Reflect",
-        _ => "Shear",
+        "move" => tl!("Move"),
+        "rotate" => tl!("Rotate"),
+        "scale" => tl!("Scale"),
+        "reflect" => tl!("Reflect"),
+        _ => tl!("Shear"),
     }
 }
 
@@ -23,10 +23,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     form::grid(ui, d, app.session.general_unit());
     ui.add_space(6.0);
     if d.kind == "scale" {
-        form::check(ui, d, "uniform", "Uniform");
+        form::check(ui, d, "uniform", tl!("Uniform"));
         scale_options(app, ui, d);
     }
-    form::check(ui, d, "copy", "Copy (make a transformed copy)");
+    form::check(ui, d, "copy", tl!("Copy (make a transformed copy)"));
     false
 }
 
@@ -45,7 +45,7 @@ pub(super) fn scale_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dia
     for (field, _, label) in SCALE_OPTIONS {
         let on = scale_option(app, d, field);
         d.fields.insert(field.into(), Value::Bool(on));
-        form::check(ui, d, field, label);
+        form::check(ui, d, field, tl!(label));
     }
 }
 

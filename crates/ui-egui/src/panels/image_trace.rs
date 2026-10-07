@@ -49,7 +49,7 @@ fn trace(app: &mut VectorcraftApp, st: &mut TraceUi) {
 fn slider(ui: &mut Ui, label: &str, v: &mut f64, range: std::ops::RangeInclusive<f64>, suffix: &str) -> (bool, bool) {
     let mut out = (false, false);
     ui.horizontal(|ui| {
-        ui.add_sized([74.0, 22.0], egui::Label::new(egui::RichText::new(label).size(12.0)));
+        ui.add_sized([74.0, 22.0], egui::Label::new(egui::RichText::new(tl!(label)).size(12.0)));
         // The theme's widget fill matches the panel, which would hide the rail.
         let t = crate::theme::Tokens::get(ui.ctx());
         ui.visuals_mut().widgets.inactive.bg_fill = t.input_border;
@@ -76,7 +76,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut retrace = false;
 
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Preset:");
+        widgets::dim_label(ui, tl!("Preset:"));
         let names: Vec<&str> = all.iter().map(|p| p.0.as_str()).collect();
         if let Some(i) = widgets::dropdown(ui, "it-preset", &st.preset, &names, 170.0) {
             st.preset = all[i].0.clone();
@@ -85,7 +85,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Mode:");
+        widgets::dim_label(ui, tl!("Mode:"));
         let mode = st.params["mode"].as_str().unwrap_or("blackAndWhite").to_string();
         let label = MODES.iter().find(|m| m.0 == mode).map_or("Black and White", |m| m.1);
         let labels: Vec<&str> = MODES.iter().map(|m| m.1).collect();
@@ -97,9 +97,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let bw = st.params["mode"].as_str() == Some("blackAndWhite");
     let (key, label, range) = if bw {
-        ("threshold", "Threshold", 0.0..=255.0)
+        ("threshold", tl!("Threshold"), 0.0..=255.0)
     } else {
-        ("colors", if st.params["mode"] == "grayscale" { "Grays" } else { "Colors" }, 2.0..=256.0)
+        ("colors", if st.params["mode"] == "grayscale" { tl!("Grays") } else { tl!("Colors") }, 2.0..=256.0)
     };
     let mut v = st.params[key].as_f64().unwrap_or(0.0);
     let (changed, release) = slider(ui, label, &mut v, range, "");
@@ -110,12 +110,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     retrace |= release;
 
     let open: bool = !pstate::<bool>(ui.ctx(), "it-advanced-closed");
-    if ui.add(egui::Button::new(format!("{} Advanced", if open { "▾" } else { "▸" })).frame(false)).clicked() {
+    if ui.add(egui::Button::new(format!("{} {}", if open { "▾" } else { "▸" }, tl!("Advanced"))).frame(false)).clicked() {
         set_pstate(ui.ctx(), "it-advanced-closed", open);
     }
     if open {
         for (key, label, range, suffix) in
-            [("paths", "Paths", 0.0..=100.0, "%"), ("corners", "Corners", 0.0..=100.0, "%"), ("noise", "Noise", 1.0..=100.0, " px")]
+            [("paths", tl!("Paths"), 0.0..=100.0, "%"), ("corners", tl!("Corners"), 0.0..=100.0, "%"), ("noise", tl!("Noise"), 1.0..=100.0, " px")]
         {
             let mut v = st.params[key].as_f64().unwrap_or(0.0);
             let (changed, release) = slider(ui, label, &mut v, range, suffix);
@@ -126,8 +126,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             retrace |= release;
         }
         ui.horizontal(|ui| {
-            widgets::dim_label(ui, "Method:");
-            for (m, l) in [("abutting", "Abutting"), ("overlapping", "Overlapping")] {
+            widgets::dim_label(ui, tl!("Method:"));
+            for (m, l) in [("abutting", tl!("Abutting")), ("overlapping", tl!("Overlapping"))] {
                 if ui.selectable_label(st.params["method"] == m, l).clicked() && st.params["method"] != m {
                     st.params["method"] = json!(m);
                     st.preset = "Custom".into();
@@ -135,7 +135,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
         });
-        for (key, label) in [("snapCurvesToLines", "Snap Curves To Lines"), ("ignoreWhite", "Ignore White")] {
+        for (key, label) in [("snapCurvesToLines", tl!("Snap Curves To Lines")), ("ignoreWhite", tl!("Ignore White"))] {
             let on = st.params[key].as_bool().unwrap_or(false);
             if widgets::check(ui, label, on, true) {
                 st.params[key] = json!(!on);
@@ -146,14 +146,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     widgets::divider(ui);
     if let Some((p, a, c)) = st.info {
-        widgets::dim_label(ui, &format!("Paths: {p}    Anchors: {a}    Colors: {c}"));
+        widgets::dim_label(
+            ui,
+            &crate::i18n::fmt(
+                tl!("Paths: {paths}    Anchors: {anchors}    Colors: {colors}"),
+                &[("paths", &p.to_string()), ("anchors", &a.to_string()), ("colors", &c.to_string())],
+            ),
+        );
     }
     ui.horizontal(|ui| {
-        let r = ui.add_enabled_ui(is_trace || is_image, |ui| widgets::flat_button(ui, "Trace", 80.0)).inner;
-        if r.on_disabled_hover_text("Select an image to trace").clicked() {
+        let r = ui.add_enabled_ui(is_trace || is_image, |ui| widgets::flat_button(ui, tl!("Trace"), 80.0)).inner;
+        if r.on_disabled_hover_text(tl!("Select an image to trace")).clicked() {
             trace(app, &mut st);
         }
-        if ui.add_enabled_ui(is_trace, |ui| widgets::flat_button(ui, "Expand", 80.0)).inner.clicked() {
+        if ui.add_enabled_ui(is_trace, |ui| widgets::flat_button(ui, tl!("Expand"), 80.0)).inner.clicked() {
             app.run("imageTrace.expand", json!({})).ok();
         }
     });
@@ -165,14 +171,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (is_trace, _, _) = target(app);
-    if menu_item(ui, "Release", is_trace, false) {
+    if menu_item(ui, tl!("Release"), is_trace, false) {
         app.run("imageTrace.release", json!({})).ok();
     }
-    if menu_item(ui, "Expand", is_trace, false) {
+    if menu_item(ui, tl!("Expand"), is_trace, false) {
         app.run("imageTrace.expand", json!({})).ok();
     }
     ui.separator();
-    if menu_item(ui, "Reset to Default", true, false) {
+    if menu_item(ui, tl!("Reset to Default"), true, false) {
         set_pstate(ui.ctx(), "image-trace", TraceUi::default());
     }
 }

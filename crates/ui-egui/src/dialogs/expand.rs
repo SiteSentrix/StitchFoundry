@@ -21,7 +21,7 @@ const CMD: &str = "object.expand";
 /// The options and their checkbox labels.
 const OPTIONS: [(&str, &str); 3] = [("object", "Object"), ("fill", "Fill"), ("stroke", "Stroke")];
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Expand".into(), body, confirm, min_width: 260.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Expand").into(), body, confirm, min_width: 260.0, ..DialogSpec::FORM };
 
 /// Open Expand for the selection, every option on (as `object.expand {}` does).
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -38,7 +38,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let set = |d: &mut Dialog, key: &str, v: Value| {
         d.fields.insert(key.into(), v);
     };
-    widgets::subheader(ui, "Expand");
+    widgets::subheader(ui, tl!("Expand"));
     for (key, label) in OPTIONS {
         let on = d.bool(key);
         ui.horizontal(|ui| {
@@ -49,26 +49,26 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
     }
     ui.add_space(10.0);
-    widgets::subheader(ui, "Expand Gradient To");
+    widgets::subheader(ui, tl!("Expand Gradient To"));
     // Only gradient fills that Fill expands care.
     let enabled = d.bool("__fill") && d.bool("fill");
     let objects = d.str("gradient") != "mesh";
     ui.horizontal(|ui| {
         ui.add_space(12.0);
-        if widgets::radio(ui, "Gradient Mesh", !objects, enabled) {
+        if widgets::radio(ui, tl!("Gradient Mesh"), !objects, enabled) {
             set(d, "gradient", json!("mesh"));
         }
     });
     ui.horizontal(|ui| {
         ui.add_space(12.0);
-        if widgets::radio(ui, "Specify:", objects, enabled) {
+        if widgets::radio(ui, tl!("Specify:"), objects, enabled) {
             set(d, "gradient", json!("objects"));
         }
         ui.add_enabled_ui(enabled && objects, |ui| {
             if let Some(n) = widgets::plain_field(ui, "expand-steps", d.f64("steps", DEFAULT_STEPS as f64), "", 0, 52.0) {
                 set(d, "steps", json!(n.round().clamp(1.0, MAX_STEPS as f64)));
             }
-            widgets::dim_label(ui, "Objects");
+            widgets::dim_label(ui, tl!("Objects"));
         });
     });
     false

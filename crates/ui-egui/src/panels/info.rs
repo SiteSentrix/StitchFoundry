@@ -80,13 +80,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::divider(ui);
         let st = tx.first_style();
         mono(ui, format!("{} {}", st.font_family, st.font_style));
-        mono(ui, format!("Size: {}  Tracking: {:.0}", app.session.type_unit().format(st.size), st.tracking));
+        mono(
+            ui,
+            crate::i18n::fmt(
+                tl!("Size: {size}  Tracking: {tracking}"),
+                &[("size", &app.session.type_unit().format(st.size)), ("tracking", &format!("{:.0}", st.tracking))],
+            ),
+        );
     }
 }
 
 pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "info-hide-options");
-    if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
+    if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "info-hide-options", !hidden);
     }
 }

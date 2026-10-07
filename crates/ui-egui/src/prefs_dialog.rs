@@ -13,7 +13,7 @@ use crate::theme::{self, Brightness, Tokens};
 use crate::{VectorcraftApp, widgets};
 
 /// UI-only fields shown in the dialog (backed by `UiState`, not engine prefs).
-const UI_FIELDS: &[(&str, &str, &str)] = &[
+pub const UI_FIELDS: &[(&str, &str, &str)] = &[
     ("__smartGuides", "Smart Guides", "Smart Guides (View → Smart Guides)"),
     ("__snapToGrid", "Guides & Grid", "Snap to Grid"),
     ("__taskBar", "General", "Enable Contextual Task Bar"),
@@ -59,6 +59,15 @@ pub fn restore(app: &mut VectorcraftApp) {
     if app.ui.engine_prefs.is_null() {
         // Older preference files: keep the saved brightness.
         p.ui_brightness = app.ui.brightness.id().into();
+    }
+    // Older preference files kept the interface language with the UI state; English was the
+    // default there, so only another language is carried over (onto an unset preference).
+    if let Some(code) = app.ui.legacy_language.take()
+        && p.interface_language == "auto"
+        && code != "en"
+        && crate::i18n::Lang::from_code(&code).is_some()
+    {
+        p.interface_language = code;
     }
     app.session.apply_prefs(p);
 }
@@ -112,7 +121,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     let cat = d.str("__category");
     let cat = PREF_CATEGORIES.iter().find(|c| **c == cat).copied().unwrap_or(PREF_CATEGORIES[0]);
-    egui::Window::new("Preferences")
+    egui::Window::new(tl!("Preferences"))
         .id(egui::Id::new("dialog-preferences"))
         .order(egui::Order::Foreground)
         .collapsible(false)
@@ -122,7 +131,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(20)))
         .show(ctx, |ui| {
             ui.set_width(760.0);
-            ui.label(egui::RichText::new("Preferences").font(theme::semibold(16.0)).color(t.text));
+            ui.label(egui::RichText::new(tl!("Preferences")).font(theme::semibold(16.0)).color(t.text));
             ui.add_space(12.0);
             ui.horizontal_top(|ui| {
                 // Category list.
@@ -135,7 +144,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             ui.spacing_mut().item_spacing.y = 1.0;
                             for c in PREF_CATEGORIES {
                                 let sel = *c == cat;
-                                let text = egui::RichText::new(*c).size(12.5).color(if sel { t.text_strong } else { t.text });
+                                let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
                                 let b = egui::Button::selectable(sel, text).frame_when_inactive(false).min_size(egui::vec2(184.0, 24.0));
                                 if ui.add(b).clicked() {
                                     d.fields.insert("__category".into(), json!(c));
@@ -148,7 +157,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 // Fields.
                 ui.vertical(|ui| {
                     ui.set_width(530.0);
-                    ui.label(egui::RichText::new(cat).font(theme::semibold(14.0)).color(t.text_strong));
+                    ui.label(egui::RichText::new(tl!(cat)).font(theme::semibold(14.0)).color(t.text_strong));
                     ui.add_space(8.0);
                     egui::ScrollArea::vertical().id_salt(("prefs", cat)).max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
                         category_fields(ui, &mut d, cat);
@@ -157,26 +166,26 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
             ui.add_space(14.0);
             ui.horizontal(|ui| {
-                if widgets::secondary_button(ui, "Reset Preferences")
-                    .on_hover_text("Restore every preference to its default (applied on OK)")
+                if widgets::secondary_button(ui, tl!("Reset Preferences"))
+                    .on_hover_text(tl!("Restore every preference to its default (applied on OK)"))
                     .clicked()
                 {
                     reset = true;
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if widgets::primary_button(ui, "OK").clicked() {
+                    if widgets::primary_button(ui, tl!("OK")).clicked() {
                         ok = true;
                     }
                     ui.add_space(8.0);
-                    if widgets::secondary_button(ui, "Cancel").clicked() {
+                    if widgets::secondary_button(ui, tl!("Cancel")).clicked() {
                         cancel = true;
                     }
                     ui.add_space(16.0);
                     let i = PREF_CATEGORIES.iter().position(|c| *c == cat).unwrap_or(0);
-                    if ui.add_enabled(i + 1 < PREF_CATEGORIES.len(), egui::Button::new("Next")).clicked() {
+                    if ui.add_enabled(i + 1 < PREF_CATEGORIES.len(), egui::Button::new(tl!("Next"))).clicked() {
                         d.fields.insert("__category".into(), json!(PREF_CATEGORIES[i + 1]));
                     }
-                    if ui.add_enabled(i > 0, egui::Button::new("Previous")).clicked() {
+                    if ui.add_enabled(i > 0, egui::Button::new(tl!("Previous"))).clicked() {
                         d.fields.insert("__category".into(), json!(PREF_CATEGORIES[i - 1]));
                     }
                 });
@@ -216,7 +225,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 if !first {
                     ui.add_space(8.0);
                 }
-                ui.label(egui::RichText::new(section).font(theme::semibold(12.5)).color(t.text_strong));
+                ui.label(egui::RichText::new(tl!(section)).font(theme::semibold(12.5)).color(t.text_strong));
                 ui.add_space(2.0);
             }
         }
@@ -228,7 +237,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 labeled(ui, sp.label, |ui| {
                     let mut x = v.as_f64().unwrap_or(min);
                     let r = if sp.key == "uiScaling" {
-                        ui.add(egui::Slider::new(&mut x, min..=max).step_by(0.05).text("Smaller ↔ Larger"))
+                        ui.add(egui::Slider::new(&mut x, min..=max).step_by(0.05).text(tl!("Smaller ↔ Larger")))
                     } else {
                         let speed = if max - min > 100.0 { 0.5 } else { 0.05 };
                         ui.add(egui::DragValue::new(&mut x).range(min..=max).speed(speed).max_decimals(3).suffix(format!(" {unit}")))
@@ -252,7 +261,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                 labeled(ui, sp.label, |ui| {
                     let mut x = v.as_i64().unwrap_or(min);
                     let r = if sp.key == "anchorSize" {
-                        ui.add(egui::Slider::new(&mut x, min..=max).show_value(false).text("Size"))
+                        ui.add(egui::Slider::new(&mut x, min..=max).show_value(false).text(tl!("Size")))
                     } else {
                         ui.add(egui::DragValue::new(&mut x).range(min..=max).speed(0.2))
                     };
@@ -282,6 +291,20 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
                     ui.label(egui::RichText::new(hex).color(t.text_dim).size(11.0));
                 });
             }
+            PrefKind::Text if sp.key == "interfaceLanguage" => {
+                // `auto` plus every registered language, by its own name.
+                labeled(ui, sp.label, |ui| {
+                    let cur = v.as_str().unwrap_or("auto");
+                    let codes: Vec<&str> = std::iter::once("auto").chain(crate::i18n::Lang::all().map(|l| l.code())).collect();
+                    let labels: Vec<&str> = std::iter::once(tl!("Auto")).chain(crate::i18n::Lang::all().map(|l| l.name())).collect();
+                    let cur_label = codes.iter().position(|c| c.eq_ignore_ascii_case(cur)).and_then(|i| labels.get(i).copied()).unwrap_or(cur);
+                    if let Some(i) = widgets::dropdown(ui, sp.key, cur_label, &labels, 260.0)
+                        && let Some(code) = codes.get(i)
+                    {
+                        d.fields.insert(sp.key.into(), json!(code));
+                    }
+                });
+            }
             PrefKind::Text => {
                 labeled(ui, sp.label, |ui| {
                     let mut s = v.as_str().unwrap_or("").to_string();
@@ -296,7 +319,7 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
 
 fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let mut b = d.bool(key);
-    if ui.checkbox(&mut b, label).changed() {
+    if ui.checkbox(&mut b, tl!(label)).changed() {
         d.fields.insert(key.into(), json!(b));
     }
 }
@@ -306,7 +329,7 @@ fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
     ui.horizontal(|ui| {
         ui.allocate_ui_with_layout(egui::vec2(210.0, 22.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.set_min_width(210.0);
-            ui.add(egui::Label::new(egui::RichText::new(format!("{label}:")).color(t.text)).truncate());
+            ui.add(egui::Label::new(egui::RichText::new(format!("{}{}", tl!(label), tl!(":"))).color(t.text)).truncate());
         });
         add(ui);
     });

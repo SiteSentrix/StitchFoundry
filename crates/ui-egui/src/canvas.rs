@@ -1236,7 +1236,7 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
             }
             Overlay::Label { p: pt, text, color } => {
                 let sp = xf.to_screen(*pt) + vec2(8.0, -14.0);
-                p.text(sp, egui::Align2::LEFT_TOP, text, egui::FontId::proportional(11.0), c32(*color));
+                p.text(sp, egui::Align2::LEFT_TOP, tl!(text), egui::FontId::proportional(11.0), c32(*color));
             }
             Overlay::Highlight { quad, color } => {
                 let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
@@ -1275,21 +1275,21 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let inner = rect.shrink2(vec2((rect.width() - 820.0).max(40.0) / 2.0, 60.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(egui::Align::Min)));
     let ui = &mut child;
-    ui.label(egui::RichText::new("Welcome to VectorCraft").font(theme::semibold(26.0)).color(t.text));
+    ui.label(egui::RichText::new(tl!("Welcome to VectorCraft")).font(theme::semibold(26.0)).color(t.text));
     ui.add_space(4.0);
-    ui.label(egui::RichText::new("Vector illustration — fast, open, scriptable.").size(14.0).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!("Vector illustration — fast, open, scriptable.")).size(14.0).color(t.text_dim));
     ui.add_space(22.0);
     ui.horizontal(|ui| {
-        if widgets::primary_button(ui, "New file").clicked() {
+        if widgets::primary_button(ui, tl!("New file")).clicked() {
             app.run("file.newDialog", json!({})).ok();
         }
         ui.add_space(8.0);
-        if widgets::secondary_button(ui, "Open").clicked() {
+        if widgets::secondary_button(ui, tl!("Open")).clicked() {
             app.run("file.open", json!({})).ok();
         }
     });
     ui.add_space(28.0);
-    ui.label(egui::RichText::new("Quickly start a new file").font(theme::semibold(14.0)).color(t.text));
+    ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     // A few of New Document's presets (`file.newPresets`), as its cards.
     let presets = ["Letter", "A4", "Web 1920×1080", "Phone 390×844", "Postcard", "Social Square Post 1080×1080"];
@@ -1303,7 +1303,7 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         }
     });
     ui.add_space(28.0);
-    ui.label(egui::RichText::new("Community").font(theme::semibold(14.0)).color(t.text));
+    ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
     crate::community::links(app, ui);
 }
@@ -1334,18 +1334,18 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let is_text = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Text(_)));
     let mut items: Vec<(&str, &str, &str)> = vec![]; // (label, icon, command)
     if n > 1 {
-        items.push(("Group", "group", "object.group"));
-        items.push(("Unite", "squares-unite", "object.pathfinder.unite"));
+        items.push((tl!("Group"), "group", "object.group"));
+        items.push((tl!("Unite"), "squares-unite", "object.pathfinder.unite"));
     } else if is_group {
-        items.push(("Ungroup", "ungroup", "object.ungroup"));
-        items.push(("Isolate", "square-dashed", "object.isolate"));
+        items.push((tl!("Ungroup"), "ungroup", "object.ungroup"));
+        items.push((tl!("Isolate"), "square-dashed", "object.isolate"));
     } else if is_text {
-        items.push(("Create Outlines", "type", "type.createOutlines"));
+        items.push((tl!("Create Outlines"), "type", "type.createOutlines"));
     } else {
-        items.push(("Offset Path", "square-dashed", "object.path.offsetPath"));
-        items.push(("Simplify", "spline", "object.path.simplify"));
+        items.push((tl!("Offset Path"), "square-dashed", "object.path.offsetPath"));
+        items.push((tl!("Simplify"), "spline", "object.path.simplify"));
     }
-    items.push(("Duplicate", "copy", "edit.duplicate"));
+    items.push((tl!("Duplicate"), "copy", "edit.duplicate"));
     let fill = first.as_ref().map(|f| f.appearance.fill_paint()).unwrap_or_default();
     let anchor = xf.to_screen(Point::new(b.center().x, b.y1));
     let est_w = 118.0 + items.iter().map(|(l, _, _)| l.len() as f32 * 7.2 + 44.0).sum::<f32>();
@@ -1385,14 +1385,14 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                         Stroke::new(1.0, t.button_border),
                         StrokeKind::Outside,
                     );
-                    if resp.on_hover_text("Fill").clicked() {
+                    if resp.on_hover_text(tl!("Fill")).clicked() {
                         app.session.fill_active = true;
                         app.ui.open_panel = Some("swatches".into());
                     }
-                    if widgets::icon_button(ui, "lock", "Lock (⌘2)", false, 30.0).clicked() {
+                    if widgets::icon_button(ui, "lock", tl!("Lock (⌘2)"), false, 30.0).clicked() {
                         run = Some("object.lock".into());
                     }
-                    if widgets::icon_button(ui, "ellipsis", "Hide Contextual Task Bar", false, 30.0).clicked() {
+                    if widgets::icon_button(ui, "ellipsis", tl!("Hide Contextual Task Bar"), false, 30.0).clicked() {
                         run = Some("window.taskBar".into());
                     }
                 });

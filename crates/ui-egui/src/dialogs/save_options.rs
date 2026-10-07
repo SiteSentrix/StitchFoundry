@@ -27,13 +27,13 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_wid
 fn heading(d: &Dialog) -> String {
     if d.bool("__pick") {
         return match SaveMode::of(&d.str("__action")) {
-            Some(SaveMode::Copy) => "Save a Copy",
-            Some(SaveMode::Template) => "Save as Template",
-            _ => "Save As",
+            Some(SaveMode::Copy) => tl!("Save a Copy"),
+            Some(SaveMode::Template) => tl!("Save as Template"),
+            _ => tl!("Save As"),
         }
         .into();
     }
-    format!("{} Options", fileio::format(&d.str("format")).map_or("", |f| f.label))
+    crate::i18n::fmt(tl!("{format} Options"), &[("format", fileio::format(&d.str("format")).map_or("", |f| f.label))])
 }
 
 /// `f`'s options with the values a save would use (`file.formatOptions`: as last saved in that
@@ -74,11 +74,11 @@ fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
 /// others from their names.
 fn label(o: &FormatOption) -> String {
     match o.name {
-        "separateArtboards" => "Save each artboard to a separate file".into(),
-        "includeLinked" => "Include Linked Files".into(),
-        "embedProfiles" => "Embed ICC Profiles".into(),
-        "pdfCompatible" => "Create PDF-Compatible File".into(),
-        "compress" => "Use Compression".into(),
+        "separateArtboards" => tl!("Save each artboard to a separate file").into(),
+        "includeLinked" => tl!("Include Linked Files").into(),
+        "embedProfiles" => tl!("Embed ICC Profiles").into(),
+        "pdfCompatible" => tl!("Create PDF-Compatible File").into(),
+        "compress" => tl!("Use Compression").into(),
         _ => form::humanize(o.name),
     }
 }
@@ -96,7 +96,7 @@ fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog) {
         ui.horizontal(|ui| {
             ui.add_space(22.0);
             let mut all = all_artboards(d);
-            if ui.radio_value(&mut all, true, "All").changed() | ui.radio_value(&mut all, false, "Range:").changed() {
+            if ui.radio_value(&mut all, true, tl!("All")).changed() | ui.radio_value(&mut all, false, tl!("Range:")).changed() {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
@@ -121,9 +121,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let mut switch = None;
     egui::Grid::new("save-options").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         if d.bool("__pick") {
-            form::field_w(ui, d, "path", "File Name:", 240.0);
+            form::field_w(ui, d, "path", tl!("File Name:"), 240.0);
             if SaveMode::of(&d.str("__action")) != Some(SaveMode::Template) {
-                ui.label(egui::RichText::new("Format:").color(t.text_dim));
+                ui.label(egui::RichText::new(tl!("Format:")).color(t.text_dim));
                 switch = widgets::dropdown(ui, "save-format", f.label, save_labels(), 254.0).and_then(|i| SAVE_FORMATS.get(i).copied());
                 ui.end_row();
             }

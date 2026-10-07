@@ -76,7 +76,7 @@ pub(super) fn rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, label: Label) {
         "tiff" => tiff_rows(ui, d, label),
         "bmp" => bmp_rows(ui, d, label),
         "tga" => {
-            label(ui, "Depth:");
+            label(ui, tl!("Depth:"));
             depth_row(ui, d, "tga-depth", &tga::DEPTHS, &TGA_DEPTH_LABELS, |_| true);
             ui.end_row();
         }
@@ -85,51 +85,51 @@ pub(super) fn rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, label: Label) {
 }
 
 fn tiff_rows(ui: &mut egui::Ui, d: &mut Dialog, label: Label) {
-    label(ui, "Color Model:");
+    label(ui, tl!("Color Model:"));
     choice(ui, d, "colorModel", &ColorModel::ALL.map(ColorModel::id), &ColorModel::ALL.map(ColorModel::label));
     ui.end_row();
 
-    label(ui, "Byte Order:");
+    label(ui, tl!("Byte Order:"));
     choice(ui, d, "byteOrder", &ByteOrder::ALL.map(ByteOrder::id), &ByteOrder::ALL.map(ByteOrder::label));
     ui.end_row();
 
     ui.label("");
     ui.horizontal(|ui| {
-        form::check(ui, d, "lzw", "LZW Compression");
-        form::check(ui, d, "embedIcc", "Embed ICC Profile");
+        form::check(ui, d, "lzw", tl!("LZW Compression"));
+        form::check(ui, d, "embedIcc", tl!("Embed ICC Profile"));
     });
     ui.end_row();
 }
 
 fn bmp_rows(ui: &mut egui::Ui, d: &mut Dialog, label: Label) {
-    label(ui, "Color Model:");
+    label(ui, tl!("Color Model:"));
     choice(ui, d, "colorModel", &BMP_MODELS, &BMP_MODEL_LABELS);
     ui.end_row();
 
-    label(ui, "File Format:");
+    label(ui, tl!("File Format:"));
     choice(ui, d, "fileFormat", &LAYOUTS, &LAYOUT_LABELS);
     ui.end_row();
 
     let os2 = d.str("fileFormat") == LAYOUTS[1];
-    label(ui, "Depth:");
+    label(ui, tl!("Depth:"));
     depth_row(ui, d, "bmp-depth", &bmp::DEPTHS, &BMP_DEPTH_LABELS, |depth| !os2 || bmp::OS2_DEPTHS.contains(&depth));
     ui.end_row();
 
     // The palette of a colour image at 4 or 8 bits (1 bit is black and white; greys are fixed).
     let depth = d.f64("depth", 24.0) as u8;
     if matches!(depth, 4 | 8) && d.str("colorModel") != BMP_MODELS[1] {
-        label(ui, "Color Reduction:");
+        label(ui, tl!("Color Reduction:"));
         choice(ui, d, "reduction", &Reduction::ALL.map(Reduction::id), &Reduction::ALL.map(Reduction::label));
         ui.end_row();
-        label(ui, "Dither:");
+        label(ui, tl!("Dither:"));
         choice(ui, d, "dither", &Dither::ALL.map(Dither::id), &Dither::ALL.map(Dither::label));
         ui.end_row();
     }
 
     ui.label("");
     ui.horizontal(|ui| {
-        ui.add_enabled_ui(!os2 && matches!(depth, 4 | 8), |ui| form::check(ui, d, "rle", "Compress (RLE)"));
-        ui.add_enabled_ui(!os2 && !d.bool("rle"), |ui| form::check(ui, d, "flipRows", "Flip Row Order"));
+        ui.add_enabled_ui(!os2 && matches!(depth, 4 | 8), |ui| form::check(ui, d, "rle", tl!("Compress (RLE)")));
+        ui.add_enabled_ui(!os2 && !d.bool("rle"), |ui| form::check(ui, d, "flipRows", tl!("Flip Row Order")));
     });
     ui.end_row();
     normalize_bmp(d);

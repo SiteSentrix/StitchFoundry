@@ -26,8 +26,15 @@ const OPTIONS: [(&str, &str); 5] = [
     ("report", "Create Report"),
 ];
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Package".into(), body, confirm, ok: Some("Package"), min_width: 440.0, max_width: Some(460.0), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Package").into(),
+    body,
+    confirm,
+    ok: Some("Package"),
+    min_width: 440.0,
+    max_width: Some(460.0),
+    ..DialogSpec::FORM
+};
 
 /// Is there no file system to write a folder to (the web downloads a zip)?
 fn downloads(app: &VectorcraftApp) -> bool {
@@ -38,7 +45,13 @@ fn downloads(app: &VectorcraftApp) -> bool {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     let Some(path) = st.path.clone() else {
-        ask(app, "Save the document first?", "Package collects a saved document with its linked files and fonts.", "file.saveAs", json!({}));
+        ask(
+            app,
+            tl!("Save the document first?"),
+            tl!("Package collects a saved document with its linked files and fonts."),
+            "file.saveAs",
+            json!({}),
+        );
         return Ok(Value::Null);
     };
     let p = std::path::Path::new(&path);
@@ -55,10 +68,10 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     if !downloads(app) {
-        widgets::label_row(ui, "Location:", LABEL, |ui| {
+        widgets::label_row(ui, tl!("Location:"), LABEL, |ui| {
             form::text(ui, d, "folder", 230.0);
             if let Some(pick) = app.services.pick_folder.as_mut()
-                && ui.button("Choose…").clicked()
+                && ui.button(tl!("Choose…")).clicked()
                 && let Some(f) = pick()
             {
                 d.fields.insert("folder".into(), json!(f));
@@ -66,11 +79,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
         ui.add_space(4.0);
     }
-    widgets::label_row(ui, "Folder Name:", LABEL, |ui| {
+    widgets::label_row(ui, tl!("Folder Name:"), LABEL, |ui| {
         form::text(ui, d, "name", 230.0);
     });
     ui.add_space(10.0);
-    widgets::subheader(ui, "Options");
+    widgets::subheader(ui, tl!("Options"));
     for (k, label) in OPTIONS {
         // The link options apply only when the links are copied.
         let enabled = !matches!(k, "linksFolder" | "relink") || d.bool("copyLinks");
@@ -80,7 +93,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     }
     ui.add_space(6.0);
-    ui.label(egui::RichText::new("Fonts whose licence doesn't allow embedding are not copied.").size(11.5).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!("Fonts whose licence doesn't allow embedding are not copied.")).size(11.5).color(t.text_dim));
     false
 }
 
@@ -110,8 +123,16 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     let folder = r["folder"].as_str().unwrap_or_default().to_string();
     app.status(format!("Packaged {n} file(s) in {folder}{note}"));
-    let detail = format!("{n} file(s) in {folder}{note}. Show the package folder?");
-    ask(app, "Package created", &detail, "file.showPackage", json!({ "folder": folder }));
+    let shown_note = if missing > 0 {
+        format!(" ({})", crate::i18n::fmt(tl!("{count} linked file(s) not found"), &[("count", &missing.to_string())]))
+    } else {
+        String::new()
+    };
+    let detail = crate::i18n::fmt(
+        tl!("{count} file(s) in {folder}{note}. Show the package folder?"),
+        &[("count", &n.to_string()), ("folder", &folder), ("note", &shown_note)],
+    );
+    ask(app, tl!("Package created"), &detail, "file.showPackage", json!({ "folder": folder }));
     Ok(r)
 }
 

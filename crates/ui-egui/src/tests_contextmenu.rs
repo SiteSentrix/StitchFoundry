@@ -150,3 +150,32 @@ fn the_menu_follows_the_selection() {
     assert!(!matches!(items.first(), Some(Item::Sep)) && !matches!(items.last(), Some(Item::Sep)));
     assert!(items.windows(2).all(|w| !matches!(w, [Item::Sep, Item::Sep])));
 }
+
+/// Every label the context menu can show is a menu string, so complete catalogs must translate it.
+#[test]
+fn every_context_label_is_a_menu_string() {
+    let strings = menus::menu_strings();
+    let mut app = app();
+    let mut shown = vec![];
+    // Nothing selected, one path, two paths, a group, a clipping group, a compound path, isolation.
+    shown.extend(labels(&menus::context_items(&app)));
+    let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 50.0, 50.0));
+    shown.extend(labels(&menus::context_items(&app)));
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    shown.extend(labels(&menus::context_items(&app)));
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    shown.extend(labels(&menus::context_items(&app)));
+    app.run("object.compoundPath.release", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.clippingMask.make", json!({})).unwrap();
+    shown.extend(labels(&menus::context_items(&app)));
+    app.run("object.group", json!({})).unwrap();
+    shown.extend(labels(&menus::context_items(&app)));
+    menus::invoke(&mut app, "object.isolate", json!({}));
+    shown.extend(labels(&menus::context_items(&app)));
+    let missing: Vec<_> = shown.iter().filter(|l| !strings.contains(**l)).collect();
+    assert!(missing.is_empty(), "context menu labels missing from menu_strings: {missing:?}");
+    for label in menus::CONTEXT_LABELS {
+        assert!(shown.contains(label), "`{label}` is listed but the context menu never shows it");
+    }
+}

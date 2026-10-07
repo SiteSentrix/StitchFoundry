@@ -234,17 +234,17 @@ pub(crate) fn describe(paint: &Paint, global: bool, spot: bool) -> String {
     match paint {
         Paint::Solid { color, .. } => {
             let kind = if spot {
-                "Spot Color"
+                tl!("Spot Color")
             } else if global {
-                "Global Process Color"
+                tl!("Global Process Color")
             } else {
-                "Process Color"
+                tl!("Process Color")
             };
-            format!("{kind}, {}", color.model_name())
+            crate::i18n::fmt(tl!("{kind}, {model}"), &[("kind", kind), ("model", color.model_name())])
         }
-        Paint::Gradient(g) => format!("{} Gradient", g.gradient.kind.label()),
-        Paint::Pattern { .. } => "Pattern".into(),
-        Paint::None => "None".into(),
+        Paint::Gradient(g) => crate::i18n::fmt(tl!("{kind} Gradient"), &[("kind", tl!(g.gradient.kind.label()))]),
+        Paint::Pattern { .. } => tl!("Pattern").into(),
+        Paint::None => tl!("None").into(),
     }
 }
 
@@ -423,7 +423,7 @@ fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String
     }
     tile_drop(ui, &resp, e, list, ev);
     let resp = match e {
-        Entry::Folder(n) => resp.on_hover_text(format!("Color Group: {n}")),
+        Entry::Folder(n) => resp.on_hover_text(crate::i18n::fmt(tl!("Color Group: {name}"), &[("name", n)])),
         Entry::Swatch { paint, global, spot, .. } if list => resp.on_hover_ui(|ui| {
             ui.label(format!("{name} ({})", describe(paint, *global, *spot)));
         }),
@@ -614,7 +614,7 @@ const POPOVER_TILE: &str = "swatch-pop-tile";
 /// The panel's body; `salt` keys its tiles (see [`tile_id`]).
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     if app.session.active().is_none() {
-        super::empty_state(ui, "swatch-book", "No document", "Open a document to see its swatches.");
+        super::empty_state(ui, "swatch-book", tl!("No document"), tl!("Open a document to see its swatches."));
         return;
     }
     let view: View = pstate(ui.ctx(), "swatch-view");
@@ -623,18 +623,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     ui.horizontal(|ui| {
         super::proxy(app, ui, 34.0);
         ui.add_space(ui.available_width() - 58.0);
-        if widgets::icon_button(ui, "dc-list-view", "Show List View", view.is_list(), 26.0).clicked() {
+        if widgets::icon_button(ui, "dc-list-view", tl!("Show List View"), view.is_list(), 26.0).clicked() {
             set_pstate(ui.ctx(), "swatch-view", View::SmallList);
         }
-        if widgets::icon_button(ui, "dc-grid-view", "Show Thumbnail View", !view.is_list(), 26.0).clicked() {
+        if widgets::icon_button(ui, "dc-grid-view", tl!("Show Thumbnail View"), !view.is_list(), 26.0).clicked() {
             set_pstate(ui.ctx(), "swatch-view", View::MediumThumb);
         }
     });
     ui.add_space(4.0);
     super::recent_colors_row(app, ui);
     widgets::divider(ui);
-    widgets::subheader(ui, "Swatch Tiles");
-    let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), "Find") } else { String::new() };
+    widgets::subheader(ui, tl!("Swatch Tiles"));
+    let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), tl!("Find")) } else { String::new() };
     let items = entries(app, kind, &query);
     let active_swatch = active_swatch(app);
     let selected = selection(app, ui);
@@ -832,10 +832,10 @@ fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
         return;
     }
     let message = match names.as_slice() {
-        [n] => format!("Delete “{n}”?"),
-        _ => format!("Delete these {} swatches and groups?", names.len()),
+        [n] => crate::i18n::fmt(tl!("Delete “{name}”?"), &[("name", n)]),
+        _ => crate::i18n::fmt(tl!("Delete these {count} swatches and groups?"), &[("count", &names.len().to_string())]),
     };
-    crate::dialogs::confirm::ask(app, &message, "Art using a deleted global swatch keeps its colour.", "swatch.delete", params);
+    crate::dialogs::confirm::ask(app, &message, tl!("Art using a deleted global swatch keeps its colour."), "swatch.delete", params);
 }
 
 fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
@@ -847,7 +847,7 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
             ui.set_min_width(200.0);
             library_panel::library_menu::<SwatchLibraries>(app, ui);
         });
-        let kr = widgets::icon_button(ui, "dc-swatch-kinds", "Show Swatch Kinds", kind != Kind::All, 24.0);
+        let kr = widgets::icon_button(ui, "dc-swatch-kinds", tl!("Show Swatch Kinds"), kind != Kind::All, 24.0);
         egui::Popup::menu(&kr).show(|ui| {
             for (k, label) in Kind::ALL {
                 if menu_item(ui, label, true, k == kind) {
@@ -858,26 +858,26 @@ fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
         // With a colour group selected the options button edits or applies the group.
         let opts = editable(app, sel);
         if let Some(g) = selected_group(app, sel).filter(|_| opts.is_none()) {
-            if widgets::icon_button(ui, "palette", "Edit or Apply Color Group", false, 24.0).clicked() {
+            if widgets::icon_button(ui, "palette", tl!("Edit or Apply Color Group"), false, 24.0).clicked() {
                 edit_group(app, &g);
             }
-        } else if widgets::icon_button_enabled(ui, "dc-options", "Swatch Options", false, opts.is_some(), 24.0).clicked()
+        } else if widgets::icon_button_enabled(ui, "dc-options", tl!("Swatch Options"), false, opts.is_some(), 24.0).clicked()
             && let Some(n) = opts
         {
             app.run("ui.swatchOptions", json!({"name": n})).ok();
         }
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
-        if widgets::icon_button(ui, "dc-folder", "New Color Group", false, 24.0).clicked() {
+        if widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0).clicked() {
             app.run("ui.newColorGroup", json!({"swatches": deletable(sel)})).ok();
         }
         // Alt-click skips the dialog; Ctrl/Cmd-click makes a spot colour.
-        if widgets::icon_button(ui, "dc-new-item", "New Swatch", false, 24.0).clicked() {
+        if widgets::icon_button(ui, "dc-new-item", tl!("New Swatch"), false, 24.0).clicked() {
             let m = ui.input(|i| i.modifiers);
             new_swatch(app, sel, m.command, m.alt);
         }
         // Alt-click deletes without asking.
         let del = deletable(sel);
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Swatch", false, !del.is_empty(), 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Swatch"), false, !del.is_empty(), 24.0).clicked() {
             delete(app, del, ui.input(|i| i.modifiers.alt));
         }
     });
@@ -911,50 +911,50 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let selected = selection(app, ui);
     let del = deletable(&selected);
     let opts = editable(app, &selected);
-    if menu_item(ui, "New Swatch…", true, false) {
+    if menu_item(ui, tl!("New Swatch…"), true, false) {
         new_swatch(app, &selected, false, false);
     }
-    if menu_item(ui, "New Color Group…", true, false) {
+    if menu_item(ui, tl!("New Color Group…"), true, false) {
         app.run("ui.newColorGroup", json!({"swatches": del})).ok();
     }
-    if menu_item(ui, "Duplicate Swatch", opts.is_some(), false)
+    if menu_item(ui, tl!("Duplicate Swatch"), opts.is_some(), false)
         && let Some(n) = &opts
     {
         app.run("swatch.duplicate", json!({"name": n})).ok();
     }
     // The first selected colour is kept.
     let merge = mergeable(app, &selected);
-    if menu_item(ui, "Merge Swatches", merge.len() > 1, false) {
+    if menu_item(ui, tl!("Merge Swatches"), merge.len() > 1, false) {
         app.run("swatch.merge", json!({ "names": merge })).ok();
     }
-    if menu_item(ui, "Delete Swatch", !del.is_empty(), false) {
+    if menu_item(ui, tl!("Delete Swatch"), !del.is_empty(), false) {
         delete(app, del, false);
     }
     let group = selected_group(app, &selected);
-    if menu_item(ui, "Edit or Apply Color Group…", group.is_some(), false)
+    if menu_item(ui, tl!("Edit or Apply Color Group…"), group.is_some(), false)
         && let Some(g) = &group
     {
         edit_group(app, g);
     }
-    if menu_item(ui, "Ungroup Color Group", group.is_some(), false)
+    if menu_item(ui, tl!("Ungroup Color Group"), group.is_some(), false)
         && let Some(g) = group
     {
         app.run("swatch.ungroup", json!({ "name": g })).ok();
     }
-    if menu_item(ui, "Select All Unused", true, false)
+    if menu_item(ui, tl!("Select All Unused"), true, false)
         && let Ok(r) = app.run("swatch.unused", json!({}))
     {
         let names: Vec<String> = r["names"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
         set_pstate(ui.ctx(), "swatch-selected", names);
     }
-    if menu_item(ui, "Add Used Colors", true, false) {
+    if menu_item(ui, tl!("Add Used Colors"), true, false) {
         app.run("swatch.addUsedColors", json!({})).ok();
     }
     ui.separator();
-    if menu_item(ui, "Sort by Name", true, false) {
+    if menu_item(ui, tl!("Sort by Name"), true, false) {
         app.run("swatch.sortByName", json!({})).ok();
     }
-    if menu_item(ui, "Sort by Kind", true, false) {
+    if menu_item(ui, tl!("Sort by Kind"), true, false) {
         app.run("swatch.sortByKind", json!({})).ok();
     }
     ui.separator();
@@ -965,21 +965,21 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     let find: bool = pstate(ui.ctx(), "swatch-show-find");
-    if menu_item(ui, "Show Find Field", true, find) {
+    if menu_item(ui, tl!("Show Find Field"), true, find) {
         set_pstate(ui.ctx(), "swatch-show-find", !find);
     }
     ui.separator();
-    if menu_item(ui, "Swatch Options…", opts.is_some(), false)
+    if menu_item(ui, tl!("Swatch Options…"), opts.is_some(), false)
         && let Some(n) = opts
     {
         app.run("ui.swatchOptions", json!({"name": n})).ok();
     }
-    if menu_item(ui, "Spot Colors…", app.session.active().is_some(), false) {
+    if menu_item(ui, tl!("Spot Colors…"), app.session.active().is_some(), false) {
         app.run("ui.spotColors", json!({})).ok();
     }
     ui.separator();
-    ui.menu_button("Open Swatch Library", |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
-    if menu_item(ui, "Save Swatch Library…", true, false) {
+    ui.menu_button(tl!("Open Swatch Library"), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
+    if menu_item(ui, tl!("Save Swatch Library…"), true, false) {
         app.run("ui.saveSwatchLibrary", json!({ "names": deletable(&selected) })).ok();
     }
 }
@@ -1071,19 +1071,19 @@ impl LibraryKind for SwatchLibraries {
         add_from_library(app, json!({"library": id, "names": names}));
     }
     fn menu_head(app: &mut VectorcraftApp, ui: &mut Ui) {
-        if menu_item(ui, "Default Swatches", app.session.active().is_some(), false) {
+        if menu_item(ui, tl!("Default Swatches"), app.session.active().is_some(), false) {
             app.run("swatch.resetDefaults", json!({})).ok();
         }
         ui.separator();
     }
     fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.separator();
-        if menu_item(ui, "Other Library…", true, false)
+        if menu_item(ui, tl!("Other Library…"), true, false)
             && let Err(e) = other_library(app, None)
         {
             app.status(e);
         }
-        if menu_item(ui, "Save Swatch Library…", app.session.active().is_some(), false) {
+        if menu_item(ui, tl!("Save Swatch Library…"), app.session.active().is_some(), false) {
             let names = deletable(&selection(app, ui));
             app.run("ui.saveSwatchLibrary", json!({ "names": names })).ok();
         }

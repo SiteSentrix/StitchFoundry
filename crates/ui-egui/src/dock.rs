@@ -28,7 +28,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let mut x = strip.left();
             for (tab, label) in [(DockTab::Properties, "Properties"), (DockTab::Layers, "Layers"), (DockTab::Libraries, "Libraries")] {
                 let active = app.ui.dock_tab == tab;
-                let galley = ui.painter().layout_no_wrap(label.to_string(), theme::semibold(12.5), if active { t.text_strong } else { t.text_dim });
+                let galley =
+                    ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.5), if active { t.text_strong } else { t.text_dim });
                 let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(galley.size().x + 24.0, strip.height() - 1.0));
                 let resp = ui.interact(r, ui.id().with(("docktab", label)), Sense::click());
                 if active {
@@ -99,10 +100,10 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.painter().rect_filled(strip, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, t.panel_darker);
             let tab = egui::Rect::from_min_size(
                 strip.min,
-                vec2(ui.painter().layout_no_wrap(label.to_string(), theme::semibold(12.0), t.text).size().x + 24.0, 26.0),
+                vec2(ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.0), t.text).size().x + 24.0, 26.0),
             );
             ui.painter().rect_filled(tab, CornerRadius { nw: 4, ne: 0, sw: 0, se: 0 }, t.panel);
-            ui.painter().text(tab.left_center() + vec2(12.0, 0.0), egui::Align2::LEFT_CENTER, *label, theme::semibold(12.0), t.text);
+            ui.painter().text(tab.left_center() + vec2(12.0, 0.0), egui::Align2::LEFT_CENTER, tl!(label), theme::semibold(12.0), t.text);
             let close = egui::Rect::from_center_size(strip.right_center() - vec2(13.0, 0.0), vec2(14.0, 14.0));
             let cr = ui.interact(close, ui.id().with("close-panel"), Sense::click());
             icons::paint(ui, "chevrons-right", close, if cr.hovered() { t.text } else { t.text_dim });

@@ -12,7 +12,7 @@ use crate::{VectorcraftApp, io, widgets};
 pub(crate) const KIND: &str = "saveForOffice";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Save for Office Documents".into(), body, confirm, ok: Some("Save…"), min_width: 340.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Save for Office Documents").into(), body, confirm, ok: Some("Save…"), min_width: 340.0, ..DialogSpec::FORM };
 
 /// Open the dialog (150 ppi on white, the first artboard).
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -28,7 +28,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let ppi = d.f64("ppi", RESOLUTIONS[1]);
     let board = (d.f64("artboard", 0.0).max(0.0) as usize).min(doc.artboards.len().saturating_sub(1));
     egui::Grid::new("office-export").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        label(ui, "Resolution:");
+        label(ui, tl!("Resolution:"));
         let at = RESOLUTIONS.iter().position(|r| *r == ppi).unwrap_or(1);
         if let Some(i) = widgets::dropdown(ui, "office-ppi", RESOLUTION_LABELS[at], &RESOLUTION_LABELS[..RESOLUTIONS.len()], 160.0)
             && let Some(r) = RESOLUTIONS.get(i)
@@ -37,7 +37,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
         ui.end_row();
         if doc.artboards.len() > 1 {
-            label(ui, "Artboard:");
+            label(ui, tl!("Artboard:"));
             let names: Vec<&str> = doc.artboards.iter().map(|a| a.name.as_str()).collect();
             if let Some(i) = widgets::dropdown(ui, "office-artboard", names.get(board).copied().unwrap_or_default(), &names, 160.0) {
                 d.fields.insert("artboard".into(), json!(i));
@@ -45,14 +45,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             ui.end_row();
         }
         if let Some(a) = doc.artboards.get(board) {
-            label(ui, "Size:");
+            label(ui, tl!("Size:"));
             let (w, h) = vectorcraft_render::region_pixels(a.rect, ppi / 72.0);
             ui.label(egui::RichText::new(format!("{w} × {h} px")).color(t.text));
             ui.end_row();
         }
     });
     ui.add_space(8.0);
-    form::check(ui, d, "transparent", "Transparent Background");
+    form::check(ui, d, "transparent", tl!("Transparent Background"));
     false
 }
 

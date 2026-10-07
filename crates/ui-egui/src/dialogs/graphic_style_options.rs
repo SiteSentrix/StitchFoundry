@@ -16,7 +16,8 @@ use crate::state::Dialog;
 /// The dialog kind of Graphic Style Options.
 pub const KIND: &str = "graphicStyleOptions";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Graphic Style Options".into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading: |_| tl!("Graphic Style Options").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
 
 /// Open Graphic Style Options for style `name`, or (`None`) to name a new style from the selection.
 pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, String> {
@@ -45,7 +46,7 @@ pub fn open_merge(app: &mut VectorcraftApp, names: Vec<String>) -> Result<Value,
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     grid(ui, |ui| {
-        label(ui, "Style Name:");
+        label(ui, tl!("Style Name:"));
         form::text(ui, d, "name", 190.0);
         ui.end_row();
     });

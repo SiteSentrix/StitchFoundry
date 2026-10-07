@@ -15,7 +15,7 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of New Color Group.
 pub const KIND: &str = "newColorGroup";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "New Color Group".into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("New Color Group").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
 
 /// Open New Color Group for the swatches selected in the panel. It starts from the artwork when
 /// art is selected and no swatches are.
@@ -40,20 +40,20 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         d.fields.insert(key.into(), json!(v));
     };
     grid(ui, |ui| {
-        label(ui, "Name:");
+        label(ui, tl!("Name:"));
         form::text(ui, d, "name", 190.0);
         ui.end_row();
-        label(ui, "Create From:");
-        if widgets::radio(ui, "Selected Swatches", !art, true) {
+        label(ui, tl!("Create From:"));
+        if widgets::radio(ui, tl!("Selected Swatches"), !art, true) {
             set(d, "fromArtwork", false);
         }
         ui.end_row();
         ui.label("");
-        if widgets::radio(ui, "Selected Artwork", art, d.bool("__art")) {
+        if widgets::radio(ui, tl!("Selected Artwork"), art, d.bool("__art")) {
             set(d, "fromArtwork", true);
         }
         ui.end_row();
-        for (key, text) in [("toGlobal", "Convert Process to Global"), ("includeTints", "Include Swatches for Tints")] {
+        for (key, text) in [("toGlobal", tl!("Convert Process to Global")), ("includeTints", tl!("Include Swatches for Tints"))] {
             ui.label("");
             ui.horizontal(|ui| {
                 ui.add_space(18.0);

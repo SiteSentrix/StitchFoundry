@@ -21,7 +21,7 @@ const UI_ONLY: [&str; 2] = ["tab", "bleedLinked"];
 pub(super) const LABEL: f32 = 130.0;
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Document Setup".into(), body, confirm, min_width: 540.0, max_width: Some(540.0), ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Document Setup").into(), body, confirm, min_width: 540.0, max_width: Some(540.0), ..DialogSpec::FORM };
 
 /// Open Document Setup on the active document's settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -79,28 +79,28 @@ fn unit(d: &Dialog) -> Unit {
 
 fn general(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let units: Vec<(&str, &str)> = Unit::ALL.iter().map(|u| (u.label(), u.label())).collect();
-    choice(ui, d, "units", "Units:", &units);
+    choice(ui, d, "units", tl!("Units:"), &units);
     ui.add_space(6.0);
     let unit = unit(d);
-    widgets::label_row(ui, "Bleed:", LABEL, |ui| form::bleed(ui, d, unit, 64.0));
+    widgets::label_row(ui, tl!("Bleed:"), LABEL, |ui| form::bleed(ui, d, unit, 64.0));
     ui.add_space(6.0);
     widgets::label_row(ui, "", LABEL, |ui| {
         // Applies the settings, then edits the artboards with the Artboard tool.
-        if widgets::flat_button(ui, "Edit Artboards", 120.0).clicked() && confirm(app, d).is_ok() {
+        if widgets::flat_button(ui, tl!("Edit Artboards"), 120.0).clicked() && confirm(app, d).is_ok() {
             app.select_tool("artboard");
         }
     });
     ui.add_space(12.0);
-    check(ui, d, "outlineImages", "Show Images in Outline Mode");
-    check(ui, d, "highlightSubstitutedFonts", "Highlight Substituted Fonts");
-    check(ui, d, "highlightSubstitutedGlyphs", "Highlight Substituted Glyphs");
+    check(ui, d, "outlineImages", tl!("Show Images in Outline Mode"));
+    check(ui, d, "highlightSubstitutedFonts", tl!("Highlight Substituted Fonts"));
+    check(ui, d, "highlightSubstitutedGlyphs", tl!("Highlight Substituted Glyphs"));
 }
 
 fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
-    widgets::subheader(ui, "Transparency Grid");
+    widgets::subheader(ui, tl!("Transparency Grid"));
     let sizes: Vec<(&str, &str)> = GridSize::ALL.iter().map(|g| (g.id(), g.label())).collect();
-    choice(ui, d, "gridSize", "Grid Size:", &sizes);
+    choice(ui, d, "gridSize", tl!("Grid Size:"), &sizes);
     let colors: Vec<String> = d
         .fields
         .get("gridColors")
@@ -112,7 +112,7 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         .find(|(_, pair)| colors.len() == 2 && colors.iter().zip(pair).all(|(h, c)| h.eq_ignore_ascii_case(&c.to_hex())))
         .map_or("Custom", |(n, _)| n);
     let names: Vec<&str> = GRID_COLOR_PRESETS.iter().map(|(n, _)| *n).chain(["Custom"]).collect();
-    widgets::label_row(ui, "Grid Colors:", LABEL, |ui| {
+    widgets::label_row(ui, tl!("Grid Colors:"), LABEL, |ui| {
         if let Some((_, pair)) = widgets::dropdown(ui, "gridColors", preset, &names, 220.0).and_then(|i| GRID_COLOR_PRESETS.get(i)) {
             d.fields.insert("gridColors".into(), json!(pair.map(|c| c.to_hex())));
         }
@@ -136,27 +136,29 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         }
     });
     ui.add_space(4.0);
-    check(ui, d, "simulatePaper", "Simulate Colored Paper");
+    check(ui, d, "simulatePaper", tl!("Simulate Colored Paper"));
     ui.add_space(14.0);
-    widgets::subheader(ui, "Export and Clipboard Transparency Flattener Settings");
+    widgets::subheader(ui, tl!("Export and Clipboard Transparency Flattener Settings"));
     let presets: Vec<String> = app.session.flattener_presets().into_iter().map(|p| p.name).collect();
     let options: Vec<(&str, &str)> = presets.iter().map(|p| (p.as_str(), p.as_str())).collect();
-    choice(ui, d, "flattenerPreset", "Preset:", &options);
-    check(ui, d, "discardWhiteOverprint", "Discard White Overprint in Output");
+    choice(ui, d, "flattenerPreset", tl!("Preset:"), &options);
+    check(ui, d, "discardWhiteOverprint", tl!("Discard White Overprint in Output"));
 }
 
 fn typography(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let langs: Vec<(&str, &str)> = LANGUAGES.iter().map(|(l, _)| (*l, *l)).collect();
     let before = d.str("language");
-    choice(ui, d, "language", "Language:", &langs);
+    choice(ui, d, "language", tl!("Language:"), &langs);
     // A language brings its quotes.
     if d.str("language") != before
         && let Some(q) = vectorcraft_doc::setup::language_quotes(&d.str("language"))
     {
         d.fields.insert("quotes".into(), json!({"double": q.double.iter().collect::<String>(), "single": q.single.iter().collect::<String>()}));
     }
-    for (key, label, choices) in [("double", "Double Quotes:", Quotes::DOUBLE_CHOICES), ("single", "Single Quotes:", Quotes::SINGLE_CHOICES)] {
+    for (key, label, choices) in
+        [("double", tl!("Double Quotes:"), Quotes::DOUBLE_CHOICES), ("single", tl!("Single Quotes:"), Quotes::SINGLE_CHOICES)]
+    {
         let pairs: Vec<String> = choices.iter().map(|p| p.iter().collect()).collect();
         let labels: Vec<&str> = pairs.iter().map(String::as_str).collect();
         let cur = d.fields.get("quotes").and_then(|q| q.get(key)).and_then(Value::as_str).unwrap_or("").to_string();
@@ -168,16 +170,16 @@ fn typography(ui: &mut egui::Ui, d: &mut Dialog) {
             }
         });
     }
-    check(ui, d, "typographersQuotes", "Use Typographer's Quotes");
+    check(ui, d, "typographersQuotes", tl!("Use Typographer's Quotes"));
     ui.add_space(14.0);
-    widgets::subheader(ui, "Options");
+    widgets::subheader(ui, tl!("Options"));
     egui::Grid::new("docsetup-scripts").num_columns(3).spacing([16.0, 6.0]).show(ui, |ui| {
         ui.label("");
-        for h in ["Size", "Position"] {
+        for h in [tl!("Size"), tl!("Position")] {
             ui.label(egui::RichText::new(h).size(11.0).color(t.text_dim));
         }
         ui.end_row();
-        for (key, label) in [("superscript", "Superscript:"), ("subscript", "Subscript:")] {
+        for (key, label) in [("superscript", tl!("Superscript:")), ("subscript", tl!("Subscript:"))] {
             ui.label(egui::RichText::new(label).color(t.text));
             for part in ["size", "position"] {
                 let v = d.fields.get(key).and_then(|m| m.get(part)).and_then(Value::as_f64).unwrap_or(0.0);
@@ -189,14 +191,14 @@ fn typography(ui: &mut egui::Ui, d: &mut Dialog) {
             }
             ui.end_row();
         }
-        ui.label(egui::RichText::new("Small Caps:").color(t.text));
+        ui.label(egui::RichText::new(tl!("Small Caps:")).color(t.text));
         if let Some(n) = widgets::plain_field(ui, "smallCaps", d.f64("smallCapsSize", 70.0), "%", 1, 70.0) {
             d.fields.insert("smallCapsSize".into(), json!(n));
         }
         ui.end_row();
     });
     ui.add_space(6.0);
-    choice(ui, d, "exportText", "Export:", &[("editable", "Preserve Text Editability"), ("appearance", "Preserve Text Appearance")]);
+    choice(ui, d, "exportText", tl!("Export:"), &[("editable", tl!("Preserve Text Editability")), ("appearance", tl!("Preserve Text Appearance"))]);
 }
 
 #[cfg(test)]

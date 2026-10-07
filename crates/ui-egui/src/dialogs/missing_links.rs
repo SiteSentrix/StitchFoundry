@@ -19,7 +19,7 @@ use crate::{VectorcraftApp, widgets};
 pub const KIND: &str = "missingLinks";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| "Linked File Not Found".into(),
+    heading: |_| tl!("Linked File Not Found").into(),
     body,
     confirm,
     ok: Some("Replace…"),
@@ -62,8 +62,11 @@ fn ask_update(app: &mut VectorcraftApp, ids: Vec<Value>) {
         app.status(format!("{} linked image(s) changed on disk: Update Links shows the new versions", ids.len()));
         return;
     }
-    let detail = format!("{} linked image(s) changed since this document was saved. Show the new versions?", ids.len());
-    super::confirm::ask(app, "Update Modified Links", &detail, "links.update", json!({ "ids": ids }));
+    let detail = crate::i18n::fmt(
+        tl!("{count} linked image(s) changed since this document was saved. Show the new versions?"),
+        &[("count", &ids.len().to_string())],
+    );
+    super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -86,11 +89,11 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
     });
     ui.add_space(8.0);
-    widgets::dim_label(ui, "Replace it with another file, or ignore it: its images keep showing the preview saved with the document.");
+    widgets::dim_label(ui, tl!("Replace it with another file, or ignore it: its images keep showing the preview saved with the document."));
     if rest > 0 {
         ui.add_space(10.0);
         let all = d.bool("applyToAll");
-        let label = format!("Apply to All ({} more missing)", rest);
+        let label = crate::i18n::fmt(tl!("Apply to All ({count} more missing)"), &[("count", &rest.to_string())]);
         if widgets::check(ui, &label, all, true) {
             d.fields.insert("applyToAll".into(), json!(!all));
         }

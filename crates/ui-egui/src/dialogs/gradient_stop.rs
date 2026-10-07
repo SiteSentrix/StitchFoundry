@@ -100,7 +100,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             egui::Frame::popup(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
                 ui.set_width(250.0);
                 ui.horizontal(|ui| {
-                    for (icon, tip, on) in [("palette", "Color", !swatches), ("swatch-book", "Swatches", swatches)] {
+                    for (icon, tip, on) in [("palette", tl!("Color"), !swatches), ("swatch-book", tl!("Swatches"), swatches)] {
                         if widgets::icon_button(ui, icon, tip, on, 24.0).clicked() {
                             tab = Some(if icon == "palette" { "color" } else { "swatches" });
                         }
@@ -115,13 +115,13 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    widgets::dim_label(ui, "Opacity:");
+                    widgets::dim_label(ui, tl!("Opacity:"));
                     if let Some(v) = widgets::plain_field(ui, "stop-pop-op", target.opacity() as f64 * 100.0, "%", 0, 54.0) {
                         apply(app, &target, &json!({ "opacity": v }));
                     }
                     let (label, key, value) = match &target {
-                        Target::Stop(stops, i) => ("Location:", "location", stops[*i].offset),
-                        Target::Point(p, _) => ("Spread:", "spread", p.spread),
+                        Target::Stop(stops, i) => (tl!("Location:"), "location", stops[*i].offset),
+                        Target::Point(p, _) => (tl!("Spread:"), "spread", p.spread),
                     };
                     widgets::dim_label(ui, label);
                     if let Some(v) = widgets::plain_field(ui, ("stop-pop", key), value as f64 * 100.0, "%", 1, 54.0) {
@@ -145,7 +145,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn swatch_grid(app: &mut VectorcraftApp, ui: &mut egui::Ui, target: &Target) {
     let colors = swatch_colors(app);
     if colors.is_empty() {
-        widgets::dim_label(ui, "The document has no colour swatches.");
+        widgets::dim_label(ui, tl!("The document has no colour swatches."));
         return;
     }
     let current = target.color();

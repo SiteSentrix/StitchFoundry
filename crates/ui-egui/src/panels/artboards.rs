@@ -16,7 +16,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
     if abs.is_empty() {
-        super::empty_state(ui, "dc-artboards", "No document", "Open a document to see its artboards.");
+        super::empty_state(ui, "dc-artboards", tl!("No document"), tl!("Open a document to see its artboards."));
         return;
     }
     let sel = selected(ui, abs.len());
@@ -61,7 +61,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let opt = egui::Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(14.0, 14.0));
                 let oresp = ui.interact(opt, ui.id().with(("ab-opt", i)), Sense::click());
                 icons::paint(ui, "dc-artboard-options", opt, if oresp.hovered() { t.text_strong } else { t.icon });
-                if oresp.on_hover_text("Artboard Options: edit with the Artboard tool").clicked() {
+                if oresp.on_hover_text(tl!("Artboard Options: edit with the Artboard tool")).clicked() {
                     set_pstate(ui.ctx(), "ab-sel", i);
                     app.select_tool("artboard");
                 }
@@ -76,22 +76,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let n = abs.len();
     widgets::bottom_bar(ui, |ui| {
-        widgets::icon_button_enabled(ui, "dc-rearrange", "Rearrange All Artboards (on the roadmap)", false, false, 24.0);
+        widgets::icon_button_enabled(ui, "dc-rearrange", tl!("Rearrange All Artboards (on the roadmap)"), false, false, 24.0);
         ui.add_space((ui.available_width() - 4.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-arrow-up", "Move Up", false, sel > 0, 24.0).clicked()
+        if widgets::icon_button_enabled(ui, "dc-arrow-up", tl!("Move Up"), false, sel > 0, 24.0).clicked()
             && app.run("artboard.reorder", json!({"index": sel, "to": sel - 1})).is_ok()
         {
             set_pstate(ui.ctx(), "ab-sel", sel - 1);
         }
-        if widgets::icon_button_enabled(ui, "dc-arrow-down", "Move Down", false, sel + 1 < n, 24.0).clicked()
+        if widgets::icon_button_enabled(ui, "dc-arrow-down", tl!("Move Down"), false, sel + 1 < n, 24.0).clicked()
             && app.run("artboard.reorder", json!({"index": sel, "to": sel + 1})).is_ok()
         {
             set_pstate(ui.ctx(), "ab-sel", sel + 1);
         }
-        if widgets::icon_button(ui, "dc-new-item", "New Artboard", false, 24.0).clicked() && app.run("artboard.new", json!({})).is_ok() {
+        if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() && app.run("artboard.new", json!({})).is_ok() {
             set_pstate(ui.ctx(), "ab-sel", n);
         }
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Artboard", false, n > 1, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
             app.run("artboard.delete", json!({"index": sel})).ok();
         }
     });
@@ -100,27 +100,27 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let sel = selected(ui, n);
-    if menu_item(ui, "New Artboard", n > 0, false) {
+    if menu_item(ui, tl!("New Artboard"), n > 0, false) {
         app.run("artboard.new", json!({})).ok();
     }
-    if menu_item(ui, "Duplicate Artboards", n > 0, false) {
+    if menu_item(ui, tl!("Duplicate Artboards"), n > 0, false) {
         app.run("artboard.duplicate", json!({"index": sel})).ok();
     }
-    if menu_item(ui, "Delete Artboards", n > 1, false) {
+    if menu_item(ui, tl!("Delete Artboards"), n > 1, false) {
         app.run("artboard.delete", json!({"index": sel})).ok();
     }
-    if menu_item(ui, "Rename", n > 0, false) {
+    if menu_item(ui, tl!("Rename"), n > 0, false) {
         set_pstate(ui.ctx(), "ab-edit", Some(sel));
     }
-    menu_item(ui, "Delete Empty Artboards", false, false);
+    menu_item(ui, tl!("Delete Empty Artboards"), false, false);
     ui.separator();
-    menu_item(ui, "Convert to Artboards", false, false);
-    if menu_item(ui, "Artboard Options…", n > 0, false) {
+    menu_item(ui, tl!("Convert to Artboards"), false, false);
+    if menu_item(ui, tl!("Artboard Options…"), n > 0, false) {
         app.select_tool("artboard");
     }
-    menu_item(ui, "Rearrange All Artboards…", false, false);
+    menu_item(ui, tl!("Rearrange All Artboards…"), false, false);
     ui.separator();
-    if menu_item(ui, "Fit to Artwork Bounds", n > 0, false) {
+    if menu_item(ui, tl!("Fit to Artwork Bounds"), n > 0, false) {
         app.run("artboard.fitToArt", json!({"index": sel})).ok();
     }
 }

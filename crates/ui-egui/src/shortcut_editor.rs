@@ -518,7 +518,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     egui::Area::new(egui::Id::new("modal-dim")).order(egui::Order::Middle).fixed_pos(egui::pos2(0.0, 0.0)).show(ctx, |ui| {
         ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
     });
-    egui::Window::new("Keyboard Shortcuts")
+    egui::Window::new(tl!("Keyboard Shortcuts"))
         .id(egui::Id::new("dialog-shortcuts"))
         .order(egui::Order::Foreground)
         .collapsible(false)
@@ -528,11 +528,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(20)))
         .show(ctx, |ui| {
             ui.set_width(640.0);
-            ui.label(egui::RichText::new("Keyboard Shortcuts").font(theme::semibold(16.0)).color(t.text));
+            ui.label(egui::RichText::new(tl!("Keyboard Shortcuts")).font(theme::semibold(16.0)).color(t.text));
             ui.add_space(10.0);
             // Set row.
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Set:").color(t.text_dim));
+                ui.label(egui::RichText::new(tl!("Set:")).color(t.text_dim));
                 let cur = d.str("set");
                 let mut opts: Vec<&str> = PRESETS.to_vec();
                 if !PRESETS.contains(&cur.as_str()) {
@@ -546,16 +546,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     d.fields.insert("__message".into(), json!(""));
                 }
                 ui.add_space(12.0);
-                if ui.button("Import…").clicked() {
+                if ui.button(tl!("Import…")).clicked() {
                     d.fields.insert("__import".into(), json!(true));
                 }
-                if ui.button("Export…").clicked() {
+                if ui.button(tl!("Export…")).clicked() {
                     d.fields.insert("__export".into(), json!(true));
                 }
-                if ui.button("Reset to Defaults").clicked() {
+                if ui.button(tl!("Reset to Defaults")).clicked() {
                     ov.clear();
                     d.fields.insert("set".into(), json!(PRESETS[0]));
-                    d.fields.insert("__message".into(), json!("All shortcuts reset to defaults."));
+                    d.fields.insert("__message".into(), json!(tl!("All shortcuts reset to defaults.")));
                 }
             });
             ui.add_space(8.0);
@@ -563,13 +563,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 let tab = d.str("tab");
                 for (id, label) in [("tools", "Tools"), ("menu", "Menu Commands")] {
-                    if ui.selectable_label(tab == id, egui::RichText::new(label).font(theme::semibold(12.5))).clicked() {
+                    if ui.selectable_label(tab == id, egui::RichText::new(tl!(label)).font(theme::semibold(12.5))).clicked() {
                         d.fields.insert("tab".into(), json!(id));
                     }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let mut q = d.str("query");
-                    if ui.add(egui::TextEdit::singleline(&mut q).hint_text("Search").desired_width(200.0)).changed() {
+                    if ui.add(egui::TextEdit::singleline(&mut q).hint_text(tl!("Search")).desired_width(200.0)).changed() {
                         d.fields.insert("query".into(), json!(q));
                     }
                 });
@@ -584,21 +584,27 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     ui.allocate_ui_with_layout(egui::vec2(360.0, 16.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         ui.set_min_width(360.0);
-                        ui.label(egui::RichText::new(if tools { "Tool" } else { "Command" }).color(t.text_dim).size(11.0));
+                        ui.label(egui::RichText::new(if tools { tl!("Tool") } else { tl!("Command") }).color(t.text_dim).size(11.0));
                     });
-                    ui.label(egui::RichText::new("Shortcut").color(t.text_dim).size(11.0));
+                    ui.label(egui::RichText::new(tl!("Shortcut")).color(t.text_dim).size(11.0));
                 });
                 egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, false]).show(ui, |ui| {
                     for e in entries().iter().filter(|e| e.is_tool == tools) {
                         let sc = effective_in(&ov, &e.key);
                         let matches = e.label.to_lowercase().contains(&q)
+                            || tl!(&e.label).to_lowercase().contains(&q)
                             || e.group.to_lowercase().contains(&q)
+                            || tl!(&e.group).to_lowercase().contains(&q)
                             || sc.as_deref().is_some_and(|s| s.to_lowercase().contains(&q));
                         if !q.is_empty() && !matches {
                             continue;
                         }
                         let row = ui.horizontal(|ui| {
-                            let name = if e.is_tool || e.group.is_empty() { e.label.clone() } else { format!("{} › {}", e.group, e.label) };
+                            let name = if e.is_tool || e.group.is_empty() {
+                                tl!(&e.label).to_string()
+                            } else {
+                                format!("{} › {}", tl!(&e.group), tl!(&e.label))
+                            };
                             let r = ui
                                 .allocate_ui_with_layout(egui::vec2(360.0, 20.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                                     ui.set_min_width(360.0);
@@ -609,7 +615,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                                 d.fields.insert("__selected".into(), json!(e.key));
                             }
                             let label = if rec == e.key {
-                                "Press keys…".to_string()
+                                tl!("Press keys…").to_string()
                             } else {
                                 sc.as_deref().map(menus::pretty_shortcut).unwrap_or_else(|| "—".into())
                             };
@@ -617,7 +623,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             let txt = egui::RichText::new(label).color(if changed { t.accent } else { t.text });
                             let b = ui
                                 .add_sized([150.0, 20.0], egui::Button::new(txt).selected(rec == e.key))
-                                .on_hover_text("Click, then press the new shortcut (Esc cancels)");
+                                .on_hover_text(tl!("Click, then press the new shortcut (Esc cancels)"));
                             if b.clicked() {
                                 d.fields.insert("__recording".into(), json!(e.key));
                                 d.fields.insert("__selected".into(), json!(e.key));
@@ -634,16 +640,16 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 let sel = d.str("__selected");
                 ui.add_enabled_ui(!sel.is_empty(), |ui| {
-                    if ui.button("Clear").on_hover_text("Remove the shortcut").clicked() {
+                    if ui.button(tl!("Clear")).on_hover_text(tl!("Remove the shortcut")).clicked() {
                         let _ = assign(&mut ov, &sel, None, true);
                         d.fields.insert("set".into(), json!(CUSTOM));
                     }
-                    if ui.button("Use Default").clicked() {
+                    if ui.button(tl!("Use Default")).clicked() {
                         reset_one(&mut ov, &sel);
                     }
                 });
                 let conflict = d.str("__conflict");
-                if !conflict.is_empty() && ui.button("Go to Conflict").clicked() {
+                if !conflict.is_empty() && ui.button(tl!("Go to Conflict")).clicked() {
                     let tab = if conflict.starts_with("tool:") { "tools" } else { "menu" };
                     d.fields.insert("tab".into(), json!(tab));
                     d.fields.insert("query".into(), json!(""));
@@ -658,15 +664,23 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
             let n = all_conflicts(&ov).len();
             if n > 0 {
-                ui.label(egui::RichText::new(format!("{n} shortcut(s) are assigned more than once")).color(t.text_dim).size(11.0));
+                ui.label(
+                    egui::RichText::new(crate::i18n::tn(
+                        n as u64,
+                        "{n} shortcut is assigned more than once",
+                        "{n} shortcuts are assigned more than once",
+                    ))
+                    .color(t.text_dim)
+                    .size(11.0),
+                );
             }
             ui.add_space(12.0);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if widgets::primary_button(ui, "OK").clicked() {
+                if widgets::primary_button(ui, tl!("OK")).clicked() {
                     ok = true;
                 }
                 ui.add_space(8.0);
-                if widgets::secondary_button(ui, "Cancel").clicked() {
+                if widgets::secondary_button(ui, tl!("Cancel")).clicked() {
                     cancel = true;
                 }
             });
@@ -686,7 +700,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 if let Some(d) = app.ui.dialog.as_mut() {
                     d.fields.insert("overrides".into(), serde_json::to_value(&o).unwrap_or(json!({})));
                     d.fields.insert("set".into(), json!(s));
-                    d.fields.insert("__message".into(), json!("Imported. Press OK to keep the imported set."));
+                    d.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
                 }
             }
             Some(Err(e)) if e != "cancelled" => app.status(e),
@@ -720,7 +734,10 @@ fn record(d: &mut Dialog, ov: &mut BTreeMap<String, String>, key: &str, chord: &
                 let names: Vec<String> = removed.iter().map(|k| entry(k).map(|e| e.label.clone()).unwrap_or(k.clone())).collect();
                 d.fields.insert(
                     "__message".into(),
-                    json!(format!("⚠ {} was already used by {} — it has been removed there.", menus::pretty_shortcut(chord), names.join(", "))),
+                    json!(crate::i18n::fmt(
+                        tl!("⚠ {chord} was already used by {names} — it has been removed there."),
+                        &[("chord", &menus::pretty_shortcut(chord)), ("names", &names.join(", "))]
+                    )),
                 );
                 d.fields.insert("__conflict".into(), json!(first));
             } else {

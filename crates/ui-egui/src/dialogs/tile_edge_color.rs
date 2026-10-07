@@ -16,7 +16,7 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Tile Edge Color.
 pub const KIND: &str = "tileEdgeColor";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Tile Edge Color".into(), body, confirm, min_width: 300.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Tile Edge Color").into(), body, confirm, min_width: 300.0, ..DialogSpec::FORM };
 
 /// Open Tile Edge Color on the current preference.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -38,7 +38,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let preset = LAYER_COLORS.iter().position(|(_, c)| *c == [r, g, b]);
     let names: Vec<&str> = LAYER_COLORS.iter().map(|(n, _)| *n).chain(["Custom"]).collect();
     grid(ui, |ui| {
-        label(ui, "Color:");
+        label(ui, tl!("Color:"));
         ui.horizontal(|ui| {
             if let Some((_, [r, g, b])) =
                 widgets::dropdown(ui, "tile-edge", names[preset.unwrap_or(LAYER_COLORS.len())], &names, 140.0).and_then(|i| LAYER_COLORS.get(i))

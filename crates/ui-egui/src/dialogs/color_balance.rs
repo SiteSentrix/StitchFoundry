@@ -21,7 +21,7 @@ pub const KIND: &str = "colorBalance";
 const CMD: &str = "edit.colors.adjustBalance";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Adjust Colors".into(), body, confirm, preview: true, min_width: 340.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Adjust Colors").into(), body, confirm, preview: true, min_width: 340.0, ..DialogSpec::FORM };
 
 /// A colour mode: its `mode` id, label and channels as (field, label).
 struct Mode {
@@ -83,28 +83,28 @@ fn track(key: &str, x: f32) -> egui::Color32 {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let m = mode(d);
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Color Mode:");
+        widgets::dim_label(ui, tl!("Color Mode:"));
         let labels: Vec<&str> = MODES.iter().map(|m| m.label).collect();
         if let Some(i) = widgets::dropdown(ui, "balance-mode", m.label, &labels, 120.0) {
             d.fields.insert("mode".into(), json!(MODES[i].id));
         }
         ui.add_space(12.0);
-        if widgets::check(ui, "Convert", d.bool("convert"), m.id != GLOBAL) {
+        if widgets::check(ui, tl!("Convert"), d.bool("convert"), m.id != GLOBAL) {
             d.fields.insert("convert".into(), json!(!d.bool("convert")));
         }
     });
     ui.add_space(8.0);
     let m = mode(d);
     if m.id == GLOBAL {
-        widgets::dim_label(ui, "Shifts the tints of global and spot colors; other colors stay.");
+        widgets::dim_label(ui, tl!("Shifts the tints of global and spot colors; other colors stay."));
     }
     for (k, label) in m.channels {
         form::slider(ui, d, k, label, -100.0..=100.0, "%", &|x| track(k, x));
     }
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Adjust Options:");
-        for (k, label) in [("fill", "Fill"), ("stroke", "Stroke")] {
+        widgets::dim_label(ui, tl!("Adjust Options:"));
+        for (k, label) in [("fill", tl!("Fill")), ("stroke", tl!("Stroke"))] {
             if widgets::check(ui, label, d.bool(k), true) {
                 d.fields.insert(k.into(), json!(!d.bool(k)));
             }

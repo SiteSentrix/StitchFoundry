@@ -5,6 +5,14 @@
 //! shortcuts, the ⌘K palette and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
+/// Translate a UI string literal into the language the UI is drawn in (see [`i18n`]).
+#[macro_export]
+macro_rules! tl {
+    ($s:expr) => {
+        $crate::i18n::t($s)
+    };
+}
+
 pub mod background;
 mod brand;
 pub mod canvas;
@@ -640,6 +648,14 @@ impl VectorcraftApp {
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl.
 impl VectorcraftApp {
+    /// The language the UI is drawn in: the Preferences dialog's choice while it is open (so a
+    /// change shows before OK), else the `interfaceLanguage` preference (`auto` = the system's).
+    pub fn ui_language(&self) -> i18n::Lang {
+        let editing =
+            self.ui.dialog.as_ref().filter(|d| d.kind == "preferences").and_then(|d| d.fields.get("interfaceLanguage")).and_then(Value::as_str);
+        i18n::Lang::from_pref(editing.unwrap_or(&self.session.prefs.interface_language))
+    }
+
     /// Per-frame logic before layout (control channel, shortcuts, inbox). A bug that panics costs
     /// one frame and shows an error, instead of closing the app with unsaved work.
     pub fn logic(&mut self, ctx: &egui::Context) {
@@ -649,6 +665,7 @@ impl VectorcraftApp {
     }
 
     fn logic_frame(&mut self, ctx: &egui::Context) {
+        i18n::set_current(self.ui_language());
         if !self.styled {
             theme::install_fonts(ctx);
             theme::apply(ctx, self.ui.brightness);

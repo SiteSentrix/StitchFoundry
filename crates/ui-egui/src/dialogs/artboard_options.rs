@@ -7,7 +7,7 @@ use super::{DialogSpec, run_and_close};
 use crate::VectorcraftApp;
 use crate::state::Dialog;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Artboard Options".into(), confirm, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Artboard Options").into(), confirm, ..DialogSpec::FORM };
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut p = Value::Object(d.fields.clone());

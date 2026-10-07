@@ -198,9 +198,9 @@ fn badge(ui: &Ui, r: egui::Rect, status: &str) {
 fn status_tip(r: &Value) -> String {
     let path = r["found"].as_str().or(r["path"].as_str()).unwrap_or_default();
     match r["status"].as_str().unwrap_or_default() {
-        "missing" => format!("Missing: {path}"),
-        "modified" => format!("Modified since it was read: {path}"),
-        "embedded" => "Embedded".into(),
+        "missing" => crate::i18n::fmt(tl!("Missing: {path}"), &[("path", path)]),
+        "modified" => crate::i18n::fmt(tl!("Modified since it was read: {path}"), &[("path", path)]),
+        "embedded" => tl!("Embedded").into(),
         _ => path.to_string(),
     }
 }
@@ -209,7 +209,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let o = options(ui.ctx());
     let Some(cache) = cached(app, ui.ctx(), &o) else {
-        widgets::dim_label(ui, "No document");
+        widgets::dim_label(ui, tl!("No document"));
         return;
     };
     let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return };
@@ -220,9 +220,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
         if rows.is_empty() {
-            let detail =
-                if o.show == "all" { "File › Place… brings in an image, linked or embedded." } else { "Nothing matches the Show filter." };
-            super::empty_state(ui, "link", "No images", detail);
+            let detail = if o.show == "all" {
+                tl!("File › Place… brings in an image, linked or embedded.")
+            } else {
+                tl!("Nothing matches the Show filter.")
+            };
+            super::empty_state(ui, "link", tl!("No images"), detail);
             return;
         }
         egui::ScrollArea::vertical().max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {
@@ -297,23 +300,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let can_edit = sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing"));
     widgets::bottom_bar(ui, |ui| {
         let info = !o.info;
-        if widgets::icon_button(ui, if o.info { "chevron-down" } else { "chevron-right" }, "Show Link Info", false, 24.0).clicked() {
+        if widgets::icon_button(ui, if o.info { "chevron-down" } else { "chevron-right" }, tl!("Show Link Info"), false, 24.0).clicked() {
             set_options(ui.ctx(), |o| o.info = info);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if widgets::icon_button_enabled(ui, "pencil", "Edit Original", false, can_edit, 24.0).clicked() {
+            if widgets::icon_button_enabled(ui, "pencil", tl!("Edit Original"), false, can_edit, 24.0).clicked() {
                 crate::menus::invoke(app, "links.editOriginal", json!({}));
             }
-            if widgets::icon_button_enabled(ui, "rotate-cw", "Update Link", false, !modified.is_empty(), 24.0).clicked() {
+            if widgets::icon_button_enabled(ui, "rotate-cw", tl!("Update Link"), false, !modified.is_empty(), 24.0).clicked() {
                 let r = app.run("links.update", json!({ "ids": modified }));
                 report(app, r, |v| format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)));
             }
-            if widgets::icon_button_enabled(ui, "zoom-in", "Go To Link", false, sel.len() == 1, 24.0).clicked()
+            if widgets::icon_button_enabled(ui, "zoom-in", tl!("Go To Link"), false, sel.len() == 1, 24.0).clicked()
                 && let Some(id) = sel.first().and_then(|r| r["id"].as_u64())
             {
                 go_to(app, id);
             }
-            if widgets::icon_button_enabled(ui, "link", "Relink…", false, !sel.is_empty() && can_pick(app), 24.0).clicked() {
+            if widgets::icon_button_enabled(ui, "link", tl!("Relink…"), false, !sel.is_empty() && can_pick(app), 24.0).clicked() {
                 relink(app, ids(&sel, |_| true));
             }
         });
@@ -344,7 +347,7 @@ pub(crate) fn date_label(ms: u64) -> String {
 fn link_info(ui: &mut Ui, info: Option<&Value>) {
     widgets::divider(ui);
     let Some(i) = info else {
-        widgets::dim_label(ui, "Select an image to see its Link Info.");
+        widgets::dim_label(ui, tl!("Select an image to see its Link Info."));
         return;
     };
     let pair = |k: &str| {
@@ -356,38 +359,38 @@ fn link_info(ui: &mut Ui, info: Option<&Value>) {
         }
     };
     let row = super::doc_info::row;
-    row(ui, "Name", i["fileName"].as_str().or(i["name"].as_str()).unwrap_or_default().into());
-    row(ui, "Format", i["format"].as_str().unwrap_or_default().into());
-    row(ui, "Color Space", i["colorMode"].as_str().unwrap_or_default().into());
+    row(ui, tl!("Name"), i["fileName"].as_str().or(i["name"].as_str()).unwrap_or_default().into());
+    row(ui, tl!("Format"), i["format"].as_str().unwrap_or_default().into());
+    row(ui, tl!("Color Space"), i["colorMode"].as_str().unwrap_or_default().into());
     if let Some(l) = i["location"].as_str() {
-        row(ui, "Location", l.into());
+        row(ui, tl!("Location"), l.into());
     }
-    row(ui, "PPI", pair("ppi"));
-    row(ui, "Effective PPI", pair("effectivePpi"));
-    row(ui, "Dimensions", format!("{} × {} px", i["pixelWidth"], i["pixelHeight"]));
+    row(ui, tl!("PPI"), pair("ppi"));
+    row(ui, tl!("Effective PPI"), pair("effectivePpi"));
+    row(ui, tl!("Dimensions"), format!("{} × {} px", i["pixelWidth"], i["pixelHeight"]));
     let scale: Vec<f64> = i["scale"].as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
     if let [x, y] = scale[..] {
-        row(ui, "Scale", format!("H: {x:.1}%  V: {y:.1}%"));
+        row(ui, tl!("Scale"), format!("H: {x:.1}%  V: {y:.1}%"));
     }
-    row(ui, "Rotation", format!("{:.1}°", i["rotation"].as_f64().unwrap_or(0.0)));
+    row(ui, tl!("Rotation"), format!("{:.1}°", i["rotation"].as_f64().unwrap_or(0.0)));
     if let Some(b) = i["fileSize"].as_u64() {
-        row(ui, "Size", size_label(b));
+        row(ui, tl!("Size"), size_label(b));
     }
-    for (k, label) in [("created", "Created"), ("modified", "Modified")] {
+    for (k, label) in [("created", tl!("Created")), ("modified", tl!("Modified"))] {
         if let Some(ms) = i[k].as_u64() {
             row(ui, label, date_label(ms));
         }
     }
     if let Some(p) = i["page"].as_u64() {
-        row(ui, "Page", p.to_string());
+        row(ui, tl!("Page"), p.to_string());
     }
     let status = match i["status"].as_str().unwrap_or_default() {
-        "ok" => "Linked",
-        "missing" => "Missing",
-        "modified" => "Modified",
-        _ => "Embedded",
+        "ok" => tl!("Linked"),
+        "missing" => tl!("Missing"),
+        "modified" => tl!("Modified"),
+        _ => tl!("Embedded"),
     };
-    row(ui, "Status", status.into());
+    row(ui, tl!("Status"), status.into());
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -400,26 +403,26 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let embedded: Vec<&Value> = sel.iter().copied().filter(|r| status_is(r, "embedded")).collect();
     let any = !sel.is_empty();
     let missing_any = list["missing"].as_u64().unwrap_or(0) > 0;
-    if menu_item(ui, "Relink…", any && can_pick(app), false) {
+    if menu_item(ui, tl!("Relink…"), any && can_pick(app), false) {
         relink(app, ids(&sel, |_| true));
     }
-    if menu_item(ui, "Relink to Folder…", (any || missing_any) && app.services.pick_folder.is_some(), false) {
+    if menu_item(ui, tl!("Relink to Folder…"), (any || missing_any) && app.services.pick_folder.is_some(), false) {
         relink_to_folder(app, ids(&sel, |_| true));
     }
-    if menu_item(ui, "Go To Link", sel.len() == 1, false)
+    if menu_item(ui, tl!("Go To Link"), sel.len() == 1, false)
         && let Some(id) = sel.first().and_then(|r| r["id"].as_u64())
     {
         go_to(app, id);
     }
-    if menu_item(ui, "Update Link", sel.iter().any(|r| status_is(r, "modified")), false) {
+    if menu_item(ui, tl!("Update Link"), sel.iter().any(|r| status_is(r, "modified")), false) {
         let r = app.run("links.update", json!({ "ids": ids(&sel, |r| status_is(r, "modified")) }));
         report(app, r, |v| format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)));
     }
-    if menu_item(ui, "Edit Original", sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
+    if menu_item(ui, tl!("Edit Original"), sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
         crate::menus::invoke(app, "links.editOriginal", json!({}));
     }
     ui.separator();
-    if menu_item(ui, "Embed Image(s)", !linked.is_empty(), false) {
+    if menu_item(ui, tl!("Embed Image(s)"), !linked.is_empty(), false) {
         let r = app.run("links.embed", json!({ "ids": linked }));
         report(app, r, |v| {
             let missing = v["missing"].as_array().map_or(0, Vec::len);
@@ -427,38 +430,38 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             if missing == 0 { format!("Embedded {n} image(s)") } else { format!("Embedded {n} image(s); {missing} missing: relink them first") }
         });
     }
-    if menu_item(ui, "Unembed…", embedded.len() == 1, false)
+    if menu_item(ui, tl!("Unembed…"), embedded.len() == 1, false)
         && let Some(r) = embedded.first()
         && let Some(id) = r["id"].as_u64()
     {
         let name = r["name"].as_str().unwrap_or("Image").to_string();
         unembed(app, id, &name);
     }
-    if menu_item(ui, "Placement Options…", any, false) {
+    if menu_item(ui, tl!("Placement Options…"), any, false) {
         crate::menus::invoke(app, "ui.placementOptionsDialog", json!({ "ids": ids(&sel, |_| true) }));
     }
-    if menu_item(ui, "Show in Folder", sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
+    if menu_item(ui, tl!("Show in Folder"), sel.iter().any(|r| r["linked"] == true && !status_is(r, "missing")), false) {
         crate::menus::invoke(app, "links.reveal", json!({}));
     }
     ui.separator();
     for (id, label) in SHOW {
-        if menu_item(ui, label, true, o.show == id) {
+        if menu_item(ui, tl!(label), true, o.show == id) {
             set_options(ui.ctx(), |o| o.show = id);
         }
     }
     ui.separator();
     for (id, label) in SORT {
-        if menu_item(ui, label, true, o.sort == Some(id)) {
+        if menu_item(ui, tl!(label), true, o.sort == Some(id)) {
             set_options(ui.ctx(), |o| o.sort = if o.sort == Some(id) { None } else { Some(id) });
         }
     }
     ui.separator();
     for (px, label) in THUMBS {
-        if menu_item(ui, label, true, o.thumb == px) {
+        if menu_item(ui, tl!(label), true, o.thumb == px) {
             set_options(ui.ctx(), |o| o.thumb = px);
         }
     }
-    if menu_item(ui, "Show Link Info", true, o.info) {
+    if menu_item(ui, tl!("Show Link Info"), true, o.info) {
         set_options(ui.ctx(), |o| o.info = !o.info);
     }
 }

@@ -12,8 +12,15 @@ use crate::state::Dialog;
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "SVG Options".into(), body, confirm, ok: Some("OK"), min_width: 380.0, max_width: Some(560.0), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("SVG Options").into(),
+    body,
+    confirm,
+    ok: Some("OK"),
+    min_width: 380.0,
+    max_width: Some(560.0),
+    ..DialogSpec::FORM
+};
 
 /// `Dialog::kind` of this dialog.
 pub const KIND: &str = "svgOptions";
@@ -166,11 +173,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if Mode::of(d) == Mode::Export {
         artboards(app, ui, d);
     } else {
-        check(ui, d, "preserveEditing", "Preserve Editing Capabilities", true);
+        check(ui, d, "preserveEditing", tl!("Preserve Editing Capabilities"), true);
     }
     ui.add_space(10.0);
     let show = d.bool("showCode");
-    if widgets::secondary_button(ui, if show { "Hide Code" } else { "Show Code" }).clicked() {
+    if widgets::secondary_button(ui, if show { tl!("Hide Code") } else { tl!("Show Code") }).clicked() {
         d.fields.insert("showCode".into(), json!(!show));
     }
     if show {
@@ -188,47 +195,47 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     // SVG Tiny has presentation attributes alone and no web fonts.
     let tiny = d.str("profile") == "tiny12";
     egui::Grid::new("svg-options").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-        choice(ui, d, "profile", "SVG Profile:", &PROFILES, None);
-        choice(ui, d, "styling", "Styling:", &STYLING, tiny.then_some("presentation"));
-        choice(ui, d, "outlineText", "Font:", &FONTS, None);
+        choice(ui, d, "profile", tl!("SVG Profile:"), &PROFILES, None);
+        choice(ui, d, "styling", tl!("Styling:"), &STYLING, tiny.then_some("presentation"));
+        choice(ui, d, "outlineText", tl!("Font:"), &FONTS, None);
         if !screens {
-            choice(ui, d, "images", "Images:", &IMAGES, None);
+            choice(ui, d, "images", tl!("Images:"), &IMAGES, None);
         }
-        choice(ui, d, "objectIds", "Object IDs:", &OBJECT_IDS, None);
-        ui.label(egui::RichText::new("Decimal:").color(t.text_dim));
+        choice(ui, d, "objectIds", tl!("Object IDs:"), &OBJECT_IDS, None);
+        ui.label(egui::RichText::new(tl!("Decimal:")).color(t.text_dim));
         let decimals = d.f64("decimals", 3.0);
         if let Some(v) = widgets::spin_plain(ui, "svg-decimals", decimals, "", 0, 70.0, 1.0, 1.0, &[]) {
             let (lo, hi) = (*vectorcraft_svg::DECIMALS.start() as f64, *vectorcraft_svg::DECIMALS.end() as f64);
             d.fields.insert("decimals".into(), json!(v.round().clamp(lo, hi) as u8));
         }
         ui.end_row();
-        choice(ui, d, "encoding", "Encoding:", &ENCODINGS, None);
+        choice(ui, d, "encoding", tl!("Encoding:"), &ENCODINGS, None);
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        check(ui, d, "minify", "Minify", true);
+        check(ui, d, "minify", tl!("Minify"), true);
         ui.add_space(12.0);
-        check(ui, d, "responsive", "Responsive", true);
+        check(ui, d, "responsive", tl!("Responsive"), true);
     });
-    check(ui, d, "embedFonts", "Embed Fonts (Glyphs Used)", !d.bool("outlineText") && !tiny);
-    check(ui, d, "fewerTspans", "Fewer <tspan> Elements", !d.bool("outlineText"));
-    check(ui, d, "metadata", "Include Metadata", true);
+    check(ui, d, "embedFonts", tl!("Embed Fonts (Glyphs Used)"), !d.bool("outlineText") && !tiny);
+    check(ui, d, "fewerTspans", tl!("Fewer <tspan> Elements"), !d.bool("outlineText"));
+    check(ui, d, "metadata", tl!("Include Metadata"), true);
 }
 
 /// Use Artboards: all of them or a range; off = the bounds of all art.
 fn artboards(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let count = app.session.active().map_or(0, |st| st.doc.artboards.len());
     ui.add_space(4.0);
-    check(ui, d, "useArtboards", "Use Artboards", count > 0);
+    check(ui, d, "useArtboards", tl!("Use Artboards"), count > 0);
     let on = d.bool("useArtboards") && count > 0;
     ui.add_enabled_ui(on, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(22.0);
             let all = d.bool("allArtboards");
-            if ui.radio(all, "All").clicked() {
+            if ui.radio(all, tl!("All")).clicked() {
                 d.fields.insert("allArtboards".into(), json!(true));
             }
-            if ui.radio(!all, "Range:").clicked() {
+            if ui.radio(!all, tl!("Range:")).clicked() {
                 d.fields.insert("allArtboards".into(), json!(false));
             }
             let mut range = d.str("range");

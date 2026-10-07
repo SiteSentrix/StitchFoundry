@@ -13,7 +13,7 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Spot Colors.
 pub const KIND: &str = "spotColors";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Spot Colors".into(), body, confirm, min_width: 360.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Spot Colors").into(), body, confirm, min_width: 360.0, ..DialogSpec::FORM };
 
 /// The choices: (`useLab`, label, what it does).
 const CHOICES: [(bool, &str, &str); 2] = [
@@ -33,15 +33,15 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     grid(ui, |ui| {
         for (i, (value, text, help)) in CHOICES.into_iter().enumerate() {
             if i == 0 {
-                label(ui, "Lab Spot Colors:");
+                label(ui, tl!("Lab Spot Colors:"));
             } else {
                 ui.label("");
             }
             ui.vertical(|ui| {
-                if widgets::radio(ui, text, use_lab == value, true) {
+                if widgets::radio(ui, tl!(text), use_lab == value, true) {
                     d.fields.insert("useLab".into(), json!(value));
                 }
-                ui.indent(text, |ui| label(ui, help));
+                ui.indent(text, |ui| label(ui, tl!(help)));
             });
             ui.end_row();
         }

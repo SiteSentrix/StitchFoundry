@@ -21,7 +21,7 @@ const CMD: &str = "object.vectorHalftone";
 /// Width of the label column.
 const LABEL_W: f32 = 84.0;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Vector Halftone".into(), body, confirm, preview: true, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Vector Halftone").into(), body, confirm, preview: true, ..DialogSpec::FORM };
 
 /// The dialog's fields as it opens: the command's defaults, previewed.
 pub fn fields() -> Value {
@@ -29,18 +29,19 @@ pub fn fields() -> Value {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let shapes = [("circle", "Circle"), ("ellipse", "Ellipse"), ("square", "Square"), ("diamond", "Diamond"), ("line", "Line")];
-    form::choice(ui, d, "shape", "Shape", (LABEL_W, 140.0), &shapes);
-    form::slider_w(ui, d, ("frequency", "Frequency", LABEL_W), 1.0..=150.0, " lpi", &|x| c32(&Color::gray(1.0 - x)));
-    form::slider_w(ui, d, ("angle", "Angle", LABEL_W), -90.0..=90.0, "°", &|x| c32(&Color::gray(0.2 + 0.6 * x)));
-    form::choice(ui, d, "mode", "Screens", (LABEL_W, 140.0), &[("mono", "Mono"), ("cmyk", "CMYK")]);
+    let shapes =
+        [("circle", tl!("Circle")), ("ellipse", tl!("Ellipse")), ("square", tl!("Square")), ("diamond", tl!("Diamond")), ("line", tl!("Line"))];
+    form::choice(ui, d, "shape", tl!("Shape"), (LABEL_W, 140.0), &shapes);
+    form::slider_w(ui, d, ("frequency", tl!("Frequency"), LABEL_W), 1.0..=150.0, " lpi", &|x| c32(&Color::gray(1.0 - x)));
+    form::slider_w(ui, d, ("angle", tl!("Angle"), LABEL_W), -90.0..=90.0, "°", &|x| c32(&Color::gray(0.2 + 0.6 * x)));
+    form::choice(ui, d, "mode", tl!("Screens"), (LABEL_W, 140.0), &[("mono", tl!("Mono")), ("cmyk", tl!("CMYK"))]);
     if d.str("mode") != "cmyk" {
-        widgets::label_row(ui, "Color", LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("Color"), LABEL_W, |ui| {
             form::text(ui, d, "color", 120.0);
         });
     }
     ui.add_space(4.0);
-    for (key, label) in [("invert", "Invert"), ("clip", "Clip to Art"), ("keepOriginal", "Keep Original")] {
+    for (key, label) in [("invert", tl!("Invert")), ("clip", tl!("Clip to Art")), ("keepOriginal", tl!("Keep Original"))] {
         form::check(ui, d, key, label);
     }
     let p = form::params(d);

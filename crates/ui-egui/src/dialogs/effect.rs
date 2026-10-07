@@ -17,7 +17,16 @@ use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| d.str("__label"), body, confirm, preview: true, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| heading_label(d), body, confirm, preview: true, ..DialogSpec::FORM };
+
+/// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
+/// without its trailing ellipsis.
+fn heading_label(d: &Dialog) -> String {
+    let label = d.str("__label");
+    let dotted = format!("{label}…");
+    let shown = tl!(&dotted);
+    if shown != dotted { shown.trim_end_matches('…').to_string() } else { tl!(&label).to_string() }
+}
 
 /// The dialog kind asking whether to edit an effect that is already applied or add another.
 /// Fields: `__effect`, `__label`, `__item?` (as given to `effect.dialog`), `__target` and
@@ -26,9 +35,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| d.str("__label"), 
 pub const EXISTS: &str = "effectExists";
 
 pub(super) const EXISTS_SPEC: DialogSpec = DialogSpec {
-    heading: |d| format!("{} is already applied", d.str("__label")),
+    heading: |d| crate::i18n::fmt(tl!("{effect} is already applied"), &[("effect", &heading_label(d))]),
     body: |_, ui, _| {
-        ui.label(egui::RichText::new("Edit the applied effect, or add another one?").color(Tokens::get(ui.ctx()).text_dim));
+        ui.label(egui::RichText::new(tl!("Edit the applied effect, or add another one?")).color(Tokens::get(ui.ctx()).text_dim));
         false
     },
     confirm: confirm_exists,
@@ -123,7 +132,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     };
     ui.add_space(6.0);
     let mut pv = d.bool("preview");
-    let pv_changed = ui.checkbox(&mut pv, "Preview").changed();
+    let pv_changed = ui.checkbox(&mut pv, tl!("Preview")).changed();
     d.fields.insert("preview".into(), json!(pv));
     if pv && (changed || pv_changed || !app.session.in_interaction()) {
         let label = d.str("__label");
@@ -189,7 +198,14 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::slider_w(ui, d, (key, label, LABEL_W), *min..=*max, "", rail);
     }
     if d.fields.contains_key("channel") {
-        form::choice(ui, d, "channel", "Channel", (LABEL_W, 120.0), &[("rgb", "RGB"), ("red", "Red"), ("green", "Green"), ("blue", "Blue")]);
+        form::choice(
+            ui,
+            d,
+            "channel",
+            tl!("Channel"),
+            (LABEL_W, 120.0),
+            &[("rgb", "RGB"), ("red", tl!("Red")), ("green", tl!("Green")), ("blue", tl!("Blue"))],
+        );
     }
     if d.fields.contains_key("points") {
         ui.horizontal(|ui| {
@@ -197,7 +213,7 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             curve_graph(ui, d);
         });
     }
-    for (key, label, width) in [("points", "Points", 220.0), ("color", "Color", 120.0)] {
+    for (key, label, width) in [("points", tl!("Points"), 220.0), ("color", tl!("Color"), 120.0)] {
         if d.fields.contains_key(key) {
             widgets::label_row(ui, label, LABEL_W, |ui| {
                 form::text(ui, d, key, width);
@@ -205,14 +221,14 @@ fn adjust_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     }
     if d.fields.contains_key("gamma") {
-        widgets::label_row(ui, "Gamma", LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("Gamma"), LABEL_W, |ui| {
             let mut g = d.f64("gamma", 1.0);
             if ui.add(egui::DragValue::new(&mut g).speed(0.01).range(0.1..=10.0).max_decimals(2)).changed() {
                 d.fields.insert("gamma".into(), json!(g));
             }
         });
     }
-    for (key, label) in [("colorize", "Colorize"), ("preserveLightness", "Preserve Lightness")] {
+    for (key, label) in [("colorize", tl!("Colorize")), ("preserveLightness", tl!("Preserve Lightness"))] {
         if d.fields.contains_key(key) {
             form::check(ui, d, key, label);
         }

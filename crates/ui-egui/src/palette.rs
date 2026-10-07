@@ -23,6 +23,12 @@ pub fn items() -> Vec<(String, String, String)> {
     items
 }
 
+/// A palette label in the UI language: each `›`-separated menu segment and the command label
+/// translate on their own.
+fn shown_label(label: &str) -> String {
+    label.split(" › ").map(crate::i18n::t).collect::<Vec<_>>().join(" › ")
+}
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !app.ui.palette_open {
         return;
@@ -32,19 +38,28 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let items = items();
     let matches: Vec<&(String, String, String)> = items
         .iter()
-        .filter(|(l, id, _)| q.is_empty() || q.split_whitespace().all(|w| l.to_lowercase().contains(w) || id.to_lowercase().contains(w)))
+        .filter(|(l, id, _)| {
+            q.is_empty() || {
+                // Match the English text (what agents document), the shown text and the id.
+                let shown = shown_label(l).to_lowercase();
+                q.split_whitespace().all(|w| l.to_lowercase().contains(w) || shown.contains(w) || id.to_lowercase().contains(w))
+            }
+        })
         .take(14)
         .collect();
     let mut run: Option<String> = None;
     egui::Area::new(egui::Id::new("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.set_width(520.0);
-            let r = ui.add(egui::TextEdit::singleline(&mut app.ui.palette_query).hint_text("Search commands and tools…").desired_width(500.0));
+            let r = ui.add(egui::TextEdit::singleline(&mut app.ui.palette_query).hint_text(tl!("Search commands and tools…")).desired_width(500.0));
             r.request_focus();
             ui.add_space(6.0);
             for (i, (label, id, sc)) in matches.iter().enumerate() {
                 let resp = ui.add(
-                    egui::Button::new(label.as_str()).shortcut_text(menus::pretty_shortcut(sc)).min_size(egui::vec2(500.0, 24.0)).selected(i == 0),
+                    egui::Button::new(shown_label(label))
+                        .shortcut_text(menus::pretty_shortcut(sc))
+                        .min_size(egui::vec2(500.0, 24.0))
+                        .selected(i == 0),
                 );
                 if resp.clicked() {
                     run = Some(id.clone());

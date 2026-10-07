@@ -15,11 +15,11 @@ use crate::theme::Tokens;
 pub const KIND: &str = "confirm";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| d.str("message"),
+    heading: |d| tl!(&d.str("message")).to_string(),
     body: |_, ui, d| {
         let detail = d.str("detail");
         if !detail.is_empty() {
-            ui.label(egui::RichText::new(detail).color(Tokens::get(ui.ctx()).text_dim));
+            ui.label(egui::RichText::new(tl!(&detail)).color(Tokens::get(ui.ctx()).text_dim));
         }
         false
     },

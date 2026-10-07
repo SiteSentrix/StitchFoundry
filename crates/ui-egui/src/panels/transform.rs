@@ -24,7 +24,7 @@ pub fn constrained(w: f64, h: f64, new_w: Option<f64>, new_h: Option<f64>) -> (f
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     if app.session.active().is_none() {
-        widgets::dim_label(ui, "No document");
+        widgets::dim_label(ui, tl!("No document"));
         return;
     }
     let units = app.session.general_unit();
@@ -69,7 +69,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let origin = rp.map(|p| json!([p.x, p.y]));
     ui.horizontal(|ui| {
         ui.add_enabled_ui(has, |ui| {
-            icons::icon(ui, "rotate-ccw", 16.0, t.icon).on_hover_text("Rotate");
+            icons::icon(ui, "rotate-ccw", 16.0, t.icon).on_hover_text(tl!("Rotate"));
             // The bounding box's angle: a new value turns the selection to it.
             let angle = bx.map_or(0.0, |b| b.angle);
             if let Some(a) = widgets::spin_plain(ui, "xfp-rot", angle, "°", 2, 96.0, 15.0, -360.0, &ANGLE_PRESETS)
@@ -78,7 +78,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("object.rotate", json!({"angle": a, "absolute": true, "origin": origin})).ok();
             }
             ui.add_space(4.0);
-            icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text("Shear");
+            icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
             if let Some(a) = widgets::plain_field(ui, "xfp-shear", 0.0, "°", 1, 56.0)
                 && a != 0.0
             {
@@ -87,10 +87,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     ui.horizontal(|ui| {
-        if widgets::icon_button_enabled(ui, "flip-horizontal-2", "Flip Horizontal", false, has, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "flip-horizontal-2", tl!("Flip Horizontal"), false, has, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "vertical", "origin": origin})).ok();
         }
-        if widgets::icon_button_enabled(ui, "flip-vertical-2", "Flip Vertical", false, has, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "flip-vertical-2", tl!("Flip Vertical"), false, has, 24.0).clicked() {
             app.run("object.reflect", json!({"axis": "horizontal", "origin": origin})).ok();
         }
     });
@@ -101,26 +101,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::divider(ui);
         match live {
             vectorcraft_doc::LiveShape::Rectangle { radii, .. } => {
-                widgets::subheader(ui, "Rectangle Properties:");
+                widgets::subheader(ui, tl!("Rectangle Properties:"));
                 ui.horizontal(|ui| {
-                    widgets::dim_label(ui, "Corner Radius:");
+                    widgets::dim_label(ui, tl!("Corner Radius:"));
                     if let Some(r) = widgets::num_field(ui, "xfp-radius", Some(radii[0]), units, 80.0) {
                         app.run("object.setLiveShape", json!({"radius": r})).ok();
                     }
                 });
             }
             vectorcraft_doc::LiveShape::Polygon { sides, .. } => {
-                widgets::subheader(ui, "Polygon Properties:");
+                widgets::subheader(ui, tl!("Polygon Properties:"));
                 ui.horizontal(|ui| {
-                    widgets::dim_label(ui, "Sides:");
+                    widgets::dim_label(ui, tl!("Sides:"));
                     if let Some(s) = widgets::plain_field(ui, "xfp-sides", *sides as f64, "", 0, 60.0) {
                         app.run("object.setLiveShape", json!({"sides": s.clamp(3.0, 20.0) as u32})).ok();
                     }
                 });
             }
             _ => {
-                widgets::subheader(ui, "Shape Properties:");
-                widgets::dim_label(ui, n.kind_label());
+                widgets::subheader(ui, tl!("Shape Properties:"));
+                widgets::dim_label(ui, tl!(n.kind_label()));
             }
         }
     }
@@ -129,10 +129,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     widgets::divider(ui);
     let (sc, ss) = (app.session.prefs.scale_corners, app.session.prefs.scale_strokes);
-    if widgets::check(ui, "Scale Corners", sc, true) {
+    if widgets::check(ui, tl!("Scale Corners"), sc, true) {
         set_pref(app, "scaleCorners", !sc);
     }
-    if widgets::check(ui, "Scale Strokes & Effects", ss, true) {
+    if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
 }
@@ -141,7 +141,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// `constrainProportions` preference, which the size fields pass on as `proportional`.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let on = app.session.prefs.constrain_proportions;
-    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, "Constrain Width and Height Proportions", on, 22.0).clicked() {
+    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tl!("Constrain Width and Height Proportions"), on, 22.0).clicked() {
         set_pref(app, "constrainProportions", !on);
     }
 }
@@ -156,27 +156,27 @@ pub fn set_pref(app: &mut VectorcraftApp, key: &str, on: bool) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "xf-hide-options");
     let has = super::selection_len(app) > 0;
-    if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
+    if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "xf-hide-options", !hidden);
     }
     ui.separator();
-    if menu_item(ui, "Flip Horizontal", has, false) {
+    if menu_item(ui, tl!("Flip Horizontal"), has, false) {
         app.run("object.reflect", json!({"axis": "vertical"})).ok();
     }
-    if menu_item(ui, "Flip Vertical", has, false) {
+    if menu_item(ui, tl!("Flip Vertical"), has, false) {
         app.run("object.reflect", json!({"axis": "horizontal"})).ok();
     }
     ui.separator();
     let ss = app.session.prefs.scale_strokes;
-    if menu_item(ui, "Scale Strokes & Effects", true, ss) {
+    if menu_item(ui, tl!("Scale Strokes & Effects"), true, ss) {
         set_pref(app, "scaleStrokes", !ss);
     }
     ui.separator();
-    menu_item(ui, "Transform Object Only", false, true);
-    menu_item(ui, "Transform Pattern Only", false, false);
-    menu_item(ui, "Transform Both", false, false);
+    menu_item(ui, tl!("Transform Object Only"), false, true);
+    menu_item(ui, tl!("Transform Pattern Only"), false, false);
+    menu_item(ui, tl!("Transform Both"), false, false);
     ui.separator();
-    menu_item(ui, "Use Registration Point for Symbol", false, false);
+    menu_item(ui, tl!("Use Registration Point for Symbol"), false, false);
 }
 
 #[cfg(test)]

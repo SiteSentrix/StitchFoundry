@@ -36,7 +36,7 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((_, para)) = text_style(app) else {
-        super::empty_state(ui, "pilcrow", "No text selected", "Select a text object to edit its paragraph attributes.");
+        super::empty_state(ui, "pilcrow", tl!("No text selected"), tl!("Select a text object to edit its paragraph attributes."));
         return;
     };
     ui.horizontal(|ui| {
@@ -55,34 +55,34 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(s).size(11.5).strong().color(t.text))).on_hover_text(tip);
     };
     egui::Grid::new("para-grid").num_columns(4).spacing([4.0, 4.0]).show(ui, |ui| {
-        label(ui, "→|", "Left Indent");
+        label(ui, "→|", tl!("Left Indent"));
         if let Some(v) = widgets::spin_field(ui, "pa-li", Some(para.left_indent), unit, fw, 1.0, -1296.0, &[]) {
             format(app, json!({"leftIndent": v}));
         }
-        label(ui, "|←", "Right Indent");
+        label(ui, "|←", tl!("Right Indent"));
         if let Some(v) = widgets::spin_field(ui, "pa-ri", Some(para.right_indent), unit, fw, 1.0, -1296.0, &[]) {
             format(app, json!({"rightIndent": v}));
         }
         ui.end_row();
-        label(ui, "1→", "First-line Left Indent");
+        label(ui, "1→", tl!("First-line Left Indent"));
         if let Some(v) = widgets::spin_field(ui, "pa-fi", Some(para.first_line_indent), unit, fw, 1.0, -1296.0, &[]) {
             format(app, json!({"firstLineIndent": v}));
         }
         ui.label("");
         ui.label("");
         ui.end_row();
-        label(ui, "↑¶", "Space Before Paragraph");
+        label(ui, "↑¶", tl!("Space Before Paragraph"));
         if let Some(v) = widgets::spin_field(ui, "pa-sb", Some(para.space_before), unit, fw, 1.0, 0.0, &[]) {
             format(app, json!({"spaceBefore": v}));
         }
-        label(ui, "↓¶", "Space After Paragraph");
+        label(ui, "↓¶", tl!("Space After Paragraph"));
         if let Some(v) = widgets::spin_field(ui, "pa-sa", Some(para.space_after), unit, fw, 1.0, 0.0, &[]) {
             format(app, json!({"spaceAfter": v}));
         }
         ui.end_row();
     });
     ui.add_space(4.0);
-    if !pstate::<bool>(ui.ctx(), "pa-hide-options") && widgets::check(ui, "Hyphenate", para.hyphenate, true) {
+    if !pstate::<bool>(ui.ctx(), "pa-hide-options") && widgets::check(ui, tl!("Hyphenate"), para.hyphenate, true) {
         format(app, json!({"hyphenate": !para.hyphenate}));
     }
 }
@@ -90,18 +90,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has = text_style(app).is_some();
     let hidden: bool = pstate(ui.ctx(), "pa-hide-options");
-    if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
+    if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "pa-hide-options", !hidden);
     }
     ui.separator();
-    for l in ["Roman Hanging Punctuation", "Justification…", "Hyphenation…"] {
+    for l in [tl!("Roman Hanging Punctuation"), tl!("Justification…"), tl!("Hyphenation…")] {
         menu_item(ui, l, false, false);
     }
     ui.separator();
-    menu_item(ui, "Single-line Composer", false, false);
-    menu_item(ui, "Every-line Composer", false, true);
+    menu_item(ui, tl!("Single-line Composer"), false, false);
+    menu_item(ui, tl!("Every-line Composer"), false, true);
     ui.separator();
-    if menu_item(ui, "Reset Panel", has, false) {
+    if menu_item(ui, tl!("Reset Panel"), has, false) {
         para_cmd(app, "text.setStyle", json!({"justify": "left"}));
         format(app, json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false}));
     }

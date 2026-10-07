@@ -33,7 +33,7 @@ use crate::{VectorcraftApp, io, widgets};
 pub const KIND: &str = "saveForWeb";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| "Save for Web".into(),
+    heading: |_| tl!("Save for Web").into(),
     body,
     confirm,
     ok: Some("Save…"),
@@ -409,8 +409,8 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
             d.fields.insert("__kbps".into(), json!(s));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, "Preview in Browser"));
-            browser = b.on_disabled_hover_text("Needs the desktop app").clicked();
+            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, tl!("Preview in Browser")));
+            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
         });
     });
     browser
@@ -484,15 +484,16 @@ fn draw_pane(
             match (settings, shot.bytes) {
                 (Some(s), Some(bytes)) => {
                     let secs = download_seconds(bytes, kbps);
-                    let time = if secs < 1.0 { "< 1 sec".into() } else { format!("{} sec", secs.ceil()) };
+                    let time =
+                        if secs < 1.0 { tl!("< 1 sec").into() } else { crate::i18n::fmt(tl!("{secs} sec"), &[("secs", &secs.ceil().to_string())]) };
                     let detail = match s.format {
-                        WebFormat::Jpg => format!("Quality {}", s.quality),
+                        WebFormat::Jpg => crate::i18n::fmt(tl!("Quality {quality}"), &[("quality", &s.quality.to_string())]),
                         WebFormat::Png24 => String::new(),
-                        _ => format!("{} colors", shot.colors.len()),
+                        _ => crate::i18n::tn(shot.colors.len() as u64, "{n} color", "{n} colors"),
                     };
                     (s.format.label().to_string(), format!("{}  {time} @ {}", size_label(bytes), speed_label(kbps)), detail)
                 }
-                _ => ("Original".into(), format!("{} × {} px", shot.size[0], shot.size[1]), String::new()),
+                _ => (tl!("Original").into(), format!("{} × {} px", shot.size[0], shot.size[1]), String::new()),
             }
         }
     };
@@ -519,36 +520,36 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
         let choice = |ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]| {
             form::choice(ui, d, key, label, (LABEL_W, FIELD_W), options);
         };
-        choice(ui, d, "format", "Format:", &pairs(&WebFormat::ALL, WebFormat::id, WebFormat::label));
+        choice(ui, d, "format", tl!("Format:"), &pairs(&WebFormat::ALL, WebFormat::id, WebFormat::label));
         let format = s.map_or(WebFormat::Gif, |s| s.format);
         match format {
             WebFormat::Gif | WebFormat::Png8 => {
-                choice(ui, d, "reduction", "Reduction:", &pairs(&Reduction::ALL, Reduction::id, Reduction::label));
+                choice(ui, d, "reduction", tl!("Reduction:"), &pairs(&Reduction::ALL, Reduction::id, Reduction::label));
                 colors_row(ui, d);
-                choice(ui, d, "dither", "Dither:", &pairs(&Dither::ALL, Dither::id, Dither::label));
+                choice(ui, d, "dither", tl!("Dither:"), &pairs(&Dither::ALL, Dither::id, Dither::label));
                 if Dither::from_id(&d.str("dither")).is_some_and(|x| x != Dither::None) {
-                    slider_row(ui, d, "ditherAmount", "Amount:", "%");
+                    slider_row(ui, d, "ditherAmount", tl!("Amount:"), "%");
                 }
-                check_pair(ui, d, ("transparency", "Transparency"), ("interlaced", "Interlaced"));
+                check_pair(ui, d, ("transparency", tl!("Transparency")), ("interlaced", tl!("Interlaced")));
                 matte_row(ui, d);
-                slider_row(ui, d, "webSnap", "Web Snap:", "%");
+                slider_row(ui, d, "webSnap", tl!("Web Snap:"), "%");
                 if format == WebFormat::Gif {
-                    slider_row(ui, d, "lossy", "Lossy:", "%");
+                    slider_row(ui, d, "lossy", tl!("Lossy:"), "%");
                 }
             }
             WebFormat::Jpg => {
                 quality_row(ui, d);
-                check_pair(ui, d, ("progressive", "Progressive"), ("optimized", "Optimized"));
-                widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "embedProfile", "ICC Profile"));
+                check_pair(ui, d, ("progressive", tl!("Progressive")), ("optimized", tl!("Optimized")));
+                widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "embedProfile", tl!("ICC Profile")));
                 matte_row(ui, d);
             }
             WebFormat::Png24 => {
-                check_pair(ui, d, ("transparency", "Transparency"), ("interlaced", "Interlaced"));
+                check_pair(ui, d, ("transparency", tl!("Transparency")), ("interlaced", tl!("Interlaced")));
                 matte_row(ui, d);
             }
         }
-        widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "convertToSrgb", "Convert to sRGB"));
-        choice(ui, d, "metadata", "Metadata:", &pairs(&WebMetadata::ALL, WebMetadata::key, WebMetadata::label));
+        widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "convertToSrgb", tl!("Convert to sRGB")));
+        choice(ui, d, "metadata", tl!("Metadata:"), &pairs(&WebMetadata::ALL, WebMetadata::key, WebMetadata::label));
         if format.palette() {
             widgets::divider(ui);
             color_table(ui, d, s);
@@ -557,9 +558,9 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
         image_size(app, ui, d, s);
         widgets::divider(ui);
         if d.bool("__hasSlices") {
-            choice(ui, d, "slices", "Slices:", &pairs(&SliceScope::ALL, SliceScope::key, SliceScope::label));
+            choice(ui, d, "slices", tl!("Slices:"), &pairs(&SliceScope::ALL, SliceScope::key, SliceScope::label));
         }
-        choice(ui, d, "output", "Output:", &pairs(&WebOutput::ALL, WebOutput::key, WebOutput::label));
+        choice(ui, d, "output", tl!("Output:"), &pairs(&WebOutput::ALL, WebOutput::key, WebOutput::label));
     });
 }
 
@@ -570,22 +571,23 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: O
     let current = s.and_then(|s| presets.iter().rposition(|p| p.settings == *s));
     let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
     let mut run: Option<(&str, Value)> = None;
-    widgets::label_row(ui, "Preset:", LABEL_W, |ui| {
-        let shown = current.and_then(|i| names.get(i).copied()).unwrap_or("[Unnamed]");
+    widgets::label_row(ui, tl!("Preset:"), LABEL_W, |ui| {
+        let shown = current.and_then(|i| names.get(i).copied()).unwrap_or(tl!("[Unnamed]"));
         if let Some(i) = widgets::dropdown(ui, "sfw-preset", shown, &names, FIELD_W - 60.0)
             && let Some(p) = presets.get(i)
         {
             d.fields.extend(settings_fields(&p.settings));
         }
         let editing = d.fields.contains_key("__presetName");
-        if widgets::icon_button(ui, "save", "Save the settings as a preset", editing, 24.0).clicked() {
+        if widgets::icon_button(ui, "save", tl!("Save the settings as a preset"), editing, 24.0).clicked() {
             match editing {
                 true => _ = d.fields.remove("__presetName"),
                 false => _ = d.fields.insert("__presetName".into(), json!("")),
             }
         }
         let user = current.filter(|i| *i + saved >= presets.len());
-        let del = ui.add_enabled(user.is_some(), |ui: &mut egui::Ui| widgets::icon_button(ui, "trash-2", "Delete this saved preset", false, 24.0));
+        let del =
+            ui.add_enabled(user.is_some(), |ui: &mut egui::Ui| widgets::icon_button(ui, "trash-2", tl!("Delete this saved preset"), false, 24.0));
         if del.clicked()
             && let Some(name) = user.and_then(|i| names.get(i))
         {
@@ -593,10 +595,10 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: O
         }
     });
     if d.fields.contains_key("__presetName") {
-        widgets::label_row(ui, "Name:", LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("Name:"), LABEL_W, |ui| {
             form::text(ui, d, "__presetName", FIELD_W - 70.0);
             let name = d.str("__presetName");
-            if ui.add_enabled(!name.trim().is_empty(), |ui: &mut egui::Ui| widgets::flat_button(ui, "Save", 52.0)).clicked() {
+            if ui.add_enabled(!name.trim().is_empty(), |ui: &mut egui::Ui| widgets::flat_button(ui, tl!("Save"), 52.0)).clicked() {
                 let mut p = params(d);
                 p["name"] = json!(name.trim());
                 run = Some(("webExport.presets.save", p));
@@ -635,7 +637,7 @@ fn slider_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, suffix:
 
 /// The palette size: the usual counts, or any 2–256.
 fn colors_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::label_row(ui, "Colors:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Colors:"), LABEL_W, |ui| {
         let mut n = d.f64("colors", 128.0).round().clamp(2.0, 256.0) as u16;
         if let Some(c) = widgets::dropdown(ui, "sfw-colors", &n.to_string(), &COLOR_COUNTS, 80.0).and_then(|i| COLOR_COUNTS.get(i)) {
             n = c.parse().unwrap_or(n);
@@ -651,7 +653,7 @@ fn colors_row(ui: &mut egui::Ui, d: &mut Dialog) {
 fn quality_row(ui: &mut egui::Ui, d: &mut Dialog) {
     let q = d.f64("quality", 60.0).round().clamp(0.0, 100.0) as u8;
     let step = QUALITIES.iter().rev().find(|(_, v)| q >= *v).map_or("Low", |(l, _)| *l);
-    widgets::label_row(ui, "Quality:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Quality:"), LABEL_W, |ui| {
         let labels = QUALITIES.map(|(l, _)| l);
         if let Some((_, v)) = widgets::dropdown(ui, "sfw-quality", step, &labels, FIELD_W).and_then(|i| QUALITIES.get(i)) {
             d.fields.insert("quality".into(), json!(v));
@@ -664,7 +666,7 @@ fn quality_row(ui: &mut egui::Ui, d: &mut Dialog) {
 fn matte_row(ui: &mut egui::Ui, d: &mut Dialog) {
     let matte = d.str("matte");
     let at = MATTES.iter().position(|v| matte.eq_ignore_ascii_case(v)).unwrap_or(3);
-    widgets::label_row(ui, "Matte:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Matte:"), LABEL_W, |ui| {
         if let Some(i) = widgets::dropdown(ui, "sfw-matte", MATTE_LABELS[at], &MATTE_LABELS, 120.0) {
             d.fields.insert("matte".into(), json!(MATTES.get(i).copied().unwrap_or("#808080")));
         }
@@ -683,11 +685,11 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     let key = s.map(|s| s.to_json().to_string());
     let shot = cache.and_then(|c| c.shots.into_iter().find(|(k, _)| Some(k) == key.as_ref())).and_then(|(_, s)| s.ok());
     let Some(shot) = shot else {
-        widgets::subheader(ui, "Color Table");
-        widgets::dim_label(ui, "Shown with the optimised preview.");
+        widgets::subheader(ui, tl!("Color Table"));
+        widgets::dim_label(ui, tl!("Shown with the optimised preview."));
         return;
     };
-    widgets::subheader(ui, &format!("Color Table ({} colors)", shot.colors.len()));
+    widgets::subheader(ui, &crate::i18n::tn(shot.colors.len() as u64, "Color Table ({n} color)", "Color Table ({n} colors)"));
     let selected = d.str("__color");
     // (colour shown, source, transparent, locked, web-safe, mapped by hand)
     let rows: Vec<(TableColor, bool)> = shot
@@ -744,9 +746,11 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
     let on = |list: &[String]| list.iter().any(|h| h.eq_ignore_ascii_case(&selected));
     ui.horizontal(|ui| {
         ui.add_enabled_ui(!selected.is_empty(), |ui| {
-            for (list, on_label, off_label) in
-                [("transparent", "Restore", "Transparent"), ("webShift", "Unshift", "Web Shift"), ("locked", "Unlock", "Lock")]
-            {
+            for (list, on_label, off_label) in [
+                ("transparent", tl!("Restore"), tl!("Transparent")),
+                ("webShift", tl!("Unshift"), tl!("Web Shift")),
+                ("locked", tl!("Unlock"), tl!("Lock")),
+            ] {
                 let current = match list {
                     "transparent" => &table.transparent,
                     "webShift" => &table.web_shift,
@@ -760,7 +764,7 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
         });
     });
     let sort = table.sort;
-    widgets::label_row(ui, "Order:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Order:"), LABEL_W, |ui| {
         let labels = ColorSort::ALL.map(ColorSort::label);
         if let Some(i) = widgets::dropdown(ui, "sfw-sort", sort.label(), &labels, FIELD_W)
             && let Some(o) = ColorSort::ALL.get(i)
@@ -792,7 +796,7 @@ pub(super) fn set_table(d: &mut Dialog, key: &str, value: Value) {
 /// Image Size: width and height in pixels (proportional) or a percentage, anti-aliasing, Clip to
 /// Artboard and which artboard.
 fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) {
-    widgets::subheader(ui, "Image Size");
+    widgets::subheader(ui, tl!("Image Size"));
     let Some(st) = app.session.active() else { return };
     let region = s.and_then(|s| webexport::region(&st.doc, s).ok());
     let (w, h) = region.map_or((0, 0), |(r, scale)| vectorcraft_render::region_pixels(r, scale));
@@ -802,28 +806,28 @@ fn image_size(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option
         }
         d.fields.insert(key.into(), v);
     };
-    widgets::label_row(ui, "W:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("W:"), LABEL_W, |ui| {
         if let Some(v) = widgets::plain_field(ui, "sfw-w", f64::from(w), " px", 0, 80.0) {
             set(d, "width", json!(v.round().max(1.0)));
         }
-        ui.label("H:");
+        ui.label(tl!("H:"));
         if let Some(v) = widgets::plain_field(ui, "sfw-h", f64::from(h), " px", 0, 80.0) {
             set(d, "height", json!(v.round().max(1.0)));
         }
     });
     let percent = region.map_or(100.0, |(_, scale)| (scale * 100.0 * 100.0).round() / 100.0);
-    widgets::label_row(ui, "Percent:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Percent:"), LABEL_W, |ui| {
         if let Some(v) = widgets::plain_field(ui, "sfw-pct", percent, "%", 2, 80.0) {
             set(d, "percent", json!(v));
         }
     });
-    form::choice(ui, d, "antiAlias", "Anti-aliasing:", (LABEL_W, FIELD_W), &pairs(&AntiAlias::ALL, AntiAlias::id, AntiAlias::label));
-    widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "clipToArtboard", "Clip to Artboard"));
+    form::choice(ui, d, "antiAlias", tl!("Anti-aliasing:"), (LABEL_W, FIELD_W), &pairs(&AntiAlias::ALL, AntiAlias::id, AntiAlias::label));
+    widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "clipToArtboard", tl!("Clip to Artboard")));
     let boards = &st.doc.artboards;
     if boards.len() > 1 && d.bool("clipToArtboard") {
         let names: Vec<&str> = boards.iter().map(|a| a.name.as_str()).collect();
         let at = s.and_then(|s| s.artboard).unwrap_or(0).min(names.len() - 1);
-        widgets::label_row(ui, "Artboard:", LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("Artboard:"), LABEL_W, |ui| {
             if let Some(i) = widgets::dropdown(ui, "sfw-artboard", names.get(at).copied().unwrap_or_default(), &names, FIELD_W) {
                 d.fields.insert("artboard".into(), json!(i));
             }

@@ -50,7 +50,12 @@ use Item::Sep;
 
 /// UI-level commands: (id, label, shortcut, params doc).
 pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
-    ("app.language", "Interface Language", "", "{lang: en|ja|cs} — persistent interface language"),
+    (
+        "app.language",
+        "Interface Language",
+        "",
+        "{lang: auto|<code>} the interface language, persisted as the `interfaceLanguage` preference (`auto` follows the system locale; codes: prefs.list › interfaceLanguage, e.g. en, ja, cs, zh-hant)",
+    ),
     ("file.open", "Open…", "Cmd+O", "{path?}"),
     (
         "file.save",
@@ -673,10 +678,16 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     if id == "app.language" {
-        let language = p.get("lang").and_then(Value::as_str).and_then(crate::i18n::Language::parse);
-        let Some(language) = language else { return Some(Err("lang must be en, ja or cs".into())) };
-        app.ui.language = language;
-        return Some(Ok(json!(language)));
+        let lang = p.get("lang").and_then(Value::as_str).unwrap_or("");
+        let value = if lang.eq_ignore_ascii_case("auto") {
+            "auto".to_string()
+        } else if let Some(l) = crate::i18n::Lang::from_code(lang) {
+            l.code().to_string()
+        } else {
+            let codes: Vec<&str> = std::iter::once("auto").chain(crate::i18n::Lang::all().map(|l| l.code())).collect();
+            return Some(Err(format!("lang must be one of {}", codes.join(", "))));
+        };
+        return Some(app.run("prefs.set", json!({"key": "interfaceLanguage", "value": value})).map(|_| json!(value)));
     }
     if let Some(r) = crate::panels::character::intercept_text_command(app, id) {
         return Some(r);
@@ -1110,7 +1121,13 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
     if id == "app.language" {
-        return Some(p.get("lang").and_then(Value::as_str).and_then(crate::i18n::Language::parse) == Some(app.ui.language));
+        let lang = p.get("lang").and_then(Value::as_str).unwrap_or("");
+        let pref = app.session.prefs.interface_language.as_str();
+        return Some(if lang.eq_ignore_ascii_case("auto") {
+            crate::i18n::Lang::from_code(pref).is_none()
+        } else {
+            crate::i18n::Lang::from_code(pref).is_some_and(|l| l.code().eq_ignore_ascii_case(lang))
+        });
     }
     let v = &app.ui.view;
     Some(match id {
@@ -1238,6 +1255,33 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "perspective.grid.rulers" => if perspective_grid(app).is_some_and(|g| g.rulers) { "Hide Rulers" } else { "Show Rulers" }.into(),
         "perspective.grid.lock" => if perspective_grid(app).is_some_and(|g| g.locked) { "Unlock Grid" } else { "Lock Grid" }.into(),
         _ => label.into(),
+    }
+}
+
+/// The label of a menu item as drawn: [`dynamic_label`] in the UI language. Labels assembled
+/// around a name (Undo *Move*, Reset *Essentials*, Last Effect: *Drop Shadow*) are translated as
+/// templates so the name can move; names that are user data (files, views, fonts) pass through.
+pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
+    let lang = crate::i18n::current();
+    let fmt = crate::i18n::fmt;
+    match id {
+        "edit.undo" | "edit.redo" => {
+            let last = app.session.active().and_then(|d| if id == "edit.undo" { d.history.undo.last() } else { d.history.redo.last() });
+            match last {
+                Some(h) if id == "edit.undo" => fmt(tl!("Undo {name}"), &[("name", tl!(&h.label))]),
+                Some(h) => fmt(tl!("Redo {name}"), &[("name", tl!(&h.label))]),
+                None => tl!(if id == "edit.undo" { "Undo" } else { "Redo" }).to_string(),
+            }
+        }
+        "window.workspace.reset" => fmt(tl!("Reset {name}"), &[("name", tl!(&app.ui.workspace))]),
+        "effect.last" => match &app.last_effect {
+            Some((e, _)) => {
+                let name = vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str());
+                fmt(tl!("Last Effect: {name}"), &[("name", tl!(name))])
+            }
+            None => crate::i18n::tr_id(lang, id, label).to_string(),
+        },
+        _ => crate::i18n::tr_id(lang, id, &dynamic_label(app, id, label)).to_string(),
     }
 }
 
@@ -1466,11 +1510,10 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Settings…", "edit.preferences"),
                 sub(
                     "Language",
-                    vec![
-                        cp("English", "app.language", json!({"lang": "en"})),
-                        cp("日本語", "app.language", json!({"lang": "ja"})),
-                        cp("Čeština", "app.language", json!({"lang": "cs"})),
-                    ],
+                    std::iter::once(cp("Automatic", "app.language", json!({"lang": "auto"})))
+                        .chain(std::iter::once(Sep))
+                        .chain(crate::i18n::Lang::all().map(|l| cp(l.name(), "app.language", json!({"lang": l.code()}))))
+                        .collect(),
                 ),
                 Sep,
                 sub("UI Brightness", Brightness::ALL.iter().map(|b| cp(b.label(), "window.brightness", json!({"brightness": b.id()}))).collect()),
@@ -2244,9 +2287,9 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         .ui(ui, |ui| {
             for (i, (title, items)) in tree.iter().enumerate() {
                 let text = if i == 0 {
-                    egui::RichText::new(app.ui.language.tr(title)).font(theme::semibold(13.0)).color(t.text)
+                    egui::RichText::new(tl!(title)).font(theme::semibold(13.0)).color(t.text)
                 } else {
-                    egui::RichText::new(app.ui.language.tr(title)).size(13.0).color(t.text)
+                    egui::RichText::new(tl!(title)).size(13.0).color(t.text)
                 };
                 ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked));
             }
@@ -2278,10 +2321,10 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks:
                 ui.separator();
             }
             Item::Header(h) => {
-                ui.label(egui::RichText::new(app.ui.language.tr(h)).size(11.0).color(t.text_dim));
+                ui.label(egui::RichText::new(tl!(h)).size(11.0).color(t.text_dim));
             }
             Item::Sub(label, children) => {
-                ui.menu_button(app.ui.language.tr(label), |ui| {
+                ui.menu_button(tl!(label), |ui| {
                     widgets::menu_scroll(ui, |ui| {
                         ui.set_min_width(200.0);
                         render_items(app, ui, children, checks, clicked);
@@ -2290,10 +2333,10 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks:
             }
             Item::Todo(label, sc) => {
                 ui.add_enabled_ui(false, |ui| {
-                    ui.add(egui::Button::new(app.ui.language.tr(label)).shortcut_text(pretty_shortcut(sc)));
+                    ui.add(egui::Button::new(tl!(label)).shortcut_text(pretty_shortcut(sc)));
                 })
                 .response
-                .on_disabled_hover_text("Coming soon — tracked in the parity plan");
+                .on_disabled_hover_text(tl!("Coming soon — tracked in the parity plan"));
             }
             Item::Cmd(label, id, p) => {
                 let en = enabled(app, id);
@@ -2301,8 +2344,7 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks:
                 if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
                     continue;
                 }
-                let label = dynamic_label(app, id, label);
-                let label = app.ui.language.tr(&label).to_string();
+                let label = display_label(app, id, label);
                 let sc = item_shortcut(id, p).map(pretty_shortcut).unwrap_or_default();
                 let chk = checks.then(|| checked(app, id, p)).flatten();
                 let text = match chk {
@@ -2727,6 +2769,127 @@ pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
         _ if p.is_null() => shortcut_of(id),
         _ => None,
     }
+}
+
+/// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
+/// every one of them is translated (a test checks the list against the menu).
+pub const CONTEXT_LABELS: &[&str] = &[
+    "Isolate Selected Group",
+    "Exit Isolation Mode",
+    "Make Clipping Mask",
+    "Release Clipping Mask",
+    "Make Compound Path",
+    "Release Compound Path",
+    "Select All",
+];
+
+/// The labels [`dynamic_label`] can show in place of an item's own (Show/Hide pairs and the like),
+/// so the catalog tests can insist every one of them is translated.
+pub const DYNAMIC_LABELS: &[&str] = &[
+    "Preview",
+    "Outline",
+    "Hide Edges",
+    "Show Edges",
+    "Hide Corner Widget",
+    "Show Corner Widget",
+    "Hide Text Threads",
+    "Show Text Threads",
+    "Hide Hidden Characters",
+    "Show Hidden Characters",
+    "Hide Gradient Annotator",
+    "Show Gradient Annotator",
+    "Hide Artboards",
+    "Show Artboards",
+    "Hide Rulers",
+    "Show Rulers",
+    "Hide Bounding Box",
+    "Show Bounding Box",
+    "Hide Transparency Grid",
+    "Show Transparency Grid",
+    "Hide Guides",
+    "Show Guides",
+    "Hide Grid",
+    "Show Grid",
+    "Unlock Guides",
+    "Lock Guides",
+    "Show Slices",
+    "Hide Slices",
+    "Hide Print Tiling",
+    "Show Print Tiling",
+    "Edit Envelope",
+    "Edit Contents",
+    "Undo",
+    "Redo",
+    "Unlock Grid",
+    "Lock Grid",
+];
+
+/// Every English string the menus, the command palette, the panel registry, the toolbar and the
+/// Preferences dialog can show: what a complete language catalog has to cover. Names that are user
+/// data (fonts, recent files, saved views, libraries) and the point sizes are left out.
+pub fn menu_strings() -> std::collections::BTreeSet<String> {
+    use std::collections::BTreeSet;
+    fn user_data(id: &str) -> bool {
+        hidden_when_disabled(id) || id.starts_with("type.recentFont")
+    }
+    fn walk(items: &[Item], under: &str, out: &mut BTreeSet<String>) {
+        for it in items {
+            match it {
+                Item::Cmd(l, id, _) => {
+                    let size = l.strip_suffix(" pt").is_some_and(|n| n.chars().all(|c| c.is_ascii_digit()));
+                    // VectorCraft › Language lists each language by its own name.
+                    let language_name = *id == "app.language" && crate::i18n::Lang::all().any(|lang| lang.name() == *l);
+                    if !user_data(id) && !size && !language_name && *l != "—" {
+                        out.insert(l.to_string());
+                    }
+                }
+                Item::Todo(l, _) | Item::Header(l) => {
+                    out.insert(l.to_string());
+                }
+                Item::Sub(l, children) => {
+                    out.insert(l.to_string());
+                    // Type › Font lists the installed families: names, not UI text.
+                    if !(under == "Type" && *l == "Font") {
+                        walk(children, l, out);
+                    }
+                }
+                Item::Sep => {}
+            }
+        }
+    }
+    let mut out = BTreeSet::new();
+    for (title, items) in menu_tree() {
+        out.insert(title.to_string());
+        walk(&items, title, &mut out);
+    }
+    out.extend(DYNAMIC_LABELS.iter().map(|s| s.to_string()));
+    out.extend(CONTEXT_LABELS.iter().map(|s| s.to_string()));
+    out.extend(UI_COMMANDS.iter().map(|c| c.1.to_string()));
+    for c in vectorcraft_engine::cmd::command_specs() {
+        out.insert(c.label.to_string());
+        out.extend(c.menu.iter().map(|m| m.to_string()));
+    }
+    out.extend(ICON_PANELS.iter().map(|p| p.1.to_string()));
+    out.extend(["Properties", "Layers", "Libraries"].map(str::to_string));
+    out.extend(vectorcraft_tools::catalog::all_tools().map(|t| t.label.to_string()));
+    out.extend(crate::toolbar::BASIC.iter().map(|c| c.0.to_string()));
+    out.extend(vectorcraft_color::BlendMode::ALL.iter().map(|m| m.label().to_string()));
+    out.extend(vectorcraft_effects::effect_catalog().iter().map(|e| e.label.to_string()));
+    out.extend(vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES.iter().map(|c| c.to_string()));
+    for sp in vectorcraft_engine::cmd::prefscmds::PREF_SPECS {
+        out.insert(sp.label.to_string());
+        if !sp.section.is_empty() {
+            out.insert(sp.section.to_string());
+        }
+        if let vectorcraft_engine::cmd::prefscmds::PrefKind::Choice(opts) = sp.kind {
+            out.extend(opts.iter().map(|o| o.1.to_string()));
+        }
+    }
+    out.extend(crate::prefs_dialog::UI_FIELDS.iter().map(|f| f.2.to_string()));
+    out.extend(crate::dialogs::button_labels().into_iter().map(str::to_string));
+    out.extend(crate::chrome::hint_strings().into_iter().map(str::to_string));
+    out.remove("");
+    out
 }
 
 #[cfg(test)]

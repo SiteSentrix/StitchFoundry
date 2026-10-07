@@ -25,7 +25,7 @@ fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str
     let on = o[flag].as_bool().unwrap_or(false);
     ui.horizontal(|ui| {
         ui.set_min_height(26.0);
-        if widgets::check(ui, label, on, true) {
+        if widgets::check(ui, tl!(label), on, true) {
             app.run("magicWand.set", json!({ flag: !on })).ok();
         }
         if let Some((key, kind, max)) = tol {
@@ -41,7 +41,7 @@ fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str
                         app.run("magicWand.set", json!({ key: n.clamp(0.0, max) })).ok();
                     }
                 });
-                widgets::dim_label(ui, "Tolerance:");
+                widgets::dim_label(ui, tl!("Tolerance:"));
             });
         }
     });
@@ -49,28 +49,28 @@ fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(app);
-    row(app, ui, &o, "Fill Color", "fillColor", Some(("fillTolerance", Tol::Plain(""), 255.0)));
+    row(app, ui, &o, tl!("Fill Color"), "fillColor", Some(("fillTolerance", Tol::Plain(""), 255.0)));
     if !pstate::<bool>(ui.ctx(), "wand-hide-stroke") {
         widgets::divider(ui);
-        row(app, ui, &o, "Stroke Color", "strokeColor", Some(("strokeTolerance", Tol::Plain(""), 255.0)));
-        row(app, ui, &o, "Stroke Weight", "strokeWeight", Some(("weightTolerance", Tol::Weight, 1000.0)));
+        row(app, ui, &o, tl!("Stroke Color"), "strokeColor", Some(("strokeTolerance", Tol::Plain(""), 255.0)));
+        row(app, ui, &o, tl!("Stroke Weight"), "strokeWeight", Some(("weightTolerance", Tol::Weight, 1000.0)));
     }
     if !pstate::<bool>(ui.ctx(), "wand-hide-transparency") {
         widgets::divider(ui);
-        row(app, ui, &o, "Opacity", "opacity", Some(("opacityTolerance", Tol::Plain("%"), 100.0)));
-        row(app, ui, &o, "Blending Mode", "blendingMode", None);
+        row(app, ui, &o, tl!("Opacity"), "opacity", Some(("opacityTolerance", Tol::Plain("%"), 100.0)));
+        row(app, ui, &o, tl!("Blending Mode"), "blendingMode", None);
     }
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    for (label, key) in [("Stroke Options", "wand-hide-stroke"), ("Transparency Options", "wand-hide-transparency")] {
+    for (label, key) in [(tl!("Stroke Options"), "wand-hide-stroke"), (tl!("Transparency Options"), "wand-hide-transparency")] {
         let hidden: bool = pstate(ui.ctx(), key);
-        if menu_item(ui, &format!("{} {label}", if hidden { "Show" } else { "Hide" }), true, false) {
+        if menu_item(ui, &format!("{} {label}", if hidden { tl!("Show") } else { tl!("Hide") }), true, false) {
             set_pstate(ui.ctx(), key, !hidden);
         }
     }
     ui.separator();
-    if menu_item(ui, "Reset", true, false) {
+    if menu_item(ui, tl!("Reset"), true, false) {
         app.run("magicWand.set", json!({ "reset": true })).ok();
     }
 }

@@ -22,6 +22,16 @@ fn expanded_id() -> egui::Id {
     egui::Id::new("layers-expanded")
 }
 
+/// The name painted for a row: a generated `<Kind>` name is translated, anything else is user data.
+fn painted_name(n: &Node, name: &str) -> String {
+    if n.name.is_none()
+        && let Some(inner) = name.strip_prefix('<').and_then(|s| s.strip_suffix('>'))
+    {
+        return format!("<{}>", crate::i18n::t(inner));
+    }
+    name.to_string()
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
@@ -46,7 +56,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut expanded: HashSet<u64> = ui.data(|d| d.get_temp(expanded_id())).unwrap_or_else(|| doc.layers.iter().map(|l| l.id.0).collect());
     let mut actions: Vec<(String, serde_json::Value)> = vec![];
     // Search field ("Search All").
-    crate::widgets::search_field(ui, egui::Id::new("layers-search"), "Search All");
+    crate::widgets::search_field(ui, egui::Id::new("layers-search"), tl!("Search All"));
     ui.add_space(6.0);
     let h = ui.available_height() - 34.0;
     egui::ScrollArea::vertical().max_height(h).auto_shrink([false, false]).show(ui, |ui| {
@@ -66,12 +76,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.painter().text(
         bar.left_center() + vec2(4.0, 0.0),
         egui::Align2::LEFT_CENTER,
-        format!("{n} Layer{}", if n == 1 { "" } else { "s" }),
+        crate::i18n::tn(n as u64, "{n} Layer", "{n} Layers"),
         egui::FontId::proportional(11.5),
         t.text_dim,
     );
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
-    let trash = widgets::icon_button(&mut child, "trash-2", "Delete Selection", false, 24.0);
+    let trash = widgets::icon_button(&mut child, "trash-2", tl!("Delete Selection"), false, 24.0);
     // A target circle dropped on the trash clears that appearance.
     if let Some(d) = trash.dnd_release_payload::<PanelDrag>()
         && let PanelDrag::Appearance(id) = *d
@@ -84,16 +94,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             actions.push(("layer.delete".into(), json!({})));
         }
     }
-    if widgets::icon_button(&mut child, "file-plus", "Create New Layer", false, 24.0).clicked() {
+    if widgets::icon_button(&mut child, "file-plus", tl!("Create New Layer"), false, 24.0).clicked() {
         actions.push(("layer.new".into(), json!({})));
     }
-    if widgets::icon_button(&mut child, "plus", "Create New Sublayer", false, 24.0).clicked() {
+    if widgets::icon_button(&mut child, "plus", tl!("Create New Sublayer"), false, 24.0).clicked() {
         actions.push(("layer.newSublayer".into(), json!({})));
     }
-    if widgets::icon_button(&mut child, "frame", "Make/Release Clipping Mask", false, 24.0).clicked() {
+    if widgets::icon_button(&mut child, "frame", tl!("Make/Release Clipping Mask"), false, 24.0).clicked() {
         actions.push(("layer.clippingMask.toggle".into(), json!({})));
     }
-    if widgets::icon_button(&mut child, "search", "Locate Object", false, 24.0).clicked() {
+    if widgets::icon_button(&mut child, "search", tl!("Locate Object"), false, 24.0).clicked() {
         // Expand ancestors of the selection.
         if let Some(st) = app.session.active() {
             let mut ex: HashSet<u64> = ui.data(|d| d.get_temp(expanded_id())).unwrap_or_default();
@@ -233,7 +243,9 @@ fn row(
         }
         _ => {
             let painter = ui.painter().with_clip_rect(name_rect);
-            let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name.clone(), font, t.text);
+            // Generated names ("<Path>", "<Opacity Mask>") are translated where painted; the stored name stays English.
+            let shown = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { tl!("<Opacity Mask>").to_string() } else { painted_name(n, &name) };
+            let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, shown, font, t.text);
             // A clipping path's name is underlined, a masked object's with a dashed line.
             if clip_path {
                 painter.line_segment([text.left_bottom(), text.right_bottom()], Stroke::new(1.0, t.text));
@@ -427,13 +439,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if i == 4 {
             ui.separator();
         }
-        if widgets::menu_item(ui, label, crate::menus::enabled(app, cmd), false) {
+        if widgets::menu_item(ui, tl!(label), crate::menus::enabled(app, cmd), false) {
             app.run(cmd, json!({})).ok();
         }
     }
     ui.separator();
     let remembers = app.session.active().is_some_and(|d| d.doc.paste_remembers_layers);
-    if widgets::menu_item(ui, "Paste Remembers Layers", app.session.active().is_some(), remembers) {
+    if widgets::menu_item(ui, tl!("Paste Remembers Layers"), app.session.active().is_some(), remembers) {
         app.run("layer.pasteRemembersLayers", json!({"on": !remembers})).ok();
     }
 }

@@ -77,7 +77,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
         if names.is_empty() {
-            super::empty_state(ui, "spray-can", "No symbols in this document", "Select art and click New Symbol to make one.");
+            super::empty_state(ui, "spray-can", tl!("No symbols in this document"), tl!("Select art and click New Symbol to make one."));
             return;
         }
         let paint_thumb = |ui: &Ui, r: egui::Rect, n: &str| {
@@ -133,18 +133,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     widgets::bottom_bar(ui, |ui| {
-        widgets::icon_button_enabled(ui, "library", "Symbol Libraries (on the roadmap)", false, false, 24.0);
-        if widgets::icon_button_enabled(ui, "dc-place-symbol", "Place Symbol Instance", false, sel.is_some(), 24.0).clicked() {
+        widgets::icon_button_enabled(ui, "library", tl!("Symbol Libraries (on the roadmap)"), false, false, 24.0);
+        if widgets::icon_button_enabled(ui, "dc-place-symbol", tl!("Place Symbol Instance"), false, sel.is_some(), 24.0).clicked() {
             app.run("symbol.place", json!({})).ok();
         }
-        if widgets::icon_button_enabled(ui, "link-2-off", "Break Link to Symbol", false, inst, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link to Symbol"), false, inst, 24.0).clicked() {
             app.run("symbol.breakLink", json!({})).ok();
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-new-item", "New Symbol", false, has_sel, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0).clicked() {
             app.run("symbol.new", json!({})).ok();
         }
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Symbol", false, sel.is_some(), 24.0).clicked()
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Symbol"), false, sel.is_some(), 24.0).clicked()
             && let Some(n) = &sel
         {
             app.run("symbol.delete", json!({"name": n})).ok();
@@ -158,15 +158,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
     let items: [(&str, bool, &str, Value); 9] = [
-        ("New Symbol…", has_sel, "symbol.new", json!({})),
-        ("Redefine Symbol", has_sel && sel.is_some(), "symbol.update", name.clone()),
-        ("Duplicate Symbol", sel.is_some(), "symbol.duplicate", name.clone()),
-        ("Delete Symbol", sel.is_some(), "symbol.delete", name.clone()),
-        ("Edit Symbol", inst, "symbol.edit", json!({})),
-        ("Place Symbol Instance", sel.is_some(), "symbol.place", name.clone()),
-        ("Replace Symbol", inst && sel.is_some(), "symbol.replace", name.clone()),
-        ("Break Link to Symbol", inst, "symbol.breakLink", json!({})),
-        ("Select All Instances", sel.is_some(), "symbol.selectInstances", name),
+        (tl!("New Symbol…"), has_sel, "symbol.new", json!({})),
+        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone()),
+        (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
+        (tl!("Delete Symbol"), sel.is_some(), "symbol.delete", name.clone()),
+        (tl!("Edit Symbol"), inst, "symbol.edit", json!({})),
+        (tl!("Place Symbol Instance"), sel.is_some(), "symbol.place", name.clone()),
+        (tl!("Replace Symbol"), inst && sel.is_some(), "symbol.replace", name.clone()),
+        (tl!("Break Link to Symbol"), inst, "symbol.breakLink", json!({})),
+        (tl!("Select All Instances"), sel.is_some(), "symbol.selectInstances", name),
     ];
     for (label, enabled, cmd, params) in items {
         if menu_item(ui, label, enabled, false) {
@@ -175,10 +175,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     let list: bool = pstate(ui.ctx(), "sym-list");
-    if menu_item(ui, "Thumbnail View", true, !list) {
+    if menu_item(ui, tl!("Thumbnail View"), true, !list) {
         set_pstate(ui.ctx(), "sym-list", false);
     }
-    if menu_item(ui, "List View", true, list) {
+    if menu_item(ui, tl!("List View"), true, list) {
         set_pstate(ui.ctx(), "sym-list", true);
     }
 }

@@ -31,7 +31,7 @@ const PRESET_NAME: &str = "__presetName";
 const CUSTOM: &str = "[Custom]";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Flatten Transparency".into(), body, confirm, preview: true, min_width: 420.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Flatten Transparency").into(), body, confirm, preview: true, min_width: 420.0, ..DialogSpec::FORM };
 
 /// Open Flatten Transparency for the selection with the default preset.
 pub fn open(app: &mut VectorcraftApp) {
@@ -86,12 +86,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let current = options(d, saved);
     let presets = app.session.flattener_presets();
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Preset:");
+        widgets::dim_label(ui, tl!("Preset:"));
         if let Some(p) = preset_dropdown(ui, "flatten-preset", &presets, &d.str("preset"), current.as_ref().ok(), 220.0) {
             put_options(&mut d.fields, &p.options);
             applied(d, &p.name);
         }
-        if widgets::flat_button(ui, "Save Preset…", 100.0).clicked() {
+        if widgets::flat_button(ui, tl!("Save Preset…"), 100.0).clicked() {
             let open = !d.bool(SAVING);
             d.fields.insert(SAVING.into(), json!(open));
             d.fields.insert(PRESET_NAME.into(), json!(app.session.new_preset_name()));
@@ -118,22 +118,22 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn save_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Name:");
+        widgets::dim_label(ui, tl!("Name:"));
         let r = form::text_edit(ui, d, PRESET_NAME, 180.0);
         // Enter saves the preset instead of flattening.
         let enter = r.lost_focus() && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
-        if (widgets::flat_button(ui, "Save", 60.0).clicked() || enter)
+        if (widgets::flat_button(ui, tl!("Save"), 60.0).clicked() || enter)
             && let Err(e) = save_preset(app, d)
         {
             app.status(e);
         }
-        if widgets::flat_button(ui, "Cancel", 60.0).clicked() {
+        if widgets::flat_button(ui, tl!("Cancel"), 60.0).clicked() {
             d.fields.insert(SAVING.into(), json!(false));
         }
     });
     let name = d.str(PRESET_NAME);
     if app.session.prefs.flattener_presets.iter().any(|p| p.name.eq_ignore_ascii_case(name.trim())) {
-        widgets::dim_label(ui, "Replaces the saved preset of that name.");
+        widgets::dim_label(ui, tl!("Replaces the saved preset of that name."));
     }
 }
 
@@ -177,25 +177,25 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
     let t = Tokens::get(ui.ctx());
     let before = o.clone();
     let dim = |ui: &mut egui::Ui, s: &str| {
-        ui.label(egui::RichText::new(s).color(t.text_dim).size(11.5));
+        ui.label(egui::RichText::new(tl!(s)).color(t.text_dim).size(11.5));
     };
     ui.add_enabled_ui(enabled, |ui| {
-        widgets::dim_label(ui, "Raster/Vector Balance:");
+        widgets::dim_label(ui, tl!("Raster/Vector Balance:"));
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            dim(ui, "Rasters");
+            dim(ui, tl!("Rasters"));
             let rail = (ui.available_width() - FIELD - 56.0).clamp(80.0, 200.0);
             if let (Some(x), _) = widgets::color_slider(ui, (id, "balance-slider"), (o.balance / 100.0) as f32, rail, &|_| t.input_border) {
                 o.balance = (x as f64 * 100.0).round();
             }
-            dim(ui, "Vectors");
+            dim(ui, tl!("Vectors"));
             if let Some(v) = widgets::plain_field(ui, (id, "balance"), o.balance, "", 0, FIELD - 12.0) {
                 o.balance = v.round().clamp(0.0, 100.0);
             }
         });
         ui.add_space(4.0);
         egui::Grid::new((id, "resolutions")).num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
-            for (label, key) in [("Line Art and Text Resolution:", 0), ("Gradient and Mesh Resolution:", 1)] {
+            for (label, key) in [(tl!("Line Art and Text Resolution:"), 0), (tl!("Gradient and Mesh Resolution:"), 1)] {
                 widgets::dim_label(ui, label);
                 ui.horizontal(|ui| {
                     let v = if key == 0 { &mut o.line_art_ppi } else { &mut o.gradient_ppi };
@@ -209,12 +209,12 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
         });
         ui.add_space(4.0);
         let switches: [(&str, &mut bool); 6] = [
-            ("Convert All Text to Outlines", &mut o.text_to_outlines),
-            ("Convert All Strokes to Outlines", &mut o.strokes_to_outlines),
-            ("Clip Complex Regions", &mut o.clip_complex_regions),
-            ("Anti-alias Rasters", &mut o.anti_alias),
-            ("Preserve Alpha Transparency", &mut o.preserve_alpha),
-            ("Preserve Overprints and Spot Colors", &mut o.preserve_overprints),
+            (tl!("Convert All Text to Outlines"), &mut o.text_to_outlines),
+            (tl!("Convert All Strokes to Outlines"), &mut o.strokes_to_outlines),
+            (tl!("Clip Complex Regions"), &mut o.clip_complex_regions),
+            (tl!("Anti-alias Rasters"), &mut o.anti_alias),
+            (tl!("Preserve Alpha Transparency"), &mut o.preserve_alpha),
+            (tl!("Preserve Overprints and Spot Colors"), &mut o.preserve_overprints),
         ];
         for (label, v) in switches {
             if widgets::check(ui, label, *v, enabled) {

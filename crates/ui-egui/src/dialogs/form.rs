@@ -18,7 +18,7 @@ pub(super) fn field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
 /// [`field`] `width` points wide.
 pub(super) fn field_w(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, width: f32) {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(label).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!(label)).color(t.text_dim));
     text(ui, d, key, width);
     ui.end_row();
 }
@@ -26,7 +26,7 @@ pub(super) fn field_w(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str,
 /// A labelled [`length`] field (one grid row).
 pub(super) fn length_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, unit: Unit) {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(label).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!(label)).color(t.text_dim));
     length(ui, d, key, unit, FIELD_W);
     ui.end_row();
 }
@@ -101,7 +101,7 @@ pub(super) fn text_area(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32
 /// A checkbox bound to `d.fields[key]`.
 pub(super) fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     let mut b = d.bool(key);
-    if ui.checkbox(&mut b, label).changed() {
+    if ui.checkbox(&mut b, tl!(label)).changed() {
         d.fields.insert(key.into(), Value::Bool(b));
     }
 }
@@ -130,9 +130,9 @@ pub(super) fn grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
                 continue;
             }
             if lengths.contains(&k.as_str()) {
-                length_field(ui, d, &k, &humanize(&k), unit);
+                length_field(ui, d, &k, &humanized(&k), unit);
             } else {
-                field(ui, d, &k, &humanize(&k));
+                field(ui, d, &k, &humanized(&k));
             }
         }
     });
@@ -153,7 +153,7 @@ pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog, is_length: &dyn Fn
         let keys: Vec<(String, Value)> =
             d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect();
         for (k, v) in keys {
-            ui.label(egui::RichText::new(humanize(&k)).color(t.text));
+            ui.label(egui::RichText::new(humanized(&k)).color(t.text));
             if let Some(cur) = crate::widgets::blend_param(&k, &v) {
                 if let Some(m) = crate::widgets::blend_param_dropdown(ui, ("fx-blend", &k), cur) {
                     d.fields.insert(k, m);
@@ -214,7 +214,7 @@ pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String,
     let mut changed = false;
     egui::Grid::new("plugin-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         for (k, spec) in specs {
-            ui.label(egui::RichText::new(humanize(k)).color(t.text));
+            ui.label(egui::RichText::new(humanized(k)).color(t.text));
             let cur = d.fields.get(k).cloned().unwrap_or_else(|| spec.default_value());
             let new = match spec {
                 ParamSpec::Number { min, max, .. } => {
@@ -272,6 +272,15 @@ pub(super) fn humanize(k: &str) -> String {
     }
 }
 
+/// [`humanize`] translated where it is painted: the ":" stays outside the translated text.
+fn humanized(k: &str) -> String {
+    let h = humanize(k);
+    match h.strip_suffix(':') {
+        Some(base) => format!("{}:", tl!(base)),
+        None => tl!(&h).to_string(),
+    }
+}
+
 /// Widths of [`slider`]'s label column and rail.
 pub(super) const SLIDER_LABEL: f32 = 64.0;
 pub(super) const SLIDER_WIDTH: f32 = 180.0;
@@ -304,7 +313,7 @@ pub(super) fn slider_w(
     let v = d.f64(key, 0.0).clamp(min, max);
     let mut new = None;
     ui.horizontal(|ui| {
-        ui.add_sized([label_w, 22.0], egui::Label::new(egui::RichText::new(label).color(t.text)));
+        ui.add_sized([label_w, 22.0], egui::Label::new(egui::RichText::new(tl!(label)).color(t.text)));
         if let (Some(x), _) = crate::widgets::color_slider(ui, ("dlg-slider", key), ((v - min) / (max - min)) as f32, SLIDER_WIDTH, track) {
             new = Some((min + x as f64 * (max - min)).round());
         }
@@ -327,7 +336,7 @@ pub(super) fn preview(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mu
     const LAST: &str = PREVIEWED;
     ui.add_space(8.0);
     let mut on = d.bool("preview");
-    if crate::widgets::check(ui, "Preview", on, true) {
+    if crate::widgets::check(ui, tl!("Preview"), on, true) {
         on = !on;
         d.fields.insert("preview".into(), json!(on));
     }
@@ -386,7 +395,7 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
         ui.spacing_mut().item_spacing.x = 6.0;
         for (i, side) in ["Top", "Bottom", "Left", "Right"].into_iter().enumerate() {
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new(side).size(11.0).color(t.text_dim));
+                ui.label(egui::RichText::new(tl!(side)).size(11.0).color(t.text_dim));
                 if let Some(v) = crate::widgets::num_field(ui, ("bleed", i), Some(b[i]), unit, width) {
                     changed = Some((i, v.clamp(0.0, vectorcraft_doc::setup::MAX_BLEED)));
                 }
@@ -394,7 +403,7 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
         }
         ui.vertical(|ui| {
             ui.add_space(15.0);
-            let tip = if linked { "Make the bleed values differ" } else { "Make all bleed settings the same" };
+            let tip = if linked { tl!("Make the bleed values differ") } else { tl!("Make all bleed settings the same") };
             if crate::widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 24.0).clicked() {
                 d.fields.insert("bleedLinked".into(), json!(!linked));
                 if !linked {
@@ -418,5 +427,5 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
 /// A small grey caption above a field (New Document's details column).
 pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(text).size(11.0).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!(text)).size(11.0).color(t.text_dim));
 }

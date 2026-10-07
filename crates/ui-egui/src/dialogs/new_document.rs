@@ -225,16 +225,16 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let list = names.get(cat).and_then(|c| newdoc::category(&app.session, c)).unwrap_or_default();
     ui.add_space(14.0);
     let heading = if cat == 0 {
-        "RECENT"
+        tl!("RECENT")
     } else if cat == 1 {
-        "SAVED"
+        tl!("SAVED")
     } else {
-        "BLANK DOCUMENT PRESETS"
+        tl!("BLANK DOCUMENT PRESETS")
     };
     ui.label(egui::RichText::new(format!("{heading} ({})", list.len())).font(theme::semibold(11.0)).color(t.text_dim));
     ui.add_space(10.0);
     if list.is_empty() {
-        let hint = if cat == 1 { "Presets you save with the Save Preset button appear here." } else { "Documents you create appear here." };
+        let hint = if cat == 1 { tl!("Presets you save with the Save Preset button appear here.") } else { tl!("Documents you create appear here.") };
         ui.label(egui::RichText::new(hint).color(t.text_dim));
         return;
     }
@@ -271,7 +271,7 @@ pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool) -> egui::
     p.rect_filled(page, 0.0, egui::Color32::WHITE);
     // The name on up to two lines, then the size.
     let mut job = egui::text::LayoutJob::single_section(
-        s.name.clone(),
+        tl!(&s.name).to_string(),
         egui::TextFormat { font_id: theme::semibold(11.5), color: t.text_strong, ..Default::default() },
     );
     job.halign = egui::Align::Center;
@@ -280,7 +280,7 @@ pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool) -> egui::
     let name_h = name.size().y;
     p.galley(egui::pos2(r.center().x, r.top() + 94.0), name, t.text_strong);
     p.text(egui::pos2(r.center().x, r.top() + 98.0 + name_h), egui::Align2::CENTER_TOP, s.size_label(), egui::FontId::proportional(11.0), t.text_dim);
-    resp.on_hover_text(&s.name)
+    resp.on_hover_text(tl!(&s.name))
 }
 
 /// The Preset Details column.
@@ -288,11 +288,11 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     let t = Tokens::get(ui.ctx());
     ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
     let top = ui.cursor().top();
-    ui.label(egui::RichText::new("PRESET DETAILS").font(theme::semibold(11.0)).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!("PRESET DETAILS")).font(theme::semibold(11.0)).color(t.text_dim));
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         form::text(ui, d, "name", DETAILS - 50.0);
-        if widgets::icon_button(ui, "save", "Save Preset", d.bool(SAVING), 26.0).clicked() {
+        if widgets::icon_button(ui, "save", tl!("Save Preset"), d.bool(SAVING), 26.0).clicked() {
             let saving = !d.bool(SAVING);
             d.fields.insert(SAVING.into(), json!(saving));
             if saving && d.str("presetName").is_empty() {
@@ -305,7 +305,7 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     }
     ui.add_space(8.0);
     let unit = unit(d);
-    form::caption(ui, "Width");
+    form::caption(ui, tl!("Width"));
     ui.horizontal(|ui| {
         form::length(ui, d, "width", unit, DETAILS - 124.0);
         units_dropdown(ui, d, 112.0);
@@ -313,48 +313,48 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     ui.add_space(4.0);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            form::caption(ui, "Height");
+            form::caption(ui, tl!("Height"));
             form::length(ui, d, "height", unit, 104.0);
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
-            form::caption(ui, "Orientation");
+            form::caption(ui, tl!("Orientation"));
             orientation(ui, d);
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
-            form::caption(ui, "Artboards");
+            form::caption(ui, tl!("Artboards"));
             artboards(ui, d, 76.0);
         });
     });
     ui.add_space(8.0);
-    form::caption(ui, "Bleed");
+    form::caption(ui, tl!("Bleed"));
     form::bleed(ui, d, unit, 52.0);
     ui.add_space(8.0);
-    form::caption(ui, "Background Contents");
+    form::caption(ui, tl!("Background Contents"));
     background(ui, d, DETAILS - 34.0);
     ui.add_space(8.0);
     advanced(ui, d, 110.0, DETAILS - 116.0);
     ui.add_space(12.0);
-    if widgets::flat_button(ui, "More Settings", DETAILS).clicked() {
+    if widgets::flat_button(ui, tl!("More Settings"), DETAILS).clicked() {
         d.kind = MORE.into();
     }
     // Close and Create at the bottom right.
     ui.add_space((HEIGHT - (ui.cursor().top() - top) - 28.0).max(12.0));
     ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 28.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        b.create = widgets::primary_button(ui, "Create").clicked();
+        b.create = widgets::primary_button(ui, tl!("Create")).clicked();
         ui.add_space(8.0);
-        b.close = widgets::secondary_button(ui, "Close").clicked();
+        b.close = widgets::secondary_button(ui, tl!("Close")).clicked();
     });
 }
 
 /// Save Preset: the preset's name, Save and Cancel.
 fn save_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(4.0);
-    form::caption(ui, "Preset Name");
+    form::caption(ui, tl!("Preset Name"));
     ui.horizontal(|ui| {
         let enter = form::text_edit(ui, d, "presetName", DETAILS - 140.0).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        if widgets::flat_button(ui, "Save", 54.0).clicked() || enter {
+        if widgets::flat_button(ui, tl!("Save"), 54.0).clicked() || enter {
             let mut p: Map<String, Value> = PARAMS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
             p.insert("name".into(), json!(d.str("presetName")));
             p.remove("preset");
@@ -368,7 +368,7 @@ fn save_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 Err(e) => app.status(e),
             }
         }
-        if widgets::flat_button(ui, "Cancel", 60.0).clicked() {
+        if widgets::flat_button(ui, tl!("Cancel"), 60.0).clicked() {
             d.fields.insert(SAVING.into(), json!(false));
         }
     });
@@ -387,7 +387,7 @@ fn orientation(ui: &mut egui::Ui, d: &mut Dialog) {
     let landscape = w > h;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
-        for (is_landscape, tip) in [(false, "Portrait"), (true, "Landscape")] {
+        for (is_landscape, tip) in [(false, tl!("Portrait")), (true, tl!("Landscape"))] {
             if widgets::orientation_button(ui, is_landscape, landscape == is_landscape, tip) && landscape != is_landscape {
                 d.fields.insert("width".into(), json!(h));
                 d.fields.insert("height".into(), json!(w));
@@ -444,7 +444,7 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
         .horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(egui::vec2(14.0, 18.0), egui::Sense::hover());
             crate::icons::paint(ui, if open { "chevron-down" } else { "chevron-right" }, r, t.icon);
-            ui.label(egui::RichText::new("Advanced Options").color(t.text));
+            ui.label(egui::RichText::new(tl!("Advanced Options")).color(t.text));
         })
         .response
         .interact(egui::Sense::click());
@@ -458,9 +458,11 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
     let ppi: Vec<(Value, String)> = RASTER_PPI.iter().map(|(v, l)| (json!(v), l.to_string())).collect();
     let previews: Vec<(Value, String)> =
         PreviewMode::ALL.iter().map(|m| (json!(m.id()), form::humanize(m.id()).trim_end_matches(':').to_string())).collect();
-    for (key, name, options) in
-        [("colorMode", "Color Mode", &colors), ("rasterEffectsPpi", "Raster Effects", &ppi), ("previewMode", "Preview Mode", &previews)]
-    {
+    for (key, name, options) in [
+        ("colorMode", tl!("Color Mode"), &colors),
+        ("rasterEffectsPpi", tl!("Raster Effects"), &ppi),
+        ("previewMode", tl!("Preview Mode"), &previews),
+    ] {
         widgets::label_row(ui, name, label, |ui| choice(ui, d, key, options, field));
     }
 }
@@ -475,15 +477,15 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
     const L: f32 = 150.0;
     window(ctx, MORE, 22, |ui| {
         ui.set_width(560.0);
-        ui.label(egui::RichText::new("More Settings").font(theme::semibold(16.0)).color(t.text));
+        ui.label(egui::RichText::new(tl!("More Settings")).font(theme::semibold(16.0)).color(t.text));
         ui.add_space(12.0);
-        widgets::label_row(ui, "Name:", L, |ui| {
+        widgets::label_row(ui, tl!("Name:"), L, |ui| {
             form::text(ui, &mut d, "name", 300.0);
         });
         // Profile: the preset categories (the tabs); Size: the profile's presets.
         let profiles: Vec<&str> = newdoc::CATEGORIES.iter().map(|c| c.0).collect();
         let profile = profiles.iter().find(|p| p.eq_ignore_ascii_case(&d.str("category"))).copied().unwrap_or("[Custom]");
-        widgets::label_row(ui, "Profile:", L, |ui| {
+        widgets::label_row(ui, tl!("Profile:"), L, |ui| {
             if let Some(p) = widgets::dropdown(ui, "newdoc-profile", profile, &profiles, 220.0).and_then(|i| profiles.get(i)) {
                 d.fields.insert("category".into(), json!(p));
                 if let Some(first) = newdoc::category(&app.session, p).and_then(|v| v.into_iter().next()) {
@@ -495,7 +497,7 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let (lay, cols, spacing, rtl) = layout(&d);
         let n = d.f64("artboards", 1.0);
         let several = n > 1.0;
-        widgets::label_row(ui, "Number of Artboards:", L, |ui| {
+        widgets::label_row(ui, tl!("Number of Artboards:"), L, |ui| {
             artboards(ui, &mut d, 76.0);
             ui.add_space(10.0);
             for (l, icon) in [
@@ -509,17 +511,17 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             }
             ui.add_space(6.0);
-            if widgets::icon_button_enabled(ui, "chevrons-left", "Change to Right-to-Left Layout", rtl, several, 26.0).clicked() {
+            if widgets::icon_button_enabled(ui, "chevrons-left", tl!("Change to Right-to-Left Layout"), rtl, several, 26.0).clicked() {
                 set_layout(&mut d, "rightToLeft", json!(!rtl));
             }
         });
         ui.add_enabled_ui(several, |ui| {
-            widgets::label_row(ui, "Spacing:", L, |ui| {
+            widgets::label_row(ui, tl!("Spacing:"), L, |ui| {
                 if let Some(v) = widgets::num_field(ui, "newdoc-spacing", Some(spacing), unit(&d), 100.0) {
                     set_layout(&mut d, "spacing", json!(v.max(0.0)));
                 }
                 ui.add_space(20.0);
-                ui.label(egui::RichText::new("Columns:").color(t.text));
+                ui.label(egui::RichText::new(tl!("Columns:")).color(t.text));
                 let grid = matches!(lay, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn);
                 ui.add_enabled_ui(grid, |ui| {
                     if let Some(v) = widgets::spin_plain(ui, "newdoc-columns", cols as f64, "", 0, 76.0, 1.0, 1.0, &[]) {
@@ -532,39 +534,39 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let sizes = newdoc::category(&app.session, profile).unwrap_or_default();
         let size_names: Vec<&str> = sizes.iter().map(|s| s.name.as_str()).collect();
         let preset = d.str("preset");
-        widgets::label_row(ui, "Size:", L, |ui| {
+        widgets::label_row(ui, tl!("Size:"), L, |ui| {
             let shown = if preset.is_empty() { "Custom" } else { preset.as_str() };
             if let Some(s) = widgets::dropdown(ui, "newdoc-size", shown, &size_names, 220.0).and_then(|i| sizes.get(i)) {
                 apply(&mut d, s);
             }
         });
         let unit = unit(&d);
-        widgets::label_row(ui, "Width:", L, |ui| {
+        widgets::label_row(ui, tl!("Width:"), L, |ui| {
             form::length(ui, &mut d, "width", unit, 120.0);
             ui.add_space(20.0);
-            ui.label(egui::RichText::new("Units:").color(t.text));
+            ui.label(egui::RichText::new(tl!("Units:")).color(t.text));
             units_dropdown(ui, &mut d, 120.0);
         });
-        widgets::label_row(ui, "Height:", L, |ui| {
+        widgets::label_row(ui, tl!("Height:"), L, |ui| {
             form::length(ui, &mut d, "height", unit, 120.0);
             ui.add_space(20.0);
-            ui.label(egui::RichText::new("Orientation:").color(t.text));
+            ui.label(egui::RichText::new(tl!("Orientation:")).color(t.text));
             orientation(ui, &mut d);
         });
         ui.add_space(4.0);
-        widgets::label_row(ui, "Bleed:", L, |ui| form::bleed(ui, &mut d, unit, 64.0));
+        widgets::label_row(ui, tl!("Bleed:"), L, |ui| form::bleed(ui, &mut d, unit, 64.0));
         ui.add_space(4.0);
-        widgets::label_row(ui, "Background Contents:", L, |ui| background(ui, &mut d, 220.0));
+        widgets::label_row(ui, tl!("Background Contents:"), L, |ui| background(ui, &mut d, 220.0));
         ui.add_space(8.0);
         advanced(ui, &mut d, L, 220.0);
         ui.add_space(16.0);
         ui.horizontal(|ui| {
-            templates = widgets::secondary_button(ui, "Templates…").on_hover_text("New from Template").clicked();
+            templates = widgets::secondary_button(ui, tl!("Templates…")).on_hover_text(tl!("New from Template")).clicked();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                b.create = widgets::primary_button(ui, "Create Document").clicked();
+                b.create = widgets::primary_button(ui, tl!("Create Document")).clicked();
                 ui.add_space(8.0);
                 // Cancel goes back to New Document.
-                if widgets::secondary_button(ui, "Cancel").clicked() {
+                if widgets::secondary_button(ui, tl!("Cancel")).clicked() {
                     d.kind = KIND.into();
                 }
             });

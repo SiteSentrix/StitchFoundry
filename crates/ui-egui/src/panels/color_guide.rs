@@ -97,7 +97,7 @@ fn limit_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.set_min_width(200.0);
     let cur = app.ui.color_guide_limit.clone();
     let mut chosen = None;
-    for (key, label) in [("", "None"), (swatchlib::DOCUMENT_SWATCHES, swatches::DOCUMENT_SWATCHES)] {
+    for (key, label) in [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, swatches::DOCUMENT_SWATCHES)] {
         if menu_item(ui, label, true, cur == key) {
             chosen = Some(key.to_string());
         }
@@ -139,7 +139,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         let (r, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
         widgets::swatch_tile(ui, r, &Paint::solid(base), false, resp.hovered());
-        if resp.on_hover_text("Set base color to the current color").clicked()
+        if resp.on_hover_text(tl!("Set base color to the current color")).clicked()
             && let Some(c) = active_paint(app).color()
         {
             set_pstate(&ctx, "cg-base", Some(c));
@@ -211,8 +211,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::bottom_bar(ui, |ui| {
         let tip = match &limit {
-            Some(name) => format!("Limit colors to swatch library: {name}"),
-            None => "Limit colors to swatch library".into(),
+            Some(name) => crate::i18n::fmt(tl!("Limit colors to swatch library: {name}"), &[("name", name)]),
+            None => tl!("Limit colors to swatch library").into(),
         };
         let lr = widgets::icon_button(ui, "library", &tip, limit.is_some(), 24.0);
         egui::Popup::menu(&lr).show(|ui| limit_menu(app, ui));
@@ -220,13 +220,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Recolor Artwork with the harmony colours as the new colours: the selected art's, or
         // (without art) the colours themselves, which OK saves as a colour group.
         let doc = app.session.active().is_some();
-        if widgets::icon_button_enabled(ui, "palette", "Edit or Apply Colors", false, doc, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "palette", tl!("Edit or Apply Colors"), false, doc, 24.0).clicked() {
             edit_or_apply(app, &g);
         }
-        if widgets::icon_button_enabled(ui, "dc-new-item", "Save selected colors as swatches", false, !sel.is_empty(), 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("Save selected colors as swatches"), false, !sel.is_empty(), 24.0).clicked() {
             save_selected(app, &ctx);
         }
-        if widgets::icon_button(ui, "dc-folder", "Save color group to Swatch panel", false, 24.0).clicked() {
+        if widgets::icon_button(ui, "dc-folder", tl!("Save color group to Swatch panel"), false, 24.0).clicked() {
             let cs: Vec<_> = g.colors.iter().map(color_json).collect();
             app.run("swatch.newGroup", json!({"name": h.label(), "colors": cs})).ok();
         }
@@ -238,19 +238,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mode = app.ui.color_guide.variation;
-    for (m, l) in
-        [(Variation::TintsShades, "Show Tints/Shades"), (Variation::WarmCool, "Show Warm/Cool"), (Variation::VividMuted, "Show Vivid/Muted")]
-    {
+    for (m, l) in [
+        (Variation::TintsShades, tl!("Show Tints/Shades")),
+        (Variation::WarmCool, tl!("Show Warm/Cool")),
+        (Variation::VividMuted, tl!("Show Vivid/Muted")),
+    ] {
         if menu_item(ui, l, true, m == mode) {
             app.ui.color_guide.variation = m;
         }
     }
     ui.separator();
     let ctx = ui.ctx().clone();
-    if menu_item(ui, "Save Colors as Swatches", !selected(&ctx).is_empty(), false) {
+    if menu_item(ui, tl!("Save Colors as Swatches"), !selected(&ctx).is_empty(), false) {
         save_selected(app, &ctx);
     }
-    if menu_item(ui, "Color Guide Options…", true, false) {
+    if menu_item(ui, tl!("Color Guide Options…"), true, false) {
         app.run("ui.colorGuideOptions", json!({})).ok();
     }
 }

@@ -11,12 +11,12 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading: |d| title(&d.kind).int
 
 fn title(kind: &str) -> &'static str {
     match kind {
-        "rectangle" => "Rectangle",
-        "roundedRectangle" => "Rounded Rectangle",
-        "ellipse" => "Ellipse",
-        "polygon" => "Polygon",
-        "star" => "Star",
-        _ => "Line Segment Tool Options",
+        "rectangle" => tl!("Rectangle"),
+        "roundedRectangle" => tl!("Rounded Rectangle"),
+        "ellipse" => tl!("Ellipse"),
+        "polygon" => tl!("Polygon"),
+        "star" => tl!("Star"),
+        _ => tl!("Line Segment Tool Options"),
     }
 }
 

@@ -15,7 +15,7 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Eyedropper Options.
 pub const KIND: &str = "eyedropperOptions";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Eyedropper Options".into(), body, confirm, min_width: 460.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Eyedropper Options").into(), body, confirm, min_width: 460.0, ..DialogSpec::FORM };
 
 /// The raster sample sizes: (pixels square, label).
 const SAMPLE_SIZES: [(u64, &str); 3] = [(1, "Point Sample"), (3, "3 x 3 Average"), (5, "5 x 5 Average")];
@@ -70,7 +70,7 @@ fn set_all(v: &mut Value, on: bool) {
 /// One tree (`key`: `pickUp` or `apply`) of checkboxes; a branch's box sets everything under it.
 fn tree(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
     ui.vertical(|ui| {
-        ui.label(egui::RichText::new(title).strong());
+        ui.label(egui::RichText::new(tl!(title)).strong());
         ui.add_space(4.0);
         let Some(t) = d.fields.get_mut(key) else { return };
         for (path, label, depth) in TREE {
@@ -90,7 +90,7 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let size = d.fields.get("sampleSize").and_then(Value::as_u64).unwrap_or(1);
     let current = SAMPLE_SIZES.iter().find(|(n, _)| *n == size).map_or(SAMPLE_SIZES[0].1, |s| s.1);
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Raster Sample Size:");
+        widgets::dim_label(ui, tl!("Raster Sample Size:"));
         let labels = SAMPLE_SIZES.map(|s| s.1);
         if let Some(i) = widgets::dropdown(ui, "eyedropper-sample", current, &labels, 150.0) {
             d.fields.insert("sampleSize".into(), json!(SAMPLE_SIZES[i].0));
@@ -98,9 +98,9 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     });
     ui.add_space(10.0);
     ui.horizontal_top(|ui| {
-        tree(ui, d, "pickUp", "Eyedropper Picks Up:");
+        tree(ui, d, "pickUp", tl!("Eyedropper Picks Up:"));
         ui.add_space(24.0);
-        tree(ui, d, "apply", "Eyedropper Applies:");
+        tree(ui, d, "apply", tl!("Eyedropper Applies:"));
     });
     false
 }

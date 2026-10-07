@@ -15,7 +15,8 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Text Import Options.
 pub const KIND: &str = "textImport";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Text Import Options".into(), body, confirm, min_width: 340.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading: |_| tl!("Text Import Options").into(), body, confirm, min_width: 340.0, ..DialogSpec::FORM };
 
 /// The label column of the Encoding rows.
 const LABEL: f32 = 104.0;
@@ -42,13 +43,13 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Value {
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    widgets::subheader(ui, "Encoding");
-    form::choice(ui, d, "platform", "Platform:", (LABEL, 180.0), &[("windows", "Windows"), ("mac", "Mac")]);
-    form::choice(ui, d, "characterSet", "Character Set:", (LABEL, 180.0), &[("unicode", "Unicode"), ("ansi", "ANSI")]);
+    widgets::subheader(ui, tl!("Encoding"));
+    form::choice(ui, d, "platform", tl!("Platform:"), (LABEL, 180.0), &[("windows", "Windows"), ("mac", "Mac")]);
+    form::choice(ui, d, "characterSet", tl!("Character Set:"), (LABEL, 180.0), &[("unicode", "Unicode"), ("ansi", "ANSI")]);
     ui.add_space(10.0);
-    widgets::subheader(ui, "Line Breaks");
+    widgets::subheader(ui, tl!("Line Breaks"));
     for (key, label) in
-        [("removeLineReturns", "Join the lines of each paragraph"), ("removeParagraphReturns", "Remove blank lines between paragraphs")]
+        [("removeLineReturns", tl!("Join the lines of each paragraph")), ("removeParagraphReturns", tl!("Remove blank lines between paragraphs"))]
     {
         let on = d.bool(key);
         if widgets::check(ui, label, on, true) {
@@ -56,17 +57,17 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     }
     ui.add_space(10.0);
-    widgets::subheader(ui, "Spaces");
+    widgets::subheader(ui, tl!("Spaces"));
     let on = d.bool("replaceSpaces");
     ui.horizontal(|ui| {
-        if widgets::check(ui, "Replace", on, true) {
+        if widgets::check(ui, tl!("Replace"), on, true) {
             d.fields.insert("replaceSpaces".into(), json!(!on));
         }
         ui.add_enabled_ui(on, |ui| {
             if let Some(n) = widgets::plain_field(ui, "text-import-spaces", d.f64("spaces", 3.0), "", 0, 44.0) {
                 d.fields.insert("spaces".into(), json!(n.round().clamp(2.0, 100.0)));
             }
-            widgets::dim_label(ui, "or more spaces with a tab");
+            widgets::dim_label(ui, tl!("or more spaces with a tab"));
         });
     });
     false

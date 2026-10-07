@@ -29,13 +29,13 @@ fn set(app: &mut VectorcraftApp, f: OtFeatures) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((st, _)) = text_style(app) else {
-        widgets::dim_label(ui, "Select text to set its OpenType features.");
+        widgets::dim_label(ui, tl!("Select text to set its OpenType features."));
         return;
     };
     let cur = OtFeatures::from_tags(st.features.iter().map(String::as_str));
     let mut next = cur;
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Figure:");
+        widgets::dim_label(ui, tl!("Figure:"));
         let fig = match (cur.tabular_figures, cur.oldstyle_figures) {
             (false, false) => 0,
             (true, false) => 1,
@@ -49,13 +49,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::divider(ui);
     let rows: [Toggle; 7] = [
-        ("Standard Ligatures", |f| &mut f.ligatures),
-        ("Contextual Alternates", |f| &mut f.contextual),
-        ("Discretionary Ligatures", |f| &mut f.discretionary_ligatures),
-        ("Swash", |f| &mut f.swash),
-        ("Small Caps", |f| &mut f.small_caps),
-        ("Ordinals", |f| &mut f.ordinals),
-        ("Fractions", |f| &mut f.fractions),
+        (tl!("Standard Ligatures"), |f| &mut f.ligatures),
+        (tl!("Contextual Alternates"), |f| &mut f.contextual),
+        (tl!("Discretionary Ligatures"), |f| &mut f.discretionary_ligatures),
+        (tl!("Swash"), |f| &mut f.swash),
+        (tl!("Small Caps"), |f| &mut f.small_caps),
+        (tl!("Ordinals"), |f| &mut f.ordinals),
+        (tl!("Fractions"), |f| &mut f.fractions),
     ];
     for (label, field) in rows {
         let on = *field(&mut next.clone());
@@ -64,7 +64,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     if st.tracking.abs() > 1e-9 && cur.ligatures {
-        widgets::dim_label(ui, "Ligatures are off while the text is tracked.");
+        widgets::dim_label(ui, tl!("Ligatures are off while the text is tracked."));
     }
     if next != cur {
         set(app, next);
@@ -72,7 +72,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if menu_item(ui, "Reset OpenType Features", text_style(app).is_some(), false) {
+    if menu_item(ui, tl!("Reset OpenType Features"), text_style(app).is_some(), false) {
         set(app, OtFeatures::default());
     }
 }

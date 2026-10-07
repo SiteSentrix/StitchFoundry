@@ -260,6 +260,8 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("largeTabs", "User Interface", "", "Large Tabs", bool),
     p!("uiScaling", "User Interface", "UI Scaling", "Scale", num(0.75, 2.0, "×")),
     p!("scaleCursorWithUi", "User Interface", "UI Scaling", "Scale Cursor Proportional to UI", bool),
+    // `auto` or a language code the shell registers (`zh-hant`); the shell shows it as a dropdown.
+    p!("interfaceLanguage", "User Interface", "Language", "Language", text),
     // Performance
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),
@@ -389,6 +391,11 @@ pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
             } else {
                 Err(format!("`{key}` must be a #rrggbb colour"))
             }
+        }
+        PrefKind::Text if key == "interfaceLanguage" => {
+            let s = v.as_str().map(str::trim).unwrap_or("");
+            let ok = !s.is_empty() && s.len() <= 16 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+            if ok { Ok(json!(s.to_ascii_lowercase())) } else { Err(format!("`{key}` must be `auto` or a language code such as `en` or `zh-hant`")) }
         }
         PrefKind::Text => match v {
             Value::String(s) => Ok(json!(s)),

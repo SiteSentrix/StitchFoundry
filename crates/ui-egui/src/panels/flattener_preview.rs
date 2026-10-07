@@ -186,7 +186,7 @@ fn merged(base: &FlattenOptions, over: &Value) -> Value {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else {
-        super::empty_state(ui, "eye", "No document", "Open a document to preview its flattening.");
+        super::empty_state(ui, "eye", tl!("No document"), tl!("Open a document to preview its flattening."));
         return;
     };
     let (index, revision) = (app.session.active_index().unwrap_or(0), st.revision);
@@ -200,7 +200,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut set = app.ui.flattener_preview.clone();
     let mut refresh_now = false;
     ui.horizontal(|ui| {
-        if widgets::flat_button(ui, "Refresh", 64.0).on_hover_text("Preview the document as it is now").clicked() {
+        if widgets::flat_button(ui, tl!("Refresh"), 64.0).on_hover_text(tl!("Preview the document as it is now")).clicked() {
             refresh_now = true;
         }
         let labels = Highlight::ALL.map(Highlight::label);
@@ -210,13 +210,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     ui.add_space(4.0);
     egui::Grid::new("fp-settings").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-        widgets::dim_label(ui, "Overprints:");
+        widgets::dim_label(ui, tl!("Overprints:"));
         let labels = Overprints::ALL.map(Overprints::label);
         if let Some(i) = widgets::dropdown(ui, "fp-overprints", set.overprints.label(), &labels, 150.0) {
             set.overprints = Overprints::ALL[i];
         }
         ui.end_row();
-        widgets::dim_label(ui, "Preset:");
+        widgets::dim_label(ui, tl!("Preset:"));
         let presets = app.session.flattener_presets();
         if let Some(p) = preset_dropdown(ui, "fp-preset", &presets, &set.preset, Some(&set.options), 150.0) {
             set.preset = p.name.clone();
@@ -238,11 +238,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (count, s.is_some_and(|s| s.revision != revision || s.options != set.options || s.overprints != set.overprints))
     });
     if set.highlight != Highlight::None {
-        let what = if matches!(set.highlight, Highlight::RasterizedRegions | Highlight::AllRasterized) { "area" } else { "object" };
-        widgets::dim_label(ui, &format!("{count} {what}{} highlighted", if count == 1 { "" } else { "s" }));
+        let areas = matches!(set.highlight, Highlight::RasterizedRegions | Highlight::AllRasterized);
+        let n = count as u64;
+        let msg = if areas {
+            crate::i18n::tn(n, "{n} area highlighted", "{n} areas highlighted")
+        } else {
+            crate::i18n::tn(n, "{n} object highlighted", "{n} objects highlighted")
+        };
+        widgets::dim_label(ui, &msg);
     }
     if stale {
-        ui.label(egui::RichText::new("Changed since the last Refresh.").color(t.text_dim).size(11.5));
+        ui.label(egui::RichText::new(tl!("Changed since the last Refresh.")).color(t.text_dim).size(11.5));
     }
     if set != app.ui.flattener_preview {
         app.ui.flattener_preview = set;
@@ -257,7 +263,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn preview_area(ui: &mut Ui, t: &Tokens, h: Highlight, overprints: Overprints) {
     let w = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(vec2(w, (w * 0.8).clamp(140.0, 320.0)), Sense::click_and_drag());
-    let resp = resp.on_hover_text("Click to zoom in, Alt-click to zoom out, drag to pan, double-click to fit");
+    let resp = resp.on_hover_text(tl!("Click to zoom in, Alt-click to zoom out, drag to pan, double-click to fit"));
     ui.painter().rect_filled(rect, 0.0, t.pasteboard);
     let ppp = ui.ctx().pixels_per_point();
     CACHE.with(|c| {
@@ -339,19 +345,19 @@ fn render(
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if widgets::menu_item(ui, "Refresh", app.session.active().is_some(), false)
+    if widgets::menu_item(ui, tl!("Refresh"), app.session.active().is_some(), false)
         && let Err(e) = refresh(app)
     {
         app.status(e);
     }
     let shown = app.ui.flattener_preview.show_options;
-    if widgets::menu_item(ui, "Show Options", true, shown) {
+    if widgets::menu_item(ui, tl!("Show Options"), true, shown) {
         app.ui.flattener_preview.show_options = !shown;
     }
-    if widgets::menu_item(ui, "Fit in Window", true, false) {
+    if widgets::menu_item(ui, tl!("Fit in Window"), true, false) {
         CACHE.with(|c| c.borrow_mut().view = View::default());
     }
-    if widgets::menu_item(ui, "Save Transparency Flattener Preset…", true, false) {
+    if widgets::menu_item(ui, tl!("Save Transparency Flattener Preset…"), true, false) {
         // Saved under a new name, then shown in the presets manager to name it.
         match app.run("flattener.presets.save", json!({ "options": app.ui.flattener_preview.options })) {
             Ok(r) => {
