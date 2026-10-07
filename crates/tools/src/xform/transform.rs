@@ -2,10 +2,10 @@
 //!
 //! The reference point defaults to the centre of the selection. A click sets it (shown as a cyan
 //! target); a drag transforms about it with a live preview (Shift constrains to 45° / uniform, Alt
-//! at release makes a copy). Alt-click sets the point and opens the tool's dialog; double-click
-//! or Return opens the dialog too. A clicked or Alt-clicked point snaps to the nearest anchor or
-//! centre (Snap to Point / Smart Guides), labelled while hovering, so transforms pivot exactly
-//! on a corner.
+//! at release makes a copy: Alt-drag). Alt-click (the release of a click made with Alt) sets the
+//! point and opens the tool's dialog; double-click or Return opens the dialog too. A clicked or
+//! Alt-clicked point snaps to the nearest anchor or centre (Snap to Point / Smart Guides), labelled
+//! while hovering, so transforms pivot exactly on a corner.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -61,6 +61,8 @@ struct Drag {
     pick: Point,
     origin: Point,
     began: bool,
+    /// Alt was down at the press: a click opens the dialog, a drag transforms a copy.
+    alt: bool,
     bounds: Rect,
     last: Affine,
 }
@@ -169,13 +171,10 @@ impl Tool for TransformTool {
                 let Some(bounds) = selection_bounds(cx) else { return vec![] };
                 self.hover.clear();
                 let (pick, _) = snap_pick(cx, p);
-                if ev.mods.alt {
-                    self.origin = Some((pick, cx.selection.objects.clone()));
-                    self.drag = None;
-                    return vec![self.dialog(pick)];
-                }
+                // Alt: decided on release. A click sets the point and opens the dialog; a drag
+                // transforms a copy about the reference point as it was.
                 let origin = self.reference_point(cx).unwrap_or(bounds.center());
-                self.drag = Some(Drag { start: p, pick, origin, began: false, bounds, last: Affine::IDENTITY });
+                self.drag = Some(Drag { start: p, pick, origin, began: false, alt: ev.mods.alt, bounds, last: Affine::IDENTITY });
                 vec![]
             }
             PointerKind::Drag => {
@@ -202,9 +201,9 @@ impl Tool for TransformTool {
                     // The Alt state at release decides whether the result is a copy.
                     vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(d.last), "copy": ev.mods.alt })), Action::Commit]
                 } else {
-                    // A click sets the reference point.
+                    // A click sets the reference point; with Alt, it opens the dialog too.
                     self.origin = Some((d.pick, cx.selection.objects.clone()));
-                    vec![]
+                    if d.alt { vec![self.dialog(d.pick)] } else { vec![] }
                 }
             }
             PointerKind::DoubleClick => {
@@ -357,9 +356,10 @@ mod tests {
         let p = paint();
         let cx = cx(&d, &s, &p);
         let mut t = TransformTool::new(TransformKind::Reflect);
-        let a = t.pointer(&cx, &ev(PointerKind::Down, 120.0, 130.0).with_mods(alt()));
+        // The release decides: a click with Alt opens the dialog…
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 120.0, 130.0).with_mods(alt())), vec![]);
+        let a = t.pointer(&cx, &ev(PointerKind::Up, 120.0, 130.0).with_mods(alt()));
         assert_eq!(a, vec![Action::Dialog("reflect".into(), json!({"axis": "vertical", "origin": [120.0, 130.0]}))]);
-        t.pointer(&cx, &ev(PointerKind::Up, 120.0, 130.0).with_mods(alt()));
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
         t.pointer(&cx, &ev(PointerKind::Drag, 120.0, 200.0));
         let up = t.pointer(&cx, &ev(PointerKind::Up, 120.0, 200.0).with_mods(alt()));
@@ -374,6 +374,28 @@ mod tests {
     }
 
     #[test]
+    fn alt_drag_transforms_a_copy_and_leaves_the_dialog_shut() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        for kind in [TransformKind::Rotate, TransformKind::Reflect, TransformKind::Scale, TransformKind::Shear] {
+            let mut t = TransformTool::new(kind);
+            // Alt down at the press, then a drag: no dialog, and the preview and the release copy.
+            assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, 260.0, 150.0).with_mods(alt())), vec![], "{kind:?}");
+            let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 180.0).with_mods(alt()));
+            assert_eq!(a[0], Action::Begin(kind.label().into()), "{kind:?}");
+            assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["copy"] == true), "{kind:?}: {a:?}");
+            let up = t.pointer(&cx, &ev(PointerKind::Up, 300.0, 180.0).with_mods(alt()));
+            assert!(matches!(&up[0], Action::Preview(_, v) if v["copy"] == true), "{kind:?}: {up:?}");
+            assert_eq!(up[1], Action::Commit);
+            // The reference point is the one it was (the centre), not the press point.
+            assert_eq!(t.reference_point(&cx), Some(Point::new(150.0, 150.0)), "{kind:?}");
+        }
+    }
+
+    #[test]
     fn alt_click_and_click_snap_the_reference_point_to_anchors_and_centres() {
         let (d, id) = doc_with_rect();
         let mut s = Selection::default();
@@ -382,7 +404,8 @@ mod tests {
         let mut c = cx(&d, &s, &p);
         // Alt-click 3 px from the top-left corner: the reflect pivots exactly on the corner.
         let mut t = TransformTool::new(TransformKind::Reflect);
-        let a = t.pointer(&c, &ev(PointerKind::Down, 102.0, 98.0).with_mods(alt()));
+        t.pointer(&c, &ev(PointerKind::Down, 102.0, 98.0).with_mods(alt()));
+        let a = t.pointer(&c, &ev(PointerKind::Up, 102.0, 98.0).with_mods(alt()));
         assert_eq!(a, vec![Action::Dialog("reflect".into(), json!({"axis": "vertical", "origin": [100.0, 100.0]}))]);
         // A plain click near the bottom-right corner, then near the centre.
         let mut t = TransformTool::new(TransformKind::Rotate);
@@ -400,7 +423,8 @@ mod tests {
         // Snapping off: the point stays where it was clicked.
         c.snap_to_point = false;
         c.smart_guides = false;
-        let a = t.pointer(&c, &ev(PointerKind::Down, 102.0, 98.0).with_mods(alt()));
+        t.pointer(&c, &ev(PointerKind::Down, 102.0, 98.0).with_mods(alt()));
+        let a = t.pointer(&c, &ev(PointerKind::Up, 102.0, 98.0).with_mods(alt()));
         assert!(matches!(&a[0], Action::Dialog(_, v) if v["origin"] == json!([102.0, 98.0])));
     }
 
