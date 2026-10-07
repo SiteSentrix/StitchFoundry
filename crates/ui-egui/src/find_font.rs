@@ -4,10 +4,10 @@
 use egui::Ui;
 use serde_json::{Value, json};
 
-use crate::VectorcraftApp;
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
 use crate::widgets;
+use crate::{VectorcraftApp, font_menu};
 
 /// Open the dialog.
 pub fn open(app: &mut VectorcraftApp) {
@@ -34,6 +34,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
     let list = fonts(app);
+    let sample = font_menu::sample_text(app);
     let mut close = false;
     let mut act: Option<&str> = None;
     egui::Area::new(egui::Id::new("modal-dim")).order(egui::Order::Middle).fixed_pos(egui::pos2(0.0, 0.0)).show(ctx, |ui| {
@@ -71,9 +72,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             widgets::subheader(ui, tl!("Replace With Font"));
             let fam = d.str("family");
             ui.horizontal(|ui| {
-                if let Some(f) = widgets::font_dropdown(ui, "ff-family", &fam, 220.0) {
+                // Picks the font only: nothing is previewed on the document.
+                let pick = font_menu::font_menu(ui, "ff-family", &fam, 220.0, sample.as_deref(), font_menu::MenuLook::of(app));
+                if let Some((f, style)) = font_menu::picked(app, pick) {
                     d.fields.insert("family".into(), json!(f));
-                    d.fields.insert("style".into(), json!(""));
+                    d.fields.insert("style".into(), json!(style.unwrap_or_default()));
                 }
                 let styles = vectorcraft_text::FontDb::global().styles(&d.str("family"));
                 // "(closest)" is ours; the font's style names are shown as they are.

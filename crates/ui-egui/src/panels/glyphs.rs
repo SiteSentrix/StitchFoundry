@@ -198,8 +198,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .color(t.text_dim),
     );
     ui.horizontal(|ui| {
-        if let Some(f) = widgets::font_dropdown(ui, "gl-family", &family, (w * 0.6).max(80.0)) {
-            let st = db.face(&f, "Regular").map_or_else(|| "Regular".into(), |face| face.style.clone());
+        // Picks the font the panel browses only: nothing is previewed on the document.
+        let sample = crate::font_menu::sample_text(app);
+        let look = crate::font_menu::MenuLook::of(app);
+        let pick = crate::font_menu::font_menu(ui, "gl-family", &family, (w * 0.6).max(80.0), sample.as_deref(), look);
+        if let Some((f, style)) = crate::font_menu::picked(app, pick) {
+            let st = style.unwrap_or_else(|| db.face(&f, "Regular").map_or_else(|| "Regular".into(), |face| face.style.clone()));
             set_pstate(ui.ctx(), "gl-font", Some((f, st)));
         }
         let styles = db.styles(&family);

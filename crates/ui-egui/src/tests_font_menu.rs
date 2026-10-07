@@ -241,3 +241,32 @@ fn stars_mark_favourites_and_the_preferences_size_the_rows() {
     let look = MenuLook::of(&app);
     assert!(!look.samples && look.row > 24.0, "Font Preview Size and Enable in-menu font previews");
 }
+
+/// Find Font's Replace With and the Glyphs panel only pick a font: their menu's highlight never
+/// previews on the document, a choice is just returned, and a star is still toggled.
+#[test]
+fn menus_that_only_pick_a_font_leave_the_document_alone() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let font = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.first_style().font_family,
+        _ => String::new(),
+    };
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = steps(&app);
+    use crate::font_menu::picked;
+    assert_eq!(picked(&mut app, None), None);
+    assert_eq!(picked(&mut app, Some(FontPick::Preview("Source Serif 4".into(), None))), None);
+    assert_eq!(picked(&mut app, Some(FontPick::EndPreview)), None);
+    assert_eq!(
+        picked(&mut app, Some(FontPick::Chosen("Source Serif 4".into(), Some("Bold".into())))),
+        Some(("Source Serif 4".to_string(), Some("Bold".to_string())))
+    );
+    assert_eq!((font(&app), steps(&app)), ("Inter".to_string(), before), "nothing previewed or applied on the text");
+    assert_eq!(picked(&mut app, Some(FontPick::Favorite("Inter".into()))), None);
+    assert_eq!(app.ui.favorite_fonts, ["Inter"], "a star is still toggled");
+    assert_eq!(picked(&mut app, Some(FontPick::Favorite("inter".into()))), None);
+    assert!(app.ui.favorite_fonts.is_empty());
+}
