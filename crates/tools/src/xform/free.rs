@@ -198,7 +198,7 @@ impl FreeTransformTool {
             Op::Scale(h) => {
                 let mut a = scale_for_drag(d.rect, h, p, shift, m.alt);
                 if let Some(t) = &self.targets {
-                    (a, self.guides) = t.snap_scale(d.rect, h, a, shift, m.alt, cx.tol(5.0));
+                    (a, self.guides) = t.snap_scale(&vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt, cx.tol(5.0));
                 }
                 let nr = a.transform_rect_bbox(d.rect);
                 self.measure = Some((p, cx.size_label(nr.width(), nr.height())));

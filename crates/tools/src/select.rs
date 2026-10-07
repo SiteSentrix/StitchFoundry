@@ -136,10 +136,8 @@ impl Tool for SelectionTool {
                             let areas = cx.selection.objects.iter().any(is_area);
                             // Only area type: the step resizes type areas; anything else scales.
                             let label = if areas && cx.selection.objects.iter().all(is_area) { "Resize Type Area" } else { "Scale" };
-                            // Smart Guides align the dragged edges with the other objects. They
-                            // are page lines: a turned box's edges don't run along them.
-                            self.targets =
-                                (cx.smart_guides && bx.angle == 0.0).then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
+                            // Smart Guides align what the handle moves with the other objects.
+                            self.targets = cx.smart_guides.then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
                             self.state = State::Scaling { handle, bx, areas };
                             return vec![Action::Begin(label.into())];
                         }
@@ -212,7 +210,7 @@ impl Tool for SelectionTool {
                 let mut a = scale_for_drag(bx.rect, handle, bx.to_local(p), m.shift, m.alt);
                 self.guides.clear();
                 if let Some(t) = &self.targets {
-                    (a, self.guides) = t.snap_scale(bx.rect, handle, a, m.shift, m.alt, cx.tol(5.0));
+                    (a, self.guides) = t.snap_scale(&bx, handle, a, m.shift, m.alt, cx.tol(5.0));
                 }
                 let nr = a.transform_rect_bbox(bx.rect);
                 self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
@@ -476,6 +474,45 @@ mod tests {
         t.pointer(&c, &ev(PointerKind::Down, 275.0, 150.0));
         let a = t.pointer(&c, &ev(PointerKind::Drag, 275.0, 197.0));
         assert!((height(&a) - 97.0).abs() < 1e-9, "{a:?}");
+    }
+
+    #[test]
+    fn handle_drag_of_a_turned_box_snaps_on_the_page() {
+        use vectorcraft_doc::{Appearance, Node};
+        let matrix = |a: &[Action]| {
+            let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+            let m: Vec<f64> = v["matrix"].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+            Affine::new([m[0], m[1], m[2], m[3], m[4], m[5]])
+        };
+        // A 50 pt square beside the 100..200 rect, turned about its centre (275, 125).
+        for (turn, low) in [(90.0_f64, 150.0), (45.0, 125.0 + 25.0 * std::f64::consts::SQRT_2)] {
+            let (mut d, _) = doc_with_rect();
+            let l = d.layers[0].id;
+            let id = d.alloc_id();
+            let r = Rect::new(250.0, 100.0, 300.0, 150.0);
+            d.insert(Some(l), 1, Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art())).unwrap();
+            let c = Point::new(275.0, 125.0);
+            d.node_mut(id)
+                .unwrap()
+                .transform(Affine::translate(c.to_vec2()) * Affine::rotate(turn.to_radians()) * Affine::translate(-c.to_vec2()), false);
+            let mut s = Selection::default();
+            s.add(id);
+            let p = paint();
+            let cx = cx(&d, &s, &p);
+            let bx = selection_box(&cx).unwrap();
+            assert_ne!(bx.angle, 0.0);
+            // The handle at the lowest point of the shape: a side at 90°, a corner at 45°.
+            let grab = Point::new(275.0, low);
+            assert!(Handle::ALL.iter().any(|h| (bx.to_doc() * h.pos(bx.rect)).distance(grab) < 1e-6), "{bx:?}");
+            let mut t = SelectionTool::default();
+            assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, grab.x, grab.y)), vec![Action::Begin("Scale".into())]);
+            // Dragged near the neighbour's bottom edge (y = 200), it lands on it.
+            let a = t.pointer(&cx, &ev(PointerKind::Drag, 275.0, 197.0));
+            let landed = matrix(&a) * grab;
+            assert!((landed.y - 200.0).abs() < 1e-6 && (landed.x - 275.0).abs() < 1e-6, "{turn}: {landed:?}");
+            assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Line { .. })));
+            t.pointer(&cx, &ev(PointerKind::Up, 275.0, 197.0));
+        }
     }
 
     #[test]
