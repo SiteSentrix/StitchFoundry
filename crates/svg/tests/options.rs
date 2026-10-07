@@ -1,5 +1,5 @@
 //! SVG Options across each other: every styling, id mode and tspan mode reads back, and linked
-//! images are named after their bytes.
+//! images are named after their bytes (and are formats browsers show).
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -72,4 +72,15 @@ fn linked_images_are_named_after_their_bytes() {
     assert!(a.linked[0].name.ends_with(".png") && a.svg.contains(&format!("href=\"{}\"", a.linked[0].name)), "{}", a.svg);
     // The same bytes under another key are the same file.
     assert_eq!(export_full(&image_doc("other", vec![1, 2, 3]), &link, None).linked[0].name, a.linked[0].name);
+}
+
+#[test]
+fn cmyk_tiffs_are_written_as_png() {
+    let inks = vectorcraft_doc::cmyk::Inks::new(2, 2, [0u8, 0, 0, 0].repeat(4)).unwrap();
+    let mut d = image_doc("cmyk", vec![]);
+    d.images.insert("cmyk".into(), ImageBlob::cmyk_tiff(&inks).unwrap());
+    // Browsers don't show TIFF: embedded and linked images are PNG.
+    assert!(export(&d, &ExportOptions::default()).contains("href=\"data:image/png;base64,"));
+    let linked = export_full(&d, &ExportOptions { images: ImageMode::Link, ..Default::default() }, None);
+    assert!(linked.linked[0].name.ends_with(".png"), "{}", linked.linked[0].name);
 }

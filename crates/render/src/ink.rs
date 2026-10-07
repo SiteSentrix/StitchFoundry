@@ -19,9 +19,11 @@ use std::sync::{Arc, Mutex};
 
 use vectorcraft_color::Color;
 use vectorcraft_color::blend::{cmyk_planes, planes_cmyk};
-use vectorcraft_color::cms::{self, Cms, ProofLut, lab};
-use vectorcraft_doc::{ColorMode, Document};
+use vectorcraft_color::cms::{self, Cms, CmykLut, ProofLut, lab};
+use vectorcraft_doc::cmyk::Inks;
+use vectorcraft_doc::{ColorMode, Document, ImageBlob};
 use vello_cpu::Pixmap;
+use vello_cpu::color::PremulRgba8;
 use vello_cpu::peniko;
 
 use crate::{RenderOptions, Renderer};
@@ -117,56 +119,22 @@ thread_local! {
     static SEPARATED: RefCell<Separated> = RefCell::default();
 }
 
-/// Grid points per ink of [`InkLut`].
-const LUT_N: usize = 17;
-
 /// Inks → display sRGB through the working CMYK profile: a 17⁴ lookup table of XYZ, interpolated
 /// quadrilinearly (inks mix close to linearly in light, and out-of-gamut colours are clipped
 /// after interpolating, not before).
-struct InkLut {
-    data: Vec<[f32; 3]>,
-}
+pub(crate) struct InkLut(CmykLut);
 
 impl InkLut {
     fn build(cms: &Cms) -> Self {
-        let s = (LUT_N - 1) as f32;
-        let mut data = Vec::with_capacity(LUT_N.pow(4));
-        for c in 0..LUT_N {
-            for m in 0..LUT_N {
-                for y in 0..LUT_N {
-                    for k in 0..LUT_N {
-                        data.push(lab::lab_to_xyz(cms.cmyk_to_lab([c, m, y, k].map(|i| i as f32 / s))));
-                    }
-                }
-            }
-        }
-        Self { data }
+        Self(CmykLut::build(|inks| {
+            let [x, y, z] = lab::lab_to_xyz(cms.cmyk_to_lab(inks));
+            [x, y, z, 0.0]
+        }))
     }
 
     fn apply(&self, inks: [f32; 4]) -> [f32; 3] {
-        const STRIDE: [usize; 4] = [LUT_N * LUT_N * LUT_N, LUT_N * LUT_N, LUT_N, 1];
-        let p = inks.map(|v| v.clamp(0.0, 1.0) * (LUT_N - 1) as f32);
-        let i = p.map(|v| (v as usize).min(LUT_N - 2));
-        let base: usize = (0..4).map(|d| i[d] * STRIDE[d]).sum();
-        let mut out = [0.0f32; 3];
-        for corner in 0..16 {
-            let (mut w, mut at) = (1.0f32, base);
-            for d in 0..4 {
-                let t = p[d] - i[d] as f32;
-                if corner >> d & 1 == 1 {
-                    w *= t;
-                    at += STRIDE[d];
-                } else {
-                    w *= 1.0 - t;
-                }
-            }
-            if w > 0.0 {
-                for (o, v) in out.iter_mut().zip(self.data[at]) {
-                    *o += w * v;
-                }
-            }
-        }
-        lab::xyz_to_srgb(out)
+        let [x, y, z, _] = self.0.apply(inks);
+        lab::xyz_to_srgb([x, y, z])
     }
 }
 
@@ -237,9 +205,55 @@ pub(crate) fn amounts(cmy: &[u8], k: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// CMYK images as shown, per image key, with the table they were shown through.
+pub(crate) type CmykImages = HashMap<String, (Arc<InkLut>, Arc<Pixmap>)>;
+
+/// Ink amounts `inks` shown through `lut` (opaque).
+fn inks_pixmap(inks: &Inks, lut: &InkLut) -> Option<Pixmap> {
+    let (w, h) = (u16::try_from(inks.width).ok()?, u16::try_from(inks.height).ok()?);
+    // Runs of one colour convert once.
+    let mut last: Option<([u8; 4], PremulRgba8)> = None;
+    let data = inks
+        .data
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|p| match last {
+            Some((k, v)) if k == *p => v,
+            _ => {
+                let [r, g, b] = lut.apply(p.map(|v| v as f32 / 255.0)).map(q);
+                let v = PremulRgba8 { r, g, b, a: 255 };
+                last = Some((*p, v));
+                v
+            }
+        })
+        .collect();
+    Some(Pixmap::from_parts(data, w, h))
+}
+
 impl Renderer {
-    /// Placed image `key` (decoded as `pm`) as painted with `ink`, cached.
-    pub(crate) fn ink_image(&mut self, key: &str, pm: &Arc<Pixmap>, ink: Ink) -> Arc<Pixmap> {
+    /// The pixels of CMYK image `blob` (cached as `cache_key`): its inks shown through the working
+    /// CMYK profile, as CMYK colours are, again when the colour settings change. `None` for
+    /// other images.
+    pub(crate) fn cmyk_image(&mut self, blob: &ImageBlob, cache_key: &str) -> Option<Arc<Pixmap>> {
+        // Other images are cached as they are once decoded: only CMYK ones come here again.
+        let shown = self.cmyk_images.get(cache_key).cloned();
+        if shown.is_none() && !blob.is_cmyk() {
+            return None;
+        }
+        let lut = cached(&DISPLAY, InkLut::build);
+        if let Some((owner, pm)) = shown
+            && Arc::ptr_eq(&owner, &lut)
+        {
+            return Some(pm);
+        }
+        let pm = Arc::new(inks_pixmap(&blob.cmyk()?, &lut)?);
+        self.cmyk_images.insert(cache_key.to_string(), (lut, pm.clone()));
+        Some(pm)
+    }
+
+    /// Placed image `key` (decoded as `pm`, from `blob`) as painted with `ink`, cached.
+    pub(crate) fn ink_image(&mut self, key: &str, pm: &Arc<Pixmap>, ink: Ink, blob: Option<&ImageBlob>) -> Arc<Pixmap> {
         if ink == Ink::Display {
             return pm.clone();
         }
@@ -253,16 +267,27 @@ impl Renderer {
         {
             return planes[at].clone();
         }
-        let planes = [0, 1].map(|i| {
+        // CMYK images paint their own inks; the others are separated.
+        let size = (pm.width() as u32, pm.height() as u32);
+        let inks = blob.filter(|_| self.cmyk_images.contains_key(key)).and_then(ImageBlob::cmyk).filter(|i| (i.width, i.height) == size);
+        let planes = [Ink::Cmy, Ink::K].map(|plane| {
             let mut out = Pixmap::new(pm.width(), pm.height());
+            if let Some(inks) = &inks {
+                for (o, p) in out.data_mut().iter_mut().zip(inks.data.as_chunks::<4>().0) {
+                    let [r, g, b] = plane.plane(p.map(|v| v as f32 / 255.0)).map(q);
+                    *o = PremulRgba8 { r, g, b, a: 255 };
+                }
+                return Arc::new(out);
+            }
+            let lut = &luts[(plane == Ink::K) as usize];
             for (o, s) in out.data_mut().iter_mut().zip(pm.data()) {
                 let a = s.a;
                 if a == 0 {
                     continue;
                 }
                 let un = |v: u8| (v as f32 / a as f32).min(1.0);
-                let [r, g, b] = luts[i].apply([un(s.r), un(s.g), un(s.b)]).map(|v| (v.clamp(0.0, 1.0) * a as f32).round() as u8);
-                *o = vello_cpu::color::PremulRgba8 { r, g, b, a };
+                let [r, g, b] = lut.apply([un(s.r), un(s.g), un(s.b)]).map(|v| (v.clamp(0.0, 1.0) * a as f32).round() as u8);
+                *o = PremulRgba8 { r, g, b, a };
             }
             Arc::new(out)
         });
@@ -291,6 +316,35 @@ mod tests {
         }
         // Within two 8-bit levels: far below a visible difference.
         assert!(worst * 255.0 < 2.5, "worst error {} levels", worst * 255.0);
+    }
+
+    #[test]
+    fn cmyk_images_show_through_the_profile_and_paint_their_own_inks() {
+        use vectorcraft_color::Paint;
+        use vectorcraft_doc::{Appearance, ImageObject, Node, NodeKind};
+        use vectorcraft_geom::{Affine, Rect, shapes};
+
+        let ink = [0u8, 102, 255, 25];
+        let mut d = Document::new_with_mode(20.0, 10.0, ColorMode::Cmyk);
+        d.images.insert("img".into(), ImageBlob::cmyk_tiff(&Inks::new(2, 2, ink.repeat(4)).unwrap()).unwrap());
+        let l = d.layers[0].id;
+        let im = ImageObject { key: "img".into(), width: 2, height: 2, xf: Affine::scale(5.0), link: None, placement: Default::default() };
+        let n = Node::new(d.alloc_id(), NodeKind::Image(im));
+        d.insert(Some(l), 0, n).unwrap();
+        // The same inks as a fill beside it.
+        let fill = Color::cmyk(0.0, 0.4, 1.0, 25.0 / 255.0);
+        let n =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 0.0, 20.0, 10.0)), Appearance::basic(Paint::solid(fill), Paint::None, 0.0));
+        d.insert(Some(l), 1, n).unwrap();
+        let mut r = Renderer::new();
+        let region = Rect::new(0.0, 0.0, 20.0, 10.0);
+        let shown = r.render_region(&d, region, 1.0, true).pixels;
+        let at = |px: &[u8], x: usize| px[(5 * 20 + x) * 4..][..4].to_vec();
+        let (image, fill) = (at(&shown, 5), at(&shown, 15));
+        assert!(image.iter().zip(&fill).all(|(a, b)| a.abs_diff(*b) <= 2), "{image:?} vs {fill:?}");
+        // CMYK exports draw ink amounts: the image's own.
+        let inks = r.render_region_inks(&d, region, 1.0, &RenderOptions::default());
+        assert!(at(&inks, 5).iter().zip(ink).all(|(a, b)| a.abs_diff(b) <= 1), "{:?}", at(&inks, 5));
     }
 
     #[test]

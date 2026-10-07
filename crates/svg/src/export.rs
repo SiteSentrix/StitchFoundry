@@ -198,6 +198,21 @@ fn entity_value(decl: &str) -> String {
     o
 }
 
+/// Image `b` as SVG viewers show it: PNG, JPEG, GIF, WebP and SVG as they are, other formats (a
+/// CMYK TIFF) as PNG.
+fn web_image(b: &ImageBlob) -> std::borrow::Cow<'_, ImageBlob> {
+    use std::borrow::Cow;
+    if matches!(b.mime.as_str(), "image/png" | "image/jpeg" | "image/jpg" | "image/gif" | "image/webp" | "image/svg+xml") {
+        return Cow::Borrowed(b);
+    }
+    let png = image::load_from_memory(&b.bytes).ok().and_then(|img| {
+        let mut out = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
+        Some(out)
+    });
+    png.map_or(Cow::Borrowed(b), |png| Cow::Owned(ImageBlob::png(png)))
+}
+
 /// The usual file extension of an image MIME type.
 fn image_ext(mime: &str) -> &str {
     match mime {
@@ -443,7 +458,7 @@ impl Writer<'_> {
         let (doc, link) = (self.doc, self.opts.images == ImageMode::Link);
         match (im.link.as_ref().filter(|_| link), doc.images.get(&im.key)) {
             (Some(l), _) => Some(l.path.clone()),
-            (None, Some(b)) if !b.bytes.is_empty() => Some(self.blob_href(b)),
+            (None, Some(b)) if !b.bytes.is_empty() => Some(self.blob_href(&web_image(b))),
             _ => im.link.as_ref().map(|l| l.path.clone()),
         }
     }
