@@ -228,6 +228,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if typing {
         return;
     }
+    // Tab is ours when no field has the keyboard (it shows and hides the panels, or goes to the
+    // Type tool): left to egui, it would also move the focus on to a field, and every key after it
+    // would count as typing.
+    if ctx.input(|i| i.key_pressed(Key::Tab)) {
+        ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+    }
     // Type tool editing: text, IME composition and editing keys go to the tool.
     if app.session.tool_wants_text() {
         type_text(app, ctx);
@@ -423,6 +429,48 @@ mod tests {
         });
         out.textures_delta.clear();
         out
+    }
+
+    /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
+    /// keyboard focus on to a field: the keys after it (a tool letter, the next letter typed) still
+    /// work.
+    #[test]
+    fn tab_leaves_the_keyboard_to_the_shortcuts_and_the_type_tool() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0));
+        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        };
+        let press = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        for _ in 0..3 {
+            run(&mut app, vec![]);
+        }
+        assert!(app.ui.dock && app.ui.toolbar);
+        run(&mut app, vec![press(Key::Tab)]);
+        run(&mut app, vec![]);
+        assert!(!app.ui.dock && !app.ui.toolbar, "Tab hid the panels");
+        run(&mut app, vec![press(Key::Tab)]);
+        run(&mut app, vec![]);
+        assert!(app.ui.dock && app.ui.toolbar, "a second Tab shows them again");
+        run(&mut app, vec![press(Key::P), egui::Event::Text("p".into())]);
+        assert_eq!(app.session.tool_id(), "pen", "and a tool letter after it works");
+        // The Type tool: a, Tab, b is one text.
+        app.select_tool("type");
+        let view = app.view_info();
+        for kind in [vectorcraft_tools::PointerKind::Down, vectorcraft_tools::PointerKind::Up] {
+            app.session.pointer(&vectorcraft_tools::PointerEvent::new(kind, 50.0, 50.0), view).unwrap();
+        }
+        run(&mut app, vec![egui::Event::Text("a".into())]);
+        run(&mut app, vec![press(Key::Tab)]);
+        run(&mut app, vec![egui::Event::Text("b".into())]);
+        let doc = app.session.execute("document.inspect", &json!({})).unwrap();
+        assert_eq!(doc["layers"][0]["children"][0]["name"], "a\tb");
     }
 
     #[test]
