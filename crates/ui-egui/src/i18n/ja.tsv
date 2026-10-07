@@ -11,6 +11,8 @@
 # grid preset names. Set `complete_menus` in i18n/mod.rs once every `tl!` literal has a row too.
 	About VectorCraft	VectorCraft について
 	Join Our Discord	Discord に参加
+	Line-end Punctuation Half Width	行末約物半角
+	Mojikumi	文字組み
 	Settings…	環境設定…
 	Language	表示言語
 	UI Brightness	UI の明るさ

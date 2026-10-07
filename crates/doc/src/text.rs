@@ -287,6 +287,31 @@ pub struct ParaStyle {
     /// Paragraph style (Paragraph Styles panel) these attributes come from; None = Normal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style_name: Option<String>,
+    /// Japanese composition: the spacing of punctuation (Paragraph panel › Mojikumi). Type made
+    /// with the Type tools and `text.create` takes [`Mojikumi::LineEndHalf`]; documents from before
+    /// it and imported text (already set) keep [`Mojikumi::None`].
+    #[serde(default, skip_serializing_if = "Mojikumi::is_none")]
+    pub mojikumi: Mojikumi,
+}
+
+/// How Japanese punctuation is spaced (JLREQ 3.1). Full-width punctuation is half a glyph and half
+/// a space: an opening bracket's space before it, a closing bracket's, a comma's or a full stop's
+/// after it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Mojikumi {
+    /// Every character takes its full advance.
+    #[default]
+    None,
+    /// Consecutive punctuation shares one half-em space (JLREQ 3.1.4), and a closing bracket,
+    /// comma or full stop ending a line is set half width.
+    LineEndHalf,
+}
+
+impl Mojikumi {
+    pub fn is_none(&self) -> bool {
+        *self == Mojikumi::None
+    }
 }
 
 /// Area Type Options "First Baseline" offset.

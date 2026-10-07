@@ -291,3 +291,41 @@ fn upright_glyphs_follow_the_fonts_vertical_metrics() {
     let l = layout(FontDb::global(), &vertical("§§"));
     assert!((l.glyphs[1].origin.y - l.glyphs[0].origin.y - 20.0).abs() < 0.01);
 }
+
+/// Mojikumi (JLREQ 3.1): with Line-end Punctuation Half Width, a closing mark ending a line is set
+/// half width, a closing mark followed by punctuation loses the space after it, and an opening
+/// bracket after another loses the space before it; vertical type the same way down the column.
+/// Needs a font with full-width Japanese punctuation (skipped without one).
+#[test]
+fn mojikumi_halves_line_end_and_consecutive_punctuation() {
+    use vectorcraft_doc::Mojikumi;
+    let lay = |text: &str, m: Mojikumi, vertical_type: bool| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.vertical = vertical_type;
+        t.para.mojikumi = m;
+        layout(FontDb::global(), &t)
+    };
+    let solid = lay("一。", Mojikumi::None, false);
+    if (solid.glyphs[1].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width punctuation here
+    }
+    for vertical_type in [false, true] {
+        let adv = |text: &str, m| lay(text, m, vertical_type).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+        // Line end: 。 half width.
+        assert!((adv("一。", Mojikumi::LineEndHalf)[1] - 10.0).abs() < 0.01, "vertical {vertical_type}");
+        assert!((adv("一。", Mojikumi::None)[1] - 20.0).abs() < 0.01);
+        // 」 before 「: the closing mark's space goes; 「 keeps its own.
+        let a = adv("一」「二", Mojikumi::LineEndHalf);
+        assert!((a[1] - 10.0).abs() < 0.01 && (a[2] - 20.0).abs() < 0.01, "{a:?}");
+        // 「「: the second bracket loses the space before it and is drawn half an em earlier.
+        let a = adv("「「一", Mojikumi::LineEndHalf);
+        assert!((a[0] - 20.0).abs() < 0.01 && (a[1] - 10.0).abs() < 0.01, "{a:?}");
+        let (on, off) = (lay("「「一", Mojikumi::LineEndHalf, vertical_type), lay("「「一", Mojikumi::None, vertical_type));
+        let along = |r: Rect| if vertical_type { r.y0 } else { r.x0 };
+        let moved = along(off.glyphs[1].outline.bounding_box()) - along(on.glyphs[1].outline.bounding_box());
+        assert!((moved - 10.0).abs() < 0.01, "vertical {vertical_type}: the second 「 is drawn half an em earlier ({moved})");
+        // Text without punctuation is untouched.
+        assert_eq!(adv("一二", Mojikumi::LineEndHalf), adv("一二", Mojikumi::None));
+    }
+}

@@ -42,6 +42,9 @@ pub(crate) struct SGlyph {
     pub ch: char,
     /// Vertical type: part of a tate-chu-yoko block (set across the column, upright).
     pub tcy: Option<Tcy>,
+    /// Japanese composition: the space taken off before the glyph (an opening bracket after
+    /// another, see [`crate::layout`]); the glyph is drawn that much earlier on the line.
+    pub lead: f64,
 }
 
 /// A glyph's place in a tate-chu-yoko block: the block takes one em of the column, its glyphs side
@@ -135,6 +138,25 @@ pub(crate) fn no_line_end(c: char) -> bool {
             | '｟'
             | '｢'
     )
+}
+
+/// Full-width punctuation for Japanese composition (JLREQ cl-01, cl-02, cl-06, cl-07).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Punct {
+    /// An opening bracket: its half-em space is before the mark.
+    Opening,
+    /// A closing bracket, comma or full stop: its half-em space is after the mark.
+    Closing,
+}
+
+pub(crate) fn punct(c: char) -> Option<Punct> {
+    match c {
+        '（' | '「' | '『' | '【' | '〔' | '〈' | '《' | '［' | '｛' | '〘' | '〖' | '｟' | '〝' => Some(Punct::Opening),
+        '）' | '」' | '』' | '】' | '〕' | '〉' | '》' | '］' | '｝' | '〙' | '〗' | '｠' | '〟' | '、' | '。' | '，' | '．' => {
+            Some(Punct::Closing)
+        }
+        _ => None,
+    }
 }
 
 pub(crate) fn is_cjk(c: char) -> bool {
@@ -316,6 +338,7 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
             xh,
             ch,
             tcy: None,
+            lead: 0.0,
         });
     }
 }

@@ -3,12 +3,12 @@
 use std::ops::Range;
 
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen, PathEl, PathSeg, Point, Rect, Shape, Vec2};
-use vectorcraft_doc::{CharStyle, Justify, ParaStyle, PathEffect, TextKind, TextObject};
+use vectorcraft_doc::{CharStyle, Justify, Mojikumi, ParaStyle, PathEffect, TextKind, TextObject};
 
 use crate::composer::{Breakpoint, compose};
 use crate::fontdb::FontDb;
 use crate::hyphen::hyphen_points;
-use crate::shape::{SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, no_line_end, no_line_start, shape_range, style_metrics};
+use crate::shape::{Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, no_line_end, no_line_start, punct, shape_range, style_metrics};
 use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout};
 
 const EPS: f64 = 1e-6;
@@ -52,7 +52,12 @@ impl Ctx<'_> {
 
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
         let src = self.db.outline(&g.face, g.gid);
-        let local = Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
+        // A glyph whose leading space was taken off (mojikumi) is drawn that much earlier: an
+        // upright one in vertical type by turning about a point that much higher.
+        let upright = self.vertical && !self.on_path && g.tcy.is_none() && stands_upright(g);
+        let lead = if upright { 0.0 } else { g.lead };
+        let local =
+            Affine::rotate(-g.rotation.to_radians()) * Affine::translate((g.dx - lead, g.dy - g.bshift)) * Affine::scale_non_uniform(g.sx, g.sy);
         let mut m = pre * local;
         if self.vertical && self.on_path {
             // Vertical path type keeps the baseline path and turns each glyph across it.
@@ -71,7 +76,7 @@ impl Ctx<'_> {
             // after the cell, and must not push the glyph off the centre line).
             let em = self.style_at(g.byte).size;
             let cell = if g.adv > 0.0 { upright_cell(g) } else { advance };
-            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em))) * m;
+            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5 - g.lead, origin.y - upright_centre(g, cell, em))) * m;
         }
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
@@ -217,6 +222,43 @@ fn tate_chu_yoko(g: &mut [SGlyph], size: impl Fn(&SGlyph) -> f64) {
         }
         i = end;
     }
+}
+
+/// Half an em of `g`'s size when it is full-width Japanese punctuation of kind `kind` (its
+/// advance an em, give or take a tenth), the space that mojikumi can take off.
+fn punct_half(g: &SGlyph, kind: Punct) -> Option<f64> {
+    if punct(g.ch)? != kind || g.tcy.is_some() {
+        return None;
+    }
+    let em = g.face.units_per_em();
+    ((g.face.advance(g.gid) - em).abs() <= em * 0.1).then_some(em * 0.5 * g.sx)
+}
+
+/// Mojikumi (JLREQ 3.1.4): consecutive punctuation shares one half-em space. A closing bracket,
+/// comma or full stop followed by punctuation loses the space after it; an opening bracket after
+/// another loses the space before it. Returns which glyphs lost the space after them (a line
+/// ending in one takes nothing more off).
+fn compress_punctuation(sg: &mut [SGlyph]) -> Vec<bool> {
+    let mut lost_after = vec![false; sg.len()];
+    for j in 1..sg.len() {
+        let (before, after) = sg.split_at_mut(j);
+        let (Some(a), Some(b)) = (before.last_mut(), after.first_mut()) else { continue };
+        if punct(b.ch).is_none() {
+            continue;
+        }
+        if let Some(h) = punct_half(a, Punct::Closing) {
+            a.adv -= h;
+            if let Some(l) = lost_after.get_mut(j - 1) {
+                *l = true;
+            }
+        } else if punct(a.ch) == Some(Punct::Opening)
+            && let Some(h) = punct_half(b, Punct::Opening)
+        {
+            b.adv -= h;
+            b.lead += h;
+        }
+    }
+    lost_after
 }
 
 /// The length an upright glyph takes down the column before tracking and justification: its
@@ -777,7 +819,9 @@ fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) ->
 fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Option<&[Region]>) {
     let mut pen = Pen { regions, ri: 0, prev: None, pending: 0.0, fb: cx.opts.first_baseline, fb_min: cx.opts.first_baseline_min, queued: vec![] };
     'paras: for (pi, pr) in paras.iter().enumerate() {
-        let sg = cx.shape_para(pr.clone());
+        let mut sg = cx.shape_para(pr.clone());
+        // Japanese composition: consecutive punctuation shares one half-em space.
+        let compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
         let pm = {
             let (asc, desc, lead) = style_metrics(cx.db, cx.style_at(pr.start));
             let (cap, xh) = cap_x_heights(cx.db, cx.style_at(pr.start));
@@ -835,7 +879,12 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 trimmed -= 1;
             }
             let hyphen = (hyph && end > i).then(|| hyphen_glyph(&sg[end - 1]));
-            let w: f64 = sg[i..trimmed].iter().map(|g| g.adv).sum::<f64>() + hyphen.as_ref().map_or(0.0, |h| h.adv);
+            // Mojikumi: a closing bracket, comma or full stop ending the line is set half width.
+            let end_trim = match trimmed.checked_sub(1).filter(|&k| k >= i && para.mojikumi == Mojikumi::LineEndHalf) {
+                Some(k) if !compressed.get(k).copied().unwrap_or(false) => sg.get(k).and_then(|g| punct_half(g, Punct::Closing)).unwrap_or(0.0),
+                _ => 0.0,
+            };
+            let w: f64 = sg[i..trimmed].iter().map(|g| g.adv).sum::<f64>() + hyphen.as_ref().map_or(0.0, |h| h.adv) - end_trim;
             let (align, justify) = match para.justify {
                 Justify::Left => (0, false),
                 Justify::Center => (1, false),
@@ -897,6 +946,9 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             let tab_origin = if regions.is_some() { x0 } else { 0.0 };
             for (j, g) in sg.iter().enumerate().take(end).skip(i) {
                 let mut adv = g.adv;
+                if j + 1 == trimmed {
+                    adv -= end_trim;
+                }
                 if g.ch == '\t' {
                     adv = tab_advance(&para.tabs, tab_origin, x, &sg[j + 1..trimmed.max(j + 1)]);
                 } else if j < trimmed {
