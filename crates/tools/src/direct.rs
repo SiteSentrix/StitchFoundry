@@ -12,8 +12,8 @@
 //! the text reflows at its size.
 //!
 //! A press on the stroke of a path that isn't selected as a whole selects that segment's two anchors
-//! (the fill selects the whole path); dragging the segment bends it if it's curved, else moves its
-//! anchors.
+//! (the fill, or Alt, selects the whole path); dragging the segment bends it if it's curved, else
+//! moves its anchors.
 
 use std::borrow::Cow;
 
@@ -302,10 +302,12 @@ impl Tool for DirectSelectionTool {
                 }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     // A segment of a path that isn't selected as a whole: its two anchors get
-                    // selected, and dragging it reshapes it if it's curved, else moves it.
+                    // selected, and dragging it reshapes it if it's curved, else moves it. Alt picks
+                    // the whole path (and Alt-drag copies it), as with Group Selection.
                     let whole = cx.selection.contains(h.leaf) && cx.selection.partial(h.leaf).is_none();
                     if !whole
                         && !ev.mods.shift
+                        && !ev.mods.alt
                         && matches!(h.kind, HitKind::Stroke | HitKind::Outline)
                         && let Some(s) = segment_at(cx, h.leaf, p)
                     {
@@ -681,6 +683,13 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 81.0));
         assert_eq!(a[1], Action::Preview("path.moveAnchors".into(), json!({"dx": 0.0, "dy": -20.0})));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 81.0));
+        // Alt on the stroke picks the whole path, and Alt-drag copies it.
+        let alt = Mods { alt: true, ..Default::default() };
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 101.0).with_mods(alt));
+        assert!(matches!(&a[..], [Action::Exec(c, _)] if c == "select.set"), "{a:?}");
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 81.0).with_mods(alt));
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, v)] if c == "object.transform" && v["copy"] == true), "{a:?}");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 150.0, 81.0).with_mods(alt));
         // The fill still selects the whole path, and a path selected as a whole still moves whole.
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
         assert!(matches!(&a[..], [Action::Exec(c, _)] if c == "select.set"), "{a:?}");
