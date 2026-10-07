@@ -571,6 +571,10 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
             None => return,
         },
         PanelDrag::GraphicStyle(name) => return pointer_chip(ctx, |ui, r| super::graphic_styles::paint_style(app, ui, r, name)),
+        PanelDrag::Symbol(name) => match app.session.active() {
+            Some(st) => return pointer_chip(ctx, |ui, r| super::symbols::chip(ui, &st.doc, r, name)),
+            None => return,
+        },
     };
     pointer_chip(ctx, |ui, r| {
         if registration {
