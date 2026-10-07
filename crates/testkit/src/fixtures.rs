@@ -115,6 +115,14 @@ pub fn rich_session() -> Session {
     let tx = id_of(&exec(&mut s, "text.create", json!({"x": 250, "y": 300, "text": "VectorCraft", "size": 30})));
     // A non-default paragraph composer, so format round trips cover it.
     exec(&mut s, "text.setFormat", json!({"ids": [tx.0], "composer": "singleLine"}));
+    // Area type with non-default Area Type Options (vertical alignment, inset).
+    let area = id_of(&exec(
+        &mut s,
+        "text.create",
+        json!({"x": 250, "y": 340, "text": "Centred area type", "size": 12, "area": {"width": 120, "height": 50}}),
+    ));
+    select(&mut s, &[area]);
+    exec(&mut s, "text.areaOptions", json!({"verticalAlign": "center", "inset": 2}));
     exec(&mut s, "layer.new", json!({"name": "Top"}));
     let d = rect(&mut s, 350.0, 200.0, 80.0, 80.0);
     let e = ellipse(&mut s, 380.0, 230.0, 80.0, 80.0);

@@ -69,6 +69,20 @@ fn wrapped_lines_get_one_tspan_each() {
 }
 
 #[test]
+fn vertically_aligned_area_type_exports_where_it_is_drawn() {
+    let top = area_doc(vec![run("alpha beta", style(12.0))], 200.0, Justify::Left);
+    let mut centred = top.clone();
+    let id = centred.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = centred.node_mut(id).map(|n| &mut n.kind) {
+        t.area.vertical_align = vectorcraft_doc::VerticalAlign::Center;
+    }
+    let y = |d: &Document| attr(tspans(&export(d, &ExportOptions::default()))[0], "y").unwrap();
+    let (yt, yc) = (y(&top), y(&centred));
+    // The 160 pt frame holds one 12 pt line: centring moves it down about (160 - 14.4) / 2.
+    assert!(yc - yt > 60.0 && yc - yt < 80.0, "{yt} → {yc}");
+}
+
+#[test]
 fn rich_text_writes_spacing_shift_and_scale() {
     let shifted = CharStyle { baseline_shift: 4.0, ..style(12.0) };
     let wide = CharStyle { h_scale: 150.0, ..style(12.0) };

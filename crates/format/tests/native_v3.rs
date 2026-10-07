@@ -44,6 +44,31 @@ fn opts(version: u32, compress: bool) -> SaveOptions {
 }
 
 #[test]
+fn area_type_vertical_alignment_round_trips() {
+    let d = rich_doc();
+    let text = String::from_utf8(save(&d, false)).unwrap();
+    assert!(text.contains("\"verticalAlign\":\"center\""), "the fixture's area type is centred");
+    let back = load(text.as_bytes()).unwrap();
+    assert_eq!(doc_json(&back), doc_json(&d));
+    let area = |d: &Document| {
+        let mut found = None;
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind
+                && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. })
+            {
+                found = Some(t.area.vertical_align);
+            }
+        });
+        found.unwrap()
+    };
+    assert_eq!(area(&back), vectorcraft_doc::VerticalAlign::Center);
+    // Files from before the option open top-aligned.
+    let old = text.replacen("\"verticalAlign\":\"center\",", "", 1).replacen(",\"verticalAlign\":\"center\"", "", 1);
+    assert!(!old.contains("verticalAlign"));
+    assert_eq!(area(&load(old.as_bytes()).unwrap()), vectorcraft_doc::VerticalAlign::Top);
+}
+
+#[test]
 fn compressed_files_load() {
     let d = rich_doc();
     let packed = save_with(&d, &SaveOptions { compress: true, pretty: true, ..SaveOptions::default() }).unwrap();
