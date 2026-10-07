@@ -560,7 +560,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
                     if matches!(d, Drag::TempSelect | Drag::Art { temp: true })
                         && let Some(prev) = ui.data(|dd| dd.get_temp::<String>(temp_tool_id()))
                     {
-                        app.select_tool(&prev);
+                        app.restore_tool(&prev);
                     }
                 }
                 Drag::Pan { .. } | Drag::RotateView { .. } => {}

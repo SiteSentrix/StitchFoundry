@@ -268,6 +268,22 @@ fn the_grid_hides_while_a_perspective_tool_is_chosen() {
 }
 
 #[test]
+fn a_hidden_grid_stays_hidden_back_from_a_temporary_tool() {
+    // Cmd-dragging with a perspective tool borrows the Selection tool; going back to the
+    // perspective tool is not choosing it, so the grid hidden meanwhile stays hidden.
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("perspectiveGrid", v).unwrap();
+    s.execute("perspective.grid.show", &json!({"visible": false})).unwrap();
+    s.switch_tool("selection", v).unwrap();
+    s.switch_tool("perspectiveGrid", v).unwrap();
+    assert!(s.overlays(v).is_empty());
+    s.select_tool("selection", v).unwrap();
+    s.select_tool("perspectiveGrid", v).unwrap();
+    assert!(s.overlays(v).len() > 20, "choosing it shows the grid");
+}
+
+#[test]
 fn grid_preset_and_set_are_undoable() {
     let mut s = session();
     s.execute("perspective.grid.preset", &json!({"kind": 3})).unwrap();
