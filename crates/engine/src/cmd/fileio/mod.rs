@@ -581,6 +581,18 @@ pub const OPEN_EXTS: &[&str] = &[
     "eps",
 ];
 
+/// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
+/// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
+pub fn export_extensions() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = Vec::new();
+    for e in FORMATS.iter().filter(|f| f.write).filter_map(|f| f.extensions.first()) {
+        if !v.contains(e) {
+            v.push(e);
+        }
+    }
+    v
+}
+
 /// Text files: File → Place sets them as area type (Text Import Options).
 pub const TEXT_EXTS: &[&str] = &["txt"];
 

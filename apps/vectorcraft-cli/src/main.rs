@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless]
-//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg|.png|.pdf|.jpg|.webp|.vectorcraft]... [--scale 2]
+//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}']]... [--export out.svg]... [--scale 2]
 //! vectorcraft-cli commands
 //! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text]
 //! vectorcraft-cli info FILE
@@ -59,16 +59,17 @@ USAGE:
 
   vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON]]... [--export FILE]... [--scale N]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
-      order, export (.svg, .png, .pdf, .jpg, .webp, .vectorcraft by extension). Prints one JSON result per step.
+      order, export each FILE in the format its extension picks (see Writable formats). Prints one
+      JSON result per step.
 
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
   vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text]
-      Open IN (any readable format) and export OUT by extension (.svg, .pdf, .png, .jpg, .webp,
-      .vectorcraft). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
-      unless one of them is given, the other formats the first. Live effects are kept;
-      --outline-text writes SVG text as paths.
+      Open IN (any readable format) and export OUT in the format its extension picks (see Writable
+      formats). --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
+      unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
+      Live effects are kept; --outline-text writes SVG text as paths.
 
   vectorcraft-cli info FILE
       Print a JSON summary: title, colour mode, units, artboards, object counts by kind, fonts.
@@ -82,9 +83,10 @@ USAGE:
       synthetic N-path document (default 50000). Exits non-zero if a budget is exceeded.
 ";
 
-/// The usage text plus the formats `document.open` reads.
+/// The usage text plus the formats `document.open` reads and `document.export` writes.
 fn usage() -> String {
-    format!("{USAGE}\nReadable formats: .{}\n", vectorcraft_engine::cmd::fileio::OPEN_EXTS.join(", ."))
+    use vectorcraft_engine::cmd::fileio::{OPEN_EXTS, export_extensions};
+    format!("{USAGE}\nReadable formats: .{}\nWritable formats: .{}\n", OPEN_EXTS.join(", ."), export_extensions().join(", ."))
 }
 
 fn main() -> ExitCode {
