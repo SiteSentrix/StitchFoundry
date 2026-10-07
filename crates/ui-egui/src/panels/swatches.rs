@@ -361,23 +361,28 @@ enum Drop {
     /// `target` (or between rows) becomes a swatch; with Alt held (`replace`) it replaces swatch
     /// `target` when that is of its kind.
     New { paint: Paint, target: Option<String>, replace: bool },
+    /// Art dragged off the canvas becomes a pattern swatch made of a copy of it (the art stays).
+    Pattern { ids: Vec<u64> },
 }
 
 impl Drop {
     /// What releasing `d` before or `after` row `target` (`None`: at the end) does: move the rows
-    /// it carries, or make a swatch of a paint dragged from elsewhere (appearances: nothing).
+    /// it carries, make a swatch of a paint dragged from elsewhere, or a pattern swatch of art dragged
+    /// off the canvas (appearances: nothing).
     fn of(d: &PanelDrag, target: Option<String>, after: bool, replace: bool) -> Option<Self> {
         match d {
             PanelDrag::Paint { rows: Some(r), .. } => Some(Drop::Move { names: r.names.clone(), target, after }),
             PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace }),
+            PanelDrag::Art(ids) => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect() }),
             _ => None,
         }
     }
 }
 
-/// The drag held over `resp`, if the panel takes it (paints, not the Appearance panel's thumbnail).
+/// The drag held over `resp`, if the panel takes it (paints and art dragged off the canvas, not the
+/// Appearance panel's thumbnail).
 fn held(resp: &Response) -> Option<std::sync::Arc<PanelDrag>> {
-    resp.dnd_hover_payload::<PanelDrag>().filter(|d| matches!(**d, PanelDrag::Paint { .. }))
+    resp.dnd_hover_payload::<PanelDrag>().filter(|d| matches!(**d, PanelDrag::Paint { .. } | PanelDrag::Art(_)))
 }
 
 /// The drag a tile or row of `e` starts, moving rows `names`. Colour groups have no paint of their
@@ -545,6 +550,7 @@ fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             }
             ("swatch.new", p)
         }
+        Drop::Pattern { ids } => ("object.pattern.make", json!({"ids": ids, "edit": false})),
     };
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
@@ -575,6 +581,7 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
             Some(st) => return pointer_chip(ctx, |ui, r| super::symbols::chip(ui, &st.doc, r, name)),
             None => return,
         },
+        PanelDrag::Brush { def, .. } => return pointer_chip(ctx, |ui, r| super::brushes::chip(ui, r, def)),
     };
     pointer_chip(ctx, |ui, r| {
         if registration {
@@ -1470,6 +1477,26 @@ mod tests {
         let white = tile_center(&ctx, "White");
         drag(&mut app, &ctx, white, white + vec2(2.0, 0.0), 7.0);
         assert_eq!((names_of(&app, None), app.session.doc().unwrap().history.undo.len()), (before, undo));
+    }
+
+    #[test]
+    fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
+        let mut app = app();
+        let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        let ctx = context();
+        frame(&mut app, &ctx, vec![], 0.0, show);
+        // Released over a swatch tile: the list takes it.
+        let at = tile_center(&ctx, "Bright Red");
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![vectorcraft_doc::NodeId(id)]));
+        let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE };
+        frame(&mut app, &ctx, vec![Event::PointerMoved(at), release], 1.0, show);
+        let patterns = app.run("pattern.list", json!({})).unwrap();
+        assert_eq!(patterns["patterns"].as_array().map(Vec::len), Some(1), "{patterns}");
+        assert_eq!(patterns["editing"], Value::Null, "no pattern editing mode");
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.doc.node(vectorcraft_doc::NodeId(id)), before.node(vectorcraft_doc::NodeId(id)), "the art stays as it was");
+        assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
     }
 
     #[test]

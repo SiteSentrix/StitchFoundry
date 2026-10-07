@@ -10,7 +10,7 @@ use vectorcraft_doc::{Appearance, Document, Node, color::Color, color::Paint};
 use super::{first_selected, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
+use crate::widgets::{self, PanelDrag, menu_item};
 
 const KINDS: [(&str, &str); 5] =
     [("calligraphic", "Calligraphic"), ("scatter", "Scatter"), ("art", "Art"), ("bristle", "Bristle"), ("pattern", "Pattern")];
@@ -46,6 +46,15 @@ fn preview(ui: &Ui, def: &Value, size: egui::Vec2) -> Option<egui::TextureHandle
     })
 }
 
+/// The stroke preview of brush definition `def` on white in `r` (the chip a dragged brush shows at
+/// the pointer).
+pub(crate) fn chip(ui: &Ui, r: egui::Rect, def: &Value) {
+    ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
+    if let Some(tex) = preview(ui, def, r.size()) {
+        ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+    }
+}
+
 fn selected_brush(app: &VectorcraftApp) -> Option<String> {
     first_selected(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
 }
@@ -59,12 +68,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let defs: HashMap<String, Value> =
         list.iter().filter_map(|(n, _)| app.run("brush.get", json!({"name": n})).ok().map(|v| (n.clone(), v))).collect();
     let mut clicked: Option<String> = None;
-    widgets::list_box(ui, |ui| {
+    let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
         if list.is_empty() {
             super::empty_state(ui, "paintbrush", tl!("No brushes"), tl!("Select art and use New Brush to make one."));
-            return;
+            return ui.min_rect();
         }
         for (ty, _) in KINDS {
             if hidden.iter().any(|h| h == ty) {
@@ -75,7 +84,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 continue;
             }
             let row = |ui: &mut Ui, name: &str, size: egui::Vec2, label: bool| -> egui::Response {
-                let (r, resp) = ui.allocate_exact_size(size, Sense::click());
+                let (r, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
+                // Dragged onto a path, the brush is applied to it.
+                widgets::drag_source(ui, &resp, || PanelDrag::Brush { name: name.to_string(), def: defs.get(name).cloned().unwrap_or_default() });
                 let on = sel_brush.as_deref() == Some(name) || (sel_brush.is_none() && current.as_deref() == Some(name));
                 if on {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
@@ -118,7 +129,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             ui.separator();
         }
+        ui.min_rect()
     });
+    // Art dragged off the canvas and dropped on the list becomes an Art brush, as New Brush makes.
+    let zone = ui.interact(list_rect, ui.id().with("brushes-drop"), Sense::hover());
+    if let Some(ids) = widgets::art_drop(ui, &zone)
+        && let Err(e) = app.run("brush.new", json!({ "type": "art", "ids": ids }))
+    {
+        app.status(e);
+    }
     if let Some(name) = clicked {
         let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
         if has_sel {
@@ -205,5 +224,51 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("List View"), true, list) {
         set_pstate(ui.ctx(), "br-list", true);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use egui::{Pos2, Rect, pos2};
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    /// One headless frame of the panel, 236 pt wide as in the dock.
+    fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    }
+
+    fn button(at: Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    }
+
+    #[test]
+    fn art_dropped_on_the_panel_becomes_an_art_brush_and_a_brush_drags_out() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let id = app.run("shape.star", json!({"cx": 50, "cy": 50, "radius1": 20, "radius2": 9, "points": 5})).unwrap()["id"].as_u64().unwrap();
+        let ctx = egui::Context::default();
+        frame(&ctx, &mut app, vec![]);
+        let (before, _) = brushes(&mut app);
+        // Art dragged off the canvas and released over the list.
+        let over = pos2(100.0, 60.0);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::Art(vec![NodeId(id)]));
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(over), button(over, false)]);
+        let (after, _) = brushes(&mut app);
+        assert_eq!(after.len(), before.len() + 1);
+        let new: Vec<_> = after.iter().filter(|b| !before.contains(b)).collect();
+        assert!(matches!(new.as_slice(), [(_, ty)] if ty == "art"), "{new:?}");
+        // Dragging the first tile out of the panel carries that brush.
+        frame(&ctx, &mut app, vec![]);
+        let tile = pos2(36.0, 16.0);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+        let drag = egui::DragAndDrop::payload::<PanelDrag>(&ctx);
+        assert!(matches!(drag.as_deref(), Some(PanelDrag::Brush { name, def }) if *name == after[0].0 && def["name"] == json!(name)), "{drag:?}");
     }
 }

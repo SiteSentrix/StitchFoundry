@@ -966,6 +966,8 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
             let add = ui.input(|i| i.modifiers.alt);
             ("graphicStyle.apply", json!({"name": name, "ids": [hit.top_object(st.isolation).0], "add": add}))
         }
+        // A brush from the Brushes panel: the path it lands on takes it.
+        widgets::PanelDrag::Brush { name, .. } => ("brush.apply", json!({"name": name, "ids": [hit.leaf.0]})),
         // Art dragged back onto the canvas: its move was already dropped. (A symbol was placed
         // above.)
         widgets::PanelDrag::Art(_) | widgets::PanelDrag::Symbol(_) => return,
@@ -1767,6 +1769,34 @@ mod tests {
         assert!(matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if *symbol == name));
         let c = n.geometric_bounds().unwrap().center();
         assert!((c - xf.to_doc(at)).hypot() < 1e-6, "{c:?}");
+    }
+
+    #[test]
+    fn a_brush_dropped_on_a_path_is_applied_to_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id =
+            app.session.execute("path.create", &json!({"anchors": [{"x": 100, "y": 150}, {"x": 300, "y": 150}]})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let brush = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.stroke().and_then(|s| s.brush.clone())
+        };
+        let drop = |app: &mut VectorcraftApp, at: Point| {
+            let at = xf.to_screen(at);
+            egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Brush { name: "Arrow".into(), def: json!({}) });
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+        };
+        // Off the path: nothing.
+        drop(&mut app, Point::new(200.0, 250.0));
+        assert_eq!(brush(&app), None);
+        // On it: the path's stroke takes the brush.
+        drop(&mut app, Point::new(200.0, 150.0));
+        assert_eq!(brush(&app).as_deref(), Some("Arrow"));
     }
 
     #[test]
