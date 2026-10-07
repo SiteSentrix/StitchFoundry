@@ -294,6 +294,43 @@ fn direct_selection_moves_one_anchor() {
     assert_eq!(p.subpaths[0].anchors[1].p, vectorcraft_geom::Point::new(200.0, 100.0));
 }
 
+/// Dragging a curved segment with Direct Selection bends it (its anchors stay), and dragging a
+/// straight one moves its two anchors, not the whole path; each is one undo step.
+#[test]
+fn direct_selection_drags_segments() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let drag = |s: &mut Session, from: (f64, f64), to: (f64, f64)| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.0, from.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1), v).unwrap();
+    };
+    let arch = &json!({"anchors": [{"x": 100, "y": 200, "out": [100, 100]}, {"x": 300, "y": 200, "in": [300, 100]}]});
+    let arch = NodeId(s.execute("path.create", arch).unwrap()["id"].as_u64().unwrap());
+    let square = &json!({"anchors": [{"x": 150, "y": 400}, {"x": 150, "y": 300}, {"x": 250, "y": 300}, {"x": 250, "y": 400}], "closed": true});
+    let square = NodeId(s.execute("path.create", square).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("directSelection", v).unwrap();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    // The arch's middle, 40 up: the curve bends, its two anchors stay.
+    drag(&mut s, (200.0, 125.0), (200.0, 85.0));
+    let sp = s.doc().unwrap().doc.node(arch).unwrap().path_data().unwrap().subpaths[0].clone();
+    let (a, b) = (sp.anchors[0], sp.anchors[1]);
+    assert_eq!((a.p, b.p), (vectorcraft_geom::Point::new(100.0, 200.0), vectorcraft_geom::Point::new(300.0, 200.0)), "the anchors stay");
+    assert!(a.h_out.y < 100.0 && b.h_in.y < 100.0, "the curve bent up: {a:?} {b:?}");
+    assert_eq!(steps(&s), before + 1);
+    // The square's top edge, 40 up: its two anchors move, the bottom two stay.
+    drag(&mut s, (200.0, 300.0), (200.0, 260.0));
+    let sq = s.doc().unwrap().doc.node(square).unwrap().geometric_bounds().unwrap();
+    assert_eq!((sq.y0, sq.y1, sq.x0, sq.x1), (260.0, 400.0, 150.0, 250.0), "the edge moved, the rest stayed");
+    assert_eq!(steps(&s), before + 2);
+    // Its fill still moves the whole square.
+    drag(&mut s, (200.0, 350.0), (200.0, 330.0));
+    let sq = s.doc().unwrap().doc.node(square).unwrap().geometric_bounds().unwrap();
+    assert_eq!((sq.y0, sq.y1), (240.0, 380.0), "the whole path moved");
+}
+
 #[test]
 fn text_create_has_bounds() {
     let mut s = session();
