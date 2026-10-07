@@ -1994,10 +1994,11 @@ keeps one axis), the left and right extents (separate: `extent` and `extentRight
 whole cells), the vertical extent and the cell size widget (on the line where the planes meet, a cell up, or more
 cells while they're small) reshape the grid; Lock Grid stops them. The Plane Switching Widget stays put in a corner
 of the document window (headless: the first artboard's top-left corner); a press on it picks the plane with any tool
-while the grid shows (a perspective tool shows it), and the keys 1–4 (`key` with `"1"`…`"4"`) pick the left,
-horizontal, right and no plane. `perspective.widget.options {show?, position?}` (Perspective Grid Options,
-double-click the tool) hides it or moves it to `topLeft`, `topRight`, `bottomLeft` or `bottomRight`, kept with the
-preferences (`prefs.get`/`prefs.set` key `perspectiveWidget`).
+while the grid shows (choosing a perspective tool shows it, and `perspective.grid.show` hides it again with the tool
+still chosen), and the keys 1–4 (`key` with `"1"`…`"4"`) pick the left, horizontal, right and no plane.
+`perspective.widget.options {show?, position?}` (Perspective Grid Options, double-click the tool) hides it or moves
+it to `topLeft`, `topRight`, `bottomLeft` or `bottomRight`, kept with the preferences (`prefs.get`/`prefs.set` key
+`perspectiveWidget`).
 
 ## Envelopes
 

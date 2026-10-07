@@ -401,7 +401,7 @@ fn the_plane_widget_stays_on_screen_and_takes_clicks_with_any_tool() {
     assert_eq!(grid(&s).plane, Plane::Right);
     assert!(s.doc().unwrap().selection.is_empty());
     assert_eq!(undo_len(&s), n);
-    // While the grid is hidden only the perspective tools show it (and take its clicks).
+    // A hidden grid takes no clicks; choosing a perspective tool shows it.
     run(&mut s, "perspective.grid.show", json!({"visible": false}));
     let q = face(&s, view, WidgetCorner::TopLeft, Plane::Ground);
     click(&mut s, q, view);
