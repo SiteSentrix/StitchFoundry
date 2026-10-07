@@ -42,6 +42,11 @@ fn cover(n: &Node, page: Rect) -> Option<(Color, f32)> {
     (covers && n.mask.is_none()).then_some((*color, f.opacity * n.opacity))
 }
 
+/// An opaque white rectangle covering `page`, filled only.
+pub(crate) fn white_cover(n: &Node, page: Rect) -> bool {
+    cover(n, page).is_some_and(|(c, a)| a >= 0.999 && luminance(&c) > 0.999)
+}
+
 /// Does `outer` contain `inner`?
 pub(crate) fn contains(outer: Rect, inner: Rect) -> bool {
     outer.x0 <= inner.x0 && outer.y0 <= inner.y0 && outer.x1 >= inner.x1 && outer.y1 >= inner.y1
@@ -105,7 +110,7 @@ pub(crate) fn mask_spec(
         if art.len() > 1
             && let Some(last) = art.last()
             && last.blend == BlendMode::Difference
-            && cover(last, page).is_some_and(|(c, a)| a >= 0.999 && luminance(&c) > 0.999)
+            && white_cover(last, page)
         {
             art.pop();
             invert = !invert;

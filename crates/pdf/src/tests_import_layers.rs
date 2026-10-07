@@ -134,3 +134,61 @@ fn an_encrypted_file_keeps_its_hidden_layers() {
     assert!(d.layers[0].visible && !d.layers[1].visible);
     assert_eq!(colors(&d.layers[1]), [Color::rgb(0.0, 0.0, 1.0)]);
 }
+
+/// A page drawing `before`, white and red squares in "Shapes", then `after`; `ai`: with an
+/// editor's private data (a PDF-compatible `.ai`).
+fn page_fill(before: &str, after: &str, ai: bool) -> Document {
+    let (objs, catalog, ids) = groups(1, "");
+    let page = PdfPage {
+        resources: format!(
+            "/Properties << /MC0 {} 0 R >> /ExtGState << /GS0 << /ca 0.5 >> >> /ColorSpace << /W [/Separation /White /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 0 0] /N 1 >>] >>",
+            ids[0]
+        ),
+        entries: if ai { "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>".into() } else { String::new() },
+        ..PdfPage::new(200.0, 100.0, &format!("{before} /OC /MC0 BDC 1 1 1 rg 20 20 60 60 re f 1 0 0 rg 120 20 60 60 re f EMC {after}"))
+    };
+    import(&pdf_with_catalog(&[page], &[&objs[0], &objs[1]], &catalog, None)).unwrap()
+}
+
+fn path_count(d: &Document) -> usize {
+    let mut n = 0;
+    d.walk(|c| n += usize::from(matches!(c.kind, NodeKind::Path { .. })));
+    n
+}
+
+#[test]
+fn an_ai_files_white_page_outside_its_layers_is_not_art() {
+    // RGB, grey and CMYK white, the rectangle drawn either way round.
+    for fill in ["1 1 1 rg 0 0 200 100 re f", "1 g 0 100 200 -100 re f", "0 0 0 0 k 0 0 200 100 re f"] {
+        let d = page_fill(fill, "", true);
+        assert_eq!(names(&d), ["Shapes"], "{fill}");
+        assert_eq!(path_count(&d), 2, "{fill}");
+        assert_eq!(colors(&d.layers[0]), [Color::rgb(1.0, 1.0, 1.0), Color::rgb(1.0, 0.0, 0.0)], "{fill}");
+    }
+}
+
+#[test]
+fn a_page_fill_that_is_art_stays() {
+    // A plain PDF's white background is art, as are an .ai's fills that aren't a plain white
+    // page under its layers: grey, smaller or larger than the page, stroked, translucent or a
+    // white ink.
+    let page = "1 1 1 rg 0 0 200 100 re f";
+    let kept = [
+        (page, false),
+        ("0.9 g 0 0 200 100 re f", true),
+        ("1 g 10 10 180 80 re f", true),
+        ("1 g -20 -20 240 140 re f", true),
+        ("1 g 0 G 0 0 200 100 re B", true),
+        ("/GS0 gs 1 g 0 0 200 100 re f", true),
+        ("/W cs 1 scn 0 0 200 100 re f", true),
+    ];
+    for (fill, ai) in kept {
+        let d = page_fill(fill, "", ai);
+        assert_eq!(names(&d), ["Page 1", "Shapes"], "{fill}");
+        assert_eq!(path_count(&d), 3, "{fill}");
+    }
+    // Painted over the layers.
+    let d = page_fill("", page, true);
+    assert_eq!(names(&d), ["Shapes", "Page 1"]);
+    assert_eq!(path_count(&d), 3);
+}

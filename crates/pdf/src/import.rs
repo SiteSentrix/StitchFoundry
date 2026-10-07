@@ -20,7 +20,7 @@ use vectorcraft_doc::{
 use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
-use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec};
+use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
 use crate::import_scan::{Ocgs, Scan, all_on, hides_forms, scan_page};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
 use crate::import_text::{Families, Look, Placement, TextLine, Upright};
@@ -112,6 +112,11 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         b.begin_page(scan);
         interpret_page(page, &mut ctx, &mut b);
         let mut parts = b.end_page();
+        // A PDF-compatible `.ai` (the editor's private data next to the PDF art).
+        let ai = crate::pages::has_private_data(page);
+        if ai {
+            drop_page_fill(&mut parts, xf.transform_rect_bbox(crate::pages::page_box(page, CropTo::Crop)));
+        }
         // A file with several artboards writes, on each page, the art of its neighbours that
         // reaches into the page's box: art lying wholly outside this page is theirs (each page
         // draws it shifted by its own artboard spacing), so keep it only where it belongs.
@@ -122,7 +127,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             parts.retain(|(_, art)| !art.is_empty());
         }
         let children: Vec<Arc<Node>> = parts.iter().flat_map(|(_, v)| v.iter().cloned()).collect();
-        placeholder &= crate::pages::has_private_data(page) && only_text(&children);
+        placeholder &= ai && only_text(&children);
         let mut right = ab.x1;
         if opts.crop == CropTo::Bounding
             && let Some(art) = vectorcraft_doc::live::nodes_bounds(&children)
@@ -345,6 +350,28 @@ struct FontInfo {
     style: String,
     /// The installed face of its PostScript name.
     face: Option<Arc<vectorcraft_text::FontFace>>,
+}
+
+/// The page a PDF-compatible `.ai` paints under its layers is the editor's page, not art: an opaque
+/// white rectangle the size of the page (`page`, document space), outside every layer and before
+/// any of them. Drop it from the page's art (`parts`, as [`Builder::end_page`] gives them).
+fn drop_page_fill(parts: &mut Vec<(Option<usize>, Vec<Arc<Node>>)>, page: Rect) {
+    let layered = parts.iter().any(|(g, _)| g.is_some());
+    let Some((None, art)) = parts.first_mut() else { return };
+    // Not a spot colour: a white ink is art.
+    let fill = art.first().is_some_and(|n| {
+        layered
+            && n.blend == BlendMode::Normal
+            && white_cover(n, page)
+            && n.appearance.fill().is_some_and(|f| matches!(f.paint, Paint::Solid { swatch: None, .. }))
+            && n.geometric_bounds().is_some_and(|b| contains(page.inflate(0.5, 0.5), b))
+    });
+    if fill {
+        art.remove(0);
+        if art.is_empty() {
+            parts.remove(0);
+        }
+    }
 }
 
 /// Is this art text and nothing else (in groups and clips), with some text?

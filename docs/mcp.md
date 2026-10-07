@@ -366,7 +366,7 @@ their stop opacity and stop where the shading doesn't extend. Text becomes point
 the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font) —
 `textAs: "outlines"` keeps glyph outlines instead. Optional content groups (the layers of PDF and PDF-compatible `.ai`
 files) become layers with their name, visibility, print state and lock, art that is off coming in as a hidden layer;
-art outside them goes to a layer per page. `layers: false` gives one layer per page of only what shows:
+art outside them goes to a layer per page (except the opaque white page a `.ai` paints under its layers, which isn't art). `layers: false` gives one layer per page of only what shows:
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/map.pdf","textAs":"outlines","layers":false}}}
