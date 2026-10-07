@@ -546,7 +546,6 @@
 	Delete Freeform Point	Excluir Ponto Livre
 	Delete Graphic Style	Excluir Estilo Gráfico
 	Delete Graphic Style (Alt-click: without asking)	Excluir Estilo Gráfico (Alt-clique: sem perguntar)
-	Delete Layer	Excluir Camada
 	Delete Mesh Point	Excluir Ponto de Malha
 	Delete PDF Preset	Excluir Predefinido de PDF
 	Delete Paragraph Style	Excluir Estilo de Parágrafo
@@ -667,7 +666,6 @@
 	Duplicate Effect	Duplicar Efeito
 	Duplicate Graphic Style	Duplicar Estilo Gráfico
 	Duplicate Item	Duplicar Item
-	Duplicate Layer	Duplicar Camada
 	Duplicate Paragraph Style	Duplicar Estilo de Parágrafo
 	Duplicate Selected Item	Duplicar Item Selecionado
 	Duplicate Slice	Duplicar Fatia
@@ -1988,7 +1986,6 @@
 	Section Symbol	Símbolo de Seção
 	Select	Selecionar
 	Select All	Selecionar Tudo
-	Select All Art on Layer	Selecionar Toda a Arte na Camada
 	Select All Assets	Selecionar Todos os Ativos
 	Select All Instances	Selecionar Todas as Instâncias
 	Select All Unused	Selecionar Todos os Não Usados
