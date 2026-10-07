@@ -156,6 +156,9 @@ mod system {
     }
 
     pub fn printers() -> Vec<Printer> {
+        #[cfg(feature = "windows7")]
+        let script = "Get-WmiObject Win32_Printer | ForEach-Object { \"$($_.Default)`t$($_.Name)\" }";
+        #[cfg(not(feature = "windows7"))]
         let script = "Get-CimInstance Win32_Printer | ForEach-Object { \"$($_.Default)`t$($_.Name)\" }";
         output(&mut powershell(script)).map(|t| windows_printers(&t)).unwrap_or_default()
     }
@@ -174,7 +177,19 @@ mod system {
     }
 
     pub fn setup(_printer: Option<&str>) -> Result<(), String> {
-        Command::new("explorer").arg("ms-settings:printers").spawn().map(|_| ()).map_err(|e| e.to_string())
+        #[cfg(feature = "windows7")]
+        let mut command = {
+            let mut command = Command::new("control.exe");
+            command.arg("printers");
+            command
+        };
+        #[cfg(not(feature = "windows7"))]
+        let mut command = {
+            let mut command = Command::new("explorer");
+            command.arg("ms-settings:printers");
+            command
+        };
+        command.spawn().map(|_| ()).map_err(|e| e.to_string())
     }
 }
 

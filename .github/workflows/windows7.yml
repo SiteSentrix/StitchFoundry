@@ -1,0 +1,52 @@
+name: Windows 7 x64 compatibility
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - Cargo.lock
+      - vendor/windows-link/**
+      - packaging/windows/windows7.ps1
+      - .github/workflows/windows7.yml
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-01
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows7-x64
+      - name: Check that modern Windows backends are excluded
+        shell: pwsh
+        run: |
+          $tree = cargo +nightly-2026-10-01 tree --locked -p vectorcraft --target x86_64-win7-windows-msvc --no-default-features --features windows7 -e normal --prefix none
+          if ($LASTEXITCODE -ne 0) { throw 'dependency inspection failed' }
+          if ($tree -match '^(wgpu|wgpu-core|wgpu-hal|accesskit_windows) v') { throw 'unsupported Windows backend in compatibility build' }
+      - name: Build portable package
+        shell: pwsh
+        run: ./packaging/windows/windows7.ps1
+      - name: Test Windows code paths on the build host
+        shell: pwsh
+        env:
+          CARGO_TARGET_X86_64_WIN7_WINDOWS_MSVC_RUSTFLAGS: '-C target-feature=+crt-static'
+        run: |
+          cargo +nightly-2026-10-01 test -Z build-std=std,panic_unwind,test --locked --target x86_64-win7-windows-msvc --no-default-features --features vectorcraft/windows7 -p vectorcraft -p vectorcraft-cli
+          if ($LASTEXITCODE -ne 0) { throw 'tests failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vectorcraft-windows7-x64-portable
+          path: dist/release/vectorcraft-windows7-x64-portable.zip
+          if-no-files-found: error
+# A modern Windows runner proves compilation and host smoke tests only.
+# Run the checklist in docs/windows7.md on actual Windows 7 before claiming support.

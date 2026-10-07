@@ -96,3 +96,8 @@ opt-level = 1
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# windows-sys 0.61.2 imports CoTaskMemFree from a Windows 8+ DLL. This tiny
+# binding patch uses its documented Ole32 export only on the win7 target.
+[patch.crates-io]
+windows-link = { path = "vendor/windows-link" }

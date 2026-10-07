@@ -7,6 +7,13 @@
 //! See `vectorcraft_ui_egui::control` for the methods.
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
+#[cfg(all(feature = "windows7", any(feature = "wgpu", feature = "accessibility")))]
+compile_error!("windows7 requires --no-default-features (wgpu and accessibility must be disabled)");
+#[cfg(all(windows, feature = "windows7", not(target_vendor = "win7")))]
+compile_error!("windows7 requires --target x86_64-win7-windows-msvc; the ordinary Windows target still imports newer APIs");
+#[cfg(all(target_vendor = "win7", not(feature = "windows7")))]
+compile_error!("the win7 target requires --no-default-features --features windows7");
+
 mod clipboard;
 mod control_server;
 #[cfg(target_os = "macos")]
@@ -50,7 +57,12 @@ impl eframe::App for App {
             discard_marked_text();
         }
     }
+    #[cfg(not(feature = "windows7"))]
     fn on_exit(&mut self) {
+        save_prefs(&self.0);
+    }
+    #[cfg(feature = "windows7")]
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         save_prefs(&self.0);
     }
 }
@@ -262,6 +274,7 @@ fn app_icon() -> egui::IconData {
 /// integrated GPU of a hybrid-graphics laptop does easily, while presenting frames rendered on the
 /// discrete GPU through the integrated one made the window flicker on some laptops. With a single
 /// GPU both preferences pick it.
+#[cfg(feature = "wgpu")]
 fn power_preference(pref: Option<&str>, env: Option<eframe::wgpu::PowerPreference>) -> eframe::wgpu::PowerPreference {
     use eframe::wgpu::PowerPreference;
     match (env, pref) {
@@ -272,6 +285,7 @@ fn power_preference(pref: Option<&str>, env: Option<eframe::wgpu::PowerPreferenc
 }
 
 /// "name (backend, kind)" of the adapter the window renders with, for Help › About and bug reports.
+#[cfg(feature = "wgpu")]
 fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
     format!("{} ({:?}, {:?})", info.name.trim(), info.backend, info.device_type)
 }
@@ -297,9 +311,11 @@ fn main() -> eframe::Result {
     }
     let saved = read_prefs();
     let saved_window = saved.as_ref().and_then(|ui| ui.window);
+    #[cfg(feature = "wgpu")]
     let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
+    #[cfg(feature = "wgpu")]
     let power = power_preference(gpu_pref, eframe::wgpu::PowerPreference::from_env());
-    let mut options = eframe::NativeOptions {
+    let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("VectorCraft")
             .with_inner_size(window::DEFAULT_SIZE)
@@ -311,11 +327,18 @@ fn main() -> eframe::Result {
             .with_title_shown(false)
             .with_icon(app_icon())
             .with_app_id("ai.storyteller.vectorcraft"),
+        #[cfg(feature = "windows7")]
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
-    if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-        create.power_preference = power;
-    }
+    #[cfg(feature = "wgpu")]
+    let options = {
+        let mut options = options;
+        if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
+            create.power_preference = power;
+        }
+        options
+    };
     // Files opened from Finder and the Dock arrive as events, not arguments.
     #[cfg(target_os = "macos")]
     open_documents::install();
@@ -340,10 +363,15 @@ fn main() -> eframe::Result {
                 let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
                 app.session.recovery.set_default_folder(recovery);
             }
+            #[cfg(feature = "wgpu")]
             if let Some(rs) = &cc.wgpu_render_state {
                 let summary = adapter_summary(&rs.adapter.get_info());
                 log::info!("vectorcraft: rendering with {summary} (power preference {power:?})");
                 app.graphics_adapter = Some(summary);
+            }
+            #[cfg(feature = "windows7")]
+            {
+                app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
             }
             app.integrated_titlebar = cfg!(target_os = "macos");
             app.custom_titlebar = CUSTOM_TITLEBAR;
@@ -363,7 +391,7 @@ fn main() -> eframe::Result {
     )
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wgpu"))]
 mod tests {
     use super::*;
     use eframe::wgpu::PowerPreference;
