@@ -1,6 +1,7 @@
 //! Data Recovery: `file.recovery.save/list/restore/discard`, copies removed on save, revert and
 //! close, complex documents skipped, each app's own area (another running app's copies are never
-//! offered: locks, heartbeats), and the folder store with real file locks.
+//! offered: locks, heartbeats, announcements; a paused app repairs its copies), and the folder
+//! store with real file locks.
 
 use std::sync::Arc;
 
@@ -175,7 +176,7 @@ fn heartbeats_hold_areas_where_the_store_has_no_locks() {
     store.set_now(10_000 + 359);
     assert!(offered(&mut b).is_empty());
     // A beats (as the app does every minute): fresh again.
-    cmd::recovery::heartbeat(&a);
+    cmd::recovery::heartbeat(&mut a);
     store.set_now(10_000 + 359 + 300);
     assert!(offered(&mut b).is_empty());
     assert_eq!(restored(b.execute("file.recovery.restore", &json!({})).unwrap()), 0);
@@ -201,6 +202,71 @@ fn heartbeats_hold_areas_where_the_store_has_no_locks() {
     assert!(offered(&mut b).is_empty());
     store.set_now(1_000_000 + 181);
     assert_eq!(offered(&mut b), ["Untitled-1"]);
+}
+
+/// Issue #367: a tab whose timers were paused (a background tab) long enough for its heartbeat to
+/// go stale, while another tab discards the copies it takes for crash leftovers.
+#[test]
+fn a_paused_app_writes_its_copies_again_and_is_running_again() {
+    let store = Arc::new(MemoryStore::without_locks());
+    let mut a = session_in(&store);
+    a.execute("file.recovery.save", &json!({})).unwrap();
+    let a_file = format!("{}/Untitled-1-1", a.recovery.own_area().unwrap());
+    let mut b = relaunch(&store);
+    b.prefs.autosave_interval = 1;
+    assert!(b.execute("file.recovery.discard", &json!({})).unwrap()["discarded"].as_array().unwrap().is_empty());
+    // A is paused past three minutes: with heartbeats alone, B can't tell it from a crash.
+    store.set_now(1_000_000 + 186);
+    assert_eq!(b.execute("file.recovery.discard", &json!({})).unwrap()["discarded"], json!([a_file.clone()]));
+    assert!(copies(store.as_ref()).is_empty());
+    // A resumes: its heartbeat finds the copy gone and the next save writes it again, unchanged
+    // document or not.
+    store.set_now(1_000_000 + 200);
+    assert_eq!(cmd::recovery::heartbeat(&mut a), [a.doc().unwrap().uid]);
+    assert!(a.doc().unwrap().recovery.is_none());
+    let r = a.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(r["saved"][0]["file"], a_file.as_str(), "{r}");
+    assert_eq!(copies(store.as_ref()), ["Untitled-1-1"]);
+    assert!(cmd::recovery::heartbeat(&mut a).is_empty(), "nothing missing any more");
+    // A's heartbeat is newer than the one B wrote taking the area over: A runs again for B.
+    let l = b.execute("file.recovery.list", &json!({})).unwrap();
+    assert_eq!((l["copies"][0]["file"].as_str(), l["copies"][0]["running"].as_bool()), (Some(a_file.as_str()), Some(true)));
+    assert!(b.execute("file.recovery.discard", &json!({})).unwrap()["discarded"].as_array().unwrap().is_empty());
+    assert!(b.execute("file.recovery.discard", &json!({"file": a_file})).is_err());
+    // A recovery save alone repairs too (no heartbeat in between).
+    store.set_now(1_000_000 + 600);
+    let mut c = relaunch(&store);
+    c.prefs.autosave_interval = 1;
+    c.execute("file.recovery.discard", &json!({})).unwrap();
+    assert!(copies(store.as_ref()).is_empty());
+    assert_eq!(a.execute("file.recovery.save", &json!({})).unwrap()["saved"].as_array().unwrap().len(), 1);
+    assert_eq!(copies(store.as_ref()), ["Untitled-1-1"]);
+}
+
+/// Issue #367 where the store can tell a paused app from a gone one (the browser's Web Locks): the
+/// paused app's copies are never taken, however old its heartbeat.
+#[test]
+fn announced_areas_stay_held_while_their_app_is_paused() {
+    let store = Arc::new(MemoryStore::announcing());
+    let mut a = session_in(&store);
+    a.execute("file.recovery.save", &json!({})).unwrap();
+    let a_file = format!("{}/Untitled-1-1", a.recovery.own_area().unwrap());
+    store.set_now(1_000_000 + 3600);
+    let mut b = relaunch(&store);
+    assert!(offered(&mut b).is_empty());
+    assert!(b.execute("file.recovery.discard", &json!({})).unwrap()["discarded"].as_array().unwrap().is_empty());
+    assert_eq!(restored(b.execute("file.recovery.restore", &json!({})).unwrap()), 0);
+    assert!(b.execute("file.recovery.discard", &json!({"file": a_file})).unwrap_err().to_string().contains("running"));
+    assert_eq!(copies(store.as_ref()), ["Untitled-1-1"]);
+    // A crashes: the browser releases its lock, and its copies are offered once its heartbeat is
+    // stale too.
+    drop(a);
+    assert_eq!(offered(&mut b), ["Untitled-1"]);
+    assert_eq!(restored(b.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    // B's area is announced in turn.
+    let mut c = relaunch(&store);
+    store.set_now(1_000_000 + 7200);
+    assert!(offered(&mut c).is_empty());
 }
 
 #[test]

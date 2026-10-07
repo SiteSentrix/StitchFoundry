@@ -1554,9 +1554,12 @@ The copies live in the `recoveryFolder` preference's folder (default: `Data Reco
 none when the app runs with `VECTORCRAFT_NO_PREFS`) or, on the web, in browser storage.
 
 Each running app (each browser tab) keeps its copies in an area of its own (`<area>/<name>`): a sub-folder whose
-`.lock` file it keeps locked while it runs, or on the web an area with a heartbeat it refreshes every minute. Only
-areas nobody holds are offered: their lock is free, or their heartbeat is older than three intervals (at least three
-minutes). Several apps running at once (agents' instances included) never see each other's copies as crash leftovers,
+`.lock` file it keeps locked while it runs, or on the web an area with a heartbeat it refreshes every minute and a Web
+Lock the browser holds until the tab is gone (where the browser has Web Locks: secure pages). Only areas nobody holds
+are offered: their lock is free, or no tab holds their Web Lock and their heartbeat is older than three intervals (at
+least three minutes). A background tab whose timers are paused therefore keeps its copies. Without Web Locks another
+tab can take such a tab for gone; when it resumes, its next heartbeat or recovery save writes its missing copies
+again. Several apps running at once (agents' instances included) never see each other's copies as crash leftovers,
 and an area being restored or discarded is held, so two apps launched together never both take it.
 
 `file.recovery.list` → `{copies: [{file, title, path, format, saved, open, running}], location}` (`open`: the copy of a

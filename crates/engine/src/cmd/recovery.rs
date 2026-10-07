@@ -13,9 +13,17 @@
 //!
 //! Every running app (each browser tab) keeps its copies in an area of its own, `<area>/…`, and
 //! holds it while it runs: a lock on the area for its lifetime where the store has locks (folders:
-//! [`FolderStore`]), else a heartbeat it refreshes ([`heartbeat`]; browser storage). Only areas
-//! nobody holds any more (their app is gone) are offered, and while their copies are restored or
-//! discarded the area is held, so two apps launched together never both take it.
+//! [`FolderStore`]), else a heartbeat it refreshes ([`heartbeat`]; browser storage) plus, where the
+//! store can, an announcement that lasts as long as the app ([`RecoveryStore::announce`]: the
+//! browser's Web Locks). Only areas nobody holds any more (their app is gone) are offered, and
+//! while their copies are restored or discarded the area is held, so two apps launched together
+//! never both take it.
+//!
+//! A heartbeat alone can't tell a gone app from one whose timers stopped (a background tab), so
+//! when unsure an area counts as held, and its app repairs what another app did meanwhile: each
+//! heartbeat and each recovery save write again the copies missing from its area ([`repair`]), and
+//! a heartbeat newer than the one another app wrote when taking the area over marks it running
+//! again.
 //!
 //! Each copy is two entries: `<area>/<file>.vectorcraft` (the native document, written as a save
 //! writes it) and `<area>/<file>.json` (its title, original path and format, and when it was
@@ -86,6 +94,17 @@ pub trait RecoveryStore: Send + Sync {
     fn lock(&self, _area: &str) -> std::result::Result<Lock, String> {
         Ok(Lock::Unsupported)
     }
+    /// Stores without locks: also hold area `area` in a way other apps can see that lasts exactly as
+    /// long as this app runs, if the store has one (the browser's Web Locks) → it, until dropped.
+    fn announce(&self, _area: &str) -> Option<Hold> {
+        None
+    }
+    /// Stores without locks: does a running app hold area `area` by [`RecoveryStore::announce`]?
+    /// `None`: the store can't tell (heartbeats alone decide). A store that can tell but isn't sure
+    /// right now says `Some(true)`: a copy kept loses nothing, one deleted may.
+    fn announced(&self, _area: &str) -> Option<bool> {
+        None
+    }
     /// Tidy away area `area` once it holds no copies and nobody holds it (its lock file and folder).
     fn remove_area(&self, _area: &str) {}
     /// The clock heartbeats are judged by (Unix seconds; `None`: none, so no area counts as gone).
@@ -96,17 +115,19 @@ pub trait RecoveryStore: Send + Sync {
 
 /// A store in memory (tests, and hosts without storage). Areas are locked in memory, so sessions
 /// sharing one store behave like apps sharing a folder; [`MemoryStore::without_locks`] uses
-/// heartbeats like browser storage, judged by a clock tests set ([`MemoryStore::set_now`]).
+/// heartbeats like browser storage, judged by a clock tests set ([`MemoryStore::set_now`]), and
+/// [`MemoryStore::announcing`] adds announcements like the browser's Web Locks.
 pub struct MemoryStore {
     entries: Mutex<BTreeMap<String, Vec<u8>>>,
     held: Arc<Mutex<BTreeSet<String>>>,
     locks: bool,
+    announces: bool,
     now: Mutex<Option<i64>>,
 }
 
 impl Default for MemoryStore {
     fn default() -> Self {
-        Self { entries: Default::default(), held: Default::default(), locks: true, now: Mutex::new(Some(1_000_000)) }
+        Self { entries: Default::default(), held: Default::default(), locks: true, announces: false, now: Mutex::new(Some(1_000_000)) }
     }
 }
 
@@ -114,6 +135,19 @@ impl MemoryStore {
     /// A store without locks: areas are held with heartbeats.
     pub fn without_locks() -> Self {
         Self { locks: false, ..Self::default() }
+    }
+
+    /// A store without locks whose apps also announce the areas they hold for as long as they run
+    /// (as the browser's Web Locks do).
+    pub fn announcing() -> Self {
+        Self { announces: true, ..Self::without_locks() }
+    }
+
+    fn hold(&self, area: &str) -> Option<Hold> {
+        if !self.held.lock().unwrap_or_else(|e| e.into_inner()).insert(area.to_string()) {
+            return None;
+        }
+        Some(Box::new(MemoryHold { held: self.held.clone(), area: area.to_string() }))
     }
 
     /// Set the clock heartbeats are judged by.
@@ -160,10 +194,16 @@ impl RecoveryStore for MemoryStore {
         if !self.locks {
             return Ok(Lock::Unsupported);
         }
-        if !self.held.lock().unwrap_or_else(|e| e.into_inner()).insert(area.to_string()) {
-            return Ok(Lock::Busy);
+        Ok(self.hold(area).map_or(Lock::Busy, Lock::Held))
+    }
+    fn announce(&self, area: &str) -> Option<Hold> {
+        if !self.announces {
+            return None;
         }
-        Ok(Lock::Held(Box::new(MemoryHold { held: self.held.clone(), area: area.to_string() })))
+        self.hold(area)
+    }
+    fn announced(&self, area: &str) -> Option<bool> {
+        self.announces.then(|| self.held.lock().unwrap_or_else(|e| e.into_inner()).contains(area))
     }
     fn now(&self) -> Option<i64> {
         *self.now.lock().unwrap_or_else(|e| e.into_inner())
@@ -288,8 +328,11 @@ struct Own {
     /// The store it is in (copies are removed from there even after the preference moves on).
     store: Arc<dyn RecoveryStore>,
     area: String,
-    /// The lock held for the session's lifetime; none in stores with heartbeats.
+    /// What holds the area for the session's lifetime: its lock, else its announcement (stores
+    /// without locks that have them).
     hold: Option<Hold>,
+    /// Held with a heartbeat (stores without locks).
+    beats: bool,
 }
 
 /// The session's recovery store settings and its own area ([`crate::Session::recovery`]).
@@ -300,9 +343,10 @@ pub struct Recovery {
     /// The folder the desktop app keeps copies in when the `recoveryFolder` preference is empty.
     default_folder: Option<String>,
     own: Option<Own>,
-    /// Gone apps' areas this session took over by heartbeat (stores without locks), so its own
-    /// fresh heartbeat there doesn't make them look running.
-    adopted: BTreeSet<String>,
+    /// Gone apps' areas this session took over by heartbeat (stores without locks), with the
+    /// heartbeat it wrote there: that one doesn't make them look running, a newer one does (their
+    /// app was only paused and came back).
+    adopted: BTreeMap<String, i64>,
 }
 
 impl Recovery {
@@ -354,31 +398,52 @@ fn stale_after(s: &Session) -> i64 {
     (i64::from(s.prefs.autosave_interval.max(1)) * 180).max(MIN_STALE)
 }
 
-/// Record that `area`'s app runs (stores without locks).
-fn beat(store: &dyn RecoveryStore, area: &str) -> std::result::Result<(), String> {
+/// Record that `area`'s app runs (stores without locks) → the heartbeat written.
+fn beat(store: &dyn RecoveryStore, area: &str) -> std::result::Result<i64, String> {
     let now = store.now().ok_or("no clock to keep a heartbeat by")?;
-    store.write(&format!("{area}/{BEAT}"), now.to_string().as_bytes())
+    store.write(&format!("{area}/{BEAT}"), now.to_string().as_bytes())?;
+    Ok(now)
 }
 
-/// Has `area`'s app said it runs within `stale` seconds (stores without locks)? Without a clock
-/// every app counts as running.
-fn beating(store: &dyn RecoveryStore, area: &str, stale: i64) -> bool {
+/// Has `area`'s app said it runs within `stale` seconds (stores without locks)? `mine`: the
+/// heartbeat this session wrote there itself when taking the area over, which doesn't count.
+/// Without a clock every app counts as running.
+fn beating(store: &dyn RecoveryStore, area: &str, stale: i64, mine: Option<i64>) -> bool {
     let Some(now) = store.now() else { return true };
     let at = store.read(&format!("{area}/{BEAT}")).ok().and_then(|b| String::from_utf8(b).ok()).and_then(|t| t.trim().parse::<i64>().ok());
-    at.is_some_and(|t| now.saturating_sub(t) <= stale)
+    at.is_some_and(|t| now.saturating_sub(t) <= stale && Some(t) != mine)
 }
 
-/// Refresh this session's heartbeat in a store without locks (the app does this every
-/// [`HEARTBEAT_EVERY`] seconds). Best effort: a missed beat only lets another app offer the copies
-/// once three intervals have passed.
-pub fn heartbeat(s: &Session) {
-    if let Some(own) = s.recovery.own.as_ref().filter(|o| o.hold.is_none()) {
+/// Refresh this session's hold on its area (the app does this every [`HEARTBEAT_EVERY`] seconds,
+/// so also on its first frame after its timers were paused): its heartbeat in a store without
+/// locks, and its copies ([`repair`]) → the documents whose copies went missing (write them now).
+/// Best effort: a missed beat only lets another app offer the copies once three intervals have
+/// passed.
+pub fn heartbeat(s: &mut Session) -> Vec<u64> {
+    if let Some(own) = s.recovery.own.as_ref().filter(|o| o.beats) {
         let _ = beat(own.store.as_ref(), &own.area);
     }
+    repair(s)
+}
+
+/// Forget this session's copies that are missing from its area, so the next recovery save writes
+/// them again → their documents' uids. Another app removes them only when it took this one for
+/// gone (its heartbeat stopped while its timers were paused, as browsers do to background tabs); a
+/// copy it restored is its own now, so both are kept. A store that can't be listed changes nothing.
+pub fn repair(s: &mut Session) -> Vec<u64> {
+    let Some(names) = s.recovery.own.as_ref().and_then(|o| o.store.list().ok()) else { return vec![] };
+    let mut lost = vec![];
+    for st in &mut s.docs {
+        if st.recovery.as_ref().is_some_and(|c| !names.iter().any(|n| n.strip_suffix(DOC_EXT) == Some(c.file.as_str()))) {
+            st.recovery = None;
+            lost.push(st.uid);
+        }
+    }
+    lost
 }
 
 /// This session's area in `store`, taken now if it has none there yet: a fresh area, held for the
-/// session's lifetime (locked, or with a heartbeat).
+/// session's lifetime (locked, or with a heartbeat and an announcement where the store has them).
 pub fn claim(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<String> {
     if let Some(own) = &s.recovery.own {
         if own.store.location() == store.location() {
@@ -394,15 +459,15 @@ pub fn claim(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<String> 
         if taken.contains(&area) {
             continue;
         }
-        let hold = match store.lock(&area).map_err(EngineError::Other)? {
-            Lock::Held(h) => Some(h),
+        let (hold, beats) = match store.lock(&area).map_err(EngineError::Other)? {
+            Lock::Held(h) => (Some(h), false),
             Lock::Busy => continue,
             Lock::Unsupported => {
                 beat(store.as_ref(), &area).map_err(EngineError::Other)?;
-                None
+                (store.announce(&area), true)
             }
         };
-        s.recovery.own = Some(Own { store: store.clone(), area: area.clone(), hold });
+        s.recovery.own = Some(Own { store: store.clone(), area: area.clone(), hold, beats });
         return Ok(area);
     }
     Err(EngineError::Other("no free recovery area".into()))
@@ -413,7 +478,7 @@ pub fn release(s: &mut Session) {
     for st in &mut s.docs {
         st.recovery = None;
     }
-    let Some(Own { store, area, hold }) = s.recovery.own.take() else { return };
+    let Some(Own { store, area, hold, .. }) = s.recovery.own.take() else { return };
     let mine = |n: &String| n.split_once('/').is_some_and(|(a, _)| a == area);
     for name in store.list().unwrap_or_default().iter().filter(|n| mine(n)) {
         let _ = store.remove(name);
@@ -531,6 +596,8 @@ fn fresh_name(area: &str, stem: &str, taken: &[String]) -> String {
 /// when it has none and a copy is needed) → (jobs, skipped: `[{title, reason}]` for modified
 /// documents that get none).
 pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<RecoveryJob>, Vec<Value>)> {
+    // Copies another app removed are written again.
+    repair(s);
     let skipped: Vec<Value> = s
         .documents()
         .iter()
@@ -628,7 +695,9 @@ enum Owner {
 
 /// Whose `area` of `store` is. A gone app's area is held by the caller (its lock in `hold` until
 /// dropped) and, with `take` in a store without locks, taken over with a fresh heartbeat, so
-/// another app leaves it alone meanwhile.
+/// another app leaves it alone meanwhile. In a store without locks an area is gone only when
+/// nothing says its app runs: no announcement (or the store can't tell) and no heartbeat for three
+/// intervals but the one this session wrote taking it over.
 fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<Hold>, take: bool) -> Owner {
     if s.recovery.own.as_ref().is_some_and(|o| o.area == area && o.store.location() == store.location()) {
         return Owner::Mine;
@@ -640,14 +709,12 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
         }
         Ok(Lock::Busy) | Err(_) => Owner::Running,
         Ok(Lock::Unsupported) => {
-            if !s.recovery.adopted.contains(area) && beating(store, area, stale_after(s)) {
+            if store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied()) {
                 return Owner::Running;
             }
-            if take {
-                // Best effort: without it another app might offer the copies too, which loses
-                // nothing.
-                let _ = beat(store, area);
-                s.recovery.adopted.insert(area.to_string());
+            // Best effort: without it another app might offer the copies too, which loses nothing.
+            if take && let Ok(t) = beat(store, area) {
+                s.recovery.adopted.insert(area.to_string(), t);
             }
             Owner::Gone
         }

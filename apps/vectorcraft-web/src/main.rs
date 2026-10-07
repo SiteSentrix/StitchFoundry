@@ -14,6 +14,8 @@
 //! URL query flag: `?webgl` forces the WebGL2 backend instead of WebGPU.
 
 #[cfg(target_arch = "wasm32")]
+mod locks;
+#[cfg(target_arch = "wasm32")]
 mod web;
 
 #[cfg(target_arch = "wasm32")]

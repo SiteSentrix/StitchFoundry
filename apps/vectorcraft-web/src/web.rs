@@ -6,11 +6,13 @@ use std::sync::{Arc, Mutex};
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
-use vectorcraft_engine::cmd::recovery::RecoveryStore;
+use vectorcraft_engine::cmd::recovery::{Hold, RecoveryStore};
 use vectorcraft_ui_egui::place::{DropTarget, PlaceArrival, PlaceInbox};
 use vectorcraft_ui_egui::print::{PrintJob, PrintService, Printer};
 use vectorcraft_ui_egui::{Services, VectorcraftApp};
 use wasm_bindgen::JsCast as _;
+
+use crate::locks::WebLocks;
 
 type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
@@ -33,6 +35,8 @@ pub fn start() {
             return;
         };
         let drag = track_drag(&canvas);
+        // Before the first frame, which looks for copies a crash left behind.
+        let locks = WebLocks::start(RECOVERY_PREFIX).await;
         let mut options = eframe::WebOptions::default();
         if query().contains("webgl")
             && let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup
@@ -49,7 +53,7 @@ pub fn start() {
                     }
                     let inbox: Inbox = Arc::default();
                     let place_inbox: PlaceInbox = Arc::default();
-                    let app = VectorcraftApp::new(Session::new(), services(inbox.clone(), place_inbox.clone(), cc.egui_ctx.clone()));
+                    let app = VectorcraftApp::new(Session::new(), services(inbox.clone(), place_inbox.clone(), cc.egui_ctx.clone(), locks));
                     Ok(Box::new(WebShell { app, inbox, place_inbox, drag }))
                 }),
             )
@@ -132,7 +136,7 @@ impl eframe::App for WebShell {
     }
 }
 
-fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context) -> Services {
+fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context, locks: Option<WebLocks>) -> Services {
     let open_inbox = inbox.clone();
     let picked = place_inbox.clone();
     let place_ctx = ctx.clone();
@@ -174,7 +178,7 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context) -> Servic
             }
         })),
         inbox: Some(inbox),
-        recovery_store: Some(Arc::new(BrowserStore)),
+        recovery_store: Some(Arc::new(BrowserStore { locks })),
         // File → Print: the browser's print dialog.
         print: Some(Box::new(BrowserPrint)),
         ..Default::default()
@@ -183,8 +187,12 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, ctx: egui::Context) -> Servic
 
 /// Data Recovery's store on the web: the browser's local storage (kept across visits and shared by
 /// the site's tabs), each entry as base64 under [`RECOVERY_PREFIX`]`<area>/<name>`. It has no
-/// locks: each tab holds its area with a heartbeat, judged by the browser's clock.
-struct BrowserStore;
+/// locks: each tab holds its area with a heartbeat, judged by the browser's clock, and with a Web
+/// Lock named after it where the browser has them (`locks`), which a tab whose timers are paused
+/// in the background keeps.
+struct BrowserStore {
+    locks: Option<WebLocks>,
+}
 
 const RECOVERY_PREFIX: &str = "vectorcraft-recovery/";
 
@@ -219,6 +227,12 @@ impl RecoveryStore for BrowserStore {
     }
     fn now(&self) -> Option<i64> {
         Some((js_sys::Date::now() / 1000.0) as i64)
+    }
+    fn announce(&self, area: &str) -> Option<Hold> {
+        self.locks.as_ref()?.hold(area)
+    }
+    fn announced(&self, area: &str) -> Option<bool> {
+        self.locks.as_ref().map(|l| l.held(area))
     }
 }
 
