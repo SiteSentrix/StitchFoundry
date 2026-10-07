@@ -48,6 +48,7 @@
 	[Default] is protected: New… starts an editable copy.	[預設] 受到保護：「新增…」會開始一份可編輯的複本。
 	[Unnamed]	[未命名]
 	A File…	一個檔案…
+	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	數值較小時會貼近筆畫，較大時則錨點較少、曲線較平滑。
 	A new preset starting from the selected one	以所選預設集為基礎建立新預設集
 	A saved copy of the selected preset	所選預設集的已儲存拷貝
 	About VectorCraft	關於 VectorCraft
@@ -361,6 +362,7 @@
 	Close All	全部關閉
 	Close Library	關閉資料庫
 	Close Path	封閉路徑
+	Close paths when ends are within:	端點相距在以下範圍內時封閉路徑：
 	Cmd	Cmd
 	CMYK	CMYK
 	CMYK Color	CMYK 色彩
@@ -740,6 +742,7 @@
 	Edit Pattern	編輯圖樣
 	Edit PDF Preset	編輯 PDF 預設集
 	Edit Print Preset	編輯列印預設集
+	Edit selected paths within:	在以下範圍內編輯選取的路徑：
 	Edit Selection	編輯選取範圍
 	Edit Selection…	編輯選取範圍…
 	Edit Symbol	編輯符號
@@ -909,6 +912,7 @@
 	Fill (X), double-click for the Color Picker	填色 (X)，按兩下開啟檢色器
 	Fill and Stroke	填色與筆畫
 	Fill Color	填色顏色
+	Fill new strokes	為新筆畫套用填色
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿

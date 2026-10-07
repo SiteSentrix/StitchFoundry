@@ -660,6 +660,7 @@
 	< 1 sec	1 秒未満
 	<Opacity Mask>	<不透明マスク>
 	A File…	ファイル…
+	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	値を小さくするとストロークに忠実に、大きくするとポイントが少なく滑らかな曲線になります。
 	A new preset starting from the selected one	選択したプリセットをもとにした新しいプリセット
 	A saved copy of the selected preset	選択したプリセットの保存済みの複製
 	Absolute Position	絶対位置
@@ -869,6 +870,7 @@
 	Clipboard as Text	クリップボードをテキストとして取得
 	Close Library	ライブラリを閉じる
 	Close Path	パスを閉じる
+	Close paths when ends are within:	端点が次の距離以内のとき、パスを閉じる：
 	Collate	部単位で印刷
 	Collect in New Layer	新規レイヤーに集める
 	Color Burn	焼き込みカラー
@@ -1123,6 +1125,7 @@
 	Edit Print Preset	プリントプリセットを編集
 	Edit Symbol	シンボルを編集
 	Edit Theme	テーマを編集
+	Edit selected paths within:	選択したパスを次の距離以内で編集：
 	Edit or Apply Color Group	カラーグループを編集または適用
 	Edit or Apply Color Group…	カラーグループを編集または適用…
 	Edit or Apply Colors	カラーを編集／適用
@@ -1241,6 +1244,7 @@
 	Fill New Type Objects With Placeholder Text	新規テキストオブジェクトをダミーテキストで埋める
 	Fill Rule	塗りのルール
 	Fill and Stroke	塗りと線
+	Fill new strokes	新しいストロークに塗りを適用
 	Fill:	塗り:
 	Find	検索
 	Find Font	フォントを検索

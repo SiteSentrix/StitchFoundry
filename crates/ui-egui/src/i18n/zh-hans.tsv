@@ -40,6 +40,7 @@
 	[Default] is protected: New… starts an editable copy.	[默认] 受保护：“新建…”会创建可编辑的副本。
 	[Unnamed]	[未命名]
 	A File…	文件…
+	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	数值较小时紧贴所绘线条，较大时锚点较少、曲线更平滑。
 	A new preset starting from the selected one	以所选预设为基础的新预设
 	A saved copy of the selected preset	所选预设的副本
 	About VectorCraft	关于 VectorCraft
@@ -350,6 +351,7 @@
 	Close All	全部关闭
 	Close Library	关闭库
 	Close Path	闭合路径
+	Close paths when ends are within:	端点相距在以下范围内时闭合路径：
 	Cmd	Cmd
 	CMYK	CMYK
 	CMYK Color	CMYK 颜色
@@ -722,6 +724,7 @@
 	Edit Pattern	编辑图案
 	Edit PDF Preset	编辑 PDF 预设
 	Edit Print Preset	编辑打印预设
+	Edit selected paths within:	在以下范围内编辑所选路径：
 	Edit Selection…	编辑所选对象…
 	Edit Symbol	编辑符号
 	Edit Text	编辑文字
@@ -886,6 +889,7 @@
 	Fill & Stroke	填色和描边
 	Fill (X), double-click for the Color Picker	填色 (X)，双击打开拾色器
 	Fill and Stroke	填色和描边
+	Fill new strokes	为新描边应用填色
 	Fill Color	填色
 	Fill New Type Objects With Placeholder Text	用占位文本填充新文字对象
 	Fill Rule	填充规则
