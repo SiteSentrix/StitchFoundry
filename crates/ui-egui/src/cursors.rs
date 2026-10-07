@@ -61,6 +61,10 @@ fn pen(p: &Painter, o: Pos2, badge: &str) {
         }
         "-" => line(p, b + vec2(0.0, 3.0), b + vec2(6.0, 3.0)),
         "/" => line(p, b + vec2(0.0, 6.0), b + vec2(5.0, 0.0)),
+        "^" => {
+            line(p, b + vec2(0.0, 6.0), b + vec2(3.0, 0.0));
+            line(p, b + vec2(3.0, 0.0), b + vec2(6.0, 6.0));
+        }
         "*" => {
             line(p, b + vec2(0.0, 0.0), b + vec2(6.0, 6.0));
             line(p, b + vec2(6.0, 0.0), b + vec2(0.0, 6.0));
@@ -204,6 +208,7 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2) -> bool {
         Cursor::PenDelete => pen(painter, p, "-"),
         Cursor::PenClose => pen(painter, p, "o"),
         Cursor::PenContinue => pen(painter, p, "/"),
+        Cursor::PenConvert => pen(painter, p, "^"),
         Cursor::Text => ibeam(painter, p),
         Cursor::AddStop => stop_badge(painter, p, true),
         Cursor::RemoveStop => stop_badge(painter, p, false),
