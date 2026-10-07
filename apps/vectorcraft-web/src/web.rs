@@ -108,8 +108,8 @@ impl eframe::App for WebShell {
                     match f.bytes_async().await {
                         Ok(bytes) => {
                             match target {
-                                DropTarget::Place { at, embed } => {
-                                    place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: Some((at, embed)) })
+                                DropTarget::Place(d) => {
+                                    place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: Some(d) })
                                 }
                                 DropTarget::Open => inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes)),
                             }

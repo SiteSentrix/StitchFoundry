@@ -18,20 +18,30 @@ const THUMB: u32 = 64;
 const THUMB_OFFSET: egui::Vec2 = egui::vec2(14.0, 14.0);
 
 /// A file to place that arrived asynchronously (web): picked for File → Place (`drop: None`), or
-/// dropped on the canvas at a point, embedded or not.
+/// dropped on a canvas.
 pub struct PlaceArrival {
     pub name: String,
     pub bytes: Vec<u8>,
-    pub drop: Option<(Point, bool)>,
+    pub drop: Option<DropAt>,
 }
 
 pub type PlaceInbox = Arc<Mutex<Vec<PlaceArrival>>>;
 
+/// Where files dropped on a canvas land: document `doc` ([`vectorcraft_engine::DocState::uid`]) at
+/// `at` (document coordinates), embedded when Shift was held. The document is kept because the web
+/// reads dropped files asynchronously: another document may have become active when they arrive.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DropAt {
+    pub doc: u64,
+    pub at: Point,
+    pub embed: bool,
+}
+
 /// Where files dropped on the window go.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DropTarget {
-    /// The active document's canvas at `at` (document coordinates); `embed` when Shift is held.
-    Place { at: Point, embed: bool },
+    /// The canvas of the document they were dropped on.
+    Place(DropAt),
     /// Opened as documents: no document is open, or the drop missed the canvas (the tab bar).
     Open,
 }
@@ -270,21 +280,31 @@ impl VectorcraftApp {
     /// doesn't tell) go: onto the canvas of the open document (Shift embeds them), else opened. An
     /// unknown position counts as the middle of the view.
     pub fn drop_target(&self, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
-        let (Some(rect), Some(v)) = (self.canvas_rect.filter(|_| self.session.active().is_some()), self.view()) else { return DropTarget::Open };
-        match pos {
-            Some(p) if !rect.contains(p) => DropTarget::Open,
-            Some(p) => DropTarget::Place { at: crate::canvas::Xf::new(rect, v).to_doc(p), embed: shift },
-            None => DropTarget::Place { at: v.center, embed: shift },
-        }
+        let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
+        let at = match pos {
+            Some(p) if !rect.contains(p) => return DropTarget::Open,
+            Some(p) => crate::canvas::Xf::new(rect, v).to_doc(p),
+            None => v.center,
+        };
+        DropTarget::Place(DropAt { doc: st.uid, at, embed: shift })
     }
 }
 
 /// Files dropped on the window (`(name, path, bytes)`): placed on the canvas or opened (and added
-/// to Open Recent Files), as `target` says.
+/// to Open Recent Files), as `target` says. Files for a canvas go to the document they were
+/// dropped on, which becomes active again; none are placed when it has closed since.
 pub fn drop_files(app: &mut VectorcraftApp, files: Vec<(String, Option<String>, Vec<u8>)>, target: DropTarget) {
+    if let DropTarget::Place(d) = target {
+        let Some(i) = app.session.documents().iter().position(|st| st.uid == d.doc) else {
+            let names: Vec<&str> = files.iter().map(|(name, ..)| name.as_str()).collect();
+            app.status(format!("Couldn't place {}: the document it was dropped on was closed", names.join(", ")));
+            return;
+        };
+        app.session.set_active(i);
+    }
     for (name, path, bytes) in files {
         let r = match target {
-            DropTarget::Place { at, embed } => {
+            DropTarget::Place(DropAt { at, embed, .. }) => {
                 let mut p = match &path {
                     Some(path) => json!({ "path": path }),
                     None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes) }),
@@ -313,7 +333,7 @@ pub fn drain(app: &mut VectorcraftApp) {
     let mut picked = vec![];
     for a in arrived {
         match a.drop {
-            Some((at, embed)) => drop_files(app, vec![(a.name, None, a.bytes)], DropTarget::Place { at, embed }),
+            Some(d) => drop_files(app, vec![(a.name, None, a.bytes)], DropTarget::Place(d)),
             None => {
                 picked.push(json!({ "name": a.name }));
                 app.place.picked.retain(|(n, _)| *n != a.name);
