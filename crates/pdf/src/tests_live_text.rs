@@ -3,11 +3,13 @@
 use krilla::geom::{Point as KPoint, Transform};
 use krilla::page::PageSettings;
 use krilla::text::{Font, TextDirection};
+use kurbo::Shape;
 use vectorcraft_doc::{Document, NodeKind, TextObject};
 
 use crate::*;
 
 const SOURCE_SANS: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+const SOURCE_SERIF: &[u8] = include_bytes!("../../../assets/fonts/SourceSerif4-Regular.ttf");
 
 /// A 300 × 200 pt page with `lines` of (x, y from the top, size, text) in Source Sans 3, and the
 /// same rotated 90° when `rotated`.
@@ -157,19 +159,71 @@ fn a_glyph_whose_unicode_names_another_letter_stays_outlined() {
     assert!(r.warnings.iter().any(|w| w.contains("differ from the installed font")), "{:?}", r.warnings);
 }
 
-/// Source Sans 3 renamed `SourceSans9-Regular` (a font no machine has installed).
-fn uninstalled_font() -> Vec<u8> {
-    let mut bytes = SOURCE_SANS.to_vec();
-    let utf16: Vec<u8> = "SourceSans3-Regular".encode_utf16().flat_map(u16::to_be_bytes).collect();
-    let renamed16: Vec<u8> = "SourceSans9-Regular".encode_utf16().flat_map(u16::to_be_bytes).collect();
-    for (from, to) in [(b"SourceSans3-Regular".to_vec(), b"SourceSans9-Regular".to_vec()), (utf16, renamed16)] {
-        let mut i = 0;
-        while let Some(at) = bytes[i..].windows(from.len()).position(|w| w == from.as_slice()) {
-            bytes[i + at..i + at + from.len()].copy_from_slice(&to);
-            i += at + from.len();
+/// `font` with each of `names` (`from`, `to`, the same length) replaced, in ASCII and UTF-16.
+fn renamed(font: &[u8], names: &[(&str, &str)]) -> Vec<u8> {
+    let mut bytes = font.to_vec();
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    for &(from, to) in names {
+        assert_eq!(from.len(), to.len());
+        for (from, to) in [(from.as_bytes().to_vec(), to.as_bytes().to_vec()), (utf16(from), utf16(to))] {
+            let mut i = 0;
+            while let Some(at) = bytes[i..].windows(from.len()).position(|w| w == from.as_slice()) {
+                bytes[i + at..i + at + from.len()].copy_from_slice(&to);
+                i += at + from.len();
+            }
         }
     }
     bytes
+}
+
+/// Source Sans 3 renamed `SourceSans9-Regular` (a font no machine has installed).
+fn uninstalled_font() -> Vec<u8> {
+    renamed(SOURCE_SANS, &[("SourceSans3-Regular", "SourceSans9-Regular")])
+}
+
+/// Source Serif 4 renamed `SourceSerif9-Regular`, family Source Serif 9: a serif font that isn't
+/// installed (the fallback font, Source Sans 3, is a sans).
+fn uninstalled_serif() -> Vec<u8> {
+    renamed(SOURCE_SERIF, &[("SourceSerif4", "SourceSerif9"), ("Source Serif 4", "Source Serif 9")])
+}
+
+/// A page with `text` in `font` (24 pt, at 20, 50).
+fn one_line_pdf(font: Vec<u8>, text: &str) -> Vec<u8> {
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+    let mut s = page.surface();
+    s.draw_text(KPoint::from_xy(20.0, 50.0), Font::new(font.into(), 0).unwrap(), 24.0, text, false, TextDirection::Auto);
+    s.finish();
+    page.finish();
+    pdf.finish().unwrap()
+}
+
+/// The outlines text imported as (`textAs: outlines`), as one path.
+fn outlines(d: &Document) -> kurbo::BezPath {
+    let mut all = kurbo::BezPath::new();
+    d.walk(|n| {
+        if let NodeKind::Path { path, .. } = &n.kind {
+            all.extend(path.to_bezpath().iter());
+        }
+    });
+    all
+}
+
+#[test]
+fn outlined_text_in_a_missing_font_keeps_the_embedded_glyphs() {
+    let outlined = |bytes: &[u8]| {
+        let r = import_with_report(bytes, &ImportOptions { text_as: TextAs::Outlines, ..Default::default() }).unwrap();
+        assert!(texts(&r.document).is_empty());
+        outlines(&r.document)
+    };
+    let missing = outlined(&one_line_pdf(uninstalled_serif(), "Serif Hamburg"));
+    let installed = outlined(&one_line_pdf(SOURCE_SERIF.to_vec(), "Serif Hamburg"));
+    let fallback = outlined(&one_line_pdf(SOURCE_SANS.to_vec(), "Serif Hamburg"));
+    let (m, i, f) = (missing.bounding_box(), installed.bounding_box(), fallback.bounding_box());
+    assert!(m.width() > 50.0, "{m:?}");
+    let near = |a: kurbo::Rect, b: kurbo::Rect| (a.x0 - b.x0).abs() + (a.x1 - b.x1).abs() + (a.y0 - b.y0).abs() + (a.y1 - b.y1).abs() < 0.01;
+    assert!(near(m, i), "the file's own serif glyphs: {m:?} vs {i:?}");
+    assert!(!near(m, f), "not the fallback font's: {m:?} vs {f:?}");
 }
 
 #[test]

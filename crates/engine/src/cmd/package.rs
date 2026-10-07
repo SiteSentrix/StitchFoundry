@@ -4,12 +4,11 @@
 //! report). The packaged document links to the copies (Relink); the open document doesn't change.
 //! Without a folder (the web, agents) the same files come back as a zip archive.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::path::Path;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeKind};
 
 use super::fileio::{create_dir, write_file};
 use super::*;
@@ -49,21 +48,6 @@ fn font_ext(bytes: &[u8]) -> &'static str {
         Some(b"ttcf") => "ttc",
         _ => "ttf",
     }
-}
-
-/// The fonts (family, style) of the type in the layers and symbols of `d`.
-fn used_fonts(d: &Document) -> BTreeSet<(String, String)> {
-    let mut fonts = BTreeSet::new();
-    let mut add = |n: &Node| {
-        if let NodeKind::Text(t) = &n.kind {
-            fonts.extend(t.runs.iter().map(|r| (r.style.font_family.clone(), r.style.font_style.clone())));
-        }
-    };
-    d.walk(&mut add);
-    for s in &d.symbols {
-        s.art.walk(&mut add);
-    }
-    fonts
 }
 
 /// The options of a package.
@@ -123,7 +107,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         let db = vectorcraft_text::FontDb::global();
         let mut files = HashSet::new();
         lines.push("FONTS".to_string());
-        for (family, style) in used_fonts(&st.doc) {
+        for (family, style) in super::fonts::used_fonts(&st.doc) {
             let font = format!("{family} {style}");
             let reason = match db.face(&family, &style) {
                 Some(f) if f.family.eq_ignore_ascii_case(&family) && f.embeddable() => {
