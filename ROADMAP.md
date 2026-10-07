@@ -191,7 +191,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Area | Weight | Done | Missing (main items) | One agent (h) |
 |---|---:|---:|---|---:|
 | Selection, transform & align tools | 6 | 85% | Free Transform/Scale/Reflect along a rotated box, Start Global Edit, transform nuances (the rotated persistent bounding box is done) | 4–6 |
-| Drawing tools | 7 | 85% | Shaper Groups (merge/punch overlapping shapes), pencil and the remaining pen modifier nuances, Touch Type, Live Corners on plain paths and polygons (and Relative rounding) | 10–15 |
+| Drawing tools | 7 | 85% | Shaper Groups (merge/punch overlapping shapes), pencil and the remaining pen modifier nuances, the freehand Tool Options' Keep selected, Alt to the Smooth tool, Blob Brush Merge Only with Selection and brush angle/roundness, Touch Type, Live Corners on plain paths and polygons (and Relative rounding) | 10–15 |
 | Path operations, Pathfinder, Shape Builder, Live Paint | 5 | 86% | Live Paint gap options, Shape Builder gap detection and options | 3–6 |
 | Colour, swatches, gradients, patterns, mesh, recolor | 7 | 96% | freeform and mixed spot/process gradients in SVG/PDF (exported as stops or process colours), pattern fills in Expand | 2–4 |
 | Strokes, brushes, width profiles | 5 | 88% | brush options depth, brush libraries (generated in code), brushes driven by pen tilt, bearing and barrel rotation (6D art pens) | 12–20 |

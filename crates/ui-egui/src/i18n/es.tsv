@@ -36,11 +36,13 @@
 	[Default] is protected: New… starts an editable copy.	[Predeterminado] está protegido: Nuevo… crea una copia editable.
 	[Unnamed]	[Sin nombre]
 	A File…	Un archivo…
+	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Un valor menor sigue el trazo de cerca; uno mayor da menos puntos y curvas más suaves.
 	A new preset starting from the selected one	Un preajuste nuevo a partir del seleccionado
 	A saved copy of the selected preset	Una copia guardada del preajuste seleccionado
 	About VectorCraft	Acerca de VectorCraft
 	above	arriba
 	Absolute Position	Posición absoluta
+	Accurate	Preciso
 	Abutting	Contiguo
 	Action {n}	Acción {n}
 	Actions	Acciones
@@ -347,6 +349,7 @@
 	Close All	Cerrar todo
 	Close Library	Cerrar biblioteca
 	Close Path	Cerrar trazado
+	Close paths when ends are within:	Cerrar trazados cuando los extremos estén a menos de:
 	Cmd	Cmd
 	CMYK	CMYK
 	CMYK Color	Color CMYK
@@ -726,6 +729,7 @@
 	Edit Pattern	Editar motivo
 	Edit PDF Preset	Editar preajuste de PDF
 	Edit Print Preset	Editar preajuste de impresión
+	Edit selected paths within:	Editar trazados seleccionados a menos de:
 	Edit Selection	Editar selección
 	Edit Selection…	Editar selección…
 	Edit Symbol	Editar símbolo
@@ -892,6 +896,7 @@
 	Fill & Stroke	Relleno y trazo
 	Fill (X), double-click for the Color Picker	Relleno (X), doble clic para el selector de color
 	Fill and Stroke	Relleno y trazo
+	Fill new strokes	Rellenar trazos nuevos
 	Fill Color	Color de relleno
 	Fill New Type Objects With Placeholder Text	Rellenar nuevos objetos de texto con texto de muestra
 	Fill Rule	Regla de relleno

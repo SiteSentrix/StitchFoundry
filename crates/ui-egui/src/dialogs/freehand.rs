@@ -80,6 +80,7 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
     if let Some(n) = new.filter(|n| *n != v) {
         d.fields.insert("fidelity".into(), json!(n));
     }
+    form::slider_ends(ui, label_w, (tl!("Accurate"), tl!("Smooth")));
     ui.label(
         egui::RichText::new(tl!("A lower value follows the stroke closely; a higher one gives fewer points and smoother curves."))
             .size(11.5)
@@ -136,7 +137,15 @@ mod tests {
         // Pencil: Fidelity, fill, the two tolerances; no Size.
         app.run("tool.options", json!({"tool": "pencil"})).unwrap();
         let text = painted(&mut app);
-        for label in ["Pencil Tool Options", "Fidelity:", "Fill new strokes", "Close paths when ends are within:", "Edit selected paths within:"] {
+        for label in [
+            "Pencil Tool Options",
+            "Fidelity:",
+            "Accurate",
+            "Smooth",
+            "Fill new strokes",
+            "Close paths when ends are within:",
+            "Edit selected paths within:",
+        ] {
             assert!(text.contains(label), "{label} in {text}");
         }
         assert!(!text.contains("Size:"), "{text}");
