@@ -274,6 +274,21 @@ fn a_form_dialog_is_as_wide_as_its_fields_not_the_window() {
     assert!(narrow.width() <= 360.0, "{:.0} wide in a 360-point window", narrow.width());
 }
 
+#[test]
+fn menu_parameter_dialogs_are_compact() {
+    // #292: Object › Path › Simplify (and its neighbours) spanned the whole window.
+    for id in ["object.path.simplify", "object.path.offsetPath", "object.move", "object.rotate", "object.path.splitIntoGrid", "path.average"] {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        crate::menus::invoke(&mut app, id, json!({}));
+        assert!(app.ui.dialog.is_some(), "{id} opened no dialog");
+        let wide = dialog_rect(&mut app, 1600.0);
+        eprintln!("{id}: {:.0} × {:.0} in a 1600-point window", wide.width(), wide.height());
+        assert!(wide.width() < 420.0, "{id} is {:.0} wide in a 1600-point window", wide.width());
+    }
+}
+
 /// A list mixing built-in labels with names translates only the built-in entries: names that
 /// happen to be catalog keys ("Black", "Regular") are shown as they are.
 #[test]

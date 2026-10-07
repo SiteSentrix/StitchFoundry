@@ -100,7 +100,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - A canvas context menu: right-click selects the object under the pointer and lists what applies to the selection (Undo/Redo, clipboard, group, isolation, join, masks, compound paths, guides, Transform, Arrange, Select, Export Selection), or the view commands on empty canvas.
   - Save / Don't Save / Cancel before closing or quitting with unsaved documents (tabs, Close, Close All, Quit, window close).
   - Four brightness themes, persistent preferences.
-  - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content.
+  - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content. As on a native menu bar, once one menu is open, moving the pointer onto another title opens that one.
 - **Tools:**
   - **Selection:** Selection, Direct/Group Selection, Magic Wand, Lasso.
   - **Drawing:** Pen, Curvature, anchor tools, Pencil, Paintbrush, Blob Brush, Smooth, Path Eraser, Join.
