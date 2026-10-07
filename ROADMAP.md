@@ -4,7 +4,7 @@ VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adob
 
 This file tracks **how far we are and what's left**. Time estimates are wall-clock hours of continuous Claude Opus 5.5 agent work (including builds and the CI gate), given both for **one agent** and for **4–6 parallel agents** on disjoint crates. They are counted from the remaining work (see [Parity estimate](#parity-estimate)), calibrated against measured throughput, and updated as work lands.
 
-_Last updated: 2026-10-08 (after M4.14–M4.98, M8.1–M8.20, M14.4–M14.7, the MCP prompts, resource templates, completions and logging, the 2026-10-07 issue fixes, the Layers panel rework and the Pen and shape-tool modifier fixes; see [Honest assessment](#honest-assessment-2026-10-05))._
+_Last updated: 2026-10-08 (after M4.14–M4.98, M8.1–M8.20, M14.4–M14.7, the MCP prompts, resource templates, completions and logging, the 2026-10-07 issue fixes, the Layers panel rework, the Pen and shape-tool modifier fixes and the Layers, Artboards, Swatches/Brushes and dialog fixes; see [Honest assessment](#honest-assessment-2026-10-05))._
 
 ## Where we are
 
@@ -101,6 +101,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - A canvas context menu: right-click selects the object under the pointer and lists what applies to the selection (Undo/Redo, clipboard, group, isolation, join, masks, compound paths, guides, Transform, Arrange, Select, Export Selection), or the view commands on empty canvas.
   - Save / Don't Save / Cancel before closing or quitting with unsaved documents (tabs, Close, Close All, Quit, window close).
   - Four brightness themes, persistent preferences.
+  - Dialogs open with their first field focused and its value selected: type a value and press Enter (Move, Rotate, Scale…).
   - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content. As on a native menu bar, once one menu is open, moving the pointer onto another title opens that one.
 - **Tools:**
   - **Selection:** Selection, Direct/Group Selection, Magic Wand, Lasso.

@@ -109,6 +109,7 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
     if !editing {
         buf = shown.clone();
     }
+    take_dialog_focus(ui, id, &buf);
     let resp = ui
         .allocate_ui_with_layout(vec2(width, 26.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.set_min_width(width);
@@ -135,6 +136,26 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
     if commit { unit.parse(&buf) } else { None }
+}
+
+/// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
+/// first field drawn takes it ([`take_dialog_focus`]).
+pub(crate) fn dialog_focus_flag() -> egui::Id {
+    egui::Id::new("dialog-focus-first-field")
+}
+
+/// If field `id` (showing `text`) is the first field of a dialog that has just opened, give it the
+/// keyboard focus with all of `text` selected: typing replaces the value and Enter applies it.
+pub(crate) fn take_dialog_focus(ui: &Ui, id: egui::Id, text: &str) {
+    // A new window's first frame only measures its contents: nothing can take focus yet.
+    if ui.is_sizing_pass() || ui.data_mut(|d| d.remove_temp::<bool>(dialog_focus_flag())).is_none() {
+        return;
+    }
+    let mut st = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
+    let all = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(text.chars().count()));
+    st.cursor.set_char_range(Some(all));
+    st.store(ui.ctx(), id);
+    ui.memory_mut(|m| m.request_focus(id));
 }
 
 /// Numeric fields take the whole text, unit included, when they gain focus or are double-clicked

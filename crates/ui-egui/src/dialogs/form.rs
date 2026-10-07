@@ -66,12 +66,14 @@ pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> 
 pub(super) fn text_edit(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let mut s = d.str(key);
+    let id = ui.id().with(("dlg-text", key));
+    crate::widgets::take_dialog_focus(ui, id, &s);
     let r = egui::Frame::NONE
         .fill(t.input)
         .stroke(egui::Stroke::new(1.0, t.input_border))
         .corner_radius(egui::CornerRadius::same(3))
         .inner_margin(egui::Margin::symmetric(6, 3))
-        .show(ui, |ui| ui.add(egui::TextEdit::singleline(&mut s).frame(egui::Frame::NONE).desired_width(width)));
+        .show(ui, |ui| ui.add(egui::TextEdit::singleline(&mut s).id(id).frame(egui::Frame::NONE).desired_width(width)));
     if r.inner.changed() {
         d.fields.insert(key.into(), Value::String(s));
     }
