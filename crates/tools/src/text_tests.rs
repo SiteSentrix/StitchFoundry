@@ -177,6 +177,33 @@ fn drag_selects_and_overlay_highlights() {
 }
 
 #[test]
+fn a_drag_across_type_not_being_edited_selects_its_text() {
+    let (d, id) = doc_with_text("Select me please");
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let t = TypeTool::text(&c, id).unwrap().clone();
+    let lay = vectorcraft_text::layout(FontDb::global(), &t);
+    let pt = |b: usize| {
+        let (a, bb) = vectorcraft_text::caret_position(&lay, b);
+        t.xf * a.midpoint(bb)
+    };
+    let (a, b) = (pt(7), pt(9));
+    // The press starts editing the type and the drag selects, in one gesture.
+    let out = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, a.x + 0.1, a.y));
+    assert!(out.contains(&Action::Exec("select.set".into(), json!({"ids": [id.0]}))));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, b.x + 0.1, b.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, b.x + 0.1, b.y));
+    assert_eq!(tool.editing, Some(id));
+    assert_eq!(tool.sel(), (7, 9));
+    // A plain click still just places the caret.
+    let mut tool = TypeTool::new("type");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, a.x + 0.1, a.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, a.x + 0.1, a.y));
+    assert_eq!((tool.editing, tool.sel()), (Some(id), (7, 7)));
+}
+
+#[test]
 fn select_all_and_styled_paste() {
     let (d, _, mut tool) = editing("abc");
     tool.set_option("selectAll", &json!(true));
