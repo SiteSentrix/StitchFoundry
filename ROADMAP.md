@@ -33,7 +33,7 @@ since 2026-10-01.
 
 | Dimension | Estimate | Evidence and what's missing |
 |---|---|---|
-| **Breadth:** menus, tools and panels exist | ~90% | 16 menu items still stubbed; every tool implemented except Touch Type; 51 panel modules |
+| **Breadth:** menus, tools and panels exist | ~90% | 15 menu items still stubbed; every tool implemented except Touch Type; 51 panel modules |
 | **Depth:** each feature behaves like Illustrator | ~69–75% | Strong: paint, appearance and colour (M3), Pathfinder and booleans, selection, drawing, files (M4). Weak: advanced type (~45%), brushes and symbols (in progress), raster effects (~20%) |
 | **Large missing subsystems** | 0–20% | 3D & Materials (0%), Photoshop-style raster effects and the Effect Gallery (~1 of ~56 filters), SVG Filters, CJK composition (vertical type with kinsoku, tate-chu-yoko and the font's vertical metrics; ruby, mojikumi and proportional vertical metrics open), Variables (data merge), scripting |
 | **Interaction fidelity:** modifiers, cursors, small behaviours | ~30–40% | The dedicated pass hasn't started, and there has been no side-by-side session with Illustrator yet. A power user notices this first |
@@ -105,6 +105,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content. As on a native menu bar, once one menu is open, moving the pointer onto another title opens that one.
 - **Tools:**
   - **Selection:** Selection, Direct/Group Selection, Magic Wand, Lasso.
+  - **Saved selections:** Select ▸ Save Selection… asks for a name and keeps the selection in the document (saved with the file, undoable, up to 25); each one is listed at the bottom of the Select menu and a click selects its objects again; Edit Selection… lists them to rename or delete, applied together on OK.
   - **Drawing:** Pen, Curvature, anchor tools, Pencil, Paintbrush, Blob Brush, Smooth, Path Eraser, Join. Direction handles dragged with Direct Selection or the Anchor Point tool snap to smart guides, and Shift keeps them at 45° steps from their anchor.
   - **Shapes:** all shape tools (including Flare) and the line, arc, spiral and grid tools. Space held while dragging out a shape, line, arc, spiral or grid moves it at its current size. While a grid is dragged out, Up/Down change its rows (concentric dividers) and Left/Right its columns (radial dividers).
   - **Cutting:** Eraser, Scissors, Knife, Mirror & Cut, Line Cut and Rectangle Cut (real geometry, compound paths keep their holes).
@@ -216,7 +217,7 @@ With 4–6 agents working on disjoint crates (as the layering allows) the wall-c
 (integration, review and shared files such as `menus.rs` serialize some work): **~55–95 h** to feature parity,
 **~80–145 h** to full parity.
 
-_Inventories (2026-10-05):_ 16 menu items still stubbed (`todo(…)` in `crates/ui-egui/src/menus.rs`); every tool
+_Inventories (2026-10-07):_ 15 menu items still stubbed (`todo(…)` in `crates/ui-egui/src/menus.rs`); every tool
 implemented except Touch Type; 51 panel modules; Illustrator-style live
 effects ~44/54, Photoshop-style raster effects ~1/56, 3D 0/5; ~2,840 tests; ~221k lines of Rust.
 

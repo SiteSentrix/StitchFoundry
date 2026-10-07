@@ -339,6 +339,14 @@ pub struct SavedView {
     pub rotation: f64,
 }
 
+/// A saved selection (Select → Save Selection…): the objects that were selected, listed by name at
+/// the bottom of the Select menu.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedSelection {
+    pub name: String,
+    pub objects: Vec<NodeId>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Guide {
     /// true = vertical guide at `pos` (x), false = horizontal at `pos` (y).
@@ -490,6 +498,9 @@ pub struct Document {
     /// View → New View… (up to 25, like Illustrator).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<SavedView>,
+    /// Select → Save Selection… (up to 25 in the engine); saved with the document.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub saved_selections: Vec<SavedSelection>,
     #[serde(default)]
     pub grid: GridPrefs,
     #[serde(default = "ppi72")]
@@ -616,6 +627,7 @@ impl Document {
             symbols: vec![],
             guides: vec![],
             views: vec![],
+            saved_selections: vec![],
             grid: GridPrefs::default(),
             raster_effects_ppi: 72.0,
             images: BTreeMap::new(),
