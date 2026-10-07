@@ -444,10 +444,15 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     let tool = app.session.tool_id();
     let pan_mode = space || tool == "hand";
     let middle_pan = matches!(drag, Some(Drag::Pan { middle: true, .. }));
-    if pointer.primary_pressed() && resp.hovered() && !middle_pan {
+    // egui counts a press a few pixels outside the canvas as on it (its interaction radius): only a
+    // press on the canvas itself reaches the tools, else it would land at the canvas's centre.
+    if pointer.primary_pressed()
+        && resp.hovered()
+        && !middle_pan
+        && let Some(p) = hover
+    {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
-        let p = hover.unwrap_or(rect.center());
         let d = if pan_mode {
             Drag::Pan { start: p, center: v.center, middle: false }
         } else if tool == "zoom" {
@@ -468,9 +473,12 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
             kind
         };
         ui.data_mut(|dd| dd.insert_temp(drag_id(), d));
-    } else if drag.is_none() && resp.hovered() && pointer.button_pressed(egui::PointerButton::Middle) {
+    } else if drag.is_none()
+        && resp.hovered()
+        && pointer.button_pressed(egui::PointerButton::Middle)
+        && let Some(start) = hover
+    {
         // Middle-button drag pans the view whatever the tool.
-        let start = hover.unwrap_or(rect.center());
         ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Pan { start, center: v.center, middle: true }));
     } else if let Some(d) = drag {
         let p = pointer.interact_pos().unwrap_or(rect.center());
@@ -1409,6 +1417,42 @@ mod tests {
 
     fn middle(pos: Pos2, pressed: bool) -> egui::Event {
         egui::Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() }
+    }
+
+    /// One headless frame with the canvas under a 40-point bar, as it is under the document tabs.
+    fn frame_under_bar(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            ui.add_space(40.0);
+            show(app, ui);
+        });
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn a_click_just_outside_the_canvas_does_not_reach_the_tool() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // A square in the middle of the artboard, where the view is centred.
+        let id = app.session.execute("shape.rectangle", &json!({"x": 180, "y": 130, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame_under_bar(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let click = |app: &mut VectorcraftApp, p: Pos2| {
+            let button =
+                |pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame_under_bar(app, &ctx, vec![egui::Event::PointerMoved(p)]);
+            frame_under_bar(app, &ctx, vec![button(true)]);
+            frame_under_bar(app, &ctx, vec![button(false)]);
+        };
+        let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.clone();
+        // Two pixels above the canvas, within egui's interaction radius: nothing happens.
+        click(&mut app, pos2(rect.center().x, rect.top() - 2.0));
+        assert!(selected(&app).is_empty(), "a click above the canvas selected {:?}", selected(&app));
+        // At the canvas's centre: the square.
+        click(&mut app, rect.center());
+        assert_eq!(selected(&app), vec![vectorcraft_doc::NodeId(id)]);
     }
 
     #[test]
