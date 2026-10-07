@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("file.close", "Close", ["File"], Some("Cmd+W"), "{index?}", has_doc, file_close),
         cmd!("document.activate", "Activate Document", [], None, "{index}", always, doc_activate),
         cmd!(query "document.inspect", "Inspect Document", [], None, "{} → layer tree, artboards, selection, history", has_doc, |s, _| Ok(inspect::document(s))),
-        cmd!(query "document.node", "Inspect Object", [], None, "{id} → full object JSON", has_doc, doc_node),
+        cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: the compact document.inspect-style summary instead of the full object JSON} → one object", has_doc, doc_node),
         cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
         cmd!(
             "document.setUnits",
@@ -106,7 +106,7 @@ fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
     let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
-    Ok(serde_json::to_value(n).unwrap_or(Value::Null))
+    if bool_or(p, "summary", false) { Ok(inspect::node_summary(n)) } else { Ok(serde_json::to_value(n).unwrap_or(Value::Null)) }
 }
 
 /// Document Setup's units (also `document.setup {units}`).

@@ -285,6 +285,21 @@ fn inspect_lists_everything() {
     assert!(s.commands().len() > 100);
 }
 
+/// `document.node {summary: true}` answers the `document.inspect` shape for one node:
+/// the same fields the full-tree summary carries, without serializing the whole tree.
+#[test]
+fn document_node_summary_matches_inspect() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0).0;
+    let full = s.execute("document.node", &json!({"id": id})).unwrap();
+    assert!(full.get("bounds").is_none(), "full object JSON carries geometry, not bounds: {full}");
+    let summary = s.execute("document.node", &json!({"id": id, "summary": true})).unwrap();
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let node = v["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).cloned().unwrap();
+    assert_eq!(summary, node, "{summary} vs {node}");
+    assert!(s.execute("document.node", &json!({"id": 999999, "summary": true})).is_err());
+}
+
 /// Type reports the paint its characters show, and its own object-level paint apart from it.
 #[test]
 fn inspect_reports_the_paint_of_types_characters() {
