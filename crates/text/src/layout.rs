@@ -76,7 +76,10 @@ impl Ctx<'_> {
             // after the cell, and must not push the glyph off the centre line).
             let em = self.style_at(g.byte).size;
             let cell = if g.adv > 0.0 { upright_cell(g) } else { advance };
-            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5 - g.lead, origin.y - upright_centre(g, cell, em))) * m;
+            m = Affine::rotate_about(
+                -std::f64::consts::FRAC_PI_2,
+                Point::new(origin.x + cell * 0.5 - g.lead, origin.y - upright_centre(g, cell, em)),
+            ) * m;
         }
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
