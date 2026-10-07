@@ -269,10 +269,14 @@ fn compress_punctuation(sg: &mut [SGlyph]) -> Vec<bool> {
 const WAKAN_AKI: f64 = 0.25;
 
 /// A Japanese character for the space next to Latin text: kana and kanji (and full-width
-/// letters), not punctuation or symbols.
+/// letters, and the iteration and abbreviation marks 々 〆 〇), not punctuation or symbols, nor
+/// Hangul (Korean sets a word space instead).
 fn is_japanese_letter(c: char) -> bool {
+    if matches!(c, '々' | '〆' | '〇') {
+        return true;
+    }
     is_cjk(c)
-        && !matches!(c as u32, 0x3000..=0x303F | 0xFF01..=0xFF0F | 0xFF1A..=0xFF20 | 0xFF3B..=0xFF40 | 0xFF5B..=0xFF65)
+        && !matches!(c as u32, 0x3000..=0x303F | 0xAC00..=0xD7AF | 0xFF01..=0xFF0F | 0xFF1A..=0xFF20 | 0xFF3B..=0xFF40 | 0xFF5B..=0xFF65)
         && c != '・'
         && punct(c).is_none()
 }
@@ -761,6 +765,17 @@ fn kinsoku_allows(g: &[SGlyph], j: usize) -> bool {
 /// Kinsoku for a break between `before` and `after` (none: the end of the paragraph).
 fn kinsoku_between(before: char, after: Option<char>) -> bool {
     !no_line_end(before) && after.is_none_or(|c| !no_line_start(c))
+}
+
+#[cfg(test)]
+#[test]
+fn japanese_letters_for_the_latin_space_are_kana_kanji_and_marks_not_hangul_or_punctuation() {
+    for c in ['あ', 'カ', '漢', '々', '〆', '〇', 'Ａ'] {
+        assert!(is_japanese_letter(c), "{c}");
+    }
+    for c in ['한', '。', '「', '・', '、', 'a'] {
+        assert!(!is_japanese_letter(c), "{c}");
+    }
 }
 
 #[cfg(test)]
