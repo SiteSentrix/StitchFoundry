@@ -39,7 +39,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         if doc.artboards.len() > 1 {
             label(ui, tl!("Artboard:"));
             let names: Vec<&str> = doc.artboards.iter().map(|a| a.name.as_str()).collect();
-            if let Some(i) = widgets::dropdown(ui, "office-artboard", names.get(board).copied().unwrap_or_default(), &names, 160.0) {
+            if let Some(i) = widgets::dropdown_names(ui, "office-artboard", names.get(board).copied().unwrap_or_default(), &names, 160.0) {
                 d.fields.insert("artboard".into(), json!(i));
             }
             ui.end_row();

@@ -558,7 +558,9 @@ fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
                 d.fields.get("__presets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!("PDF Preset:")).color(t.text_dim));
-                if let Some(p) = widgets::dropdown(ui, "efs-pdf-preset", &s.str("preset"), &labels, 220.0).and_then(|i| labels.get(i)) {
+                // The built-in presets are ours (translated); the saved ones are names.
+                let builtin = |k: usize| labels.get(k).is_some_and(|n| super::save_pdf::is_builtin_preset(n));
+                if let Some(p) = super::mixed_dropdown(ui, "efs-pdf-preset", &s.str("preset"), &labels, 220.0, builtin).and_then(|i| labels.get(i)) {
                     s.fields.insert("preset".into(), json!(p));
                 }
             });

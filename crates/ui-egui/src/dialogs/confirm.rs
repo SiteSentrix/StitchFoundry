@@ -2,7 +2,8 @@
 //! as deleting swatches.
 //!
 //! Fields: `message` (the question, shown as the heading), `detail` (an optional line under it),
-//! `__command` and `__params` (the command OK runs).
+//! `__command` and `__params` (the command OK runs). Both texts are shown as given: callers
+//! translate their template before filling in a name, so the name is never translated.
 
 use serde_json::{Value, json};
 
@@ -15,11 +16,11 @@ use crate::theme::Tokens;
 pub const KIND: &str = "confirm";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| tl!(&d.str("message")).to_string(),
+    heading: |d| d.str("message"),
     body: |_, ui, d| {
         let detail = d.str("detail");
         if !detail.is_empty() {
-            ui.label(egui::RichText::new(tl!(&detail)).color(Tokens::get(ui.ctx()).text_dim));
+            ui.label(egui::RichText::new(detail).color(Tokens::get(ui.ctx()).text_dim));
         }
         false
     },
@@ -28,7 +29,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
-/// Ask `message` (with an optional `detail` line); OK runs `command` with `params`.
+/// Ask `message` (with an optional `detail` line), both in the UI language; OK runs `command`
+/// with `params`.
 pub fn ask(app: &mut VectorcraftApp, message: &str, detail: &str, command: &str, params: Value) {
     let fields = json!({"message": message, "detail": detail, "__command": command, "__params": params});
     app.ui.dialog = Some(Dialog::new(KIND, fields));

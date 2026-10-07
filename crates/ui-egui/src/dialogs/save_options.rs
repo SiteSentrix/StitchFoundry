@@ -164,7 +164,7 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
     if let Some(boards) = artboards {
         let i = value.as_u64().unwrap_or(0) as usize;
         let names: Vec<&str> = boards.iter().map(|a| a.name.as_str()).collect();
-        if let Some(i) = widgets::dropdown(ui, ("save-option", o.name), names.get(i).copied().unwrap_or(""), &names, 254.0) {
+        if let Some(i) = widgets::dropdown_names(ui, ("save-option", o.name), names.get(i).copied().unwrap_or(""), &names, 254.0) {
             d.fields.insert(o.name.into(), json!(i));
         }
     } else {

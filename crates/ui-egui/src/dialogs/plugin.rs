@@ -23,8 +23,9 @@ const CMD: &str = "plugin.run";
 /// Object › Plug-ins' header while no filter plug-in is installed.
 pub const NO_FILTERS: &str = "No filter plug-ins installed";
 
+/// Headed by the plug-in's name, as it is (plug-in text is never translated).
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |d| tl!(&d.str("__label")).to_string(), body, confirm, preview: true, max_width: Some(420.0), ..DialogSpec::FORM };
+    DialogSpec { heading: |d| d.str("__label"), body, confirm, preview: true, max_width: Some(420.0), ..DialogSpec::FORM };
 
 /// A menu label for plug-in `name`: with an ellipsis when it opens a dialog.
 fn label(name: &str, has_params: bool) -> &'static str {

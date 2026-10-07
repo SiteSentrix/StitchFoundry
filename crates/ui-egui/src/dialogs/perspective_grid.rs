@@ -14,6 +14,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
+use vectorcraft_tools::distort::perspective::define::is_builtin;
 use vectorcraft_tools::distort::perspective::{GridDefinition, Rgb};
 
 use super::{DialogSpec, form};
@@ -219,8 +220,11 @@ fn name_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     let shown = current.map_or(CUSTOM, |p| p.name.as_str());
     let names: Vec<&str> = std::iter::once(CUSTOM).chain(presets.iter().map(|p| p.name.as_str())).collect();
+    // [Custom] and the built-in presets are ours (translated); the saved ones are names.
+    let builtin = |k: usize| k == 0 || names.get(k).is_some_and(|n| is_builtin(n));
     widgets::label_row(ui, tl!("Preset:"), LABEL, |ui| {
-        if let Some(p) = widgets::dropdown(ui, "persp-preset", shown, &names, 200.0).and_then(|i| i.checked_sub(1)).and_then(|i| presets.get(i)) {
+        let picked = super::mixed_dropdown(ui, "persp-preset", shown, &names, 200.0, builtin);
+        if let Some(p) = picked.and_then(|i| i.checked_sub(1)).and_then(|i| presets.get(i)) {
             let mut fields = json!(p);
             fields[SHOWN] = fields["units"].clone();
             if let Some(o) = fields.as_object() {

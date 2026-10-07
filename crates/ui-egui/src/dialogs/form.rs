@@ -207,14 +207,15 @@ pub(super) fn param_fields(ui: &mut egui::Ui, d: &mut Dialog, is_length: &dyn Fn
 
 /// Editor for a plug-in's parameters from its schema (plug-in filter and effect dialogs): numbers
 /// within their range, whole numbers, checkboxes and dropdowns, in declaration order. Returns
-/// true when a value changed.
+/// true when a value changed. The labels (from the parameter keys) and choices are the plug-in's
+/// text, shown as they are.
 pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String, vectorcraft_plugins::ParamSpec)]) -> bool {
     use vectorcraft_plugins::ParamSpec;
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     egui::Grid::new("plugin-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         for (k, spec) in specs {
-            ui.label(egui::RichText::new(humanized(k)).color(t.text));
+            ui.label(egui::RichText::new(humanize(k)).color(t.text));
             let cur = d.fields.get(k).cloned().unwrap_or_else(|| spec.default_value());
             let new = match spec {
                 ParamSpec::Number { min, max, .. } => {
@@ -232,7 +233,7 @@ pub(super) fn schema_fields(ui: &mut egui::Ui, d: &mut Dialog, specs: &[(String,
                 }
                 ParamSpec::Choice { options, .. } => {
                     let labels: Vec<&str> = options.iter().map(String::as_str).collect();
-                    crate::widgets::dropdown(ui, ("plugin-choice", k), cur.as_str().unwrap_or_default(), &labels, 140.0)
+                    crate::widgets::dropdown_names(ui, ("plugin-choice", k), cur.as_str().unwrap_or_default(), &labels, 140.0)
                         .and_then(|i| options.get(i))
                         .map(|o| json!(o))
                 }

@@ -153,7 +153,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// The flattener preset dropdown: `presets` by name, showing `name` while `options` are that
-/// preset's, else [Custom]. Returns the preset chosen.
+/// preset's, else [Custom]. The built-in presets are ours (translated); the saved ones are names.
+/// Returns the preset chosen.
 pub(crate) fn preset_dropdown<'a>(
     ui: &mut egui::Ui,
     id: &str,
@@ -162,9 +163,14 @@ pub(crate) fn preset_dropdown<'a>(
     options: Option<&FlattenOptions>,
     width: f32,
 ) -> Option<&'a FlattenerPreset> {
-    let shown = presets.iter().find(|p| p.name == name && Some(&p.options) == options).map_or(CUSTOM, |p| p.name.as_str());
+    let shown = presets.iter().find(|p| p.name == name && Some(&p.options) == options).map_or(tl!(CUSTOM), |p| p.name.as_str());
     let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
-    widgets::dropdown(ui, id, shown, &names, width).map(|i| &presets[i])
+    super::mixed_dropdown(ui, id, shown, &names, width, |k| names.get(k).is_some_and(|n| is_builtin(n))).and_then(|i| presets.get(i))
+}
+
+/// Is `name` a built-in flattener preset's?
+fn is_builtin(name: &str) -> bool {
+    FlattenOptions::PRESETS.iter().any(|id| FlattenOptions::preset_label(id) == Some(name))
 }
 
 /// The width of the option value fields.
@@ -229,6 +235,13 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+
+    /// The built-in presets are told from saved ones by name (only theirs are translated).
+    #[test]
+    fn built_in_presets_are_known_by_name() {
+        assert!(FlattenOptions::builtin_presets().iter().all(|p| is_builtin(&p.name)));
+        assert!(!is_builtin("Regular") && !is_builtin("high"));
+    }
 
     fn frame(app: &mut VectorcraftApp) {
         let ctx = egui::Context::default();

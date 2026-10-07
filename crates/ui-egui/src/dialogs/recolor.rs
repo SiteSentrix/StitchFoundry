@@ -28,7 +28,7 @@ use vectorcraft_engine::cmd::swatchlib;
 
 use super::{DialogSpec, form};
 use crate::panels::c32;
-use crate::panels::swatches::{colour_libraries, limit_key, limit_name};
+use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries, limit_key};
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
 use crate::{VectorcraftApp, widgets};
@@ -433,15 +433,18 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         }
         ui.end_row();
         ui.label(egui::RichText::new(tl!("Limit to Library:")).color(t.text_dim));
-        // None, the document's swatches, then the colour libraries.
+        // None, the document's swatches, then the colour libraries: the built-in ones (at the top
+        // level of the library menu) translated, those the user saved or loaded by their names.
         let libs = colour_libraries(app);
         let keys: Vec<&str> = ["", swatchlib::DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.id.as_str())).collect();
-        let labels: Vec<String> = keys.iter().map(|k| limit_name(app, k).unwrap_or_else(|| tl!("None").into())).collect();
+        let names: Vec<&str> = ["None", DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.name.as_str())).collect();
+        let builtin = |k: usize| k.checked_sub(2).is_none_or(|i| libs.get(i).is_some_and(|l| l.submenu.is_none()));
+        let shown = super::shown_names(crate::i18n::current(), &names, builtin);
         let cur = d.str("limitTo");
-        let name = keys.iter().position(|k| *k == cur).map_or(tl!("None"), |i| labels[i].as_str());
-        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
-        if let Some(i) = widgets::dropdown(ui, "recolor-library", name, &labels, 180.0) {
-            d.fields.insert("limitTo".into(), json!(keys[i]));
+        let at = keys.iter().position(|k| *k == cur).unwrap_or(0);
+        let current = shown.get(at).copied().unwrap_or_default();
+        if let Some(k) = widgets::dropdown_names(ui, "recolor-library", current, &shown, 180.0).and_then(|i| keys.get(i)) {
+            d.fields.insert("limitTo".into(), json!(k));
         }
         ui.end_row();
     });

@@ -538,11 +538,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 if !PRESETS.contains(&cur.as_str()) {
                     opts.push(CUSTOM);
                 }
-                if let Some(i) = widgets::dropdown(ui, "kbset", &cur, &opts, 200.0)
-                    && let Some(p) = preset(opts[i])
+                // The sets listed are ours (translated); a set read from an imported file shows
+                // its name as it is.
+                if let Some(&name) = crate::dialogs::mixed_dropdown(ui, "kbset", &cur, &opts, 200.0, |_| true).and_then(|i| opts.get(i))
+                    && let Some(p) = preset(name)
                 {
                     ov = p;
-                    d.fields.insert("set".into(), json!(opts[i]));
+                    d.fields.insert("set".into(), json!(name));
                     d.fields.insert("__message".into(), json!(""));
                 }
                 ui.add_space(12.0);

@@ -273,3 +273,28 @@ fn a_form_dialog_is_as_wide_as_its_fields_not_the_window() {
     let narrow = dialog_rect(&mut app, 360.0);
     assert!(narrow.width() <= 360.0, "{:.0} wide in a 360-point window", narrow.width());
 }
+
+/// A list mixing built-in labels with names translates only the built-in entries: names that
+/// happen to be catalog keys ("Black", "Regular") are shown as they are.
+#[test]
+fn mixed_lists_translate_only_their_built_in_entries() {
+    use crate::i18n::{Lang, tr};
+    let zh = Lang::from_code("zh-hant").unwrap();
+    for key in ["None", "Black", "Regular", "Default"] {
+        assert_ne!(tr(zh, key), key, "{key} must be a catalog key for this test");
+    }
+    let names = ["None", "Black", "Regular", "Default"];
+    assert_eq!(shown_names(zh, &names, |k| k == 0 || k == 3), [tr(zh, "None"), "Black", "Regular", tr(zh, "Default")]);
+    assert_eq!(shown_names(zh, &names, |_| false), names);
+    assert_eq!(shown_names(Lang::EN, &names, |_| true), names);
+}
+
+/// Confirmations and plug-in dialogs are headed by the text they are given (callers translate
+/// their own templates; a plug-in's name is its own).
+#[test]
+fn given_headings_are_shown_as_they_are() {
+    let d = Dialog::new(confirm::KIND, json!({"message": "Delete “Black”?", "detail": "Regular"}));
+    assert_eq!((spec(&d.kind).heading)(&d), "Delete “Black”?");
+    let d = Dialog::new(plugin::KIND, json!({"__label": "Black", "__plugin": "x"}));
+    assert_eq!((spec(&d.kind).heading)(&d), "Black");
+}
