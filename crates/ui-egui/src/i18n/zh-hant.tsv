@@ -314,6 +314,7 @@
 	Channel	色版
 	Character	字元
 	Character / Paragraph	字元／段落
+	Character Alignment	字元對齊
 	Character Rotation	字元旋轉
 	Character Set:	字元集：
 	Character Style	字元樣式
@@ -766,6 +767,9 @@
 	Ellipse Tool	橢圓工具
 	Ellipse…	橢圓形…
 	Ellipsis	刪節號
+	Em Box Bottom/Left	全形字框下 / 左
+	Em Box Center	全形字框中央
+	Em Box Top/Right	全形字框上 / 右
 	Em Dash	長破折號
 	Em Space	全形空格
 	Embed	嵌入
@@ -2100,6 +2104,7 @@
 	Right-to-Left Paragraph Direction	從右至左段落方向
 	Right:	右：
 	Rise…	上升…
+	Roman Baseline	羅馬基線
 	Roman Hanging Punctuation	羅馬懸掛標點
 	Rotate	旋轉
 	Rotate 90° CW	順時針旋轉 90°

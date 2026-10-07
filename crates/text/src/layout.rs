@@ -320,6 +320,26 @@ fn space_japanese_and_latin(sg: &mut [SGlyph]) -> Vec<f64> {
     added
 }
 
+/// The size of `g`'s em, in points.
+fn glyph_em(g: &SGlyph) -> f64 {
+    g.face.units_per_em() * g.sy
+}
+
+/// How far up (line space) Character Alignment `a` moves glyph `g` on a line whose largest em is
+/// `line_em`: the glyph's em box top, centre or bottom onto the line's (the em box running from
+/// its centre less half an em to its centre plus half an em above the baseline). Nothing on the
+/// Roman baseline, or for the line's largest characters.
+fn align_shift(g: &SGlyph, a: vectorcraft_doc::CharAlign, line_em: f64) -> f64 {
+    use vectorcraft_doc::CharAlign;
+    let k = match a {
+        CharAlign::RomanBaseline => return 0.0,
+        CharAlign::EmBoxTop => 0.5,
+        CharAlign::EmBoxCenter => 0.0,
+        CharAlign::EmBoxBottom => -0.5,
+    };
+    (g.face.ideographic_centre() + k) * (line_em - glyph_em(g)).max(0.0)
+}
+
 /// The length an upright glyph takes down the column before tracking and justification: its
 /// vertical advance (the font's vertical metrics), else its advance, at least one em.
 fn upright_cell(g: &SGlyph) -> f64 {
@@ -1056,6 +1076,8 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             };
             let li = cx.out.lines.len();
             let glyph_start = cx.out.glyphs.len();
+            // Character Alignment lines smaller characters up with the line's largest em box.
+            let line_em = sg.get(i..end).map_or(0.0, |line| line.iter().map(glyph_em).fold(0.0, f64::max));
             let mut x_end = start_x;
             // Tab stops are measured from the frame's left edge (point type: the origin).
             let tab_origin = if regions.is_some() { x0 } else { 0.0 };
@@ -1088,7 +1110,8 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                         adv += per_gap;
                     }
                 }
-                cx.emit(g, Affine::translate((x, baseline)), Point::new(x, baseline), 0.0, adv, li);
+                let y = baseline - align_shift(g, cx.style_at(g.byte).char_align, line_em);
+                cx.emit(g, Affine::translate((x, y)), Point::new(x, y), 0.0, adv, li);
                 x += adv;
                 if j < trimmed {
                     x_end = x;

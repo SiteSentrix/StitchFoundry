@@ -395,6 +395,24 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         menu_item(ui, tl!(l), false, false);
     }
     ui.separator();
+    // Character Alignment: where characters smaller than the largest on their line line up.
+    let align = s.as_ref().map(|s| s.char_align);
+    ui.add_enabled_ui(has, |ui| {
+        ui.menu_button(tl!("Character Alignment"), |ui| {
+            use vectorcraft_doc::CharAlign;
+            for (label, a, key) in [
+                (tl!("Roman Baseline"), CharAlign::RomanBaseline, "romanBaseline"),
+                (tl!("Em Box Top/Right"), CharAlign::EmBoxTop, "emBoxTop"),
+                (tl!("Em Box Center"), CharAlign::EmBoxCenter, "emBoxCenter"),
+                (tl!("Em Box Bottom/Left"), CharAlign::EmBoxBottom, "emBoxBottom"),
+            ] {
+                if menu_item(ui, label, true, align == Some(a)) {
+                    format(app, json!({"charAlign": key}));
+                }
+            }
+        });
+    });
+    ui.separator();
     for l in ["Standard Vertical Roman Alignment", "Tate-chu-yoko", "Fractional Widths", "System Layout", "No Break"] {
         menu_item(ui, tl!(l), false, l == "Fractional Widths");
     }
