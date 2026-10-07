@@ -4553,6 +4553,7 @@ dependencies = [
  "subsetter",
  "vectorcraft-doc",
  "vectorcraft-geom",
+ "write-fonts",
 ]
 
 [[package]]

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use harfrust::{Direction, Feature, ShapeOptions, UnicodeBuffer};
 use skrifa::MetadataProvider;
-use skrifa::instance::{LocationRef, Size};
+use skrifa::instance::Size;
 use vectorcraft_doc::CharStyle;
 
 use crate::features::OtFeatures;
@@ -247,7 +247,7 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
 
     let mut raw: Vec<(u32, u32, i32, i32, i32)> = Vec::with_capacity(text_seg.len()); // gid, cluster, xadv, xoff, yoff
     let shaped = face.hb().map(|hb| {
-        let shaper = face.shaper.shaper(&hb).build();
+        let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
         let mut buf = UnicodeBuffer::new();
         for (i, c) in text_seg.char_indices() {
             let cl = (range.start + i) as u32;
@@ -271,7 +271,7 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
         // Fallback: nominal glyphs and hmtx advances, no shaping.
         if let Some(f) = face.skrifa() {
             let cmap = f.charmap();
-            let gm = f.glyph_metrics(Size::unscaled(), LocationRef::default());
+            let gm = f.glyph_metrics(Size::unscaled(), face.location());
             for (i, c) in text_seg.char_indices() {
                 let cl = (range.start + i) as u32;
                 let chars: Vec<char> = if upper { c.to_uppercase().collect() } else { vec![c] };
