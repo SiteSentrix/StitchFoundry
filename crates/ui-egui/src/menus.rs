@@ -2446,6 +2446,13 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks:
                     None => label,
                 };
                 let r = ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc));
+                // Type → Font: each family's sample beside its name (Enable in-menu font previews).
+                if *id == "text.setStyle"
+                    && app.session.prefs.font_preview
+                    && let Some(family) = p.get("font").and_then(Value::as_str)
+                {
+                    crate::font_menu::menu_item_sample(ui, r.rect, family);
+                }
                 if r.clicked() {
                     *clicked = Some(click_target(label_of(it), id, p));
                     ui.close();

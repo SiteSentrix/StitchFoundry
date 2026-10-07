@@ -119,6 +119,7 @@
 	All on Active Artboard	作用中工作區域上的全部
 	All on Same Layers	相同圖層上的全部
 	All printer's marks	所有印表機標記
+	All Scripts	所有文字
 	All Text Objects	所有文字物件
 	All the art	所有圖稿
 	All Tools	所有工具
@@ -141,6 +142,7 @@
 	Anti-alias Rasters	點陣影像消除鋸齒
 	Anti-aliased Artwork	消除鋸齒的圖稿
 	Anti-aliasing:	消除鋸齒：
+	Any Kind	所有類型
 	Appearance	外觀
 	Appearance Attribute	外觀屬性
 	Appearance Item	外觀項目
@@ -533,6 +535,7 @@
 	Dates	日期
 	Decimal-Justified Tab	小數點對齊定位點
 	Decimal:	小數：
+	Decorative	裝飾
 	Default	預設
 	Default Actions	預設動作
 	Default Figure	預設數字
@@ -866,6 +869,7 @@
 	Eyedropper Picks Up:	滴管擷取：
 	Eyedropper Tool	滴管工具
 	Eyedropper: click the art to sample the stop's colour	滴管：點擊圖稿以取樣色標的顏色
+	Favorites	我的最愛
 	Feather…	羽化…
 	Feet	英呎
 	Feet & Inches	英呎與英吋
@@ -1170,6 +1174,7 @@
 	Isolate Blending	隔離混合
 	Isolate Group	隔離群組
 	Italian	義大利文
+	Japanese	日文
 	Join	連接
 	Join Our Discord	加入我們的 Discord
 	Join our Discord	加入我們的 Discord
@@ -1215,6 +1220,7 @@
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
 	Last Page	最後一頁
+	Latin	拉丁文
 	Latin Extended	拉丁文擴充
 	Latin-1 Supplement	拉丁文-1 補充
 	Layer	圖層
@@ -1400,6 +1406,7 @@
 	Monitor RGB	顯示器 RGB
 	Mono	單色
 	Monochrome images	單色影像
+	Monospaced	等寬
 	More	更多
 	More Pathfinder options	更多路徑管理員選項
 	More Settings	更多設定
@@ -2067,6 +2074,7 @@
 	Round Cap	圓端點
 	Round Corners…	圓角…
 	Round Join	圓角
+	Rounded	圓體
 	Rounded Rectangle	圓角矩形
 	Rounded Rectangle Tool	圓角矩形工具
 	Rounded Rectangle…	圓角矩形…
@@ -2078,6 +2086,7 @@
 	Same	相同
 	Same As Source	與來源相同
 	Sample Color	取樣顏色
+	Sans Serif / Gothic	無襯線 / 黑體
 	Saturate	飽和
 	Saturate…	增加飽和度…
 	Saturation	飽和度
@@ -2179,6 +2188,7 @@
 	Screen Mode	螢幕模式
 	Screens	螢幕
 	Scribble…	塗抹…
+	Script / Brush	手寫 / 書法
 	Scripts	指令碼
 	Search	搜尋
 	Search All	搜尋全部
@@ -2237,6 +2247,7 @@
 	Separations list the document's inks here: one page per ink that prints.	分色會在此列出文件的油墨：每種會列印的油墨各一頁。
 	Separations Preview	分色預視
 	Serialize Document	序列化文件
+	Serif / Mincho	襯線 / 明體
 	Server-side (.map)	伺服器端 (.map)
 	Set 1	組 1
 	Set Anchors	設定錨點

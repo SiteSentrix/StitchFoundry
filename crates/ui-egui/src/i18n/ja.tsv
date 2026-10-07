@@ -10,7 +10,18 @@
 # product name, language names, OpenType, the built-in workspace names and the bracketed perspective
 # grid preset names. Set `complete_menus` in i18n/mod.rs once every `tl!` literal has a row too.
 	About VectorCraft	VectorCraft について
+	All Scripts	すべての文字
+	Any Kind	すべての種類
+	Decorative	装飾
+	Favorites	お気に入り
+	Japanese	日本語
 	Join Our Discord	Discord に参加
+	Latin	欧文
+	Monospaced	等幅
+	Rounded	丸ゴシック
+	Sans Serif / Gothic	ゴシック・サンセリフ
+	Script / Brush	筆書体・スクリプト
+	Serif / Mincho	明朝・セリフ
 	Settings…	環境設定…
 	Language	表示言語
 	UI Brightness	UI の明るさ
