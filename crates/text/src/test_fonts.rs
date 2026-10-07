@@ -110,3 +110,67 @@ pub fn name_table(records: &[(u16, &str)]) -> Option<Vec<u8>> {
     head.extend(strings);
     Some(head)
 }
+
+/// The family of [`vertical_font`].
+pub const VERTICAL_FAMILY: &str = "Vertitest Sans";
+
+/// The character whose vertical metrics [`vertical_font`] sets apart: 1.4 em down the column, its
+/// vertical origin 1.1 em above the baseline.
+pub const VERTICAL_TALL: char = '§';
+
+/// The bundled Source Sans 3 Regular as family [`VERTICAL_FAMILY`] with vertical metrics (`vhea`,
+/// `vmtx`, and `VORG` when `vorg`): every glyph one em down the column with its vertical origin at
+/// the usual 0.88 em, except [`VERTICAL_TALL`] (1.4 em, origin 1.1 em). Without `VORG` the origin
+/// comes from each glyph's top and top side bearing, as in TrueType fonts. `None` when it can't be
+/// built.
+pub fn vertical_font(vorg: bool) -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let n = font.maxp().ok()?.num_glyphs();
+    let metrics = font.glyph_metrics(Size::unscaled(), LocationRef::default());
+    let tall = font.charmap().map(VERTICAL_TALL)?;
+    let cell = |g: GlyphId| -> (u16, i16) { if g == tall { (1400, 1100) } else { (1000, 880) } };
+    let be16 = |v: &mut Vec<u8>, x: i16| v.extend_from_slice(&x.to_be_bytes());
+    // vmtx: (advance height, top side bearing = origin − the glyph's top) for every glyph.
+    let mut vmtx = Vec::with_capacity(4 * usize::from(n));
+    for g in 0..u32::from(n) {
+        let id = GlyphId::new(g);
+        let (advance, origin) = cell(id);
+        let top = metrics.bounds(id).map_or(0.0, |b| b.y_max).round() as i16;
+        vmtx.extend_from_slice(&advance.to_be_bytes());
+        be16(&mut vmtx, origin - top);
+    }
+    // vhea 1.1: ascent/descent of the em box across the column, then the metrics' count.
+    let mut vhea = Vec::with_capacity(36);
+    vhea.extend_from_slice(&0x0001_1000_u32.to_be_bytes());
+    for x in [500, -500, 0] {
+        be16(&mut vhea, x);
+    }
+    vhea.extend_from_slice(&1400_u16.to_be_bytes());
+    for x in [0, 0, 1400, 1, 0, 0, 0, 0, 0, 0, 0] {
+        be16(&mut vhea, x);
+    }
+    vhea.extend_from_slice(&n.to_be_bytes());
+    let name = name_table(&[(1, VERTICAL_FAMILY), (2, "Regular"), (4, "Vertitest Sans Regular"), (6, "VertitestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    builder.add_raw(Tag::new(b"vhea"), vhea);
+    builder.add_raw(Tag::new(b"vmtx"), vmtx);
+    if vorg {
+        // VORG 1.0: the default origin, then the one glyph that differs.
+        let mut t = Vec::new();
+        for x in [1, 0, 880, 1] {
+            be16(&mut t, x);
+        }
+        t.extend_from_slice(&u16::try_from(tall.to_u32()).ok()?.to_be_bytes());
+        be16(&mut t, 1100);
+        builder.add_raw(Tag::new(b"VORG"), t);
+    }
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
