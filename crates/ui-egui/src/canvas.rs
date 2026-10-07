@@ -829,11 +829,18 @@ fn c32(rgb: [u8; 3]) -> Color32 {
     Color32::from_rgb(rgb[0], rgb[1], rgb[2])
 }
 
-/// Outline of a node for highlighting (paths, compound children, text/image bounds).
+/// Outline of a node for highlighting (paths, compound children, area type frames, other
+/// text/image bounds).
 fn node_outline(n: &Node) -> BezPath {
     let mut bp = BezPath::new();
     walk_drawn(n, &mut |c| match &c.kind {
         NodeKind::Path { path, .. } => bp.extend(path.to_bezpath()),
+        // Area type shows its frame: the type area Direct Selection reshapes.
+        NodeKind::Text(t) if c.perspective.is_none() && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) => {
+            if let Some(frame) = t.area_frame() {
+                bp.extend(frame.to_bezpath());
+            }
+        }
         NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
             if let Some(b) = c.geometric_bounds() {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
@@ -1162,8 +1169,10 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
         {
             anchor_square(p, xf.to_screen(b.center()), color, true, 4.0);
         }
-        // Text: baseline marker.
-        if let NodeKind::Text(tx) = &n.kind {
+        // Text: baseline marker (area type shows its frame instead, which may not be a rectangle).
+        if let NodeKind::Text(tx) = &n.kind
+            && !matches!(tx.kind, vectorcraft_doc::TextKind::Area { .. })
+        {
             let o = xf.to_screen(tx.xf * Point::ZERO);
             let b = n.geometric_bounds().unwrap_or_default();
             let e = xf.to_screen(Point::new(b.x1, (tx.xf * Point::ZERO).y));

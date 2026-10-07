@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Justify, Node, NodeId, NodeKind, TextObject};
-use vectorcraft_geom::PathData;
+use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
 use super::pathops::{len_param, num_param, shape_node};
@@ -48,9 +48,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?, rows?, columns?, gutter?: pt, inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt} set the selected area type's options (none given: query) → the first object's options",
+            "{ids?, width?: pt, height?: pt, rows?, columns?, gutter?: pt, inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt} set the selected area type's options; width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (none given: query) → the first object's options",
             has_selection,
             area_options
+        ),
+        cmd!(
+            "text.reshapeArea",
+            "Reshape Type Area",
+            [],
+            None,
+            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge)",
+            has_doc,
+            reshape_area
         ),
         cmd!(
             "text.fitHeadline",
@@ -265,25 +274,82 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
+/// Reshape area type's frame with `f` ([`TextObject::transform_area`],
+/// [`TextObject::move_area_anchors`]) and lay its text out again. False, changing nothing, when
+/// `f` fails or the frame would reach past [`crate::MAX_COORD`] (the text flows over its height).
+pub(crate) fn reshape_area_with(t: &mut TextObject, f: impl FnOnce(&mut TextObject) -> bool) -> bool {
+    let before = t.kind.clone();
+    let within = |t: &TextObject| match &t.kind {
+        vectorcraft_doc::TextKind::Area { frame } => {
+            frame.bounds().is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
+        }
+        _ => false,
+    };
+    if !(f(t) && within(t)) {
+        t.kind = before;
+        return false;
+    }
+    refresh_bounds(t);
+    true
+}
+
+/// Area type's text, if `n` is area type.
+fn area_text(n: Option<&Node>) -> Option<&TextObject> {
+    match n.map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) => Some(t),
+        _ => None,
+    }
+}
+
+/// The width and height of area type's frame in points, along the type's own axes, and the frame's
+/// bounds in text space.
+fn area_size(t: &TextObject) -> Option<(f64, f64, vectorcraft_geom::Rect)> {
+    let vectorcraft_doc::TextKind::Area { frame } = &t.kind else { return None };
+    let b = frame.bounds()?;
+    let [a, bb, c, d, _, _] = t.xf.as_coeffs();
+    Some((b.width() * a.hypot(bb), b.height() * c.hypot(d), b))
+}
+
+/// Size area type's frame to `w` × `h` points (None: keep that side) from its top-left corner,
+/// and lay its text out again. False when the frame doesn't change.
+fn size_area(t: &mut TextObject, w: Option<f64>, h: Option<f64>) -> bool {
+    let Some((cw, ch, b)) = area_size(t) else { return false };
+    let factor = |to: Option<f64>, cur: f64| match to {
+        Some(to) if cur > 1e-9 && (to - cur).abs() > 1e-9 => to / cur,
+        _ => 1.0,
+    };
+    let (sx, sy) = (factor(w, cw), factor(h, ch));
+    if sx == 1.0 && sy == 1.0 {
+        return false;
+    }
+    let o = Affine::translate(b.origin().to_vec2());
+    let a = t.xf * o * Affine::scale_non_uniform(sx, sy) * o.inverse() * t.xf.inverse();
+    reshape_area_with(t, |t| t.transform_area(a))
+}
+
 fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.areaOptions";
     let ids: Vec<NodeId> = {
         let d = &s.doc()?.doc;
-        text_targets(s, p, C)?
-            .into_iter()
-            .filter(|i| matches!(d.node(*i).map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. })))
-            .collect()
+        text_targets(s, p, C)?.into_iter().filter(|i| area_text(d.node(*i)).is_some()).collect()
     };
-    let first = ids.first().ok_or_else(|| bad(C, "select area type (text in a frame)"))?;
-    let current = match &s.doc()?.doc.node(*first).map(|n| &n.kind) {
-        Some(NodeKind::Text(t)) => t.area.clone(),
-        _ => return Err(bad(C, "select area type (text in a frame)")),
+    let first = *ids.first().ok_or_else(|| bad(C, "select area type (text in a frame)"))?;
+    let options = |s: &Session| -> Result<Value> {
+        let t = area_text(s.doc()?.doc.node(first)).ok_or_else(|| bad(C, "select area type (text in a frame)"))?;
+        let mut v = serde_json::to_value(&t.area).map_err(|e| EngineError::Other(e.to_string()))?;
+        if let (Some(o), Some((w, h, _))) = (v.as_object_mut(), area_size(t)) {
+            o.insert("width".into(), json!(w));
+            o.insert("height".into(), json!(h));
+        }
+        Ok(v)
     };
-    let mut v = serde_json::to_value(&current).map_err(|e| EngineError::Other(e.to_string()))?;
-    let mut changed = false;
+    let mut v = options(s)?;
+    let size = |k: &str| p.get(k).and_then(Value::as_f64).map(|x| x.clamp(1.0, 100_000.0));
+    let (w, h) = (size("width"), size("height"));
+    let mut changed = w.is_some() || h.is_some();
     if let (Some(o), Some(src)) = (v.as_object_mut(), p.as_object()) {
         for (k, val) in src {
-            if o.contains_key(k) && k != "ids" {
+            if o.contains_key(k) && !matches!(k.as_str(), "ids" | "width" | "height") {
                 o.insert(k.clone(), val.clone());
                 changed = true;
             }
@@ -298,17 +364,43 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     opts.gutter = opts.gutter.clamp(0.0, 10_000.0);
     opts.inset = opts.inset.clamp(0.0, 10_000.0);
     opts.first_baseline_min = opts.first_baseline_min.clamp(0.0, 10_000.0);
-    let out = serde_json::to_value(&opts).map_err(|e| EngineError::Other(e.to_string()))?;
     s.edit("Area Type Options", |d, _| {
         for id in &ids {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
                 t.area = opts.clone();
-                refresh_bounds(t);
+                // A resized frame has laid its text out again; otherwise the new options do here.
+                if !size_area(t, w, h) {
+                    refresh_bounds(t);
+                }
             }
         }
         Ok(())
     })?;
-    Ok(out)
+    options(s)
+}
+
+fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.reshapeArea";
+    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let mut refs = super::select::parse_refs(p.get("anchors"));
+    refs.sort_unstable();
+    refs.dedup();
+    if refs.is_empty() {
+        return Err(bad(C, "missing anchors [[subpath, anchor]…]"));
+    }
+    let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
+    let node = s.doc()?.doc.node(id);
+    if area_text(node).is_none() || node.is_some_and(|n| n.perspective.is_some()) {
+        return Err(bad(C, "not area type (text in a frame) outside perspective"));
+    }
+    s.edit("Reshape Type Area", |doc, _| {
+        let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+        if !reshape_area_with(t, |t| t.move_area_anchors(&refs, d)) {
+            return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
+        }
+        Ok(())
+    })?;
+    ok()
 }
 
 #[cfg(test)]

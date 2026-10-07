@@ -26,7 +26,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "artboard.rearrange" => &["spacing"],
         "perspective.grid.set" => &["cell", "distance"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
-        "text.areaOptions" => &["gutter", "inset", "firstBaselineMin"],
+        "text.areaOptions" => &["width", "height", "gutter", "inset", "firstBaselineMin"],
         _ => &[],
     }
 }

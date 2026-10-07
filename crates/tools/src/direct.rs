@@ -7,16 +7,20 @@
 //! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
 //! points (a key object on a point moves with it) and, once a point is clicked, its handles; and
 //! the points of selected gradient meshes and mesh envelopes and their handles ([`MeshEdit`]).
+//! Dragging a corner or an edge of area type's frame reshapes the type area (`text.reshapeArea`):
+//! the text reflows at its size.
+
+use std::borrow::Cow;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_doc::{AnchorRef, NodeId, NodeKind};
+use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind};
 use vectorcraft_geom::{PathData, Point, Rect};
 
 use crate::bbox::move_delta;
 use crate::corners::{CornerDrag, over_widget};
 use crate::meshedit::MeshEdit;
-use crate::select::matrix_json;
+use crate::select::{is_area_type, matrix_json};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
 #[derive(Clone, Debug)]
@@ -58,6 +62,13 @@ enum State {
     },
     /// Dragging a mesh point or handle ([`MeshEdit`]).
     Mesh,
+    /// Dragging anchors of area type's frame (a corner, or the two ends of an edge).
+    TypeArea {
+        id: NodeId,
+        anchors: Vec<AnchorRef>,
+        start: Point,
+        began: bool,
+    },
 }
 
 pub struct DirectSelectionTool {
@@ -115,33 +126,45 @@ fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcra
     }
 }
 
-/// Anchor (or handle) of any selected/visible path under `p`.
-fn hit_anchor(cx: &ToolContext, p: Point, tol: f64, selected_only: bool) -> Option<(NodeId, usize, usize)> {
-    let ids: Vec<NodeId> = if selected_only {
-        cx.selection.objects.clone()
-    } else {
-        let mut v = vec![];
-        cx.doc.walk(|n| {
-            if matches!(n.kind, NodeKind::Path { .. }) {
-                v.push(n.id)
-            }
-        });
-        v.reverse();
-        v
-    };
-    for id in ids {
-        if !cx.doc.is_editable(id) {
-            continue;
-        }
-        if let Some(pd) = cx.doc.node(id).and_then(|n| n.path_data()) {
-            for (si, ai, a) in pd.anchors() {
-                if a.p.distance(p) <= tol {
-                    return Some((id, si, ai));
-                }
-            }
-        }
+/// The anchors Direct Selection edits on `n`, in document space: a path's, or area type's frame.
+fn editable_path(n: &Node) -> Option<Cow<'_, PathData>> {
+    match &n.kind {
+        NodeKind::Path { path, .. } => Some(Cow::Borrowed(path)),
+        NodeKind::Text(t) => t.area_frame().map(Cow::Owned),
+        _ => None,
     }
-    None
+}
+
+/// The editable objects `f` accepts, topmost first.
+fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
+    let mut v = vec![];
+    cx.doc.walk(|n| {
+        if f(n) {
+            v.push(n.id)
+        }
+    });
+    v.reverse();
+    v.retain(|id| cx.doc.is_editable(*id));
+    v
+}
+
+/// Anchor of any visible path or area type frame under `p`, topmost first.
+fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize)> {
+    let owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n));
+    owners.into_iter().find_map(|id| {
+        let pd = cx.doc.node(id).and_then(editable_path)?;
+        pd.anchors().find(|(_, _, a)| a.p.distance(p) <= tol).map(|(si, ai, _)| (id, si, ai))
+    })
+}
+
+/// An edge of an area type frame under `p`, topmost first: (text, the edge's two anchors).
+fn hit_frame_edge(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Vec<AnchorRef>)> {
+    anchor_owners(cx, is_area_type).into_iter().find_map(|id| {
+        let frame = cx.doc.node(id).and_then(editable_path)?;
+        let (si, seg, _, _, d) = frame.nearest(p)?;
+        let n = frame.subpaths.get(si)?.anchors.len();
+        (d <= tol && n > 0).then(|| (id, vec![(si, seg % n), (si, (seg + 1) % n)]))
+    })
 }
 
 /// Direction handle of a partially selected anchor under `p`: (id, si, ai, is_out).
@@ -223,7 +246,10 @@ impl Tool for DirectSelectionTool {
                     self.state = State::SpinePoint { id, anchor, from, start: p, began: false };
                     return if cx.selection.contains(id) { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                 }
-                if let Some((id, si, ai)) = hit_anchor(cx, p, tol, false) {
+                if let Some((id, si, ai)) = hit_anchor(cx, p, tol) {
+                    if cx.doc.node(id).is_some_and(is_area_type) {
+                        return self.press_type_area(cx, id, vec![(si, ai)], p, ev.mods.shift);
+                    }
                     let already = cx.selection.partial(id).is_some_and(|s| s.contains(&(si, ai)));
                     self.state = State::MoveAnchors { start: p, began: false };
                     if ev.mods.shift {
@@ -233,6 +259,9 @@ impl Tool for DirectSelectionTool {
                         return vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "set"}))];
                     }
                     return vec![];
+                }
+                if let Some((id, anchors)) = hit_frame_edge(cx, p, tol) {
+                    return self.press_type_area(cx, id, anchors, p, ev.mods.shift);
                 }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     // Clicking a segment/fill selects the whole leaf path (all anchors).
@@ -277,6 +306,19 @@ impl Tool for DirectSelectionTool {
                 ));
                 out
             }
+            (PointerKind::Drag, State::TypeArea { id, anchors, start, began }) => {
+                let mut out = vec![];
+                if !began {
+                    if p.distance(start) < cx.tol(3.0) {
+                        return out;
+                    }
+                    out.push(Action::Begin("Reshape Type Area".into()));
+                }
+                let d = move_delta(start, p, ev.mods.shift);
+                out.push(Action::Preview("text.reshapeArea".into(), json!({"id": id.0, "anchors": anchors_json(&anchors), "dx": d.x, "dy": d.y})));
+                self.state = State::TypeArea { id, anchors, start, began: true };
+                out
+            }
             (PointerKind::Drag, State::Handle { id, si, ai, out }) => {
                 vec![Action::Preview(
                     "path.setHandle".into(),
@@ -318,7 +360,10 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Idle;
                 c.finish()
             }
-            (PointerKind::Up, State::MoveAnchors { began, .. } | State::MoveObject { began, .. } | State::SpinePoint { began, .. }) => {
+            (
+                PointerKind::Up,
+                State::MoveAnchors { began, .. } | State::MoveObject { began, .. } | State::SpinePoint { began, .. } | State::TypeArea { began, .. },
+            ) => {
                 self.state = State::Idle;
                 if began { vec![Action::Commit] } else { vec![] }
             }
@@ -356,6 +401,9 @@ impl Tool for DirectSelectionTool {
             _ => {
                 let mut out = self.spine_overlays(cx);
                 out.extend(self.mesh.overlays(cx));
+                if !self.group {
+                    out.extend(frame_overlays(cx));
+                }
                 out
             }
         }
@@ -368,7 +416,31 @@ impl Tool for DirectSelectionTool {
     }
 }
 
+/// The frame anchors of the selected area type, which Direct Selection drags.
+fn frame_overlays(cx: &ToolContext) -> Vec<Overlay> {
+    let mut out = vec![];
+    for id in &cx.selection.objects {
+        let Some(frame) = cx.doc.node(*id).filter(|n| is_area_type(n)).and_then(editable_path) else { continue };
+        let color = cx.doc.layer_color(*id);
+        out.extend(frame.anchors().map(|(_, _, a)| Overlay::Anchor { p: a.p, color, filled: false, size: 5.0 }));
+    }
+    out
+}
+
 impl DirectSelectionTool {
+    /// Press on area type's frame anchors (a corner, or an edge's two ends): select the text and
+    /// get ready to drag them.
+    fn press_type_area(&mut self, cx: &ToolContext, id: NodeId, anchors: Vec<AnchorRef>, p: Point, shift: bool) -> Vec<Action> {
+        self.state = State::TypeArea { id, anchors, start: p, began: false };
+        if cx.selection.contains(id) {
+            vec![]
+        } else if shift {
+            vec![Action::Exec("select.add".into(), json!({"ids": [id.0]}))]
+        } else {
+            vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]
+        }
+    }
+
     /// The clicked spine point, filled, with its handles.
     fn spine_overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let Some(sel) = self.spine.filter(|(id, _)| cx.selection.contains(*id)) else { return vec![] };
@@ -433,6 +505,37 @@ mod tests {
         // A click on a step (between the keys) still selects the blend.
         let a = DirectSelectionTool::new(true).pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 304.0));
         assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
+    }
+
+    #[test]
+    fn dragging_a_frame_corner_or_edge_reshapes_area_type() {
+        let (d, text) = doc_with_area_type();
+        let p = paint();
+        let s = Selection::default();
+        let cx1 = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        // The bottom-right corner of the 120 × 40 frame at (300, 300) selects the text...
+        assert_eq!(
+            t.pointer(&cx1, &PointerEvent::new(PointerKind::Down, 421.0, 339.0)),
+            vec![Action::Exec("select.set".into(), json!({"ids": [text.0]}))]
+        );
+        // ...and drags that corner.
+        let a = t.pointer(&cx1, &PointerEvent::new(PointerKind::Drag, 461.0, 399.0));
+        assert_eq!(a[0], Action::Begin("Reshape Type Area".into()));
+        assert_eq!(a[1], Action::Preview("text.reshapeArea".into(), json!({"id": text.0, "anchors": [[0, 2]], "dx": 40.0, "dy": 60.0})));
+        assert_eq!(t.pointer(&cx1, &PointerEvent::new(PointerKind::Up, 461.0, 399.0)), vec![Action::Commit]);
+        // The top edge drags both its ends; a click alone changes nothing.
+        let mut s = Selection::default();
+        s.add(text);
+        let cx2 = cx(&d, &s, &p);
+        assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Down, 350.0, 301.0)).is_empty());
+        let a = t.pointer(&cx2, &PointerEvent::new(PointerKind::Drag, 350.0, 281.0));
+        assert_eq!(a[1], Action::Preview("text.reshapeArea".into(), json!({"id": text.0, "anchors": [[0, 0], [0, 1]], "dx": 0.0, "dy": -20.0})));
+        t.pointer(&cx2, &PointerEvent::new(PointerKind::Up, 350.0, 281.0));
+        assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Down, 300.0, 340.0)).is_empty());
+        assert!(t.pointer(&cx2, &PointerEvent::new(PointerKind::Up, 300.0, 340.0)).is_empty());
+        // The selected frame's corners show.
+        assert_eq!(t.overlays(&cx2).iter().filter(|o| matches!(o, Overlay::Anchor { filled: false, .. })).count(), 4);
     }
 
     #[test]

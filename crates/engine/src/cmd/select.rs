@@ -188,7 +188,8 @@ fn key(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn parse_refs(v: Option<&Value>) -> Vec<(usize, usize)> {
+/// `[[subpath, anchor]…]` anchor references (malformed entries are left out).
+pub(crate) fn parse_refs(v: Option<&Value>) -> Vec<(usize, usize)> {
     v.and_then(Value::as_array)
         .map(|a| a.iter().filter_map(|x| Some((x.get(0)?.as_u64()? as usize, x.get(1)?.as_u64()? as usize))).collect())
         .unwrap_or_default()
