@@ -133,9 +133,38 @@ pub fn num_field(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, value:
         })
         .inner;
     select_all_on_focus(ui, &resp, &buf);
+    let stepped = step_with_arrows(ui, &resp, &mut buf, unit);
     let commit = resp.lost_focus() && buf != shown;
     ui.data_mut(|d| d.insert_temp(id, buf.clone()));
-    if commit { unit.parse(&buf) } else { None }
+    if commit { unit.parse(&buf) } else { stepped }
+}
+
+/// ↑/↓ in a focused numeric field step its value by one `unit` (Shift: ten, Ctrl/Cmd: a tenth),
+/// applied at once as in Illustrator's panels. Returns the new value (points) when it changed.
+fn step_with_arrows(ui: &Ui, resp: &Response, buf: &mut String, unit: Unit) -> Option<f64> {
+    // Memory focus, as the field's highlight and its typing use: `Response::has_focus` also needs the
+    // window to report keyboard focus.
+    if !ui.memory(|m| m.has_focus(resp.id)) {
+        return None;
+    }
+    use egui::{Key, Modifiers};
+    let mut steps = 0.0;
+    ui.input_mut(|i| {
+        // Most specific first: a plain pattern would also take Shift+↑.
+        for (mods, size) in [(Modifiers::SHIFT, 10.0), (Modifiers::COMMAND, 0.1), (Modifiers::NONE, 1.0)] {
+            let up = i.count_and_consume_key(mods, Key::ArrowUp) as f64;
+            let down = i.count_and_consume_key(mods, Key::ArrowDown) as f64;
+            steps += size * (up - down);
+        }
+    });
+    if steps == 0.0 {
+        return None;
+    }
+    // In the field's unit, rounded as fields show it (no 12.300000001).
+    let v = unit.from_pt(unit.parse(buf)?) + steps;
+    let v = unit.to_pt((v * 1000.0).round() / 1000.0);
+    *buf = unit.format(v);
+    Some(v)
 }
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
@@ -1453,4 +1482,39 @@ pub fn text_presets(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, val
         });
     });
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ↑/↓ step a focused numeric field by one unit (Shift: ten, Ctrl/Cmd: a tenth) at once.
+    #[test]
+    fn arrow_keys_step_a_focused_numeric_field() {
+        let ctx = egui::Context::default();
+        let value = std::cell::Cell::new(Unit::Millimeters.to_pt(4.0));
+        let frame = |events: Vec<egui::Event>, focus: bool| {
+            // The window doesn't report keyboard focus (as in the live app), yet the field has egui's.
+            let mut out = ctx.run_ui(egui::RawInput { events, focused: false, ..Default::default() }, |ui| {
+                if focus {
+                    ui.memory_mut(|m| m.request_focus(ui.id().with("w")));
+                }
+                if let Some(v) = num_field(ui, "w", Some(value.get()), Unit::Millimeters, 80.0) {
+                    value.set(v);
+                }
+            });
+            out.textures_delta.clear();
+        };
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        let mm = |v: f64| Unit::Millimeters.from_pt(v);
+        frame(vec![], true);
+        frame(vec![], false);
+        let start = mm(value.get());
+        frame(vec![key(egui::Key::ArrowUp, egui::Modifiers::NONE)], false);
+        assert!((mm(value.get()) - (start + 1.0)).abs() < 1e-6, "{}", mm(value.get()));
+        frame(vec![key(egui::Key::ArrowUp, egui::Modifiers::SHIFT)], false);
+        assert!((mm(value.get()) - (start + 11.0)).abs() < 1e-6, "{}", mm(value.get()));
+        frame(vec![key(egui::Key::ArrowDown, egui::Modifiers::COMMAND)], false);
+        assert!((mm(value.get()) - (start + 10.9)).abs() < 1e-6, "{}", mm(value.get()));
+    }
 }
