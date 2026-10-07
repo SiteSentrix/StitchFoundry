@@ -748,6 +748,9 @@ fn thumb(ui: &Ui, n: &Node, r: egui::Rect) {
     });
 }
 
+/// A panel menu item: label, command, params, enabled, checked.
+type MenuItem<'a> = (&'a str, &'a str, Value, bool, bool);
+
 /// The Layers panel's (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
@@ -772,7 +775,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             all_layers.push(n);
         }
     });
-    let mut items: Vec<Option<(&str, &str, Value, bool, bool)>> = vec![
+    let mut items: Vec<Option<MenuItem>> = vec![
         Some(("New Layer…", "ui.newLayer", json!({}), true, false)),
         Some(("New Sublayer…", "ui.newLayer", json!({"sublayer": true}), current.is_some(), false)),
         Some(("Duplicate Selection", "layer.duplicate", json!({}), !targets.is_empty(), false)),

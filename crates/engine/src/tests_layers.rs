@@ -187,7 +187,7 @@ fn layer_options_validate_and_template_locks_and_dims() {
     }
     let color = |s: &Session| match node(s, layer).kind {
         NodeKind::Layer { color, .. } => color,
-        _ => unreachable!(),
+        _ => panic!("not a layer"),
     };
     run(&mut s, "layer.setProps", json!({"id": layer.0, "color": "red"}));
     assert_eq!(color(&s), LayerColor::Preset(1));
