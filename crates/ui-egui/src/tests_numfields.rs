@@ -14,19 +14,21 @@ struct Field {
     time: f64,
     rect: Cell<Rect>,
     id: Cell<egui::Id>,
+    /// Whether the window reports keyboard focus (the live app's doesn't always).
+    focused: bool,
 }
 
 impl Field {
     fn new() -> Self {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        Self { ctx, time: 0.0, rect: Cell::new(Rect::NOTHING), id: Cell::new(egui::Id::NULL) }
+        Self { ctx, time: 0.0, rect: Cell::new(Rect::NOTHING), id: Cell::new(egui::Id::NULL), focused: true }
     }
 
     fn frame(&mut self, events: Vec<Event>, draw: &dyn Fn(&mut egui::Ui) -> Option<f64>) -> Option<f64> {
         self.time += 0.05;
         let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 200.0)));
-        let input = egui::RawInput { events, time: Some(self.time), screen_rect, ..Default::default() };
+        let input = egui::RawInput { events, time: Some(self.time), screen_rect, focused: self.focused, ..Default::default() };
         let mut got = None;
         let mut out = self.ctx.run_ui(input, |ui| {
             self.id.set(ui.id().with("f"));
@@ -56,7 +58,11 @@ impl Field {
 }
 
 fn enter() -> Event {
-    Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE }
+    key(Key::Enter, Modifiers::NONE)
+}
+
+fn key(key: Key, modifiers: Modifiers) -> Event {
+    Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
 }
 
 #[test]
@@ -124,4 +130,53 @@ fn plain_fields_do_math_with_their_suffix() {
     assert_eq!(f.selection(), Some((0, "10°".chars().count())));
     f.frame(vec![Event::Text("45*2°".into())], &draw);
     assert_eq!(f.frame(vec![enter()], &draw), Some(90.0));
+}
+
+/// ↑/↓ step a focused numeric field by one of its unit (Shift: ten, Ctrl/Cmd: a tenth) and apply it
+/// at once, the new value selected so typing replaces it; an unfocused field leaves the arrows to
+/// the canvas (nudge).
+#[test]
+fn arrow_keys_step_a_focused_field() {
+    let mut f = Field::new();
+    let u = Unit::Millimeters;
+    let mm = Cell::new(4.0);
+    let draw = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(u.to_pt(mm.get())), u, 80.0).inspect(|&v| mm.set(u.from_pt(v)));
+    f.frame(vec![], &draw);
+    assert_eq!(f.frame(vec![key(Key::ArrowUp, Modifiers::NONE)], &draw), None, "unfocused");
+    f.frame(f.click(1), &draw);
+    f.frame(vec![], &draw);
+    // The window needn't report keyboard focus: the field has egui's.
+    f.focused = false;
+    for (k, mods, want) in [
+        (Key::ArrowUp, Modifiers::NONE, 5.0),
+        (Key::ArrowUp, Modifiers::SHIFT, 15.0),
+        (Key::ArrowDown, Modifiers::COMMAND, 14.9),
+        (Key::ArrowDown, Modifiers::NONE, 13.9),
+    ] {
+        assert!(f.frame(vec![key(k, mods)], &draw).is_some(), "{k:?} {mods:?}");
+        assert!((mm.get() - want).abs() < 1e-6, "{k:?} {mods:?}: {}", mm.get());
+    }
+    assert_eq!(f.selection(), Some((0, "13.9 mm".len())), "the new value is selected");
+    // Enter after the steps commits nothing more.
+    assert_eq!(f.frame(vec![enter()], &draw), None);
+}
+
+/// Plain fields (degrees, percent, counts) step too, at their precision.
+#[test]
+fn arrow_keys_step_plain_fields() {
+    let mut f = Field::new();
+    let angle = |ui: &mut egui::Ui| widgets::plain_field(ui, "f", 10.0, "°", 2, 80.0);
+    f.frame(vec![], &angle);
+    f.frame(f.click(1), &angle);
+    f.frame(vec![], &angle);
+    assert_eq!(f.frame(vec![key(Key::ArrowUp, Modifiers::NONE)], &angle), Some(11.0));
+    assert_eq!(f.frame(vec![key(Key::ArrowDown, Modifiers::SHIFT)], &angle), Some(1.0));
+    // A count ignores the tenth.
+    let mut f = Field::new();
+    let count = |ui: &mut egui::Ui| widgets::plain_field(ui, "f", 3.0, "", 0, 80.0);
+    f.frame(vec![], &count);
+    f.frame(f.click(1), &count);
+    f.frame(vec![], &count);
+    assert_eq!(f.frame(vec![key(Key::ArrowUp, Modifiers::COMMAND)], &count), None);
+    assert_eq!(f.frame(vec![key(Key::ArrowUp, Modifiers::NONE)], &count), Some(4.0));
 }
