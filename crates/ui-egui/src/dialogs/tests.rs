@@ -313,3 +313,35 @@ fn given_headings_are_shown_as_they_are() {
     let d = Dialog::new(plugin::KIND, json!({"__label": "Black", "__plugin": "x"}));
     assert_eq!((spec(&d.kind).heading)(&d), "Black");
 }
+
+#[test]
+fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let enter = || egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let bounds = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    // Object › Transform › Rotate…: type 90 over the angle, press Enter.
+    crate::menus::invoke(&mut app, "object.rotate", json!({}));
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("90".into())]);
+    frame(&mut app, vec![enter()]);
+    assert!(app.ui.dialog.is_none());
+    let b = bounds(&app);
+    assert!((b.width() - 20.0).abs() < 1e-6 && (b.height() - 40.0).abs() < 1e-6, "{b:?}");
+    // Move…: its first field is a distance (with a unit): typing replaces it as well.
+    let before = bounds(&app);
+    crate::menus::invoke(&mut app, "object.move", json!({}));
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("15".into())]);
+    frame(&mut app, vec![enter()]);
+    assert!(app.ui.dialog.is_none());
+    let after = bounds(&app);
+    assert!((after.x0 - before.x0 - 15.0).abs() < 1e-6 && (after.y0 - before.y0).abs() < 1e-6, "{before:?} → {after:?}");
+}
