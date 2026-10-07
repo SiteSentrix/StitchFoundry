@@ -211,7 +211,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             // A key the tool claims (Esc with a loaded place cursor) is only the tool's.
             let claimed = app.session.tool_claims_key(tk, view);
             let r = app.session.tool_key(tk, Mods::default(), view);
-            if claimed {
+            // Enter also takes what the tool asks of the UI: Rotate, Scale, Reflect and Shear open
+            // their dialog with it.
+            if claimed || (k == Key::Enter && !busy) {
                 crate::canvas::apply_requests(app, r);
             }
             if k == Key::Escape && !busy && !claimed {
@@ -221,6 +223,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     let _ = app.run("object.exitIsolation", json!({}));
                 } else if app.ui.flyout.is_some() {
                     app.ui.flyout = None;
+                }
+            }
+            if k == Key::Enter && !busy && !claimed {
+                // Enter with a selection tool opens the Move dialog, as a double-click on its button
+                // does.
+                let tool = app.session.tool_id();
+                if app.ui.dialog.is_none() && crate::canvas::is_selection_tool(tool) {
+                    // Nothing selected: it fails and nothing opens (the menu item is disabled then too).
+                    let _ = crate::toolbar::open_options(app, tool);
+                }
+                // The Enter that opened a dialog isn't also its OK: dialogs take Enter, this frame too.
+                if app.ui.dialog.is_some() {
+                    ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
                 }
             }
         }
@@ -524,6 +539,54 @@ mod tests {
         let (rows, columns) = grid(&mut app, &[]);
         assert_eq!(grid(&mut app, &[Key::ArrowRight, Key::ArrowRight, Key::ArrowUp]), (rows + 1, columns + 2));
         assert_eq!(grid(&mut app, &[Key::ArrowLeft, Key::ArrowDown]), (rows, columns + 1));
+    }
+
+    /// Enter opens the tool's dialog: the Move dialog for the selection tools, the tool's own for
+    /// Rotate, Scale, Reflect and Shear. The Enter that opens it isn't also its OK.
+    #[test]
+    fn enter_opens_the_tools_dialog_and_leaves_it_open() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let ctx = egui::Context::default();
+        let enter = || egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        // A whole app frame: the shortcuts first, then the UI, where a dialog takes its Enter.
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0)));
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        };
+        let kind = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.kind.clone());
+        let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        app.select_tool("selection");
+        frame(&mut app, vec![enter()]);
+        assert_eq!(kind(&app), None, "nothing is selected");
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 30})).unwrap();
+        for (tool, dialog) in [
+            ("selection", "move"),
+            ("directSelection", "move"),
+            ("groupSelection", "move"),
+            ("rotate", "rotate"),
+            ("scale", "scale"),
+            ("reflect", "reflect"),
+            ("shear", "shear"),
+        ] {
+            app.select_tool(tool);
+            let before = steps(&app);
+            frame(&mut app, vec![enter()]);
+            assert_eq!(kind(&app).as_deref(), Some(dialog), "{tool}: Enter opens it");
+            frame(&mut app, vec![]);
+            assert_eq!(kind(&app).as_deref(), Some(dialog), "{tool}: and it stays open");
+            assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
+            // The next Enter is its OK.
+            frame(&mut app, vec![enter()]);
+            assert_eq!((kind(&app), steps(&app)), (None, before + 1), "{tool}: Enter confirms");
+        }
+        app.select_tool("rectangle");
+        frame(&mut app, vec![enter()]);
+        assert_eq!(kind(&app), None, "another tool has its own Enter");
     }
 
     #[test]

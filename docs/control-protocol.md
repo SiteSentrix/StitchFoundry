@@ -89,8 +89,11 @@ for `eyedropper` it opens Eyedropper Options, an `eyedropperOptions` dialog (fie
 `apply`, the attribute trees of `eyedropper.setOptions`) whose `ui.dialog.confirm` runs `eyedropper.setOptions` (what
 `appearance.copyFrom` copies). For `hand` it fits the artboard in the window (`view.fitArtboard`) and for `zoom` it
 shows 100% (`view.actualSize`). For `rotate`, `scale`, `reflect` and `shear` it opens the same dialog as Object ›
-Transform (dialog kind = the tool id), or fails with `nothing selected`. Gradient tool handles snap to
-anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.
+Transform (dialog kind = the tool id), or fails with `nothing selected`. For `selection`, `directSelection` and
+`groupSelection` it opens the Move dialog (kind `move`), with the same failure. `ui.key` Enter with one of those seven
+tools opens its dialog too (nothing happens without a selection), with the transform tools' `origin` at their reference
+point. Gradient tool handles snap to anchors, edges and smart guides; Shift constrains them to 45° steps from the
+`constrainAngle` preference.
 
 Effect dialogs: `engine.execute {command: "effect.dialog", params: {effect, index?, item?}}` opens the `effect` dialog
 (fields: the effect's parameters, `preview`). With `index` it edits that applied effect of `item` (null: the object's
