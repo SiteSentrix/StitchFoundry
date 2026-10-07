@@ -100,14 +100,14 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - A canvas context menu: right-click selects the object under the pointer and lists what applies to the selection (Undo/Redo, clipboard, group, isolation, join, masks, compound paths, guides, Transform, Arrange, Select, Export Selection), or the view commands on empty canvas.
   - Save / Don't Save / Cancel before closing or quitting with unsaved documents (tabs, Close, Close All, Quit, window close).
   - Four brightness themes, persistent preferences.
-  - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content.
+  - On Windows and Linux the app bar is the window's title bar (its own minimize, maximize and close buttons, drag to move, edges to resize), with the dragon app icon as the brand mark; dialogs and menus size to their content. As on a native menu bar, once one menu is open, moving the pointer onto another title opens that one.
 - **Tools:**
   - **Selection:** Selection, Direct/Group Selection, Magic Wand, Lasso.
   - **Drawing:** Pen, Curvature, anchor tools, Pencil, Paintbrush, Blob Brush, Smooth, Path Eraser, Join.
   - **Shapes:** all shape tools (including Flare) and the line, arc, spiral and grid tools.
   - **Cutting:** Eraser, Scissors, Knife, Mirror & Cut, Line Cut and Rectangle Cut (real geometry, compound paths keep their holes).
   - **Transform:** Rotate, Reflect, Scale, Shear (click or Alt-click snaps the reference point to anchors and centres), Reshape, Free Transform (free and perspective distort and shear, switched by the keys held during a handle drag).
-  - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout.
+  - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout. Corners stay circular when the rectangle is scaled unevenly or along its own sides when rotated (the radius keeps its size, or scales by the mean scale with Scale Corners on); only a shear distorts them.
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
   - **Editing type:** double-clicking type with a selection tool switches to the Type tool with the caret where it was clicked.

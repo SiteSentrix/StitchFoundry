@@ -153,6 +153,61 @@ fn scale_corners_keeps_or_scales_live_corner_radii() {
     assert!((n.geometric_bounds().unwrap().width() - 400.0).abs() < 1e-6);
 }
 
+/// The extent along x and y of each corner arc of an upright live rounded rectangle's path.
+fn corner_spans(n: &Node) -> Vec<(f64, f64)> {
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("not a path") };
+    let a = &path.subpaths[0].anchors;
+    assert_eq!(a.len(), 8, "a rounded rectangle");
+    [(1, 2), (3, 4), (5, 6), (7, 0)].iter().map(|(i, j)| ((a[*j].p.x - a[*i].p.x).abs(), (a[*j].p.y - a[*i].p.y).abs())).collect()
+}
+
+/// Every corner is a circular arc of radius `r`.
+fn round_corners(n: &Node, r: f64) -> bool {
+    corner_spans(n).iter().all(|(x, y)| (x - r).abs() < 1e-9 && (y - r).abs() < 1e-9)
+}
+
+#[test]
+fn live_corners_stay_circular_when_a_rectangle_is_scaled_unevenly() {
+    // #291: a rounded square widened into a long rectangle keeps round corners.
+    let mut s = session();
+    let id = id_of(&run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 100, "radius": 10})));
+    run(&mut s, "object.scale", json!({"sx": 300, "sy": 100, "corners": false}));
+    let n = node(&s, id);
+    assert!((n.geometric_bounds().unwrap().width() - 300.0).abs() < 1e-9);
+    assert!(round_corners(&n, 10.0), "{:?}", corner_spans(&n));
+    let NodeKind::Path { live: Some(LiveShape::Rectangle { w, h, radii, .. }), .. } = &n.kind else { panic!("not live") };
+    assert!((w - 300.0).abs() < 1e-9 && (h - 100.0).abs() < 1e-9 && (radii[0] - 10.0).abs() < 1e-9, "the panels read document units");
+    // Scale Corners on: the radius scales by the mean scale (√(2 × 0.5) = 1 here, 2 below).
+    run(&mut s, "object.scale", json!({"sx": 200, "sy": 50, "corners": true}));
+    assert!(round_corners(&node(&s, id), 10.0), "{:?}", corner_spans(&node(&s, id)));
+    run(&mut s, "object.scale", json!({"sx": 100, "sy": 400, "corners": true}));
+    assert!(round_corners(&node(&s, id), 20.0), "{:?}", corner_spans(&node(&s, id)));
+    // Undo brings each step back.
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(round_corners(&node(&s, id), 10.0));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(round_corners(&node(&s, id), 10.0));
+    assert!((node(&s, id).geometric_bounds().unwrap().width() - 100.0).abs() < 1e-9);
+}
+
+#[test]
+fn a_bounding_box_drag_keeps_live_corners_circular() {
+    // The Selection tool's handle drag previews `object.transform` from the shape as it began.
+    let mut s = session();
+    let id = id_of(&run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100, "radius": 25})));
+    s.begin_interaction("Scale").unwrap();
+    for sx in [1.5, 2.5, 4.0] {
+        // Dragging the right-middle handle: scaled about the left edge.
+        s.preview("object.transform", &json!({"matrix": [sx, 0, 0, 1, 50.0 - 50.0 * sx, 0]})).unwrap();
+    }
+    s.commit_interaction().unwrap();
+    let n = node(&s, id);
+    let b = n.geometric_bounds().unwrap();
+    assert!((b.x0 - 50.0).abs() < 1e-9 && (b.width() - 400.0).abs() < 1e-9 && (b.height() - 100.0).abs() < 1e-9, "{b:?}");
+    assert!(round_corners(&n, 25.0), "{:?}", corner_spans(&n));
+}
+
 #[test]
 fn the_journal_records_the_scale_options_used() {
     let mut s = session();
