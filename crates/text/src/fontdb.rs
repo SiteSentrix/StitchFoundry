@@ -379,20 +379,9 @@ pub enum FontClass {
 }
 
 impl FontClass {
+    /// The kinds a font menu filters by (all but `Other`).
     pub const ALL: [FontClass; 6] =
         [FontClass::Serif, FontClass::Sans, FontClass::Rounded, FontClass::Script, FontClass::Monospaced, FontClass::Decorative];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            FontClass::Serif => "Serif / Mincho",
-            FontClass::Sans => "Sans Serif / Gothic",
-            FontClass::Rounded => "Rounded",
-            FontClass::Script => "Script / Brush",
-            FontClass::Monospaced => "Monospaced",
-            FontClass::Decorative => "Decorative",
-            FontClass::Other => "Other",
-        }
-    }
 }
 
 /// What a font menu filters on: whether a family sets Japanese, and its kind.

@@ -2592,14 +2592,20 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks:
                     Some(false) => format!("     {label}"),
                     None => label,
                 };
-                let r = ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc));
-                // Type → Font: each family's sample beside its name (Enable in-menu font previews).
-                if *id == "text.setStyle"
-                    && app.session.prefs.font_preview
-                    && let Some(family) = p.get("font").and_then(Value::as_str)
-                {
-                    crate::font_menu::menu_item_sample(ui, r.rect, family);
-                }
+                // Type → Font: each family's sample after its name (Enable in-menu font previews).
+                let sampled = p.get("font").and_then(Value::as_str).filter(|_| *id == "text.setStyle" && app.session.prefs.font_preview);
+                let r = match sampled {
+                    Some(family) => {
+                        let slot = ui.id().with(("font-sample", family));
+                        let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
+                        let out = ui.add_enabled_ui(en, |ui| button.atom_ui(ui)).inner;
+                        if let Some(rect) = out.rect(slot) {
+                            crate::font_menu::menu_item_sample(ui, rect, family);
+                        }
+                        out.response
+                    }
+                    None => ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc)),
+                };
                 if r.clicked() {
                     *clicked = Some(click_target(label_of(it), id, p));
                     ui.close();

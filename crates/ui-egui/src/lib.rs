@@ -842,6 +842,7 @@ impl VectorcraftApp {
             return;
         }
         let t0 = now_ms();
+        font_menu::end_stale_preview(self, &ctx);
         let t = theme::Tokens::get(&ctx);
         if self.ui.screen_mode < 2 {
             chrome::app_bar(self, ui);

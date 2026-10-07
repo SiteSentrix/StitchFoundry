@@ -116,6 +116,69 @@ fn preview_changes_the_text_live_and_only_a_choice_is_a_step() {
     assert_eq!(font(&app), "Inter");
 }
 
+/// A preview whose menu isn't drawn any more (the text was deselected, the panel closed) is undone
+/// at the start of the next frame, before the canvas sees its input.
+#[test]
+fn a_preview_left_open_by_a_menu_that_is_gone_is_undone() {
+    let ctx = egui::Context::default();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = app.session.active().unwrap().history.undo.len();
+    crate::font_menu::apply(&mut app, &ctx, FontPick::Preview("Source Serif 4".into(), None));
+    assert!(app.session.in_interaction());
+    crate::font_menu::end_stale_preview(&mut app, &ctx);
+    assert!(!app.session.in_interaction(), "no menu drawn: the preview is undone");
+    let font = match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.first_style().font_family,
+        _ => String::new(),
+    };
+    assert_eq!((font.as_str(), app.session.active().unwrap().history.undo.len()), ("Inter", steps));
+    // With nothing previewed it does nothing.
+    crate::font_menu::end_stale_preview(&mut app, &ctx);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), steps);
+}
+
+/// A press outside the open menu ends the preview in that frame, before the canvas could act on
+/// it inside the preview's interaction (the menu itself closes on the release).
+#[test]
+fn a_press_outside_the_menu_ends_the_preview_at_once() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let mut frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+        let mut at = egui::Pos2::ZERO;
+        let mut out = ctx.run_ui(input, |ui| {
+            crate::font_menu::end_stale_preview(&mut app, ui.ctx());
+            at = ui.next_widget_position();
+            if let Some(pick) = font_menu(ui, "test-press", "Inter", 260.0, None, MenuLook::default()) {
+                crate::font_menu::apply(&mut app, ui.ctx(), pick);
+            }
+        });
+        out.textures_delta.clear();
+        (at, app.session.in_interaction())
+    };
+    let (at, _) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(click, true)]);
+    frame(vec![button(click, false)]);
+    for _ in 0..5 {
+        frame(vec![]);
+    }
+    assert!(frame(key(egui::Key::ArrowDown)).1, "↓ previews");
+    assert!(frame(vec![]).1, "the preview lasts while the menu is open");
+    let outside = egui::pos2(580.0, 780.0);
+    assert!(!frame(vec![egui::Event::PointerMoved(outside), button(outside, true)]).1, "the press ends the preview");
+    assert!(!frame(vec![button(outside, false)]).1);
+}
+
 #[test]
 fn bundled_families_are_classified() {
     use vectorcraft_text::FontClass;
