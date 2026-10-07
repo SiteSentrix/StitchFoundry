@@ -136,6 +136,10 @@ impl Tool for SelectionTool {
                             let areas = cx.selection.objects.iter().any(is_area);
                             // Only area type: the step resizes type areas; anything else scales.
                             let label = if areas && cx.selection.objects.iter().all(is_area) { "Resize Type Area" } else { "Scale" };
+                            // Smart Guides align the dragged edges with the other objects. They
+                            // are page lines: a turned box's edges don't run along them.
+                            self.targets =
+                                (cx.smart_guides && bx.angle == 0.0).then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
                             self.state = State::Scaling { handle, bx, areas };
                             return vec![Action::Begin(label.into())];
                         }
@@ -205,7 +209,11 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Drag, State::Scaling { handle, bx, areas }) => {
                 // Scale in the box's own frame: along the objects' axes when it is rotated.
-                let a = scale_for_drag(bx.rect, handle, bx.to_local(p), m.shift, m.alt);
+                let mut a = scale_for_drag(bx.rect, handle, bx.to_local(p), m.shift, m.alt);
+                self.guides.clear();
+                if let Some(t) = &self.targets {
+                    (a, self.guides) = t.snap_scale(bx.rect, handle, a, m.shift, m.alt, cx.tol(5.0));
+                }
                 let nr = a.transform_rect_bbox(bx.rect);
                 self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
                 let mut params = json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false });
@@ -246,6 +254,8 @@ impl Tool for SelectionTool {
             (PointerKind::Up, State::Scaling { .. } | State::Rotating { .. }) => {
                 self.state = State::Idle;
                 self.measure = None;
+                self.guides.clear();
+                self.targets = None;
                 vec![Action::Commit]
             }
             (PointerKind::Up, State::Marquee { start, add, .. }) => {
@@ -435,6 +445,37 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 300.0));
         assert!(matches!(&a[0], Action::Preview(_, v) if v["matrix"][0] == 2.0));
         assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn handle_drag_snaps_to_the_other_objects_with_smart_guides() {
+        use vectorcraft_doc::{Appearance, Node};
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let r = Rect::new(250.0, 100.0, 300.0, 150.0);
+        d.insert(Some(l), 1, Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let mut c = cx(&d, &s, &p);
+        let height = |a: &[Action]| {
+            let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+            v["matrix"][3].as_f64().unwrap() * 50.0
+        };
+        // The bottom handle, dragged near the neighbour's bottom edge (y = 200), lands on it.
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 275.0, 150.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 275.0, 197.0));
+        assert!((height(&a) - 100.0).abs() < 1e-9, "{a:?}");
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Line { .. })));
+        t.pointer(&c, &ev(PointerKind::Up, 275.0, 197.0));
+        assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Line { .. })));
+        // Smart Guides off: the edge follows the pointer.
+        c.smart_guides = false;
+        t.pointer(&c, &ev(PointerKind::Down, 275.0, 150.0));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 275.0, 197.0));
+        assert!((height(&a) - 97.0).abs() < 1e-9, "{a:?}");
     }
 
     #[test]

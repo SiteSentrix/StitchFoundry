@@ -3,8 +3,9 @@
 
 use vectorcraft_doc::hit::{HitOptions, hit_test};
 use vectorcraft_doc::{Document, NodeId, NodeKind};
-use vectorcraft_geom::{Point, Rect, Vec2};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
+use crate::bbox::Handle;
 use crate::{Overlay, ToolContext};
 
 pub const MAGENTA: [u8; 3] = [0xff, 0x3d, 0xfc];
@@ -154,6 +155,57 @@ impl Targets {
         }
         (d, ov)
     }
+
+    /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
+    /// dragging `handle` of `r` (about the centre when `from_center`): the edges that handle moves
+    /// land on the nearest target within `tol`. A proportional scale stays proportional, so only
+    /// the closer of its two axes snaps.
+    pub fn snap_scale(&self, r: Rect, handle: Handle, a: Affine, proportional: bool, from_center: bool, tol: f64) -> (Affine, Vec<Overlay>) {
+        let origin = if from_center { r.center() } else { handle.opposite().pos(r) };
+        let (start, [sx, _, _, sy, _, _]) = (handle.pos(r), a.as_coeffs());
+        let (ax, ay) = handle.axes();
+        // The nearest target to the edge a scale `s` takes from `v0` (about `o`), as (the scale
+        // landing on it, distance, target, the point it comes from). A target on the fixed side
+        // would collapse or flip the box: it is no candidate.
+        let near = |on: bool, s: f64, v0: f64, o: f64, ts: &[(f64, Point, Kind)]| {
+            if !on || (v0 - o).abs() <= 1e-9 {
+                return None;
+            }
+            let v = o + (v0 - o) * s;
+            ts.iter()
+                .map(|(t, from, _)| ((t - o) / (v0 - o), (t - v).abs(), *t, *from))
+                .filter(|(k, d, _, _)| *d <= tol && k.is_finite() && k * s > 0.0)
+                .min_by(|p, q| p.1.total_cmp(&q.1))
+        };
+        let mut hx = near(ax, sx, start.x, origin.x, &self.xs);
+        let mut hy = near(ay, sy, start.y, origin.y, &self.ys);
+        if proportional && let (Some(x), Some(y)) = (hx, hy) {
+            if x.1 <= y.1 {
+                hy = None;
+            } else {
+                hx = None;
+            }
+        }
+        let (mut nx, mut ny) = (hx.map_or(sx, |h| h.0), hy.map_or(sy, |h| h.0));
+        if proportional {
+            // The two scales are equal but for their signs.
+            if hx.is_some() {
+                ny = nx.abs() * sy.signum();
+            } else if hy.is_some() {
+                nx = ny.abs() * sx.signum();
+            }
+        }
+        let out = Affine::translate(origin.to_vec2()) * Affine::scale_non_uniform(nx, ny) * Affine::translate(-origin.to_vec2());
+        let nr = out.transform_rect_bbox(r);
+        let mut ov = vec![];
+        if let Some((_, _, x, from)) = hx {
+            ov.push(Overlay::Line { a: Point::new(x, from.y.min(nr.y0)), b: Point::new(x, from.y.max(nr.y1)), color: MAGENTA, dashed: false });
+        }
+        if let Some((_, _, y, from)) = hy {
+            ov.push(Overlay::Line { a: Point::new(from.x.min(nr.x0), y), b: Point::new(from.x.max(nr.x1), y), color: MAGENTA, dashed: false });
+        }
+        (out, ov)
+    }
 }
 
 /// Snap `p` for a drawing tool when smart guides (or grid snapping) are on.
@@ -208,5 +260,39 @@ mod tests {
         let (dv, ov) = t.snap_rect(Rect::new(2.0, 50.0, 52.0, 90.0), 4.0);
         assert_eq!(dv.x, -2.0);
         assert!(!ov.is_empty());
+    }
+
+    #[test]
+    fn scale_snap_lands_the_moved_edges_on_targets() {
+        use crate::bbox::scale_for_drag;
+        let (d, _) = doc_with_rect();
+        // The document's rect is 100..200: a box beside it is resized against it.
+        let t = Targets::collect(&d, &[], None);
+        let r = Rect::new(250.0, 100.0, 300.0, 150.0);
+        let snap = |h: Handle, p: Point, shift: bool, alt: bool| {
+            let (a, ov) = t.snap_scale(r, h, scale_for_drag(r, h, p, shift, alt), shift, alt, 4.0);
+            (a.transform_rect_bbox(r), ov)
+        };
+        // The bottom edge lands on the neighbour's bottom: same height.
+        let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 197.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 200.0));
+        assert_eq!(ov.len(), 1);
+        // A corner snaps each axis on its own: y to the neighbour, x stays free.
+        let (nr, ov) = snap(Handle::BottomRight, Point::new(330.0, 202.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 330.0, 200.0));
+        assert_eq!(ov.len(), 1);
+        // Proportional: the snapped axis carries the other one.
+        let (nr, _) = snap(Handle::BottomRight, Point::new(340.0, 198.0), true, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 350.0, 200.0));
+        // From the centre the dragged edge still lands on the target.
+        let (nr, _) = snap(Handle::Bottom, Point::new(275.0, 198.0), false, true);
+        assert_eq!(nr, Rect::new(250.0, 50.0, 300.0, 200.0));
+        // Out of reach, and the fixed edge's own target: untouched.
+        let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 180.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 180.0));
+        assert!(ov.is_empty());
+        let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 102.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 102.0));
+        assert!(ov.is_empty());
     }
 }
