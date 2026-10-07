@@ -442,6 +442,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{id, index} open Width Point Edit for width point `index` of path `id` (dialog `widthPoint`: side1, side2 (pt), linked, adjustAdjoining; double-clicking a width point with the Width tool opens it too): OK runs stroke.widthPoint.set, discard: true (the Delete button) stroke.widthPoint.remove",
     ),
     (
+        "ui.corners",
+        "Corners…",
+        "",
+        "{id?, corners?: [0..3…]} open Corners for live rectangle `id` (default: the selected one) and its corners (0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else all four) (dialog `corners`: kind (round|invertedRound|chamfer), radius (pt); double-clicking a corner widget opens it too): OK runs object.setLiveShape",
+    ),
+    (
         "ui.colorGuideLimit",
         "Limit Color Guide to Library",
         "",
@@ -1126,6 +1132,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             },
         },
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
+        "ui.corners" => crate::dialogs::corners::open(app, p),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
         "file.exportAs" if s("path").is_none() => {

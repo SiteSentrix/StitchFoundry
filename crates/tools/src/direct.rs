@@ -3,7 +3,9 @@
 //! Direct Selection: click an anchor to select it (Shift toggles), click a segment to select the
 //! path's anchors on that segment, drag to move selected anchors, drag a direction handle to
 //! reshape (Shift keeps it at 45° steps round its anchor, Alt moves it alone; smart guides snap
-//! it), marquee to select anchors, drag a live rectangle's corner widget to round its corners.
+//! it), marquee to select anchors, drag a live rectangle's corner widget to round its corners
+//! (the selected ones when anchors are selected; Alt-click cycles their kind, double-click opens
+//! the Corners dialog).
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
 //! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
 //! points (a key object on a point moves with it) and, once a point is clicked, its handles; and
@@ -23,7 +25,7 @@ use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind};
 use vectorcraft_geom::{PathData, Point, Rect};
 
 use crate::bbox::move_delta;
-use crate::corners::{CornerDrag, over_widget};
+use crate::corners::{self, CornerDrag, over_widget};
 use crate::meshedit::MeshEdit;
 use crate::select::{is_area_type, matrix_json};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
@@ -257,8 +259,9 @@ impl Tool for DirectSelectionTool {
                     vec![Action::Exec("select.set".into(), json!({"ids": [target.0]}))]
                 }
             }
+            (PointerKind::DoubleClick, _) if !self.group => corners::double_click(cx, p).into_iter().collect(),
             (PointerKind::Down, _) => {
-                if let Some(c) = CornerDrag::hit(cx, p) {
+                if let Some(c) = CornerDrag::hit(cx, ev) {
                     self.state = State::Corner(c);
                     return vec![];
                 }

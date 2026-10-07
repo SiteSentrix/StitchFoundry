@@ -4,7 +4,7 @@ use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{NodeKind, Unit};
 
-use super::{first_selected, pstate, set_pstate};
+use super::{corner_radius, first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
 use crate::widgets::{self, dim_label, divider, section_header};
 use crate::{VectorcraftApp, icons};
@@ -317,10 +317,10 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
     {
         match live {
-            vectorcraft_doc::LiveShape::Rectangle { radii, .. } => {
+            vectorcraft_doc::LiveShape::Rectangle { .. } => {
                 ui.horizontal(|ui| {
                     dim_label(ui, tl!("Corner Radius:"));
-                    if let Some(r) = widgets::num_field(ui, "radius", Some(radii[0]), units, 80.0) {
+                    if let Some(r) = widgets::num_field(ui, "radius", corner_radius(app, &n, live), units, 80.0) {
                         app.run("object.setLiveShape", json!({"radius": r})).ok();
                     }
                 });

@@ -15,6 +15,7 @@ pub mod color_guide_options;
 mod color_picker;
 mod command;
 pub mod confirm;
+pub mod corners;
 mod document_setup;
 pub mod dxf_import;
 pub mod dxf_options;
@@ -230,6 +231,7 @@ registry! {
     SpotColors: [spot_colors::KIND] => spot_colors::SPEC,
     TransformEach: [transform_each::KIND] => transform_each::SPEC,
     WidthPoint: [width_point::KIND] => width_point::SPEC,
+    Corners: [corners::KIND] => corners::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,

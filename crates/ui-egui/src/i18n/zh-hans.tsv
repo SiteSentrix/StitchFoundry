@@ -467,6 +467,10 @@
 	Corner Radius:	圆角半径：
 	Corner:	转角：
 	Corners	转角
+	Round	圆角
+	Inverted Round	反向圆角
+	Corners…	转角…
+	Chamfer	倒角
 	Couldn't copy to the system clipboard: {e}	无法复制到系统剪贴板：{e}
 	Couldn't paste from the clipboard: {e}	无法从剪贴板粘贴：{e}
 	Couldn't save recovery data: {e}	无法存储恢复数据：{e}

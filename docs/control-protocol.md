@@ -253,6 +253,11 @@ Width Point Edit: double-clicking a width point with the Width tool, or `ui.widt
 `adjustAdjoining`). `ui.dialog.confirm` runs `stroke.widthPoint.set` with them; `ui.dialog.set {field: "discard",
 value: true}` then confirm (the Delete button) removes the point with `stroke.widthPoint.remove`.
 
+Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
+corners?}`, opens the `corners` dialog for a live rectangle's corners (the Direct-Selected ones, else all four; fields
+`id`, `corners`: indices 0–3 clockwise from the top-left, `kind`: round, invertedRound or chamfer, `radius` in points;
+`kind` or `radius` is absent while the corners differ). `ui.dialog.confirm` runs `object.setLiveShape` with them.
+
 Perspective plane options: double-clicking a plane widget of the perspective grid, or `ui.perspectivePlane {plane}`,
 opens the `perspectivePlane` dialog (fields `plane`: left, right or ground; `location`: points along the plane's
 normal; `objects`: none, move or copy). `ui.dialog.confirm` runs `perspective.plane.move` with them.

@@ -1039,6 +1039,22 @@ size. The journal entry of a scaling command records the `strokes` and `corners`
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
 ```
 
+## Live Corners
+
+`object.setLiveShape {id?, ids?, radius?, kind?, corners?}` sets the corners of live rectangles (one undo step):
+`radius` (pt) and `kind` (`round`, `invertedRound` or `chamfer`) go to the `corners` given (0 top-left, 1 top-right,
+2 bottom-right, 3 bottom-left), else to the corners holding a Direct-Selected anchor (`select.anchors`), else to all
+four. Each corner keeps its own radius and kind (the shape's `live` in queries has `radii` and, when a corner isn't
+round, `kinds`); a corner with no radius is one anchor, a cut one two, and Direct-Selected corners stay selected as
+that changes. With the Selection or Direct Selection tool, dragging a corner widget rounds the corners whose widgets
+show (all four, or the Direct-Selected ones), Alt-clicking one cycles their kind and double-clicking one opens Corners
+(`ui.corners {id?, corners?}`, dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
+
+```json
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[1],"radius":16}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"id":12,"corners":[0,3],"radius":8,"kind":"chamfer"}}}
+```
+
 ## Use Preview Bounds
 
 With the preference `usePreviewBounds` on (`prefs.set {key: "usePreviewBounds", value: true}`; also the Align panel
