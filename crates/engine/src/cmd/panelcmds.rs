@@ -54,15 +54,25 @@ fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let index = s.edit("Duplicate Artboard", |d, _| {
         let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
         let right = d.artboards.iter().map(|a| a.rect.x1).fold(f64::MIN, f64::max);
-        let mut a = src.clone();
-        a.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
-        a.name = format!("{} copy", src.name);
         let dx = right + 20.0 - src.rect.x0;
-        a.rect = vectorcraft_geom::Rect::new(src.rect.x0 + dx, src.rect.y0, src.rect.x1 + dx, src.rect.y1);
-        d.artboards.push(a);
-        Ok(d.artboards.len() - 1)
+        Ok(push_artboard_copy(d, &src, vectorcraft_geom::Rect::new(src.rect.x0 + dx, src.rect.y0, src.rect.x1 + dx, src.rect.y1)))
     })?;
     Ok(json!({"index": index}))
+}
+
+/// Add a copy of artboard `src` at `rect`, named `<name> copy` (`<name> copy 2`… when taken),
+/// with an id of its own → its index.
+pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vectorcraft_doc::Artboard, rect: vectorcraft_geom::Rect) -> usize {
+    let mut a = src.clone();
+    a.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0).saturating_add(1);
+    let taken = |name: &str| d.artboards.iter().any(|a| a.name == name);
+    a.name = std::iter::once(format!("{} copy", src.name))
+        .chain((2u64..).map(|i| format!("{} copy {i}", src.name)))
+        .find(|name| !taken(name))
+        .unwrap_or_default();
+    a.rect = rect;
+    d.artboards.push(a);
+    d.artboards.len() - 1
 }
 
 // ---------- text ----------
