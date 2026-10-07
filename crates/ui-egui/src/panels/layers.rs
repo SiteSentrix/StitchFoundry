@@ -543,6 +543,21 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
     }
 }
 
+/// Alt-clicking row `n`'s eye or lock (`prop`: `visible` or `locked`) toggles that column for the
+/// other items beside it (the other layers for a layer), in one step: hides or locks them while
+/// any of them is shown or unlocked, else shows or unlocks them all. → the action, if there are
+/// others.
+fn others_action(doc: &Document, n: &Node, prop: &str) -> Option<(String, Value)> {
+    let siblings = doc.children(doc.parent_of(n.id))?;
+    let others: Vec<&Node> = siblings.iter().map(|c| &**c).filter(|c| c.id != n.id).collect();
+    if others.is_empty() {
+        return None;
+    }
+    let value = if prop == "visible" { !others.iter().any(|o| o.visible) } else { others.iter().any(|o| !o.locked) };
+    let ids: Vec<u64> = others.iter().map(|o| o.id.0).collect();
+    Some(("layer.setProps".into(), json!({ "ids": ids, prop: value })))
+}
+
 /// The eye and lock columns of row `n` at `r`.
 fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out) {
     let t = &view.t;
@@ -574,14 +589,18 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
     }
     let m = ui.input(|i| i.modifiers);
     if er.clicked() {
-        if m.command && n.is_layer() {
+        if m.alt {
+            out.actions.extend(others_action(view.doc, n, "visible"));
+        } else if m.command && n.is_layer() {
             // Ctrl/Cmd-click: Preview ↔ Outline for this layer.
             out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "preview": !preview})));
         } else {
             out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "visible": !n.visible})));
         }
     }
-    if lr.clicked() {
+    if lr.clicked() && m.alt {
+        out.actions.extend(others_action(view.doc, n, "locked"));
+    } else if lr.clicked() {
         out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
     }
     // Dragging down a column gives every row it passes this row's new state.
@@ -991,6 +1010,41 @@ mod tests {
         for e in steps {
             frame(app, ctx, e, alt);
         }
+    }
+
+    #[test]
+    fn alt_clicking_an_eye_or_lock_toggles_the_other_layers() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        run(&mut app, "layer.new", json!({}));
+        run(&mut app, "layer.new", json!({}));
+        let ctx = egui::Context::default();
+        // Rows top first: Layers 3, 2, 1.
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 3);
+        let state =
+            |app: &VectorcraftApp| -> Vec<(bool, bool)> { app.session.active().unwrap().doc.layers.iter().map(|l| (l.visible, l.locked)).collect() };
+        let click = |app: &mut VectorcraftApp, at: egui::Pos2, alt: bool| {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)], alt);
+            frame(app, &ctx, vec![button(at, true)], alt);
+            frame(app, &ctx, vec![button(at, false)], alt);
+        };
+        let (eye, lock) = (egui::pos2(12.0, circles[1].y), egui::pos2(37.0, circles[1].y));
+        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let before = undo(&app);
+        // Alt-click Layer 2's eye: Layers 1 and 3 hide in one step; again, they show.
+        click(&mut app, eye, true);
+        assert_eq!(state(&app), [(false, false), (true, false), (false, false)]);
+        assert_eq!(undo(&app), before + 1);
+        click(&mut app, eye, true);
+        assert_eq!(state(&app), [(true, false); 3]);
+        // Alt-click its lock: the others lock.
+        click(&mut app, lock, true);
+        assert_eq!(state(&app), [(true, true), (true, false), (true, true)]);
+        // A plain click still toggles only that layer.
+        click(&mut app, eye, false);
+        assert_eq!(state(&app), [(true, true), (false, false), (true, true)]);
     }
 
     /// A document with two rectangles on one layer → (app, layer, [bottom, top]).
