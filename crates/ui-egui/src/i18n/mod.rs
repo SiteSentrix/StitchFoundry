@@ -60,13 +60,23 @@ fn plural_czech(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 6] = [
+pub static LANGUAGES: [LangInfo; 7] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Japanese: the whole interface (every menu string and `tl!` literal), keeping the product,
     // workspace and perspective preset names in English (`MENU_KEEP_AS_IS`).
     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     // Czech: every menu label (`menu_catalogs_translate_every_menu_label`); panels and dialogs not yet.
     LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_czech, complete_menus: false, catalog: OnceLock::new() },
+    // Spanish: the whole interface in neutral, international Spanish, keeping the same names in
+    // English as Japanese; every `es-*` locale (`es-ES`, `es-MX`, `es-AR`, `es-419` …) resolves here.
+    LangInfo {
+        code: "es",
+        name: "Español",
+        source: include_str!("es.tsv"),
+        plural: plural_one_other,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
     // Brazilian Portuguese: every menu label (`menu_catalogs_translate_every_menu_label`), every
     // `tl!` literal and the plural messages; left English on purpose are the `MENU_KEEP_AS_IS`
     // strings (product name, language names, workspace names, perspective grid presets).

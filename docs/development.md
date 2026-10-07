@@ -76,7 +76,8 @@ always use the English ids and labels, so agents and scripts never see translate
 Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, complete, in the vocabulary used
 in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Simplified Chinese (`zh-hans`,
 complete, in the vocabulary used in mainland China; `zh-CN`, `zh-SG`, `zh-Hans-*` and a bare `zh` resolve to it,
-so the two scripts never mix), Japanese (`ja`, complete), Czech (`cs`, every menu label) and Brazilian Portuguese
+so the two scripts never mix), Japanese (`ja`, complete), Spanish (`es`, complete, in neutral
+international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or `es-419` resolves to it), Czech (`cs`, every menu label) and Brazilian Portuguese
 (`pt-br`, every menu label and every `tl!` literal). Untranslated text falls back to English until its rows are added.
 
 - `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a

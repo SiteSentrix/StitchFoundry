@@ -54,7 +54,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "app.language",
         "Interface Language",
         "",
-        "{lang: auto|<code>} the interface language, persisted as the `interfaceLanguage` preference (`auto` follows the system locale; codes: prefs.list › interfaceLanguage, e.g. en, ja, cs, zh-hant)",
+        "{lang: auto|<code>} the interface language, persisted as the `interfaceLanguage` preference (`auto` follows the system locale; codes: prefs.list › interfaceLanguage, e.g. en, ja, cs, es, zh-hant)",
     ),
     ("file.open", "Open…", "Cmd+O", "{path?}"),
     (
