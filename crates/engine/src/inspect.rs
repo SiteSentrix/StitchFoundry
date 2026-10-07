@@ -29,7 +29,21 @@ pub fn node_summary(n: &Node) -> Value {
     if n.bbox_angle != 0.0 {
         v["rotation"] = json!(n.bbox_angle);
     }
-    if !n.is_container() {
+    if let NodeKind::Text(t) = &n.kind {
+        // Type shows its characters' paint: the first run's, as paint.proxies and the Stroke
+        // options read it. Fills and strokes of the type object itself, above or below its
+        // characters, come separately so the two stay apart.
+        let default = vectorcraft_doc::CharStyle::default();
+        let style = t.runs.first().map_or(&default, |r| &r.style);
+        v["fill"] = json!(style.fill.label());
+        v["stroke"] = json!(style.stroke.label());
+        v["strokeWidth"] = json!(if style.stroke.is_none() { 0.0 } else { style.stroke_width });
+        if n.appearance.fill().is_some() || n.appearance.stroke().is_some() {
+            v["objectFill"] = json!(n.appearance.fill_paint().label());
+            v["objectStroke"] = json!(n.appearance.stroke_paint().label());
+            v["objectStrokeWidth"] = json!(n.appearance.stroke_width());
+        }
+    } else if !n.is_container() {
         v["fill"] = json!(n.appearance.fill_paint().label());
         v["stroke"] = json!(n.appearance.stroke_paint().label());
         v["strokeWidth"] = json!(n.appearance.stroke_width());
