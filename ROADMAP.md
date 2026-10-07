@@ -110,7 +110,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout.
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
-- **Drawing aids:** Smart Guides and snapping, and Draw Normal / Behind / Inside modes.
+- **Drawing aids:** Smart Guides and snapping, guides dragged out of the rulers, and Draw Normal / Behind / Inside modes.
 - **Geometry and effects:**
   - Pathfinder (10 exact curve booleans), Offset, Outline Stroke, Simplify, Clean Up, Split Into Grid, Divide Objects Below.
   - Live effects with previewing dialogs: Distort & Transform, Path, Convert to Shape, 15 Warp styles, Round Corners, Scribble, Effect → Pathfinder (all 10 operations, live on groups; several loose objects are grouped first, in one undo step), Color Adjustments (Brightness/Contrast, Curves, Levels, Hue/Saturation, Shift to Color, Temperature/Tint, on vectors, live type and embedded images), and raster drop shadow, glows and feather. SVG and PDF export keep live effects (geometry baked; SVG raster effects as filters).
@@ -190,7 +190,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Image Trace, graphs, image tools | 3 | 70% | graph Design/Column/Marker, Create Object Mosaic, Crop Image polish (Vector Halftone is done) | 6–10 |
 | Layers, artboards, document setup | 5 | 80% | Layers panel options depth, artboard presets/rearrange polish (Document Setup and New Document are done) | 5–8 |
 | View & navigation | 3 | 70% | New View/Edit Views, multiple windows/arrange, Snap to Pixel/Glyph (print tiling is done) | 9–14 |
-| Guides, grids, smart guides, snapping, rulers | 3 | 75% | global/video rulers, smart-guide preference depth | 4–8 |
+| Guides, grids, smart guides, snapping, rulers | 3 | 75% | global/video rulers, smart-guide preference depth, ruler-drag modifiers (Shift snaps to ticks, Alt swaps orientation) and dragging existing guides | 4–8 |
 | File formats | 6 | 85% | DWG (no open spec: DXF instead), PSD placement as layers, Illustrator EPS checked against real files (only reduced repros so far), the remaining fidelity polish; EPS, DXF, EMF/WMF, TIFF, BMP, Targa, PSD export, SVGZ, PDF security, PDF/X, PDF layers and presets are done | 6–10 |
 | Export for Screens, Asset Export, slices, Save for Web | 3 | 85% | polish only (all four are done) | 2–4 |
 | Print, colour management, separations, flattener | 3 | 80% | print preview fidelity (flattener presets in PDF and print, overprint in PDF and composite print, Print dialog, presets, PostScript, marks, separations, Print Tiling, print overprint/flattener/bitmap options and printer profile are done) | 1–2 |

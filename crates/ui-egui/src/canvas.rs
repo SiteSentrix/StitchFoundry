@@ -342,6 +342,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     if app.ui.view.rulers && app.ui.screen_mode < 3 {
         rulers(ui, full, &xf, app.hover_doc, app.session.general_unit(), &t);
+        ruler_guides(app, ui, full, rect, &xf, &t);
     }
     if app.ui.task_bar && !app.session.tool_busy() && app.ui.screen_mode < 3 {
         task_bar(app, ui, &xf);
@@ -680,11 +681,39 @@ pub(crate) fn ruler_label(v: f64, step: f64) -> String {
 }
 
 /// The rulers, numbered in `unit` (the General unit).
-fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, unit: Unit, t: &Tokens) {
-    let p = ui.painter();
+/// The top ruler, the left ruler and the box where they meet.
+fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
     let top = egui::Rect::from_min_max(pos2(full.left() + RULER, full.top()), pos2(full.right(), full.top() + RULER));
     let left = egui::Rect::from_min_max(pos2(full.left(), full.top() + RULER), pos2(full.left() + RULER, full.bottom()));
-    let corner = egui::Rect::from_min_size(full.min, vec2(RULER, RULER));
+    [top, left, egui::Rect::from_min_size(full.min, vec2(RULER, RULER))]
+}
+
+/// A drag from a ruler onto the canvas makes a guide where the button is released: a horizontal
+/// one from the top ruler, a vertical one from the left ruler. Released anywhere else, it makes
+/// none.
+fn ruler_guides(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf, t: &Tokens) {
+    let [top, left, _] = ruler_rects(full);
+    for (r, vertical, id) in [(top, false, "ruler-top"), (left, true, "ruler-left")] {
+        let resp = ui.interact(r, egui::Id::new(id), Sense::drag());
+        let Some(p) = resp.interact_pointer_pos().filter(|p| canvas.contains(*p)) else { continue };
+        if resp.drag_stopped() {
+            let d = xf.to_doc(p);
+            // The new guide shows even if guides were hidden.
+            app.ui.view.guides = true;
+            if let Err(e) = app.run("guide.add", json!({ "vertical": vertical, "pos": if vertical { d.x } else { d.y } })) {
+                app.status(e);
+            }
+        } else if resp.dragged() {
+            let line =
+                if vertical { [pos2(p.x, canvas.top()), pos2(p.x, canvas.bottom())] } else { [pos2(canvas.left(), p.y), pos2(canvas.right(), p.y)] };
+            ui.painter_at(canvas).line_segment(line, Stroke::new(1.0, t.guide));
+        }
+    }
+}
+
+fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, unit: Unit, t: &Tokens) {
+    let p = ui.painter();
+    let [top, left, corner] = ruler_rects(full);
     for r in [top, left, corner] {
         p.rect_filled(r, 0.0, t.ruler);
     }
@@ -1473,6 +1502,41 @@ mod tests {
         // At the canvas's centre: the square.
         click(&mut app, rect.center());
         assert_eq!(selected(&app), vec![vectorcraft_doc::NodeId(id)]);
+    }
+
+    #[test]
+    fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.ui.view.rulers = true;
+        app.ui.view.guides = false;
+        // A drawing tool: the drag must not draw.
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let drag = |app: &mut VectorcraftApp, from: Pos2, to: Pos2| {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(from)]);
+            frame(app, &ctx, vec![button(from, true)]);
+            frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
+            frame(app, &ctx, vec![button(to, false)]);
+        };
+        let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+        // From the top ruler: a horizontal guide where the button was released.
+        let to = pos2(rect.center().x, rect.top() + 120.0);
+        drag(&mut app, pos2(rect.center().x, rect.top() - RULER / 2.0), to);
+        assert_eq!(guides(&app), [(false, xf.to_doc(to).y)]);
+        assert!(app.ui.view.guides, "the new guide shows");
+        // From the left ruler: a vertical one.
+        let to2 = pos2(rect.left() + 200.0, rect.center().y);
+        drag(&mut app, pos2(rect.left() - RULER / 2.0, rect.center().y), to2);
+        assert_eq!(guides(&app), [(false, xf.to_doc(to).y), (true, xf.to_doc(to2).x)]);
+        // Released back on the ruler: no guide.
+        drag(&mut app, pos2(rect.center().x, rect.top() - RULER / 2.0), pos2(rect.center().x + 40.0, rect.top() - 4.0));
+        assert_eq!(guides(&app).len(), 2);
+        assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the tool drew nothing");
     }
 
     #[test]
