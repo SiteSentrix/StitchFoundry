@@ -120,16 +120,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "nothing to change"));
     }
     let (position, small_caps) = super::docsetup::script_params(p, &s.doc()?.doc.setup, C)?;
-    let char_align = match p.get("charAlign") {
-        None => None,
-        Some(v) => Some(match v.as_str() {
-            Some("romanBaseline") => vectorcraft_doc::CharAlign::RomanBaseline,
-            Some("emBoxTop") => vectorcraft_doc::CharAlign::EmBoxTop,
-            Some("emBoxCenter") => vectorcraft_doc::CharAlign::EmBoxCenter,
-            Some("emBoxBottom") => vectorcraft_doc::CharAlign::EmBoxBottom,
-            _ => return Err(bad(C, "`charAlign` must be \"romanBaseline\", \"emBoxTop\", \"emBoxCenter\" or \"emBoxBottom\"")),
-        }),
-    };
+    let char_align = super::textedit::char_align_param(p, C)?;
     let mojikumi = match p.get("mojikumi") {
         None => None,
         Some(v) => Some(match v.as_str() {

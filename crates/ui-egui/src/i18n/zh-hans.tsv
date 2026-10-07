@@ -302,6 +302,7 @@
 	Changing these settings changes how raster effects look when exported, flattened or expanded.	更改这些设置会改变栅格效果在导出、拼合或扩展时的外观。
 	Channel	色版
 	Character	字符
+	Character Alignment	字符对齐
 	Character / Paragraph	字符/段落
 	Character Rotation	字符旋转
 	Character Set:	字符集：
@@ -747,6 +748,9 @@
 	Ellipse Tool	椭圆工具
 	Ellipse…	椭圆形…
 	Ellipsis	删节号
+	Em Box Bottom/Left	全角字框下 / 左
+	Em Box Center	全角字框居中
+	Em Box Top/Right	全角字框上 / 右
 	Em Dash	长破折号
 	Em Space	全角空格
 	Embed	嵌入
@@ -2053,6 +2057,7 @@
 	Right-Justified Tab	右对齐制表位
 	Right:	右：
 	Rise…	上升…
+	Roman Baseline	罗马基线
 	Roman Hanging Punctuation	西文悬挂标点
 	Rotate	旋转
 	Rotate 90° CW	顺时针旋转 90°

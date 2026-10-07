@@ -452,6 +452,11 @@ mod area_tests {
         assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["charAlign"], "emBoxCenter");
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(runs(&s)[0].style.char_align, CharAlign::RomanBaseline);
+        // Characters selected with the Type tool: only the range takes it (雅 is 3 bytes).
+        assert!(s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "charAlign": "top"})).is_err());
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "charAlign": "emBoxTop"})).unwrap();
+        let aligns: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.char_align)).collect();
+        assert_eq!(aligns, [("雅".to_string(), CharAlign::RomanBaseline), ("楽".to_string(), CharAlign::EmBoxTop)]);
     }
 
     #[test]
