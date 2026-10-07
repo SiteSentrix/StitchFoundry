@@ -235,19 +235,26 @@ impl TypeTool {
         }
     }
 
-    fn on_up(&mut self, cx: &ToolContext, start: Point) -> Vec<Action> {
+    /// Start editing the type under `p` with the caret there → the actions (ending the previous
+    /// edit, selecting the type); None when no type is under `p`.
+    fn edit_at(&mut self, cx: &ToolContext, p: Point) -> Option<Vec<Action>> {
+        let h = hit_test(cx.doc, p, cx.hit_options())?;
+        let Some(NodeKind::Text(t)) = cx.doc.node(h.leaf).map(|n| &n.kind) else { return None };
+        let lay = self.layout(t);
+        let byte = vectorcraft_text::hit_byte(&lay, t.xf.inverse() * p);
         let mut out = self.finish(cx);
+        self.start_editing(h.leaf, byte);
+        self.clicks = (Some(p), 1);
+        out.push(Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]})));
+        Some(out)
+    }
+
+    fn on_up(&mut self, cx: &ToolContext, start: Point) -> Vec<Action> {
         // Click into existing text: place the caret.
-        if let Some(h) = hit_test(cx.doc, start, cx.hit_options())
-            && let Some(NodeKind::Text(t)) = cx.doc.node(h.leaf).map(|n| &n.kind)
-        {
-            let lay = self.layout(t);
-            let byte = vectorcraft_text::hit_byte(&lay, t.xf.inverse() * start);
-            self.start_editing(h.leaf, byte);
-            self.clicks = (Some(start), 1);
-            out.push(Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]})));
+        if let Some(out) = self.edit_at(cx, start) {
             return out;
         }
+        let mut out = self.finish(cx);
         let drag = self.drag.take();
         // Area Type / Type on a Path: click a path.
         if self.mode != Mode::Type && drag.is_none() {
@@ -357,6 +364,12 @@ impl Tool for TypeTool {
                     return out;
                 }
                 self.clicks = (None, 0);
+                // A press on other type edits it from there, so a drag selects its text at once,
+                // as it does in the type being edited.
+                if let Some(out) = self.edit_at(cx, ev.pos) {
+                    self.selecting = true;
+                    return out;
+                }
                 self.press = Some(ev.pos);
                 self.drag = None;
                 vec![]
