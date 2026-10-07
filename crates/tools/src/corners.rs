@@ -93,14 +93,15 @@ impl CornerDrag {
         Some(Self { widgets, corner, start: p, began: false, radius: widgets.radii[corner], at: p })
     }
 
-    /// The start radius plus the pointer's travel along the corner's inward diagonal (in the
-    /// shape's own units), from square to fully round.
+    /// The start radius (as drawn: no larger than fits) plus the pointer's travel along the
+    /// corner's inward diagonal (in the shape's own units), from square to fully round.
     fn radius_at(&self, p: Point) -> f64 {
         let w = &self.widgets;
         let inv = w.xf.inverse();
         let d = inv * p - inv * self.start;
         let (_, (sx, sy)) = CORNERS[self.corner];
-        (w.radii[self.corner] + (d.x * sx + d.y * sy) / 2.0).clamp(0.0, w.w.min(w.h) / 2.0)
+        let max = (w.w.abs().min(w.h.abs()) / 2.0).max(0.0);
+        (w.radii[self.corner].min(max) + (d.x * sx + d.y * sy) / 2.0).clamp(0.0, max)
     }
 
     pub fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
