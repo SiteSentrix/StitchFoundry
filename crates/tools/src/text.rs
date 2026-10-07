@@ -264,7 +264,7 @@ impl TypeTool {
         }
         let area = drag.map(|d| Rect::from_points(start, d)).filter(|r| r.width() > cx.tol(6.0) && r.height() > cx.tol(6.0));
         let mut params = match area {
-            Some(r) => json!({"x": r.x0, "y": r.y0 + 12.0, "text": "", "area": {"width": r.width(), "height": r.height()}}),
+            Some(r) => json!({"x": r.x0, "y": r.y0, "text": "", "area": {"width": r.width(), "height": r.height()}}),
             None => json!({"x": start.x, "y": start.y, "text": ""}),
         };
         params["vertical"] = json!(self.vertical);
