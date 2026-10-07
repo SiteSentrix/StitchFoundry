@@ -1,9 +1,10 @@
 //! Paragraph panel: seven alignment buttons, Paragraph Direction (with the Indic options), indents,
-//! space before/after, Hyphenate and Mojikumi Set (with the East Asian options).
+//! space before/after, Hyphenate and Mojikumi Set (with the East Asian options); the panel menu
+//! picks the Single-line or Every-line Composer.
 
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Justify, NodeKind, ParaDirection, ParaStyle};
+use vectorcraft_doc::{Composer, Justify, NodeKind, ParaDirection, ParaStyle};
 
 use super::character::text_style;
 use super::{pstate, set_pstate};
@@ -181,14 +182,20 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     ui.separator();
-    menu_item(ui, tl!("Single-line Composer"), false, false);
-    menu_item(ui, tl!("Every-line Composer"), false, true);
+    let composer = style.as_ref().map(|(_, p)| p.composer);
+    for (c, label, id) in
+        [(Composer::SingleLine, tl!("Single-line Composer"), "singleLine"), (Composer::EveryLine, tl!("Every-line Composer"), "everyLine")]
+    {
+        if menu_item(ui, label, has, composer == Some(c)) {
+            format(app, json!({ "composer": id }));
+        }
+    }
     ui.separator();
     if menu_item(ui, tl!("Reset Panel"), has, false) {
         para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
         format(
             app,
-            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard"}),
+            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard", "composer": "everyLine"}),
         );
     }
 }

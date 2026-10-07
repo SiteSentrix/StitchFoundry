@@ -7,7 +7,7 @@ use std::io::Write as _;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{ColorProfiles, Document, ImageBlob, ImageObject, Node, NodeKind, OpacityMask, Symbol};
+use vectorcraft_doc::{ColorProfiles, Composer, Document, ImageBlob, ImageObject, Node, NodeKind, OpacityMask, Symbol};
 use vectorcraft_format::{FormatError, SaveOptions, VERSION, is_compressed, load, preview, save, save_with, sniff};
 use vectorcraft_geom::Affine;
 use vectorcraft_testkit::fixtures;
@@ -109,6 +109,41 @@ fn keys_from_newer_versions_round_trip() {
         assert_eq!(again["document"]["futureFlag"], json!(true));
     }
     check_native_roundtrip(&d).unwrap();
+}
+
+/// The paragraph composer is saved only when it isn't the default (Every-line) and reads back.
+#[test]
+fn text_composer_round_trips() {
+    let d = rich_doc();
+    let composers = |d: &Document| {
+        let mut v = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                v.push(t.para.composer);
+            }
+        });
+        v
+    };
+    assert_eq!(composers(&d), [Composer::SingleLine]);
+    let bytes = save(&d, false);
+    assert!(String::from_utf8_lossy(&bytes).contains("\"composer\":\"singleLine\""));
+    assert_eq!(composers(&load(&bytes).unwrap()), [Composer::SingleLine]);
+    // Files without the key (older files, Every-line text) read as Every-line.
+    fn strip(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                m.remove("composer");
+                m.values_mut().for_each(strip);
+            }
+            Value::Array(a) => a.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    let mut v = json_of(&bytes);
+    strip(&mut v);
+    let d2 = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+    assert_eq!(composers(&d2), [Composer::EveryLine]);
+    assert!(!String::from_utf8_lossy(&save(&d2, false)).contains("composer"));
 }
 
 /// A document as the first version wrote it (format name `drawcraft`, anchors as maps).
