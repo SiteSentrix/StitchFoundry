@@ -347,6 +347,24 @@ pub struct SavedSelection {
     pub objects: Vec<NodeId>,
 }
 
+impl SavedSelection {
+    /// Most saved selections a document keeps (the Select menu lists every one).
+    pub const MAX: usize = 25;
+    /// Longest name, in characters.
+    pub const MAX_NAME: usize = 255;
+
+    /// `name` trimmed and cut to [`Self::MAX_NAME`] characters (`None` when blank).
+    pub fn clean_name(name: &str) -> Option<String> {
+        let name: String = name.trim().chars().take(Self::MAX_NAME).collect();
+        (!name.is_empty()).then_some(name)
+    }
+
+    /// The first "Selection N" none of `saved` is named.
+    pub fn default_name(saved: &[SavedSelection]) -> String {
+        (1..=saved.len() + 1).map(|i| format!("Selection {i}")).find(|n| !saved.iter().any(|x| &x.name == n)).unwrap_or_default()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Guide {
     /// true = vertical guide at `pos` (x), false = horizontal at `pos` (y).
@@ -498,7 +516,7 @@ pub struct Document {
     /// View → New View… (up to 25, like Illustrator).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<SavedView>,
-    /// Select → Save Selection… (up to 25 in the engine); saved with the document.
+    /// Select → Save Selection… (at most [`SavedSelection::MAX`]); saved with the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub saved_selections: Vec<SavedSelection>,
     #[serde(default)]
@@ -929,6 +947,33 @@ impl Document {
 }
 
 impl Document {
+    /// Saved selections as a file gives them, made safe to list and recall: at most
+    /// [`SavedSelection::MAX`], each with a clean, unique name and naming objects this document
+    /// has, each once. (An id it doesn't have would select whatever object takes that id later.)
+    pub fn tidy_saved_selections(&mut self) {
+        if self.saved_selections.is_empty() {
+            return;
+        }
+        let mut ids = std::collections::HashSet::new();
+        self.walk(|n| {
+            ids.insert(n.id);
+        });
+        let mut kept: Vec<SavedSelection> = vec![];
+        for s in std::mem::take(&mut self.saved_selections) {
+            if kept.len() >= SavedSelection::MAX {
+                break;
+            }
+            let Some(name) = SavedSelection::clean_name(&s.name) else { continue };
+            if kept.iter().any(|k| k.name == name) {
+                continue;
+            }
+            let mut seen = std::collections::HashSet::new();
+            let objects = s.objects.into_iter().filter(|id| ids.contains(id) && seen.insert(*id)).collect();
+            kept.push(SavedSelection { name, objects });
+        }
+        self.saved_selections = kept;
+    }
+
     /// Leave opacity-mask editing: drop the temporary editing layer, a working copy of art the
     /// mask already holds (the engine syncs it after every edit).
     pub fn drop_edit_modes(&mut self) {

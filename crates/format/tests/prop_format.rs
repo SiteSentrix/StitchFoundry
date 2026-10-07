@@ -203,3 +203,35 @@ fn bug_f64_bit_exact_roundtrip() {
     d.raster_effects_ppi = 0.1 + 0.2;
     check_native_roundtrip_exact(&d).unwrap();
 }
+
+/// Saved selections come from the file: older files have none, and a hostile one is cut down to
+/// what the Select menu can list, with names that fit and ids the document has.
+#[test]
+fn saved_selections_from_a_file_are_tidied() {
+    let d = rich_doc();
+    let mut v: Value = serde_json::from_slice(&save(&d, false)).unwrap();
+    assert!(v["document"].get("saved_selections").is_none(), "nothing written when there are none");
+    assert!(load(&serde_json::to_vec(&v).unwrap()).unwrap().saved_selections.is_empty());
+    let id = fixtures::all_ids(&d).into_iter().next().unwrap();
+    let missing = fixtures::all_ids(&d).into_iter().map(|NodeId(i)| i).max().unwrap() + 1;
+    let mut list = vec![
+        json!({"name": format!("  {}  ", "x".repeat(1000)), "objects": [id.0, missing, id.0]}),
+        json!({"name": "   ", "objects": [id.0]}),
+        json!({"name": "Dup", "objects": []}),
+        json!({"name": "Dup", "objects": [id.0]}),
+    ];
+    list.extend((0..100).map(|i| json!({"name": format!("S{i}"), "objects": [id.0]})));
+    v["document"]["saved_selections"] = json!(list);
+    let back = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+    let saved = &back.saved_selections;
+    assert_eq!(saved.len(), vectorcraft_doc::SavedSelection::MAX);
+    assert_eq!(saved[0].name, "x".repeat(vectorcraft_doc::SavedSelection::MAX_NAME));
+    assert_eq!(saved[0].objects, vec![id], "a missing id is dropped, a repeated one kept once");
+    assert_eq!((saved[1].name.as_str(), saved[1].objects.len()), ("Dup", 0), "blank names go, the first of a name stays");
+    assert_eq!(saved[2].name, "S0");
+    // What loads saves and loads again unchanged.
+    assert_eq!(&load(&save(&back, false)).unwrap().saved_selections, saved);
+    // Junk in the member is a format error, not a crash.
+    v["document"]["saved_selections"] = json!([{"name": 5, "objects": "x"}]);
+    assert!(load(&serde_json::to_vec(&v).unwrap()).is_err());
+}

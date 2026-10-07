@@ -6,7 +6,7 @@
 //! `name<i>` (as edited) and `deleted<i>`; `selected` (the row picked).
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::MAX_SAVED_SELECTIONS;
+use vectorcraft_engine::doc::SavedSelection;
 
 use super::{DialogSpec, form};
 use crate::state::Dialog;
@@ -34,7 +34,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 }
 
 fn count(d: &Dialog) -> usize {
-    d.fields.get("count").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).unwrap_or(0).min(MAX_SAVED_SELECTIONS)
+    d.fields.get("count").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).unwrap_or(0).min(SavedSelection::MAX)
 }
 
 /// The rows still in the list (not deleted).

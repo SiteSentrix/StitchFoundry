@@ -793,3 +793,16 @@ fn every_new_command_has_params_doc_and_menu() {
         assert!(!c.params.is_empty() && !c.menu.is_empty(), "{id}");
     }
 }
+
+#[test]
+fn saved_selection_names_are_trimmed_and_capped() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a]);
+    let long = "n".repeat(1000);
+    let name = s.execute("select.save", &json!({ "name": format!(" {long} ") })).unwrap()["name"].clone();
+    assert_eq!(name.as_str().map(|n| n.chars().count()), Some(vectorcraft_doc::SavedSelection::MAX_NAME));
+    s.execute("select.editSaved", &json!({"name": name, "newName": format!("{long}é")})).unwrap();
+    let list = s.execute("select.savedList", &json!({})).unwrap();
+    assert_eq!(list[0].as_str().map(|n| n.chars().count()), Some(vectorcraft_doc::SavedSelection::MAX_NAME));
+}

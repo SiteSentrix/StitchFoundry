@@ -521,6 +521,18 @@ the one highlighted layer or group row, else the one selected group, else the cu
 so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
 underlines clipping-path names.
 
+## Saved selections
+
+Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default
+the first free "Selection N"; an existing name is replaced with the current selection; at most 25 per document,
+names up to 255 characters) → `{name}`, one undo step. `select.savedList` lists the names in menu order, and
+`select.recall {name}` selects those objects again (ones deleted since are left out) → `{count}`. Edit Selection…
+renames and deletes: `select.editSaved {name, newName?, delete?}`, or several at once as
+`{edits: [{name, newName?, delete?}…]}` in one undo step, where every `name` is the name before the edit and the
+names must stay unique. In the desktop app the saved selections are listed at the bottom of the Select menu
+(`select.recall1` … `select.recall25`). A file's saved selections are checked when it opens: past 25, blank or
+repeated names, and ids the document doesn't have are dropped.
+
 ## Graphic styles
 
 A graphic style holds an appearance (fills, strokes, effects) plus opacity, blend mode, isolate and knockout.

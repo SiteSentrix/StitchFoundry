@@ -1550,7 +1550,7 @@ const PERSPECTIVE_SLOTS: [[&str; crate::dialogs::perspective_presets::SLOTS]; 3]
 ];
 
 /// Select → saved selections: the n-th saved selection of the active document.
-const SAVED_SELECTION_IDS: [&str; 25] = [
+const SAVED_SELECTION_IDS: [&str; vectorcraft_engine::doc::SavedSelection::MAX] = [
     "select.recall1",
     "select.recall2",
     "select.recall3",
@@ -2712,9 +2712,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
     // Save Selection…: a name dialog, starting from the first free "Selection N".
     if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
-        let taken = app.session.execute("select.savedList", &json!({})).ok().unwrap_or_default();
-        let taken: Vec<&str> = taken.as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-        let name = (1..).map(|i| format!("Selection {i}")).find(|n| !taken.contains(&n.as_str())).unwrap_or_default();
+        let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedSelection::default_name(&d.doc.saved_selections)).unwrap_or_default();
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Save Selection", "params": {"name": name}}));
         return;
     }
