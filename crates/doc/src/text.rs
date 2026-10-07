@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_geom::{Affine, PathData, Point, Rect};
+use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeLayer};
 
@@ -476,6 +476,49 @@ impl TextObject {
     pub fn transform(&mut self, a: Affine) {
         self.xf = a * self.xf;
     }
+    /// Area type's frame (the type area) in document space; None for other type.
+    pub fn area_frame(&self) -> Option<PathData> {
+        match &self.kind {
+            TextKind::Area { frame } => Some(frame.transformed(self.xf)),
+            _ => None,
+        }
+    }
+    /// Reshape area type's frame by `a`, a document-space transform, keeping the type at its size
+    /// (a bounding-box resize: the text reflows, it isn't scaled). False, changing nothing, for
+    /// other type, a degenerate `xf` or a frame that would not be finite.
+    pub fn transform_area(&mut self, a: Affine) -> bool {
+        let xf = self.xf;
+        self.reshape_area(|frame, to_text| {
+            frame.transform(to_text * a * xf);
+            true
+        })
+    }
+    /// Move anchors `refs` (subpath, anchor) of area type's frame by `d` in document space, with
+    /// their handles (a Direct Selection drag of a frame corner or edge). False, changing
+    /// nothing, when an anchor doesn't exist, or as [`Self::transform_area`].
+    pub fn move_area_anchors(&mut self, refs: &[(usize, usize)], d: Vec2) -> bool {
+        self.reshape_area(|frame, to_text| {
+            // A distance: only the linear part of the document → text map applies.
+            let local = to_text * d.to_point() - to_text * Point::ZERO;
+            refs.iter().all(|&(si, ai)| frame.anchor_mut(si, ai).map(|a| a.translate(local)).is_some())
+        })
+    }
+    /// Edit a copy of the area frame with `f` (given the document → text space map) and keep it
+    /// when `f` succeeds and the result is finite.
+    fn reshape_area(&mut self, f: impl FnOnce(&mut PathData, Affine) -> bool) -> bool {
+        let det = self.xf.determinant();
+        if !det.is_finite() || det.abs() < 1e-12 {
+            return false;
+        }
+        let to_text = self.xf.inverse();
+        let TextKind::Area { frame } = &mut self.kind else { return false };
+        let mut next = frame.clone();
+        if !f(&mut next, to_text) || !next.anchors().all(|(_, _, a)| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite()) {
+            return false;
+        }
+        *frame = next;
+        true
+    }
     /// Scale the character strokes' weights and dashes by `s` (they are drawn in text space, so
     /// `1 / scale` keeps their weight through a transform that scales the type).
     pub fn scale_char_strokes(&mut self, s: f64) {
@@ -504,5 +547,50 @@ mod tests {
         let b = t.bounds().unwrap();
         assert!(b.x0 >= 10.0 - 1e-9 && b.y1 > 20.0);
         assert_eq!(CharStyle::default().effective_leading(), 14.399999999999999);
+    }
+
+    /// 120 × 40 area type at (40, 40), its text drawn at twice its size.
+    fn area_type() -> TextObject {
+        let mut t = TextObject::point(Point::ZERO, "Some text", CharStyle::default());
+        t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 60.0, 20.0)) };
+        t.xf = Affine::translate((40.0, 40.0)) * Affine::scale(2.0);
+        t
+    }
+
+    #[test]
+    fn area_resizes_its_frame_and_keeps_its_type() {
+        let mut t = area_type();
+        assert_eq!(t.bounds(), Some(Rect::new(40.0, 40.0, 160.0, 80.0)));
+        // Bottom-right handle to (200, 140), about the top-left corner.
+        let o = Affine::translate((40.0, 40.0));
+        assert!(t.transform_area(o * Affine::scale_non_uniform(160.0 / 120.0, 100.0 / 40.0) * o.inverse()));
+        assert_eq!(t.xf, Affine::translate((40.0, 40.0)) * Affine::scale(2.0), "the type keeps its size");
+        let b = t.bounds().unwrap();
+        assert!((b.x1 - 200.0).abs() < 1e-9 && (b.y1 - 140.0).abs() < 1e-9 && b.x0 == 40.0, "{b:?}");
+        assert_eq!(t.area_frame().unwrap().bounds(), Some(b));
+        // Point type has no area; a degenerate transform or a non-finite frame changes nothing.
+        let mut p = TextObject::point(Point::ZERO, "x", CharStyle::default());
+        assert!(!p.transform_area(Affine::scale(2.0)) && p.area_frame().is_none());
+        let before = t.clone();
+        assert!(!t.transform_area(Affine::scale(f64::INFINITY)));
+        t.xf = Affine::scale(0.0);
+        assert!(!t.transform_area(Affine::scale(2.0)));
+        t.xf = before.xf;
+        assert_eq!(t, before);
+    }
+
+    #[test]
+    fn area_anchors_move_in_document_space() {
+        let mut t = area_type();
+        // The bottom-right corner (anchor 2) 20 pt right: 10 pt in text space at 2×.
+        assert!(t.move_area_anchors(&[(0, 2)], Vec2::new(20.0, 0.0)));
+        let TextKind::Area { frame } = &t.kind else { panic!() };
+        assert_eq!(frame.subpaths[0].anchors[2].p, Point::new(70.0, 20.0));
+        assert_eq!(frame.subpaths[0].anchors[1].p, Point::new(60.0, 0.0), "the others stay");
+        // A missing anchor changes nothing.
+        let before = t.clone();
+        assert!(!t.move_area_anchors(&[(0, 1), (0, 9)], Vec2::new(5.0, 5.0)));
+        assert!(!t.move_area_anchors(&[(3, 0)], Vec2::new(5.0, 5.0)));
+        assert_eq!(t, before);
     }
 }

@@ -2,7 +2,8 @@
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's corner widget to round its corners, double-click to enter isolation mode.
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
-//! along the objects' axes.
+//! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
+//! scaling its type: the text reflows at its size.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::{hit_test, marquee};
@@ -28,6 +29,8 @@ enum State {
     Scaling {
         handle: Handle,
         bx: OrientedBox,
+        /// Area type is selected: its frame resizes (`typeAreas`), its type keeps its size.
+        areas: bool,
     },
     Rotating {
         center: Point,
@@ -129,8 +132,12 @@ impl Tool for SelectionTool {
                 {
                     match box_hit(cx, &bx, p) {
                         Some(BoxHit::Handle(handle)) => {
-                            self.state = State::Scaling { handle, bx };
-                            return vec![Action::Begin("Scale".into())];
+                            let is_area = |id: &NodeId| cx.doc.node(*id).is_some_and(is_area_type);
+                            let areas = cx.selection.objects.iter().any(is_area);
+                            // Only area type: the step resizes type areas; anything else scales.
+                            let label = if areas && cx.selection.objects.iter().all(is_area) { "Resize Type Area" } else { "Scale" };
+                            self.state = State::Scaling { handle, bx, areas };
+                            return vec![Action::Begin(label.into())];
                         }
                         Some(BoxHit::Rotate) => {
                             self.state = State::Rotating { center: bx.center(), start: p };
@@ -196,12 +203,16 @@ impl Tool for SelectionTool {
                 out.push(Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt })));
                 out
             }
-            (PointerKind::Drag, State::Scaling { handle, bx }) => {
+            (PointerKind::Drag, State::Scaling { handle, bx, areas }) => {
                 // Scale in the box's own frame: along the objects' axes when it is rotated.
                 let a = scale_for_drag(bx.rect, handle, bx.to_local(p), m.shift, m.alt);
                 let nr = a.transform_rect_bbox(bx.rect);
                 self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
-                vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false }))]
+                let mut params = json!({ "matrix": matrix_json(bx.conjugate(a)), "copy": false });
+                if areas {
+                    params["typeAreas"] = json!(true);
+                }
+                vec![Action::Preview("object.transform".into(), params)]
             }
             (PointerKind::Drag, State::Rotating { center, start, .. }) => {
                 let (a, deg) = rotate_for_drag(center, start, p, m.shift);
@@ -271,7 +282,7 @@ impl Tool for SelectionTool {
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         match self.state {
             State::Rotating { .. } => return Cursor::Rotate,
-            State::Scaling { handle, bx } => return handle_cursor(handle, bx.angle),
+            State::Scaling { handle, bx, .. } => return handle_cursor(handle, bx.angle),
             State::Moving { began: true, .. } => return Cursor::Arrow,
             State::Corner(_) => return Cursor::CornerRadius,
             _ => {}
@@ -296,6 +307,12 @@ impl Tool for SelectionTool {
         }
         Cursor::Arrow
     }
+}
+
+/// Is `n` area type (text in a frame) whose frame the tools reshape? Type in perspective isn't:
+/// it transforms whole.
+pub(crate) fn is_area_type(n: &vectorcraft_doc::Node) -> bool {
+    n.perspective.is_none() && matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }))
 }
 
 /// The resize cursor for handle `h` of a box turned by `angle` (counter-clockwise degrees): the
@@ -418,6 +435,36 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 300.0, 300.0));
         assert!(matches!(&a[0], Action::Preview(_, v) if v["matrix"][0] == 2.0));
         assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 300.0, 300.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn handle_drag_on_area_type_resizes_its_frame() {
+        let (d, text) = doc_with_area_type();
+        let p = paint();
+        let mut s = Selection::default();
+        s.add(text);
+        let cx1 = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        // Bottom-right handle of the 120 × 40 frame at (300, 300).
+        assert_eq!(t.pointer(&cx1, &ev(PointerKind::Down, 420.0, 340.0)), vec![Action::Begin("Resize Type Area".into())]);
+        let a = t.pointer(&cx1, &ev(PointerKind::Drag, 460.0, 400.0));
+        assert!(matches!(&a[0], Action::Preview(c, v) if c == "object.transform" && v["typeAreas"] == true), "{a:?}");
+        assert_eq!(t.pointer(&cx1, &ev(PointerKind::Up, 460.0, 400.0)), vec![Action::Commit]);
+        // With another object the step is a scale, still resizing the type area.
+        let rect = d.layers[0].children().unwrap()[0].id;
+        s.add(rect);
+        let cx2 = cx(&d, &s, &p);
+        assert_eq!(t.pointer(&cx2, &ev(PointerKind::Down, 420.0, 340.0)), vec![Action::Begin("Scale".into())]);
+        let a = t.pointer(&cx2, &ev(PointerKind::Drag, 460.0, 400.0));
+        assert!(matches!(&a[0], Action::Preview(_, v) if v["typeAreas"] == true), "{a:?}");
+        t.pointer(&cx2, &ev(PointerKind::Up, 460.0, 400.0));
+        // Without area type the drag scales as before.
+        let mut s = Selection::default();
+        s.add(rect);
+        let cx3 = cx(&d, &s, &p);
+        t.pointer(&cx3, &ev(PointerKind::Down, 200.0, 200.0));
+        let a = t.pointer(&cx3, &ev(PointerKind::Drag, 300.0, 300.0));
+        assert!(matches!(&a[0], Action::Preview(_, v) if v.get("typeAreas").is_none()), "{a:?}");
     }
 
     #[test]

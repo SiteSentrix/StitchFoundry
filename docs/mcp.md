@@ -1790,6 +1790,20 @@ its undo history are as if the click never happened. Commands on the edited text
 {"name":"run_command","arguments":{"command":"text.discardEmpty","params":{"id":42}}}
 ```
 
+## Resizing area type
+
+As in the reference app, dragging a bounding-box handle of area type resizes its type area instead of scaling the
+type: the Selection tool sends `object.transform {matrix, typeAreas: true}`, which reshapes the frame of each area
+type object it transforms (other objects, type inside groups and point type transform as usual) and reflows the
+text at its size, through its thread too. `text.reshapeArea {id, anchors: [[subpath, anchor]…], dx, dy}` moves
+frame anchors with their handles (Direct Selection dragging a corner, or an edge's two ends), and
+`text.areaOptions {width?, height?}` sizes the area from its top-left corner (the query returns both). Each is one
+undo step. Object › Transform › Scale, the Scale tool and the Transform panel still scale the type.
+
+```json
+{"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
+```
+
 ## Constrain proportions
 
 The link between W and H in the Transform panel, the Properties panel and the Control bar is the

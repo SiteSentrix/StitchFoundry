@@ -20,7 +20,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform",
             [],
             None,
-            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool} apply an affine to the selection (or ids); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences)",
+            "{matrix: [a,b,c,d,e,f], copy?: bool, ids?, strokes?: bool, corners?: bool, typeAreas?: bool} apply an affine to the selection (or ids); strokes/corners: Scale Strokes & Effects / Scale Corners (default: the preferences); typeAreas: area type among them (not type inside a group) reshapes its frame by the matrix and its text reflows at its size, as a bounding-box handle drag does (default: the type transforms too)",
             has_doc,
             transform
         ),
@@ -202,15 +202,18 @@ pub(crate) fn scaling(s: &mut Session, p: &Value) -> Scaling {
     Scaling { strokes, effects: strokes.then_some(vectorcraft_render::effects::scale_effect), keep_type_strokes: !strokes, keep_corners: !corners }
 }
 
-/// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`]).
-/// Records Transform Again.
+/// Apply `xf` to `ids` (`copy` param: duplicate first; `strokes`/`corners`: see [`scaling`];
+/// `typeAreas`: see [`resize_type_area`]). Records Transform Again.
 pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf: Affine, p: &Value) -> Result<Value> {
     let copy = bool_or(p, "copy", false);
+    let areas = bool_or(p, "typeAreas", false);
     let sc = if Scaling::factor(xf).is_some() { scaling(s, p) } else { Scaling::default() };
     let ids = s.edit(label, |d, sel| {
         let targets = if copy { duplicate_in(d, sel, &ids, Affine::IDENTITY)? } else { ids.clone() };
         for id in &targets {
-            if let Some(n) = d.node_mut(*id) {
+            if let Some(n) = d.node_mut(*id)
+                && !(areas && resize_type_area(n, xf))
+            {
                 n.transform(xf, sc);
             }
         }
@@ -222,6 +225,17 @@ pub(crate) fn apply_transform(s: &mut Session, label: &str, ids: Vec<NodeId>, xf
         st.last_perspective = None;
     }
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Area type resized by its bounding box: `xf` reshapes its frame (the type area) and the text
+/// reflows at its size. False for anything else (and type in perspective), which transforms as
+/// usual.
+fn resize_type_area(n: &mut Node, xf: Affine) -> bool {
+    if n.perspective.is_some() {
+        return false;
+    }
+    let NodeKind::Text(t) = &mut n.kind else { return false };
+    super::typecmd::reshape_area_with(t, |t| t.transform_area(xf))
 }
 
 fn transform(s: &mut Session, p: &Value) -> Result<Value> {

@@ -477,6 +477,17 @@ pub(crate) mod testutil {
         (d, id)
     }
 
+    /// [`doc_with_rect`] plus 120 × 40 area type at (300, 300).
+    pub fn doc_with_area_type() -> (Document, NodeId) {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut t = vectorcraft_doc::TextObject::point(Point::new(300.0, 300.0), "Some words", Default::default());
+        t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 40.0)) };
+        d.insert(Some(l), 1, Node::new(id, vectorcraft_doc::NodeKind::Text(Box::new(t)))).unwrap();
+        (d, id)
+    }
+
     pub fn paint() -> PaintDefaults {
         PaintDefaults::default()
     }
