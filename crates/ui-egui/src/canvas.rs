@@ -1656,6 +1656,50 @@ mod tests {
     }
 
     #[test]
+    fn space_pressed_mid_drag_moves_what_the_tool_draws() {
+        use egui::{Event, Modifiers};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.ui.view.smart_guides = false;
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
+        let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+        // Press at `a`, drag to `b`, then hold Space while moving on by `by` and let go of both.
+        let draw = |app: &mut VectorcraftApp, a: Pos2, b: Pos2, by: egui::Vec2| {
+            frame(app, &ctx, vec![Event::PointerMoved(a)]);
+            frame(app, &ctx, vec![button(a, true)]);
+            frame(app, &ctx, vec![Event::PointerMoved(b)]);
+            frame(app, &ctx, vec![space(true)]);
+            frame(app, &ctx, vec![Event::PointerMoved(b + by)]);
+            frame(app, &ctx, vec![space(false)]);
+            frame(app, &ctx, vec![button(b + by, false)]);
+        };
+        let near = |p: Point, q: Point| p.distance(q) < 1e-3;
+        let at = app.canvas_rect.unwrap().center() - vec2(100.0, 60.0);
+        let center = app.view().unwrap().center;
+        // The rectangle moves at its size instead of growing, and the view doesn't pan.
+        app.select_tool("rectangle");
+        draw(&mut app, at, at + vec2(80.0, 40.0), vec2(30.0, 20.0));
+        assert_eq!(app.view().unwrap().center, center, "Space during a drag doesn't pan");
+        let st = app.session.active().unwrap();
+        let r = st.doc.node(st.selection.objects[0]).unwrap().path_data().unwrap().bounds().unwrap();
+        assert!(
+            near(Point::new(r.x0, r.y0), xf.to_doc(at + vec2(30.0, 20.0))) && near(Point::new(r.x1, r.y1), xf.to_doc(at + vec2(110.0, 60.0))),
+            "{r:?}"
+        );
+        // The Pen's anchor being dragged out moves, handles and all.
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("pen");
+        let a = at + vec2(0.0, 120.0);
+        draw(&mut app, a, a + vec2(40.0, 0.0), vec2(20.0, 10.0));
+        let st = app.session.active().unwrap();
+        let anchor = st.doc.node(st.selection.objects[0]).unwrap().path_data().unwrap().subpaths[0].anchors[0];
+        assert!(near(anchor.p, xf.to_doc(a + vec2(20.0, 10.0))) && near(anchor.h_out, xf.to_doc(a + vec2(60.0, 10.0))), "{anchor:?}");
+    }
+
+    #[test]
     fn double_clicking_type_with_the_selection_tool_puts_the_caret_there() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();

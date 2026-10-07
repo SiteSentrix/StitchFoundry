@@ -1,8 +1,8 @@
 //! Shape tools: Rectangle, Rounded Rectangle, Ellipse, Polygon, Star, Line Segment.
 //!
-//! Drag draws (Shift constrains to square/circle/45°, Alt draws from the centre); a click without a
-//! drag asks the UI for the size dialog (like Illustrator). ↑/↓ during a polygon/star drag change the
-//! side/point count.
+//! Drag draws (Shift constrains to square/circle/45°, Alt draws from the centre, Space held moves
+//! the shape being drawn); a click without a drag asks the UI for the size dialog (like
+//! Illustrator). ↑/↓ during a polygon/star drag change the side/point count.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect};
@@ -92,6 +92,15 @@ impl ShapeTool {
     }
 }
 
+/// Space held once a shape drag has begun moves the shape being drawn instead of sizing it: `start`
+/// moves as far as the pointer did since `last`, which becomes the pointer.
+pub(crate) fn space_moves(start: &mut Point, last: &mut Point, ev: &PointerEvent, began: bool) {
+    if ev.mods.space && began {
+        *start += ev.pos - *last;
+    }
+    *last = ev.pos;
+}
+
 /// The rectangle a drag from `start` to `p` draws: Shift makes it a square, Alt draws it from its
 /// centre.
 pub(crate) fn drag_rect(start: Point, p: Point, m: Mods) -> Rect {
@@ -120,11 +129,12 @@ impl Tool for ShapeTool {
                 vec![]
             }
             PointerKind::Drag => {
-                let Some(s) = self.start else { return vec![] };
+                let Some(mut s) = self.start else { return vec![] };
                 let (pos, g) = crate::guides::snap_draw(cx, ev.pos, &[]);
                 self.guides = g;
                 let ev = &PointerEvent { pos, ..*ev };
-                self.last = ev.pos;
+                space_moves(&mut s, &mut self.last, ev, self.began);
+                self.start = Some(s);
                 self.mods = ev.mods;
                 let mut out = vec![];
                 if !self.began {
@@ -237,6 +247,31 @@ mod tests {
         assert_eq!(a[0], Action::Begin("Rectangle".into()));
         assert_eq!(a[1], Action::Preview("shape.rectangle".into(), json!({"x": 10.0, "y": 10.0, "width": 40.0, "height": 20.0})));
         assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 50.0, 30.0)), vec![Action::Commit]);
+    }
+
+    #[test]
+    fn space_moves_the_shape_being_drawn() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let space = Mods { space: true, ..Default::default() };
+        let mut t = ShapeTool::new("rectangle");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 120.0));
+        // Space held: the 100 × 70 rectangle follows the pointer.
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 170.0).with_mods(space));
+        assert_eq!(a.last(), Some(&Action::Preview("shape.rectangle".into(), json!({"x": 150.0, "y": 100.0, "width": 100.0, "height": 70.0}))));
+        // Let go of Space: it grows again, from where it was moved to.
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 270.0, 190.0));
+        assert_eq!(a.last(), Some(&Action::Preview("shape.rectangle".into(), json!({"x": 150.0, "y": 100.0, "width": 120.0, "height": 90.0}))));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 270.0, 190.0)), vec![Action::Commit]);
+        // A star (drawn from its centre) moves its centre.
+        let mut t = ShapeTool::new("star");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 80.0, 50.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 60.0).with_mods(space));
+        assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["cx"] == 60.0 && v["cy"] == 60.0), "{a:?}");
     }
 
     #[test]
