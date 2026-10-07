@@ -449,3 +449,34 @@ fn a_dragged_handle_snaps_to_smart_guides() {
         assert_eq!(out_handle(&s, id), Point::new(298.0, 170.0), "{tool}: smart guides off");
     }
 }
+
+#[test]
+fn shift_drag_keeps_a_smooth_anchor_smooth_and_alt_breaks_it() {
+    // #322: the opposite handle of a smooth anchor turns with the constrained one; Alt still
+    // moves the dragged handle alone.
+    let shift = Mods { shift: true, ..Mods::default() };
+    let shift_alt = Mods { shift: true, alt: true, ..Mods::default() };
+    for (mods, opposite_follows) in [(shift, true), (shift_alt, false)] {
+        let mut s = session();
+        let anchors = json!([{"x": 100, "y": 200}, {"x": 200, "y": 100, "in": [150, 100], "out": [250, 100]}, {"x": 300, "y": 200}]);
+        let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+        s.select_tool("directSelection", view()).unwrap();
+        for (kind, x, y, m) in [
+            (PointerKind::Down, 200.0, 100.0, Mods::default()),
+            (PointerKind::Up, 200.0, 100.0, Mods::default()),
+            (PointerKind::Down, 250.0, 100.0, mods),
+            (PointerKind::Drag, 275.0, 165.0, mods),
+            (PointerKind::Up, 275.0, 165.0, mods),
+        ] {
+            s.pointer(&PointerEvent::new(kind, x, y).with_mods(m), view()).unwrap();
+        }
+        let a = path(&s, id).subpaths[0].anchors[1];
+        let (o, i) = (a.h_out - a.p, a.h_in - a.p);
+        assert!((o.x - o.y).abs() < 1e-6 && o.x > 0.0, "{mods:?}: 45°: {o:?}");
+        if opposite_follows {
+            assert!(near(a.h_in, a.p - o.normalize() * 50.0), "{mods:?}: {i:?}");
+        } else {
+            assert_eq!(a.h_in, Point::new(150.0, 100.0), "{mods:?}");
+        }
+    }
+}

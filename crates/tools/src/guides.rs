@@ -158,6 +158,11 @@ impl Targets {
 
 /// Snap `p` for a drawing tool when smart guides (or grid snapping) are on.
 pub fn snap_draw(cx: &ToolContext, p: Point, exclude: &[NodeId]) -> (Point, Vec<Overlay>) {
+    snap_with(cx, p, || Targets::collect(cx.doc, exclude, None))
+}
+
+/// Snap `p` to pixels or the grid when they are on, else to the smart guide `targets`.
+fn snap_with(cx: &ToolContext, p: Point, targets: impl FnOnce() -> Targets) -> (Point, Vec<Overlay>) {
     if cx.snap_to_pixel {
         return (Point::new(p.x.round(), p.y.round()), vec![]);
     }
@@ -168,20 +173,28 @@ pub fn snap_draw(cx: &ToolContext, p: Point, exclude: &[NodeId]) -> (Point, Vec<
     if !cx.smart_guides {
         return (p, vec![]);
     }
-    Targets::collect(cx.doc, exclude, None).snap_point(p, cx.tol(5.0))
+    targets().snap_point(p, cx.tol(5.0))
 }
 
 /// Where a dragged direction handle of anchor `ai` of subpath `si` of path `id` goes for the
-/// pointer at `p`: with Shift at a multiple of 45° from its anchor (as the Pen draws them), else
-/// snapped as a drawn point is (smart guides, the grid, pixels).
+/// pointer at `p`: with Shift at a multiple of 45° (from the Constrain Angle) round its anchor,
+/// else snapped as a drawn point is (smart guides, the grid, pixels).
 pub fn snap_handle(cx: &ToolContext, (id, si, ai): (NodeId, usize, usize), p: Point, shift: bool) -> (Point, Vec<Overlay>) {
-    if shift {
-        let anchor = cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai).map(|a| a.p));
-        if let Some(a) = anchor {
-            return (a + vectorcraft_geom::constrain_angle(p - a, 45.0), vec![]);
-        }
+    let path = cx.doc.node(id).and_then(|n| n.path_data());
+    if shift && let Some(a) = path.and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)) {
+        return (a.p + vectorcraft_geom::constrain_angle_from(p - a.p, 45.0, cx.constrain_angle), vec![]);
     }
-    snap_draw(cx, p, &[])
+    snap_with(cx, p, || {
+        // The path's bounds move with the handle, so they would chase it: its anchors (which stay
+        // put) are the targets instead, the handle lining up with them too.
+        let mut t = Targets::collect(cx.doc, &[id], None);
+        for (_, _, a) in path.into_iter().flat_map(|pd| pd.anchors()).take(20_000) {
+            t.points.push((a.p, Kind::Anchor));
+            t.xs.push((a.p.x, a.p, Kind::Anchor));
+            t.ys.push((a.p.y, a.p, Kind::Anchor));
+        }
+        t
+    })
 }
 
 /// Snap a picked point (a transform tool's reference point) to the nearest anchor or centre of the

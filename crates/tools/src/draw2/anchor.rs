@@ -3,7 +3,8 @@
 //! Add: click a segment to insert an anchor without changing the shape (Alt = delete).
 //! Delete: click an anchor to remove it, re-fitting the neighbouring curve (Alt = add).
 //! Anchor Point: click a smooth anchor → corner; drag an anchor → pull out smooth handles; drag a
-//! handle → move it independently; drag a segment → reshape the curve.
+//! handle → move it independently (Shift: at 45° steps round its anchor); drag a segment → reshape
+//! the curve.
 //! Scissors: click a path to split it there.
 
 use serde_json::json;
