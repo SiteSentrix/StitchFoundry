@@ -418,6 +418,9 @@ pub(crate) fn menu_item_sample(ui: &Ui, item: egui::Rect, family: &str) {
 
 type Key = (String, String, String, u32);
 
+/// Samples kept before the cache starts over.
+const MAX_SAMPLES: usize = 256;
+
 #[derive(Default)]
 struct Samples {
     ready: HashMap<Key, Option<egui::TextureHandle>>,
@@ -447,7 +450,8 @@ fn sample_texture(
         if let Some(t) = s.ready.get(&key) {
             return t.clone();
         }
-        if s.ready.len() > 3000 {
+        // Up to ~370 KB of texture each (96 px high, 10:1): keep a few screens' worth.
+        if s.ready.len() > MAX_SAMPLES {
             s.ready.clear();
         }
         #[cfg(not(target_arch = "wasm32"))]
