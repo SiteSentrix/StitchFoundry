@@ -837,9 +837,19 @@ impl Document {
     pub fn is_visible(&self, id: NodeId) -> bool {
         self.ancestry(id).is_some_and(|a| a.iter().all(|i| self.node(*i).is_some_and(|n| n.visible)))
     }
-    /// Colour of the layer containing `id` (selection highlight colour).
+    /// The innermost layer or sublayer containing `id` (`id` itself when it is a layer).
+    pub fn layer_containing(&self, id: NodeId) -> Option<NodeId> {
+        let a = self.ancestry(id)?;
+        a.iter().rev().copied().find(|i| self.node(*i).is_some_and(Node::is_layer))
+    }
+    /// Every art object the Selection tool can reach (Select All): the visible, unlocked objects
+    /// of the visible, unlocked, non-template layers, looking through sublayers (bottom first).
+    pub fn selectable_art(&self) -> Vec<NodeId> {
+        self.layers.iter().filter(|l| l.visible && !l.locked && !l.is_template()).flat_map(|l| l.layer_art(true)).collect()
+    }
+    /// Colour of the innermost layer or sublayer containing `id` (selection highlight colour).
     pub fn layer_color(&self, id: NodeId) -> [u8; 3] {
-        let l = self.layer_of(id).and_then(|l| self.node(l));
+        let l = self.layer_containing(id).and_then(|l| self.node(l));
         match l.map(|n| &n.kind) {
             Some(NodeKind::Layer { color, .. }) => color.rgb(),
             _ => LAYER_COLORS[0].1,

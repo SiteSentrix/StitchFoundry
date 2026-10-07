@@ -288,8 +288,13 @@ Paste placement: through the app, `edit.paste` and `edit.pasteWithoutFormatting`
 paste at the centre of the view. The Paste menu items are enabled while the system clipboard holds something to
 paste (SVG, PDF, text or a bitmap on the desktop; SVG on the web), even with nothing copied in the app (looked at up
 to four times a second; `ui.menu.list` shows it). The Layers panel menu (≡ on
-the dock's tab strip while Layers shows) lists the layer commands and Paste Remembers Layers
-(`layer.pasteRemembersLayers`, checked when on).
+the dock's tab strip while Layers shows) lists the layer commands (New Layer…, Duplicate and Delete Selection,
+Options for Selection…, clipping mask, isolation, Locate Object, Merge Selected, Flatten Artwork, Collect in New
+Layer, Release to Layers, Reverse Order, Template, Hide/Outline/Lock Others or Show/Preview/Unlock All Layers), Paste
+Remembers Layers (`layer.pasteRemembersLayers`, checked when on) and Panel Options…. Layer Options is the
+`layerOptions` dialog (`ui.layerOptions {ids?}`, `ui.newLayer {sublayer?}`), Panel Options the `layersPanelOptions`
+dialog (`ui.layersPanelOptions`), and `ui.layersExpand {ids?, open?}` opens or closes rows; see the Layers panel
+section of `docs/mcp.md` for the row commands (`layer.setCurrent`, `layer.highlight`, `layer.move`…).
 
 File Info: File → File Info… (`file.info` from the menu or Cmd+Alt+Shift+I; `ui.fileInfoDialog` for agents) opens the
 `fileInfo` dialog. Its fields are what `file.info` reports (`title`, `author`, `authorTitle`, `description`,

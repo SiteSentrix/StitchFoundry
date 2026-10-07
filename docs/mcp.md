@@ -512,7 +512,7 @@ paints behind the clipped art and its stroke over it, not clipped, on screen and
 ```
 
 `layer.clippingMask.toggle {id?}` is the Layers panel's clipping mask button: the top object of the layer `id` (default:
-the one selected group, else the current layer) becomes its clipping path (unpainted, moved to the bottom of the layer,
+the one highlighted layer or group row, else the one selected group, else the current layer) becomes its clipping path (unpainted, moved to the bottom of the layer,
 so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
 underlines clipping-path names.
 
@@ -719,9 +719,58 @@ branch sets all of it. `paint.sampleColor {color}` puts a sampled colour (in its
 {"name":"run_command","arguments":{"command":"appearance.copyFrom","params":{"source":12,"ids":[7,8]}}}
 ```
 
+## The Layers panel: rows, layers and sublayers
+
+Every layer, sublayer, group and object is a row of the Layers panel. Sublayers are layers inside layers: they are not
+objects, so clicking or marquee-selecting art in a sublayer, Select All and the other Select commands take the art
+itself, and each sublayer has its own colour for the selection highlight. `document.inspect` lists the tree (layers
+report `color`, `template`, `printable`, `preview`, `dimImages` and `clip`), the `currentLayer` (where new art goes)
+and `layerRows`, the rows highlighted in the panel.
+
+- **Clicking rows** (not undo steps): `layer.setCurrent {id}` is a plain click on any row: it alone is highlighted
+  and its layer (the row itself when it is a layer or sublayer) becomes current. `layer.highlight {ids, mode?:
+  set|add|toggle}` is Shift-click (a range) and Ctrl/Cmd-click (toggle). Selecting art makes its layer current.
+  Without `ids`, the panel commands below act on the highlighted rows, else on the current layer.
+- **Selection column**: `layer.selectAll {id, add?}` selects a row's visible, unlocked art (a layer's sublayers'
+  too); `add` (Shift) adds it, or removes it when it's all selected.
+- **Eye and lock**: `layer.setProps {ids?, visible?, locked?, name?}` for any rows, plus Layer Options for layers:
+  `template` (also locks the layer and dims its images to 50% unless given), `printable`, `preview` (off: the layer
+  draws and is clicked in outline, Ctrl/Cmd-click its eye), `dimImages` (0–100, or false) and `color` (an index 0–26,
+  `#rrggbb` or a preset name). Several rows change in one undo step (a drag down the eye or lock column).
+- **Dragging rows**: `layer.move {ids, target, place?: above|below|inside, copy?}` moves rows beside a row or into a
+  layer or group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves copies. Layers go
+  only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
+  inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
+  selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
+  form with the same rules.
+- **Buttons**: `layer.new {name?, top?, …options}` (above the current layer at its level; `top` with Ctrl/Cmd),
+  `layer.newSublayer {parent?, name?, …options}` (on top of the parent's contents), `layer.delete {ids?}` (rows with
+  what they hold; the last layer stays), `layer.locate {id?}` (highlights the selected object's row; the panel opens
+  the rows around it) and `layer.clippingMask.toggle`.
+- **Panel menu**: `layer.duplicate {ids?}`, `layer.merge {ids?}` (into the layer highlighted last, keeping the
+  stacking order), `layer.flatten {id?}` (every other visible layer's art into one layer; hidden layers are deleted,
+  templates stay), `layer.collectInNew {ids?}`, `layer.releaseToLayers {id?, build?}` and
+  `layer.releaseToLayersBuild` (each object of a layer or group in a sublayer of its own; Build adds up copies),
+  `layer.reverse {ids?}`, `layer.template {ids?, on?}`, `layer.hideOthers` / `layer.showAll`,
+  `layer.outlineOthers` / `layer.previewAll`, `layer.lockOthers` / `layer.unlockAll`, `layer.pasteRemembersLayers`,
+  `object.isolate {id}` / `object.exitIsolation`.
+- **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
+  {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
+  dimImages, dimPercent; OK is one undo step), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
+  layersOnly, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
+  `ui.layersExpand {ids?, open?}` opens or closes rows as their triangles do (Alt-click: everything inside).
+
+```json
+{"name":"run_command","arguments":{"command":"layer.newSublayer","params":{"name":"Shadows"}}}
+{"name":"run_command","arguments":{"command":"layer.move","params":{"ids":[12,15],"target":7,"place":"inside"}}}
+{"name":"run_command","arguments":{"command":"layer.setProps","params":{"ids":[7],"preview":false,"color":"Orange"}}}
+{"name":"run_command","arguments":{"command":"layer.highlight","params":{"ids":[3,7]}}}
+{"name":"run_command","arguments":{"command":"layer.merge","params":{}}}
+```
+
 ## Targeting layers and moving appearances
 
-`layer.target {id}` is the Layers panel's target circle: a layer gets its visible, unlocked art selected and is itself
+`layer.target {id}` is the Layers panel's target circle: a layer gets its visible, unlocked art (its sublayers' too) selected and is itself
 the target, so `appearance.*`, `effect.*`, `transparency.*` and the opacity-mask commands without `ids` act on the
 layer (its opacity, its own fills and effects, an opacity mask on the whole layer); a group or object is simply
 selected. `document.inspect` reports it as `target`, and any other selection change ends it.

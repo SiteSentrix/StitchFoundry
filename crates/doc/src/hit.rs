@@ -23,6 +23,8 @@ pub struct Hit {
     /// The innermost envelope in the ancestry whose contents are being edited (Edit Contents):
     /// its content, not the envelope, is the object clicked.
     pub contents_of: Option<NodeId>,
+    /// How many entries at the start of `ancestry` are layers (the layer and its sublayers).
+    pub layers: usize,
 }
 
 impl Hit {
@@ -34,8 +36,8 @@ impl Hit {
         if let Some(i) = at(scope).max(at(self.contents_of)) {
             return self.ancestry.get(i + 1).copied().unwrap_or(self.leaf);
         }
-        // Skip layers and sublayers.
-        self.ancestry.get(1).copied().unwrap_or(self.leaf)
+        // Skip layers and sublayers: they are not objects.
+        self.ancestry.get(self.layers.max(1)).copied().unwrap_or(self.leaf)
     }
 }
 
@@ -63,7 +65,7 @@ pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
         if !layer.visible || layer.locked {
             continue;
         }
-        if let NodeKind::Layer { template: true, .. } = layer.kind {
+        if layer.is_template() {
             continue;
         }
         // Pattern editing mode: only the tile art is editable.
@@ -71,8 +73,10 @@ pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
             continue;
         }
         chain.push(layer.id);
+        let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
         if let Some(mut h) = hit_children(layer, p, opt, &mut chain) {
             h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
+            h.layers = h.ancestry.iter().take_while(|a| doc.node(**a).is_some_and(Node::is_layer)).count();
             return Some(h);
         }
         chain.pop();
@@ -105,7 +109,8 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
         return None;
     }
     for c in children.iter().rev() {
-        if !c.visible || c.locked {
+        // Hidden, locked and template sublayers block clicks like top-level layers do.
+        if !c.visible || c.locked || c.is_template() {
             continue;
         }
         // (An envelope's content sits where it was, not where the envelope draws it.)
@@ -117,14 +122,16 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
         }
         chain.push(c.id);
         let hit = match &c.kind {
+            // A sublayer whose Preview is off is clicked in outline, like an outline view.
+            NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, chain),
             NodeKind::Layer { .. } | NodeKind::Group { .. } => hit_children(c, p, opt, chain),
             // Edit Contents: the envelope's content hits, undistorted.
             NodeKind::Envelope { editing: true, .. } => hit_children(c, p, opt, chain),
             // A blend's key objects first (Direct and Group Selection pick them); its steps hit
             // as the blend.
             NodeKind::Blend { .. } => hit_children(c, p, opt, chain)
-                .or_else(|| hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None })),
-            _ => hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None }),
+                .or_else(|| hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 })),
+            _ => hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 }),
         };
         if hit.is_some() {
             return hit;
@@ -192,13 +199,28 @@ pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> 
     let mut out = Vec::new();
     let tops: Vec<&std::sync::Arc<Node>> = match scope.and_then(|s| doc.node(s)) {
         Some(s) => s.children().map(|c| c.iter().collect()).unwrap_or_default(),
+        // The objects of the layers, looking through sublayers (hidden, locked and template ones
+        // are left out).
         None => doc
             .layers
             .iter()
-            .filter(|l| l.visible && !l.locked && doc.pattern_edit.as_ref().is_none_or(|e| e.layer == l.id))
-            .flat_map(|l| l.children().into_iter().flatten())
+            .filter(|l| l.visible && !l.locked && !l.is_template() && doc.pattern_edit.as_ref().is_none_or(|e| e.layer == l.id))
+            .flat_map(|l| layer_objects(l))
             .collect(),
     };
+    fn layer_objects(l: &Node) -> Vec<&std::sync::Arc<Node>> {
+        let mut out = vec![];
+        for c in l.children().into_iter().flatten() {
+            if c.is_layer() {
+                if c.visible && !c.locked && !c.is_template() {
+                    out.extend(layer_objects(c));
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
     fn touches(n: &Node, r: Rect) -> bool {
         match &n.kind {
             NodeKind::Path { path, .. } => vectorcraft_geom::hit::intersects_rect(path, r),
@@ -294,6 +316,54 @@ mod tests {
         assert_eq!(marquee(&d, Rect::new(-5.0, -5.0, 5.0, 5.0), None, false), vec![g]);
         assert_eq!(marquee(&d, Rect::new(-5.0, -5.0, 5.0, 5.0), None, true), vec![a]);
         assert!(marquee(&d, Rect::new(100.0, 100.0, 105.0, 105.0), None, false).is_empty());
+    }
+
+    /// Art in a sublayer is an object of its own: a click or a marquee takes it, not the
+    /// sublayer; hidden, locked and template sublayers block both.
+    #[test]
+    fn sublayers_are_not_objects() {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let sub = d.alloc_id();
+        d.insert(Some(l), 0, Node::layer(sub, "Sub", crate::LayerColor::Preset(2))).unwrap();
+        let inner = d.alloc_id();
+        d.insert(Some(sub), 0, Node::layer(inner, "Inner", crate::LayerColor::Preset(3))).unwrap();
+        let a = d.alloc_id();
+        d.insert(Some(inner), 0, Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default_art())).unwrap();
+        let g = d.alloc_id();
+        let b = d.alloc_id();
+        let pb = Node::path(b, shapes::rectangle(Rect::new(100.0, 0.0, 150.0, 50.0)), Appearance::default_art());
+        d.insert(Some(sub), 9, Node::group(g, vec![Arc::new(pb)])).unwrap();
+        let h = hit_test(&d, Point::new(10.0, 10.0), HitOptions::default()).unwrap();
+        assert_eq!((h.leaf, h.top_object(None), h.layers), (a, a, 3));
+        let h = hit_test(&d, Point::new(110.0, 10.0), HitOptions::default()).unwrap();
+        assert_eq!((h.top_object(None), h.top_object(Some(g))), (g, b));
+        let all = Rect::new(-5.0, -5.0, 200.0, 200.0);
+        assert_eq!(marquee(&d, all, None, false), vec![a, g]);
+        assert_eq!(d.layer_containing(a), Some(inner));
+        assert_eq!(d.layer_color(a), crate::LayerColor::Preset(3).rgb(), "the sublayer's own colour");
+        assert_eq!(d.selectable_art(), vec![a, g]);
+        for f in [
+            |n: &mut Node| n.visible = false,
+            |n: &mut Node| n.locked = true,
+            |n: &mut Node| {
+                if let NodeKind::Layer { template, .. } = &mut n.kind {
+                    *template = true;
+                }
+            },
+        ] {
+            let mut d2 = d.clone();
+            f(d2.node_mut(inner).unwrap());
+            assert!(hit_test(&d2, Point::new(10.0, 10.0), HitOptions::default()).is_none());
+            assert_eq!(marquee(&d2, all, None, false), vec![g]);
+            assert_eq!(d2.selectable_art(), vec![g]);
+        }
+        // A sublayer whose Preview is off is clicked in outline: its fill no longer hits.
+        if let NodeKind::Layer { preview, .. } = &mut d.node_mut(inner).unwrap().kind {
+            *preview = false;
+        }
+        assert!(hit_test(&d, Point::new(25.0, 25.0), HitOptions::default()).is_none());
+        assert!(hit_test(&d, Point::new(0.5, 25.0), HitOptions::default()).is_some());
     }
 
     #[test]

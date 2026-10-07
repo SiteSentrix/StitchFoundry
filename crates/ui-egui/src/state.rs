@@ -339,6 +339,12 @@ pub struct UiState {
     /// becoming active, leaves it.
     #[serde(skip)]
     pub home: Option<(Option<u64>, usize)>,
+    /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only).
+    #[serde(default)]
+    pub layers_panel: crate::panels::layers::PanelOptions,
+    /// The Layers panel's open rows, per open document (`DocState::uid` → node ids).
+    #[serde(skip)]
+    pub layers_expanded: std::collections::HashMap<u64, std::collections::HashSet<u64>>,
     /// The desktop window's size, position and maximized state, saved when the app quits and
     /// restored at the next launch (the desktop host reads and writes it; none on the web).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -422,6 +428,8 @@ impl Default for UiState {
             eps_options: Value::Null,
             dxf_import: Value::Null,
             home: None,
+            layers_panel: Default::default(),
+            layers_expanded: Default::default(),
             window: None,
         }
     }

@@ -102,6 +102,11 @@ pub struct DocState {
     saved_doc: Arc<Document>,
     /// The layer new art goes into (the "current layer" in the Layers panel).
     pub active_layer: Option<NodeId>,
+    /// The rows highlighted in the Layers panel (layers, sublayers, groups or objects, in the order
+    /// they were clicked): what the panel's Duplicate, Delete, Merge, Options… and similar act on.
+    /// Panel state, not art selection: not saved, not undoable (`layer.setCurrent`,
+    /// `layer.highlight`).
+    pub layer_rows: Vec<NodeId>,
     /// Isolation mode container.
     pub isolation: Option<NodeId>,
     pub interaction: Option<Interaction>,
@@ -156,6 +161,7 @@ impl DocState {
             path,
             revision: 1,
             active_layer,
+            layer_rows: vec![],
             isolation: None,
             interaction: None,
             last_transform: None,
@@ -236,7 +242,13 @@ impl DocState {
         {
             return Some(i);
         }
-        self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer() && !n.locked)).or_else(|| self.doc.default_layer())
+        // A sublayer takes new art only while it and the layers around it are shown and unlocked.
+        self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()) && self.doc.is_editable(*l)).or_else(|| self.doc.default_layer())
+    }
+    /// The highlighted Layers panel rows that still exist (ids are reused after undo, so a
+    /// remembered row must still be in the document).
+    pub fn highlighted_rows(&self) -> Vec<NodeId> {
+        self.layer_rows.iter().copied().filter(|id| self.doc.node(*id).is_some()).collect()
     }
     /// The object whose opacity mask View Opacity Mask shows ([`DocState::mask_view`]): only while
     /// its mask is being edited, so leaving editing by any route (undo, deleting the object) ends it.
@@ -1069,8 +1081,18 @@ impl Session {
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.active_appearance_item = None;
         let st = self.doc_mut()?;
+        let before = st.selection.objects.clone();
         f(&st.doc, &mut st.selection);
         st.selection.prune(&st.doc);
+        // Selecting art makes its layer (or sublayer) the current one, as in the Layers panel of
+        // the reference app: new art then goes beside it.
+        if st.selection.objects != before
+            && let Some(layer) = st.selection.objects.last().and_then(|id| st.doc.layer_containing(*id)).filter(|l| st.doc.is_editable(*l))
+            && st.active_layer != Some(layer)
+        {
+            st.active_layer = Some(layer);
+            st.layer_rows.clear();
+        }
         st.revision += 1;
         // Puppet Warp pins belong to the art they were placed on: another selection starts afresh.
         if st.doc.puppet.as_ref().is_some_and(|p| p.ids != st.selection.objects) {
@@ -1266,6 +1288,8 @@ mod tests_knockout;
 mod tests_labspots;
 #[cfg(test)]
 mod tests_layerclip;
+#[cfg(test)]
+mod tests_layers;
 #[cfg(test)]
 mod tests_linked_stops;
 #[cfg(test)]

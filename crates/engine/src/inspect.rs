@@ -52,6 +52,15 @@ pub fn node_summary(n: &Node) -> Value {
         v["strokeOptions"] = stroke_options(&st);
     }
     match &n.kind {
+        NodeKind::Layer { color, template, printable, preview, dim_images, clip, .. } => {
+            let [r, g, b] = color.rgb();
+            v["color"] = json!(format!("#{r:02x}{g:02x}{b:02x}"));
+            v["template"] = json!(template);
+            v["printable"] = json!(printable);
+            v["preview"] = json!(preview);
+            v["dimImages"] = json!(dim_images);
+            v["clip"] = json!(clip);
+        }
         NodeKind::Path { path, .. } => {
             v["anchors"] = json!(path.anchor_count());
             v["closed"] = json!(path.is_closed());
@@ -79,6 +88,8 @@ pub fn document(s: &Session) -> Value {
         // Top of the stack first, like the Layers panel.
         "layers": d.layers.iter().rev().map(|l| node_summary(l)).collect::<Vec<_>>(),
         "currentLayer": st.active_layer.map(|l| l.0),
+        // The rows highlighted in the Layers panel (`layer.setCurrent`, `layer.highlight`).
+        "layerRows": st.highlighted_rows().iter().map(|i| i.0).collect::<Vec<_>>(),
         "isolation": st.isolation.map(|l| l.0),
         "selection": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>(),
         "selectionBounds": rect_json(d.bounds_of(&st.selection.objects, false)),

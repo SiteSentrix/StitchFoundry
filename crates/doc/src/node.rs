@@ -259,6 +259,14 @@ pub enum NodeKind {
         /// Layer clipping mask: the first (bottom-most) child clips the others, as in a clip group.
         #[serde(default, skip_serializing_if = "crate::skip::is_default")]
         clip: bool,
+        /// Layer Options → Preview: off, the layer's art is drawn (and clicked) in outline on screen
+        /// (Ctrl-click its eye in the Layers panel).
+        #[serde(default = "yes", skip_serializing_if = "crate::skip::is_true")]
+        preview: bool,
+        /// Layer Options → Dim Images to: on screen, images on the layer show faded to this
+        /// percentage (0–100); `None`: not dimmed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        dim_images: Option<u8>,
     },
     /// A group. With `clip`, the first (bottom-most) child is the clipping path.
     Group {
@@ -448,7 +456,10 @@ impl Node {
         Self::new(id, NodeKind::Group { children, clip: false })
     }
     pub fn layer(id: NodeId, name: &str, color: LayerColor) -> Self {
-        let mut n = Self::new(id, NodeKind::Layer { color, template: false, printable: true, children: vec![], clip: false });
+        let mut n = Self::new(
+            id,
+            NodeKind::Layer { color, template: false, printable: true, children: vec![], clip: false, preview: true, dim_images: None },
+        );
         n.name = Some(name.to_string());
         n
     }
@@ -476,6 +487,30 @@ impl Node {
     }
     pub fn is_layer(&self) -> bool {
         matches!(self.kind, NodeKind::Layer { .. })
+    }
+    /// A template layer (Layer Options → Template).
+    pub fn is_template(&self) -> bool {
+        matches!(self.kind, NodeKind::Layer { template: true, .. })
+    }
+    /// The art objects of this container: its children, looking through sublayers, which are not
+    /// objects (bottom first). With `editable`, only the visible, unlocked objects in visible,
+    /// unlocked, non-template sublayers.
+    pub fn layer_art(&self, editable: bool) -> Vec<NodeId> {
+        fn visit(n: &Node, editable: bool, out: &mut Vec<NodeId>) {
+            for c in n.children().into_iter().flatten() {
+                if editable && (!c.visible || c.locked || c.is_template()) {
+                    continue;
+                }
+                if c.is_layer() {
+                    visit(c, editable, out);
+                } else {
+                    out.push(c.id);
+                }
+            }
+        }
+        let mut out = vec![];
+        visit(self, editable, &mut out);
+        out
     }
     pub fn is_container(&self) -> bool {
         self.children().is_some()
