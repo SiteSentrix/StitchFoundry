@@ -42,7 +42,7 @@ since 2026-10-01.
 | **Bundled content:** brush, symbol, style and swatch libraries | ~30% | Ours are original and generated in code, and far fewer than Illustrator ships; brush and symbol libraries are still missing |
 | **Performance** | unverified | Multithreaded, off-thread rendering and caches are in place. The last budget run (2026-10-01, loaded machine) measured 290 ms for a 50k-path fit against a 16 ms budget. Re-run `vectorcraft-cli perf` on an idle machine |
 | **Robustness** | good, new | ~2,840 tests, property tests, no panics in shipped code (lints, the `guard` safety net, import fuzzing), Data Recovery. Missing: a corpus of real-world files, Windows/Linux/browser QA |
-| **Platforms and 1.0 polish** | ~60% | The macOS app and the web build work; Windows/Linux packaging and accessibility are pending |
+| **Platforms and 1.0 polish** | ~60% | The macOS app and the web build work; hybrid-graphics laptops render on the power-saving GPU by default (#306); Windows/Linux packaging and accessibility are pending |
 | **Agent automation** | beyond Illustrator | Every command, gesture and dialog is drivable over MCP, the CLI and the control channel |
 
 ### Where we're lacking (in priority order)
@@ -141,6 +141,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - EPS and DXF in and out, EMF/WMF in and out; PNG (with PNG-8), JPEG, WebP, GIF, TIFF, BMP, Targa and layered PSD export. EPS import runs Illustrator's AGM/CoolType prologs (resource categories, `resourceforall`, `clipsave`/`cliprestore`, subarrays and substrings that share storage) and falls back to its palette TIFF preview. DXF TEXT justified Fit or Aligned spans its two points (stretched, or scaled as a whole).
   - Place and the Links panel, Package, File Info, Print with print presets, PostScript output and print tiling, slices and Save for Web, Export for Screens and Asset Export, CSS Properties, PNG/PDF/SVG/text clipboard flavours.
 - **Performance:** 20k shapes + 1k texts render in 27 ms per full-retina frame (7.8 ms zoomed), 7× faster than the first version. The UI thread never blocks. The web build is 7.1 MB gzipped.
+- **Graphics processor:** the canvas is rasterized on the CPU and the GPU only composites it, so the desktop app asks for the power-saving GPU by default (the integrated one on hybrid-graphics laptops, where presenting from the discrete GPU made the window flicker, #306). Preferences › Performance › Graphics Processor (`gpuPreference`) or `WGPU_POWER_PREF` picks the discrete one; Help › About and `ui.inspect` name the adapter in use.
 - **Tests and robustness:** ~2,840 automated tests: model-based property tests, a junk-parameter sweep over every command, import fuzzing (SVG, PDF, libraries), golden renders, and MCP end-to-end tests over stdio. Shipped code never panics (workspace lints and a rollback safety net; see `docs/development.md`).
 
 ## Milestones and estimates

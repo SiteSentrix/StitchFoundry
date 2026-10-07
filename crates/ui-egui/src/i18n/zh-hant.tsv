@@ -148,6 +148,7 @@
 	Appearance Panel	外觀面板
 	Appearance panel	外觀面板
 	Applies when the linked file is relinked or updated.	重新連結或更新連結檔案時套用。
+	Applies the next time VectorCraft starts.	下次啟動 VectorCraft 時生效。
 	Apply Brush	套用筆刷
 	Apply Character Style	套用字元樣式
 	Apply Effect	套用效果
@@ -1017,6 +1018,8 @@
 	Graphic Styles	繪圖樣式
 	Graphic Styles Options	繪圖樣式選項
 	Graphics	圖形
+	Graphics Processor	圖形處理器
+	Graphics: {adapter}	圖形：{adapter}
 	Gravity	重力
 	Grays	灰色
 	Grays and Neutrals	灰色與中性色
@@ -1073,6 +1076,7 @@
 	Hide Transparency Grid	隱藏透明度格點
 	High	高
 	High (300 ppi)	高 (300 ppi)
+	High Performance (discrete)	高效能 (獨立顯示卡)
 	Highlight Alternate Glyphs	醒目提示替代字符
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
 	Highlight Substituted Fonts	醒目提示被取代的字體
@@ -1775,6 +1779,7 @@
 	Polygon Properties:	多邊形內容：
 	Polygon Tool	多邊形工具
 	Portrait	直向
+	Power Saving (integrated)	節能 (內建顯示晶片)
 	Portuguese	葡萄牙文
 	Position	位置
 	Postcard	明信片
