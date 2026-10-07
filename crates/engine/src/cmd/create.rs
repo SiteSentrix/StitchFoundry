@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}",
+            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -415,10 +415,12 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         let w = f64_or(a, "width", 200.0);
         let h = f64_or(a, "height", 100.0);
         t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, h)) };
+        t.area.fit = new_area_fit(s, a, "text.create")?;
     }
     if bool_or(p, "placeholder", false) {
         super::typemenu::fill_with_placeholder(&mut t);
     } else {
+        // Lays the text out (and sizes an Auto Size frame).
         super::typecmd::refresh_bounds(&mut t);
     }
     add_node(s, "Type", NodeKind::Text(Box::new(t)), Appearance::default(), None)
@@ -469,6 +471,13 @@ pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut 
         r.style.char_align = align;
     }
     Ok(())
+}
+
+/// The fit new area type gets: `fit`/`fitMinPercent` from `p` (as `text.areaOptions` takes
+/// them), else Auto Size when the "Auto Size New Area Type" preference is on.
+pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str) -> Result<vectorcraft_doc::AreaFit> {
+    let default = if s.prefs.auto_size_area_type { vectorcraft_doc::AreaFit::AutoHeight } else { vectorcraft_doc::AreaFit::None };
+    Ok(super::typecmd::fit_param(p, default, c)?.unwrap_or(default))
 }
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p`, else the
