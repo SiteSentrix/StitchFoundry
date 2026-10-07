@@ -329,6 +329,23 @@ fn select_all_and_cut_like_ui() {
 }
 
 #[test]
+fn a_frame_dragged_with_the_type_tools_is_the_dragged_rectangle() {
+    for tool in ["type", "verticalType"] {
+        let mut s = session();
+        let v = ViewInfo::default();
+        s.select_tool(tool, v).unwrap();
+        for (k, x, y) in [(PointerKind::Down, 100.0, 100.0), (PointerKind::Drag, 300.0, 180.0), (PointerKind::Up, 300.0, 180.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        let t = obj(&s, s.doc().unwrap().selection.objects[0]);
+        let TextKind::Area { frame } = &t.kind else { panic!("{tool}: not area type") };
+        let b = frame.bounds().unwrap();
+        let (a, z) = (t.xf * Point::new(b.x0, b.y0), t.xf * Point::new(b.x1, b.y1));
+        assert!((a - Point::new(100.0, 100.0)).hypot() < 1e-9 && (z - Point::new(300.0, 180.0)).hypot() < 1e-9, "{tool}: {a:?} {z:?}");
+    }
+}
+
+#[test]
 fn area_type_from_a_circle_keeps_glyphs_inside() {
     let mut s = session();
     let e = s.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 240, "height": 240})).unwrap();
