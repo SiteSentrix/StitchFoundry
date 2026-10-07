@@ -359,12 +359,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let m = ui.input(|i| i.modifiers);
         let space = ui.input(|i| i.key_down(egui::Key::Space));
         let panning = matches!(ui.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Pan { .. }));
+        let zooming = if space { m.command } else { app.session.tool_id() == "zoom" };
         let cur = if panning {
             egui::CursorIcon::Grabbing
+        } else if zooming {
+            if m.alt { egui::CursorIcon::ZoomOut } else { egui::CursorIcon::ZoomIn }
         } else if space || app.session.tool_id() == "hand" {
             egui::CursorIcon::Grab
-        } else if app.session.tool_id() == "zoom" {
-            if m.alt { egui::CursorIcon::ZoomOut } else { egui::CursorIcon::ZoomIn }
         } else if let Some(p) = app.hover_doc {
             let c = app.session.cursor(p, mods(m, space), view_info);
             let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("tool-cursor")));
@@ -450,7 +451,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     }
 
     let tool = app.session.tool_id();
-    let pan_mode = space || tool == "hand";
+    // Held, Space is the Hand tool for the moment, and Cmd+Space the Zoom tool (with Alt, zooming
+    // out), whatever the tool.
+    let zoom_mode = if space { m.command } else { tool == "zoom" };
+    let pan_mode = if space { !m.command } else { tool == "hand" };
     let middle_pan = matches!(drag, Some(Drag::Pan { middle: true, .. }));
     // egui counts a press a few pixels outside the canvas as on it (its interaction radius): only a
     // press on the canvas itself reaches the tools, else it would land at the canvas's centre.
@@ -461,10 +465,10 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     {
         ui.ctx().memory_mut(|mem| mem.stop_text_input());
         app.ui.flyout = None;
-        let d = if pan_mode {
-            Drag::Pan { start: p, center: v.center, middle: false }
-        } else if tool == "zoom" {
+        let d = if zoom_mode {
             Drag::ZoomBox { start: p }
+        } else if pan_mode {
+            Drag::Pan { start: p, center: v.center, middle: false }
         } else if tool == "rotateView" {
             let c = rect.center();
             Drag::RotateView { start_angle: (p.y - c.y).atan2(p.x - c.x) as f64, start_rot: v.rotation }
@@ -1597,6 +1601,41 @@ mod tests {
         assert_eq!(cmd_drag(&mut app, inside, inside), "groupSelection");
         app.select_tool("selection");
         assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
+    }
+
+    #[test]
+    fn cmd_space_zooms_and_space_pans_whatever_the_tool() {
+        use egui::{Event, Modifiers};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let at = app.canvas_rect.unwrap().center();
+        let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
+        let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+        // A drag from `at` to `to` with Space and `held` down.
+        let drag = |app: &mut VectorcraftApp, held: Modifiers, to: Pos2| {
+            frame(app, &ctx, vec![Event::ModifiersChanged(held), space(true, held), Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(at, true, held)]);
+            frame(app, &ctx, vec![Event::PointerMoved(to)]);
+            frame(app, &ctx, vec![button(to, false, held)]);
+            frame(app, &ctx, vec![space(false, held), Event::ModifiersChanged(Modifiers::NONE)]);
+        };
+        let z0 = app.view().unwrap().zoom;
+        drag(&mut app, Modifiers::COMMAND, at);
+        let z1 = app.view().unwrap().zoom;
+        assert_eq!(z1, crate::state::next_zoom(z0, true), "Cmd+Space click zooms in");
+        drag(&mut app, Modifiers::COMMAND | Modifiers::ALT, at);
+        assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z1, false), "Cmd+Alt+Space click zooms out");
+        assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the Rectangle tool drew nothing");
+        // Space alone pans, with the Zoom tool too.
+        app.select_tool("zoom");
+        let before = *app.view().unwrap();
+        drag(&mut app, Modifiers::NONE, at + vec2(30.0, 0.0));
+        let after = *app.view().unwrap();
+        assert_eq!(after.zoom, before.zoom);
+        assert!((after.center.x - (before.center.x - 30.0 / before.zoom)).abs() < 1e-6, "{before:?} → {after:?}");
     }
 
     #[test]
