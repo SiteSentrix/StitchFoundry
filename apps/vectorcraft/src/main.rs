@@ -241,6 +241,27 @@ fn app_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }
 
+/// The power preference wgpu picks the window's graphics adapter with (#306): the
+/// `WGPU_POWER_PREF` environment variable (`low`, `high`, `none`) when set, otherwise Preferences ›
+/// Performance › Graphics Processor (`gpuPreference`). Power saving unless the preference asks for
+/// high performance: the canvas is rasterized on the CPU and the GPU only composites it, which the
+/// integrated GPU of a hybrid-graphics laptop does easily, while presenting frames rendered on the
+/// discrete GPU through the integrated one made the window flicker on some laptops. With a single
+/// GPU both preferences pick it.
+fn power_preference(pref: Option<&str>, env: Option<eframe::wgpu::PowerPreference>) -> eframe::wgpu::PowerPreference {
+    use eframe::wgpu::PowerPreference;
+    match (env, pref) {
+        (Some(p), _) => p,
+        (None, Some("highPerformance")) => PowerPreference::HighPerformance,
+        (None, _) => PowerPreference::LowPower,
+    }
+}
+
+/// "name (backend, kind)" of the adapter the window renders with, for Help › About and bug reports.
+fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
+    format!("{} ({:?}, {:?})", info.name.trim(), info.backend, info.device_type)
+}
+
 /// Windows and Linux: no OS title bar; the app bar is the title bar (`vectorcraft_ui_egui::titlebar`).
 /// macOS keeps its traffic lights over the integrated title strip.
 const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
@@ -262,7 +283,9 @@ fn main() -> eframe::Result {
     }
     let saved = read_prefs();
     let saved_window = saved.as_ref().and_then(|ui| ui.window);
-    let options = eframe::NativeOptions {
+    let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
+    let power = power_preference(gpu_pref, eframe::wgpu::PowerPreference::from_env());
+    let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("VectorCraft")
             .with_inner_size(window::DEFAULT_SIZE)
@@ -276,6 +299,9 @@ fn main() -> eframe::Result {
             .with_app_id("ai.storyteller.vectorcraft"),
         ..Default::default()
     };
+    if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
+        create.power_preference = power;
+    }
     eframe::run_native(
         "VectorCraft",
         options,
@@ -297,6 +323,11 @@ fn main() -> eframe::Result {
                 let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
                 app.session.recovery.set_default_folder(recovery);
             }
+            if let Some(rs) = &cc.wgpu_render_state {
+                let summary = adapter_summary(&rs.adapter.get_info());
+                log::info!("vectorcraft: rendering with {summary} (power preference {power:?})");
+                app.graphics_adapter = Some(summary);
+            }
             app.integrated_titlebar = cfg!(target_os = "macos");
             app.custom_titlebar = CUSTOM_TITLEBAR;
             if let Some(port) = control_port {
@@ -315,4 +346,36 @@ fn main() -> eframe::Result {
             )))
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eframe::wgpu::PowerPreference;
+
+    #[test]
+    fn power_saving_unless_the_preference_or_the_environment_says_otherwise() {
+        assert_eq!(power_preference(None, None), PowerPreference::LowPower);
+        assert_eq!(power_preference(Some("powerSaving"), None), PowerPreference::LowPower);
+        assert_eq!(power_preference(Some("highPerformance"), None), PowerPreference::HighPerformance);
+        // A value this version doesn't know (a newer or damaged preference file) is the default.
+        assert_eq!(power_preference(Some("turbo"), None), PowerPreference::LowPower);
+        assert_eq!(power_preference(Some(""), None), PowerPreference::LowPower);
+        // WGPU_POWER_PREF wins over the preference, either way.
+        assert_eq!(power_preference(Some("powerSaving"), Some(PowerPreference::HighPerformance)), PowerPreference::HighPerformance);
+        assert_eq!(power_preference(Some("highPerformance"), Some(PowerPreference::LowPower)), PowerPreference::LowPower);
+        assert_eq!(power_preference(None, Some(PowerPreference::None)), PowerPreference::None);
+    }
+
+    /// The preference the engine saves is the one the app reads back before the window opens.
+    #[test]
+    fn the_saved_engine_preference_is_found() {
+        let mut prefs = vectorcraft_engine::Prefs::default();
+        let saved = prefs.to_json();
+        assert_eq!(saved.get("gpuPreference").and_then(serde_json::Value::as_str), Some("powerSaving"));
+        prefs.gpu_preference = "highPerformance".into();
+        let saved = prefs.to_json();
+        let pref = saved.get("gpuPreference").and_then(serde_json::Value::as_str);
+        assert_eq!(power_preference(pref, None), PowerPreference::HighPerformance);
+    }
 }

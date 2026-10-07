@@ -24,6 +24,14 @@ How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 - **No control server:** browsers can't listen on TCP. To automate the web build, drive headless Chrome with `--remote-debugging-port`.
 - Quick smoke test: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --enable-unsafe-webgpu --screenshot=web.png --window-size=1440,900 --virtual-time-budget=15000 http://127.0.0.1:8766/` (headless Chrome on macOS gets a real WebGPU adapter).
 
+## Desktop graphics processor
+
+The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (wgpu, through eframe) only composites the canvas texture and draws the UI. The desktop app (`apps/vectorcraft/src/main.rs`) therefore asks wgpu for the **power-saving** adapter by default, which is the integrated GPU on hybrid-graphics laptops. Presenting frames rendered on a discrete GPU through the integrated one made the window flicker on some laptops (#306). A machine with one GPU gets that GPU either way.
+
+- **Preferences › Performance › Graphics Processor** (`gpuPreference`: `powerSaving` or `highPerformance`) picks the other one. The adapter is chosen when the window opens, so a change applies after a restart.
+- The `WGPU_POWER_PREF` environment variable (`low`, `high` or `none`) overrides the preference.
+- Help › About and the control channel's `ui.inspect` (`graphicsAdapter`) show the adapter in use, and the app logs it at startup.
+
 ## Fonts: craft-fonts (optional build input)
 
 Font files are never committed to this repository. Fonts shared by the Crafting Apps live in

@@ -37,6 +37,11 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ))
                 .size(11.0),
             );
+            // The GPU the window renders with, for bug reports (Preferences › Performance picks it).
+            if let Some(adapter) = &app.graphics_adapter {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(crate::i18n::fmt(tl!("Graphics: {adapter}"), &[("adapter", adapter.as_str())])).size(11.0));
+            }
         });
     app.ui.about = open;
 }

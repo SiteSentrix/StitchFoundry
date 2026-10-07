@@ -158,6 +158,10 @@ Japanese fonts come from [storytold/craft-fonts](https://github.com/storytold/cr
 build input (releases always use it): `CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p vectorcraft` (an absolute path).
 Without it, Japanese text uses the installed system fonts. See [`docs/development.md`](docs/development.md#fonts-craft-fonts-optional-build-input).
 
+On laptops with two graphics processors, VectorCraft uses the power-saving (integrated) one by default.
+To use the discrete one, choose **Preferences › Performance › Graphics Processor › High Performance**
+and restart, or start the app with `WGPU_POWER_PREF=high` (see [`docs/development.md`](docs/development.md#desktop-graphics-processor)).
+
 ### Use it from Claude Code and other agents
 
 Register the MCP server with Claude Code:
