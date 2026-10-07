@@ -2885,3 +2885,60 @@
 @plural	{n} star|{n} stars	{n} 個の光線
 @plural	{n} step|{n} steps	{n} ステップ
 @plural	{n} stroke|{n} strokes	{n} 本の線
+
+# Strings added on main since the catalog was written (Layers panel, saved selections, Delete Anchor Points).
+	Delete Anchor Points	アンカーポイントを削除
+	Duplicate Selection	選択項目を複製
+	Expand Layers Panel Rows	レイヤーパネルの行を展開
+	Flatten Artwork	アートワークを統合
+	Graphics Processor	グラフィックプロセッサー
+	Hide Others	その他を隠す
+	High Performance (discrete)	高パフォーマンス（外部 GPU）
+	Highlight Rows	行をハイライト
+	Lock Others	その他をロック
+	Merge Selected	選択項目を結合
+	Move Rows	行を移動
+	New Layer Options…	新規レイヤーオプション…
+	Options for Selection…	選択項目のオプション…
+	Outline Others	その他をアウトライン表示
+	Power Saving (integrated)	省電力（内蔵 GPU）
+	Preview All Layers	すべてのレイヤーをプレビュー
+	Release to Layers (Build)	レイヤーに分配（ビルド）
+	Release to Layers (Sequence)	レイヤーに分配（シーケンス）
+	Select Art	アートを選択
+	Show All Layers	すべてのレイヤーを表示
+	Unlock All Layers	すべてのレイヤーのロックを解除
+	Applies the next time VectorCraft starts.	VectorCraft の次回起動時に適用されます。
+	Dim Images to:	画像の表示濃度：
+	Edit Selection	選択範囲を編集
+	Graphics: {adapter}	グラフィック：{adapter}
+	Layer Options	レイヤーオプション
+	Layers Panel Options	レイヤーパネルオプション
+	Row Size:	行のサイズ：
+	Show Layers Only	レイヤーのみを表示
+	Thumbnails:	サムネール：
+	Saved Selection 1	保存した選択範囲 1
+	Saved Selection 2	保存した選択範囲 2
+	Saved Selection 3	保存した選択範囲 3
+	Saved Selection 4	保存した選択範囲 4
+	Saved Selection 5	保存した選択範囲 5
+	Saved Selection 6	保存した選択範囲 6
+	Saved Selection 7	保存した選択範囲 7
+	Saved Selection 8	保存した選択範囲 8
+	Saved Selection 9	保存した選択範囲 9
+	Saved Selection 10	保存した選択範囲 10
+	Saved Selection 11	保存した選択範囲 11
+	Saved Selection 12	保存した選択範囲 12
+	Saved Selection 13	保存した選択範囲 13
+	Saved Selection 14	保存した選択範囲 14
+	Saved Selection 15	保存した選択範囲 15
+	Saved Selection 16	保存した選択範囲 16
+	Saved Selection 17	保存した選択範囲 17
+	Saved Selection 18	保存した選択範囲 18
+	Saved Selection 19	保存した選択範囲 19
+	Saved Selection 20	保存した選択範囲 20
+	Saved Selection 21	保存した選択範囲 21
+	Saved Selection 22	保存した選択範囲 22
+	Saved Selection 23	保存した選択範囲 23
+	Saved Selection 24	保存した選択範囲 24
+	Saved Selection 25	保存した選択範囲 25
