@@ -33,6 +33,8 @@ mod gradient_stop;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod import_pdf;
+pub mod layer_options;
+pub mod layers_panel_options;
 pub mod liquify;
 pub mod missing_links;
 pub mod new_color_group;
@@ -267,6 +269,8 @@ registry! {
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
+    LayerOptions: [layer_options::KIND] => layer_options::SPEC,
+    LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
 }
 
 /// The button labels the shared dialog frame can show (OK, discard and the fixed Cancel/Close),

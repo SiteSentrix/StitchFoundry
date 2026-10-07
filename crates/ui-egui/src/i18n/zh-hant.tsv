@@ -602,6 +602,7 @@
 	Difference	差異化
 	Differences from {preset}:	與{preset}的差異：
 	Dim Copies to:	將拷貝調暗至：
+	Dim Images to:	影像變暗至：
 	Dimensions	尺寸
 	Direct Selection Tool	直接選取工具
 	Direction Handles	控制把手
@@ -697,6 +698,7 @@
 	Duplicate Layer	製作圖層複本
 	Duplicate Paragraph Style	製作段落樣式複本
 	Duplicate Selected Item	製作所選項目的複本
+	Duplicate Selection	製作選取範圍複本
 	Duplicate Slice	製作切片複本
 	Duplicate Swatch	製作色票複本
 	Duplicate Symbol	製作符號複本
@@ -817,6 +819,7 @@
 	Expand Compound Shape	展開複合形狀
 	Expand Gradient Mesh	展開漸層網格
 	Expand Gradient To	展開漸層為
+	Expand Layers Panel Rows	展開圖層面板列
 	Expand Options	展開選項
 	Expand Panels	展開面板
 	Expand Repeat	展開重複
@@ -924,6 +927,7 @@
 	Flare Tool Options	光暈工具選項
 	Flat Image	平面影像
 	Flatness:	平滑度：
+	Flatten Artwork	將圖稿平面化
 	Flatten Transparency	透明度平面化
 	Flatten Transparency…	透明度平面化…
 	Flattener preset:	平面化預設集：
@@ -1070,6 +1074,7 @@
 	Hide Hidden Characters	隱藏隱藏字元
 	Hide Note	隱藏註解
 	Hide Options	隱藏選項
+	Hide Others	隱藏其他
 	Hide Print Tiling	隱藏列印分頁
 	Hide Rulers	隱藏尺標
 	Hide Slices	隱藏切片
@@ -1082,6 +1087,7 @@
 	High Performance (discrete)	高效能 (獨立顯示卡)
 	Highlight Alternate Glyphs	醒目提示替代字符
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
+	Highlight Rows	反白顯示列
 	Highlight Substituted Fonts	醒目提示被取代的字體
 	Highlight Substituted Glyphs	醒目提示被取代的字符
 	History	步驟記錄
@@ -1222,8 +1228,10 @@
 	Latin-1 Supplement	拉丁文-1 補充
 	Layer	圖層
 	Layer Names	圖層名稱
+	Layer Options	圖層選項
 	Layer Options…	圖層選項…
 	Layers	圖層
+	Layers Panel Options	圖層面板選項
 	Layout	版面配置
 	Layout:	版面配置：
 	Leader:	前導字元：
@@ -1307,6 +1315,7 @@
 	Lock (⌘2)	鎖定 (⌘2)
 	Lock Grid	鎖定格點
 	Lock Guides	鎖定參考線
+	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
 	Lossless (lossy WebP isn't available yet)	無失真 (尚未提供有失真的 WebP)
@@ -1371,6 +1380,7 @@
 	Merge Graphic Styles	合併繪圖樣式
 	Merge Graphic Styles…	合併繪圖樣式…
 	Merge Layers	合併圖層
+	Merge Selected	合併選取的項目
 	Merge Swatches	合併色票
 	Mesh Tool	網格工具
 	Message:	訊息：
@@ -1423,6 +1433,7 @@
 	Move Mesh Point	移動網格點
 	Move Plane	移動平面
 	Move Plane to Match Object	移動平面以符合物件
+	Move Rows	移動列
 	Move Slices	移動切片
 	Move Spine Point	移動脊線點
 	Move Swatch	移動色票
@@ -1459,6 +1470,7 @@
 	New Graphic Style	新增繪圖樣式
 	New Graphic Style (Alt-click to name it)	新增繪圖樣式 (Alt+點擊可命名)
 	New Graphic Style…	新增繪圖樣式…
+	New Layer Options…	新圖層選項…
 	New Layer…	新增圖層…
 	New Opacity Masks Are Clipping	新的不透明度遮色片為剪裁
 	New Opacity Masks Are Inverted	新的不透明度遮色片為反轉
@@ -1627,6 +1639,7 @@
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
 	Options	選項
+	Options for Selection…	選取範圍的選項…
 	Options:	選項：
 	Options…	選項…
 	or more spaces with a tab	個以上的空格取代為定位字元
@@ -1646,6 +1659,7 @@
 	Out Tangent Handles	外切線控制把手
 	Outer Glow…	外光暈…
 	Outline	外框
+	Outline Others	其他以外框檢視
 	Outline Stroke	外框筆畫
 	Outline Text	外框文字
 	Outlines and Rules	外框與規則線
@@ -1815,6 +1829,7 @@
 	Presets:	預設集：
 	Press 	按下 
 	Preview	預覽
+	Preview All Layers	預覽所有圖層
 	Preview in Browser	在瀏覽器中預覽
 	Preview in Browser needs the desktop app (the web downloads files instead)	在瀏覽器中預覽需要桌面版應用程式 (網頁版會改為下載檔案)
 	Preview Mode	預覽模式
@@ -1962,6 +1977,8 @@
 	Release Guides	釋放參考線
 	Release Opacity Mask	釋放不透明度遮色片
 	Release Selection	釋放選取範圍
+	Release to Layers (Build)	釋放至圖層 (累加)
+	Release to Layers (Sequence)	釋放至圖層 (順序)
 	Release with Perspective	釋放透視
 	Relink	重新連結
 	Relink Linked Files to the Document	將連結檔案重新連結至文件
@@ -2073,6 +2090,7 @@
 	Rounded Rectangle	圓角矩形
 	Rounded Rectangle Tool	圓角矩形工具
 	Rounded Rectangle…	圓角矩形…
+	Row Size:	列尺寸：
 	Rows:	列數：
 	Rule:	規則線：
 	Rulers	尺標
@@ -2206,6 +2224,7 @@
 	Select an image to trace	選取要描圖的影像
 	Select Anchors	選取錨點
 	Select Appearance Item	選取外觀項目
+	Select Art	選取圖稿
 	Select art and choose Object › Pattern › Make.	選取圖稿，然後選擇「物件 › 圖樣 › 製作」。
 	Select art and click New Symbol to make one.	選取圖稿並按一下「新增符號」即可建立。
 	Select art and use New Brush to make one.	選取圖稿，然後使用「新增筆刷」來製作。
@@ -2280,6 +2299,7 @@
 	Show Active Plane Widget	顯示作用中平面 Widget
 	Show All	全部顯示
 	Show All Hidden Attributes	顯示所有隱藏屬性
+	Show All Layers	顯示所有圖層
 	Show All Plates	顯示所有色版
 	Show all plates	顯示所有色版
 	Show All Swatches	顯示所有色票
@@ -2308,6 +2328,7 @@
 	Show Images in Outline Mode	在外框模式中顯示影像
 	Show in Folder	在資料夾中顯示
 	Show Indic Options	顯示印度文字選項
+	Show Layers Only	僅顯示圖層
 	Show Link Info	顯示連結資訊
 	Show List View	顯示清單檢視
 	Show Mesh	顯示網格
@@ -2557,6 +2578,7 @@
 	Three Point Perspective Preset 5	三點透視預設集 5
 	Threshold	臨界值
 	Thumbnail View	縮圖檢視
+	Thumbnails:	縮圖：
 	Tile	並排顯示
 	Tile Edge Color	拼貼邊緣顏色
 	Tile Edge Color…	拼貼邊緣顏色…
@@ -2672,6 +2694,7 @@
 	Unlink the mask	取消連結遮色片
 	Unlock	解除鎖定
 	Unlock All	全部解除鎖定
+	Unlock All Layers	解除鎖定所有圖層
 	Unlock Grid	解除鎖定格點
 	Unlock Guides	解除鎖定參考線
 	Unnamed Objects	未命名物件

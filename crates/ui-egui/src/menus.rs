@@ -306,6 +306,30 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{names: [two or more styles]} open Graphic Style Options (dialog `graphicStyleOptions`, field `name`) to name the style OK merges from them (graphicStyle.merge)",
     ),
     (
+        "ui.layerOptions",
+        "Options for Selection…",
+        "",
+        "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step)",
+    ),
+    (
+        "ui.newLayer",
+        "New Layer Options…",
+        "",
+        "{sublayer?: bool} open Layer Options for a new layer (or a sublayer of the current layer), named and coloured as it would be: dialog `layerOptions` with mode new|newSublayer; OK runs layer.new or layer.newSublayer with the fields",
+    ),
+    (
+        "ui.layersPanelOptions",
+        "Panel Options…",
+        "",
+        "{} open the Layers panel's Panel Options: dialog `layersPanelOptions`, fields layersOnly, rowSize (small|medium|large|other), otherSize (12–100 pt), thumbLayers, thumbGroups, thumbObjects; OK applies them (kept with the UI state)",
+    ),
+    (
+        "ui.layersExpand",
+        "Expand Layers Panel Rows",
+        "",
+        "{ids?: [id…] (default: every row that holds others), open?: bool (default true)} open or close rows of the Layers panel, as clicking their triangles does → {count}",
+    ),
+    (
         "ui.tileEdgeColor",
         "Tile Edge Color…",
         "",
@@ -1022,6 +1046,10 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::dialogs::graphic_style_options::open_merge(app, names.unwrap_or_default())
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
+        "ui.layerOptions" => crate::dialogs::layer_options::open(app, p),
+        "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
+        "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
+        "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.flattenTransparencyDialog" => {
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)
