@@ -232,6 +232,8 @@ mod tests_import_options;
 #[cfg(test)]
 mod tests_layers;
 #[cfg(test)]
+mod tests_live_text;
+#[cfg(test)]
 mod tests_marks;
 #[cfg(test)]
 mod tests_output;

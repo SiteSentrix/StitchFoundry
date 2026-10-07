@@ -15,13 +15,14 @@ vectorcraft-effects = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-text = { workspace = true }
+skrifa = { workspace = true }
 kurbo = { workspace = true }
 thiserror = { workspace = true }
 flate2 = { workspace = true }
 image = { workspace = true }
 krilla = { workspace = true }
 hayro-syntax = "0.7.2"
-hayro-interpret = { version = "0.7.0", default-features = false, features = ["embed-fonts"] }
+hayro-interpret = { version = "0.7.0", default-features = false, features = ["embed-fonts", "embed-cmaps"] }
 log = { workspace = true }
 smallvec = "1"
 serde = { workspace = true }

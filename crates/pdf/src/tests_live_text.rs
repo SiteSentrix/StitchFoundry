@@ -1,0 +1,296 @@
+//! PDF text in installed fonts imports as live type (one point type object per line).
+
+use krilla::geom::{Point as KPoint, Transform};
+use krilla::page::PageSettings;
+use krilla::text::{Font, TextDirection};
+use vectorcraft_doc::{Document, NodeKind, TextObject};
+
+use crate::*;
+
+const SOURCE_SANS: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+
+/// A 300 × 200 pt page with `lines` of (x, y from the top, size, text) in Source Sans 3, and the
+/// same rotated 90° when `rotated`.
+fn text_pdf(lines: &[(f32, f32, f32, &str)], rotated: bool) -> Vec<u8> {
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+    let mut s = page.surface();
+    let font = Font::new(SOURCE_SANS.into(), 0).unwrap();
+    if rotated {
+        s.push_transform(&Transform::from_row(0.0, 1.0, -1.0, 0.0, 150.0, 20.0));
+    }
+    for &(x, y, size, text) in lines {
+        s.draw_text(KPoint::from_xy(x, y), font.clone(), size, text, false, TextDirection::Auto);
+    }
+    if rotated {
+        s.pop();
+    }
+    s.finish();
+    page.finish();
+    pdf.finish().unwrap()
+}
+
+fn texts(d: &Document) -> Vec<TextObject> {
+    let mut v = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            v.push((**t).clone());
+        }
+    });
+    v
+}
+
+fn ink_width(t: &TextObject) -> f64 {
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| g.advance).sum()
+}
+
+#[test]
+fn lines_of_text_in_installed_fonts_come_in_as_point_type() {
+    let bytes = text_pdf(&[(20.0, 50.0, 24.0, "Gagaku Concert"), (20.0, 90.0, 12.0, "Hall A")], false);
+    let r = import_with_report(&bytes, &ImportOptions::default()).unwrap();
+    let t = texts(&r.document);
+    assert_eq!(t.len(), 2, "{t:?}");
+    let first = t.iter().find(|t| t.plain_text() == "Gagaku Concert").unwrap();
+    let st = first.first_style();
+    assert_eq!((st.font_family.as_str(), st.font_style.as_str()), ("Source Sans 3", "Regular"));
+    assert!((st.size - 24.0).abs() < 0.01);
+    let origin = first.xf * kurbo::Point::ZERO;
+    assert!((origin.x - 20.0).abs() < 0.01 && (origin.y - 50.0).abs() < 0.01, "on the PDF's baseline: {origin:?}");
+    assert!(st.tracking.abs() <= 1.0, "set as VectorCraft sets it: {}", st.tracking);
+    assert!(t.iter().any(|t| t.plain_text() == "Hall A" && (t.first_style().size - 12.0).abs() < 0.01));
+    assert!(!r.warnings.iter().any(|w| w.contains("outlines")), "{:?}", r.warnings);
+}
+
+#[test]
+fn rotated_lines_keep_their_angle_and_outline_text_option_outlines_everything() {
+    let bytes = text_pdf(&[(0.0, 0.0, 18.0, "Sideways")], true);
+    let d = import_with_report(&bytes, &ImportOptions::default()).unwrap().document;
+    let t = texts(&d);
+    assert_eq!(t.len(), 1);
+    let dir = t[0].xf * kurbo::Point::new(1.0, 0.0) - t[0].xf * kurbo::Point::ZERO;
+    assert!(dir.x.abs() < 1e-6 && (dir.y - 1.0).abs() < 1e-6, "the baseline runs down the page: {dir:?}");
+    let outlined = import_with_report(&bytes, &ImportOptions { text_as: TextAs::Outlines, ..Default::default() }).unwrap();
+    assert!(texts(&outlined.document).is_empty());
+    assert!(outlined.warnings.iter().any(|w| w.contains("outlines")));
+}
+
+#[test]
+fn letter_spacing_in_the_pdf_becomes_tracking() {
+    // Source Sans 3 at 20 pt, every letter 2 pt further apart than its advance.
+    let mut x = 20.0;
+    let mut lines = vec![];
+    let word = "Wide";
+    let font = vectorcraft_text::FontDb::global().find_postscript("SourceSans3-Regular").unwrap();
+    let mut pieces = vec![];
+    for c in word.chars() {
+        pieces.push((x, c.to_string()));
+        x += font.advance(font.glyph_for(c)) as f32 / font.units_per_em() as f32 * 20.0 + 2.0;
+    }
+    for (x, c) in &pieces {
+        lines.push((*x, 60.0, 20.0, c.as_str()));
+    }
+    let d = import_with_report(&text_pdf(&lines, false), &ImportOptions::default()).unwrap().document;
+    let t = texts(&d);
+    assert_eq!(t.len(), 1, "{t:?}");
+    assert_eq!(t[0].plain_text(), "Wide");
+    assert!((t[0].first_style().tracking - 100.0).abs() <= 1.0, "2 pt at 20 pt = 100/1000 em: {}", t[0].first_style().tracking);
+    let expected = (x - 2.0 - 20.0) as f64 + 2.0;
+    assert!((ink_width(&t[0]) - expected).abs() < 0.3, "{} vs {expected}", ink_width(&t[0]));
+}
+
+#[test]
+fn kangxi_radicals_from_cid_tables_become_ideographs() {
+    assert_eq!(crate::import::unify_radical('\u{2FD3}'), '龍');
+    assert_eq!(crate::import::unify_radical('\u{2F00}'), '一');
+    assert_eq!(crate::import::unify_radical('笙'), '笙');
+}
+
+#[test]
+fn a_glyph_whose_unicode_names_another_letter_stays_outlined() {
+    // The glyph of `l` labelled `W` in the PDF's ToUnicode map: opening it as live `W` would change
+    // what the page shows.
+    let font = vectorcraft_text::FontDb::global().find_postscript("SourceSans3-Regular").unwrap();
+    let l = font.glyph_for('l');
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+    let mut s = page.surface();
+    let kfont = Font::new(SOURCE_SANS.into(), 0).unwrap();
+    let glyph = krilla::text::KrillaGlyph {
+        glyph_id: krilla::text::GlyphId::new(l),
+        text_range: 0..1,
+        x_advance: 0.25,
+        x_offset: 0.0,
+        y_offset: 0.0,
+        y_advance: 0.0,
+        location: None,
+    };
+    s.draw_glyphs(KPoint::from_xy(20.0, 50.0), &[glyph], kfont, "W", 24.0, false);
+    s.finish();
+    page.finish();
+    let r = import_with_report(&pdf.finish().unwrap(), &ImportOptions::default()).unwrap();
+    assert!(texts(&r.document).is_empty(), "{:?}", texts(&r.document));
+    assert!(r.warnings.iter().any(|w| w.contains("differ from the installed font")), "{:?}", r.warnings);
+}
+
+/// Source Sans 3 renamed `SourceSans9-Regular` (a font no machine has installed).
+fn uninstalled_font() -> Vec<u8> {
+    let mut bytes = SOURCE_SANS.to_vec();
+    let utf16: Vec<u8> = "SourceSans3-Regular".encode_utf16().flat_map(u16::to_be_bytes).collect();
+    let renamed16: Vec<u8> = "SourceSans9-Regular".encode_utf16().flat_map(u16::to_be_bytes).collect();
+    for (from, to) in [(b"SourceSans3-Regular".to_vec(), b"SourceSans9-Regular".to_vec()), (utf16, renamed16)] {
+        let mut i = 0;
+        while let Some(at) = bytes[i..].windows(from.len()).position(|w| w == from.as_slice()) {
+            bytes[i + at..i + at + from.len()].copy_from_slice(&to);
+            i += at + from.len();
+        }
+    }
+    bytes
+}
+
+#[test]
+fn text_in_a_missing_font_is_outlined_with_a_pink_editable_copy_that_does_not_print() {
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+    let mut s = page.surface();
+    let font = Font::new(uninstalled_font().into(), 0).unwrap();
+    s.draw_text(KPoint::from_xy(20.0, 50.0), font, 24.0, "Gagaku", false, TextDirection::Auto);
+    s.finish();
+    page.finish();
+    let r = import_with_report(&pdf.finish().unwrap(), &ImportOptions::default()).unwrap();
+    let d = &r.document;
+    assert_eq!(d.layers.len(), 2, "the page and its copies");
+    // The page keeps the outlines.
+    let page_layer = &d.layers[0];
+    let mut outlines = 0;
+    page_layer.walk(&mut |n| outlines += usize::from(n.name.as_deref() == Some("<Text Outlines>")));
+    assert!(outlines > 0);
+    // Over it, a non-printing layer of editable copies, named by the font's PostScript name.
+    let copies = &d.layers[1];
+    let NodeKind::Layer { printable, .. } = &copies.kind else { panic!() };
+    assert!(!printable && copies.name.as_deref().unwrap().starts_with(crate::import::COPIES_LAYER));
+    let mut t = vec![];
+    copies.walk(&mut |n| {
+        if let NodeKind::Text(x) = &n.kind {
+            t.push((**x).clone());
+        }
+    });
+    assert_eq!(t.len(), 1);
+    assert_eq!(t[0].plain_text(), "Gagaku");
+    let st = t[0].first_style();
+    assert_eq!(st.font_family, "SourceSans9-Regular");
+    assert_eq!(st.fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.2, 0.6)));
+    assert!(r.warnings.iter().any(|w| w.contains("SourceSans9-Regular") && w.contains("editable copies")), "{:?}", r.warnings);
+    // Exports leave the non-printing copies out (compared with the copies made printable).
+    let count = |d: &Document| {
+        let bytes = crate::export(d, &Default::default()).unwrap();
+        let back = import_with_report(&bytes, &ImportOptions::default()).unwrap().document;
+        let mut n = 0;
+        back.walk(|x| n += usize::from(!x.is_container()));
+        n
+    };
+    let mut printed = d.clone();
+    if let Some(l) = printed.layers.get_mut(1).map(std::sync::Arc::make_mut)
+        && let NodeKind::Layer { printable, .. } = &mut l.kind
+    {
+        *printable = true;
+    }
+    assert!(count(d) < count(&printed), "{} vs {}", count(d), count(&printed));
+}
+
+#[test]
+fn stroke_only_text_in_a_missing_font_gets_an_editable_copy_too() {
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+    let mut s = page.surface();
+    let font = Font::new(uninstalled_font().into(), 0).unwrap();
+    s.set_fill(None);
+    s.set_stroke(Some(krilla::paint::Stroke::default()));
+    s.draw_text(KPoint::from_xy(20.0, 50.0), font, 24.0, "Gagaku", false, TextDirection::Auto);
+    s.finish();
+    page.finish();
+    let d = import_with_report(&pdf.finish().unwrap(), &ImportOptions::default()).unwrap().document;
+    let copies = d.layers.get(1).expect("a layer of editable copies");
+    let mut t = vec![];
+    copies.walk(&mut |n| {
+        if let NodeKind::Text(x) = &n.kind {
+            t.push(x.plain_text());
+        }
+    });
+    assert_eq!(t, ["Gagaku"]);
+}
+
+#[test]
+fn a_single_upright_glyph_comes_in_as_vertical_type_and_takes_no_horizontal_glyphs() {
+    use crate::import_text::{Look, Placement, TextLine, Upright};
+    use vectorcraft_geom::{Point, Vec2};
+    let look = Look {
+        font: 1,
+        family: "Source Sans 3".into(),
+        style: "Regular".into(),
+        size: 20.0,
+        h_scale: 100.0,
+        fill: Some(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0))),
+        stroke: None,
+    };
+    let at = |x: f64, y: f64| Placement { origin: Point::new(x, y), dir: Vec2::new(1.0, 0.0), size: 20.0, h_scale: 100.0 };
+    let mut line = TextLine::new(at(100.0, 100.0), 1.0);
+    assert!(line.push_upright(&look, at(100.0, 100.0), 1.0, Upright { top: Point::new(110.0, 82.0) }, "§"));
+    assert!(!line.push(&look, at(130.0, 100.0), 1.0, 10.0, "a"), "a horizontal glyph starts another line");
+    let (t, _) = line.finish().unwrap();
+    assert!(t.vertical, "one upright glyph is vertical type");
+    assert_eq!(t.plain_text(), "§");
+}
+
+#[test]
+fn letter_spaced_vertical_type_keeps_its_characters_together() {
+    use crate::import_text::{Look, Placement, TextLine, Upright};
+    use vectorcraft_geom::{Point, Vec2};
+    let look = Look {
+        font: 1,
+        family: "Source Sans 3".into(),
+        style: "Regular".into(),
+        size: 20.0,
+        h_scale: 100.0,
+        fill: Some(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0))),
+        stroke: None,
+    };
+    // Glyphs set down a column 1.5 em apart (tracking 500): no spaces come in between them.
+    let at = |y: f64| Placement { origin: Point::new(100.0, y), dir: Vec2::new(1.0, 0.0), size: 20.0, h_scale: 100.0 };
+    let mut line = TextLine::new(at(100.0), 1.0);
+    for (i, c) in ["§", "§", "§"].iter().enumerate() {
+        let y = 100.0 + 30.0 * i as f64;
+        assert!(line.push_upright(&look, at(y), 1.0, Upright { top: Point::new(110.0, y - 18.0) }, c));
+    }
+    let (t, _) = line.finish().unwrap();
+    assert!(t.vertical);
+    assert_eq!(t.plain_text(), "§§§", "letter spacing isn't a space");
+}
+
+#[test]
+fn a_tagged_span_inside_a_line_leaves_the_line_whole() {
+    use krilla::tagging::{ContentTag, SpanTag};
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+    let mut s = page.surface();
+    let font = Font::new(SOURCE_SANS.into(), 0).unwrap();
+    // "Ga" "ga" "ku" with the middle part in its own marked content (a span, as apps write for
+    // actual text), all on one baseline.
+    s.draw_text(KPoint::from_xy(20.0, 50.0), font.clone(), 24.0, "Ga", false, TextDirection::Auto);
+    let x = 20.0 + ink_width_of(&font, 24.0, "Ga");
+    s.start_tagged(ContentTag::Span(SpanTag::empty()));
+    s.draw_text(KPoint::from_xy(x, 50.0), font.clone(), 24.0, "ga", false, TextDirection::Auto);
+    s.end_tagged();
+    let x = x + ink_width_of(&font, 24.0, "ga");
+    s.draw_text(KPoint::from_xy(x, 50.0), font, 24.0, "ku", false, TextDirection::Auto);
+    s.finish();
+    page.finish();
+    let d = import(&pdf.finish().unwrap()).unwrap();
+    let t: Vec<String> = texts(&d).iter().map(TextObject::plain_text).collect();
+    assert_eq!(t, ["Gagaku"]);
+}
+
+/// Advance of `text` in `font` at `size` (from the bundled Source Sans 3, as laid out).
+fn ink_width_of(_font: &Font, size: f32, text: &str) -> f32 {
+    let style = vectorcraft_doc::CharStyle { font_family: "Source Sans 3".into(), size: f64::from(size), ..Default::default() };
+    ink_width(&TextObject::point(vectorcraft_geom::Point::ZERO, text, style)) as f32
+}
