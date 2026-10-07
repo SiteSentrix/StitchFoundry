@@ -150,6 +150,39 @@ fn open_exts_cover_every_readable_format() {
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
 }
 
+/// The extensions usage texts list for export: one per writable format, each picking that format
+/// (`.png` picks PNG; PNG-8 is asked for by `format`).
+#[test]
+fn export_extensions_name_every_writable_format() {
+    let exts = export_extensions();
+    assert_eq!(
+        exts,
+        [
+            "vectorcraft",
+            "svg",
+            "svgz",
+            "pdf",
+            "png",
+            "jpg",
+            "gif",
+            "webp",
+            "tif",
+            "bmp",
+            "vctemplate",
+            "txt",
+            "dxf",
+            "eps",
+            "emf",
+            "wmf",
+            "tga",
+            "psd"
+        ]
+    );
+    for e in exts {
+        assert!(format_for_name(&format!("x.{e}")).is_some_and(|f| f.write), "{e}");
+    }
+}
+
 #[test]
 fn formats_query_lists_readers_writers_and_options() {
     let mut s = Session::new();
