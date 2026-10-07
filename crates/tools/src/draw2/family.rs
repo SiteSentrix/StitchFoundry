@@ -1,8 +1,9 @@
 //! Line Segment family drag tools: Arc, Spiral, Rectangular Grid and Polar Grid.
 //!
-//! Drag draws (Shift = equal axes / square, Alt = from the centre for arc and grids); a click
-//! without dragging asks the UI for the options dialog. While dragging, ↑/↓ change the spiral's
-//! segments, the grid rows or the concentric dividers; ←/→ change grid columns / radial dividers.
+//! Drag draws (Shift = equal axes / square, Alt = from the centre for arc and grids, Space held
+//! moves the shape being drawn); a click without dragging asks the UI for the options dialog.
+//! While dragging, ↑/↓ change the spiral's segments, the grid rows or the concentric dividers; ←/→
+//! change grid columns / radial dividers.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect, Vec2};
@@ -120,8 +121,9 @@ impl Tool for FamilyTool {
                 vec![]
             }
             PointerKind::Drag => {
-                let Some(s) = self.start else { return vec![] };
-                self.last = ev.pos;
+                let Some(mut s) = self.start else { return vec![] };
+                crate::shape::space_moves(&mut s, &mut self.last, ev, self.began);
+                self.start = Some(s);
                 self.mods = ev.mods;
                 let mut out = vec![];
                 if !self.began {
@@ -238,7 +240,13 @@ mod tests {
         );
         let a = t.key(&cx, ToolKey::Right, Mods::default());
         assert!(matches!(&a[0], Action::Preview(_, v) if v["columns"] == 6));
-        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+        // Space held moves the grid at its size; let go, it grows again from there.
+        let space = Mods { space: true, ..Mods::default() };
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 80.0, 50.0).with_mods(space));
+        assert!(matches!(&a[..], [Action::Preview(_, v)] if v["x"] == 30.0 && v["y"] == 20.0 && v["width"] == 50.0 && v["height"] == 30.0), "{a:?}");
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 60.0));
+        assert!(matches!(&a[..], [Action::Preview(_, v)] if v["x"] == 30.0 && v["width"] == 60.0 && v["height"] == 40.0), "{a:?}");
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 60.0)), vec![Action::Commit]);
     }
 
     #[test]

@@ -92,6 +92,15 @@ impl ShapeTool {
     }
 }
 
+/// Space held once a shape drag has begun moves the shape being drawn instead of sizing it: `start`
+/// moves as far as the pointer did since `last`, which becomes the pointer.
+pub(crate) fn space_moves(start: &mut Point, last: &mut Point, ev: &PointerEvent, began: bool) {
+    if ev.mods.space && began {
+        *start += ev.pos - *last;
+    }
+    *last = ev.pos;
+}
+
 /// The rectangle a drag from `start` to `p` draws: Shift makes it a square, Alt draws it from its
 /// centre.
 pub(crate) fn drag_rect(start: Point, p: Point, m: Mods) -> Rect {
@@ -124,12 +133,8 @@ impl Tool for ShapeTool {
                 let (pos, g) = crate::guides::snap_draw(cx, ev.pos, &[]);
                 self.guides = g;
                 let ev = &PointerEvent { pos, ..*ev };
-                // Space held while drawing: the shape moves with the pointer instead of growing.
-                if ev.mods.space && self.began {
-                    s += ev.pos - self.last;
-                    self.start = Some(s);
-                }
-                self.last = ev.pos;
+                space_moves(&mut s, &mut self.last, ev, self.began);
+                self.start = Some(s);
                 self.mods = ev.mods;
                 let mut out = vec![];
                 if !self.began {
