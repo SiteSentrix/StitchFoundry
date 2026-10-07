@@ -239,8 +239,8 @@ pub fn popup(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 ui.separator();
             }
             crate::menus::Item::Cmd(label, id, p) => {
-                let label = crate::menus::dynamic_label(app, id, label);
-                let label = tl!(&label);
+                // As the Window menu draws it: custom workspace names (and Reset <name>) as they are.
+                let label = crate::menus::display_label(app, id, label);
                 let text = match crate::menus::checked(app, id, &p) {
                     Some(true) => format!("✓  {label}"),
                     Some(false) => format!("     {label}"),
@@ -338,7 +338,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     ui.set_width(ui.available_width());
                     for n in names(&app.ui) {
                         let builtin = is_builtin(&n);
-                        let shown = if builtin { tl!(&n) } else { n.as_str() };
+                        let shown = crate::panels::label_or_name(&n, builtin);
                         let text = if builtin { egui::RichText::new(shown).color(t.text_dim) } else { egui::RichText::new(shown).color(t.text) };
                         if ui.selectable_label(d.str("selected") == n, text).clicked() && !builtin {
                             d.fields.insert("selected".into(), json!(n));

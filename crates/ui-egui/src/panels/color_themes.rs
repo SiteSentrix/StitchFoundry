@@ -211,7 +211,8 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(n) => crate::i18n::fmt(tl!("Save changes to {name}"), &[("name", n)]),
             None => tl!("Save theme to My Themes").into(),
         };
-        if widgets::icon_button(ui, "save", &tip, false, 24.0).clicked() {
+        // The tip is translated around the theme's name, not looked up whole.
+        if widgets::icon_button(ui, "save", "", false, 24.0).on_hover_text(tip).clicked() {
             save(app, &ctx);
         }
         let doc = app.session.active().is_some();

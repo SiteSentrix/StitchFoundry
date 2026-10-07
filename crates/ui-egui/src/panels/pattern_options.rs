@@ -169,7 +169,7 @@ fn idle(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         let labels: Vec<&str> = names.iter().map(String::as_str).collect();
-        if let Some(i) = widgets::dropdown(ui, "po-pick", &chosen, &labels, 150.0) {
+        if let Some(i) = widgets::dropdown_names(ui, "po-pick", &chosen, &labels, 150.0) {
             set_pstate(ui.ctx(), "po-chosen", names[i].clone());
         }
         if widgets::flat_button(ui, tl!("Edit Pattern"), 90.0).clicked()

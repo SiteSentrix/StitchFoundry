@@ -205,7 +205,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         let styles = db.styles(&family);
         let snames: Vec<&str> = styles.iter().map(String::as_str).collect();
-        if let Some(i) = widgets::dropdown(ui, "gl-style", &style, &snames, (w * 0.38 - 8.0).max(60.0)) {
+        if let Some(i) = widgets::dropdown_names(ui, "gl-style", &style, &snames, (w * 0.38 - 8.0).max(60.0)) {
             set_pstate(ui.ctx(), "gl-font", Some((family.clone(), snames[i].to_string())));
         }
     });

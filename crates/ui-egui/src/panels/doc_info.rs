@@ -18,10 +18,12 @@ struct Cache {
     info: Value,
 }
 
+/// A `label: value` row. `label` is shown as given: translate an interface label first, a name
+/// stays as it is.
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(tl!(label)).size(12.0).color(t.text_dim));
+        ui.label(egui::RichText::new(label).size(12.0).color(t.text_dim));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Long values (paths) are cut to the panel's width; hovering shows them whole.
             ui.add(egui::Label::new(egui::RichText::new(value).size(12.0).color(t.text)).truncate());
@@ -70,16 +72,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if rows.is_empty() {
                 widgets::dim_label(ui, tl!("None"));
             }
-            for r in rows {
+            let named = named_rows(s["id"].as_str().unwrap_or_default(), rows);
+            for (k, r) in rows.iter().enumerate() {
                 let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
+                let label = super::label_or_name(label, !named.contains(&k));
                 if value.is_empty() {
-                    widgets::dim_label(ui, label);
+                    widgets::dim_name(ui, label);
                 } else {
                     row(ui, label, value.into());
                 }
             }
         }
     });
+}
+
+/// The rows of Document Info section `id` labelled by a name (an artboard, a style, a swatch, a
+/// font, an image) rather than an interface label: every row of the lists, and in Document the
+/// artboards, which follow the Artboards count. Names are shown as they are.
+fn named_rows(id: &str, rows: &[Value]) -> std::ops::Range<usize> {
+    match id {
+        "objects" => 0..0,
+        "document" => {
+            let Some(at) = rows.iter().position(|r| r[0] == "Artboards") else { return 0..0 };
+            let count = rows.get(at).and_then(|r| r[1].as_str()).and_then(|n| n.parse::<usize>().ok()).unwrap_or(0);
+            at + 1..(at + 1).saturating_add(count).min(rows.len())
+        }
+        _ => 0..rows.len(),
+    }
 }
 
 /// `docInfo.save {path?, selectionOnly?}`: write the text report to `path`, else a picked file
@@ -134,6 +153,26 @@ mod tests {
             menu(&mut app, ui);
         });
         out.textures_delta.clear();
+    }
+
+    /// Artboard, font and other names in the rows are shown as they are, the labels in the UI
+    /// language: an artboard named like a label ("Units") is still a name.
+    #[test]
+    fn names_in_rows_are_told_from_labels() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("artboard.setProps", &json!({"index": 0, "name": "Units"})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap();
+        let info = app.session.execute("document.info", &json!({})).unwrap();
+        let rows = |id: &str| info["sections"].as_array().unwrap().iter().find(|s| s["id"] == id).unwrap()["rows"].as_array().unwrap().clone();
+        let doc = rows("document");
+        let named: Vec<&str> = named_rows("document", &doc).map(|k| doc[k][0].as_str().unwrap()).collect();
+        assert_eq!(named, ["Units"], "{doc:?}");
+        assert_eq!(doc.iter().filter(|r| r[0] == "Units").count(), 2, "the label and the artboard");
+        assert_eq!(named_rows("objects", &rows("objects")), 0..0);
+        let fonts = rows("fonts");
+        assert!(!fonts.is_empty());
+        assert_eq!(named_rows("fonts", &fonts), 0..fonts.len());
     }
 
     #[test]

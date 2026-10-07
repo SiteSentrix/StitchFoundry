@@ -408,7 +408,7 @@ fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: boo
                 Some(n) => format!("{n} {}%", vectorcraft_color::tint_percent(s.tint)),
                 None => s.color.to_hex().to_uppercase(),
             };
-            widgets::dim_label(ui, &label);
+            widgets::dim_name(ui, &label);
             if resp.on_hover_text(tl!("Edit the stop")).clicked() {
                 open_popover(app, i, r.left_bottom() + vec2(0.0, 4.0));
             }

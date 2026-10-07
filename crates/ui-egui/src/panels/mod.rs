@@ -372,6 +372,14 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(("panel-state", key)), v));
 }
 
+/// An entry of a list that mixes interface labels with names (user, file or system data) as
+/// shown: a built-in entry in the UI language, a name exactly as it is (a profile or library the
+/// user calls "Layers" stays "Layers"). Pass the result to the non-translating widgets
+/// (`dropdown_names`, `menu_item_name`, `dim_name`).
+pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
+    if built_in { tl!(s) } else { s }
+}
+
 /// "Recent Colors" header + a row of chips (the Session's recent colours, which every paint
 /// command feeds); clicking one applies it to the active proxy (Alt: the inactive one).
 pub(crate) fn recent_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) {

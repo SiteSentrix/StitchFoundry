@@ -98,8 +98,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             } else if resp.hovered() {
                 ui.painter().rect_filled(r, 0.0, t.hover);
             }
-            // The built-in "[Normal … Style]" names are translated where painted; other names are user data.
-            let shown = if name.starts_with('[') && name.ends_with(']') { tl!(name) } else { name.as_str() };
+            // The built-in "[Normal … Style]" (listed first) is translated where painted; other names
+            // are user data, brackets or not.
+            let shown = super::label_or_name(name, *name == normal);
             let label = if overridden { format!("{shown}+") } else { shown.to_string() };
             ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
             if resp.clicked() {

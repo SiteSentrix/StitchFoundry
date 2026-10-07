@@ -22,12 +22,13 @@ fn expanded_id() -> egui::Id {
     egui::Id::new("layers-expanded")
 }
 
-/// The name painted for a row: a generated `<Kind>` name is translated, anything else is user data.
-fn painted_name(n: &Node, name: &str) -> String {
-    if n.name.is_none()
-        && let Some(inner) = name.strip_prefix('<').and_then(|s| s.strip_suffix('>'))
-    {
-        return format!("<{}>", crate::i18n::t(inner));
+/// The name painted for a row in `lang`: a generated `<Kind>` name is translated, anything else is
+/// user data (an unnamed text object shows its text, which can look like `<Path>`; only an empty
+/// one is called `<Text>`).
+fn painted_name(n: &Node, name: &str, lang: crate::i18n::Lang) -> String {
+    let generated = n.name.is_none() && !matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| !r.text.is_empty()));
+    if generated && let Some(inner) = name.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
+        return format!("<{}>", crate::i18n::tr(lang, inner));
     }
     name.to_string()
 }
@@ -244,7 +245,11 @@ fn row(
         _ => {
             let painter = ui.painter().with_clip_rect(name_rect);
             // Generated names ("<Path>", "<Opacity Mask>") are translated where painted; the stored name stays English.
-            let shown = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { tl!("<Opacity Mask>").to_string() } else { painted_name(n, &name) };
+            let shown = if doc.mask_edit.is_some_and(|m| m.layer == n.id) {
+                tl!("<Opacity Mask>").to_string()
+            } else {
+                painted_name(n, &name, crate::i18n::current())
+            };
             let text = painter.text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, shown, font, t.text);
             // A clipping path's name is underlined, a masked object's with a dashed line.
             if clip_path {
@@ -462,6 +467,28 @@ mod tests {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
         out.textures_delta.clear();
         out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Circle(cs) if cs.radius == 3.2 && cs.fill != Color32::TRANSPARENT)).count()
+    }
+
+    /// A generated `<Kind>` name is translated where painted; an unnamed text object's text never
+    /// is, even when it reads like one.
+    #[test]
+    fn only_generated_names_are_translated() {
+        let zh = crate::i18n::Lang::from_code("zh-hant").unwrap();
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let rect = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        let text = run(&mut app, "text.create", json!({"x": 10, "y": 40, "text": "<Path>"}))["id"].as_u64().unwrap();
+        let doc = &app.session.active().unwrap().doc;
+        let names = |id: u64| {
+            let n = doc.node(NodeId(id)).unwrap();
+            (n.display_name(), painted_name(n, &n.display_name(), zh))
+        };
+        assert_eq!(names(text), ("<Path>".to_string(), "<Path>".to_string()));
+        let (stored, painted) = names(rect);
+        let inner = stored.trim_start_matches('<').trim_end_matches('>');
+        assert_eq!(painted, format!("<{}>", crate::i18n::tr(zh, inner)));
+        assert_ne!(painted, stored, "translated");
     }
 
     #[test]

@@ -1201,6 +1201,12 @@ fn ime_output(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) {
     });
 }
 
+/// Is overlay label `text` the Artboard tool's "01 - <artboard name>"? It holds a name, so it is
+/// shown as it is; the tools' other labels ("anchor", "path", Puppet Warp's warning) are ours.
+fn names_an_artboard(text: &str) -> bool {
+    text.split_once(" - ").is_some_and(|(n, _)| n.len() >= 2 && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
 fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
     for o in overlays {
         match o {
@@ -1236,7 +1242,13 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens) {
             }
             Overlay::Label { p: pt, text, color } => {
                 let sp = xf.to_screen(*pt) + vec2(8.0, -14.0);
-                p.text(sp, egui::Align2::LEFT_TOP, tl!(text), egui::FontId::proportional(11.0), c32(*color));
+                p.text(
+                    sp,
+                    egui::Align2::LEFT_TOP,
+                    crate::panels::label_or_name(text, !names_an_artboard(text)),
+                    egui::FontId::proportional(11.0),
+                    c32(*color),
+                );
             }
             Overlay::Highlight { quad, color } => {
                 let c = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], color[3]);
@@ -1413,6 +1425,14 @@ mod tests {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
         out.textures_delta.clear();
+    }
+
+    /// The Artboard tool's label holds the artboard's name (never translated); the tools' own
+    /// labels are interface text.
+    #[test]
+    fn artboard_labels_name_the_artboard() {
+        assert!(names_an_artboard("01 - Layers") && names_an_artboard("12 - Artboard 12 - copy"));
+        assert!(!names_an_artboard("anchor") && !names_an_artboard("1 - x") && !names_an_artboard("Off the mesh - move closer"));
     }
 
     fn middle(pos: Pos2, pressed: bool) -> egui::Event {

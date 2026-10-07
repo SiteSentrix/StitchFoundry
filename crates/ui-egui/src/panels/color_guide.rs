@@ -200,7 +200,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let (left, right) = app.ui.color_guide.variation.sides();
-    let limit = limit_name(app, &app.ui.color_guide_limit);
+    let key = &app.ui.color_guide_limit;
+    let limit = limit_name(app, key).map(|n| library_panel::library_name(key, &n).to_string());
     ui.horizontal(|ui| {
         widgets::dim_label(ui, left);
         // The library the colours are limited to, centred between the ends.
@@ -214,7 +215,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(name) => crate::i18n::fmt(tl!("Limit colors to swatch library: {name}"), &[("name", name)]),
             None => tl!("Limit colors to swatch library").into(),
         };
-        let lr = widgets::icon_button(ui, "library", &tip, limit.is_some(), 24.0);
+        // The tip is translated around the library's name, not looked up whole.
+        let lr = widgets::icon_button(ui, "library", "", limit.is_some(), 24.0).on_hover_text(tip);
         egui::Popup::menu(&lr).show(|ui| limit_menu(app, ui));
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
         // Recolor Artwork with the harmony colours as the new colours: the selected art's, or
