@@ -2,9 +2,10 @@
 //! construction lines and labels Illustrator users expect.
 
 use vectorcraft_doc::hit::{HitOptions, hit_test};
-use vectorcraft_doc::{Document, NodeId, NodeKind};
-use vectorcraft_geom::{Point, Rect, Vec2};
+use vectorcraft_doc::{Document, NodeId, NodeKind, OrientedBox};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
+use crate::bbox::Handle;
 use crate::{Overlay, ToolContext};
 
 pub const MAGENTA: [u8; 3] = [0xff, 0x3d, 0xfc];
@@ -154,6 +155,99 @@ impl Targets {
         }
         (d, ov)
     }
+
+    /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
+    /// dragging `handle` of the box `bx` (about the centre when `from_center`), in the box's own
+    /// frame, and so is the result. The corners and the side that handle moves land on the nearest
+    /// target within `tol` on the page, whatever the box's angle. A handle with one way to go (a
+    /// side, or a proportional corner) slides along it until one of them is on a target.
+    pub fn snap_scale(&self, bx: &OrientedBox, handle: Handle, a: Affine, proportional: bool, from_center: bool, tol: f64) -> (Affine, Vec<Overlay>) {
+        type Hit = Option<(f64, Point)>;
+        let r = bx.rect;
+        let origin = if from_center { r.center() } else { handle.opposite().pos(r) };
+        let (d0, [sx, _, _, sy, _, _]) = (handle.pos(r) - origin, a.as_coeffs());
+        let (to_doc, to_local) = (bx.to_doc(), bx.to_doc().inverse());
+        // A scale that collapses or flips the box is no snap.
+        let valid = |n: f64, s: f64| n.is_finite() && n * s > 0.0;
+        let nearest = |v: f64, ts: &[(f64, Point, Kind)]| -> Hit {
+            ts.iter().map(|(t, from, _)| (*t, *from)).filter(|(t, _)| (t - v).abs() <= tol).min_by(|p, q| (p.0 - v).abs().total_cmp(&(q.0 - v).abs()))
+        };
+        let (mut nx, mut ny) = (sx, sy);
+        let (mut hit_x, mut hit_y): (Hit, Hit) = (None, None);
+        if handle.is_corner() && !proportional {
+            // The corner goes anywhere: it takes the target's x, its y, or both.
+            let p = to_doc * (a * handle.pos(r));
+            let (hx, hy) = (nearest(p.x, &self.xs), nearest(p.y, &self.ys));
+            for (tx, ty) in [(hx, hy), (hx, None), (None, hy)] {
+                if tx.is_none() && ty.is_none() {
+                    continue;
+                }
+                let q = to_local * Point::new(tx.map_or(p.x, |h| h.0), ty.map_or(p.y, |h| h.0));
+                let (mut cx, mut cy) = ((q.x - origin.x) / d0.x, (q.y - origin.y) / d0.y);
+                // Square to the page, the axis without a target stays exactly where it was.
+                if bx.angle == 0.0 {
+                    (cx, cy) = (if tx.is_some() { cx } else { sx }, if ty.is_some() { cy } else { sy });
+                }
+                if valid(cx, sx) && valid(cy, sy) {
+                    (nx, ny, hit_x, hit_y) = (cx, cy, tx, ty);
+                    break;
+                }
+            }
+        } else {
+            // One parameter `s`: the scale is `c + s·e` on each axis.
+            let (ax, _) = handle.axes();
+            let (e, c, s0) = match (handle.is_corner(), ax, proportional) {
+                (true, _, _) => ((sx.signum(), sy.signum()), (0.0, 0.0), sx.abs()),
+                (false, true, true) => ((1.0, sx.signum()), (0.0, 0.0), sx),
+                (false, true, false) => ((1.0, 0.0), (0.0, 1.0), sx),
+                (false, false, true) => ((sy.signum(), 1.0), (0.0, 0.0), sy),
+                (false, false, false) => ((0.0, 1.0), (1.0, 0.0), sy),
+            };
+            // The points that may land on a target: the handle, and the two ends of its side.
+            let i = handle as usize;
+            let ends = if handle.is_corner() { [None, None] } else { [Handle::ALL.get((i + 1) % 8), Handle::ALL.get((i + 7) % 8)] };
+            // How far the handle travels per unit of `s`: a snap may not drag it far from the
+            // pointer, as it would for a target the side runs almost along.
+            let travel = (e.0 * d0.x).hypot(e.1 * d0.y);
+            let mut best: Option<(f64, f64, bool, (f64, Point))> = None;
+            for h in std::iter::once(handle).chain(ends.into_iter().flatten().copied()) {
+                let v = h.pos(r) - origin;
+                let base = to_doc * (origin + Vec2::new(c.0 * v.x, c.1 * v.y));
+                let dir = (to_doc * Point::new(e.0 * v.x, e.1 * v.y)).to_vec2();
+                let p = base + dir * s0;
+                for (is_x, at, b, d, ts) in [(true, p.x, base.x, dir.x, &self.xs), (false, p.y, base.y, dir.y, &self.ys)] {
+                    if d.abs() <= 1e-9 {
+                        continue;
+                    }
+                    let Some(hit) = nearest(at, ts) else { continue };
+                    let s = (hit.0 - b) / d;
+                    let moved = (s - s0).abs() * travel;
+                    if valid(s, s0) && moved <= 2.0 * tol && best.is_none_or(|k| moved < k.1) {
+                        best = Some((s, moved, is_x, hit));
+                    }
+                }
+            }
+            if let Some((s, _, is_x, hit)) = best {
+                (nx, ny) = (c.0 + s * e.0, c.1 + s * e.1);
+                if is_x {
+                    hit_x = Some(hit);
+                } else {
+                    hit_y = Some(hit);
+                }
+            }
+        }
+        let out = Affine::translate(origin.to_vec2()) * Affine::scale_non_uniform(nx, ny) * Affine::translate(-origin.to_vec2());
+        // The lines run from the target's own point across the resized box, on the page.
+        let nr = (to_doc * out).transform_rect_bbox(r);
+        let mut ov = vec![];
+        if let Some((x, from)) = hit_x {
+            ov.push(Overlay::Line { a: Point::new(x, from.y.min(nr.y0)), b: Point::new(x, from.y.max(nr.y1)), color: MAGENTA, dashed: false });
+        }
+        if let Some((y, from)) = hit_y {
+            ov.push(Overlay::Line { a: Point::new(from.x.min(nr.x0), y), b: Point::new(from.x.max(nr.x1), y), color: MAGENTA, dashed: false });
+        }
+        (out, ov)
+    }
 }
 
 /// Snap `p` for a drawing tool when smart guides (or grid snapping) are on.
@@ -234,5 +328,39 @@ mod tests {
         let (dv, ov) = t.snap_rect(Rect::new(2.0, 50.0, 52.0, 90.0), 4.0);
         assert_eq!(dv.x, -2.0);
         assert!(!ov.is_empty());
+    }
+
+    #[test]
+    fn scale_snap_lands_the_moved_edges_on_targets() {
+        use crate::bbox::scale_for_drag;
+        let (d, _) = doc_with_rect();
+        // The document's rect is 100..200: a box beside it is resized against it.
+        let t = Targets::collect(&d, &[], None);
+        let r = Rect::new(250.0, 100.0, 300.0, 150.0);
+        let snap = |h: Handle, p: Point, shift: bool, alt: bool| {
+            let (a, ov) = t.snap_scale(&OrientedBox::aligned(r), h, scale_for_drag(r, h, p, shift, alt), shift, alt, 4.0);
+            (a.transform_rect_bbox(r), ov)
+        };
+        // The bottom edge lands on the neighbour's bottom: same height.
+        let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 197.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 200.0));
+        assert_eq!(ov.len(), 1);
+        // A corner snaps each axis on its own: y to the neighbour, x stays free.
+        let (nr, ov) = snap(Handle::BottomRight, Point::new(330.0, 202.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 330.0, 200.0));
+        assert_eq!(ov.len(), 1);
+        // Proportional: the snapped axis carries the other one.
+        let (nr, _) = snap(Handle::BottomRight, Point::new(340.0, 198.0), true, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 350.0, 200.0));
+        // From the centre the dragged edge still lands on the target.
+        let (nr, _) = snap(Handle::Bottom, Point::new(275.0, 198.0), false, true);
+        assert_eq!(nr, Rect::new(250.0, 50.0, 300.0, 200.0));
+        // Out of reach, and the fixed edge's own target: untouched.
+        let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 180.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 180.0));
+        assert!(ov.is_empty());
+        let (nr, ov) = snap(Handle::Bottom, Point::new(275.0, 102.0), false, false);
+        assert_eq!(nr, Rect::new(250.0, 100.0, 300.0, 102.0));
+        assert!(ov.is_empty());
     }
 }

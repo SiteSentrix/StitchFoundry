@@ -82,6 +82,9 @@ pub struct FreeTransformTool {
     /// The current (distorted) quad while dragging corners.
     quad: Option<[Point; 4]>,
     measure: Option<(Point, String)>,
+    /// Smart Guides for a scale: the other objects' edges, and the lines of the current snap.
+    targets: Option<crate::guides::Targets>,
+    guides: Vec<Overlay>,
 }
 
 /// Shear for dragging side `h` of `r` by `d` (about the opposite side, or the centre with Alt).
@@ -178,6 +181,7 @@ impl FreeTransformTool {
     fn preview(&mut self, cx: &ToolContext, d: Drag, p: Point, m: Mods) -> Action {
         let shift = m.shift || self.constrain;
         let delta = p - d.start;
+        self.guides.clear();
         let xf = match d.op {
             Op::Corners(h, mode) => {
                 let q = distort_quad(d.rect, h, delta, mode);
@@ -192,7 +196,10 @@ impl FreeTransformTool {
                 Affine::translate(v)
             }
             Op::Scale(h) => {
-                let a = scale_for_drag(d.rect, h, p, shift, m.alt);
+                let mut a = scale_for_drag(d.rect, h, p, shift, m.alt);
+                if let Some(t) = &self.targets {
+                    (a, self.guides) = t.snap_scale(&vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt, cx.tol(5.0));
+                }
                 let nr = a.transform_rect_bbox(d.rect);
                 self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
                 a
@@ -225,6 +232,8 @@ impl Tool for FreeTransformTool {
                 self.drag = None;
                 let Some(r) = selection_bounds(cx) else { return vec![] };
                 if let Some(op) = self.classify(cx, r, p, ev.mods) {
+                    self.targets =
+                        (cx.smart_guides && op.handle().is_some()).then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
                     self.drag = Some(Drag { op, rect: r, start: p, began: false });
                 }
                 vec![]
@@ -259,6 +268,8 @@ impl Tool for FreeTransformTool {
                 let d = self.drag.take();
                 self.quad = None;
                 self.measure = None;
+                self.guides.clear();
+                self.targets = None;
                 if d.is_some_and(|d| d.began) { vec![Action::Commit] } else { vec![] }
             }
             _ => vec![],
@@ -270,6 +281,8 @@ impl Tool for FreeTransformTool {
             self.drag = None;
             self.quad = None;
             self.measure = None;
+            self.guides.clear();
+            self.targets = None;
             return vec![Action::Cancel];
         }
         vec![]
@@ -290,6 +303,7 @@ impl Tool for FreeTransformTool {
                 o.push(Overlay::Anchor { p: a.midpoint(b), color: BLUE, filled: false, size: 6.0 });
             }
         }
+        o.extend(self.guides.iter().cloned());
         if let Some((p, t)) = &self.measure {
             o.push(Overlay::Measure { p: *p + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: t.clone() });
         }
@@ -332,6 +346,8 @@ impl Tool for FreeTransformTool {
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.quad = None;
+        self.guides.clear();
+        self.targets = None;
         if self.drag.take().is_some_and(|d| d.began) { vec![Action::Cancel] } else { vec![] }
     }
 }
