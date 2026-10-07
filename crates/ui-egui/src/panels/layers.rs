@@ -11,7 +11,9 @@
 //!   another row moves the selected art there (Alt copies it).
 //! - The eye and lock columns toggle a row (`layer.setProps`); dragging down a column sets every
 //!   row it passes to the same state, in one undo step. Ctrl/Cmd-click an eye switches the layer
-//!   between Preview and Outline.
+//!   between Preview and Outline. Alt-click an eye hides the other layers (`layer.hideOthers`), or
+//!   shows every layer when they are hidden (`layer.showAll`); Alt-click a lock does the same with
+//!   `layer.lockOthers` and `layer.unlockAll`.
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
 //!   a box shows where); Alt copies them; dropped on the trash they are deleted.
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
@@ -543,19 +545,19 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
     }
 }
 
-/// Alt-clicking row `n`'s eye or lock (`prop`: `visible` or `locked`) toggles that column for the
-/// other items beside it (the other layers for a layer), in one step: hides or locks them while
-/// any of them is shown or unlocked, else shows or unlocks them all. → the action, if there are
-/// others.
-fn others_action(doc: &Document, n: &Node, prop: &str) -> Option<(String, Value)> {
-    let siblings = doc.children(doc.parent_of(n.id))?;
-    let others: Vec<&Node> = siblings.iter().map(|c| &**c).filter(|c| c.id != n.id).collect();
-    if others.is_empty() {
-        return None;
-    }
-    let value = if prop == "visible" { !others.iter().any(|o| o.visible) } else { others.iter().any(|o| !o.locked) };
-    let ids: Vec<u64> = others.iter().map(|o| o.id.0).collect();
-    Some(("layer.setProps".into(), json!({ "ids": ids, prop: value })))
+/// Alt-clicking row `n`'s eye (`eye`) or lock: Hide Others or Lock Others, every top-level layer
+/// but the one holding the row; when they all are hidden (locked) already, Show All Layers (Unlock
+/// All Layers). Each is one undo step.
+fn others_action(doc: &Document, n: &Node, eye: bool) -> (String, Value) {
+    let own = doc.layer_of(n.id);
+    let mut others = doc.layers.iter().filter(|l| Some(l.id) != own);
+    let cmd = match (eye, if eye { others.any(|l| l.visible) } else { others.any(|l| !l.locked) }) {
+        (true, true) => "layer.hideOthers",
+        (true, false) => "layer.showAll",
+        (false, true) => "layer.lockOthers",
+        (false, false) => "layer.unlockAll",
+    };
+    (cmd.into(), json!({ "ids": [n.id.0] }))
 }
 
 /// The eye and lock columns of row `n` at `r`.
@@ -590,7 +592,7 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
     let m = ui.input(|i| i.modifiers);
     if er.clicked() {
         if m.alt {
-            out.actions.extend(others_action(view.doc, n, "visible"));
+            out.actions.push(others_action(view.doc, n, true));
         } else if m.command && n.is_layer() {
             // Ctrl/Cmd-click: Preview ↔ Outline for this layer.
             out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "preview": !preview})));
@@ -599,7 +601,7 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
         }
     }
     if lr.clicked() && m.alt {
-        out.actions.extend(others_action(view.doc, n, "locked"));
+        out.actions.push(others_action(view.doc, n, false));
     } else if lr.clicked() {
         out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
     }
@@ -1039,12 +1041,26 @@ mod tests {
         assert_eq!(undo(&app), before + 1);
         click(&mut app, eye, true);
         assert_eq!(state(&app), [(true, false); 3]);
-        // Alt-click its lock: the others lock.
+        // Alt-click its lock: the others lock; again, every layer unlocks.
         click(&mut app, lock, true);
         assert_eq!(state(&app), [(true, true), (true, false), (true, true)]);
+        assert_eq!(app.session.active().unwrap().history.undo.last().map(|u| u.label.as_str()), Some("Lock Others"));
         // A plain click still toggles only that layer.
         click(&mut app, eye, false);
         assert_eq!(state(&app), [(true, true), (false, false), (true, true)]);
+        click(&mut app, lock, true);
+        assert_eq!(state(&app), [(true, false), (false, false), (true, false)]);
+        // A sublayer's row stands for its top-level layer: the other layers hide.
+        click(&mut app, eye, false);
+        let layer2 = app.session.active().unwrap().doc.layers[1].id.0;
+        let sub = run(&mut app, "layer.newSublayer", json!({"parent": layer2}));
+        // Rows: Layer 3, Layer 2, its sublayer, Layer 1.
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 4);
+        click(&mut app, egui::pos2(12.0, circles[2].y), true);
+        assert_eq!(state(&app), [(false, false), (true, false), (false, false)]);
+        let doc = &app.session.active().unwrap().doc;
+        assert!(doc.node(NodeId(sub["id"].as_u64().unwrap())).unwrap().visible);
     }
 
     /// A document with two rectangles on one layer → (app, layer, [bottom, top]).

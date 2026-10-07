@@ -752,7 +752,8 @@ and `layerRows`, the rows highlighted in the panel.
   templates stay), `layer.collectInNew {ids?}`, `layer.releaseToLayers {id?, build?}` and
   `layer.releaseToLayersBuild` (each object of a layer or group in a sublayer of its own; Build adds up copies),
   `layer.reverse {ids?}`, `layer.template {ids?, on?}`, `layer.hideOthers` / `layer.showAll`,
-  `layer.outlineOthers` / `layer.previewAll`, `layer.lockOthers` / `layer.unlockAll`, `layer.pasteRemembersLayers`,
+  `layer.outlineOthers` / `layer.previewAll`, `layer.lockOthers` / `layer.unlockAll` (Alt-clicking an eye or a lock
+  runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are), `layer.pasteRemembersLayers`,
   `object.isolate {id}` / `object.exitIsolation`.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
