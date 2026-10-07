@@ -12,7 +12,7 @@ use vectorcraft_geom::Affine;
 use super::graphics::{Space, process};
 use super::interp::{Interp, matrix_of};
 use super::lex::{find, hex_decode};
-use super::obj::{DictRef, Key, Obj, Op, PsError, Res, ps_err};
+use super::obj::{DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 use crate::ps;
 
 /// Most bytes one filter or image reads.
@@ -223,20 +223,15 @@ impl Interp<'_> {
             ReadHexString | ReadString => {
                 let s = self.pop_str()?;
                 let Obj::File(f) = self.pop()? else { return ps_err("typecheck", "") };
-                let n = s.borrow().len();
+                let n = s.len();
                 let got = if op == ReadString { self.read(&f, n)? } else { self.read_hex(&f, n)? };
-                let full = got.len() == n;
-                self.alloc(got.len())?;
-                if let Some(d) = s.borrow_mut().get_mut(..got.len()) {
-                    d.copy_from_slice(&got);
-                }
-                self.push(Obj::string(got))?;
-                self.push(Obj::Bool(full))?;
+                self.fill(s, &got)?;
+                self.push(Obj::Bool(got.len() == n))?;
             }
             ReadLine => {
                 let s = self.pop_str()?;
                 let Obj::File(f) = self.pop()? else { return ps_err("typecheck", "") };
-                let n = s.borrow().len();
+                let n = s.len();
                 let mut line = vec![];
                 let mut ended = false;
                 while line.len() < n {
@@ -252,8 +247,7 @@ impl Interp<'_> {
                         Some(b) => line.push(*b),
                     }
                 }
-                self.alloc(line.len())?;
-                self.push(Obj::string(line))?;
+                self.fill(s, &line)?;
                 self.push(Obj::Bool(ended))?;
             }
             FlushFile | CloseFile => {
@@ -307,12 +301,20 @@ impl Interp<'_> {
         Ok(out)
     }
 
+    /// Read bytes `got` into string `s` and push the part of `s` they fill.
+    fn fill(&mut self, s: Shared<u8>, got: &[u8]) -> Res {
+        if !s.write(0, got) {
+            return ps_err("rangecheck", "");
+        }
+        self.push_interval(Obj::Str(s), 0, got.len())
+    }
+
     /// `filter`: a file that decodes its source. Over the program's own data it decodes when
     /// first read (the data follows the operator that reads it); over other data, at once.
     fn filter(&mut self) -> Res {
         let name = self.pop()?.text().ok_or(PsError::Ps("typecheck", "filter".into()))?;
         let sub = if &*name == "SubFileDecode" {
-            let eod = self.pop_str()?.borrow().clone();
+            let eod = self.pop_str()?.to_vec();
             let count = self.pop_count()?;
             (count, eod)
         } else {
@@ -687,8 +689,8 @@ struct Pixels {
 fn source(o: &Obj) -> Res<Source> {
     Ok(match o {
         Obj::File(f) => Source::File(f.clone()),
-        Obj::Str(s) => Source::Str(s.borrow().clone()),
-        p @ Obj::Array { .. } => Source::Proc(Obj::Array { items: p.items().cloned().unwrap_or_default(), exec: true }),
+        Obj::Str(s) => Source::Str(s.to_vec()),
+        Obj::Array { items, .. } => Source::Proc(Obj::Array { items: items.clone(), exec: true }),
         _ => return ps_err("typecheck", "DataSource"),
     })
 }

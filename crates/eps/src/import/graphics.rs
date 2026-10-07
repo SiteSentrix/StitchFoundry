@@ -106,6 +106,8 @@ pub(crate) struct GState {
     pub cur: Option<Point>,
     pub start: Option<Point>,
     pub clips: Vec<Arc<Clip>>,
+    /// The clips `clipsave` saved, for `cliprestore`.
+    pub saved_clips: Vec<Rc<[Arc<Clip>]>>,
     pub overprint: bool,
     pub font: Option<DictRef>,
 }
@@ -128,6 +130,7 @@ impl Default for GState {
             cur: None,
             start: None,
             clips: vec![],
+            saved_clips: vec![],
             overprint: false,
             font: None,
         }
@@ -489,7 +492,7 @@ impl Interp<'_> {
         let (family, items) = match o {
             Obj::Name(n) | Obj::Exec(n) => (n.clone(), vec![]),
             Obj::Array { items, .. } => {
-                let v = items.borrow().clone();
+                let v = items.to_vec();
                 let n = v.first().and_then(Obj::text).ok_or(PsError::Ps("typecheck", "setcolorspace".into()))?;
                 (n, v)
             }
@@ -702,7 +705,7 @@ impl Interp<'_> {
         let d = match f {
             Obj::Dict(d) => d.clone(),
             Obj::Array { items, .. } => {
-                let fs = items.borrow().clone();
+                let fs = items.to_vec();
                 let mut out = vec![];
                 for g in &fs {
                     out.extend(self.eval(g, t, depth + 1)?.first().copied());
@@ -730,7 +733,7 @@ impl Interp<'_> {
                 Ok(c0.iter().zip(&c1).map(|(a, b)| a + x * (b - a)).collect())
             }
             Some(3.0) => {
-                let fs = get("Functions").and_then(|o| o.items().map(|i| i.borrow().clone())).unwrap_or_default();
+                let fs = get("Functions").and_then(|o| o.items().map(|i| i.to_vec())).unwrap_or_default();
                 let bounds = nums(get("Bounds"));
                 let encode = nums(get("Encode"));
                 let (lo, hi) = (domain.first().copied().unwrap_or(0.0), domain.get(1).copied().unwrap_or(1.0));
@@ -1095,6 +1098,19 @@ impl Interp<'_> {
                 self.g.start = self.g.cur;
             }
             InitClip => self.g.clips.clear(),
+            ClipSave => {
+                if self.g.saved_clips.len() >= MAX_GSAVE {
+                    return Err(PsError::Limit("too many saved clips"));
+                }
+                self.alloc(std::mem::size_of_val(self.g.clips.as_slice()))?;
+                let clips = self.g.clips.as_slice().into();
+                self.g.saved_clips.push(clips);
+            }
+            ClipRestore => {
+                if let Some(clips) = self.g.saved_clips.pop() {
+                    self.g.clips = clips.to_vec();
+                }
+            }
             Clip | EoClip => {
                 let bp = self.g.path.clone();
                 self.clip_with(bp, if op == EoClip { FillRule::EvenOdd } else { FillRule::NonZero });
@@ -1118,7 +1134,7 @@ impl Interp<'_> {
             }
             RectStroke => {
                 let m = match self.stack.last() {
-                    Some(Obj::Array { items, .. }) if items.borrow().len() == 6 => Some(self.pop_matrix()?),
+                    Some(Obj::Array { items, .. }) if items.len() == 6 => Some(self.pop_matrix()?),
                     _ => None,
                 };
                 let mut bp = self.rects()?;
@@ -1157,7 +1173,7 @@ fn linear_points(f: &Obj) -> Option<Vec<f64>> {
     match num("FunctionType")? {
         2.0 if num("N").unwrap_or(1.0) == 1.0 => Some(vec![]),
         3.0 => {
-            let fs = d.get(&Key::name("Functions"))?.items()?.borrow().clone();
+            let fs = d.get(&Key::name("Functions"))?.items()?.to_vec();
             if !fs.iter().all(|g| linear_points(g).is_some_and(|p| p.is_empty())) {
                 return None;
             }

@@ -1,6 +1,6 @@
 //! The PostScript objects the interpreter works with, its operators and its errors.
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -31,10 +31,10 @@ pub(crate) enum Obj {
     Name(Rc<str>),
     /// An executable name: looked up and run.
     Exec(Rc<str>),
-    Str(Rc<RefCell<Vec<u8>>>),
+    Str(Shared<u8>),
     /// An array; executable ones are procedures.
     Array {
-        items: Rc<RefCell<Vec<Obj>>>,
+        items: Shared<Obj>,
         exec: bool,
     },
     Dict(DictRef),
@@ -53,15 +53,15 @@ impl Obj {
     }
 
     pub fn string(bytes: Vec<u8>) -> Self {
-        Self::Str(Rc::new(RefCell::new(bytes)))
+        Self::Str(Shared::new(bytes))
     }
 
     pub fn array(items: Vec<Obj>) -> Self {
-        Self::Array { items: Rc::new(RefCell::new(items)), exec: false }
+        Self::Array { items: Shared::new(items), exec: false }
     }
 
     pub fn proc(items: Vec<Obj>) -> Self {
-        Self::Array { items: Rc::new(RefCell::new(items)), exec: true }
+        Self::Array { items: Shared::new(items), exec: true }
     }
 
     pub fn dict(d: Dict) -> Self {
@@ -98,7 +98,7 @@ impl Obj {
     }
 
     /// The items of an array or procedure.
-    pub fn items(&self) -> Option<&Rc<RefCell<Vec<Obj>>>> {
+    pub fn items(&self) -> Option<&Shared<Obj>> {
         match self {
             Self::Array { items, .. } => Some(items),
             _ => None,
@@ -122,6 +122,71 @@ impl Obj {
             Self::Save(_) => "savetype",
             Self::GState(_) => "gstatetype",
         }
+    }
+}
+
+/// The values of a string or an array: a run of storage that other strings or arrays may share
+/// (`getinterval` makes a new object over part of the same values, as PostScript does).
+#[derive(Clone, Debug)]
+pub(crate) struct Shared<T> {
+    buf: Rc<RefCell<Vec<T>>>,
+    at: usize,
+    len: usize,
+}
+
+impl<T: Clone> Shared<T> {
+    pub fn new(v: Vec<T>) -> Self {
+        Self { len: v.len(), buf: Rc::new(RefCell::new(v)), at: 0 }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// The values. Only [`Self::write`] borrows the storage mutably, for the copy alone, so this
+    /// never meets it.
+    pub fn borrow(&self) -> Ref<'_, [T]> {
+        let (at, end) = (self.at, self.at.saturating_add(self.len));
+        Ref::map(self.buf.borrow(), |v| v.get(at..end).unwrap_or(&[]))
+    }
+
+    pub fn get(&self, i: usize) -> Option<T> {
+        self.borrow().get(i).cloned()
+    }
+
+    pub fn to_vec(&self) -> Vec<T> {
+        self.borrow().to_vec()
+    }
+
+    /// `n` values from `at`, sharing the storage (`getinterval`); `None` past the end.
+    pub fn sub(&self, at: usize, n: usize) -> Option<Self> {
+        (at.checked_add(n)? <= self.len).then(|| Self { buf: self.buf.clone(), at: self.at + at, len: n })
+    }
+
+    /// Write `vals` from `at`: false when they don't fit (or `vals` is borrowed from the storage).
+    pub fn write(&self, at: usize, vals: &[T]) -> bool {
+        if at.saturating_add(vals.len()) > self.len {
+            return false;
+        }
+        let start = self.at + at;
+        let Ok(mut v) = self.buf.try_borrow_mut() else { return false };
+        match v.get_mut(start..start + vals.len()) {
+            Some(d) => {
+                d.clone_from_slice(vals);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The same object (`eq` on arrays): the same values of the same storage.
+    pub fn same(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.buf, &o.buf) && self.at == o.at && self.len == o.len
+    }
+
+    /// Do both see the same storage?
+    pub fn shares(&self, o: &Self) -> bool {
+        Rc::ptr_eq(&self.buf, &o.buf)
     }
 }
 
@@ -209,7 +274,7 @@ ops! {
     ErrorDict = "errordict", DollarError = "$error", Bind = "bind",
     // Virtual memory and the environment.
     Save = "save", Restore = "restore", SetGlobal = "setglobal", CurrentGlobal = "currentglobal", VmStatus = "vmstatus",
-    LanguageLevel = "languagelevel", Version = "version", Product = "product", RealTime = "realtime", UserTime = "usertime",
+    Version = "version", Product = "product", RealTime = "realtime", UserTime = "usertime",
     Print = "print", EqPrint = "=", EqEqPrint = "==", Pstack = "pstack", Stack = "stack", Flush = "flush",
     // Graphics state.
     Gsave = "gsave", Grestore = "grestore", GrestoreAll = "grestoreall", InitGraphics = "initgraphics",
@@ -242,8 +307,8 @@ ops! {
     RLineTo = "rlineto", CurveTo = "curveto", RCurveTo = "rcurveto", Arc = "arc", Arcn = "arcn", Arct = "arct",
     Arcto = "arcto", ClosePath = "closepath", FlattenPath = "flattenpath", ReversePath = "reversepath",
     PathBBox = "pathbbox", ClipPath = "clippath", InitClip = "initclip", Clip = "clip", EoClip = "eoclip",
-    RectClip = "rectclip", Fill = "fill", EoFill = "eofill", Stroke = "stroke", RectFill = "rectfill",
-    RectStroke = "rectstroke", ShFill = "shfill",
+    RectClip = "rectclip", ClipSave = "clipsave", ClipRestore = "cliprestore", Fill = "fill", EoFill = "eofill",
+    Stroke = "stroke", RectFill = "rectfill", RectStroke = "rectstroke", ShFill = "shfill",
     // Images.
     Image = "image", ImageMask = "imagemask", ColorImage = "colorimage",
     // Files.
@@ -252,7 +317,8 @@ ops! {
     // Fonts and type.
     FindFont = "findfont", ScaleFont = "scalefont", MakeFont = "makefont", SetFont = "setfont", SelectFont = "selectfont",
     CurrentFont = "currentfont", DefineFont = "definefont", UndefineFont = "undefinefont", FindResource = "findresource",
-    DefineResource = "defineresource", ResourceStatus = "resourcestatus", Show = "show", AShow = "ashow",
+    DefineResource = "defineresource", UndefineResource = "undefineresource", ResourceStatus = "resourcestatus",
+    ResourceForAll = "resourceforall", Show = "show", AShow = "ashow",
     WidthShow = "widthshow", AWidthShow = "awidthshow", XShow = "xshow", YShow = "yshow", XYShow = "xyshow",
     KShow = "kshow", GlyphShow = "glyphshow", StringWidth = "stringwidth", CharPath = "charpath",
     SetCacheDevice = "setcachedevice", SetCharWidth = "setcharwidth",

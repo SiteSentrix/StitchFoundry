@@ -11,7 +11,7 @@ use vectorcraft_geom::Affine;
 
 use super::graphics::{GState, Out};
 use super::lex::Lexer;
-use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, ps_err};
+use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
 /// Most operations one file may run.
 const MAX_OPS: u64 = 50_000_000;
@@ -61,6 +61,12 @@ fn encoding() -> Obj {
     Obj::array(vec![Obj::name(".notdef"); 256])
 }
 
+/// The resource categories there are to begin with (instances of `Category`).
+const CATEGORIES: &str = "Category Generic Font CIDFont CMap FontSet Encoding Form Pattern ProcSet ColorSpace Halftone \r
+                          ColorRendering IdiomSet InkParams TrapParams OutputDevice ControlLanguage Localization PDL HWOptions \r
+                          Filter ColorSpaceFamily Emulator IODevice ColorRenderingType FMapType FontType FormType HalftoneType \r
+                          ImageType PatternType FunctionType ShadingType";
+
 impl<'a> Interp<'a> {
     pub fn new(src: &'a [u8], g: GState, out: Out) -> Self {
         let system = new_dict();
@@ -72,7 +78,15 @@ impl<'a> Interp<'a> {
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
                 d.insert(Key::name(name), encoding());
             }
+            // An integer, as interpreters have it (`systemdict /languagelevel get 2 ge`): run, the
+            // name pushes it all the same.
+            d.insert(Key::name("languagelevel"), Obj::Int(3));
         }
+        // Each category's implementation dictionary (`/Generic /Category findresource`).
+        let categories: Dict =
+            CATEGORIES.split_whitespace().map(|c| (Key::name(c), Obj::dict(Dict::from([(Key::name("Category"), Obj::name(c))])))).collect();
+        let resources = new_dict();
+        resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         system.borrow_mut().insert(Key::name("GlobalFontDirectory"), Obj::Dict(fonts.clone()));
@@ -87,7 +101,7 @@ impl<'a> Interp<'a> {
             status: new_dict(),
             error: new_dict(),
             fonts,
-            resources: new_dict(),
+            resources,
             depth: 0,
             ops: 0,
             allocated: 0,
@@ -175,7 +189,7 @@ impl<'a> Interp<'a> {
         }
     }
 
-    pub fn pop_str(&mut self) -> Res<Rc<RefCell<Vec<u8>>>> {
+    pub fn pop_str(&mut self) -> Res<Shared<u8>> {
         match self.pop()? {
             Obj::Str(s) => Ok(s),
             _ => ps_err("typecheck", "a string"),
@@ -183,7 +197,7 @@ impl<'a> Interp<'a> {
     }
 
     /// An array or procedure.
-    pub fn pop_array(&mut self) -> Res<Rc<RefCell<Vec<Obj>>>> {
+    pub fn pop_array(&mut self) -> Res<Shared<Obj>> {
         match self.pop()? {
             Obj::Array { items, .. } => Ok(items),
             _ => ps_err("typecheck", "an array"),
@@ -197,15 +211,9 @@ impl<'a> Interp<'a> {
     }
 
     /// Store `m` into the matrix operand `items` and push it back.
-    pub fn put_matrix(&mut self, items: Rc<RefCell<Vec<Obj>>>, m: Affine) -> Res {
-        {
-            let mut v = items.borrow_mut();
-            if v.len() != 6 {
-                return ps_err("rangecheck", "a matrix");
-            }
-            for (slot, c) in v.iter_mut().zip(m.as_coeffs()) {
-                *slot = Obj::Real(c);
-            }
+    pub fn put_matrix(&mut self, items: Shared<Obj>, m: Affine) -> Res {
+        if items.len() != 6 || !items.write(0, &m.as_coeffs().map(Obj::Real)) {
+            return ps_err("rangecheck", "a matrix");
         }
         self.push(Obj::Array { items, exec: false })
     }
@@ -276,24 +284,24 @@ impl<'a> Interp<'a> {
         Ok(())
     }
 
-    fn run_proc(&mut self, items: &Rc<RefCell<Vec<Obj>>>) -> Res {
+    fn run_proc(&mut self, items: &Shared<Obj>) -> Res {
         self.enter()?;
         let r = self.run_items(items);
         self.depth -= 1;
         r
     }
 
-    fn run_items(&mut self, items: &Rc<RefCell<Vec<Obj>>>) -> Res {
+    fn run_items(&mut self, items: &Shared<Obj>) -> Res {
         let mut i = 0;
         loop {
-            let Some(o) = items.borrow().get(i).cloned() else { return Ok(()) };
+            let Some(o) = items.get(i) else { return Ok(()) };
             i += 1;
             self.exec_token(o)?;
         }
     }
 
     /// Run `proc` as a loop body: `Ok(false)` when it ran `exit`.
-    fn body(&mut self, proc: &Obj) -> Res<bool> {
+    pub fn body(&mut self, proc: &Obj) -> Res<bool> {
         self.tick()?;
         match self.call(proc.clone()) {
             Ok(()) => Ok(true),
@@ -303,7 +311,7 @@ impl<'a> Interp<'a> {
     }
 
     /// Run a procedure operand, executable or not (`exec`, `if`, loops).
-    fn pop_proc(&mut self) -> Res<Obj> {
+    pub fn pop_proc(&mut self) -> Res<Obj> {
         match self.pop()? {
             Obj::Array { items, .. } => Ok(Obj::Array { items, exec: true }),
             o @ (Obj::Op(_) | Obj::Exec(_)) => Ok(o),
@@ -480,7 +488,7 @@ impl<'a> Interp<'a> {
             Gt | Ge | Lt | Le => {
                 let (b, a) = (self.pop()?, self.pop()?);
                 let ord = match (&a, &b) {
-                    (Obj::Str(x), Obj::Str(y)) => x.borrow().as_slice().partial_cmp(y.borrow().as_slice()),
+                    (Obj::Str(x), Obj::Str(y)) => x.borrow().partial_cmp(&*y.borrow()),
                     _ => a.as_num().zip(b.as_num()).and_then(|(x, y)| x.partial_cmp(&y)),
                 }
                 .ok_or(PsError::Ps("typecheck", String::new()))?;
@@ -646,14 +654,10 @@ impl<'a> Interp<'a> {
                 } else {
                     show_text(&self.pop()?)
                 };
-                let n = text.len();
-                if n > s.borrow().len() {
+                if !s.write(0, text.as_bytes()) {
                     return ps_err("rangecheck", "");
                 }
-                if let Some(d) = s.borrow_mut().get_mut(..n) {
-                    d.copy_from_slice(text.as_bytes());
-                }
-                self.push_interval(Obj::Str(s), 0, n)?;
+                self.push_interval(Obj::Str(s), 0, text.len())?;
             }
             ReadOnly | ExecuteOnly | NoAccess | SetPacking | SetGlobal | SetObjectFormat => {
                 if matches!(op, SetPacking | SetGlobal | SetObjectFormat) {
@@ -683,8 +687,8 @@ impl<'a> Interp<'a> {
             }
             Length => {
                 let n = match self.pop()? {
-                    Obj::Array { items, .. } => items.borrow().len(),
-                    Obj::Str(s) => s.borrow().len(),
+                    Obj::Array { items, .. } => items.len(),
+                    Obj::Str(s) => s.len(),
                     Obj::Dict(d) => d.borrow().len(),
                     Obj::Name(n) | Obj::Exec(n) => n.len(),
                     _ => return ps_err("typecheck", ""),
@@ -699,14 +703,8 @@ impl<'a> Interp<'a> {
             Get => {
                 let k = self.pop()?;
                 let o = match self.pop()? {
-                    Obj::Array { items, .. } => {
-                        let i = index(&k)?;
-                        items.borrow().get(i).cloned().ok_or(PsError::Ps("rangecheck", String::new()))?
-                    }
-                    Obj::Str(s) => {
-                        let i = index(&k)?;
-                        Obj::Int(i64::from(*s.borrow().get(i).ok_or(PsError::Ps("rangecheck", String::new()))?))
-                    }
+                    Obj::Array { items, .. } => items.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?,
+                    Obj::Str(s) => Obj::Int(i64::from(s.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?)),
                     Obj::Dict(d) => {
                         let key = k.key().ok_or(PsError::Ps("typecheck", String::new()))?;
                         let v = d.borrow().get(&key).cloned();
@@ -718,21 +716,21 @@ impl<'a> Interp<'a> {
             }
             Put => {
                 let (v, k, c) = (self.pop()?, self.pop()?, self.pop()?);
-                match c {
-                    Obj::Array { items, .. } => {
-                        let i = index(&k)?;
-                        *items.borrow_mut().get_mut(i).ok_or(PsError::Ps("rangecheck", String::new()))? = v;
-                    }
+                let written = match c {
+                    Obj::Array { items, .. } => items.write(index(&k)?, std::slice::from_ref(&v)),
                     Obj::Str(s) => {
-                        let i = index(&k)?;
                         let b = v.as_num().ok_or(PsError::Ps("typecheck", String::new()))?;
-                        *s.borrow_mut().get_mut(i).ok_or(PsError::Ps("rangecheck", String::new()))? = b as i64 as u8;
+                        s.write(index(&k)?, &[b as i64 as u8])
                     }
                     Obj::Dict(d) => {
                         let key = k.key().ok_or(PsError::Ps("typecheck", String::new()))?;
                         insert(&d, key, v)?;
+                        true
                     }
                     _ => return ps_err("typecheck", ""),
+                };
+                if !written {
+                    return ps_err("rangecheck", "");
                 }
             }
             GetInterval => {
@@ -744,41 +742,35 @@ impl<'a> Interp<'a> {
             PutInterval => {
                 let src = self.pop()?;
                 let at = self.pop_count()?;
-                match (self.pop()?, src) {
-                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => {
-                        let from = from.borrow().clone();
-                        let mut v = items.borrow_mut();
-                        let d = v.get_mut(at..at + from.len()).ok_or(PsError::Ps("rangecheck", String::new()))?;
-                        d.clone_from_slice(&from);
-                    }
-                    (Obj::Str(s), Obj::Str(from)) => {
-                        let from = from.borrow().clone();
-                        let mut v = s.borrow_mut();
-                        let d = v.get_mut(at..at + from.len()).ok_or(PsError::Ps("rangecheck", String::new()))?;
-                        d.copy_from_slice(&from);
-                    }
+                let written = match (self.pop()?, src) {
+                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => items.write(at, &from.to_vec()),
+                    (Obj::Str(s), Obj::Str(from)) => s.write(at, &from.to_vec()),
                     _ => return ps_err("typecheck", ""),
+                };
+                if !written {
+                    return ps_err("rangecheck", "");
                 }
             }
             Aload => {
                 let items = self.pop_array()?;
-                let all = items.borrow().clone();
-                for o in all {
+                for o in items.to_vec() {
                     self.push(o)?;
                 }
                 self.push(Obj::Array { items, exec: false })?;
             }
             Astore => {
                 let items = self.pop_array()?;
-                let n = items.borrow().len();
-                let at = self.stack.len().checked_sub(n).ok_or(PsError::Ps("stackunderflow", String::new()))?;
-                *items.borrow_mut() = self.stack.split_off(at);
+                let at = self.stack.len().checked_sub(items.len()).ok_or(PsError::Ps("stackunderflow", String::new()))?;
+                if !items.write(0, self.stack.get(at..).unwrap_or_default()) {
+                    return ps_err("rangecheck", "");
+                }
+                self.stack.truncate(at);
                 self.push(Obj::Array { items, exec: false })?;
             }
             Search | AnchorSearch => {
-                let seek = self.pop_str()?.borrow().clone();
+                let seek = self.pop_str()?.to_vec();
                 let s = self.pop_str()?;
-                let text = s.borrow().clone();
+                let text = s.to_vec();
                 let at = if op == Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
                 match at {
                     Some(i) => {
@@ -888,7 +880,6 @@ impl<'a> Interp<'a> {
                     self.push(Obj::Int(v))?;
                 }
             }
-            LanguageLevel => self.push(Obj::Int(3))?,
             Version => self.push(Obj::string(b"3010".to_vec()))?,
             Product => self.push(Obj::string(b"VectorCraft".to_vec()))?,
             RealTime | UserTime => self.push(Obj::Int(0))?,
@@ -922,19 +913,18 @@ impl<'a> Interp<'a> {
                 }
             }
             Obj::Array { items, exec } => {
-                let from = self.pop_array()?.borrow().clone();
-                let n = from.len();
-                {
-                    let mut v = items.borrow_mut();
-                    v.get_mut(..n).ok_or(PsError::Ps("rangecheck", String::new()))?.clone_from_slice(&from);
+                let from = self.pop_array()?.to_vec();
+                if !items.write(0, &from) {
+                    return ps_err("rangecheck", "copy");
                 }
-                self.push_interval(Obj::Array { items, exec }, 0, n)?;
+                self.push_interval(Obj::Array { items, exec }, 0, from.len())?;
             }
             Obj::Str(s) => {
-                let from = self.pop_str()?.borrow().clone();
-                let n = from.len();
-                s.borrow_mut().get_mut(..n).ok_or(PsError::Ps("rangecheck", String::new()))?.copy_from_slice(&from);
-                self.push_interval(Obj::Str(s), 0, n)?;
+                let from = self.pop_str()?.to_vec();
+                if !s.write(0, &from) {
+                    return ps_err("rangecheck", "copy");
+                }
+                self.push_interval(Obj::Str(s), 0, from.len())?;
             }
             Obj::Dict(d) => {
                 let from = self.pop_dict()?.borrow().clone();
@@ -946,16 +936,12 @@ impl<'a> Interp<'a> {
         Ok(())
     }
 
-    /// `n` items of an array or string from `at` (a copy: shared storage isn't modelled).
-    fn push_interval(&mut self, o: Obj, at: usize, n: usize) -> Res {
-        let end = at.checked_add(n).ok_or(PsError::Ps("rangecheck", String::new()))?;
-        self.alloc(n * if matches!(o, Obj::Str(_)) { 1 } else { std::mem::size_of::<Obj>() })?;
+    /// `n` items of an array or string from `at`, sharing its storage.
+    pub fn push_interval(&mut self, o: Obj, at: usize, n: usize) -> Res {
+        let range = || PsError::Ps("rangecheck", String::new());
         let r = match o {
-            Obj::Array { items, exec } => {
-                let v = items.borrow().get(at..end).ok_or(PsError::Ps("rangecheck", String::new()))?.to_vec();
-                Obj::Array { items: Rc::new(RefCell::new(v)), exec }
-            }
-            Obj::Str(s) => Obj::string(s.borrow().get(at..end).ok_or(PsError::Ps("rangecheck", String::new()))?.to_vec()),
+            Obj::Array { items, exec } => Obj::Array { items: items.sub(at, n).ok_or_else(range)?, exec },
+            Obj::Str(s) => Obj::Str(s.sub(at, n).ok_or_else(range)?),
             _ => return ps_err("typecheck", "getinterval"),
         };
         self.push(r)
@@ -966,7 +952,7 @@ impl<'a> Interp<'a> {
         match self.pop()? {
             Obj::Array { items, .. } => {
                 let mut i = 0;
-                while let Some(o) = items.borrow().get(i).cloned() {
+                while let Some(o) = items.get(i) {
                     i += 1;
                     self.push(o)?;
                     if !self.body(&p)? {
@@ -975,8 +961,7 @@ impl<'a> Interp<'a> {
                 }
             }
             Obj::Str(s) => {
-                let bytes = s.borrow().clone();
-                for b in bytes {
+                for b in s.to_vec() {
                     self.push(Obj::Int(i64::from(b)))?;
                     if !self.body(&p)? {
                         break;
@@ -1000,22 +985,19 @@ impl<'a> Interp<'a> {
 
     /// Replace the names in a procedure that stand for operators by the operators, down through
     /// nested procedures.
-    fn bind(&mut self, items: &Rc<RefCell<Vec<Obj>>>, depth: u32) {
+    fn bind(&mut self, items: &Shared<Obj>, depth: u32) {
         if depth > 64 {
             return;
         }
-        let n = items.borrow().len();
-        for i in 0..n {
-            let o = items.borrow().get(i).cloned();
-            match o {
+        for i in 0..items.len() {
+            match items.get(i) {
                 Some(Obj::Exec(name)) => {
-                    if let Some(Obj::Op(op)) = self.lookup(&name)
-                        && let Some(slot) = items.borrow_mut().get_mut(i)
-                    {
-                        *slot = Obj::Op(op);
+                    if let Some(o @ Obj::Op(_)) = self.lookup(&name) {
+                        // `i` is in range and nothing is reading the procedure: the write can't fail.
+                        items.write(i, &[o]);
                     }
                 }
-                Some(Obj::Array { items: inner, exec: true }) if !Rc::ptr_eq(&inner, items) => self.bind(&inner, depth + 1),
+                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => self.bind(&inner, depth + 1),
                 _ => {}
             }
         }
@@ -1031,6 +1013,67 @@ impl<'a> Interp<'a> {
             Obj::Dict(d) => Ok(d),
             _ => ps_err("typecheck", ""),
         })
+    }
+
+    /// The instances of `category`: `FontDirectory` for fonts.
+    pub fn instances(&mut self, category: &Obj) -> Res<DictRef> {
+        if category.text().as_deref() == Some("Font") { Ok(self.fonts.clone()) } else { self.category(category) }
+    }
+
+    /// `template proc scratch category resourceforall`: `proc` run on each instance name that
+    /// matches `template`, copied into `scratch` (in name order).
+    pub fn resource_for_all(&mut self) -> Res {
+        let category = self.pop()?;
+        let scratch = self.pop_str()?;
+        let p = self.pop_proc()?;
+        let template = self.pop_str()?.to_vec();
+        let mut names: Vec<Vec<u8>> = self.instances(&category)?.borrow().keys().map(|k| show_text(&k.obj()).into_bytes()).collect();
+        names.sort();
+        for name in names {
+            if !self.matches(&template, &name)? {
+                continue;
+            }
+            if !scratch.write(0, &name) {
+                return ps_err("rangecheck", "resourceforall");
+            }
+            self.push_interval(Obj::Str(scratch.clone()), 0, name.len())?;
+            if !self.body(&p)? {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    /// Does `name` match a `resourceforall` template: `*` any run of bytes, `?` any one, `\` the
+    /// next one as it is? Each step counts as an operation.
+    fn matches(&mut self, template: &[u8], name: &[u8]) -> Res<bool> {
+        let (mut t, mut n) = (0, 0);
+        // Where the last `*` was followed (template, name): a mismatch after it retries from there.
+        let mut star: Option<(usize, usize)> = None;
+        loop {
+            self.tick()?;
+            if n == name.len() {
+                return Ok(template.get(t..).unwrap_or_default().iter().all(|b| *b == b'*'));
+            }
+            let (want, width) = match template.get(t) {
+                Some(b'*') => {
+                    t += 1;
+                    star = Some((t, n));
+                    continue;
+                }
+                Some(b'?') => (name.get(n).copied(), 1),
+                Some(b'\\') => (template.get(t + 1).copied(), 2),
+                c => (c.copied(), 1),
+            };
+            if want.is_some() && want == name.get(n).copied() {
+                (t, n) = (t + width, n + 1);
+                continue;
+            }
+            // The last `*` takes one more byte, else there is no match.
+            let Some((st, sn)) = star else { return Ok(false) };
+            star = Some((st, sn + 1));
+            (t, n) = (st, sn + 1);
+        }
     }
 }
 
@@ -1057,7 +1100,7 @@ fn equal(a: &Obj, b: &Obj) -> bool {
     match (a, b) {
         (Obj::Null, Obj::Null) | (Obj::Mark, Obj::Mark) => true,
         (Obj::Bool(x), Obj::Bool(y)) => x == y,
-        (Obj::Array { items: x, .. }, Obj::Array { items: y, .. }) => Rc::ptr_eq(x, y),
+        (Obj::Array { items: x, .. }, Obj::Array { items: y, .. }) => x.same(y),
         (Obj::Dict(x), Obj::Dict(y)) => Rc::ptr_eq(x, y),
         (Obj::Op(x), Obj::Op(y)) => x == y,
         _ => match (a.as_num(), b.as_num()) {
