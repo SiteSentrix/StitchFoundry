@@ -24,7 +24,7 @@ use crate::{VectorcraftApp, widgets};
 pub(super) const KIND: &str = "colorPicker";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Color Picker".into(), body, confirm, min_width: 600.0, max_width: Some(640.0), ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Color Picker").into(), body, confirm, min_width: 600.0, max_width: Some(640.0), ..DialogSpec::FORM };
 
 /// Side of the colour field (and height of the channel slider).
 const FIELD: f32 = 240.0;
@@ -222,7 +222,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                     }
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                    toggle_swatches = widgets::flat_button(ui, if swatches { "Color Models" } else { "Color Swatches" }, 110.0).clicked();
+                    toggle_swatches = widgets::flat_button(ui, if swatches { tl!("Color Models") } else { tl!("Color Swatches") }, 110.0).clicked();
                 });
             });
             ui.add_space(10.0);
@@ -232,7 +232,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         });
     });
     ui.add_space(8.0);
-    if widgets::check(ui, "Only Web Colors", web, true) {
+    if widgets::check(ui, tl!("Only Web Colors"), web, true) {
         d.fields.insert("webOnly".into(), json!(!web));
     }
     if let Some(ch) = new_channel {
@@ -254,8 +254,8 @@ fn new_original_chips(ui: &mut Ui, new: &Color, original: &Color) -> bool {
     widgets::paint_chip(ui, top, &Paint::solid(*new));
     widgets::paint_chip(ui, bottom, &Paint::solid(*original));
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Outside);
-    ui.interact(top, ui.id().with("cp-new"), Sense::hover()).on_hover_text("New");
-    ui.interact(bottom, ui.id().with("cp-original"), Sense::click()).on_hover_text("Original: click to restore").clicked()
+    ui.interact(top, ui.id().with("cp-new"), Sense::hover()).on_hover_text(tl!("New"));
+    ui.interact(bottom, ui.id().with("cp-original"), Sense::click()).on_hover_text(tl!("Original: click to restore")).clicked()
 }
 
 /// The HSB and RGB fields with the channel radios, hex, Lab and CMYK. Returns the edited colour
@@ -334,7 +334,7 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, current: &Color) -> Option<Col
             egui::ScrollArea::vertical().id_salt("cp-swatches").max_height(FIELD).show(ui, |ui| {
                 ui.set_width(FIELD + 24.0);
                 let Some(st) = app.session.active() else {
-                    widgets::dim_label(ui, "Open a document to see its swatches.");
+                    widgets::dim_label(ui, tl!("Open a document to see its swatches."));
                     return;
                 };
                 let doc = &st.doc;

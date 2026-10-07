@@ -173,6 +173,9 @@ macro_rules! registry {
                 }
             }
 
+            /// Every variant, in registry order.
+            pub const ALL: &[DialogKind] = &[$(Self::$variant,)+];
+
             fn spec(self) -> &'static DialogSpec {
                 match self {
                     $(Self::$variant => {
@@ -265,6 +268,19 @@ registry! {
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
 }
 
+/// The button labels the shared dialog frame can show (OK, discard and the fixed Cancel/Close),
+/// so the catalog tests can insist they are translated.
+pub fn button_labels() -> Vec<&'static str> {
+    let mut v = vec!["Cancel", "Close"];
+    for spec in std::iter::once(&DialogSpec::FORM).chain(DialogKind::ALL.iter().map(|k| k.spec())) {
+        v.extend(spec.ok);
+        v.extend(spec.discard);
+    }
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
 /// The spec for a `Dialog::kind` ([`DialogSpec::FORM`] when unregistered).
 fn spec(kind: &str) -> &'static DialogSpec {
     static FALLBACK: DialogSpec = DialogSpec::FORM;
@@ -324,7 +340,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
             ui.set_min_width(spec.min_width.min(room));
             ui.set_max_width(spec.max_width.map_or(room, |w| w.min(room)));
-            ui.label(egui::RichText::new(heading.as_str()).font(theme::semibold(16.0)).color(t.text));
+            ui.label(egui::RichText::new(tl!(heading.as_str())).font(theme::semibold(16.0)).color(t.text));
             ui.add_space(12.0);
             cancel = (spec.body)(app, ui, &mut d);
             ui.add_space(16.0);

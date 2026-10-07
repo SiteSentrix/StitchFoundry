@@ -36,13 +36,13 @@ use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
 pub(super) const KIND: &str = "print";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Print".into(), body, confirm, ok: Some("Print"), discard: Some("Done"), ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Print").into(), body, confirm, ok: Some("Print"), discard: Some("Done"), ..DialogSpec::FORM };
 
 /// The dialog kind of the preset editor (New / Edit in Edit → Print Presets).
 pub(super) const PRESET_KIND: &str = "printPreset";
 
 pub(super) const PRESET_SPEC: DialogSpec = DialogSpec {
-    heading: |d| if d.str(EDITING).is_empty() { "New Print Preset" } else { "Edit Print Preset" }.into(),
+    heading: |d| if d.str(EDITING).is_empty() { tl!("New Print Preset") } else { tl!("Edit Print Preset") }.into(),
     body,
     confirm: confirm_preset,
     ok: Some("Save Preset"),
@@ -218,7 +218,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         app.status(e);
     }
     if d.kind == PRESET_KIND {
-        row_with(ui, "Preset name:", TOP_LABEL_WIDTH, |ui| {
+        row_with(ui, tl!("Preset name:"), TOP_LABEL_WIDTH, |ui| {
             form::text_edit(ui, d, "name", 288.0);
         });
     } else {
@@ -237,7 +237,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.add_space(14.0);
         ui.vertical(|ui| {
             ui.set_width(500.0);
-            ui.label(egui::RichText::new(section).font(theme::semibold(14.0)).color(t.text_strong));
+            ui.label(egui::RichText::new(tl!(section)).font(theme::semibold(14.0)).color(t.text_strong));
             egui::ScrollArea::vertical().id_salt(("print", section)).max_height(360.0).auto_shrink([false, false]).show(ui, |ui| match section {
                 "Marks and Bleed" => super::save_pdf::marks_and_bleeds(app, ui, d),
                 "Output" => output(ui, d, &preview),
@@ -263,11 +263,11 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let mut picked = None;
     let asking = d.fields.contains_key(SAVE_AS);
     let mut ask = false;
-    row_with(ui, "Print Preset:", TOP_LABEL_WIDTH, |ui| {
+    row_with(ui, tl!("Print Preset:"), TOP_LABEL_WIDTH, |ui| {
         picked =
             widgets::dropdown(ui, "print-preset", if same { &name } else { CUSTOM }, &names, 300.0).and_then(|i| names.get(i)).map(|n| n.to_string());
-        let save = ui.add_enabled_ui(!asking, |ui| widgets::flat_button(ui, "Save Preset…", 96.0)).inner;
-        ask = save.on_hover_text("Save these settings as a print preset").clicked();
+        let save = ui.add_enabled_ui(!asking, |ui| widgets::flat_button(ui, tl!("Save Preset…"), 96.0)).inner;
+        ask = save.on_hover_text(tl!("Save these settings as a print preset")).clicked();
     });
     if let Some(n) = picked {
         // Picking the preset shown again brings its settings back.
@@ -281,14 +281,14 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         d.fields.insert(SAVE_AS.into(), json!(app.session.new_print_preset_name()));
     }
     if d.fields.contains_key(SAVE_AS) {
-        row_with(ui, "Save as preset:", TOP_LABEL_WIDTH, |ui| {
+        row_with(ui, tl!("Save as preset:"), TOP_LABEL_WIDTH, |ui| {
             form::text_edit(ui, d, SAVE_AS, 200.0);
-            if widgets::flat_button(ui, "Save", 52.0).clicked()
+            if widgets::flat_button(ui, tl!("Save"), 52.0).clicked()
                 && let Err(e) = save_preset(app, d)
             {
                 app.status(e);
             }
-            if widgets::flat_button(ui, "Cancel", 60.0).clicked() {
+            if widgets::flat_button(ui, tl!("Cancel"), 60.0).clicked() {
                 d.fields.remove(SAVE_AS);
             }
         });
@@ -331,7 +331,7 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     } else {
         printer.as_str()
     };
-    row_with(ui, "Printer:", TOP_LABEL_WIDTH, |ui| {
+    row_with(ui, tl!("Printer:"), TOP_LABEL_WIDTH, |ui| {
         let options: Vec<&str> = labels.iter().map(String::as_str).collect();
         match widgets::dropdown(ui, "print-printer", current, &options, 300.0).and_then(|i| entries.get(i)) {
             Some(Destination::Printer(name)) => {
@@ -348,8 +348,8 @@ fn printer_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             None => {}
         }
         let to_file = d.bool("toFile");
-        let tip = if setup { "The system's settings of this printer" } else { "No printer settings to open here" };
-        if ui.add_enabled_ui(setup && !to_file, |ui| widgets::flat_button(ui, "Setup…", 72.0)).inner.on_hover_text(tip).clicked()
+        let tip = if setup { tl!("The system's settings of this printer") } else { tl!("No printer settings to open here") };
+        if ui.add_enabled_ui(setup && !to_file, |ui| widgets::flat_button(ui, tl!("Setup…"), 72.0)).inner.on_hover_text(tip).clicked()
             && let Err(e) = app.run("print.printerSetup", json!({ "printer": d.str("printer") }))
         {
             app.status(e);
@@ -395,9 +395,9 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
     let sheet = pv.as_ref().ok().and_then(|v| current_sheet(d, v));
     let Some((index, count, sheet)) = sheet else {
         let text = match pv {
-            _ if app.session.active().is_none() => "Open a document to preview its pages",
-            Ok(_) => "Nothing to print",
-            Err(_) => "Can't print these settings: see the Summary",
+            _ if app.session.active().is_none() => tl!("Open a document to preview its pages"),
+            Ok(_) => tl!("Nothing to print"),
+            Err(_) => tl!("Can't print these settings: see the Summary"),
         };
         let font = egui::FontId::proportional(11.0);
         let galley = ui.painter().layout(text.into(), font, t.text_dim, rect.width() - 16.0);
@@ -462,26 +462,26 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
         clip.rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.accent), egui::StrokeKind::Middle);
     }
     let resp = if tiling { resp } else { resp.on_hover_cursor(egui::CursorIcon::Grab) };
-    resp.on_hover_text(if tiling { "The page as it prints" } else { "Drag the art to move it on the paper" });
+    resp.on_hover_text(if tiling { tl!("The page as it prints") } else { tl!("Drag the art to move it on the paper") });
     // ◀ n of N ▶, then what the page is.
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
-        if widgets::icon_button_enabled(ui, "chevron-left", "Previous page", false, index > 0, 20.0).clicked() {
+        if widgets::icon_button_enabled(ui, "chevron-left", tl!("Previous page"), false, index > 0, 20.0).clicked() {
             d.fields.insert("__sheet".into(), json!(index - 1));
         }
-        let text = format!("{} of {count}", index + 1);
+        let text = crate::i18n::fmt(tl!("{page} of {count}"), &[("page", &(index + 1).to_string()), ("count", &count.to_string())]);
         ui.add_sized([PREVIEW.x - 44.0, 20.0], egui::Label::new(egui::RichText::new(text).size(11.5).color(t.text)));
-        if widgets::icon_button_enabled(ui, "chevron-right", "Next page", false, index + 1 < count, 20.0).clicked() {
+        if widgets::icon_button_enabled(ui, "chevron-right", tl!("Next page"), false, index + 1 < count, 20.0).clicked() {
             d.fields.insert("__sheet".into(), json!(index + 1));
         }
     });
     let mut what = vec![];
     match sheet["artboard"].as_u64() {
-        Some(a) => what.push(format!("Artboard {}", a + 1)),
-        None => what.push("All the art".into()),
+        Some(a) => what.push(crate::i18n::fmt(tl!("Artboard {number}"), &[("number", &(a + 1).to_string())])),
+        None => what.push(tl!("All the art").into()),
     }
     if let Some(tile) = sheet["tile"].as_u64() {
-        what.push(format!("tile {tile}"));
+        what.push(crate::i18n::fmt(tl!("tile {number}"), &[("number", &tile.to_string())]));
     }
     if let Some(ink) = sheet["ink"].as_str() {
         what.push(ink.to_string());
@@ -563,17 +563,17 @@ fn whole(ui: &mut egui::Ui, d: &mut Dialog, path: &str, range: std::ops::RangeIn
 
 fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let unit = app.session.general_unit();
-    row(ui, "Copies:", |ui| {
+    row(ui, tl!("Copies:"), |ui| {
         whole(ui, d, "copies", 1.0..=f64::from(vectorcraft_pdf::MAX_COPIES), true);
         ui.add_space(12.0);
         let copies = get(d, "copies").as_u64().unwrap_or(1);
-        flag(ui, d, "collate", "Collate", copies > 1);
-        flag(ui, d, "reverse", "Reverse Order", true);
+        flag(ui, d, "collate", tl!("Collate"), copies > 1);
+        flag(ui, d, "reverse", tl!("Reverse Order"), true);
     });
-    heading(ui, "Artboards");
+    heading(ui, tl!("Artboards"));
     let artboards = choice::<PrintArtboards>(d, "artboards").unwrap_or(PrintArtboards::All);
     ui.horizontal(|ui| {
-        for (a, label) in [(PrintArtboards::All, "All"), (PrintArtboards::Range, "Range:")] {
+        for (a, label) in [(PrintArtboards::All, tl!("All")), (PrintArtboards::Range, tl!("Range:"))] {
             if widgets::radio(ui, label, artboards == a, true) {
                 set(d, "artboards", json!(a.id()));
             }
@@ -584,43 +584,43 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             set(d, "range", json!(range));
         }
     });
-    if widgets::radio(ui, "Ignore Artboards (all the art as one page)", artboards == PrintArtboards::Ignore, true) {
+    if widgets::radio(ui, tl!("Ignore Artboards (all the art as one page)"), artboards == PrintArtboards::Ignore, true) {
         set(d, "artboards", json!(PrintArtboards::Ignore.id()));
     }
-    flag(ui, d, "skipBlank", "Skip Blank Artboards", artboards != PrintArtboards::Ignore);
-    heading(ui, "Media");
-    row(ui, "Size:", |ui| {
+    flag(ui, d, "skipBlank", tl!("Skip Blank Artboards"), artboards != PrintArtboards::Ignore);
+    heading(ui, tl!("Media"));
+    row(ui, tl!("Size:"), |ui| {
         pick::<Media>(ui, d, "media", 160.0, |_| true);
     });
     // A paper size shows its size; Custom takes one.
     let media = choice::<Media>(d, "media").unwrap_or_default();
-    row(ui, "Width:", |ui| match media.size() {
+    row(ui, tl!("Width:"), |ui| match media.size() {
         Some((w, h)) => {
             ui.add_enabled_ui(false, |ui| widgets::num_field(ui, "print-media-w", Some(w), unit, 80.0));
-            ui.label("Height:");
+            ui.label(tl!("Height:"));
             ui.add_enabled_ui(false, |ui| widgets::num_field(ui, "print-media-h", Some(h), unit, 80.0));
         }
         None => {
             length(ui, d, "width", unit, true);
-            ui.label("Height:");
+            ui.label(tl!("Height:"));
             length(ui, d, "height", unit, true);
         }
     });
-    heading(ui, "Orientation");
-    flag(ui, d, "autoRotate", "Auto-Rotate (turn the paper to each artboard)", true);
+    heading(ui, tl!("Orientation"));
+    flag(ui, d, "autoRotate", tl!("Auto-Rotate (turn the paper to each artboard)"), true);
     let auto = get(d, "autoRotate").as_bool() == Some(true);
-    row(ui, "Orientation:", |ui| {
+    row(ui, tl!("Orientation:"), |ui| {
         ui.add_enabled_ui(!auto, |ui| pick::<Orientation>(ui, d, "orientation", 160.0, |_| true));
     });
-    flag(ui, d, "transverse", "Transverse (the page a quarter turn on the paper)", true);
-    heading(ui, "Options");
-    row(ui, "Print Layers:", |ui| {
+    flag(ui, d, "transverse", tl!("Transverse (the page a quarter turn on the paper)"), true);
+    heading(ui, tl!("Options"));
+    row(ui, tl!("Print Layers:"), |ui| {
         pick::<PrintLayers>(ui, d, "printLayers", 220.0, |_| true);
     });
     let scaling = choice::<PrintScaling>(d, "scaling").unwrap_or(PrintScaling::None);
     let tiles = scaling.tiles();
     let placed = get(d, PLACED).as_bool() == Some(true);
-    row(ui, "Placement:", |ui| {
+    row(ui, tl!("Placement:"), |ui| {
         ui.add_enabled_ui(!tiles && !placed, |ui| {
             let origin = choice::<Origin>(d, "placement.origin").unwrap_or_default();
             let current = Origin::ALL.iter().position(|o| *o == origin).unwrap_or(4);
@@ -635,50 +635,50 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     if placed {
         row(ui, "", |ui| {
-            note(ui, "The Print Tiling tool placed the pages.");
-            if widgets::flat_button(ui, "Reset", 56.0).on_hover_text("Place the pages with the placement again").clicked() {
+            note(ui, tl!("The Print Tiling tool placed the pages."));
+            if widgets::flat_button(ui, tl!("Reset"), 56.0).on_hover_text(tl!("Place the pages with the placement again")).clicked() {
                 set(d, PLACED, json!(false));
             }
         });
     }
-    row(ui, "Scaling:", |ui| {
+    row(ui, tl!("Scaling:"), |ui| {
         pick::<PrintScaling>(ui, d, "scaling", 180.0, |_| true);
     });
-    row(ui, "Scale:", |ui| {
+    row(ui, tl!("Scale:"), |ui| {
         let on = scaling == PrintScaling::Custom || tiles;
-        ui.label("W:");
+        ui.label(tl!("W:"));
         number(ui, d, "scale.width", "%", on);
-        ui.label("H:");
+        ui.label(tl!("H:"));
         number(ui, d, "scale.height", "%", on);
     });
-    row(ui, "Overlap:", |ui| length(ui, d, "overlap", unit, tiles));
-    row(ui, "Tile Range:", |ui| text(ui, d, "tileRange", tiles));
+    row(ui, tl!("Overlap:"), |ui| length(ui, d, "overlap", unit, tiles));
+    row(ui, tl!("Tile Range:"), |ui| text(ui, d, "tileRange", tiles));
     if tiles {
-        note(ui, "Tiles are numbered across, then down; leave the range empty for every tile.");
+        note(ui, tl!("Tiles are numbered across, then down; leave the range empty for every tile."));
     }
 }
 
 fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
-    row(ui, "Mode:", |ui| {
+    row(ui, tl!("Mode:"), |ui| {
         pick::<OutputMode>(ui, d, "output.mode", 160.0, |_| true);
     });
-    row(ui, "Emulsion:", |ui| {
+    row(ui, tl!("Emulsion:"), |ui| {
         pick::<Emulsion>(ui, d, "output.emulsion", 160.0, |_| true);
     });
-    row(ui, "Image:", |ui| {
+    row(ui, tl!("Image:"), |ui| {
         pick::<PrintImage>(ui, d, "output.image", 160.0, |_| true);
     });
     let separations = choice::<OutputMode>(d, "output.mode") == Some(OutputMode::Separations);
-    flag(ui, d, "output.spotsToProcess", "Convert All Spot Colors to Process", separations);
-    heading(ui, "Document Ink Options");
+    flag(ui, d, "output.spotsToProcess", tl!("Convert All Spot Colors to Process"), separations);
+    heading(ui, tl!("Document Ink Options"));
     let inks = pv.as_ref().ok().and_then(|v| v["inks"].as_array()).map(Vec::as_slice).unwrap_or_default();
     if !separations || inks.is_empty() {
-        note(ui, "Separations list the document's inks here: one page per ink that prints.");
+        note(ui, tl!("Separations list the document's inks here: one page per ink that prints."));
         return;
     }
     let t = Tokens::get(ui.ctx());
     egui::Grid::new("print-inks").num_columns(4).spacing([12.0, 4.0]).show(ui, |ui| {
-        for h in ["Print", "Ink", "Frequency", "Angle"] {
+        for h in [tl!("Print"), tl!("Ink"), tl!("Frequency"), tl!("Angle")] {
             ui.label(egui::RichText::new(h).size(11.5).color(t.text_dim));
         }
         ui.end_row();
@@ -688,7 +688,7 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
             if widgets::check(ui, "", on, true) {
                 set_ink(d, name, "print", json!(!on));
             }
-            let spot = if ink["spot"] == true { " (spot)" } else { "" };
+            let spot = if ink["spot"] == true { format!(" ({})", tl!("spot")) } else { String::new() };
             ui.label(egui::RichText::new(format!("{name}{spot}")).color(t.text));
             for (k, suffix) in [("frequency", " lpi"), ("angle", "°")] {
                 let v = ink[k].as_f64().unwrap_or(0.0);
@@ -699,7 +699,7 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
             ui.end_row();
         }
     });
-    note(ui, "Frequencies and angles are the output device's to apply.");
+    note(ui, tl!("Frequencies and angles are the output device's to apply."));
 }
 
 /// Set option `key` of ink `name` in `output.inks` (the ink gets its own entry the first time).
@@ -717,15 +717,15 @@ fn set_ink(d: &mut Dialog, name: &str, key: &str, value: Value) {
 }
 
 fn graphics(ui: &mut egui::Ui, d: &mut Dialog) {
-    heading(ui, "Paths");
-    flag(ui, d, "graphics.autoFlatness", "Automatic flatness", true);
+    heading(ui, tl!("Paths"));
+    flag(ui, d, "graphics.autoFlatness", tl!("Automatic flatness"), true);
     let auto = get(d, "graphics.autoFlatness").as_bool() == Some(true);
-    row(ui, "Flatness:", |ui| {
+    row(ui, tl!("Flatness:"), |ui| {
         number(ui, d, "graphics.flatness", "", !auto);
-        ui.label(egui::RichText::new("0.2 (quality) to 100 (speed)").size(11.5).color(Tokens::get(ui.ctx()).text_dim));
+        ui.label(egui::RichText::new(tl!("0.2 (quality) to 100 (speed)")).size(11.5).color(Tokens::get(ui.ctx()).text_dim));
     });
-    heading(ui, "Fonts");
-    row(ui, "Download:", |ui| {
+    heading(ui, tl!("Fonts"));
+    row(ui, tl!("Download:"), |ui| {
         pick::<FontDownload>(ui, d, "graphics.fonts", 160.0, |_| true);
     });
 }
@@ -733,37 +733,39 @@ fn graphics(ui: &mut egui::Ui, d: &mut Dialog) {
 fn color(ui: &mut egui::Ui, d: &mut Dialog) {
     let profiles = vectorcraft_color::cms::profiles();
     let names: Vec<&str> = std::iter::once(SAME_AS_SOURCE).chain(profiles.iter().map(|p| p.name.as_str())).collect();
-    row(ui, "Printer profile:", |ui| super::save_pdf::profile_pick(ui, d, "color.profile", &names, true));
-    note(ui, "Composite colours are converted to it; separations separate with it when it is a CMYK profile.");
-    row(ui, "Rendering intent:", |ui| {
+    row(ui, tl!("Printer profile:"), |ui| super::save_pdf::profile_pick(ui, d, "color.profile", &names, true));
+    note(ui, tl!("Composite colours are converted to it; separations separate with it when it is a CMYK profile."));
+    row(ui, tl!("Rendering intent:"), |ui| {
         let current = serde_json::from_value::<Intent>(get(d, "color.intent").clone()).unwrap_or_default();
         let labels: Vec<&str> = Intent::ALL.iter().map(Intent::label).collect();
         if let Some(i) = widgets::dropdown(ui, "color.intent", current.label(), &labels, 200.0).and_then(|i| Intent::ALL.get(i)) {
             set(d, "color.intent", serde_json::to_value(i).unwrap_or_default());
         }
     });
-    note(ui, "How colours outside the press's gamut are separated.");
-    flag(ui, d, "color.preserveNumbers", "Preserve CMYK Numbers", true);
-    note(ui, "CMYK colours print with their own values; off, they go through the colour settings too.");
+    note(ui, tl!("How colours outside the press's gamut are separated."));
+    flag(ui, d, "color.preserveNumbers", tl!("Preserve CMYK Numbers"), true);
+    note(ui, tl!("CMYK colours print with their own values; off, they go through the colour settings too."));
 }
 
 fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    heading(ui, "Printer");
-    row(ui, "Unprintable margin:", |ui| length(ui, d, "margin", app.session.general_unit(), true));
-    note(ui, "The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed.");
+    heading(ui, tl!("Printer"));
+    row(ui, tl!("Unprintable margin:"), |ui| length(ui, d, "margin", app.session.general_unit(), true));
+    note(ui, tl!("The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed."));
     let composite = choice::<OutputMode>(d, "output.mode") != Some(OutputMode::Separations);
-    flag(ui, d, "advanced.printAsBitmap", "Print as Bitmap", composite);
-    note(ui, "Each page prints as one image, at the document's raster effects resolution.");
-    heading(ui, "Overprint and Transparency Flattener Options");
-    row(ui, "Overprints:", |ui| {
+    flag(ui, d, "advanced.printAsBitmap", tl!("Print as Bitmap"), composite);
+    note(ui, tl!("Each page prints as one image, at the document's raster effects resolution."));
+    heading(ui, tl!("Overprint and Transparency Flattener Options"));
+    row(ui, tl!("Overprints:"), |ui| {
         ui.add_enabled_ui(composite, |ui| pick::<PrintOverprints>(ui, d, "advanced.overprints", 160.0, |_| true));
     });
     let presets = app.session.flattener_presets();
     let names: Vec<&str> = std::iter::once(KEEP_TRANSPARENCY).chain(presets.iter().map(|p| p.name.as_str())).collect();
-    row(ui, "Preset:", |ui| super::save_pdf::profile_pick(ui, d, "advanced.flattenerPreset", &names, true));
+    row(ui, tl!("Preset:"), |ui| super::save_pdf::profile_pick(ui, d, "advanced.flattenerPreset", &names, true));
     note(
         ui,
-        "Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).",
+        tl!(
+            "Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it)."
+        ),
     );
 }
 
@@ -827,28 +829,34 @@ fn summary(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>, has_do
     let t = Tokens::get(ui.ctx());
     match pv {
         Ok(v) => {
-            heading(ui, "Pages");
+            heading(ui, tl!("Pages"));
             let per_copy = v["sheets"].as_array().map_or(0, Vec::len);
-            ui.label(egui::RichText::new(format!("{} in all, {per_copy} per copy", v["pages"])).color(t.text));
+            ui.label(
+                egui::RichText::new(crate::i18n::fmt(
+                    tl!("{pages} in all, {count} per copy"),
+                    &[("pages", &v["pages"].to_string()), ("count", &per_copy.to_string())],
+                ))
+                .color(t.text),
+            );
         }
         // A preset edited without a document has no pages to count.
         Err(_) if !has_doc => {}
         Err(e) => {
-            heading(ui, "Error");
+            heading(ui, tl!("Error"));
             ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
         }
     }
-    heading(ui, "Options");
+    heading(ui, tl!("Options"));
     let mut changed = vec![];
     vectorcraft_engine::cmd::fileio::pdf::changed("", &settings(d), &DEFAULTS, &mut changed);
     changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()).0);
     labelled(&mut changed);
     if changed.is_empty() {
-        note(ui, "Every option is at its default.");
+        note(ui, tl!("Every option is at its default."));
     }
     super::save_pdf::option_rows(ui, &changed, option_label);
     if let Ok(v) = pv {
-        heading(ui, "Warnings");
+        heading(ui, tl!("Warnings"));
         super::save_pdf::warning_rows(ui, v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default());
     }
 }

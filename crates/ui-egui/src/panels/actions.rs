@@ -76,7 +76,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                 ui.painter().text(
                     r.right_center() - egui::vec2(6.0, 0.0),
                     egui::Align2::RIGHT_CENTER,
-                    format!("{} step{}", a.steps.len(), if a.steps.len() == 1 { "" } else { "s" }),
+                    crate::i18n::tn(a.steps.len() as u64, "{n} step", "{n} steps"),
                     egui::FontId::proportional(11.0),
                     t.text_dim,
                 );
@@ -94,7 +94,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Bottom bar: stop, record, play, new, delete.
     ui.horizontal(|ui| {
         let recording = app.ui.recording.is_some();
-        if widgets::icon_button(ui, "square", "Stop Playing/Recording", false, 24.0).clicked()
+        if widgets::icon_button(ui, "square", tl!("Stop Playing/Recording"), false, 24.0).clicked()
             && let Some((set, name, start)) = app.ui.recording.take()
         {
             let steps = app.session.journal_for_action(start);
@@ -104,7 +104,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
         let (r, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
         ui.painter().circle_filled(r.center(), 6.0, if recording { egui::Color32::from_rgb(0xe0, 0x30, 0x30) } else { t.icon });
-        if resp.on_hover_text("Begin Recording").clicked() && !recording {
+        if resp.on_hover_text(tl!("Begin Recording")).clicked() && !recording {
             let n = app.ui.action_sets.first().map(|s| s.actions.len()).unwrap_or(0) + 1;
             if app.ui.action_sets.is_empty() {
                 app.ui.action_sets.push(ActionSet { name: "Set 1".into(), actions: vec![] });
@@ -112,12 +112,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             let set = selected.map(|s| s.0).unwrap_or(0);
             app.ui.recording = Some((set, format!("Action {n}"), app.session.journal.len()));
         }
-        if widgets::icon_button(ui, "dc-actions", "Play Current Selection", false, 24.0).clicked()
+        if widgets::icon_button(ui, "dc-actions", tl!("Play Current Selection"), false, 24.0).clicked()
             && let Some(s) = selected
         {
             play_req = Some(s);
         }
-        if widgets::icon_button(ui, "trash-2", "Delete Selection", false, 24.0).clicked()
+        if widgets::icon_button(ui, "trash-2", tl!("Delete Selection"), false, 24.0).clicked()
             && let Some((si, ai)) = selected
             && let Some(s) = app.ui.action_sets.get_mut(si)
             && ai < s.actions.len()
@@ -126,7 +126,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             ui.data_mut(|d| d.insert_temp::<Option<(usize, usize)>>(selected_id, None));
         }
         if recording {
-            ui.label(egui::RichText::new("● Recording").color(egui::Color32::from_rgb(0xe0, 0x30, 0x30)));
+            ui.label(egui::RichText::new(tl!("● Recording")).color(egui::Color32::from_rgb(0xe0, 0x30, 0x30)));
         }
     });
     if let Some((si, ai)) = play_req
@@ -136,7 +136,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
     let _ = icons::exists;
     if app.ui.action_sets.is_empty() {
-        dim_label(ui, "No actions. Press ● to record.");
+        dim_label(ui, tl!("No actions. Press ● to record."));
     }
 }
 

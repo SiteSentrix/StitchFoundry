@@ -22,7 +22,7 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| "Export for Screens".into(),
+    heading: |_| tl!("Export for Screens").into(),
     body,
     confirm,
     ok: Some("Export Artboard"),
@@ -256,7 +256,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let tab = usize::from(d.str("tab") == "assets");
-    if let Some(i) = widgets::tab_bar(ui, &["Artboards", "Assets"], tab) {
+    if let Some(i) = widgets::tab_bar(ui, &[tl!("Artboards"), tl!("Assets")], tab) {
         d.fields.insert("tab".into(), json!(if i == 1 { "assets" } else { "artboards" }));
     }
     ui.add_space(8.0);
@@ -282,7 +282,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 formats(ui, d);
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    widgets::dim_label(ui, "Prefix:");
+                    widgets::dim_label(ui, tl!("Prefix:"));
                     form::text(ui, d, "prefix", 140.0);
                 });
             }
@@ -303,13 +303,13 @@ fn artboards(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     boards.resize(n, true);
     let before = boards.clone();
     let select = d.str("select");
-    widgets::dim_label(ui, "Select:");
+    widgets::dim_label(ui, tl!("Select:"));
     ui.horizontal(|ui| {
-        if widgets::radio(ui, "All", select == "all", true) {
+        if widgets::radio(ui, tl!("All"), select == "all", true) {
             set_select(d, "all");
             boards.iter_mut().for_each(|b| *b = true);
         }
-        if widgets::radio(ui, "Range:", select == "range", true) {
+        if widgets::radio(ui, tl!("Range:"), select == "range", true) {
             set_select(d, "range");
         }
         ui.add_enabled_ui(select == "range", |ui| {
@@ -320,20 +320,20 @@ fn artboards(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         });
     });
-    if widgets::radio(ui, "Full Document", select == "full", true) {
+    if widgets::radio(ui, tl!("Full Document"), select == "full", true) {
         set_select(d, "full");
     }
     ui.add_space(4.0);
-    form::check(ui, d, "includeBleed", "Include Bleed");
+    form::check(ui, d, "includeBleed", tl!("Include Bleed"));
     ui.add_space(6.0);
     let typed = boards != before;
     let checked = boards.clone();
     ui.add_enabled_ui(d.str("select") != "full", |ui| {
         ui.horizontal(|ui| {
-            if ui.small_button("Select All").clicked() {
+            if ui.small_button(tl!("Select All")).clicked() {
                 boards.iter_mut().for_each(|b| *b = true);
             }
-            if ui.small_button("Clear").clicked() {
+            if ui.small_button(tl!("Clear")).clicked() {
                 boards.iter_mut().for_each(|b| *b = false);
             }
         });
@@ -381,16 +381,16 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let Some(st) = app.session.active() else { return };
     if st.doc.assets.is_empty() {
         ui.add_space(24.0);
-        widgets::dim_label(ui, "No assets yet. Collect art with Object › Collect for Export, or drag it into the Asset Export panel.");
+        widgets::dim_label(ui, tl!("No assets yet. Collect art with Object › Collect for Export, or drag it into the Asset Export panel."));
         return;
     }
     let mut on = checked_assets(app, d);
     let before = on.clone();
     ui.horizontal(|ui| {
-        if ui.small_button("Select All").clicked() {
+        if ui.small_button(tl!("Select All")).clicked() {
             on = st.doc.assets.iter().map(|a| a.id).collect();
         }
-        if ui.small_button("Clear").clicked() {
+        if ui.small_button(tl!("Clear")).clicked() {
             on.clear();
         }
     });
@@ -417,23 +417,23 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 /// Export to: the folder (typed or picked), Open Location after Export and Create Sub-folders; the
 /// web downloads instead.
 fn destination(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::dim_label(ui, "Export to:");
+    widgets::dim_label(ui, tl!("Export to:"));
     if io::is_web(app) {
-        widgets::dim_label(ui, "Your browser downloads the files (several as one .zip).");
+        widgets::dim_label(ui, tl!("Your browser downloads the files (several as one .zip)."));
     } else {
         let pick = app.services.pick_folder.is_some();
         ui.horizontal(|ui| {
             form::text(ui, d, "folder", if pick { 300.0 } else { 334.0 });
             if pick
-                && widgets::icon_button(ui, "folder-open", "Choose a folder", false, 26.0).clicked()
+                && widgets::icon_button(ui, "folder-open", tl!("Choose a folder"), false, 26.0).clicked()
                 && let Some(f) = app.services.pick_folder.as_mut().and_then(|pick| pick())
             {
                 d.fields.insert("folder".into(), json!(f));
             }
         });
-        form::check(ui, d, "openLocation", "Open Location after Export");
+        form::check(ui, d, "openLocation", tl!("Open Location after Export"));
     }
-    form::check(ui, d, "subfolders", "Create Sub-folders");
+    form::check(ui, d, "subfolders", tl!("Create Sub-folders"));
 }
 
 /// The preset, the Format Settings gear (which sets `__settings`), the format rows (scale, suffix,
@@ -442,9 +442,9 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
     let mut rows: Vec<Value> = d.fields.get("formats").and_then(Value::as_array).cloned().unwrap_or_default();
     let mut edited = false;
     ui.horizontal(|ui| {
-        widgets::dim_label(ui, "Formats:");
+        widgets::dim_label(ui, tl!("Formats:"));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if widgets::icon_button(ui, "settings", "Format Settings", false, 24.0).clicked() {
+            if widgets::icon_button(ui, "settings", tl!("Format Settings"), false, 24.0).clicked() {
                 let first = rows.first().and_then(|r| r["format"].as_str()).filter(|f| SETTINGS.iter().any(|(id, _)| id == f));
                 d.fields.insert("__settings".into(), json!(first.unwrap_or("png")));
             }
@@ -469,7 +469,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
     let k = ((ui.available_width() - 66.0) / 262.0).clamp(0.6, 1.0);
     let (scale_w, suffix_w, format_w) = (96.0 * k, 70.0 * k, 96.0 * k);
     egui::Grid::new("efs-formats").num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
-        for head in ["Scale", "Suffix", "Format", ""] {
+        for head in [tl!("Scale"), tl!("Suffix"), tl!("Format"), ""] {
             widgets::dim_label(ui, head);
         }
         ui.end_row();
@@ -507,7 +507,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
                 edited = true;
             }
             ui.add_enabled_ui(!one, |ui| {
-                if widgets::icon_button(ui, "x", "Remove", false, 22.0).clicked() {
+                if widgets::icon_button(ui, "x", tl!("Remove"), false, 22.0).clicked() {
                     remove = Some(i);
                 }
             });
@@ -518,7 +518,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
         rows.remove(i);
         edited = true;
     }
-    if widgets::secondary_button(ui, "+ Add Scale").clicked() {
+    if widgets::secondary_button(ui, tl!("+ Add Scale")).clicked() {
         // One more than the largest factor so far.
         let largest = rows
             .iter()
@@ -541,7 +541,7 @@ pub(crate) fn formats(ui: &mut egui::Ui, d: &mut Dialog) {
 /// Format Settings: the options of format `id` that apply to every row of it, then Done.
 fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
     let t = Tokens::get(ui.ctx());
-    widgets::subheader(ui, "Format Settings");
+    widgets::subheader(ui, tl!("Format Settings"));
     ui.add_space(6.0);
     let at = SETTINGS.iter().position(|(f, _)| *f == id).unwrap_or(0);
     if let Some((f, _)) = widgets::dropdown(ui, "efs-settings-format", SETTINGS_LABELS[at], &SETTINGS_LABELS, 150.0).and_then(|i| SETTINGS.get(i)) {
@@ -557,7 +557,7 @@ fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
             let labels: Vec<&str> =
                 d.fields.get("__presets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("PDF Preset:").color(t.text_dim));
+                ui.label(egui::RichText::new(tl!("PDF Preset:")).color(t.text_dim));
                 if let Some(p) = widgets::dropdown(ui, "efs-pdf-preset", &s.str("preset"), &labels, 220.0).and_then(|i| labels.get(i)) {
                     s.fields.insert("preset".into(), json!(p));
                 }
@@ -571,7 +571,7 @@ fn format_settings(ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
         all.insert(id.into(), Value::Object(s.fields));
     }
     ui.add_space(10.0);
-    if widgets::secondary_button(ui, "Done").clicked() {
+    if widgets::secondary_button(ui, tl!("Done")).clicked() {
         d.fields.insert("__settings".into(), json!(""));
     }
 }

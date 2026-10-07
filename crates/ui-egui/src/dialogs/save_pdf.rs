@@ -27,13 +27,13 @@ use crate::{VectorcraftApp, io, widgets};
 
 pub(super) const KIND: &str = "savePdf";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Save PDF".into(), body, confirm, ok: Some("Save PDF"), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Save PDF").into(), body, confirm, ok: Some("Save PDF"), ..DialogSpec::FORM };
 
 /// The dialog kind of the preset editor (New / Edit in Edit → PDF Presets).
 pub(super) const PRESET_KIND: &str = "pdfPreset";
 
 pub(super) const PRESET_SPEC: DialogSpec = DialogSpec {
-    heading: |d| if d.str(EDITING).is_empty() { "New PDF Preset" } else { "Edit PDF Preset" }.into(),
+    heading: |d| if d.str(EDITING).is_empty() { tl!("New PDF Preset") } else { tl!("Edit PDF Preset") }.into(),
     body,
     confirm: confirm_preset,
     ok: Some("Save Preset"),
@@ -304,20 +304,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let editor = d.kind == PRESET_KIND;
     if editor {
-        row_with(ui, "Preset name:", TOP_LABEL_WIDTH, |ui| {
+        row_with(ui, tl!("Preset name:"), TOP_LABEL_WIDTH, |ui| {
             form::text_edit(ui, d, "name", 288.0);
         });
     } else {
         preset_rows(app, ui, d);
     }
-    row_with(ui, "Standard:", TOP_LABEL_WIDTH, |ui| {
+    row_with(ui, tl!("Standard:"), TOP_LABEL_WIDTH, |ui| {
         let picked = pick::<Standard>(ui, d, "standard", 170.0, |_| true);
         let standard = choice::<Standard>(d, "standard").unwrap_or_default();
         if picked {
             standard_chosen(d, standard);
         }
         ui.add_space(16.0);
-        ui.label(egui::RichText::new("Compatibility:").color(t.text));
+        ui.label(egui::RichText::new(tl!("Compatibility:")).color(t.text));
         pick::<Compatibility>(ui, d, "compatibility", 110.0, |c| standard.allows(c));
     });
     ui.add_space(10.0);
@@ -327,7 +327,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.add_space(14.0);
         ui.vertical(|ui| {
             ui.set_width(500.0);
-            ui.label(egui::RichText::new(section).font(theme::semibold(14.0)).color(t.text_strong));
+            ui.label(egui::RichText::new(tl!(section)).font(theme::semibold(14.0)).color(t.text_strong));
             egui::ScrollArea::vertical().id_salt(("save-pdf", section)).max_height(360.0).auto_shrink([false, false]).show(ui, |ui| match section {
                 "Compression" => compression(ui, d),
                 "Marks and Bleeds" => marks_and_bleeds(app, ui, d),
@@ -363,7 +363,7 @@ pub(super) fn section_list(ui: &mut egui::Ui, d: &mut Dialog, sections: &[&str],
     ui.spacing_mut().item_spacing.y = 1.0;
     for s in sections {
         let sel = *s == section;
-        let label = egui::RichText::new(*s).size(12.5).color(if sel { t.text_strong } else { t.text });
+        let label = egui::RichText::new(tl!(*s)).size(12.5).color(if sel { t.text_strong } else { t.text });
         if ui.add(egui::Button::selectable(sel, label).frame_when_inactive(false).min_size(egui::vec2(LIST_WIDTH - 12.0, 24.0))).clicked() {
             d.fields.insert("__section".into(), json!(s));
         }
@@ -391,7 +391,7 @@ fn standard_chosen(d: &mut Dialog, standard: Standard) {
 /// The Preset row (the presets, built-in and saved, and Save Preset…) and, while Save Preset…
 /// asks for a name, the row taking it.
 fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    row_with(ui, "Preset:", TOP_LABEL_WIDTH, |ui| {
+    row_with(ui, tl!("Preset:"), TOP_LABEL_WIDTH, |ui| {
         let presets = pdf::presets(&app.session);
         let names: Vec<&str> = presets.iter().map(String::as_str).collect();
         let chosen = widgets::dropdown(ui, "pdf-preset", &d.str("preset"), &names, 300.0).and_then(|i| names.get(i)).map(|p| p.to_string());
@@ -400,23 +400,23 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         }
         let asking = d.fields.contains_key(SAVE_AS);
         if ui
-            .add_enabled_ui(!asking, |ui| widgets::flat_button(ui, "Save Preset…", 96.0))
+            .add_enabled_ui(!asking, |ui| widgets::flat_button(ui, tl!("Save Preset…"), 96.0))
             .inner
-            .on_hover_text("Save these settings as a preset")
+            .on_hover_text(tl!("Save these settings as a preset"))
             .clicked()
         {
             d.fields.insert(SAVE_AS.into(), json!(app.session.new_pdf_preset_name()));
         }
     });
     if d.fields.contains_key(SAVE_AS) {
-        row_with(ui, "Save as preset:", TOP_LABEL_WIDTH, |ui| {
+        row_with(ui, tl!("Save as preset:"), TOP_LABEL_WIDTH, |ui| {
             form::text_edit(ui, d, SAVE_AS, 200.0);
-            if widgets::flat_button(ui, "Save", 52.0).clicked()
+            if widgets::flat_button(ui, tl!("Save"), 52.0).clicked()
                 && let Err(e) = save_preset(app, d)
             {
                 app.status(e);
             }
-            if widgets::flat_button(ui, "Cancel", 60.0).clicked() {
+            if widgets::flat_button(ui, tl!("Cancel"), 60.0).clicked() {
                 d.fields.remove(SAVE_AS);
             }
         });
@@ -436,27 +436,27 @@ fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
 
 /// General: the options, then the artboards (Save PDF) or the description (preset editor).
 fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
-    heading(ui, "Options");
+    heading(ui, tl!("Options"));
     let standard = choice::<Standard>(d, "standard").unwrap_or_default();
-    flag(ui, d, "preserveEditing", "Preserve editing capabilities", standard == Standard::None);
-    flag(ui, d, "thumbnails", "Embed page thumbnails", true);
-    flag(ui, d, "fastWebView", "Optimize for fast web view", true);
-    flag(ui, d, "viewAfterSaving", "View PDF after saving", true);
+    flag(ui, d, "preserveEditing", tl!("Preserve editing capabilities"), standard == Standard::None);
+    flag(ui, d, "thumbnails", tl!("Embed page thumbnails"), true);
+    flag(ui, d, "fastWebView", tl!("Optimize for fast web view"), true);
+    flag(ui, d, "viewAfterSaving", tl!("View PDF after saving"), true);
     // PDF layers need PDF 1.5, and PDF/X-1a and PDF/X-3 have none.
     let layers = standard.allows_layers() && choice::<Compatibility>(d, "compatibility").unwrap_or_default().has_layers();
-    flag(ui, d, "createLayers", "Create PDF layers from top-level layers", layers);
-    flag(ui, d, "includeNonPrinting", "Include non-printing layers", true);
+    flag(ui, d, "createLayers", tl!("Create PDF layers from top-level layers"), layers);
+    flag(ui, d, "includeNonPrinting", tl!("Include non-printing layers"), true);
     if editor {
-        heading(ui, "Description");
+        heading(ui, tl!("Description"));
         if let Some(text) = widgets::text_field(ui, "pdf-preset-description", Some(&d.str("description")), 460.0, 3) {
             d.fields.insert("description".into(), json!(text));
         }
         return;
     }
-    heading(ui, "Artboards");
+    heading(ui, tl!("Artboards"));
     let mut all = d.bool("__allArtboards");
     ui.horizontal(|ui| {
-        let changed = ui.radio_value(&mut all, true, "All").changed() | ui.radio_value(&mut all, false, "Range:").changed();
+        let changed = ui.radio_value(&mut all, true, tl!("All")).changed() | ui.radio_value(&mut all, false, tl!("Range:")).changed();
         if changed {
             d.fields.insert("__allArtboards".into(), json!(all));
         }
@@ -473,19 +473,19 @@ fn image_rows(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
     let on = get(d, &format!("{base}.downsample")) != Downsample::None.id();
     ui.horizontal(|ui| {
         pick::<Downsample>(ui, d, &format!("{base}.downsample"), 150.0, |_| true);
-        ui.label("to");
+        ui.label(tl!("to"));
         number(ui, d, &format!("{base}.ppi"), " ppi", on);
-        ui.label("above");
+        ui.label(tl!("above"));
         number(ui, d, &format!("{base}.abovePpi"), " ppi", on);
     });
     ui.horizontal(|ui| {
-        ui.label("Compression:");
+        ui.label(tl!("Compression:"));
         if key == "mono" {
             pick::<MonoCodec>(ui, d, &format!("{base}.compression"), 150.0, |_| true);
         } else {
             pick::<ImageCodec>(ui, d, &format!("{base}.compression"), 120.0, |_| true);
             let lossy = get(d, &format!("{base}.compression")).as_str().is_some_and(|c| c != ImageCodec::None.id() && c != ImageCodec::Zip.id());
-            ui.label("Quality:");
+            ui.label(tl!("Quality:"));
             ui.add_enabled_ui(lossy, |ui| {
                 pick::<JpegQuality>(ui, d, &format!("{base}.quality"), 110.0, |_| true);
             });
@@ -494,11 +494,11 @@ fn image_rows(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
 }
 
 fn compression(ui: &mut egui::Ui, d: &mut Dialog) {
-    image_rows(ui, d, "color", "Color images");
-    image_rows(ui, d, "gray", "Grayscale images");
-    image_rows(ui, d, "mono", "Monochrome images");
+    image_rows(ui, d, "color", tl!("Color images"));
+    image_rows(ui, d, "gray", tl!("Grayscale images"));
+    image_rows(ui, d, "mono", tl!("Monochrome images"));
     ui.add_space(8.0);
-    flag(ui, d, "compression.compressText", "Compress text and line art", true);
+    flag(ui, d, "compression.compressText", tl!("Compress text and line art"), true);
 }
 
 pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
@@ -509,9 +509,9 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
         ("marks.colorBars", "Color bars"),
         ("marks.pageInfo", "Page information"),
     ];
-    heading(ui, "Marks");
+    heading(ui, tl!("Marks"));
     let all = MARKS.iter().all(|(p, _)| get(d, p).as_bool() == Some(true));
-    if widgets::check(ui, "All printer's marks", all, true) {
+    if widgets::check(ui, tl!("All printer's marks"), all, true) {
         for (p, _) in MARKS {
             set(d, p, json!(!all));
         }
@@ -519,15 +519,15 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
     egui::Grid::new("pdf-marks").num_columns(2).spacing([24.0, 4.0]).show(ui, |ui| {
         for pair in MARKS.chunks(2) {
             for (p, label) in pair {
-                flag(ui, d, p, label, true);
+                flag(ui, d, p, tl!(label), true);
             }
             ui.end_row();
         }
     });
-    row(ui, "Printer mark type:", |ui| {
+    row(ui, tl!("Printer mark type:"), |ui| {
         pick::<MarkKind>(ui, d, "marks.kind", 130.0, |_| true);
     });
-    row(ui, "Trim mark weight:", |ui| {
+    row(ui, tl!("Trim mark weight:"), |ui| {
         let w = get(d, "marks.weight").as_f64().unwrap_or(0.25);
         let current =
             WEIGHTS.iter().zip(WEIGHT_LABELS).find(|(x, _)| (*x - w).abs() < 1e-9).map_or_else(|| format!("{w} pt"), |(_, l)| l.to_string());
@@ -535,13 +535,16 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
             set(d, "marks.weight", json!(x));
         }
     });
-    row(ui, "Offset:", |ui| length(ui, d, "marks.offset", unit, true));
-    heading(ui, "Bleeds");
-    flag(ui, d, "bleed.useDocument", "Use document bleed settings", true);
+    row(ui, tl!("Offset:"), |ui| length(ui, d, "marks.offset", unit, true));
+    heading(ui, tl!("Bleeds"));
+    flag(ui, d, "bleed.useDocument", tl!("Use document bleed settings"), true);
     // With the document's bleed the fields show it (Document Setup's `[top, bottom, left, right]`).
     let document = (get(d, "bleed.useDocument").as_bool() == Some(true)).then(|| app.session.active().map_or([0.0; 4], |s| s.doc.setup.bleed));
     egui::Grid::new("pdf-bleed").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
-        for pair in [[(0, "bleed.top", "Top:"), (1, "bleed.bottom", "Bottom:")], [(2, "bleed.left", "Left:"), (3, "bleed.right", "Right:")]] {
+        for pair in [
+            [(0, "bleed.top", tl!("Top:")), (1, "bleed.bottom", tl!("Bottom:"))],
+            [(2, "bleed.left", tl!("Left:")), (3, "bleed.right", tl!("Right:"))],
+        ] {
             for (i, p, label) in pair {
                 ui.label(label);
                 match document {
@@ -572,56 +575,56 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     let profiles = vectorcraft_color::cms::profiles();
     let names = |blank: &'static str| -> Vec<&str> { std::iter::once(blank).chain(profiles.iter().map(|p| p.name.as_str())).collect() };
     let standard = choice::<Standard>(d, "standard").unwrap_or_default();
-    heading(ui, "Color");
-    row(ui, "Color conversion:", |ui| {
+    heading(ui, tl!("Color"));
+    row(ui, tl!("Color conversion:"), |ui| {
         pick::<ColorConversion>(ui, d, "output.conversion", 300.0, |_| true);
     });
     // PDF/X-1a converts to CMYK even without a conversion.
     let converting = get(d, "output.conversion") != ColorConversion::None.id() || standard.cmyk_only();
-    row(ui, "Destination:", |ui| profile_pick(ui, d, "output.destination", &names(DOCUMENT_PROFILE), converting));
-    row(ui, "Profile inclusion:", |ui| {
+    row(ui, tl!("Destination:"), |ui| profile_pick(ui, d, "output.destination", &names(DOCUMENT_PROFILE), converting));
+    row(ui, tl!("Profile inclusion:"), |ui| {
         // A standard decides whether colours are tagged.
         ui.add_enabled_ui(standard == Standard::None, |ui| pick::<ProfileInclusion>(ui, d, "output.profiles", 300.0, |_| true));
     });
     if standard.cmyk_only() {
-        note(ui, "PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.");
+        note(ui, tl!("PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged."));
     } else if standard != Standard::None {
-        note(ui, "Files of this standard tag their colours with ICC profiles.");
+        note(ui, tl!("Files of this standard tag their colours with ICC profiles."));
     }
-    heading(ui, "Output Intent");
+    heading(ui, tl!("Output Intent"));
     // PDF/A files carry their own output intent; PDF/X files always have one.
     let own = standard != Standard::PdfA2b;
     let blank = if standard.is_pdfx() { PDFX_INTENT } else { NO_PROFILE };
-    row(ui, "Output intent profile:", |ui| profile_pick(ui, d, "output.outputIntent", &names(blank), own));
+    row(ui, tl!("Output intent profile:"), |ui| profile_pick(ui, d, "output.outputIntent", &names(blank), own));
     for (p, label) in [
-        ("output.outputCondition", "Output condition:"),
-        ("output.outputConditionId", "Condition identifier:"),
-        ("output.registry", "Registry name:"),
+        ("output.outputCondition", tl!("Output condition:")),
+        ("output.outputConditionId", tl!("Condition identifier:")),
+        ("output.registry", tl!("Registry name:")),
     ] {
         row(ui, label, |ui| text(ui, d, p, own));
     }
-    flag(ui, d, "output.trapped", "Mark as trapped", own);
+    flag(ui, d, "output.trapped", tl!("Mark as trapped"), own);
     if !own {
-        note(ui, "PDF/A files carry their own output intent.");
+        note(ui, tl!("PDF/A files carry their own output intent."));
     }
 }
 
 fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    heading(ui, "Fonts");
+    heading(ui, tl!("Fonts"));
     let outline = get(d, "advanced.outlineText").as_bool() == Some(true);
-    row(ui, "Subset fonts below:", |ui| {
+    row(ui, tl!("Subset fonts below:"), |ui| {
         number(ui, d, "advanced.fontSubsetPercent", "%", !outline);
-        ui.label("of characters used");
+        ui.label(tl!("of characters used"));
     });
-    flag(ui, d, "advanced.outlineText", "Convert text to outlines", true);
-    heading(ui, "Overprint and Transparency Flattener");
-    row(ui, "Overprint:", |ui| {
+    flag(ui, d, "advanced.outlineText", tl!("Convert text to outlines"), true);
+    heading(ui, tl!("Overprint and Transparency Flattener"));
+    row(ui, tl!("Overprint:"), |ui| {
         pick::<Overprint>(ui, d, "advanced.overprint", 130.0, |_| true);
     });
     // PDF 1.3 files (PDF/X-1a and PDF/X-3 ones too) have no transparency: it is flattened.
     let flat = choice::<Compatibility>(d, "compatibility") == Some(Compatibility::Pdf13)
         || choice::<Standard>(d, "standard").is_some_and(Standard::flattens);
-    row(ui, "Flattener preset:", |ui| {
+    row(ui, tl!("Flattener preset:"), |ui| {
         let presets = app.session.flattener_presets();
         let names: Vec<&str> = presets.iter().map(|p| p.name.as_str()).collect();
         let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
@@ -634,7 +637,7 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         });
     });
     if !flat {
-        note(ui, "PDF 1.3 files have no transparency: the preset flattens it.");
+        note(ui, tl!("PDF 1.3 files have no transparency: the preset flattens it."));
     }
 }
 
@@ -665,24 +668,24 @@ fn password_field(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) 
 fn security(ui: &mut egui::Ui, d: &mut Dialog) {
     let plain = choice::<Standard>(d, "standard").unwrap_or_default() == Standard::None;
     if !plain {
-        note(ui, "Files of a PDF standard can't be password-protected.");
+        note(ui, tl!("Files of a PDF standard can't be password-protected."));
     }
-    heading(ui, "Document open password");
-    let open = password_check(ui, d, OPEN_PASSWORD, "__requireOpenPassword", "Require a password to open the document", plain);
-    row(ui, "Open password:", |ui| password_field(ui, d, OPEN_PASSWORD, open));
-    heading(ui, "Permissions");
-    let restrict = password_check(ui, d, PERMISSIONS_PASSWORD, "__restrictPermissions", "Restrict printing, editing and other tasks", plain);
-    row(ui, "Permissions password:", |ui| password_field(ui, d, PERMISSIONS_PASSWORD, restrict));
+    heading(ui, tl!("Document open password"));
+    let open = password_check(ui, d, OPEN_PASSWORD, "__requireOpenPassword", tl!("Require a password to open the document"), plain);
+    row(ui, tl!("Open password:"), |ui| password_field(ui, d, OPEN_PASSWORD, open));
+    heading(ui, tl!("Permissions"));
+    let restrict = password_check(ui, d, PERMISSIONS_PASSWORD, "__restrictPermissions", tl!("Restrict printing, editing and other tasks"), plain);
+    row(ui, tl!("Permissions password:"), |ui| password_field(ui, d, PERMISSIONS_PASSWORD, restrict));
     ui.add_enabled_ui(restrict, |ui| {
-        row(ui, "Printing allowed:", |ui| {
+        row(ui, tl!("Printing allowed:"), |ui| {
             pick::<Printing>(ui, d, "security.printing", 260.0, |_| true);
         });
-        row(ui, "Changes allowed:", |ui| {
+        row(ui, tl!("Changes allowed:"), |ui| {
             pick::<Changes>(ui, d, "security.changes", 260.0, |_| true);
         });
     });
-    flag(ui, d, "security.copy", "Enable copying of text, images and other content", restrict);
-    let reader = "Enable text access for screen readers";
+    flag(ui, d, "security.copy", tl!("Enable copying of text, images and other content"), restrict);
+    let reader = tl!("Enable text access for screen readers");
     if get(d, "security.copy").as_bool() == Some(true) {
         // What can be copied can be read out.
         widgets::check(ui, reader, true, false);
@@ -694,11 +697,11 @@ fn security(ui: &mut egui::Ui, d: &mut Dialog) {
         ui,
         d,
         "security.plaintextMetadata",
-        "Enable plaintext metadata",
+        tl!("Enable plaintext metadata"),
         (open || restrict) && !matches!(compatibility, Compatibility::Pdf13 | Compatibility::Pdf14),
     );
     ui.add_space(6.0);
-    note(ui, &format!("Encryption: {} (set by Compatibility)", Encryption::for_compatibility(compatibility).label()));
+    note(ui, &crate::i18n::fmt(tl!("Encryption: {name} (set by Compatibility)"), &[("name", Encryption::for_compatibility(compatibility).label())]));
 }
 
 /// The section a changed option belongs to (for the Summary's order).
@@ -745,20 +748,20 @@ fn summary(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let v = match summary_of(app, ui.ctx(), &params(d)) {
         Ok(v) => v,
         Err(e) => {
-            heading(ui, "Error");
+            heading(ui, tl!("Error"));
             ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
             return;
         }
     };
-    heading(ui, "Options");
+    heading(ui, tl!("Options"));
     let mut changed: Vec<&Value> = v["changed"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
     changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()));
     if changed.is_empty() {
-        let base = if d.kind == PRESET_KIND { pdf::DEFAULT_PRESET } else { "the preset" };
-        note(ui, &format!("Every option matches {base}."));
+        let base = if d.kind == PRESET_KIND { pdf::DEFAULT_PRESET } else { tl!("the preset") };
+        note(ui, &crate::i18n::fmt(tl!("Every option matches {base}."), &[("base", base)]));
     }
     option_rows(ui, changed, option_label);
-    heading(ui, "Warnings");
+    heading(ui, tl!("Warnings"));
     warning_rows(ui, v["warnings"].as_array().map(Vec::as_slice).unwrap_or_default());
 }
 
@@ -767,7 +770,7 @@ pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item
     let t = Tokens::get(ui.ctx());
     for c in changed {
         let value = match &c["value"] {
-            Value::Bool(b) => if *b { "On" } else { "Off" }.to_string(),
+            Value::Bool(b) => if *b { tl!("On") } else { tl!("Off") }.to_string(),
             Value::String(s) => s.clone(),
             other => other.to_string(),
         };
@@ -779,7 +782,7 @@ pub(super) fn option_rows<'a>(ui: &mut egui::Ui, changed: impl IntoIterator<Item
 pub(super) fn warning_rows(ui: &mut egui::Ui, warnings: &[Value]) {
     let t = Tokens::get(ui.ctx());
     if warnings.is_empty() {
-        note(ui, "None.");
+        note(ui, tl!("None."));
     }
     for w in warnings {
         ui.label(egui::RichText::new(format!("⚠ {}", w.as_str().unwrap_or_default())).color(t.text));

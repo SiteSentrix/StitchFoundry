@@ -142,7 +142,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let picked: Option<(String, String)> = pstate(ui.ctx(), "gl-font");
     let (family, style) = picked.or(current).unwrap_or_else(|| (vectorcraft_text::FALLBACK_FAMILY.to_string(), "Regular".to_string()));
     let Some(face) = db.face(&family, &style) else {
-        ui.label(egui::RichText::new("No fonts are available.").color(t.text_dim));
+        ui.label(egui::RichText::new(tl!("No fonts are available.")).color(t.text_dim));
         return;
     };
     let subset: usize = pstate(ui.ctx(), "gl-subset");
@@ -150,7 +150,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let w = ui.available_width();
     let names: Vec<&str> = SUBSETS.iter().map(|s| s.0).collect();
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Show:").color(t.text_dim));
+        ui.label(egui::RichText::new(tl!("Show:")).color(t.text_dim));
         if let Some(i) = widgets::dropdown(ui, "gl-subset", names[subset.min(names.len() - 1)], &names, (w - 50.0).max(80.0)) {
             set_pstate(ui.ctx(), "gl-subset", i);
         }
@@ -175,7 +175,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     ui.painter().rect_stroke(rect.shrink(0.5), 0, egui::Stroke::new(0.5, t.border), egui::StrokeKind::Inside);
                     let tex = glyph_texture(ui.ctx(), &face, gid, px);
                     ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), t.text_strong);
-                    let resp = resp.on_hover_text(format!("U+{:04X}  {c}  (glyph {gid})\nDouble-click to insert", c as u32));
+                    let resp = resp.on_hover_text(format!("U+{:04X}  {c}  (glyph {gid})\n{}", c as u32, tl!("Double-click to insert")));
                     if resp.double_clicked() {
                         insert(app, c);
                     }
@@ -187,8 +187,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let info = ui.ctx().data(|d| d.get_temp::<(char, u32)>(hover_id));
     ui.label(
         egui::RichText::new(match info {
-            Some((c, g)) => format!("U+{:04X}  glyph {g}  ·  {} glyphs", c as u32, chars.len()),
-            None => format!("{} glyphs", chars.len()),
+            Some((c, g)) => format!(
+                "U+{:04X}  {}  ·  {}",
+                c as u32,
+                crate::i18n::fmt(tl!("glyph {id}"), &[("id", &g.to_string())]),
+                crate::i18n::tn(chars.len() as u64, "{n} glyph", "{n} glyphs")
+            ),
+            None => crate::i18n::tn(chars.len() as u64, "{n} glyph", "{n} glyphs"),
         })
         .size(11.0)
         .color(t.text_dim),
@@ -207,13 +212,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    if menu_item(ui, "Use the Selected Text's Font", true, false) {
+    if menu_item(ui, tl!("Use the Selected Text's Font"), true, false) {
         set_pstate::<Option<(String, String)>>(ui.ctx(), "gl-font", None);
     }
     ui.separator();
     for (i, (name, _, _)) in SUBSETS.iter().enumerate() {
         let cur: usize = pstate(ui.ctx(), "gl-subset");
-        if menu_item(ui, name, true, cur == i) {
+        if menu_item(ui, tl!(name), true, cur == i) {
             set_pstate(ui.ctx(), "gl-subset", i);
         }
     }

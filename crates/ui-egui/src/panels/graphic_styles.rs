@@ -455,7 +455,7 @@ fn selected(ctx: &egui::Context, d: &Document) -> Vec<String> {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The document is shared (an `Arc`): holding it while drawing copies nothing.
     let Some(doc) = app.session.active().map(|d| d.doc.clone()) else {
-        super::empty_state(ui, "dc-graphic-styles", "No document", "Open a document to see its graphic styles.");
+        super::empty_state(ui, "dc-graphic-styles", tl!("No document"), tl!("Open a document to see its graphic styles."));
         return;
     };
     let looks = look_hashes(ui.ctx(), app);
@@ -468,7 +468,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.set_min_height(120.0);
             ui.set_width(ui.available_width());
             if doc.graphic_styles.is_empty() {
-                super::empty_state(ui, "dc-graphic-styles", "No graphic styles", "Select styled art and click New Graphic Style.");
+                super::empty_state(ui, "dc-graphic-styles", tl!("No graphic styles"), tl!("Select styled art and click New Graphic Style."));
                 return;
             }
             match view.row() {
@@ -490,14 +490,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.set_min_width(200.0);
             library_panel::library_menu::<GraphicStyleLibraries>(app, ui);
         });
-        if widgets::icon_button_enabled(ui, "link-2-off", "Break Link to Graphic Style", false, linked, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link to Graphic Style"), false, linked, 24.0).clicked() {
             app.run("graphicStyle.breakLink", json!({})).ok();
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-new-item", "New Graphic Style (Alt-click to name it)", false, has_sel, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Graphic Style (Alt-click to name it)"), false, has_sel, 24.0).clicked() {
             new_style(app, alt_held(ui));
         }
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Graphic Style (Alt-click: without asking)", false, !sel.is_empty(), 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Graphic Style (Alt-click: without asking)"), false, !sel.is_empty(), 24.0)
+            .clicked()
+        {
             delete(app, &sel, alt_held(ui));
         }
     });
@@ -548,10 +550,10 @@ fn delete(app: &mut VectorcraftApp, names: &[String], now: bool) {
         return;
     }
     let message = match names {
-        [n] => format!("Delete the graphic style \u{201c}{n}\u{201d}?"),
-        _ => format!("Delete these {} graphic styles?", names.len()),
+        [n] => crate::i18n::fmt(tl!("Delete the graphic style “{name}”?"), &[("name", n)]),
+        _ => crate::i18n::tn(names.len() as u64, "Delete this {n} graphic style?", "Delete these {n} graphic styles?"),
     };
-    crate::dialogs::confirm::ask(app, &message, "Objects using them keep their look but are no longer linked.", "graphicStyle.delete", params);
+    crate::dialogs::confirm::ask(app, &message, tl!("Objects using them keep their look but are no longer linked."), "graphicStyle.delete", params);
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -559,15 +561,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel = doc.as_ref().map(|d| selected(ui.ctx(), d)).unwrap_or_default();
     let one = (sel.len() == 1).then(|| sel[0].clone());
     let has_doc = doc.is_some();
-    if menu_item(ui, "New Graphic Style…", selection_len(app) > 0, false) {
+    if menu_item(ui, tl!("New Graphic Style…"), selection_len(app) > 0, false) {
         new_style(app, true);
     }
-    if menu_item(ui, "Duplicate Graphic Style", one.is_some(), false)
+    if menu_item(ui, tl!("Duplicate Graphic Style"), one.is_some(), false)
         && let Some(n) = &one
     {
         app.run("graphicStyle.duplicate", json!({ "name": n })).ok();
     }
-    if menu_item(ui, "Merge Graphic Styles", sel.len() > 1, false)
+    if menu_item(ui, tl!("Merge Graphic Styles"), sel.len() > 1, false)
         && let Some(d) = &doc
     {
         // Merged in panel order.
@@ -575,48 +577,48 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         names.sort_by_key(|n| d.graphic_style_index(n));
         run(app, "ui.mergeGraphicStyles", json!({ "names": names }));
     }
-    if menu_item(ui, "Delete Graphic Style", !sel.is_empty(), false) {
+    if menu_item(ui, tl!("Delete Graphic Style"), !sel.is_empty(), false) {
         delete(app, &sel, false);
     }
-    if menu_item(ui, "Break Link to Graphic Style", app.session.selection_graphic_style().is_some(), false) {
+    if menu_item(ui, tl!("Break Link to Graphic Style"), app.session.selection_graphic_style().is_some(), false) {
         app.run("graphicStyle.breakLink", json!({})).ok();
     }
     ui.separator();
-    if menu_item(ui, "Select All Unused", has_doc, false)
+    if menu_item(ui, tl!("Select All Unused"), has_doc, false)
         && let Ok(r) = app.run("graphicStyle.unused", json!({}))
     {
         let names: Vec<String> = serde_json::from_value(r["names"].clone()).unwrap_or_default();
         set_pstate(ui.ctx(), "gs-sel", names);
     }
-    if menu_item(ui, "Sort by Name", has_doc, false) {
+    if menu_item(ui, tl!("Sort by Name"), has_doc, false) {
         app.run("graphicStyle.sortByName", json!({})).ok();
     }
     ui.separator();
     let view: View = pstate(ui.ctx(), "gs-view");
     for (v, label) in View::ALL {
-        if menu_item(ui, label, true, view == v) {
+        if menu_item(ui, tl!(label), true, view == v) {
             set_pstate(ui.ctx(), "gs-view", v);
         }
     }
     ui.separator();
     let preview: Preview = pstate(ui.ctx(), "gs-preview");
-    for (p, label) in [(Preview::Square, "Use Square for Previews"), (Preview::Text, "Use Text for Previews")] {
+    for (p, label) in [(Preview::Square, tl!("Use Square for Previews")), (Preview::Text, tl!("Use Text for Previews"))] {
         if menu_item(ui, label, true, preview == p) {
             set_pstate(ui.ctx(), "gs-preview", p);
         }
     }
     let over = app.session.prefs.override_char_color;
-    if menu_item(ui, "Override Character Color", true, over) {
+    if menu_item(ui, tl!("Override Character Color"), true, over) {
         app.run("graphicStyle.setOptions", json!({ "overrideCharColor": !over })).ok();
     }
     ui.separator();
-    if menu_item(ui, "Graphic Style Options…", one.is_some(), false)
+    if menu_item(ui, tl!("Graphic Style Options…"), one.is_some(), false)
         && let Some(n) = &one
     {
         app.run("ui.graphicStyleOptions", json!({ "name": n })).ok();
     }
-    ui.menu_button("Open Graphic Style Library", |ui| library_panel::library_menu::<GraphicStyleLibraries>(app, ui));
-    if menu_item(ui, "Save Graphic Style Library…", has_doc, false) {
+    ui.menu_button(tl!("Open Graphic Style Library"), |ui| library_panel::library_menu::<GraphicStyleLibraries>(app, ui));
+    if menu_item(ui, tl!("Save Graphic Style Library…"), has_doc, false) {
         run(app, "ui.saveGraphicStyleLibrary", json!({ "names": sel }));
     }
 }
@@ -667,19 +669,19 @@ fn shown_library(lib: Arc<StyleLibrary>) -> LibStyles {
 /// transparency.
 fn describe(g: &GraphicStyle) -> String {
     let ap = &g.appearance;
-    let count = |fill: bool, one: &str| match ap.items.iter().filter(|i| i.is_fill() == fill).count() {
+    let count = |fill: bool| match ap.items.iter().filter(|i| i.is_fill() == fill).count() {
         0 => None,
-        1 => Some(format!("1 {one}")),
-        n => Some(format!("{n} {one}s")),
+        n if fill => Some(crate::i18n::tn(n as u64, "{n} fill", "{n} fills")),
+        n => Some(crate::i18n::tn(n as u64, "{n} stroke", "{n} strokes")),
     };
-    let mut parts: Vec<String> = [count(true, "fill"), count(false, "stroke")].into_iter().flatten().collect();
+    let mut parts: Vec<String> = [count(true), count(false)].into_iter().flatten().collect();
     let effects = ap.effects.iter().filter_map(|e| vectorcraft_render::effects::effect_info(&e.id));
     parts.extend(effects.map(|e| e.label.trim_end_matches('…').to_string()));
     if g.opacity < 1.0 {
-        parts.push(format!("{}% opacity", (g.opacity * 100.0).round()));
+        parts.push(crate::i18n::fmt(tl!("{percent}% opacity"), &[("percent", &format!("{}", (g.opacity * 100.0).round()))]));
     }
     if g.blend != BlendMode::Normal {
-        parts.push(g.blend.label().to_string());
+        parts.push(tl!(g.blend.label()).to_string());
     }
     parts.join(", ")
 }
@@ -728,13 +730,13 @@ impl LibraryKind for GraphicStyleLibraries {
     }
     fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.separator();
-        if menu_item(ui, "Other Library…", true, false)
+        if menu_item(ui, tl!("Other Library…"), true, false)
             && let Err(e) = other_library(app, None)
         {
             app.status(e);
         }
         let doc = app.session.active().map(|st| st.doc.clone());
-        if menu_item(ui, "Save Graphic Style Library…", doc.is_some(), false) {
+        if menu_item(ui, tl!("Save Graphic Style Library…"), doc.is_some(), false) {
             let names = doc.map(|d| selected(ui.ctx(), &d)).unwrap_or_default();
             run(app, "ui.saveGraphicStyleLibrary", json!({ "names": names }));
         }

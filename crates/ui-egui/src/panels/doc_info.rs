@@ -21,7 +21,7 @@ struct Cache {
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(label).size(12.0).color(t.text_dim));
+        ui.label(egui::RichText::new(tl!(label)).size(12.0).color(t.text_dim));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Long values (paths) are cut to the panel's width; hovering shows them whole.
             ui.add(egui::Label::new(egui::RichText::new(value).size(12.0).color(t.text)).truncate());
@@ -46,7 +46,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel_only: bool = pstate(ui.ctx(), "docinfo-sel");
     let category: String = pstate(ui.ctx(), "docinfo-category");
     let Some(i) = info(app, ui.ctx(), sel_only) else {
-        widgets::dim_label(ui, "No document");
+        widgets::dim_label(ui, tl!("No document"));
         return;
     };
     egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
@@ -60,12 +60,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let rows = s["rows"].as_array().map_or(&[][..], Vec::as_slice);
             // Lists show how many they hold; the selection scope shows on the first.
             let title = match s["id"].as_str() {
-                Some("document" | "objects") => title.to_string(),
-                _ => format!("{title} ({})", rows.len()),
+                Some("document" | "objects") => tl!(title).to_string(),
+                _ => format!("{} ({})", tl!(title), rows.len()),
             };
-            widgets::subheader(ui, &if sel_only && n == 0 && category.is_empty() { format!("{title} (selection)") } else { title });
+            widgets::subheader(
+                ui,
+                &if sel_only && n == 0 && category.is_empty() { crate::i18n::fmt(tl!("{title} (selection)"), &[("title", &title)]) } else { title },
+            );
             if rows.is_empty() {
-                widgets::dim_label(ui, "None");
+                widgets::dim_label(ui, tl!("None"));
             }
             for r in rows {
                 let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
@@ -95,12 +98,12 @@ pub(crate) fn save_report(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel: bool = pstate(ui.ctx(), "docinfo-sel");
-    if menu_item(ui, "Selection Only", true, sel) {
+    if menu_item(ui, tl!("Selection Only"), true, sel) {
         set_pstate(ui.ctx(), "docinfo-sel", !sel);
     }
     ui.separator();
     let category: String = pstate(ui.ctx(), "docinfo-category");
-    if menu_item(ui, "All Categories", true, category.is_empty()) {
+    if menu_item(ui, tl!("All Categories"), true, category.is_empty()) {
         set_pstate(ui.ctx(), "docinfo-category", String::new());
     }
     let info = info(app, ui.ctx(), sel).unwrap_or_default();
@@ -111,7 +114,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.separator();
-    if menu_item(ui, "Save…", app.session.active().is_some(), false) {
+    if menu_item(ui, tl!("Save…"), app.session.active().is_some(), false) {
         crate::menus::invoke(app, "docInfo.save", json!({ "selectionOnly": sel }));
     }
 }

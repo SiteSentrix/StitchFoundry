@@ -23,7 +23,7 @@ use crate::widgets;
 pub const KIND: &str = "swatchOptions";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Swatch Options".into(), body, confirm, preview: true, min_width: 340.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Swatch Options").into(), body, confirm, preview: true, min_width: 340.0, ..DialogSpec::FORM };
 
 /// Colour modes, in menu order, with their `mode` field / `swatch.edit` ids.
 const MODES: [(Mode, &str); 6] =
@@ -117,7 +117,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     };
     ui.add_space(8.0);
     let mut pv = d.bool("preview");
-    let pv_changed = widgets::check(ui, "Preview", pv, true);
+    let pv_changed = widgets::check(ui, tl!("Preview"), pv, true);
     if pv_changed {
         pv = !pv;
         d.fields.insert("preview".into(), json!(pv));
@@ -151,7 +151,7 @@ pub(super) fn label(ui: &mut egui::Ui, s: &str) {
 
 /// The Swatch Name row of the grid. Returns true when it changed.
 pub(super) fn name_row(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    label(ui, "Swatch Name:");
+    label(ui, tl!("Swatch Name:"));
     let changed = form::text(ui, d, "name", 190.0);
     ui.end_row();
     changed
@@ -163,7 +163,7 @@ pub(super) fn editor(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let mut changed = false;
     grid(ui, |ui| {
         changed |= name_row(ui, d);
-        label(ui, "Color Type:");
+        label(ui, tl!("Color Type:"));
         let spot = d.bool("spot");
         if let Some(i) = widgets::dropdown(ui, "swatch-type", TYPES[usize::from(spot)], &TYPES, 200.0) {
             d.fields.insert("spot".into(), json!(i == 1));
@@ -173,12 +173,12 @@ pub(super) fn editor(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.label("");
         // Spot colours are always global.
         let global = spot || d.bool("global");
-        if widgets::check(ui, "Global", global, !spot) {
+        if widgets::check(ui, tl!("Global"), global, !spot) {
             d.fields.insert("global".into(), json!(!global));
             changed = true;
         }
         ui.end_row();
-        label(ui, "Color Mode:");
+        label(ui, tl!("Color Mode:"));
         let labels = MODES.map(|m| m.0.label());
         if let Some(i) = widgets::dropdown(ui, "swatch-mode", mode_of(d).label(), &labels, 200.0) {
             let m = MODES[i].0;

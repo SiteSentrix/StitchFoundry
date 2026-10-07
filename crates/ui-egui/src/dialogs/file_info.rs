@@ -22,7 +22,7 @@ const PENDING: &str = "__keyword";
 const FIELD: f32 = 320.0;
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "File Info".into(), body, confirm, min_width: 500.0, max_width: Some(500.0), ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("File Info").into(), body, confirm, min_width: 500.0, max_width: Some(500.0), ..DialogSpec::FORM };
 
 /// Open File Info on the active document's.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -62,19 +62,19 @@ fn add_keywords(d: &mut Dialog) {
 
 fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
-    for (key, label) in [("title", "Document Title:"), ("author", "Author:"), ("authorTitle", "Author Title:")] {
+    for (key, label) in [("title", tl!("Document Title:")), ("author", tl!("Author:")), ("authorTitle", tl!("Author Title:"))] {
         widgets::label_row(ui, label, LABEL, |ui| {
             form::text(ui, d, key, FIELD);
         });
         ui.add_space(4.0);
     }
-    top_row(ui, "Description:", |ui| {
+    top_row(ui, tl!("Description:"), |ui| {
         form::text_area(ui, d, "description", FIELD, 3);
     });
     ui.add_space(4.0);
-    widgets::label_row(ui, "Rating:", LABEL, |ui| rating(ui, d));
+    widgets::label_row(ui, tl!("Rating:"), LABEL, |ui| rating(ui, d));
     ui.add_space(4.0);
-    top_row(ui, "Keywords:", |ui| {
+    top_row(ui, tl!("Keywords:"), |ui| {
         ui.vertical(|ui| {
             ui.set_max_width(FIELD + 12.0);
             chips(ui, d);
@@ -87,28 +87,28 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     r.request_focus();
                 }
                 let typed = !d.str(PENDING).trim().is_empty();
-                if (widgets::flat_button(ui, "Add", 56.0).clicked() || enter) && typed {
+                if (widgets::flat_button(ui, tl!("Add"), 56.0).clicked() || enter) && typed {
                     add_keywords(d);
                 }
             });
-            form::caption(ui, "Separate several keywords with commas.");
+            form::caption(ui, tl!("Separate several keywords with commas."));
         });
     });
     ui.add_space(10.0);
-    widgets::subheader(ui, "Copyright");
+    widgets::subheader(ui, tl!("Copyright"));
     let statuses: Vec<(&str, &str)> = CopyrightStatus::ALL.iter().map(|c| (c.id(), c.label())).collect();
-    choice(ui, d, "copyrightStatus", "Copyright Status:", &statuses);
+    choice(ui, d, "copyrightStatus", tl!("Copyright Status:"), &statuses);
     ui.add_space(4.0);
-    top_row(ui, "Copyright Notice:", |ui| {
+    top_row(ui, tl!("Copyright Notice:"), |ui| {
         form::text_area(ui, d, "copyrightNotice", FIELD, 2);
     });
     ui.add_space(4.0);
-    widgets::label_row(ui, "Copyright Info URL:", LABEL, |ui| {
+    widgets::label_row(ui, tl!("Copyright Info URL:"), LABEL, |ui| {
         form::text(ui, d, "copyrightUrl", FIELD);
     });
     ui.add_space(10.0);
-    widgets::subheader(ui, "Dates");
-    for (key, label) in [("created", "Created:"), ("modified", "Modified:")] {
+    widgets::subheader(ui, tl!("Dates"));
+    for (key, label) in [("created", tl!("Created:")), ("modified", tl!("Modified:"))] {
         // ISO 8601 UTC from the engine, shown as "2026-10-05 14:03:00 UTC".
         let shown = d
             .fields
@@ -127,7 +127,7 @@ fn top_row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal_top(|ui| {
         let (r, _) = ui.allocate_exact_size(egui::vec2(LABEL, 24.0), egui::Sense::hover());
-        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
+        ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, tl!(label), egui::FontId::proportional(12.5), t.text);
         add(ui);
     });
 }
@@ -148,7 +148,7 @@ fn rating(ui: &mut egui::Ui, d: &mut Dialog) {
             t.text_dim
         };
         icons::paint(ui, "star", rect.shrink(2.0), tint);
-        let resp = resp.on_hover_text(if i == 1 { "1 star".to_string() } else { format!("{i} stars") });
+        let resp = resp.on_hover_text(crate::i18n::tn(u64::from(i), "{n} star", "{n} stars"));
         if resp.clicked() {
             d.fields.insert("rating".into(), json!(if i == current { 0 } else { i }));
         }
@@ -173,7 +173,9 @@ fn chips(ui: &mut egui::Ui, d: &mut Dialog) {
             ui.painter().rect_stroke(rect, egui::CornerRadius::same(11), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
             ui.painter().galley(egui::pos2(rect.left() + 9.0, rect.center().y - galley.size().y / 2.0), galley, t.text_strong);
             let x = egui::Rect::from_center_size(egui::pos2(rect.right() - 11.0, rect.center().y), egui::vec2(14.0, 14.0));
-            let resp = ui.interact(x, ui.id().with(("keyword-remove", i)), egui::Sense::click()).on_hover_text(format!("Remove “{k}”"));
+            let resp = ui
+                .interact(x, ui.id().with(("keyword-remove", i)), egui::Sense::click())
+                .on_hover_text(crate::i18n::fmt(tl!("Remove “{keyword}”"), &[("keyword", k.as_str())]));
             icons::paint(ui, "x", x.shrink(2.0), if resp.hovered() { t.text_strong } else { t.text_dim });
             if resp.clicked() {
                 remove = Some(i);

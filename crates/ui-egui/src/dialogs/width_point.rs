@@ -19,7 +19,7 @@ use crate::{VectorcraftApp, widgets};
 pub const KIND: &str = "widthPoint";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Width Point Edit".into(), body, confirm, discard: Some("Delete"), min_width: 300.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Width Point Edit").into(), body, confirm, discard: Some("Delete"), min_width: 300.0, ..DialogSpec::FORM };
 
 /// Width point `index` of `id`: its place and side widths (points).
 fn point(app: &VectorcraftApp, id: u64, index: usize) -> Option<(f64, f64, f64)> {
@@ -44,12 +44,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (s1, s2, linked) = (d.f64("side1", 0.0), d.f64("side2", 0.0), d.bool("linked"));
     let mut sides = None;
     grid(ui, |ui| {
-        label(ui, "Side 1:");
+        label(ui, tl!("Side 1:"));
         ui.horizontal(|ui| {
             if let Some(v) = widgets::num_field(ui, "wp-side1", Some(s1), unit, 90.0) {
                 sides = Some((v, if linked { v } else { s2 }));
             }
-            if widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, "Keep both sides the same width", linked, 22.0).clicked() {
+            if widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tl!("Keep both sides the same width"), linked, 22.0).clicked() {
                 d.fields.insert("linked".into(), json!(!linked));
                 if !linked {
                     sides = Some((s1, s1));
@@ -57,12 +57,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
         ui.end_row();
-        label(ui, "Side 2:");
+        label(ui, tl!("Side 2:"));
         if let Some(v) = widgets::num_field(ui, "wp-side2", Some(s2), unit, 90.0) {
             sides = Some((if linked { v } else { s1 }, v));
         }
         ui.end_row();
-        label(ui, "Total Width:");
+        label(ui, tl!("Total Width:"));
         if let Some(v) = widgets::num_field(ui, "wp-total", Some(s1 + s2), unit, 90.0) {
             // Both sides in proportion (equal halves from nothing).
             let k = if s1 + s2 > 1e-9 { v / (s1 + s2) } else { 0.0 };
@@ -76,7 +76,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     ui.add_space(4.0);
     ui.allocate_ui(vec2(ui.available_width(), 22.0), |ui| {
-        if widgets::check(ui, "Adjust Adjoining Width Points", d.bool("adjustAdjoining"), true) {
+        if widgets::check(ui, tl!("Adjust Adjoining Width Points"), d.bool("adjustAdjoining"), true) {
             d.fields.insert("adjustAdjoining".into(), json!(!d.bool("adjustAdjoining")));
         }
     });

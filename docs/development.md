@@ -58,6 +58,48 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
 
+## Localisation
+
+Strings in code stay English and are the default lookup keys. `crates/ui-egui/src/i18n` maps them to display
+text at render time from one catalog per language (`i18n/<code>.tsv`; the format is documented in the header of
+`zh-hant.tsv`). Command ids, menu paths used for logic, `ui.menu.list`, the control channel, the CLI and MCP
+always use the English ids and labels, so agents and scripts never see translated text.
+
+Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, complete, in the vocabulary used
+in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Czech (`cs`, every menu
+label) and Japanese (`ja`, the main menus so far). Untranslated text falls back to English until its rows are
+added. Simplified Chinese locales
+(`zh-CN`, `zh-SG`, `zh-Hans`) fall back to English until a `zh-hans` catalog is registered: the resolver already
+tells the two scripts apart, so the Traditional catalog is never shown to a Simplified locale.
+
+- `tl!("…")` translates a literal into the language the UI is drawn in; `i18n::t(s)` is the same for a
+  `&str`. `tr(lang, s)` takes the language; `tr_ctx` when one English word needs different translations;
+  `tr_id(lang, command_id, label)` for menu items (keyed by command id, English label as the fallback);
+  `tn` / `trn(lang, n, one, other)` for plurals; `fmt` fills `{name}` placeholders, which a translation may
+  reorder.
+- The shared widgets (`widgets::check`, `dropdown`, `menu_item`, the buttons, `label_row`, tooltips of
+  `icon_button`…), the menus, the dock, the toolbar, the dialog frame and `panels::empty_state` translate
+  the text they are given, so a panel mostly needs its literals wrapped in `tl!` to be covered by the tests.
+- The language is VectorCraft › Language (the `app.language` UI command, `{lang: auto|<code>}`) or Edit ›
+  Preferences › User Interface › Language; both set the `interfaceLanguage` preference (`auto` or a language
+  code; `auto` follows the system locale: `VECTORCRAFT_LOCALE`, then `LC_ALL`/`LC_MESSAGES`/`LANG`/`LANGUAGE`,
+  the macOS preferred languages, the Windows user locale). The web build has no locale detection yet and
+  starts in English. The Preferences dialog previews the chosen language before OK.
+- To add a language: add `<code>.tsv` and one row in `i18n::LANGUAGES` (code, native name, catalog, plural
+  rule). The Language menu, the dropdown, locale matching and the catalog tests (well-formed, no duplicates,
+  placeholders and ellipses agree, command ids exist, every row of a partial catalog is a string the UI
+  shows, the UI fonts have every glyph, no Simplified characters in `zh-hant`) pick it up. Set `complete_menus`
+  once every menu string and `tl!` literal is translated; `i18n::tests` then enforce it
+  (`VECTORCRAFT_I18N_DUMP=strings.txt cargo test -p vectorcraft-ui-egui dump_source_strings` lists them).
+- Translations are clean-room: written from the meaning of the English text in ordinary vocabulary, never
+  from another product's localisation resources. Product and technology names stay in Latin letters.
+- Not translated on purpose: status-bar messages and errors (agents and tests read them), names that are
+  user data (layers, swatches, fonts, documents), the tab title's colour mode. Not done yet: locale-aware
+  number and date formats, right-to-left layout, locale detection on the web. Chinese and Japanese UI text
+  is drawn with craft-fonts' BIZ UDPGothic when the build embeds it (see Fonts above), else with an installed
+  system font; the glyph test checks Latin-script catalogs always and the CJK ones only with craft-fonts.
+  A Traditional Chinese UI font is still to be added to craft-fonts for the web build.
+
 ## Vendor names gate
 
 `cargo xtask brands` (part of `cargo xtask ci`) fails when user-visible text names another vendor's products or company: string literals in Rust sources (command labels and params docs, menus, panels, MCP tool definitions), `Cargo.toml` descriptions and packaging files. Comments and test code are not checked. Say "the reference app" or name the feature itself. A line that must keep an old name, such as an alias that files or preferences from earlier versions still use, carries a `brand-ok` comment.

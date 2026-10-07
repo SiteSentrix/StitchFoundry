@@ -15,7 +15,7 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, io, widgets};
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Export As".into(), body, confirm, ok: Some("Export…"), min_width: 380.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Export As").into(), body, confirm, ok: Some("Export…"), min_width: 380.0, ..DialogSpec::FORM };
 
 /// The formats Export As writes (the native format is Save's).
 static FORMATS: LazyLock<Vec<&'static Format>> = LazyLock::new(|| fileio::FORMATS.iter().filter(|f| f.write && f.id != "vectorcraft").collect());
@@ -63,7 +63,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let Some(f) = chosen(d) else { return false };
     let missing = unavailable(d);
     egui::Grid::new("export-as").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        ui.label(egui::RichText::new("Format:").color(t.text_dim));
+        ui.label(egui::RichText::new(tl!("Format:")).color(t.text_dim));
         let shown = missing.map_or(f.label, |(label, _)| label);
         if let Some(g) = widgets::dropdown_with(ui, "export-as-format", shown, &LABELS, 160.0, |i| i < FORMATS.len()).and_then(|i| FORMATS.get(i)) {
             d.fields.insert("format".into(), json!(g.id));
@@ -75,13 +75,13 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::caption(ui, hint);
     }
     ui.add_space(10.0);
-    form::check(ui, d, "useArtboards", "Use Artboards");
+    form::check(ui, d, "useArtboards", tl!("Use Artboards"));
     let use_artboards = d.bool("useArtboards");
     ui.add_enabled_ui(use_artboards, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(22.0);
             let mut all = d.bool("all");
-            if ui.radio_value(&mut all, true, "All").changed() | ui.radio_value(&mut all, false, "Range:").changed() {
+            if ui.radio_value(&mut all, true, tl!("All")).changed() | ui.radio_value(&mut all, false, tl!("Range:")).changed() {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
@@ -93,9 +93,9 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(8.0);
     let ext = f.extensions[0];
     let hint = match (use_artboards, f.id) {
-        (true, "pdf") => "One page per artboard.".to_string(),
-        (true, _) => format!("One file per artboard: <name>-<artboard>.{ext}"),
-        (false, _) => "The bounds of the visible art.".to_string(),
+        (true, "pdf") => tl!("One page per artboard.").to_string(),
+        (true, _) => crate::i18n::fmt(tl!("One file per artboard: <name>-<artboard>.{ext}"), &[("ext", ext)]),
+        (false, _) => tl!("The bounds of the visible art.").to_string(),
     };
     ui.label(egui::RichText::new(hint).color(t.text_dim).size(11.5));
     false

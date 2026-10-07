@@ -19,7 +19,7 @@ use crate::state::Dialog;
 /// The dialog kind of New Swatch.
 pub const KIND: &str = "newSwatch";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "New Swatch".into(), body, confirm, min_width: 340.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("New Swatch").into(), body, confirm, min_width: 340.0, ..DialogSpec::FORM };
 
 /// Open New Swatch for the active paint: a spot colour with `spot`, going into colour `group`.
 pub fn open(app: &mut VectorcraftApp, spot: bool, group: Option<&str>) -> Result<Value, String> {

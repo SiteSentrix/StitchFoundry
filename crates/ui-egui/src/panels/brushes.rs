@@ -63,7 +63,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
         if list.is_empty() {
-            super::empty_state(ui, "paintbrush", "No brushes", "Select art and use New Brush to make one.");
+            super::empty_state(ui, "paintbrush", tl!("No brushes"), tl!("Select art and use New Brush to make one."));
             return;
         }
         for (ty, _) in KINDS {
@@ -131,18 +131,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let target = sel_brush.clone().or(current.clone());
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     widgets::bottom_bar(ui, |ui| {
-        widgets::icon_button_enabled(ui, "library", "Brush Libraries (on the roadmap)", false, false, 24.0);
-        if widgets::icon_button_enabled(ui, "dc-remove-brush", "Remove Brush Stroke", false, has_brush, 24.0).clicked() {
+        widgets::icon_button_enabled(ui, "library", tl!("Brush Libraries (on the roadmap)"), false, false, 24.0);
+        if widgets::icon_button_enabled(ui, "dc-remove-brush", tl!("Remove Brush Stroke"), false, has_brush, 24.0).clicked() {
             app.run("brush.remove", json!({})).ok();
         }
-        if widgets::icon_button_enabled(ui, "dc-options", "Expand Brush Strokes", false, has_brush, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-options", tl!("Expand Brush Strokes"), false, has_brush, 24.0).clicked() {
             app.run("object.expandBrush", json!({})).ok();
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-new-item", "New Art Brush from Selection", false, has_sel, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Art Brush from Selection"), false, has_sel, 24.0).clicked() {
             app.run("brush.new", json!({"type": "art"})).ok();
         }
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Brush", false, target.is_some(), 24.0).clicked()
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Brush"), false, target.is_some(), 24.0).clicked()
             && let Some(n) = &target
         {
             app.run("brush.delete", json!({"name": n})).ok();
@@ -155,39 +155,41 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (_, current) = brushes(app);
     let target = sel.clone().or(current);
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
-    for (label, ty) in [("New Calligraphic Brush", "calligraphic"), ("New Bristle Brush", "bristle")] {
+    for (label, ty) in [(tl!("New Calligraphic Brush"), "calligraphic"), (tl!("New Bristle Brush"), "bristle")] {
         if menu_item(ui, label, true, false) {
             app.run("brush.new", json!({"type": ty})).ok();
         }
     }
-    for (label, ty) in
-        [("New Art Brush from Selection", "art"), ("New Scatter Brush from Selection", "scatter"), ("New Pattern Brush from Selection", "pattern")]
-    {
+    for (label, ty) in [
+        (tl!("New Art Brush from Selection"), "art"),
+        (tl!("New Scatter Brush from Selection"), "scatter"),
+        (tl!("New Pattern Brush from Selection"), "pattern"),
+    ] {
         if menu_item(ui, label, has_sel, false) {
             app.run("brush.new", json!({"type": ty})).ok();
         }
     }
-    if menu_item(ui, "Duplicate Brush", target.is_some(), false)
+    if menu_item(ui, tl!("Duplicate Brush"), target.is_some(), false)
         && let Some(n) = &target
     {
         app.run("brush.duplicate", json!({"name": n})).ok();
     }
-    if menu_item(ui, "Delete Brush", target.is_some(), false)
+    if menu_item(ui, tl!("Delete Brush"), target.is_some(), false)
         && let Some(n) = &target
     {
         app.run("brush.delete", json!({"name": n})).ok();
     }
-    if menu_item(ui, "Remove Brush Stroke", sel.is_some(), false) {
+    if menu_item(ui, tl!("Remove Brush Stroke"), sel.is_some(), false) {
         app.run("brush.remove", json!({})).ok();
     }
-    if menu_item(ui, "Expand Brush Strokes", sel.is_some(), false) {
+    if menu_item(ui, tl!("Expand Brush Strokes"), sel.is_some(), false) {
         app.run("object.expandBrush", json!({})).ok();
     }
     ui.separator();
     let mut hidden: Vec<String> = pstate(ui.ctx(), "br-hidden");
     for (ty, label) in KINDS {
         let shown = !hidden.iter().any(|h| h == ty);
-        if menu_item(ui, &format!("Show {label} Brushes"), true, shown) {
+        if menu_item(ui, &crate::i18n::fmt(tl!("Show {kind} Brushes"), &[("kind", tl!(label))]), true, shown) {
             if shown {
                 hidden.push(ty.to_string());
             } else {
@@ -198,10 +200,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     let list: bool = pstate(ui.ctx(), "br-list");
-    if menu_item(ui, "Thumbnail View", true, !list) {
+    if menu_item(ui, tl!("Thumbnail View"), true, !list) {
         set_pstate(ui.ctx(), "br-list", false);
     }
-    if menu_item(ui, "List View", true, list) {
+    if menu_item(ui, tl!("List View"), true, list) {
         set_pstate(ui.ctx(), "br-list", true);
     }
 }

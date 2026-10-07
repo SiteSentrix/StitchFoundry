@@ -20,7 +20,7 @@ use crate::{VectorcraftApp, widgets};
 pub const KIND: &str = "swatchConflict";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Swatch Conflict".into(), body, confirm, min_width: 380.0, max_width: Some(440.0), ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Swatch Conflict").into(), body, confirm, min_width: 380.0, max_width: Some(440.0), ..DialogSpec::FORM };
 
 /// The choices: (`choice` value, label, what it does).
 const CHOICES: [(&str, &str, &str); 2] = [
@@ -67,33 +67,33 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let i = index(d);
     let (count, Some(c)) = (conflicts(d).len(), conflicts(d).get(i).cloned()) else { return true };
     let name = c["name"].as_str().unwrap_or_default();
-    ui.label(format!("This document already has a swatch named \u{201c}{name}\u{201d} with another color."));
+    ui.label(crate::i18n::fmt(tl!("This document already has a swatch named “{name}” with another color."), &[("name", name)]));
     if count > 1 {
-        label(ui, &format!("Conflict {} of {count}", i + 1));
+        label(ui, &crate::i18n::fmt(tl!("Conflict {n} of {count}"), &[("n", &(i + 1).to_string()), ("count", &count.to_string())]));
     }
     ui.add_space(10.0);
     ui.horizontal(|ui| {
-        chip(ui, c["document"].as_str(), "Document");
+        chip(ui, c["document"].as_str(), tl!("Document"));
         ui.add_space(12.0);
-        chip(ui, c["clipboard"].as_str(), "Pasted");
+        chip(ui, c["clipboard"].as_str(), tl!("Pasted"));
     });
     ui.add_space(10.0);
     let choice = d.str("choice");
     grid(ui, |ui| {
         for (k, (value, text, help)) in CHOICES.into_iter().enumerate() {
-            label(ui, if k == 0 { "Options:" } else { "" });
+            label(ui, if k == 0 { tl!("Options:") } else { "" });
             ui.vertical(|ui| {
-                if widgets::radio(ui, text, choice == value, true) {
+                if widgets::radio(ui, tl!(text), choice == value, true) {
                     d.fields.insert("choice".into(), json!(value));
                 }
-                ui.indent(text, |ui| label(ui, help));
+                ui.indent(text, |ui| label(ui, tl!(help)));
             });
             ui.end_row();
         }
     });
     ui.add_space(6.0);
     let all = d.bool("applyToAll");
-    if widgets::check(ui, "Apply to All", all, count > 1) {
+    if widgets::check(ui, tl!("Apply to All"), all, count > 1) {
         d.fields.insert("applyToAll".into(), json!(!all));
     }
     false

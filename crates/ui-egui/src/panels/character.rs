@@ -230,14 +230,14 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
-        ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(label).size(11.5).strong().color(t.text))).on_hover_text(tip);
+        ui.add_sized(vec2(22.0, 24.0), egui::Label::new(egui::RichText::new(label).size(11.5).strong().color(t.text))).on_hover_text(tl!(tip));
         add(ui);
     });
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((s, _)) = text_style(app) else {
-        super::empty_state(ui, "type", "No text selected", "Select a text object to edit its character attributes.");
+        super::empty_state(ui, "type", tl!("No text selected"), tl!("Select a text object to edit its character attributes."));
         return;
     };
     let w = ui.available_width();
@@ -253,47 +253,47 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
     egui::Grid::new("ch-grid").num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
-        cell(ui, "T", "Font Size", |ui| {
+        cell(ui, "T", tl!("Font Size"), |ui| {
             if let Some(v) = widgets::spin_field(ui, "ch-size", Some(s.size), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
                 style(app, json!({"size": v}));
             }
         });
-        cell(ui, "A↕", "Leading", |ui| {
+        cell(ui, "A↕", tl!("Leading"), |ui| {
             let presets: Vec<f64> = SIZE_PRESETS.iter().map(|v| v * 1.2).collect();
             if let Some(v) = widgets::spin_field(ui, "ch-lead", Some(s.effective_leading()), unit, fw, 1.0, 0.1, &presets) {
                 style(app, json!({"leading": v}));
             }
         });
         ui.end_row();
-        cell(ui, "VA", "Kerning (0 = Auto)", |ui| {
+        cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
             if let Some(v) = widgets::spin_plain(ui, "ch-kern", s.kerning.unwrap_or(0.0), "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
                 format(app, if v == 0.0 { json!({"kerning": "auto"}) } else { json!({"kerning": v}) });
             }
         });
-        cell(ui, "VA↔", "Tracking", |ui| {
+        cell(ui, "VA↔", tl!("Tracking"), |ui| {
             if let Some(v) = widgets::spin_plain(ui, "ch-track", s.tracking, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
                 style(app, json!({"tracking": v}));
             }
         });
         ui.end_row();
         if !pstate::<bool>(ui.ctx(), "ch-hide-options") {
-            cell(ui, "IT", "Vertical Scale %", |ui| {
+            cell(ui, "IT", tl!("Vertical Scale %"), |ui| {
                 if let Some(v) = widgets::spin_plain(ui, "ch-vs", s.v_scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
                     format(app, json!({"vScale": v}));
                 }
             });
-            cell(ui, "T↔", "Horizontal Scale %", |ui| {
+            cell(ui, "T↔", tl!("Horizontal Scale %"), |ui| {
                 if let Some(v) = widgets::spin_plain(ui, "ch-hs", s.h_scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
                     format(app, json!({"hScale": v}));
                 }
             });
             ui.end_row();
-            cell(ui, "Aª", "Baseline Shift", |ui| {
+            cell(ui, "Aª", tl!("Baseline Shift"), |ui| {
                 if let Some(v) = widgets::spin_field(ui, "ch-bs", Some(s.baseline_shift), unit, fw, 1.0, -1296.0, &[]) {
                     format(app, json!({"baselineShift": v}));
                 }
             });
-            cell(ui, "⟲T", "Character Rotation", |ui| {
+            cell(ui, "⟲T", tl!("Character Rotation"), |ui| {
                 if let Some(v) = widgets::spin_plain(ui, "ch-rot", s.rotation, "°", 1, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS) {
                     format(app, json!({"rotation": v}));
                 }
@@ -307,12 +307,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         for (kind, tip, key, on, enabled) in [
-            (Glyph::AllCaps, "All Caps", "allCaps", s.all_caps, true),
-            (Glyph::SmallCaps, "Small Caps (on the roadmap)", "", false, false),
-            (Glyph::Super, "Superscript (on the roadmap)", "", false, false),
-            (Glyph::Sub, "Subscript (on the roadmap)", "", false, false),
-            (Glyph::Underline, "Underline", "underline", s.underline, true),
-            (Glyph::Strike, "Strikethrough", "strikethrough", s.strikethrough, true),
+            (Glyph::AllCaps, tl!("All Caps"), "allCaps", s.all_caps, true),
+            (Glyph::SmallCaps, tl!("Small Caps (on the roadmap)"), "", false, false),
+            (Glyph::Super, tl!("Superscript (on the roadmap)"), "", false, false),
+            (Glyph::Sub, tl!("Subscript (on the roadmap)"), "", false, false),
+            (Glyph::Underline, tl!("Underline"), "underline", s.underline, true),
+            (Glyph::Strike, tl!("Strikethrough"), "strikethrough", s.strikethrough, true),
         ] {
             if style_toggle(ui, kind, tip, on, enabled) && !key.is_empty() {
                 format(app, json!({key: !on}));
@@ -371,7 +371,7 @@ fn style_toggle(ui: &mut Ui, g: Glyph, tip: &str, on: bool, enabled: bool) -> bo
             p.line_segment([c + vec2(-6.0, 1.0), c + vec2(6.0, 1.0)], egui::Stroke::new(1.2, col));
         }
     }
-    let resp = resp.on_hover_text(tip);
+    let resp = resp.on_hover_text(tl!(tip));
     enabled && resp.clicked()
 }
 
@@ -379,36 +379,36 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = text_style(app);
     let has = st.is_some();
     let hidden: bool = pstate(ui.ctx(), "ch-hide-options");
-    if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
+    if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "ch-hide-options", !hidden);
     }
     ui.separator();
     let s = st.map(|x| x.0);
     for (label, key, on) in [
-        ("All Caps", "allCaps", s.as_ref().is_some_and(|s| s.all_caps)),
-        ("Underline", "underline", s.as_ref().is_some_and(|s| s.underline)),
-        ("Strikethrough", "strikethrough", s.as_ref().is_some_and(|s| s.strikethrough)),
+        (tl!("All Caps"), "allCaps", s.as_ref().is_some_and(|s| s.all_caps)),
+        (tl!("Underline"), "underline", s.as_ref().is_some_and(|s| s.underline)),
+        (tl!("Strikethrough"), "strikethrough", s.as_ref().is_some_and(|s| s.strikethrough)),
     ] {
         if menu_item(ui, label, has, on) {
             format(app, json!({key: !on}));
         }
     }
     for l in ["Small Caps", "Superscript", "Subscript"] {
-        menu_item(ui, l, false, false);
+        menu_item(ui, tl!(l), false, false);
     }
     ui.separator();
     for l in ["Standard Vertical Roman Alignment", "Tate-chu-yoko", "Fractional Widths", "System Layout", "No Break"] {
-        menu_item(ui, l, false, l == "Fractional Widths");
+        menu_item(ui, tl!(l), false, l == "Fractional Widths");
     }
     ui.separator();
     // The installed fonts are always listed; this picks up fonts installed since the app started.
     #[cfg(not(target_arch = "wasm32"))]
-    if menu_item(ui, "Refresh Font List", true, false)
+    if menu_item(ui, tl!("Refresh Font List"), true, false)
         && let Ok(r) = app.run("text.rescanFonts", json!({}))
     {
         app.status(format!("{} font families available", r["families"]));
     }
-    if menu_item(ui, "Reset Panel", has, false) {
+    if menu_item(ui, tl!("Reset Panel"), has, false) {
         style(app, json!({"tracking": 0, "leading": "auto"}));
         format(
             app,

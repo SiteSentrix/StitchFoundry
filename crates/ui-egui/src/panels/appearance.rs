@@ -157,11 +157,11 @@ pub fn effect_label(id: &str) -> String {
 /// "Opacity: Default" or "Opacity: 50% Multiply".
 pub fn opacity_text(opacity: f32, blend: BlendMode) -> String {
     if (opacity - 1.0).abs() < 1e-4 && blend == BlendMode::Normal {
-        "Default".into()
+        tl!("Default").into()
     } else if blend == BlendMode::Normal {
         format!("{:.0}%", opacity * 100.0)
     } else {
-        format!("{:.0}% {}", opacity * 100.0, blend.label())
+        format!("{:.0}% {}", opacity * 100.0, tl!(blend.label()))
     }
 }
 
@@ -188,7 +188,7 @@ fn eye(ui: &mut Ui, r: Rect, id: impl std::hash::Hash + std::fmt::Debug, on: boo
         t.icon
     };
     icons::paint(ui, if on { "eye" } else { "eye-off" }, er, col);
-    enabled && resp.on_hover_text("Click to toggle visibility").clicked()
+    enabled && resp.on_hover_text(tl!("Click to toggle visibility")).clicked()
 }
 
 fn chevron(ui: &mut Ui, r: Rect, id: impl std::hash::Hash + std::fmt::Debug, open: bool) -> bool {
@@ -241,7 +241,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
         let mixed = mixed_appearances(app);
-        let label = if mixed { "Mixed Appearances" } else { object_label(app) };
+        let label = if mixed { tl!("Mixed Appearances") } else { tl!(object_label(app)) };
         // A linked object names its graphic style ("Rectangle: Sunshine"), and so does new art
         // with nothing selected.
         let style = match app.session.selection_graphic_style() {
@@ -277,7 +277,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The object row's thumbnail drags this object's appearance onto art ([`PanelDrag::Appearance`];
 /// a chip of its fill follows the pointer).
 fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
-    let resp = ui.interact(th, ui.id().with("ap-thumb"), Sense::drag()).on_hover_text("Drag onto art to apply this appearance");
+    let resp = ui.interact(th, ui.id().with("ap-thumb"), Sense::drag()).on_hover_text(tl!("Drag onto art to apply this appearance"));
     widgets::drag_source(ui, &resp, || PanelDrag::Appearance(id));
     if resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
@@ -320,7 +320,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fx = |ui: &mut Ui, e: &Effect, id: (Option<usize>, usize)| {
         let (r, _) = row(ui, false);
         eye(ui, r, ("ap-def-fx", id), e.visible, false);
-        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &effect_label(&e.id), false);
+        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), tl!(&effect_label(&e.id)), false);
         icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     };
     for (i, it) in ap.items.iter().enumerate().rev() {
@@ -328,8 +328,8 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
         eye(ui, r, ("ap-def-eye", i), it.visible(), false);
         let lx = r.left() + EYE_W + 24.0;
         if it.is_fill() {
-            text(ui, pos2(lx, r.center().y), "Fill:", false);
-        } else if link(ui, pos2(lx, r.center().y), ("ap-def-link", i), "Stroke:") {
+            text(ui, pos2(lx, r.center().y), tl!("Fill:"), false);
+        } else if link(ui, pos2(lx, r.center().y), ("ap-def-link", i), tl!("Stroke:")) {
             app.ui.open_panel = Some("stroke".into());
         }
         chip(ui, Rect::from_min_size(pos2(r.left() + EYE_W + 76.0, r.center().y - 9.0), vec2(18.0, 18.0)), it.paint());
@@ -347,7 +347,12 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let (r, _) = row(ui, false);
     eye(ui, r, "ap-def-op", true, false);
-    text(ui, r.left_center() + vec2(EYE_W + 24.0, 0.0), &format!("Opacity: {}", opacity_text(opacity, blend)), false);
+    text(
+        ui,
+        r.left_center() + vec2(EYE_W + 24.0, 0.0),
+        &crate::i18n::fmt(tl!("Opacity: {value}"), &[("value", &opacity_text(opacity, blend))]),
+        false,
+    );
 }
 
 /// A stack row being dragged.
@@ -409,12 +414,12 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         }
         let lx = r.left() + EYE_W + 24.0;
         if is_stroke {
-            if link(ui, pos2(lx, r.center().y), ("ap-link", i), "Stroke:") {
+            if link(ui, pos2(lx, r.center().y), ("ap-link", i), tl!("Stroke:")) {
                 select_row(app, ui.ctx(), Sel::Item(i));
                 app.ui.open_panel = Some("stroke".into());
             }
         } else {
-            text(ui, pos2(lx, r.center().y), "Fill:", false);
+            text(ui, pos2(lx, r.center().y), tl!("Fill:"), false);
         }
         // Swatch with a swatches popup that sets this item's paint; Shift-click opens the Color
         // panel's mixer on this row instead.
@@ -422,7 +427,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         chip(ui, cr, paint);
         let cresp = ui
             .interact(cr.expand(2.0), ui.id().with(("ap-chip", i)), Sense::click())
-            .on_hover_text("Click to choose a swatch, Shift-click to mix a colour");
+            .on_hover_text(tl!("Click to choose a swatch, Shift-click to mix a colour"));
         let mixer = cresp.clicked() && ui.input(|inp| inp.modifiers.shift);
         if mixer {
             select_row(app, ui.ctx(), Sel::Item(i));
@@ -597,7 +602,7 @@ fn drop_command(n: &Node, rows: &[(Slot, Rect)], what: Dragged, p: egui::Pos2, c
 fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, sel: Sel) -> (Rect, egui::Response) {
     let (r, resp) = row(ui, sel == Sel::Contents);
     eye(ui, r, "ap-contents-eye", true, false);
-    text(ui, pos2(r.left() + EYE_W + 24.0, r.center().y), label, false);
+    text(ui, pos2(r.left() + EYE_W + 24.0, r.center().y), tl!(label), false);
     let characters = matches!(n.kind, vectorcraft_doc::NodeKind::Text(_));
     if characters {
         for (k, stroke) in [false, true].into_iter().enumerate() {
@@ -605,7 +610,8 @@ fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, se
             chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p));
         }
     }
-    let resp = resp.on_hover_text(if characters { "Double-click to edit the characters' paint" } else { "Double-click to target the contents" });
+    let resp =
+        resp.on_hover_text(if characters { tl!("Double-click to edit the characters' paint") } else { tl!("Double-click to target the contents") });
     if resp.clicked() || resp.double_clicked() {
         select_row(app, ui.ctx(), Sel::Contents);
     }
@@ -623,7 +629,7 @@ fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, se
 fn stroke_notes(ui: &Ui, r: Rect, st: &vectorcraft_doc::StrokeLayer) {
     let t = Tokens::get(ui.ctx());
     let painter = ui.painter_at(r);
-    let dashed = st.dash.as_ref().is_some_and(|d| d.is_dashed()).then_some("Dashed");
+    let dashed = st.dash.as_ref().is_some_and(|d| d.is_dashed()).then_some(tl!("Dashed"));
     let notes: Vec<&str> = st.brush.as_deref().into_iter().chain(dashed).collect();
     let mut x = r.left();
     if !notes.is_empty() {
@@ -646,7 +652,7 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opaci
     let (r, resp) = row(ui, false);
     eye(ui, r, ("ap-op-eye", item), true, false);
     let lx = r.left() + EYE_W + 24.0 + if item.is_some() { 12.0 } else { 0.0 };
-    let clicked = link(ui, pos2(lx, r.center().y), ("ap-op-link", item), "Opacity:") || resp.clicked();
+    let clicked = link(ui, pos2(lx, r.center().y), ("ap-op-link", item), tl!("Opacity:")) || resp.clicked();
     text(ui, pos2(lx + 56.0, r.center().y), &opacity_text(opacity, blend), false);
     egui::Popup::menu(&resp)
         .open_memory(clicked.then_some(egui::SetOpenCommand::Toggle))
@@ -680,7 +686,7 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
         set_pstate(ui.ctx(), &open_key, !open);
     }
     let lx = r.left() + EYE_W + 24.0;
-    if link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_label(&e.id)) {
+    if link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), tl!(&effect_label(&e.id))) {
         select_row(app, ui.ctx(), this);
         if has_options(&e.id) {
             app.run("effect.dialog", json!({"effect": e.id, "index": k, "item": item})).ok();
@@ -722,12 +728,12 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin { left: (EYE_W + 12.0) as i8, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
         if params.is_empty() {
-            widgets::dim_label(ui, "No options");
+            widgets::dim_label(ui, tl!("No options"));
         }
         for (key, v) in &params {
             ui.horizontal(|ui| {
                 let label = humanize(key);
-                ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(label).size(11.5).color(t.text)).truncate());
+                ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(tl!(&label)).size(11.5).color(t.text)).truncate());
                 if let Some(cur) = widgets::blend_param(key, v) {
                     if let Some(m) = widgets::blend_param_dropdown(ui, ("fx-blend", item, k, key.as_str()), cur) {
                         change = Some((key.clone(), m));
@@ -815,26 +821,26 @@ fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, index: usize) {
 fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, node: Option<&Node>, sel: Sel) {
     let has = node.is_some();
     widgets::bottom_bar(ui, |ui| {
-        if widgets::icon_button_enabled(ui, "dc-new-stroke", "Add New Stroke", false, has, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-new-stroke", tl!("Add New Stroke"), false, has, 24.0).clicked() {
             app.run("appearance.addStroke", json!({})).ok();
         }
-        if widgets::icon_button_enabled(ui, "dc-new-fill", "Add New Fill", false, has, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-new-fill", tl!("Add New Fill"), false, has, 24.0).clicked() {
             app.run("appearance.addFill", json!({})).ok();
         }
-        let fx = widgets::icon_button_enabled(ui, "dc-fx", "Add New Effect", false, has, 24.0);
+        let fx = widgets::icon_button_enabled(ui, "dc-fx", tl!("Add New Effect"), false, has, 24.0);
         egui::Popup::menu(&fx).show(|ui| {
             fx_menu(app, ui);
         });
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
         let basic = node.is_none_or(|n| n.appearance.is_basic());
-        if widgets::icon_button_enabled(ui, "dc-clear", "Clear Appearance", false, has, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-clear", tl!("Clear Appearance"), false, has, 24.0).clicked() {
             app.run("appearance.clear", json!({})).ok();
         }
         let can = has && sel.editable();
-        if widgets::icon_button_enabled(ui, "dc-new-item", "Duplicate Selected Item", false, can, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("Duplicate Selected Item"), false, can, 24.0).clicked() {
             duplicate_selected(app, ui, node, sel);
         }
-        if widgets::icon_button_enabled(ui, "trash-2", "Delete Selected Item", false, can, 24.0).clicked() {
+        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Selected Item"), false, can, 24.0).clicked() {
             delete_selected(app, ui, node, sel);
         }
         let _ = basic;
@@ -876,10 +882,10 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     for (g, items) in groups {
-        ui.menu_button(g, |ui| {
+        ui.menu_button(tl!(&g), |ui| {
             crate::widgets::menu_scroll(ui, |ui| {
                 for (id, label) in items {
-                    if ui.button(format!("{label}…")).clicked() {
+                    if ui.button(format!("{}…", tl!(&label))).clicked() {
                         app.run("effect.dialog", json!({"effect": id})).ok();
                         ui.close();
                     }
@@ -893,41 +899,43 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
     let has = node.is_some();
     let sel = current_sel(app, ui.ctx(), node.as_ref());
-    if menu_item(ui, "Add New Fill", has, false) {
+    if menu_item(ui, tl!("Add New Fill"), has, false) {
         app.run("appearance.addFill", json!({})).ok();
     }
-    if menu_item(ui, "Add New Stroke", has, false) {
+    if menu_item(ui, tl!("Add New Stroke"), has, false) {
         app.run("appearance.addStroke", json!({})).ok();
     }
     ui.separator();
-    if menu_item(ui, "Duplicate Item", has && sel.editable(), false) {
+    if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
         duplicate_selected(app, ui, node.as_ref(), sel);
     }
-    if menu_item(ui, "Remove Item", has && sel.editable(), false) {
+    if menu_item(ui, tl!("Remove Item"), has && sel.editable(), false) {
         delete_selected(app, ui, node.as_ref(), sel);
     }
-    if menu_item(ui, "Clear Appearance", has, false) {
+    if menu_item(ui, tl!("Clear Appearance"), has, false) {
         app.run("appearance.clear", json!({})).ok();
     }
-    if menu_item(ui, "Reduce to Basic Appearance", has && !node.as_ref().is_some_and(|n| n.appearance.is_basic()), false) {
+    if menu_item(ui, tl!("Reduce to Basic Appearance"), has && !node.as_ref().is_some_and(|n| n.appearance.is_basic()), false) {
         app.run("appearance.reduceToBasic", json!({})).ok();
     }
     ui.separator();
     let basic = app.session.prefs.new_art_basic;
-    if menu_item(ui, "New Art Has Basic Appearance", true, basic) {
+    if menu_item(ui, tl!("New Art Has Basic Appearance"), true, basic) {
         app.run("appearance.setNewArtBasic", json!({ "on": !basic })).ok();
     }
     let hide: bool = pstate(ui.ctx(), "ap-hide-thumb");
-    if menu_item(ui, if hide { "Show Thumbnail" } else { "Hide Thumbnail" }, true, false) {
+    if menu_item(ui, if hide { tl!("Show Thumbnail") } else { tl!("Hide Thumbnail") }, true, false) {
         set_pstate(ui.ctx(), "ap-hide-thumb", !hide);
     }
     ui.separator();
     let style = app.session.selection_graphic_style().map(|(g, _)| g.name.clone());
-    let redefine = style.as_ref().map_or_else(|| "Redefine Graphic Style".into(), |n| format!("Redefine Graphic Style \u{201c}{n}\u{201d}"));
+    let redefine = style
+        .as_ref()
+        .map_or_else(|| tl!("Redefine Graphic Style").into(), |n| crate::i18n::fmt(tl!("Redefine Graphic Style “{name}”"), &[("name", n)]));
     if menu_item(ui, &redefine, style.is_some(), false) {
         app.run("graphicStyle.redefine", json!({})).ok();
     }
-    if menu_item(ui, "Show All Hidden Attributes", node.as_ref().is_some_and(|n| n.appearance.has_hidden()), false) {
+    if menu_item(ui, tl!("Show All Hidden Attributes"), node.as_ref().is_some_and(|n| n.appearance.has_hidden()), false) {
         app.run("appearance.showAllHidden", json!({})).ok();
     }
 }

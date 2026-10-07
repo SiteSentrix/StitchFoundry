@@ -9,7 +9,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new("About VectorCraft")
+    egui::Window::new(tl!("About VectorCraft"))
         .collapsible(false)
         .resizable(false)
         .open(&mut open)
@@ -22,16 +22,19 @@ pub(super) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 crate::brand::paint_mark(ui, r);
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new("VectorCraft").font(theme::semibold(22.0)));
-                    ui.label(format!("Version {} — open-source vector illustration in pure Rust.", env!("CARGO_PKG_VERSION")));
+                    ui.label(crate::i18n::fmt(
+                        tl!("Version {version} — open-source vector illustration in pure Rust."),
+                        &[("version", env!("CARGO_PKG_VERSION"))],
+                    ));
                 });
             });
             ui.add_space(12.0);
             crate::community::links(app, ui);
             ui.add_space(12.0);
             ui.label(
-                egui::RichText::new(
-                    "Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft.",
-                )
+                egui::RichText::new(tl!(
+                    "Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono (OFL). Icons: Lucide (ISC) + VectorCraft."
+                ))
                 .size(11.0),
             );
         });

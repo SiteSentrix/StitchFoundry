@@ -18,8 +18,15 @@ use crate::{VectorcraftApp, io, widgets};
 
 pub(super) const KIND: &str = "epsOptions";
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "EPS Options".into(), body, confirm, ok: Some("Export"), min_width: 420.0, max_width: Some(460.0), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("EPS Options").into(),
+    body,
+    confirm,
+    ok: Some("Export"),
+    min_width: 420.0,
+    max_width: Some(460.0),
+    ..DialogSpec::FORM
+};
 
 /// Fields that are not remembered between exports (they belong to one export).
 const PER_EXPORT: [&str; 7] = ["format", "path", "useArtboards", "range", "artboard", "artboards", "selectedOnly"];
@@ -62,15 +69,15 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    widgets::subheader(ui, "Preview");
+    widgets::subheader(ui, tl!("Preview"));
     let previews: Vec<(&str, &str)> = Preview::ALL.iter().map(|p| (p.id(), p.label())).collect();
-    choice(ui, d, "previewFormat", "Format:", &previews);
+    choice(ui, d, "previewFormat", tl!("Format:"), &previews);
     // Only the colour preview can keep transparency.
     let color = Preview::from_id(&d.str("previewFormat")) == Some(Preview::TiffColor);
     let transparent = d.bool("transparentPreview");
     ui.horizontal(|ui| {
         ui.add_space(LABEL + 8.0);
-        for (label, on) in [("Transparent", true), ("Opaque", false)] {
+        for (label, on) in [(tl!("Transparent"), true), (tl!("Opaque"), false)] {
             if widgets::radio(ui, label, color && transparent == on, color) {
                 d.fields.insert("transparentPreview".into(), json!(on));
             }
@@ -78,22 +85,22 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     ui.add_space(8.0);
-    widgets::subheader(ui, "Transparency");
+    widgets::subheader(ui, tl!("Transparency"));
     let overprints: Vec<(&str, &str)> = Overprint::ALL.iter().map(|o| (o.id(), o.label())).collect();
-    choice(ui, d, "overprints", "Overprints:", &overprints);
+    choice(ui, d, "overprints", tl!("Overprints:"), &overprints);
     let presets = app.session.flattener_presets();
     let names: Vec<(&str, &str)> = presets.iter().map(|p| (p.name.as_str(), p.name.as_str())).collect();
-    choice(ui, d, "flattenerPreset", "Preset:", &names);
+    choice(ui, d, "flattenerPreset", tl!("Preset:"), &names);
     ui.add_space(8.0);
-    widgets::subheader(ui, "Fonts");
+    widgets::subheader(ui, tl!("Fonts"));
     // Type is written as glyph outlines, which need no fonts.
-    widgets::check(ui, "Embed Fonts (for other applications)", true, false);
+    widgets::check(ui, tl!("Embed Fonts (for other applications)"), true, false);
     ui.add_space(8.0);
-    widgets::subheader(ui, "Options");
-    check(ui, d, "includeLinkedFiles", "Include Linked Files");
-    check(ui, d, "thumbnails", "Include Document Thumbnails");
-    check(ui, d, "cmykPostScript", "Include CMYK PostScript in RGB Files");
-    check(ui, d, "compatibleGradients", "Compatible Gradient and Gradient Mesh Printing");
+    widgets::subheader(ui, tl!("Options"));
+    check(ui, d, "includeLinkedFiles", tl!("Include Linked Files"));
+    check(ui, d, "thumbnails", tl!("Include Document Thumbnails"));
+    check(ui, d, "cmykPostScript", tl!("Include CMYK PostScript in RGB Files"));
+    check(ui, d, "compatibleGradients", tl!("Compatible Gradient and Gradient Mesh Printing"));
     ui.add_space(4.0);
     let levels: Vec<(&str, &str)> = Level::ALL.iter().map(|l| (l.id(), l.label())).collect();
     // A level set as a number (`level: 2`) reads as its id.
@@ -101,14 +108,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let id = n.to_string();
         d.fields.insert("level".into(), json!(id));
     }
-    choice(ui, d, "level", "PostScript:", &levels);
+    choice(ui, d, "level", tl!("PostScript:"), &levels);
     ui.add_space(8.0);
     super::form::caption(
         ui,
         if Level::from_id(&d.str("level")) == Some(Level::Two) || d.bool("compatibleGradients") {
-            "Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour."
+            tl!("Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.")
         } else {
-            "Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth."
+            tl!("Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.")
         },
     );
     false

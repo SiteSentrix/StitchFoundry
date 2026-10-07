@@ -74,7 +74,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // The thumbnail being edited is outlined (object normally, the mask while editing it).
             let (obj_w, mask_w) = if editing.is_some() { (0.5, 1.5) } else { (1.5, 1.0) };
             ui.painter().rect_stroke(r, 0.0, Stroke::new(obj_w, t.border), StrokeKind::Outside);
-            if editing.is_some() && oresp.on_hover_text("Stop editing the opacity mask").clicked() {
+            if editing.is_some() && oresp.on_hover_text(tl!("Stop editing the opacity mask")).clicked() {
                 app.run("transparency.stopEditingOpacityMask", json!({})).ok();
             }
             if let Some(n) = &n {
@@ -101,7 +101,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         egui::Rect::from_center_size(lr.center(), vec2(12.0, 12.0)),
                         t.icon,
                     );
-                    if lresp.on_hover_text(if m.linked { "Unlink the mask" } else { "Link the mask" }).clicked() {
+                    if lresp.on_hover_text(if m.linked { tl!("Unlink the mask") } else { tl!("Link the mask") }).clicked() {
                         app.run("transparency.setOpacityMask", json!({"linked": !m.linked})).ok();
                     }
                     let (mr, _) = ui.allocate_exact_size(vec2(50.0, 50.0), Sense::hover());
@@ -123,7 +123,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         ui.painter().line_segment([mr.right_top(), mr.left_bottom()], red);
                     }
                     let (shift, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.alt));
-                    let tip = "Click to edit the mask; Alt-click to view only the mask; Shift-click to disable or enable it";
+                    let tip = tl!("Click to edit the mask; Alt-click to view only the mask; Shift-click to disable or enable it");
                     if mresp.on_hover_text(tip).clicked() {
                         if shift {
                             app.run(if m.disabled { "transparency.enableOpacityMask" } else { "transparency.disableOpacityMask" }, json!({})).ok();
@@ -142,25 +142,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         ui.vertical(|ui| {
-            let label = if mask.is_some() { "Release" } else { "Make Mask" };
+            let label = if mask.is_some() { tl!("Release") } else { tl!("Make Mask") };
             let enabled = mask.is_some() || (has && editing.is_none());
             let r = ui.add_enabled_ui(enabled, |ui| widgets::flat_button(ui, label, 96.0)).inner;
-            if r.on_disabled_hover_text("Select the art (and, on top of it, the mask object)").clicked() {
+            if r.on_disabled_hover_text(tl!("Select the art (and, on top of it, the mask object)")).clicked() {
                 let id = if mask.is_some() { "transparency.releaseOpacityMask" } else { "transparency.makeOpacityMask" };
                 app.run(id, json!({})).ok();
             }
             let (clip, invert) = mask.map(|m| (m.clip, m.invert)).unwrap_or((new_clip, new_invert));
-            if widgets::check(ui, "Clip", clip, mask.is_some()) {
+            if widgets::check(ui, tl!("Clip"), clip, mask.is_some()) {
                 app.run("transparency.setOpacityMask", json!({"clip": !clip})).ok();
             }
-            if widgets::check(ui, "Invert Mask", invert, mask.is_some()) {
+            if widgets::check(ui, tl!("Invert Mask"), invert, mask.is_some()) {
                 app.run("transparency.setOpacityMask", json!({"invert": !invert})).ok();
             }
         });
     });
     if !pstate::<bool>(ui.ctx(), "tr-hide-options") {
         widgets::divider(ui);
-        if widgets::check(ui, "Isolate Blending", isolate, has) {
+        if widgets::check(ui, tl!("Isolate Blending"), isolate, has) {
             app.run("transparency.set", json!({"isolate": !isolate})).ok();
         }
         // Neutral (and mixed) show a dash; a click moves on → neutral → off → on (mixed → on).
@@ -169,26 +169,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(Knockout::Off) => Some(false),
             _ => None,
         };
-        if widgets::check3(ui, "Knockout Group", shown, has) {
+        if widgets::check3(ui, tl!("Knockout Group"), shown, has) {
             let next = info.knockout.map_or(Knockout::On, Knockout::cycle);
             app.run("transparency.set", json!({"knockout": next.label()})).ok();
         }
-        if widgets::check(ui, "Opacity & Mask Define Knockout Shape", knockout_shape, has) {
+        if widgets::check(ui, tl!("Opacity & Mask Define Knockout Shape"), knockout_shape, has) {
             app.run("transparency.set", json!({"knockoutShape": !knockout_shape})).ok();
         }
     }
     if !has {
-        widgets::dim_label(ui, if selection_len(app) == 0 { "No Selection" } else { "" });
+        widgets::dim_label(ui, if selection_len(app) == 0 { tl!("No Selection") } else { "" });
     }
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hide_thumbs: bool = pstate(ui.ctx(), "tr-hide-thumbs");
     let hide_opts: bool = pstate(ui.ctx(), "tr-hide-options");
-    if menu_item(ui, if hide_thumbs { "Show Thumbnails" } else { "Hide Thumbnails" }, true, false) {
+    if menu_item(ui, if hide_thumbs { tl!("Show Thumbnails") } else { tl!("Hide Thumbnails") }, true, false) {
         set_pstate(ui.ctx(), "tr-hide-thumbs", !hide_thumbs);
     }
-    if menu_item(ui, if hide_opts { "Show Options" } else { "Hide Options" }, true, false) {
+    if menu_item(ui, if hide_opts { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "tr-hide-options", !hide_opts);
     }
     ui.separator();
@@ -197,25 +197,25 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (_, n) = state(app, ui.ctx());
     let mask = n.as_ref().and_then(|n| n.mask.as_deref());
     for (label, id, enabled) in mask_items(mask, n.is_some() && !editing) {
-        if menu_item(ui, label, enabled, false) {
+        if menu_item(ui, tl!(label), enabled, false) {
             app.run(id, json!({})).ok();
         }
     }
     ui.separator();
     let (clip, invert) = app.session.new_mask_defaults();
-    if menu_item(ui, "New Opacity Masks Are Clipping", true, clip) {
+    if menu_item(ui, tl!("New Opacity Masks Are Clipping"), true, clip) {
         app.run("transparency.toggleNewMasksClipping", json!({})).ok();
     }
-    if menu_item(ui, "New Opacity Masks Are Inverted", true, invert) {
+    if menu_item(ui, tl!("New Opacity Masks Are Inverted"), true, invert) {
         app.run("transparency.toggleNewMasksInverted", json!({})).ok();
     }
     ui.separator();
     let page = app.session.active().map(|d| (d.doc.page_isolate, d.doc.page_knockout));
     let (isolate, knockout) = page.unwrap_or_default();
-    if menu_item(ui, "Page Isolated Blending", page.is_some(), isolate) {
+    if menu_item(ui, tl!("Page Isolated Blending"), page.is_some(), isolate) {
         app.run("transparency.togglePageIsolatedBlending", json!({})).ok();
     }
-    if menu_item(ui, "Page Knockout Group", page.is_some(), knockout) {
+    if menu_item(ui, tl!("Page Knockout Group"), page.is_some(), knockout) {
         app.run("transparency.togglePageKnockoutGroup", json!({})).ok();
     }
 }
@@ -225,24 +225,24 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn mask_items(mask: Option<&OpacityMask>, can_make: bool) -> [(&'static str, &'static str, bool); 4] {
     match mask {
         Some(m) => [
-            ("Make Opacity Mask", "transparency.makeOpacityMask", false),
-            ("Release Opacity Mask", "transparency.releaseOpacityMask", true),
+            (tl!("Make Opacity Mask"), "transparency.makeOpacityMask", false),
+            (tl!("Release Opacity Mask"), "transparency.releaseOpacityMask", true),
             if m.disabled {
-                ("Enable Opacity Mask", "transparency.enableOpacityMask", true)
+                (tl!("Enable Opacity Mask"), "transparency.enableOpacityMask", true)
             } else {
-                ("Disable Opacity Mask", "transparency.disableOpacityMask", true)
+                (tl!("Disable Opacity Mask"), "transparency.disableOpacityMask", true)
             },
             if m.linked {
-                ("Unlink Opacity Mask", "transparency.unlinkOpacityMask", true)
+                (tl!("Unlink Opacity Mask"), "transparency.unlinkOpacityMask", true)
             } else {
-                ("Link Opacity Mask", "transparency.linkOpacityMask", true)
+                (tl!("Link Opacity Mask"), "transparency.linkOpacityMask", true)
             },
         ],
         None => [
-            ("Make Opacity Mask", "transparency.makeOpacityMask", can_make),
-            ("Release Opacity Mask", "", false),
-            ("Disable Opacity Mask", "", false),
-            ("Unlink Opacity Mask", "", false),
+            (tl!("Make Opacity Mask"), "transparency.makeOpacityMask", can_make),
+            (tl!("Release Opacity Mask"), "", false),
+            (tl!("Disable Opacity Mask"), "", false),
+            (tl!("Unlink Opacity Mask"), "", false),
         ],
     }
 }

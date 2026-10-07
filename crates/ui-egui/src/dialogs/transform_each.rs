@@ -20,7 +20,7 @@ pub const KIND: &str = "transformEach";
 const CMD: &str = "object.transformEach";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Transform Each".into(), body, confirm, preview: true, min_width: 360.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Transform Each").into(), body, confirm, preview: true, min_width: 360.0, ..DialogSpec::FORM };
 
 /// The fields a fresh dialog starts with.
 pub fn fields() -> Value {
@@ -55,9 +55,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             egui::Grid::new("te-grid").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                 for (head, rows) in [
-                    ("Scale", [("scaleH", "Horizontal:", "%"), ("scaleV", "Vertical:", "%")].as_slice()),
-                    ("Move", &[("moveH", "Horizontal:", "pt"), ("moveV", "Vertical:", "pt")]),
-                    ("Rotate", &[("rotate", "Angle:", "°")]),
+                    (tl!("Scale"), [("scaleH", tl!("Horizontal:"), "%"), ("scaleV", tl!("Vertical:"), "%")].as_slice()),
+                    (tl!("Move"), &[("moveH", tl!("Horizontal:"), "pt"), ("moveV", tl!("Vertical:"), "pt")]),
+                    (tl!("Rotate"), &[("rotate", tl!("Angle:"), "°")]),
                 ] {
                     widgets::subheader(ui, head);
                     ui.end_row();
@@ -69,20 +69,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
         ui.add_space(16.0);
         ui.vertical(|ui| {
-            widgets::subheader(ui, "Options");
+            widgets::subheader(ui, tl!("Options"));
             ui.add_space(4.0);
             scale_options(app, ui, d);
-            form::check(ui, d, "reflectX", "Reflect X");
-            form::check(ui, d, "reflectY", "Reflect Y");
+            form::check(ui, d, "reflectX", tl!("Reflect X"));
+            form::check(ui, d, "reflectY", tl!("Reflect Y"));
             ui.horizontal(|ui| {
                 let cur = d.f64("reference", 4.0).clamp(0.0, 8.0) as usize;
                 if let Some(i) = widgets::reference_point(ui, cur) {
                     d.fields.insert("reference".into(), json!(i));
                 }
-                widgets::dim_label(ui, "Reference Point");
+                widgets::dim_label(ui, tl!("Reference Point"));
             });
-            form::check(ui, d, "random", "Random");
-            form::check(ui, d, "copy", "Copy");
+            form::check(ui, d, "random", tl!("Random"));
+            form::check(ui, d, "copy", tl!("Copy"));
         });
     });
     let mut p = params(d);

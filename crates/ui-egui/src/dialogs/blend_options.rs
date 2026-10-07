@@ -28,7 +28,7 @@ const LABEL_W: f32 = 82.0;
 const SPACING: [(&str, &str); 3] = [("smooth", "Smooth Color"), ("steps", "Specified Steps"), ("distance", "Specified Distance")];
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Blend Options".into(), body, confirm, preview: true, min_width: 300.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Blend Options").into(), body, confirm, preview: true, min_width: 300.0, ..DialogSpec::FORM };
 
 /// Open Blend Options on the selected blend's options (else those new blends start with).
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -63,7 +63,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let mode = d.str("spacing");
     let shown = SPACING.iter().find(|(v, _)| *v == mode).map_or(SPACING[0].1, |(_, l)| l);
     let labels = SPACING.map(|(_, l)| l);
-    widgets::label_row(ui, "Spacing:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| {
         if let Some((value, _)) = widgets::dropdown(ui, "blend-spacing", shown, &labels, 150.0).and_then(|i| SPACING.get(i)) {
             d.fields.insert("spacing".into(), json!(value));
         }
@@ -84,9 +84,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     ui.add_space(6.0);
-    widgets::label_row(ui, "Orientation:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Orientation:"), LABEL_W, |ui| {
         let path = d.str("orientation") == "path";
-        for (value, along, tip) in [("page", false, "Align to Page"), ("path", true, "Align to Path")] {
+        for (value, along, tip) in [("page", false, tl!("Align to Page")), ("path", true, tl!("Align to Path"))] {
             if orientation_button(ui, along, path == along, tip) {
                 d.fields.insert("orientation".into(), json!(value));
             }

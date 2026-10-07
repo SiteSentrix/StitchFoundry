@@ -12,7 +12,7 @@ use crate::{VectorcraftApp, io};
 pub(crate) const KIND: &str = "txtOptions";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| "Text Export Options".into(), body, confirm, ok: Some("Export"), min_width: 340.0, ..DialogSpec::FORM };
+    DialogSpec { heading: |_| tl!("Text Export Options").into(), body, confirm, ok: Some("Export"), min_width: 340.0, ..DialogSpec::FORM };
 
 const ENCODINGS: [&str; 2] = ["utf8", "utf16"];
 const ENCODING_LABELS: [&str; 2] = ["UTF-8", "UTF-16 (Unicode)"];
@@ -31,16 +31,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).color(t.text_dim));
     egui::Grid::new("text-export").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        label(ui, "Encoding:");
+        label(ui, tl!("Encoding:"));
         choice(ui, d, "encoding", &ENCODINGS, &ENCODING_LABELS);
         ui.end_row();
-        label(ui, "Line Endings:");
+        label(ui, tl!("Line Endings:"));
         choice(ui, d, "lineEndings", &LINE_ENDINGS, &LINE_ENDING_LABELS);
         ui.end_row();
     });
     ui.add_space(8.0);
     let selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
-    ui.add_enabled_ui(selected, |ui| form::check(ui, d, "selectionOnly", "Selection Only"));
+    ui.add_enabled_ui(selected, |ui| form::check(ui, d, "selectionOnly", tl!("Selection Only")));
     false
 }
 

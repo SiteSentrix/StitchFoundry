@@ -16,7 +16,7 @@ use crate::{VectorcraftApp, widgets};
 pub const KIND: &str = "place";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| "Place".into(),
+    heading: |_| tl!("Place").into(),
     body,
     confirm: crate::place::confirm,
     ok: Some("Place"),
@@ -36,7 +36,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let files: Vec<Value> = d.fields.get("files").and_then(Value::as_array).cloned().unwrap_or_default();
     let info = d.fields.get("__info").cloned().unwrap_or_default();
-    widgets::subheader(ui, if files.len() == 1 { "File" } else { "Files" });
+    widgets::subheader(ui, if files.len() == 1 { tl!("File") } else { tl!("Files") });
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().max_height(180.0).auto_shrink([false, true]).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -63,7 +63,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     });
     if files.len() > 1 {
         ui.add_space(4.0);
-        widgets::dim_label(ui, "Click to place each file at 100%, or drag to size it; arrow keys switch files, Esc skips one.");
+        widgets::dim_label(ui, tl!("Click to place each file at 100%, or drag to size it; arrow keys switch files, Esc skips one."));
     }
     ui.add_space(10.0);
     // The options row.
@@ -72,11 +72,11 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         for (key, label, tip) in OPTIONS {
             let on = d.bool(key);
             let enabled = key != "replace" || d.bool("__replace");
-            let resp = ui.scope(|ui| widgets::check(ui, label, on && enabled, enabled));
+            let resp = ui.scope(|ui| widgets::check(ui, tl!(label), on && enabled, enabled));
             if resp.inner {
                 d.fields.insert(key.into(), json!(!on));
             }
-            resp.response.on_hover_text(tip);
+            resp.response.on_hover_text(tl!(tip));
         }
     });
     false

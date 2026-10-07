@@ -22,7 +22,7 @@ use crate::{VectorcraftApp, io, widgets};
 pub(super) const KIND: &str = "importPdf";
 
 pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |d| if d.str("mode") == "place" { "Place PDF" } else { "Import PDF" }.into(), body, confirm, ..DialogSpec::FORM };
+    DialogSpec { heading: |d| if d.str("mode") == "place" { tl!("Place PDF") } else { tl!("Import PDF") }.into(), body, confirm, ..DialogSpec::FORM };
 
 /// The longest side of the page preview (pt).
 const PREVIEW: f32 = 200.0;
@@ -223,7 +223,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if d.bool("__locked") {
         let name = d.str("name");
         let file = std::path::Path::new(&name).file_name().map_or(name.clone(), |f| f.to_string_lossy().into_owned());
-        ui.label(egui::RichText::new(format!("“{file}” is protected by a password.")).color(t.text));
+        ui.label(egui::RichText::new(crate::i18n::fmt(tl!("“{file}” is protected by a password."), &[("file", &file)])).color(t.text));
         ui.add_space(8.0);
         password_row(ui, d);
         return false;
@@ -240,16 +240,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     widgets::icon_button_enabled(ui, icon, tip, false, enabled, 22.0).clicked().then_some(to)
                 };
                 let go = [
-                    nav(ui, "chevrons-left", "First Page", 1, current > 1),
-                    nav(ui, "chevron-left", "Previous Page", current.saturating_sub(1).max(1), current > 1),
+                    nav(ui, "chevrons-left", tl!("First Page"), 1, current > 1),
+                    nav(ui, "chevron-left", tl!("Previous Page"), current.saturating_sub(1).max(1), current > 1),
                 ];
                 if let Some(v) = widgets::plain_field(ui, "pdf-page", current as f64, "", 0, 40.0) {
                     current = (v.max(1.0) as usize).min(count.max(1));
                 }
-                ui.label(egui::RichText::new(format!("of {count}")).color(t.text_dim));
+                ui.label(egui::RichText::new(crate::i18n::fmt(tl!("of {count}"), &[("count", &count.to_string())])).color(t.text_dim));
                 let go2 = [
-                    nav(ui, "chevron-right", "Next Page", (current + 1).min(count), current < count),
-                    nav(ui, "chevrons-right", "Last Page", count, current < count),
+                    nav(ui, "chevron-right", tl!("Next Page"), (current + 1).min(count), current < count),
+                    nav(ui, "chevrons-right", tl!("Last Page"), count, current < count),
                 ];
                 if let Some(to) = go.into_iter().chain(go2).flatten().next() {
                     current = to;
@@ -258,7 +258,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
         ui.add_space(14.0);
         ui.vertical(|ui| {
-            widgets::label_row(ui, "Crop To", LABEL_WIDTH, |ui| {
+            widgets::label_row(ui, tl!("Crop To"), LABEL_WIDTH, |ui| {
                 if let Some(i) = widgets::dropdown(ui, "pdf-crop", crop(d).label(), CropTo::LABELS, 130.0)
                     && let Some(id) = CropTo::IDS.get(i)
                 {
@@ -267,20 +267,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             });
             if d.str("mode") != "place" {
                 ui.add_space(10.0);
-                ui.label(egui::RichText::new("Pages").color(t.text));
+                ui.label(egui::RichText::new(tl!("Pages")).color(t.text));
                 let all = d.bool("allPages");
-                if widgets::radio(ui, "All", all, true) {
+                if widgets::radio(ui, tl!("All"), all, true) {
                     d.fields.insert("allPages".into(), json!(true));
                 }
                 ui.horizontal(|ui| {
-                    if widgets::radio(ui, "Range:", !all, true) {
+                    if widgets::radio(ui, tl!("Range:"), !all, true) {
                         d.fields.insert("allPages".into(), json!(false));
                     }
                     if super::form::text_edit(ui, d, "range", 90.0).gained_focus() {
                         d.fields.insert("allPages".into(), json!(false));
                     }
                 });
-                widgets::dim_label(ui, "e.g. 1-3, 5");
+                widgets::dim_label(ui, tl!("e.g. 1-3, 5"));
             }
         });
     });
@@ -289,7 +289,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 fn password_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::label_row(ui, "Password", LABEL_WIDTH, |ui| {
+    widgets::label_row(ui, tl!("Password"), LABEL_WIDTH, |ui| {
         let mut s = d.str("password");
         let r = ui.add(egui::TextEdit::singleline(&mut s).password(true).desired_width(180.0));
         if r.changed() {

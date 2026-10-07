@@ -391,6 +391,9 @@ pub struct Prefs {
     pub large_tabs: bool,
     pub ui_scaling: f64,
     pub scale_cursor_with_ui: bool,
+    /// UI language: `auto` (follow the system locale) or a language code such as `en`, `zh-hant`.
+    /// The list of languages belongs to the shell (`ui-egui` i18n); an unknown code reads as `auto`.
+    pub interface_language: String,
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
@@ -592,6 +595,7 @@ impl Default for Prefs {
             large_tabs: false,
             ui_scaling: 1.0,
             scale_cursor_with_ui: false,
+            interface_language: s("auto"),
             gpu_performance: true,
             animated_zoom: true,
             history_states: 500,

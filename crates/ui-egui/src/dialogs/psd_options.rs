@@ -25,18 +25,18 @@ pub(super) fn defaults(cmyk: bool, o: &mut Map<String, Value>) {
 
 /// The grid rows of PSD's own options.
 pub(super) fn rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
-    label(ui, "Color Model:");
+    label(ui, tl!("Color Model:"));
     choice(ui, d, "colorModel", &ColorModel::ALL.map(ColorModel::id), &ColorModel::ALL.map(ColorModel::label));
     ui.end_row();
 
-    label(ui, "Options:");
+    label(ui, tl!("Options:"));
     ui.vertical(|ui| {
         let mut layers = d.bool("layers");
-        if ui.radio_value(&mut layers, false, "Flat Image").changed() | ui.radio_value(&mut layers, true, "Write Layers").changed() {
+        if ui.radio_value(&mut layers, false, tl!("Flat Image")).changed() | ui.radio_value(&mut layers, true, tl!("Write Layers")).changed() {
             d.fields.insert("layers".into(), json!(layers));
         }
         ui.add_enabled_ui(layers, |ui| {
-            for (key, text) in [("maxEditability", "Maximum Editability"), ("hiddenLayers", "Include Hidden Layers")] {
+            for (key, text) in [("maxEditability", tl!("Maximum Editability")), ("hiddenLayers", tl!("Include Hidden Layers"))] {
                 ui.horizontal(|ui| {
                     ui.add_space(22.0);
                     form::check(ui, d, key, text);
@@ -47,6 +47,6 @@ pub(super) fn rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::
     ui.end_row();
 
     ui.label("");
-    form::check(ui, d, "embedIcc", "Embed ICC Profile");
+    form::check(ui, d, "embedIcc", tl!("Embed ICC Profile"));
     ui.end_row();
 }

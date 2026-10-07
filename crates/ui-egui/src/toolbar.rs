@@ -50,8 +50,8 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
 
 fn tip(t: &ToolInfo) -> String {
     match crate::shortcut_editor::tool_shortcut(t.id) {
-        Some(s) => format!("{} ({})", t.label, s),
-        None => t.label.to_string(),
+        Some(s) => format!("{} ({})", tl!(t.label), s),
+        None => tl!(t.label).to_string(),
     }
 }
 
@@ -96,7 +96,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 egui::Rect::from_min_size(hdr.left_top() + vec2(3.0, 2.0), vec2(10.0, 10.0)),
                 if hresp.hovered() { t.text_strong } else { t.text },
             );
-            if hresp.on_hover_text("Toggle single/double column").clicked() {
+            if hresp.on_hover_text(tl!("Toggle single/double column")).clicked() {
                 app.ui.toolbar_double = !app.ui.toolbar_double;
             }
             let (grip, _) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::hover());
@@ -120,7 +120,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 while i < all.len() {
                     if let Some(cat) = all[i].0 {
                         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
-                        let label = if cols == 1 && cat.len() > 6 { format!("{}...", &cat[..4]) } else { cat.to_string() };
+                        // A long name is cut to its first four characters in the single column.
+                        let cat = tl!(cat);
+                        let label = if cols == 1 && cat.chars().count() > 6 {
+                            format!("{}...", cat.chars().take(4).collect::<String>())
+                        } else {
+                            cat.to_string()
+                        };
                         ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
                     }
                     // One row = `cols` slots (a category label always starts a new row).
@@ -246,7 +252,7 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
     for (key, label, choices) in MIRROR {
-        ui.label(egui::RichText::new(label).size(12.0).color(t.text));
+        ui.label(egui::RichText::new(tl!(label)).size(12.0).color(t.text));
         let cur = opts[key].as_str().unwrap_or_default();
         let shown = choices.iter().find(|(v, _)| *v == cur).map_or(cur, |(_, l)| *l);
         let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
@@ -272,7 +278,7 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
                 "paint.lastGradient" => widgets::gradient_chip(ui, r, &app.session.last_gradient.gradient),
                 _ => widgets::paint_chip(ui, r, &Paint::None),
             }
-            if resp.on_hover_text(tip).clicked() {
+            if resp.on_hover_text(tl!(tip)).clicked() {
                 clicked = Some(cmd);
             }
         }
@@ -289,7 +295,7 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
             vectorcraft_engine::DrawMode::Behind => 1,
             vectorcraft_engine::DrawMode::Inside => 2,
         };
-        if widgets::icon_button(ui, modes[m], &format!("{} (Shift+D)", names[m]), m != 0, 26.0).clicked() {
+        if widgets::icon_button(ui, modes[m], &format!("{} (Shift+D)", tl!(names[m])), m != 0, 26.0).clicked() {
             app.run("view.drawMode", json!({})).ok();
         }
         if widgets::icon_button(ui, "dc-screen-mode", "Change Screen Mode (F)", false, 26.0).clicked() {
@@ -341,7 +347,7 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         ui.painter().text(
                             r.left_center() + vec2(52.0, 0.0),
                             egui::Align2::LEFT_CENTER,
-                            tool.label,
+                            tl!(tool.label),
                             egui::FontId::proportional(13.0),
                             color,
                         );
@@ -376,7 +382,7 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
-    ui.label(egui::RichText::new("Expand:").size(12.0).color(t.text));
+    ui.label(egui::RichText::new(tl!("Expand:")).size(12.0).color(t.text));
     let unit = app.session.general_unit();
     if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
         app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();

@@ -44,10 +44,10 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, preview
 
 fn heading(d: &Dialog) -> String {
     match d.kind.as_str() {
-        WARP => "Warp Options",
-        MESH if d.bool("reset") => "Reset Envelope Mesh",
-        MESH => "Envelope Mesh",
-        _ => "Envelope Options",
+        WARP => tl!("Warp Options"),
+        MESH if d.bool("reset") => tl!("Reset Envelope Mesh"),
+        MESH => tl!("Envelope Mesh"),
+        _ => tl!("Envelope Options"),
     }
     .into()
 }
@@ -143,44 +143,44 @@ fn count(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
 
 fn warp_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let styles: Vec<(&str, &str)> = WARP_STYLES.iter().map(|(id, label)| (*id, label.trim_end_matches('…'))).collect();
-    form::choice(ui, d, "style", "Style:", (LABEL_W, 160.0), &styles);
+    form::choice(ui, d, "style", tl!("Style:"), (LABEL_W, 160.0), &styles);
     let horizontal = d.bool("horizontal");
     widgets::label_row(ui, "", LABEL_W, |ui| {
-        for (h, label) in [(true, "Horizontal"), (false, "Vertical")] {
+        for (h, label) in [(true, tl!("Horizontal")), (false, tl!("Vertical"))] {
             if widgets::radio(ui, label, horizontal == h, true) {
                 set(d, "horizontal", json!(h));
             }
             ui.add_space(10.0);
         }
     });
-    percent(ui, d, "bend", "Bend:");
+    percent(ui, d, "bend", tl!("Bend:"));
     ui.add_space(6.0);
-    widgets::subheader(ui, "Distortion");
-    percent(ui, d, "h", "Horizontal:");
-    percent(ui, d, "v", "Vertical:");
+    widgets::subheader(ui, tl!("Distortion"));
+    percent(ui, d, "h", tl!("Horizontal:"));
+    percent(ui, d, "v", tl!("Vertical:"));
 }
 
 fn mesh_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    count(ui, d, "rows", "Rows:");
-    count(ui, d, "cols", "Columns:");
+    count(ui, d, "rows", tl!("Rows:"));
+    count(ui, d, "cols", tl!("Columns:"));
     if d.bool("reset") {
         ui.add_space(4.0);
-        form::check(ui, d, "maintainShape", "Maintain Envelope Shape");
+        form::check(ui, d, "maintainShape", tl!("Maintain Envelope Shape"));
     }
 }
 
 fn options_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    widgets::subheader(ui, "Rasters");
+    widgets::subheader(ui, tl!("Rasters"));
     ui.horizontal(|ui| {
         ui.add_space(12.0);
-        form::check(ui, d, "antiAlias", "Anti-Alias");
+        form::check(ui, d, "antiAlias", tl!("Anti-Alias"));
     });
     ui.add_space(4.0);
-    widgets::subheader(ui, "Preserve Shape Using:");
+    widgets::subheader(ui, tl!("Preserve Shape Using:"));
     let clip = d.str("preserveShape") != "transparency";
     ui.horizontal(|ui| {
         ui.add_space(12.0);
-        for (value, label) in [("clippingMask", "Clipping Mask"), ("transparency", "Transparency")] {
+        for (value, label) in [("clippingMask", tl!("Clipping Mask")), ("transparency", tl!("Transparency"))] {
             if widgets::radio(ui, label, clip == (value == "clippingMask"), true) {
                 set(d, "preserveShape", json!(value));
             }
@@ -189,12 +189,12 @@ fn options_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
     ui.add_space(4.0);
     let rail = Tokens::get(ui.ctx()).input_border;
-    form::slider_w(ui, d, ("fidelity", "Fidelity:", LABEL_W), 0.0..=100.0, "", &move |_| rail);
+    form::slider_w(ui, d, ("fidelity", tl!("Fidelity:"), LABEL_W), 0.0..=100.0, "", &move |_| rail);
     ui.add_space(4.0);
-    form::check(ui, d, "distortAppearance", "Distort Appearance");
+    form::check(ui, d, "distortAppearance", tl!("Distort Appearance"));
     // Gradients and patterns bend only with the appearance.
     let appearance = d.bool("distortAppearance");
-    for (key, label) in [("distortLinearGradients", "Distort Linear Gradients"), ("distortPatternFills", "Distort Pattern Fills")] {
+    for (key, label) in [("distortLinearGradients", tl!("Distort Linear Gradients")), ("distortPatternFills", tl!("Distort Pattern Fills"))] {
         let on = d.bool(key);
         ui.horizontal(|ui| {
             ui.add_space(20.0);
@@ -256,7 +256,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some((editing, bar)) = bar_of(app) else { return };
     let mut run: Option<(&str, Value)> = None;
     ui.separator();
-    for (contents, icon, tip) in [(false, "dc-mesh", "Edit Envelope"), (true, "shapes", "Edit Contents")] {
+    for (contents, icon, tip) in [(false, "dc-mesh", tl!("Edit Envelope")), (true, "shapes", tl!("Edit Contents"))] {
         if widgets::icon_button(ui, icon, tip, editing == contents, 24.0).clicked() && editing != contents {
             run = Some(("object.envelope.editContents", json!({ "editing": contents })));
         }
@@ -270,23 +270,23 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         Bar::Warp { style, bend, h, v, horizontal } => {
             let styles: Vec<&str> = WARP_STYLES.iter().map(|(_, l)| l.trim_end_matches('…')).collect();
             let current = WARP_STYLES.iter().find(|(id, _)| id == style).map_or(style.as_str(), |(_, l)| l.trim_end_matches('…'));
-            widgets::dim_label(ui, "Style:");
+            widgets::dim_label(ui, tl!("Style:"));
             if let Some((id, _)) = widgets::dropdown(ui, "cb-envelope-style", current, &styles, 110.0).and_then(|i| WARP_STYLES.get(i)) {
                 run = Some((OPTIONS_CMD, json!({ "style": id })));
             }
-            for (h, label) in [(true, "Horizontal"), (false, "Vertical")] {
+            for (h, label) in [(true, tl!("Horizontal")), (false, tl!("Vertical"))] {
                 if widgets::radio(ui, label, *horizontal == h, true) {
                     run = Some((OPTIONS_CMD, json!({ "horizontal": h })));
                 }
             }
-            for (key, label, value) in [("bend", "Bend:", *bend), ("h", "H:", *h), ("v", "V:", *v)] {
+            for (key, label, value) in [("bend", tl!("Bend:"), *bend), ("h", tl!("H:"), *h), ("v", tl!("V:"), *v)] {
                 if let Some(n) = field(ui, key, label, value, "%") {
                     run = Some((OPTIONS_CMD, json!({ key: n.round().clamp(-100.0, 100.0) })));
                 }
             }
         }
         Bar::Mesh { rows, cols } => {
-            for (key, label, value) in [("rows", "Rows:", *rows), ("cols", "Columns:", *cols)] {
+            for (key, label, value) in [("rows", tl!("Rows:"), *rows), ("cols", tl!("Columns:"), *cols)] {
                 if let Some(n) = field(ui, key, label, f64::from(value), "") {
                     run = Some((RESET_MESH, json!({ key: n.round().clamp(1.0, 50.0), "maintainShape": true })));
                 }
@@ -301,11 +301,11 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         Bar::TopObject => None,
     };
     if let Some(r) = reset
-        && widgets::flat_button(ui, "Reset", 50.0).on_hover_text("Reset Envelope Shape").clicked()
+        && widgets::flat_button(ui, tl!("Reset"), 50.0).on_hover_text(tl!("Reset Envelope Shape")).clicked()
     {
         run = Some(r);
     }
-    if widgets::icon_button(ui, "dc-options", "Envelope Options", false, 24.0).clicked() {
+    if widgets::icon_button(ui, "dc-options", tl!("Envelope Options"), false, 24.0).clicked() {
         crate::menus::invoke(app, OPTIONS_CMD, json!({}));
     }
     if let Some((cmd, p)) = run

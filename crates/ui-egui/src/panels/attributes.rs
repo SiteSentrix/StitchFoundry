@@ -65,7 +65,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has = !info.ids.is_empty();
     ui.horizontal(|ui| {
         for (label, key, value) in
-            [("Overprint Fill", "overprintFill", info.overprint_fill), ("Overprint Stroke", "overprintStroke", info.overprint_stroke)]
+            [(tl!("Overprint Fill"), "overprintFill", info.overprint_fill), (tl!("Overprint Stroke"), "overprintStroke", info.overprint_stroke)]
         {
             if widgets::check3(ui, label, value, has) {
                 set(app, json!({ key: value != Some(true) }));
@@ -76,19 +76,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !pstate::<bool>(ui.ctx(), HIDE_OPTIONS) {
         widgets::divider(ui);
         ui.horizontal(|ui| {
-            let center = [("dc-center-hide", "Don't Show Center", false), ("dc-center-show", "Show Center", true)];
+            let center = [("dc-center-hide", tl!("Don't Show Center"), false), ("dc-center-show", tl!("Show Center"), true)];
             if let Some(v) = pair(ui, has, info.show_center, center) {
                 set(app, json!({ "showCenter": v }));
             }
             ui.add_space(10.0);
-            let dir = [("dc-dir-off", "Reverse Path Direction Off", false), ("dc-dir-on", "Reverse Path Direction On", true)];
+            let dir = [("dc-dir-off", tl!("Reverse Path Direction Off"), false), ("dc-dir-on", tl!("Reverse Path Direction On"), true)];
             if let Some(v) = pair(ui, paths, info.reversed, dir) {
                 app.run("path.reverse", json!({ "reversed": v })).ok();
             }
             ui.add_space(10.0);
             let rules = [
-                ("dc-rule-nonzero", "Use Non-Zero Winding Fill Rule", FillRule::NonZero),
-                ("dc-rule-evenodd", "Use Even-Odd Fill Rule", FillRule::EvenOdd),
+                ("dc-rule-nonzero", tl!("Use Non-Zero Winding Fill Rule"), FillRule::NonZero),
+                ("dc-rule-evenodd", tl!("Use Even-Odd Fill Rule"), FillRule::EvenOdd),
             ];
             if let Some(r) = pair(ui, paths, info.fill_rule, rules) {
                 app.run("path.setFillRule", json!({ "rule": if r == FillRule::EvenOdd { "evenOdd" } else { "nonZero" } })).ok();
@@ -96,7 +96,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         ui.add_space(4.0);
         let url = info.url.clone().filter(|u| !u.is_empty());
-        widgets::label_row(ui, "Image Map:", LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("Image Map:"), LABEL_W, |ui| {
             ui.add_enabled_ui(has, |ui| {
                 let labels = ImageMap::ALL.map(ImageMap::label);
                 if let Some(i) = widgets::dropdown(ui, "attr-map", info.image_map.map_or("", ImageMap::label), &labels, 100.0) {
@@ -104,12 +104,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
             ui.add_space(6.0);
-            let r = ui.add_enabled_ui(url.is_some(), |ui| widgets::flat_button(ui, "Browser", 64.0)).inner;
-            if r.on_hover_text("Open the URL in the web browser").clicked() {
+            let r = ui.add_enabled_ui(url.is_some(), |ui| widgets::flat_button(ui, tl!("Browser"), 64.0)).inner;
+            if r.on_hover_text(tl!("Open the URL in the web browser")).clicked() {
                 app.run("attributes.openUrl", json!({})).ok();
             }
         });
-        widgets::label_row(ui, "URL:", LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("URL:"), LABEL_W, |ui| {
             ui.add_enabled_ui(has, |ui| {
                 let width = (ui.available_width() - 26.0).max(80.0);
                 if let Some(u) = widgets::text_field(ui, "attr-url", info.url.as_deref(), width, 1) {
@@ -121,7 +121,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if !pstate::<bool>(ui.ctx(), HIDE_NOTE) {
         widgets::divider(ui);
-        widgets::subheader(ui, "Note:");
+        widgets::subheader(ui, tl!("Note:"));
         ui.add_enabled_ui(has, |ui| {
             if let Some(n) = widgets::text_field(ui, "attr-note", info.note.as_deref(), ui.available_width(), 3) {
                 set(app, json!({ "note": n }));
@@ -129,13 +129,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     }
     if !has {
-        widgets::dim_label(ui, if selection_len(app) == 0 { "No Selection" } else { "" });
+        widgets::dim_label(ui, if selection_len(app) == 0 { tl!("No Selection") } else { "" });
     }
 }
 
 /// The recent URLs button: a menu of the URLs given lately; picking one sets it.
 fn recent_urls(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let resp = widgets::icon_button_enabled(ui, "chevron-down", "Recent URLs", false, !app.session.recent_urls.is_empty(), 20.0);
+    let resp = widgets::icon_button_enabled(ui, "chevron-down", tl!("Recent URLs"), false, !app.session.recent_urls.is_empty(), 20.0);
     let mut chosen = None;
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(220.0);
@@ -151,7 +151,7 @@ fn recent_urls(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    for (key, hide, show) in [(HIDE_OPTIONS, "Hide Options", "Show Options"), (HIDE_NOTE, "Hide Note", "Show Note")] {
+    for (key, hide, show) in [(HIDE_OPTIONS, tl!("Hide Options"), tl!("Show Options")), (HIDE_NOTE, tl!("Hide Note"), tl!("Show Note"))] {
         let hidden: bool = pstate(ui.ctx(), key);
         if menu_item(ui, if hidden { show } else { hide }, true, false) {
             set_pstate(ui.ctx(), key, !hidden);

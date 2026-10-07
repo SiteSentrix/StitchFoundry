@@ -124,15 +124,15 @@ fn export_size(doc: &vectorcraft_doc::Document, p: &Value) -> Option<(f64, f64)>
 }
 
 fn heading(d: &Dialog) -> String {
-    format!("{} Options", format_of(d).map_or("Export", |f| f.label))
+    crate::i18n::fmt(tl!("{format} Options"), &[("format", format_of(d).map_or(tl!("Export"), |f| f.label))])
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let t = Tokens::get(ui.ctx());
     let id = format_of(d).map_or("png", |f| f.id);
-    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).color(t.text_dim));
+    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(tl!(text)).color(t.text_dim));
     egui::Grid::new("raster-options").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-        label(ui, "Resolution:");
+        label(ui, tl!("Resolution:"));
         let ppi = d.f64("ppi", 72.0);
         let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| !d.bool("__otherPpi"));
         ui.horizontal(|ui| {
@@ -155,7 +155,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         if let Some([w, h]) =
             d.fields.get("__size").and_then(Value::as_array).map(|a| [0, 1].map(|i| a.get(i).and_then(Value::as_f64).unwrap_or(0.0)))
         {
-            label(ui, "Size:");
+            label(ui, tl!("Size:"));
             let (pw, ph) = vectorcraft_render::region_pixels(vectorcraft_geom::Rect::new(0.0, 0.0, w, h), d.f64("ppi", 72.0) / 72.0);
             ui.label(egui::RichText::new(format!("{pw} × {ph} px")).color(t.text));
             ui.end_row();
@@ -169,8 +169,8 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// choose (JPEG quality) and what writes other files (image maps).
 pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: bool) {
     let t = Tokens::get(ui.ctx());
-    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).color(t.text_dim));
-    label(ui, "Background Color:");
+    let label = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(tl!(text)).color(t.text_dim));
+    label(ui, tl!("Background Color:"));
     let bg = d.str("background");
     let choice = BACKGROUNDS.iter().position(|v| bg.eq_ignore_ascii_case(v)).unwrap_or(3);
     // JPEG has no transparency, nor have some TIFF, BMP and Targa options: their list starts at
@@ -187,7 +187,7 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
     });
     ui.end_row();
 
-    label(ui, "Anti-aliasing:");
+    label(ui, tl!("Anti-aliasing:"));
     let aa = AntiAlias::from_id(&d.str("antiAlias")).unwrap_or_default();
     if let Some(i) = widgets::dropdown(ui, "ro-aa", aa.label(), &AntiAlias::ALL.map(AntiAlias::label), 150.0) {
         d.fields.insert("antiAlias".into(), json!(AntiAlias::ALL[i].id()));
@@ -197,14 +197,14 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
     match id {
         "png" => {
             ui.label("");
-            form::check(ui, d, "interlaced", "Interlaced");
+            form::check(ui, d, "interlaced", tl!("Interlaced"));
             ui.end_row();
         }
         "jpg" => jpeg_rows(ui, d, &label, screens),
         "gif" | "png8" => palette_rows(ui, d, &label),
         "webp" => {
             ui.label("");
-            label(ui, "Lossless (lossy WebP isn't available yet)");
+            label(ui, tl!("Lossless (lossy WebP isn't available yet)"));
             ui.end_row();
         }
         "psd" => psd_options::rows(ui, d, &label),
@@ -215,7 +215,7 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
 /// The JPEG Options rows: colour model, quality, method and scans, profile and image map (not
 /// quality and image map for Export for Screens).
 fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response, screens: bool) {
-    label(ui, "Color Model:");
+    label(ui, tl!("Color Model:"));
     choice(ui, d, "colorModel", &ColorModel::ALL.map(ColorModel::id), &ColorModel::ALL.map(ColorModel::label));
     ui.end_row();
 
@@ -224,19 +224,19 @@ fn jpeg_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &s
     }
     method_row(ui, d, label);
     if !screens {
-        label(ui, "Image Map:");
+        label(ui, tl!("Image Map:"));
         choice(ui, d, "imageMap", &IMAGE_MAPS, &IMAGE_MAP_LABELS);
         ui.end_row();
     }
 
     ui.label("");
-    form::check(ui, d, "embedIcc", "Embed ICC Profile");
+    form::check(ui, d, "embedIcc", tl!("Embed ICC Profile"));
     ui.end_row();
 }
 
 /// JPEG quality on the dialog's 0–10 scale (stored ×10).
 fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
-    label(ui, "Quality:");
+    label(ui, tl!("Quality:"));
     let mut q = (d.f64("quality", 90.0) / 10.0).round().clamp(0.0, 10.0) as u8;
     ui.horizontal(|ui| {
         if ui.add(egui::Slider::new(&mut q, 0..=10)).changed() {
@@ -249,11 +249,11 @@ fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, 
 
 /// The JPEG method, and its scans when progressive.
 fn method_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
-    label(ui, "Method:");
+    label(ui, tl!("Method:"));
     ui.horizontal(|ui| {
         choice(ui, d, "method", &Method::ALL.map(Method::id), &Method::ALL.map(Method::label));
         if Method::from_id(&d.str("method")) == Some(Method::Progressive) {
-            label(ui, "Scans:");
+            label(ui, tl!("Scans:"));
             let mut scans = d.f64("scans", 3.0).round().clamp(*jpeg::SCANS.start() as f64, *jpeg::SCANS.end() as f64) as u8;
             if ui.add(egui::DragValue::new(&mut scans).range(jpeg::SCANS)).changed() {
                 d.fields.insert("scans".into(), json!(scans));
@@ -266,11 +266,11 @@ fn method_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &
 /// The PNG-8 and GIF Options rows: the palette (reduction, colours, dither and amount),
 /// transparency and matte, interlacing.
 fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
-    label(ui, "Color Reduction:");
+    label(ui, tl!("Color Reduction:"));
     choice(ui, d, "reduction", &Reduction::ALL.map(Reduction::id), &Reduction::ALL.map(Reduction::label));
     ui.end_row();
 
-    label(ui, "Colors:");
+    label(ui, tl!("Colors:"));
     let mut n = d.f64("colors", 256.0).round().clamp(2.0, 256.0) as u16;
     ui.horizontal(|ui| {
         if let Some(i) = widgets::dropdown(ui, "ro-colors", &n.to_string(), &COLOR_COUNTS, 70.0) {
@@ -283,7 +283,7 @@ fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui,
     });
     ui.end_row();
 
-    label(ui, "Dither:");
+    label(ui, tl!("Dither:"));
     ui.horizontal(|ui| {
         choice(ui, d, "dither", &Dither::ALL.map(Dither::id), &Dither::ALL.map(Dither::label));
         if Dither::from_id(&d.str("dither")).is_some_and(|x| x != Dither::None) {
@@ -295,7 +295,7 @@ fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui,
     });
     ui.end_row();
 
-    label(ui, "Matte:");
+    label(ui, tl!("Matte:"));
     let matte = d.str("matte");
     let at = MATTES.iter().position(|v| matte.eq_ignore_ascii_case(v)).unwrap_or(3);
     ui.horizontal(|ui| {
@@ -310,8 +310,8 @@ fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui,
 
     ui.label("");
     ui.horizontal(|ui| {
-        form::check(ui, d, "transparency", "Transparency");
-        form::check(ui, d, "interlaced", "Interlaced");
+        form::check(ui, d, "transparency", tl!("Transparency"));
+        form::check(ui, d, "interlaced", tl!("Interlaced"));
     });
     ui.end_row();
 }

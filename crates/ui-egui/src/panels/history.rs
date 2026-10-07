@@ -16,7 +16,7 @@ pub fn steps_to(current: usize, target: usize) -> i64 {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else {
-        super::empty_state(ui, "history", "No document", "Open a document to see its history.");
+        super::empty_state(ui, "history", tl!("No document"), tl!("Open a document to see its history."));
         return;
     };
     let mut rows: Vec<(String, bool)> = vec![("Open".to_string(), false)];
@@ -42,7 +42,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     if *future { t.text_disabled } else { t.icon },
                 );
                 let col = if *future { t.text_disabled } else { t.text };
-                ui.painter().text(r.left_center() + vec2(30.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), col);
+                ui.painter().text(r.left_center() + vec2(30.0, 0.0), egui::Align2::LEFT_CENTER, tl!(label), egui::FontId::proportional(12.5), col);
                 if resp.clicked() && i != current {
                     steps = Some(steps_to(current, i));
                 }
@@ -60,7 +60,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    menu_item(ui, "History Options…", false, false);
+    menu_item(ui, tl!("History Options…"), false, false);
 }
 
 #[cfg(test)]

@@ -17,7 +17,7 @@ const CMD: &str = "document.rasterEffectsSettings";
 const RESOLUTIONS: [(f64, &str); 3] = [(72.0, "Screen (72 ppi)"), (150.0, "Medium (150 ppi)"), (300.0, "High (300 ppi)")];
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| "Document Raster Effects Settings".into(),
+    heading: |_| tl!("Document Raster Effects Settings").into(),
     body,
     confirm,
     min_width: 440.0,
@@ -44,9 +44,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     // Resolution: a preset, or Other with its own value.
     let ppi = d.f64("resolution", 72.0);
     let preset = RESOLUTIONS.iter().position(|(p, _)| (*p - ppi).abs() < 1e-9);
-    let mut labels: Vec<&str> = RESOLUTIONS.iter().map(|(_, l)| *l).collect();
-    labels.push("Other");
-    widgets::label_row(ui, "Resolution:", LABEL, |ui| {
+    let mut labels: Vec<&str> = RESOLUTIONS.iter().map(|(_, l)| tl!(l)).collect();
+    labels.push(tl!("Other"));
+    widgets::label_row(ui, tl!("Resolution:"), LABEL, |ui| {
         if let Some(i) = widgets::dropdown(ui, "raster-resolution", labels[preset.unwrap_or(RESOLUTIONS.len())], &labels, 170.0) {
             // Other keeps the current value to edit.
             if let Some((p, _)) = RESOLUTIONS.get(i) {
@@ -64,11 +64,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(4.0);
     let own =
         if app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk) { ("cmyk", "CMYK") } else { ("rgb", "RGB") };
-    choice(ui, d, "colorModel", "Color Model:", &[own, ("grayscale", "Grayscale"), ("bitmap", "Bitmap")]);
+    choice(ui, d, "colorModel", tl!("Color Model:"), &[own, ("grayscale", tl!("Grayscale")), ("bitmap", tl!("Bitmap"))]);
     ui.add_space(6.0);
-    widgets::label_row(ui, "Background:", LABEL, |ui| {
+    widgets::label_row(ui, tl!("Background:"), LABEL, |ui| {
         let cur = d.str("background");
-        for (id, label) in [("white", "White"), ("transparent", "Transparent")] {
+        for (id, label) in [("white", tl!("White")), ("transparent", tl!("Transparent"))] {
             if widgets::radio(ui, label, cur == id, true) {
                 d.fields.insert("background".into(), json!(id));
             }
@@ -76,21 +76,21 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     ui.add_space(10.0);
-    widgets::subheader(ui, "Options");
-    check(ui, d, "antiAlias", "Anti-alias");
-    check(ui, d, "clippingMask", "Create Clipping Mask");
+    widgets::subheader(ui, tl!("Options"));
+    check(ui, d, "antiAlias", tl!("Anti-alias"));
+    check(ui, d, "clippingMask", tl!("Create Clipping Mask"));
     let unit = app.session.general_unit();
     let t = crate::theme::Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Add").color(t.text));
+        ui.label(egui::RichText::new(tl!("Add")).color(t.text));
         if let Some(v) = widgets::num_field(ui, "raster-add-around", Some(d.f64("addAround", 0.0)), unit, 80.0) {
             d.fields.insert("addAround".into(), json!(v));
         }
-        ui.label(egui::RichText::new("Around Object").color(t.text));
+        ui.label(egui::RichText::new(tl!("Around Object")).color(t.text));
     });
-    check(ui, d, "preserveSpotColors", "Preserve Spot Colors");
+    check(ui, d, "preserveSpotColors", tl!("Preserve Spot Colors"));
     ui.add_space(8.0);
-    super::form::caption(ui, "Changing these settings changes how raster effects look when exported, flattened or expanded.");
+    super::form::caption(ui, tl!("Changing these settings changes how raster effects look when exported, flattened or expanded."));
     false
 }
 

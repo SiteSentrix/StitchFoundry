@@ -1,0 +1,42 @@
+# Japanese (ja) catalog. Same format as zh-hant.tsv:  context <TAB> source <TAB> translation
+# (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" forms).
+#
+# Coverage: the main menus. Untranslated text falls back to English, so rows can be added one at a
+# time; set `complete_menus` in i18n/mod.rs once every menu string and `tl!` literal has a row.
+# Every row's source must be a string the UI shows (menu label or `tl!` literal): tested.
+	Copy	コピー
+	Color	カラー
+	Cut	切り取り
+	Deselect	選択を解除
+	Edit	編集
+	Effect	効果
+	Export	書き出し
+	Export As…	形式を指定して書き出し…
+	File	ファイル
+	Help	ヘルプ
+	History	履歴
+	Horizontal	横書き
+	Language	表示言語
+	Layers	レイヤー
+	New…	新規…
+	Object	オブジェクト
+	Open…	開く…
+	Paste	貼り付け
+	Preferences…	環境設定…
+	Print…	印刷…
+	Properties	プロパティ
+	Redo	やり直し
+	Revert	保存済みの状態に戻す
+	Save	保存
+	Save As…	別名で保存…
+	Select	選択
+	Settings…	環境設定…
+	Tools	ツール
+	Type	書式
+	Type Orientation	組み方向
+	Undo	取り消し
+	Vertical	縦書き
+	View	表示
+	Window	ウィンドウ
+	Zoom In	ズームイン
+	Zoom Out	ズームアウト

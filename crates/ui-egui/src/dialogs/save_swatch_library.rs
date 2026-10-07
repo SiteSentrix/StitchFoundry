@@ -20,7 +20,8 @@ use crate::{VectorcraftApp, widgets};
 /// The dialog kind of Save Swatch Library.
 pub const KIND: &str = "saveSwatchLibrary";
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| "Save Swatch Library".into(), body, confirm, min_width: 360.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec =
+    DialogSpec { heading: |_| tl!("Save Swatch Library").into(), body, confirm, min_width: 360.0, ..DialogSpec::FORM };
 
 /// Open Save Swatch Library for the document's swatches (`names`: the ones selected in the panel).
 pub fn open(app: &mut VectorcraftApp, names: Vec<String>) -> Result<Value, String> {
@@ -51,22 +52,22 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let labels = PaletteFormat::ALL.map(PaletteFormat::label);
     grid(ui, |ui| {
         name_row(ui, d);
-        label(ui, "Format:");
+        label(ui, tl!("Format:"));
         if let Some(i) = widgets::dropdown(ui, "library-format", format_of(d).label(), &labels, 230.0) {
             set(d, "format", json!(PaletteFormat::ALL[i].id()));
         }
         ui.end_row();
-        destination(ui, d, "Selected Swatches Only");
+        destination(ui, d, tl!("Selected Swatches Only"));
     });
     if format_of(d) == PaletteFormat::Gpl {
-        widgets::dim_label(ui, "GPL palettes keep solid colours only, as RGB.");
+        widgets::dim_label(ui, tl!("GPL palettes keep solid colours only, as RGB."));
     }
     false
 }
 
 /// The Name row of a Save … Library dialog's [`grid`].
 pub(super) fn name_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    label(ui, "Name:");
+    label(ui, tl!("Name:"));
     form::text(ui, d, "name", 220.0);
     ui.end_row();
 }
@@ -75,14 +76,14 @@ pub(super) fn name_row(ui: &mut egui::Ui, d: &mut Dialog) {
 /// one) or a file, and `only` (Selected Swatches Only) with the number of selected items.
 pub(super) fn destination(ui: &mut egui::Ui, d: &mut Dialog, only: &str) {
     let names = d.fields.get("names").and_then(Value::as_array).map_or(0, Vec::len);
-    label(ui, "Save To:");
+    label(ui, tl!("Save To:"));
     let (user, has_user) = (d.bool("user"), d.bool("__user"));
-    if widgets::radio(ui, "User Defined Libraries", user, has_user) {
+    if widgets::radio(ui, tl!("User Defined Libraries"), user, has_user) {
         set(d, "user", json!(true));
     }
     ui.end_row();
     ui.label("");
-    if widgets::radio(ui, "A File…", !user, true) {
+    if widgets::radio(ui, tl!("A File…"), !user, true) {
         set(d, "user", json!(false));
     }
     ui.end_row();

@@ -20,7 +20,7 @@ use crate::{VectorcraftApp, widgets};
 pub const KIND: &str = "pdfPresets";
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| "PDF Presets".into(),
+    heading: |_| tl!("PDF Presets").into(),
     body,
     confirm: |app, _| {
         app.ui.dialog = None;
@@ -57,13 +57,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(300.0);
-            widgets::dim_label(ui, "Presets:");
+            widgets::dim_label(ui, tl!("Presets:"));
             widgets::list_box(ui, |ui| {
                 egui::ScrollArea::vertical().id_salt("pdf-presets").min_scrolled_height(260.0).max_height(260.0).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.set_min_height(260.0);
                     for (k, p) in presets.iter().enumerate() {
-                        let label = if k < builtins { format!("[{}]", p.name) } else { p.name.clone() };
+                        let label = if k < builtins { format!("[{}]", tl!(&p.name)) } else { p.name.clone() };
                         if ui.selectable_label(k == i, label).clicked() {
                             act = Some(Action::Select(p.name.clone()));
                         }
@@ -73,19 +73,19 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                if widgets::flat_button(ui, "New…", 48.0).on_hover_text("A new preset starting from the selected one").clicked() {
+                if widgets::flat_button(ui, tl!("New…"), 48.0).on_hover_text(tl!("A new preset starting from the selected one")).clicked() {
                     act = Some(Action::New);
                 }
-                if ui.add_enabled_ui(!builtin, |ui| widgets::flat_button(ui, "Edit…", 48.0)).inner.clicked() {
+                if ui.add_enabled_ui(!builtin, |ui| widgets::flat_button(ui, tl!("Edit…"), 48.0)).inner.clicked() {
                     act = Some(Action::Edit);
                 }
-                if ui.add_enabled_ui(!builtin, |ui| widgets::flat_button(ui, "Delete", 52.0)).inner.clicked() {
+                if ui.add_enabled_ui(!builtin, |ui| widgets::flat_button(ui, tl!("Delete"), 52.0)).inner.clicked() {
                     act = Some(Action::Delete);
                 }
-                if widgets::flat_button(ui, "Import…", 64.0).clicked() {
+                if widgets::flat_button(ui, tl!("Import…"), 64.0).clicked() {
                     act = Some(Action::Import);
                 }
-                if widgets::flat_button(ui, "Export…", 64.0).on_hover_text("Save the selected preset to a file").clicked() {
+                if widgets::flat_button(ui, tl!("Export…"), 64.0).on_hover_text(tl!("Save the selected preset to a file")).clicked() {
                     act = Some(Action::Export);
                 }
             });
@@ -113,14 +113,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// What sets the preset apart: its settings that differ from the app default, and the notes on
 /// what Save PDF can't honour or apply yet.
 fn details(ui: &mut egui::Ui, t: &Tokens, preset: &vectorcraft_pdf::PdfPreset, builtin: bool) {
-    let dim = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).color(t.text_dim).size(11.5));
-    widgets::dim_label(ui, &format!("Differences from {}:", pdf::DEFAULT_PRESET));
+    let dim = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(tl!(text)).color(t.text_dim).size(11.5));
+    widgets::dim_label(ui, &crate::i18n::fmt(tl!("Differences from {preset}:"), &[("preset", pdf::DEFAULT_PRESET)]));
     let base = vectorcraft_pdf::builtin_preset(pdf::DEFAULT_PRESET).map(|p| p.settings).unwrap_or_default();
     let mut changed = pdf::changes(&preset.settings, &base);
     changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()));
     egui::ScrollArea::vertical().id_salt("pdf-preset-details").max_height(180.0).show(ui, |ui| {
         if changed.is_empty() {
-            dim(ui, "None.");
+            dim(ui, tl!("None."));
         }
         option_rows(ui, &changed, option_label);
     });
@@ -133,7 +133,7 @@ fn details(ui: &mut egui::Ui, t: &Tokens, preset: &vectorcraft_pdf::PdfPreset, b
     }
     if builtin {
         ui.add_space(6.0);
-        dim(ui, "Built-in presets are read-only: New… starts an editable copy.");
+        dim(ui, tl!("Built-in presets are read-only: New… starts an editable copy."));
     }
 }
 

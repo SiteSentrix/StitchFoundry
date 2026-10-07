@@ -53,7 +53,7 @@ fn kind(d: &Dialog) -> LiquifyKind {
 }
 
 fn heading(d: &Dialog) -> String {
-    format!("{} Tool Options", kind(d).label())
+    crate::i18n::fmt(tl!("{tool} Tool Options"), &[("tool", tl!(kind(d).label()))])
 }
 
 /// Open the options of Liquify tool `tool` with its current values.
@@ -79,58 +79,60 @@ fn slider(ui: &mut egui::Ui, d: &mut Dialog, (key, label): (&str, &str), range: 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let k = kind(d);
     let unit = app.session.general_unit();
-    widgets::subheader(ui, "Global Brush Dimensions");
+    widgets::subheader(ui, tl!("Global Brush Dimensions"));
     ui.add_space(4.0);
-    for (key, label) in [("width", "Width:"), ("height", "Height:")] {
+    for (key, label) in [("width", tl!("Width:")), ("height", tl!("Height:"))] {
         widgets::label_row(ui, label, LABEL_W, |ui| {
             form::length(ui, d, key, unit, 110.0);
         });
     }
-    widgets::label_row(ui, "Angle:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Angle:"), LABEL_W, |ui| {
         if let Some(v) = widgets::plain_field(ui, "lq-angle", d.f64("angle", 0.0), "°", 1, 110.0) {
             d.fields.insert("angle".into(), json!(v.clamp(-360.0, 360.0)));
         }
     });
     let pressure = d.bool("usePressure");
-    widgets::label_row(ui, "Intensity:", LABEL_W, |ui| {
+    widgets::label_row(ui, tl!("Intensity:"), LABEL_W, |ui| {
         ui.add_enabled_ui(!pressure, |ui| {
             if let Some(v) = widgets::plain_field(ui, "lq-intensity", d.f64("intensity", 50.0), "%", 0, 110.0) {
                 d.fields.insert("intensity".into(), json!(v.clamp(1.0, 100.0)));
             }
         });
     });
-    widgets::label_row(ui, "", LABEL_W, |ui| check(ui, d, "usePressure", "Use Pressure Pen"));
+    widgets::label_row(ui, "", LABEL_W, |ui| check(ui, d, "usePressure", tl!("Use Pressure Pen")));
     ui.add_space(10.0);
-    widgets::subheader(ui, &format!("{} Options", k.label()));
+    widgets::subheader(ui, &crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(k.label()))]));
     ui.add_space(4.0);
     if k == LiquifyKind::Twirl {
-        slider(ui, d, ("rate", "Twirl Rate:"), -180.0..=180.0, "°");
+        slider(ui, d, ("rate", tl!("Twirl Rate:")), -180.0..=180.0, "°");
     }
     if k == LiquifyKind::Wrinkle {
-        slider(ui, d, ("horizontal", "Horizontal:"), 0.0..=100.0, "%");
-        slider(ui, d, ("vertical", "Vertical:"), 0.0..=100.0, "%");
+        slider(ui, d, ("horizontal", tl!("Horizontal:")), 0.0..=100.0, "%");
+        slider(ui, d, ("vertical", tl!("Vertical:")), 0.0..=100.0, "%");
     }
     if k.has_affects() {
-        slider(ui, d, ("complexity", "Complexity:"), 0.0..=15.0, "");
+        slider(ui, d, ("complexity", tl!("Complexity:")), 0.0..=15.0, "");
     }
-    slider(ui, d, ("detail", "Detail:"), 1.0..=10.0, "");
+    slider(ui, d, ("detail", tl!("Detail:")), 1.0..=10.0, "");
     if k.simplifies() {
-        widgets::label_row(ui, "", LABEL_W, |ui| check(ui, d, "simplifyOn", "Simplify"));
+        widgets::label_row(ui, "", LABEL_W, |ui| check(ui, d, "simplifyOn", tl!("Simplify")));
         let on = d.bool("simplifyOn");
-        ui.add_enabled_ui(on, |ui| slider(ui, d, ("simplify", "Simplify:"), 1.0..=100.0, ""));
+        ui.add_enabled_ui(on, |ui| slider(ui, d, ("simplify", tl!("Simplify:")), 1.0..=100.0, ""));
     } else {
         ui.add_space(4.0);
-        widgets::label_row(ui, "Brush Affects:", LABEL_W, |ui| {
+        widgets::label_row(ui, tl!("Brush Affects:"), LABEL_W, |ui| {
             ui.vertical(|ui| {
-                for (key, label) in [("affectAnchors", "Anchor Points"), ("affectIn", "In Tangent Handles"), ("affectOut", "Out Tangent Handles")] {
+                for (key, label) in
+                    [("affectAnchors", tl!("Anchor Points")), ("affectIn", tl!("In Tangent Handles")), ("affectOut", tl!("Out Tangent Handles"))]
+                {
                     check(ui, d, key, label);
                 }
             });
         });
     }
     ui.add_space(10.0);
-    check(ui, d, "showBrush", "Show Brush Size");
-    let hint = format!("{} with the tool sizes the brush", crate::menus::pretty_shortcut("Alt+Drag"));
+    check(ui, d, "showBrush", tl!("Show Brush Size"));
+    let hint = crate::i18n::fmt(tl!("{shortcut} with the tool sizes the brush"), &[("shortcut", crate::menus::pretty_shortcut("Alt+Drag").as_str())]);
     ui.label(egui::RichText::new(hint).size(11.5).color(Tokens::get(ui.ctx()).text_dim));
     false
 }

@@ -146,7 +146,7 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
                     );
                 }
             }
-            let resp = resp.on_hover_text(format!("{}\nDouble-click to rename", a.name));
+            let resp = resp.on_hover_text(format!("{}\n{}", a.name, tl!("Double-click to rename")));
             if resp.double_clicked() {
                 ui.data_mut(|d| d.insert_temp(rename_id, (a.id, a.name.clone())));
             } else if resp.clicked() {
@@ -251,7 +251,7 @@ fn settings(ui: &mut Ui, st: &DocState) -> (Option<Settings>, usize) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ctx = ui.ctx().clone();
     let Some(st) = app.session.active() else {
-        widgets::dim_label(ui, "No document");
+        widgets::dim_label(ui, tl!("No document"));
         return;
     };
     let sel = selected(&ctx, st);
@@ -261,7 +261,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.set_min_height(110.0);
             ui.set_width(ui.available_width());
             if st.doc.assets.is_empty() {
-                super::empty_state(ui, "share-2", "No assets", "Drag art here, or select it and click +. Hold Alt for one asset of several objects.");
+                super::empty_state(
+                    ui,
+                    "share-2",
+                    tl!("No assets"),
+                    tl!("Drag art here, or select it and click +. Hold Alt for one asset of several objects."),
+                );
             } else {
                 tiles(ui, st, &sel, &mut ev);
             }
@@ -270,7 +275,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         drop_zone(ui, &zone, &mut ev);
     });
     ui.add_space(6.0);
-    widgets::section_header(ui, "Export Settings");
+    widgets::section_header(ui, tl!("Export Settings"));
     let (change, files_each) = settings(ui, st);
     let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
     let has_art = !st.selection.is_empty();
@@ -280,17 +285,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_enabled_ui(!all.is_empty(), |ui| {
-                let label = if sel.is_empty() || sel.len() == all.len() { "Export".to_string() } else { format!("Export {} Selected", sel.len()) };
-                export_clicked = widgets::primary_button(ui, &label).on_hover_text("Export the selected assets (else all of them)").clicked();
+                let label = if sel.is_empty() || sel.len() == all.len() {
+                    tl!("Export").to_string()
+                } else {
+                    crate::i18n::fmt(tl!("Export {count} Selected"), &[("count", &sel.len().to_string())])
+                };
+                export_clicked = widgets::primary_button(ui, &label).on_hover_text(tl!("Export the selected assets (else all of them)")).clicked();
             });
         });
     });
     let (mut screens, mut add, mut remove) = (false, false, false);
     widgets::bottom_bar(ui, |ui| {
-        screens = widgets::icon_button(ui, "monitor", "Export for Screens…", false, 24.0).clicked();
+        screens = widgets::icon_button(ui, "monitor", tl!("Export for Screens…"), false, 24.0).clicked();
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            remove = widgets::icon_button_enabled(ui, "trash-2", "Remove Selected Assets", false, !sel.is_empty(), 24.0).clicked();
-            add = widgets::icon_button_enabled(ui, "plus", "Add Selected Artwork (Alt: as one asset)", false, has_art, 24.0).clicked();
+            remove = widgets::icon_button_enabled(ui, "trash-2", tl!("Remove Selected Assets"), false, !sel.is_empty(), 24.0).clicked();
+            add = widgets::icon_button_enabled(ui, "plus", tl!("Add Selected Artwork (Alt: as one asset)"), false, has_art, 24.0).clicked();
         });
     });
     // Act on what the panel saw (the document is no longer borrowed).
@@ -345,22 +354,22 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else { return };
     let (has_art, sel) = (!st.selection.is_empty(), selected(&ctx, st));
     let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
-    if menu_item(ui, "Add Selected Artwork as One Asset", has_art, false) {
+    if menu_item(ui, tl!("Add Selected Artwork as One Asset"), has_art, false) {
         collect(app, &ctx, None, true);
     }
-    if menu_item(ui, "Add Selected Artwork as Multiple Assets", has_art, false) {
+    if menu_item(ui, tl!("Add Selected Artwork as Multiple Assets"), has_art, false) {
         collect(app, &ctx, None, false);
     }
     ui.separator();
-    if menu_item(ui, "Select All Assets", !all.is_empty(), false) {
+    if menu_item(ui, tl!("Select All Assets"), !all.is_empty(), false) {
         set_pstate(&ctx, SELECTED, all.clone());
     }
-    if menu_item(ui, "Remove Selected Assets", !sel.is_empty(), false) {
+    if menu_item(ui, tl!("Remove Selected Assets"), !sel.is_empty(), false) {
         run(app, "assets.remove", json!({ "assets": sel }));
         set_pstate(&ctx, SELECTED, Vec::<u64>::new());
     }
     ui.separator();
-    if menu_item(ui, "Export for Screens…", true, false) {
+    if menu_item(ui, tl!("Export for Screens…"), true, false) {
         open_export_for_screens_assets(app, Some(&sel_or_all(&sel, &all)));
     }
 }

@@ -80,10 +80,10 @@ pub fn caption_buttons(app: &mut VectorcraftApp, ui: &mut Ui, bar: Rect) {
         let ink = if close && resp.hovered() { t.caption_close_text } else { t.icon };
         paint_glyph(ui, c, max, r.center(), Stroke::new(1.0, ink));
         let tip = match c {
-            Caption::Minimize => "Minimize",
-            Caption::Maximize if max => "Restore",
-            Caption::Maximize => "Maximize",
-            Caption::Close => "Close",
+            Caption::Minimize => tl!("Minimize"),
+            Caption::Maximize if max => tl!("Restore"),
+            Caption::Maximize => tl!("Maximize"),
+            Caption::Close => tl!("Close"),
         };
         if resp.on_hover_text(tip).clicked() {
             clicked = Some(c);

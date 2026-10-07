@@ -8,7 +8,7 @@ use crate::VectorcraftApp;
 use crate::state::Dialog;
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| d.str("__label"),
+    heading: |d| tl!(&d.str("__label")).to_string(),
     body: |app, ui, d| {
         let lengths = lengths(&d.str("__command"));
         form::param_fields(ui, d, &|k| lengths.contains(&k), app.session.general_unit());

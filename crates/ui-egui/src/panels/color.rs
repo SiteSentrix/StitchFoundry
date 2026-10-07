@@ -209,10 +209,14 @@ pub(crate) fn warning_chip(ui: &mut Ui, (icon, warning): (&str, &str), fix: &Col
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
-        icons::icon(ui, icon, 16.0, t.icon).on_hover_text(warning);
+        icons::icon(ui, icon, 16.0, t.icon).on_hover_text(tl!(warning));
         let (r, resp) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
         widgets::swatch_tile(ui, r, &Paint::solid(*fix), false, resp.hovered());
-        resp.on_hover_text(format!("{warning}: click to correct to the closest color ({})", fix.to_hex())).clicked()
+        resp.on_hover_text(crate::i18n::fmt(
+            tl!("{warning}: click to correct to the closest color ({hex})"),
+            &[("warning", tl!(warning)), ("hex", &fix.to_hex())],
+        ))
+        .clicked()
     })
     .inner
 }
@@ -572,7 +576,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // None / Black / White chips and the hex field.
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        for (p, tip) in [(Paint::None, "None"), (Paint::solid(Color::BLACK), "Black"), (Paint::solid(Color::WHITE), "White")] {
+        for (p, tip) in [(Paint::None, tl!("None")), (Paint::solid(Color::BLACK), tl!("Black")), (Paint::solid(Color::WHITE), tl!("White"))] {
             let (r, resp) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
             widgets::swatch_tile(ui, r, &p, false, resp.hovered());
             if resp.on_hover_text(tip).clicked() {
@@ -612,7 +616,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "color-hide-options");
-    if menu_item(ui, if hidden { "Show Options" } else { "Hide Options" }, true, false) {
+    if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "color-hide-options", !hidden);
     }
     ui.separator();
@@ -621,7 +625,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Tint mode checks no colour mode: picking one makes the tint a process colour.
     let cur = display_mode(pstate(ui.ctx(), "color-mode"), color.as_ref());
     for m in Mode::ALL {
-        if menu_item(ui, m.label(), true, m == cur && tgt.tint().is_none()) {
+        if menu_item(ui, tl!(m.label()), true, m == cur && tgt.tint().is_none()) {
             set_mode(app, ui.ctx(), &tgt, m);
         }
     }
@@ -630,8 +634,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     // its colour model); a gradient stop is recoloured in place.
     let recolor = color.is_some() || super::active_mixed(app, ui.ctx());
     for (label, cmd, f) in [
-        ("Invert", "paint.invert", Color::invert_keep_model as fn(&Color) -> Color),
-        ("Complement", "paint.complement", Color::complement_keep_model),
+        (tl!("Invert"), "paint.invert", Color::invert_keep_model as fn(&Color) -> Color),
+        (tl!("Complement"), "paint.complement", Color::complement_keep_model),
     ] {
         if menu_item(ui, label, recolor, false) {
             match (&tgt, color) {
@@ -643,7 +647,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.separator();
-    if menu_item(ui, "Create New Swatch…", color.is_some(), false)
+    if menu_item(ui, tl!("Create New Swatch…"), color.is_some(), false)
         && let Some(c) = color
     {
         // A tint saves a tint swatch ("Name 40%").
@@ -653,7 +657,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         };
         app.run("swatch.new", p).ok();
     }
-    if menu_item(ui, "Copy Color Value (Hex)", color.is_some(), false)
+    if menu_item(ui, tl!("Copy Color Value (Hex)"), color.is_some(), false)
         && let Some(c) = color
     {
         ui.ctx().copy_text(c.to_hex());

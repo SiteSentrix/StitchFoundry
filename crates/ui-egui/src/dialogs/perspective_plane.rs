@@ -23,9 +23,9 @@ const OBJECTS: [(&str, &str); 3] = [("none", "Do Not Move"), ("move", "Move All 
 
 fn heading(d: &Dialog) -> String {
     match Plane::parse(&d.str("plane")) {
-        Some(Plane::Right) => "Right Plane",
-        Some(Plane::Ground) => "Horizontal Plane",
-        _ => "Left Plane",
+        Some(Plane::Right) => tl!("Right Plane"),
+        Some(Plane::Ground) => tl!("Horizontal Plane"),
+        _ => tl!("Left Plane"),
     }
     .into()
 }
@@ -49,7 +49,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let unit = app.session.general_unit();
     grid(ui, |ui| {
-        label(ui, "Location:");
+        label(ui, tl!("Location:"));
         if let Some(v) = widgets::num_field(ui, "pp-location", Some(d.f64("location", 0.0)), unit, 120.0) {
             d.fields.insert("location".into(), json!(v));
         }

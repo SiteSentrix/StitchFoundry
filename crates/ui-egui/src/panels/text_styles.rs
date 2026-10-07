@@ -26,6 +26,10 @@ impl Kind {
     fn what(self) -> &'static str {
         if self == Kind::Char { "Character" } else { "Paragraph" }
     }
+    /// `what` in the UI language, for text shown to the user.
+    fn what_label(self) -> &'static str {
+        if self == Kind::Char { tl!("Character") } else { tl!("Paragraph") }
+    }
     fn key(self) -> &'static str {
         if self == Kind::Char { "char-style-sel" } else { "para-style-sel" }
     }
@@ -94,7 +98,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             } else if resp.hovered() {
                 ui.painter().rect_filled(r, 0.0, t.hover);
             }
-            let label = if overridden { format!("{name}+") } else { name.clone() };
+            // The built-in "[Normal … Style]" names are translated where painted; other names are user data.
+            let shown = if name.starts_with('[') && name.ends_with(']') { tl!(name) } else { name.as_str() };
+            let label = if overridden { format!("{shown}+") } else { shown.to_string() };
             ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
             if resp.clicked() {
                 clicked = Some((name.clone(), ui.input(|i| i.modifiers.alt)));
@@ -113,12 +119,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let deletable = sel.as_ref().is_some_and(|s| *s != normal);
     widgets::bottom_bar(ui, |ui| {
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-new-item", &format!("Create New {} Style", kind.what()), false, true, 24.0).clicked()
+        if widgets::icon_button_enabled(
+            ui,
+            "dc-new-item",
+            &crate::i18n::fmt(tl!("Create New {kind} Style"), &[("kind", kind.what_label())]),
+            false,
+            true,
+            24.0,
+        )
+        .clicked()
             && let Ok(r) = app.run(&format!("{}.new", kind.prefix()), target(app, kind, json!({})))
         {
             set_pstate(ui.ctx(), kind.key(), r["name"].as_str().map(str::to_string));
         }
-        if widgets::icon_button_enabled(ui, "trash-2", &format!("Delete {} Style", kind.what()), false, deletable, 24.0).clicked()
+        if widgets::icon_button_enabled(
+            ui,
+            "trash-2",
+            &crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]),
+            false,
+            deletable,
+            24.0,
+        )
+        .clicked()
             && let Some(n) = &sel
             && app.run(&format!("{}.delete", kind.prefix()), json!({ "name": n })).is_ok()
         {
@@ -133,31 +155,31 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let user = sel.as_ref().is_some_and(|s| s != normal);
     let has_text = current(app, kind).is_some() || selection_len(app) > 0;
     let p = kind.prefix();
-    if menu_item(ui, &format!("New {} Style…", kind.what()), true, false) {
+    if menu_item(ui, &crate::i18n::fmt(tl!("New {kind} Style…"), &[("kind", kind.what_label())]), true, false) {
         app.run(&format!("{p}.new"), target(app, kind, json!({}))).ok();
     }
-    if menu_item(ui, &format!("Duplicate {} Style", kind.what()), sel.is_some(), false)
+    if menu_item(ui, &crate::i18n::fmt(tl!("Duplicate {kind} Style"), &[("kind", kind.what_label())]), sel.is_some(), false)
         && let Some(n) = &sel
     {
         app.run(&format!("{p}.duplicate"), json!({ "name": n })).ok();
     }
-    if menu_item(ui, &format!("Delete {} Style", kind.what()), user, false)
+    if menu_item(ui, &crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]), user, false)
         && let Some(n) = &sel
     {
         app.run(&format!("{p}.delete"), json!({ "name": n })).ok();
     }
     ui.separator();
-    if menu_item(ui, "Clear Overrides", sel.is_some() && has_text, false)
+    if menu_item(ui, tl!("Clear Overrides"), sel.is_some() && has_text, false)
         && let Some(n) = &sel
     {
         app.run(&format!("{p}.apply"), target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
     }
-    if menu_item(ui, &format!("Redefine {} Style", kind.what()), sel.is_some() && has_text, false)
+    if menu_item(ui, &crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]), sel.is_some() && has_text, false)
         && let Some(n) = &sel
     {
         app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": n }))).ok();
     }
-    if menu_item(ui, &format!("{} Style Options…", kind.what()), user, false)
+    if menu_item(ui, &crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]), user, false)
         && let Some(n) = &sel
     {
         let label = format!("{} Style Options", kind.what());
