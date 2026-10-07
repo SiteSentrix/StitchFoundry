@@ -25,45 +25,69 @@ mod window;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_ui_egui::graphics::GraphicsLoss;
 use vectorcraft_ui_egui::{FilePick, Services, VectorcraftApp};
 
-struct App(VectorcraftApp, #[cfg(target_os = "macos")] Option<native_menu::NativeMenu>);
+struct App {
+    app: VectorcraftApp,
+    /// Reported by wgpu when the window's graphics device is lost (a driver reset).
+    graphics_loss: GraphicsLoss,
+    /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
+    graphics_lost: bool,
+    #[cfg(target_os = "macos")]
+    menu: Option<native_menu::NativeMenu>,
+}
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(why) = self.graphics_loss.take() {
+            // eframe can't give a window a new device: the user saves and starts again.
+            self.graphics_lost = self.app.graphics_lost(&why);
+            self.app.status(if self.graphics_lost {
+                "The graphics device was lost: unsaved changes are kept for Data Recovery. Save your documents and restart VectorCraft"
+            } else {
+                "The graphics device was lost: save your documents and restart VectorCraft"
+            });
+        }
+        if self.graphics_lost && ctx.input(|i| i.viewport().close_requested()) {
+            // The window can't show the Save Changes question: it closes, and the next launch
+            // offers the changes back.
+            vectorcraft_ui_egui::background::wait_all(&mut self.app);
+            return;
+        }
         #[cfg(target_os = "macos")]
         {
-            if self.1.is_none() && std::env::var_os("VECTORCRAFT_NO_NATIVE_MENU").is_none() {
-                self.1 = Some(native_menu::NativeMenu::install(&mut self.0));
+            if self.menu.is_none() && std::env::var_os("VECTORCRAFT_NO_NATIVE_MENU").is_none() {
+                self.menu = Some(native_menu::NativeMenu::install(&mut self.app));
             }
-            if let Some(m) = &mut self.1 {
-                m.poll(&mut self.0);
+            if let Some(m) = &mut self.menu {
+                m.poll(&mut self.app);
             }
-            open_files(&mut self.0, open_documents::take());
+            open_files(&mut self.app, open_documents::take());
         }
-        self.0.logic(ctx);
-        window::track(ctx, &mut self.0.ui.window);
-        if self.0.ui.status == "quit" {
+        self.app.logic(ctx);
+        window::track(ctx, &mut self.app.ui.window);
+        if self.app.ui.status == "quit" {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
-        self.0.raw_input_hook(raw);
+        self.app.raw_input_hook(raw);
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.0.ui(ui);
+        self.app.ui(ui);
         #[cfg(target_os = "macos")]
-        if self.0.take_ime_discard() {
+        if self.app.take_ime_discard() {
             discard_marked_text();
         }
     }
     #[cfg(not(feature = "windows7"))]
     fn on_exit(&mut self) {
-        save_prefs(&self.0);
+        save_prefs(&self.app);
     }
     #[cfg(feature = "windows7")]
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        save_prefs(&self.0);
+        save_prefs(&self.app);
     }
 }
 
@@ -363,11 +387,14 @@ fn main() -> eframe::Result {
                 let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
                 app.session.recovery.set_default_folder(recovery);
             }
+            let graphics_loss = GraphicsLoss::default();
             #[cfg(feature = "wgpu")]
             if let Some(rs) = &cc.wgpu_render_state {
                 let summary = adapter_summary(&rs.adapter.get_info());
                 log::info!("vectorcraft: rendering with {summary} (power preference {power:?})");
                 app.graphics_adapter = Some(summary);
+                let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
+                rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
             }
             #[cfg(feature = "windows7")]
             {
@@ -382,11 +409,13 @@ fn main() -> eframe::Result {
             #[cfg(target_os = "macos")]
             open_documents::set_ui(&cc.egui_ctx);
             open_files(&mut app, files);
-            Ok(Box::new(App(
+            Ok(Box::new(App {
                 app,
+                graphics_loss,
+                graphics_lost: false,
                 #[cfg(target_os = "macos")]
-                None,
-            )))
+                menu: None,
+            }))
         }),
     )
 }

@@ -714,7 +714,7 @@ pub(crate) fn real_thumb(ui: &Ui, doc: &vectorcraft_doc::Document, n: &Node, r: 
     use std::collections::HashMap;
     thread_local! {
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
-        static CACHE: RefCell<HashMap<(usize, u64), egui::TextureHandle>> = RefCell::new(HashMap::new());
+        static CACHE: crate::graphics::TexCache<HashMap<(usize, u64), egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
     if !ui.is_rect_visible(r) {
         return true;

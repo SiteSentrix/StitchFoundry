@@ -2,8 +2,6 @@
 //! document revision) with the red view box you drag to pan, zoom out/in buttons, a zoom slider
 //! and a zoom field.
 
-use std::cell::RefCell;
-
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
 use vectorcraft_geom::{Point, Rect as DRect};
@@ -13,6 +11,7 @@ use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 
+#[derive(Default)]
 struct Cache {
     renderer: Option<vectorcraft_render::Renderer>,
     key: Option<(usize, u64, u32, u32, bool)>,
@@ -20,7 +19,7 @@ struct Cache {
 }
 
 thread_local! {
-    static CACHE: RefCell<Cache> = const { RefCell::new(Cache { renderer: None, key: None, tex: None }) };
+    static CACHE: crate::graphics::TexCache<Cache> = crate::graphics::TexCache::default();
 }
 
 /// Map a document point into the thumbnail rect (region → rect, aspect preserved).

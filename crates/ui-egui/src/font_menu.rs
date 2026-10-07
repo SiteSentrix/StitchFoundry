@@ -6,7 +6,6 @@
 //! only those. Preferences › Type › Enable in-menu font previews and Font Preview Size turn the
 //! samples off or size the rows.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -480,7 +479,7 @@ impl Samples {
 }
 
 thread_local! {
-    static SAMPLES: RefCell<Samples> = RefCell::new(Samples::default());
+    static SAMPLES: crate::graphics::TexCache<Samples> = crate::graphics::TexCache::default();
 }
 
 /// The sample of `family` for a row `height` points high: the selected text set in it (else a

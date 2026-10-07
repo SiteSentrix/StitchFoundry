@@ -169,11 +169,10 @@ fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
 
 /// A pattern swatch drawn as a rendered tile (cached by the definition's identity and size).
 fn pattern_thumb(app: &VectorcraftApp, ui: &Ui, r: Rect, paint: &Paint) {
-    use std::cell::RefCell;
     use std::collections::HashMap;
     type Key = (String, Vec<usize>, String, u32);
     thread_local! {
-        static CACHE: RefCell<HashMap<Key, Option<egui::TextureHandle>>> = RefCell::new(HashMap::new());
+        static CACHE: crate::graphics::TexCache<HashMap<Key, Option<egui::TextureHandle>>> = crate::graphics::TexCache::default();
     }
     let Paint::Pattern { pattern, .. } = paint else { return };
     let Some(st) = app.session.active() else { return };

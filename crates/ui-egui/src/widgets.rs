@@ -1269,7 +1269,7 @@ pub fn doc_preview(ui: &Ui, key: &str, size: Vec2, build: impl FnOnce(f64, f64) 
     use std::collections::HashMap;
     thread_local! {
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
-        static CACHE: RefCell<HashMap<String, egui::TextureHandle>> = RefCell::new(HashMap::new());
+        static CACHE: crate::graphics::TexCache<HashMap<String, egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
     let ppp = ui.ctx().pixels_per_point() as f64;
     let (w, h) = (size.x as f64, size.y as f64);

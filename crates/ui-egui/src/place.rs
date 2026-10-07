@@ -51,16 +51,26 @@ pub enum DropTarget {
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
     picked: Vec<(String, Vec<u8>)>,
-    /// The loaded cursor's thumbnails by file name: decoded when the cursor is loaded, uploaded
-    /// when first drawn.
+    /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
     info: Option<((u64, u64, u64), Value)>,
 }
 
-enum Thumb {
-    Decoded(egui::ColorImage),
-    Uploaded(egui::TextureHandle),
+/// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
+/// again in a new graphics context).
+struct Thumb {
+    image: std::sync::Arc<egui::ColorImage>,
+    tex: Option<egui::TextureHandle>,
+}
+
+impl PlaceState {
+    /// The UI moved to a new egui context: the thumbnails are uploaded again when drawn.
+    pub(crate) fn forget_textures(&mut self) {
+        for (_, th) in &mut self.thumbs {
+            th.tex = None;
+        }
+    }
 }
 
 /// Run engine command `id` itself (past the UI's handling of the same id); an error shows in the
@@ -230,7 +240,7 @@ pub fn queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             let png = vectorcraft_format::base64_decode(f["thumbnailBase64"].as_str()?)?;
             let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()?.to_rgba8();
             let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], img.as_raw());
-            Some((f["name"].as_str()?.to_string(), Thumb::Decoded(color)))
+            Some((f["name"].as_str()?.to_string(), Thumb { image: std::sync::Arc::new(color), tex: None }))
         })
         .collect();
     Ok(r)
@@ -243,15 +253,10 @@ pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egu
     let name = opts["name"].as_str().unwrap_or_default();
     let t = Tokens::get(ctx);
     let tex = app.place.thumbs.iter_mut().find(|(n, _)| n == name).map(|(n, th)| {
-        if let Thumb::Decoded(img) = th {
-            *th = Thumb::Uploaded(ctx.load_texture(format!("place-thumb-{n}"), std::mem::take(img), egui::TextureOptions::LINEAR));
-        }
-        match th {
-            Thumb::Uploaded(tex) => Some((tex.id(), tex.size_vec2())),
-            Thumb::Decoded(_) => None,
-        }
+        let tex = th.tex.get_or_insert_with(|| ctx.load_texture(format!("place-thumb-{n}"), th.image.clone(), egui::TextureOptions::LINEAR));
+        (tex.id(), tex.size_vec2())
     });
-    let (id, size) = tex.flatten().unzip();
+    let (id, size) = tex.unzip();
     let size = size.unwrap_or(egui::vec2(THUMB as f32, THUMB as f32 * 0.75));
     let k = THUMB as f32 / size.x.max(size.y).max(1.0);
     let r = egui::Rect::from_min_size(pos + THUMB_OFFSET, size * k);

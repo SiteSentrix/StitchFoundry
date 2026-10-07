@@ -116,6 +116,12 @@ struct Cache {
     view: View,
     generation: u64,
     renderer: Option<vectorcraft_render::Renderer>,
+    drawn: crate::graphics::TexCache<Drawn>,
+}
+
+/// The preview as drawn: for what, and its texture.
+#[derive(Default)]
+struct Drawn {
     key: Option<Key>,
     tex: Option<egui::TextureHandle>,
 }
@@ -268,8 +274,10 @@ fn preview_area(ui: &mut Ui, t: &Tokens, h: Highlight, overprints: Overprints) {
     let ppp = ui.ctx().pixels_per_point();
     CACHE.with(|c| {
         let mut c = c.borrow_mut();
-        let Cache { shot, view, renderer, key, tex, .. } = &mut *c;
+        let Cache { shot, view, renderer, drawn, .. } = &mut *c;
         let Some(shot) = shot.as_ref() else { return };
+        let mut drawn = drawn.borrow_mut();
+        let Drawn { key, tex } = &mut *drawn;
         let visible = view.visible(shot.fit);
         if resp.double_clicked() {
             *view = View::default();
@@ -420,7 +428,7 @@ mod tests {
         let mut app = app();
         frame(&mut app);
         assert!(CACHE.with(|c| c.borrow().shot.is_some()), "a first look refreshes");
-        assert!(CACHE.with(|c| c.borrow().tex.is_some()), "the preview is drawn");
+        assert!(CACHE.with(|c| c.borrow().drawn.borrow().tex.is_some()), "the preview is drawn");
         let v = command(&mut app, &json!({"highlight": "allAffected"})).unwrap();
         assert_eq!(v["counts"]["allAffected"], 2);
         assert_eq!(app.ui.open_panel.as_deref(), Some(ID));

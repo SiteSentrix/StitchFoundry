@@ -487,6 +487,22 @@ pub fn release(s: &mut Session) {
     store.remove_area(&area);
 }
 
+/// Let go of this session's area but leave its copies, as a crash would, so the next app started
+/// offers them at once instead of waiting for the heartbeat to go stale: for an app that can't go
+/// on (the web page lost its graphics and has to be reloaded). Its documents keep no copies.
+pub fn leave(s: &mut Session) {
+    for st in &mut s.docs {
+        st.recovery = None;
+    }
+    let Some(Own { store, area, hold, beats }) = s.recovery.own.take() else { return };
+    if beats {
+        // Best effort: if the heartbeat stays, the copies are offered once it is stale.
+        let _ = store.remove(&format!("{area}/{BEAT}"));
+    }
+    // The lock or announcement goes too.
+    drop(hold);
+}
+
 /// A document's recovery copy: its entry and the document it holds.
 #[derive(Clone, Debug)]
 pub struct RecoveryCopy {

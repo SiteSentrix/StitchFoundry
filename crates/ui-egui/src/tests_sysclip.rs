@@ -95,9 +95,13 @@ pub(super) fn blue_png() -> Vec<u8> {
     png
 }
 
-/// One headless frame of app logic (shortcuts too, from the second frame on) delivering `events`.
+/// One headless frame of app logic (shortcuts too, from the second frame on) delivering `events`,
+/// in the test's one context (in a new one the app starts its fonts over).
 fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) {
-    let ctx = egui::Context::default();
+    thread_local! {
+        static CTX: egui::Context = egui::Context::default();
+    }
+    let ctx = CTX.with(Clone::clone);
     ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| app.logic(ui.ctx())).textures_delta.clear();
 }
 

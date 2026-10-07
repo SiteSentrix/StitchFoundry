@@ -2,7 +2,6 @@
 //! outlines. Double-click inserts the character at the Type tool's caret (or appends it to the
 //! selected text objects).
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 use egui::{Color32, Sense, Ui, vec2};
@@ -29,7 +28,7 @@ const SUBSETS: [(&str, u32, u32); 7] = [
 ];
 
 thread_local! {
-    static TEX: RefCell<HashMap<(u32, u32, u32), egui::TextureHandle>> = RefCell::new(HashMap::new());
+    static TEX: crate::graphics::TexCache<HashMap<(u32, u32, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
 }
 
 /// Antialiased coverage mask (nonzero winding) of `path` in a `w`×`h` pixel grid.
