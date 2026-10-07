@@ -110,7 +110,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout.
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
-  - **Temporary tools:** Cmd with any other tool drags with the selection tool used last (Selection, Direct Selection or Group Selection).
+  - **Temporary tools:** Cmd with any other tool drags with the selection tool used last (Selection, Direct Selection or Group Selection). Held Space pans and Cmd+Space zooms (Cmd+Alt+Space out) whatever the tool.
   - **Tool double-clicks:** double-clicking a tool's button opens its options: Hand fits the artboard in the window, Zoom shows 100 %, Rotate, Scale, Reflect and Shear open their Object › Transform dialogs, Gradient, Eyedropper, Blend and the Liquify tools their panels or options.
 - **Drawing aids:** Smart Guides and snapping, guides dragged out of the rulers, and Draw Normal / Behind / Inside modes.
 - **Views:** the status bar's artboard navigator (first, previous, next, last; `view.goToArtboard`) goes to an artboard and fits it, and Fit Artboard in Window and Actual Size show the navigator's artboard.
