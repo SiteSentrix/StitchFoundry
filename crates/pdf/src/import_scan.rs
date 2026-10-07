@@ -1,6 +1,6 @@
 //! What the interpreter doesn't tell the import, read from the file itself: the optional content
-//! groups (layers) with their states, which group each marked-content sequence belongs to, the
-//! isolate and knockout flags of transparency groups, and the names of the fonts.
+//! groups (layers) with their states and nesting, which group each marked-content sequence belongs
+//! to, the isolate and knockout flags of transparency groups, and the names of the fonts.
 //!
 //! hayro-interpret reports a marked-content sequence by its tag alone and a transparency group
 //! without its flags, and skips the content of groups that are off. So each page's content is
@@ -16,7 +16,7 @@ use hayro_interpret::CacheKey;
 use hayro_syntax::Pdf;
 use hayro_syntax::content::TypedIter;
 use hayro_syntax::content::ops::TypedInstruction;
-use hayro_syntax::object::{Array, Dict, FromBytes, Name, Object, ObjectIdentifier, dict_or_stream};
+use hayro_syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, dict_or_stream};
 use hayro_syntax::page::{Page, Resources};
 
 /// The interpreter's limit on nested form XObjects.
@@ -25,6 +25,8 @@ const MAX_DEPTH: u32 = 50;
 const MAX_OPS: usize = 2_000_000;
 /// The most groups read.
 const MAX_GROUPS: usize = 10_000;
+/// The deepest layers nest in the configuration's `/Order`.
+pub(crate) const MAX_NESTING: usize = 32;
 
 /// An optional content group: a layer.
 #[derive(Clone, Debug, PartialEq)]
@@ -35,6 +37,8 @@ pub(crate) struct Ocg {
     /// Printed (its print usage isn't off).
     pub print: bool,
     pub locked: bool,
+    /// The group it is listed under in the layer order (a sublayer of it).
+    pub parent: Option<usize>,
 }
 
 /// The file's optional content groups.
@@ -44,6 +48,10 @@ pub(crate) struct Ocgs {
     index: HashMap<ObjectIdentifier, usize>,
     /// The groups that are off (as the interpreter decides it).
     off: HashSet<ObjectIdentifier>,
+    /// The groups whose view state applies when the file opens (an `/AS` entry for viewing).
+    view_auto: HashSet<ObjectIdentifier>,
+    /// The groups placed in the layer order.
+    placed: HashSet<usize>,
 }
 
 impl Ocgs {
@@ -68,13 +76,62 @@ impl Ocgs {
             o.off.remove(&id);
         }
         o.off.extend(refs(&config, b"OFF"));
+        let auto = config.get::<Array<'_>>(b"AS").map(|a| a.iter::<Dict<'_>>().take(MAX_GROUPS).collect::<Vec<_>>()).unwrap_or_default();
+        for d in auto.iter().filter(|d| d.get::<Name<'_>>(b"Event").is_some_and(|e| e.as_ref() == b"View")) {
+            o.view_auto.extend(refs(d, b"OCGs"));
+        }
         let locked: HashSet<_> = refs(&config, b"Locked").into_iter().collect();
         for id in all {
             if let Some(d) = xref.get::<Dict<'_>>(id) {
                 o.add(id, &d, locked.contains(&id));
             }
         }
+        if let Some(order) = config.get::<Array<'_>>(b"Order") {
+            o.nest(&order, None, 0, xref, &mut 0);
+        }
         o
+    }
+
+    /// Read the layer order `order` (listed under group `parent`): a group followed by an array
+    /// lists that array's groups as its sublayers; an array starting with a label lists its
+    /// groups under the label, which isn't a group (they go under `parent`). A group listed twice
+    /// stays where it is first listed. `seen`: the entries read so far.
+    fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &hayro_syntax::xref::XRef, seen: &mut usize) {
+        let mut prev = None;
+        for item in order.raw_iter() {
+            *seen += 1;
+            if *seen > 4 * MAX_GROUPS {
+                return;
+            }
+            let sub = match item {
+                MaybeRef::Ref(r) => {
+                    let id = ObjectIdentifier::from(r);
+                    let sub = xref.get::<Array<'_>>(id);
+                    if sub.is_none() {
+                        prev = self.place(id, parent);
+                    }
+                    sub
+                }
+                MaybeRef::NotRef(o) => o.into_array(),
+            };
+            if let Some(sub) = sub
+                && depth < MAX_NESTING
+            {
+                let label = matches!(sub.raw_iter().next(), Some(MaybeRef::NotRef(Object::String(_))));
+                let under = prev.take().filter(|_| !label).or(parent);
+                self.nest(&sub, under, depth + 1, xref, seen);
+            }
+        }
+    }
+
+    /// Put group `id` under `parent` in the layer order → its index, unless it isn't a group or
+    /// is already placed. Each group is placed after its parent, so the nesting has no cycles.
+    fn place(&mut self, id: ObjectIdentifier, parent: Option<usize>) -> Option<usize> {
+        let i = *self.index.get(&id)?;
+        let placed = self.placed.insert(i);
+        let g = self.list.get_mut(i).filter(|_| placed)?;
+        g.parent = parent;
+        Some(i)
     }
 
     /// Note group `id` (its dictionary `d`) → its index.
@@ -83,20 +140,24 @@ impl Ocgs {
             return *i;
         }
         let name = d.get::<hayro_syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
-        let print = d
-            .get::<Dict<'_>>(b"Usage")
-            .and_then(|u| u.get::<Dict<'_>>(b"Print"))
-            .and_then(|p| p.get::<Name<'_>>(b"PrintState"))
-            .is_none_or(|s| s.as_ref() != b"OFF");
-        let on = !self.off.contains(&id);
-        self.list.push(Ocg { name: if name.is_empty() { format!("Layer {}", self.list.len() + 1) } else { name }, on, print, locked });
+        let print = usage(d, b"Print", b"PrintState") != Some(false);
+        // A view state applies when the configuration says so on opening; an off one hides the
+        // group all the same (it says how the group is meant to be seen).
+        let view = usage(d, b"View", b"ViewState");
+        let on = match view {
+            Some(v) if self.view_auto.contains(&id) => v,
+            Some(false) => false,
+            _ => !self.off.contains(&id),
+        };
+        let name = if name.is_empty() { format!("Layer {}", self.list.len() + 1) } else { name };
+        self.list.push(Ocg { name, on, print, locked, parent: None });
         self.index.insert(id, self.list.len() - 1);
         self.list.len() - 1
     }
 
-    /// Is any group off?
-    pub fn any_off(&self) -> bool {
-        self.list.iter().any(|g| !g.on)
+    /// Does the interpreter leave out the art of some group (off in the default configuration)?
+    pub fn skips_any(&self) -> bool {
+        self.index.keys().any(|id| self.off.contains(id))
     }
 
     /// The group content marked with `/OC` (`d`: the group or membership dictionary, `id` its
@@ -116,6 +177,16 @@ impl Ocgs {
             Some(i) => Some(*i),
             None => (self.list.len() < MAX_GROUPS).then(|| self.add(id, d, false)),
         }
+    }
+}
+
+/// The state (`ON` → true, `OFF` → false) group `d`'s usage `category` gives in `key`.
+fn usage(d: &Dict<'_>, category: &[u8], key: &[u8]) -> Option<bool> {
+    let state = d.get::<Dict<'_>>(b"Usage")?.get::<Dict<'_>>(category)?.get::<Name<'_>>(key)?;
+    match state.as_ref() {
+        b"ON" => Some(true),
+        b"OFF" => Some(false),
+        _ => None,
     }
 }
 
