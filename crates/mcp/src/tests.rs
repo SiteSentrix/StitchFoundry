@@ -303,6 +303,17 @@ fn inspect_document_reports_the_paint_of_type() {
     assert_eq!((t["fill"].as_str(), t["stroke"].as_str(), t["strokeWidth"].as_f64()), (Some("#0000ff"), Some("#00ff00"), Some(3.0)), "{t}");
 }
 
+/// save_file says it saves in the document's own format or the one the path's extension picks.
+#[test]
+fn save_file_describes_the_formats_it_writes() {
+    let tools = tool_definitions();
+    let d = tools.iter().find(|t| t["name"] == "save_file").and_then(|t| t["description"].as_str()).unwrap();
+    for ext in [".vectorcraft", ".vctemplate", ".pdf", ".svg", ".svgz", ".ai"] {
+        assert!(d.contains(ext), "{ext}: {d}");
+    }
+    assert!(d.contains("its own format"), "{d}");
+}
+
 #[test]
 fn errors_are_tool_results_not_crashes() {
     let mut s = server();

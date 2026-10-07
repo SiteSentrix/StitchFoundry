@@ -2,7 +2,7 @@
 //! [`Backend`].
 
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS};
+use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS, SAVE_FORMATS, format};
 
 use crate::backend::Backend;
 
@@ -57,6 +57,12 @@ fn obj(props: Value, required: &[&str]) -> Value {
     }
     o
 }
+
+/// The extension of each format Save writes, in [`SAVE_FORMATS`] order.
+fn save_extensions() -> Vec<&'static str> {
+    SAVE_FORMATS.iter().filter_map(|id| format(id)?.extensions.first().copied()).collect()
+}
+
 fn tool(name: &str, title: &str, desc: &str, schema: Value, read_only: bool) -> Value {
     json!({
         "name": name,
@@ -259,8 +265,11 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "save_file",
             "Save file",
-            "Save the active document in the native .vectorcraft format.",
-            obj(json!({"path": string("Destination (default: the document's current path)")}), &[]),
+            &format!(
+                "Save the active document with the engine's document.save: by default to its own file in its own format (native .vectorcraft unless it was opened from or saved as SVG, PDF or a restorable .ai). With `path`, the extension picks the format: .{}. Other formats are exports (see export). The reply's `format` says what was written and `warnings` what that format loses.",
+                save_extensions().join(", .")
+            ),
+            obj(json!({"path": string("Destination; its extension picks the format (default: the document's own file)")}), &[]),
             false,
         ),
         tool(
