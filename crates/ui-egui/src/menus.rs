@@ -171,7 +171,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
-    ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke"),
+    ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     ("window.workspace", "Workspace", "", "{name} switch workspace (Essentials, Essentials Classic, Painting, …)"),
     ("window.workspace.reset", "Reset Essentials", "", "{} reset the current workspace"),
@@ -681,6 +681,28 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
+/// Canonical panel id for `window.panel`: the dock tabs (`properties`, `layers`, `libraries`)
+/// and every `ICON_PANELS` id, matched case-insensitively. Each icon panel's display label
+/// is accepted too, so `"Layers"` and `"Swatches"` work the way agents write them.
+fn normalize_panel(input: &str) -> Option<&'static str> {
+    let name = input.trim();
+    if name.eq_ignore_ascii_case("properties") {
+        return Some("properties");
+    }
+    if name.eq_ignore_ascii_case("layers") {
+        return Some("layers");
+    }
+    if name.eq_ignore_ascii_case("libraries") {
+        return Some("libraries");
+    }
+    for &(id, label, _) in ICON_PANELS.iter() {
+        if name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label) {
+            return Some(id);
+        }
+    }
+    None
+}
+
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     if id == "app.language" {
@@ -896,26 +918,26 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(json!(on))
         }
         "window.panel" => {
-            let panel = s("panel").unwrap_or_default();
-            match panel.as_str() {
-                "properties" => {
+            let raw = s("panel").unwrap_or_default();
+            match normalize_panel(&raw) {
+                Some("properties") => {
                     app.ui.dock_tab = DockTab::Properties;
                     Ok(Value::Null)
                 }
-                "layers" => {
+                Some("layers") => {
                     app.ui.dock_tab = DockTab::Layers;
                     Ok(Value::Null)
                 }
-                "libraries" => {
+                Some("libraries") => {
                     app.ui.dock_tab = DockTab::Libraries;
                     Ok(Value::Null)
                 }
-                p if ICON_PANELS.iter().any(|(id, _, _)| *id == p) => {
+                Some(p) => {
                     app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(p) { None } else { Some(p.to_string()) };
                     app.ui.dock = true;
                     Ok(json!({"open": app.ui.open_panel}))
                 }
-                other => Err(format!("unknown panel `{other}`")),
+                None => Err(format!("unknown panel `{raw}`")),
             }
         }
         "window.brightness" => match s("brightness").as_deref().and_then(Brightness::parse) {
@@ -1195,11 +1217,12 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.taskBar" => app.ui.task_bar,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            match panel {
-                "properties" => app.ui.dock_tab == DockTab::Properties,
-                "layers" => app.ui.dock_tab == DockTab::Layers,
-                "libraries" => app.ui.dock_tab == DockTab::Libraries,
-                _ => app.ui.open_panel.as_deref() == Some(panel),
+            match normalize_panel(panel) {
+                Some("properties") => app.ui.dock_tab == DockTab::Properties,
+                Some("layers") => app.ui.dock_tab == DockTab::Layers,
+                Some("libraries") => app.ui.dock_tab == DockTab::Libraries,
+                Some(id) => app.ui.open_panel.as_deref() == Some(id),
+                None => false,
             }
         }
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
@@ -2993,6 +3016,28 @@ mod tests {
             app.run(id, json!({})).unwrap();
             assert_eq!(dynamic_label(&app, id, ""), off);
         }
+    }
+
+    #[test]
+    fn panel_ids_are_case_insensitive_and_labels_work() {
+        assert_eq!(normalize_panel("layers"), Some("layers"));
+        assert_eq!(normalize_panel("Layers"), Some("layers"));
+        assert_eq!(normalize_panel("LAYERS"), Some("layers"));
+        assert_eq!(normalize_panel("Swatches"), Some("swatches"));
+        assert_eq!(normalize_panel("swatches"), Some("swatches"));
+        assert_eq!(normalize_panel("Color Guide"), Some("colorGuide"));
+        assert_eq!(normalize_panel("colorguide"), Some("colorGuide"));
+        assert_eq!(normalize_panel("  Stroke  "), Some("stroke"));
+        assert_eq!(normalize_panel("nope"), None);
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("window.panel", json!({"panel": "Layers"})).unwrap();
+        assert_eq!(app.ui.dock_tab, crate::state::DockTab::Layers);
+        app.run("window.panel", json!({"panel": "Swatches"})).unwrap();
+        assert_eq!(app.ui.open_panel.as_deref(), Some("swatches"));
+        assert!(checked(&app, "window.panel", &json!({"panel": "Swatches"})).unwrap());
+        assert!(app.run("window.panel", json!({"panel": "nope"})).is_err());
     }
 
     #[test]
