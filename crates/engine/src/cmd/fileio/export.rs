@@ -11,7 +11,7 @@ use crate::DocState;
 
 use super::super::*;
 use super::encode::single_artboard;
-use super::{ARTBOARD_PARAMS, Format, default_name, encode, encode_all, merge, writable, write_encoded, write_or_return};
+use super::{ARTBOARD_PARAMS, Format, default_name, encode, encode_all, encode_with_warnings, merge, writable, write_encoded, write_or_return};
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
@@ -151,8 +151,10 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let expanded = expand_presets(s, C, p)?;
     let p = &*expanded;
     let (d, bounds) = selection(s, C)?;
-    let bytes = encode(&d, f.id, &without_artboards(p))?;
-    write_or_return(path, &bytes, json!({ "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
+    // The encoder's warnings (options accepted but not applied, features approximated or left
+    // out), as document.export reports them.
+    let (bytes, warnings) = encode_with_warnings(&d, f.id, &without_artboards(p))?;
+    write_or_return(path, &bytes, json!({ "format": f.id, "warnings": warnings, "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
 }
 
 /// File → Save for Office Documents: one artboard as a PNG at `ppi`, on white unless

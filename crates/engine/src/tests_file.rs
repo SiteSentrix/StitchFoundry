@@ -168,6 +168,33 @@ fn export_selection_crops_to_the_selection() {
     assert_eq!(text.matches("<path").count(), 1, "{text}");
 }
 
+/// A selection export reports the encoder's warnings like a whole-document export, and an empty
+/// list when nothing was approximated.
+#[test]
+fn export_selection_reports_the_encoders_warnings() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "Multiply"})).unwrap();
+    let warnings = |v: &serde_json::Value| v["warnings"].as_array().cloned().unwrap_or_else(|| panic!("no warnings key: {v}"));
+    // Control: nothing approximated.
+    let plain = s.execute("document.exportSelection", &json!({"format": "svg"})).unwrap();
+    assert_eq!(plain["format"], "svg");
+    assert!(warnings(&plain).is_empty(), "{plain}");
+    for (format, options, says) in [
+        ("webp", json!({"lossless": false}), "lossless"),
+        ("svg", json!({"profile": "tiny12"}), "blend"),
+        ("pdf", json!({"createLayers": true, "compatibility": "1.4"}), "layers"),
+    ] {
+        let mut p = options.clone();
+        p["format"] = json!(format);
+        let sel = s.execute("document.exportSelection", &p).unwrap();
+        let doc = s.execute("document.export", &p).unwrap();
+        let w = warnings(&sel);
+        assert!(w.iter().any(|w| w.as_str().unwrap_or("").to_lowercase().contains(says)), "{format}: {sel}");
+        assert_eq!(w, warnings(&doc), "{format}: the same warnings as a whole-document export");
+    }
+}
+
 #[test]
 fn template_opens_as_untitled() {
     let mut s = session();
