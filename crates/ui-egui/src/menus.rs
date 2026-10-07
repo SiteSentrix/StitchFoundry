@@ -2343,14 +2343,16 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     let tree = menu_tree();
     let end = egui::MenuBar::new()
         .ui(ui, |ui| {
+            let mut titles = Vec::with_capacity(tree.len());
             for (i, (title, items)) in tree.iter().enumerate() {
                 let text = if i == 0 {
                     egui::RichText::new(tl!(title)).font(theme::semibold(13.0)).color(t.text)
                 } else {
                     egui::RichText::new(tl!(title)).size(13.0).color(t.text)
                 };
-                ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked));
+                titles.push(ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked)).response);
             }
+            switch_on_hover(ui.ctx(), &titles);
             ui.cursor().min.x
         })
         .inner;
@@ -2358,6 +2360,39 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         invoke(app, &id, p);
     }
     end
+}
+
+/// Whether the pointer at `p` is really over the menu title `title`: inside it, and with no
+/// popup above it (a tall menu that egui moves up can cover the bar; hovering that menu must
+/// not switch to the title under it).
+fn pointer_reaches_title(ctx: &egui::Context, title: &egui::Response, p: egui::Pos2) -> bool {
+    title.interact_rect.contains(p) && ctx.layer_id_at(p) == Some(title.layer_id)
+}
+
+/// Like a native menu bar: while one top-level menu is open, moving the pointer onto another
+/// title opens that menu instead (egui alone needs a click on each title).
+fn switch_on_hover(ctx: &egui::Context, titles: &[egui::Response]) {
+    let ids: Vec<egui::Id> = titles.iter().map(egui::Popup::default_response_id).collect();
+    let Some(open) = ids.iter().position(|id| egui::Popup::is_id_open(ctx, *id)) else {
+        return;
+    };
+    // `Response::hovered` is false while a menu's popup is open, so hit-test the titles here.
+    let Some(p) = ctx.pointer_hover_pos() else {
+        return;
+    };
+    // Only a moving pointer switches: one resting on a title leaves the open menu alone.
+    if ctx.input(|i| i.pointer.delta() == egui::Vec2::ZERO) {
+        return;
+    }
+    let Some(i) = titles.iter().position(|title| pointer_reaches_title(ctx, title, p)) else {
+        return;
+    };
+    if i != open
+        && let Some(id) = ids.get(i)
+    {
+        egui::Popup::open_id(ctx, *id);
+        ctx.request_repaint();
+    }
 }
 
 /// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt;
@@ -2953,6 +2988,99 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One headless frame of the in-window menu bar; returns its titles (left to right) as
+    /// (rect, id of the title's popup).
+    fn bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(egui::Rect, egui::Id)> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+        let mut layer = None;
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            layer = Some(ui.layer_id());
+            menu_bar(app, ui);
+        });
+        out.textures_delta.clear();
+        let layer = layer.unwrap();
+        let mut titles: Vec<(egui::Rect, egui::Id)> = ctx.viewport(|vp| {
+            vp.prev_pass
+                .widgets
+                .get_layer(layer)
+                .filter(|w| w.sense.senses_click() && w.rect.top() < 30.0)
+                // `egui::Popup::default_response_id` of the title's response.
+                .map(|w| (w.rect, w.id.with("popup")))
+                .collect()
+        });
+        titles.sort_by(|a, b| a.0.left().total_cmp(&b.0.left()));
+        titles
+    }
+
+    fn open_titles(ctx: &egui::Context, titles: &[(egui::Rect, egui::Id)]) -> Vec<usize> {
+        (0..titles.len()).filter(|&i| egui::Popup::is_id_open(ctx, titles[i].1)).collect()
+    }
+
+    #[test]
+    fn hovering_another_title_switches_the_open_menu() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        bar_frame(&mut app, &ctx, vec![]);
+        let titles = bar_frame(&mut app, &ctx, vec![]);
+        assert_eq!(titles.len(), menu_tree().len());
+        // 0 is the app menu, then File, Edit, Object.
+        let (file, edit, object) = (titles[1].0.center(), titles[2].0.center(), titles[3].0.center());
+        let frames = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut t = bar_frame(app, &ctx, events);
+            for _ in 0..2 {
+                t = bar_frame(app, &ctx, vec![]);
+            }
+            t
+        };
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+
+        // Nothing open: hovering a title opens nothing.
+        let t = frames(&mut app, vec![egui::Event::PointerMoved(edit)]);
+        assert!(open_titles(&ctx, &t).is_empty());
+
+        // Click File, then move onto Edit and on to Object: each opens in turn, alone.
+        frames(&mut app, vec![egui::Event::PointerMoved(file)]);
+        frames(&mut app, vec![button(file, true)]);
+        let t = frames(&mut app, vec![button(file, false)]);
+        assert_eq!(open_titles(&ctx, &t), vec![1], "a click opens File");
+        let t = frames(&mut app, vec![egui::Event::PointerMoved(edit)]);
+        assert_eq!(open_titles(&ctx, &t), vec![2], "hovering Edit opens it and closes File");
+        let t = frames(&mut app, vec![egui::Event::PointerMoved(object)]);
+        assert_eq!(open_titles(&ctx, &t), vec![3], "hovering Object opens it and closes Edit");
+
+        // A pointer resting on a title doesn't switch: File opened another way (the keyboard)
+        // stays open while the pointer stays still over Object.
+        egui::Popup::open_id(&ctx, t[1].1);
+        let t = frames(&mut app, vec![]);
+        assert_eq!(open_titles(&ctx, &t), vec![1], "a still pointer leaves the open menu alone");
+    }
+
+    #[test]
+    fn a_popup_covering_a_title_does_not_switch_menus() {
+        let ctx = egui::Context::default();
+        let p = egui::pos2(90.0, 12.0);
+        let mut reaches = (true, false);
+        // The popup becomes hit-testable once egui has laid it out: draw a few frames.
+        for _ in 0..3 {
+            let raw =
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 200.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let ctx = ui.ctx().clone();
+                let covered = ui.interact(egui::Rect::from_center_size(p, egui::vec2(80.0, 24.0)), egui::Id::new("covered"), egui::Sense::click());
+                let q = p + egui::vec2(0.0, 100.0);
+                let free = ui.interact(egui::Rect::from_center_size(q, egui::vec2(80.0, 24.0)), egui::Id::new("free"), egui::Sense::click());
+                egui::Area::new(egui::Id::new("popup")).order(egui::Order::Foreground).fixed_pos(p - egui::vec2(10.0, 10.0)).show(&ctx, |ui| {
+                    ui.allocate_space(egui::vec2(20.0, 20.0));
+                });
+                reaches = (pointer_reaches_title(&ctx, &covered, p), pointer_reaches_title(&ctx, &free, q));
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(reaches, (false, true));
+    }
 
     #[test]
     fn names_in_menus_are_not_interface_labels() {
