@@ -211,3 +211,20 @@ fn pdf_a_takes_real_text() {
     let bytes = export(&d, &PdfOptions { settings, created: Some(0), ..Default::default() }).unwrap();
     assert_eq!(texts(&import_as(&bytes, TextAs::Text)), ["Archive"]);
 }
+
+/// A named instance comes back as live type in that style (not the default instance's).
+#[test]
+fn a_variable_font_instance_comes_back_in_its_own_style() {
+    use vectorcraft_text::test_fonts::{VARIABLE_CHARS, VARIABLE_FAMILY, variable_font};
+    FontDb::global().add_font(variable_font().unwrap());
+    let st = CharStyle { font_family: VARIABLE_FAMILY.into(), font_style: "Bold".into(), ..style(48.0) };
+    let d = doc(vec![TextObject::point(Point::new(20.0, 80.0), VARIABLE_CHARS, st)]);
+    let back = crate::import_with_report(&pdf(&d, false).bytes, &ImportOptions { text_as: TextAs::Text, ..Default::default() }).unwrap().document;
+    let mut styles = vec![];
+    back.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            styles.extend(t.runs.iter().map(|r| r.style.font_style.clone()));
+        }
+    });
+    assert_eq!(styles, ["Bold"]);
+}

@@ -23,7 +23,7 @@ use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec};
 use crate::import_scan::{Ocgs, Scan, all_on, hides_forms, scan_page};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
-use crate::import_text::{Families, Look, Placement, TextLine};
+use crate::import_text::{Families, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
 
 /// The name of the paths text imports as.
@@ -112,6 +112,7 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         b.begin_page(scan);
         interpret_page(page, &mut ctx, &mut b);
         let mut parts = b.end_page();
+        let copies = std::mem::take(&mut b.copies);
         // A file with several artboards writes, on each page, the art of its neighbours that
         // reaches into the page's box: art lying wholly outside this page is theirs (each page
         // draws it shifted by its own artboard spacing), so keep it only where it belongs.
@@ -160,6 +161,16 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
                 }
             }
         }
+        if !copies.is_empty() {
+            // Over the page: editable copies of the text set in fonts that aren't installed. The
+            // outlines below are what prints and exports.
+            let mut copy = Node::layer(b.id(), &format!("{COPIES_LAYER} {}", number + 1), LayerColor::Preset(((i + 1) % 27) as u8));
+            if let NodeKind::Layer { children: c, printable, .. } = &mut copy.kind {
+                *c = copies;
+                *printable = false;
+            }
+            slots.push(Slot::Page(Box::new(copy)));
+        }
     }
     if placeholder {
         return Err(PdfError::PlaceholderOnly);
@@ -204,7 +215,9 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     }
     if !b.missing_fonts.is_empty() {
         let list = b.missing_fonts.join(", ");
-        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
+        b.warn(&format!(
+            "fonts not installed ({list}): their text is kept as outlines, with editable copies in substitute fonts (pink) on the non-printing layer “{COPIES_LAYER}”"
+        ));
     }
     doc.fix_next_id();
     doc.reserve_ids(b.next);
@@ -218,6 +231,135 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
         }
     }
     Ok(ImportReport { document: doc, warnings, native: crate::editing::editing_in(&pdf) })
+}
+
+/// The non-printing layer of editable copies of text in fonts that aren't installed (+ page number).
+pub const COPIES_LAYER: &str = "Editable Text (substitute fonts, not printed)";
+
+/// The characters of a CID-keyed CFF font embedded without a ToUnicode map (as macOS writes
+/// Hiragino): each glyph's CID from the font's charset, then Adobe's CID → Unicode table of its
+/// character collection (Japan1, GB1, CNS1, Korea1).
+struct CidText {
+    /// CID of each glyph.
+    cids: Vec<u16>,
+    table: hayro_interpret::hayro_cmap::CMap,
+}
+
+impl CidText {
+    fn of(data: &[u8]) -> Option<Self> {
+        // An embedded CFF of a few CJK glyphs is kilobytes; whole fonts are some megabytes.
+        if data.len() > 64 << 20 {
+            return None;
+        }
+        use hayro_interpret::hayro_cmap::{CMap, CMapName, load_embedded};
+        use skrifa::raw::ps::cff::{CffFontRef, dict, v1::Cff};
+        use skrifa::raw::{FontData, FontRead};
+        let cff = Cff::read(FontData::new(data)).ok()?;
+        let top = cff.top_dicts().get(0)?;
+        let ordering = dict::entries(top, None).filter_map(Result::ok).find_map(|e| match e {
+            dict::Entry::Ros { ordering, .. } => Some(ordering),
+            _ => None,
+        })?;
+        let name = match cff.string(ordering)? {
+            b"Japan1" => CMapName::AdobeJapan1Ucs2,
+            b"GB1" => CMapName::AdobeGb1Ucs2,
+            b"CNS1" => CMapName::AdobeCns1Ucs2,
+            b"Korea1" => CMapName::AdobeKorea1Ucs2,
+            _ => return None,
+        };
+        let table = CMap::parse(load_embedded(name)?, load_embedded)?;
+        let charset = CffFontRef::new(data, 0, None).ok()?.charset()?;
+        let cids = (0..charset.num_glyphs().min(65_536)).map(|g| charset.string_id(skrifa::GlyphId::new(g)).map_or(0, |s| s.to_u16())).collect();
+        Some(Self { cids, table })
+    }
+
+    fn unicode(&self, glyph: u32) -> Option<hayro_interpret::hayro_cmap::BfString> {
+        let cid = *self.cids.get(glyph as usize)?;
+        self.table.lookup_bf_string(u32::from(cid))
+    }
+}
+
+/// The ideographs of the Kangxi radicals U+2F00–U+2FD5 (their NFKC forms): the CID → Unicode
+/// tables of some PDFs map 龍 to the radical ⿓, which looks the same but isn't the character.
+const KANGXI: &str = "一丨丶丿乙亅二亠人儿入八冂冖冫几凵刀力勹匕匚匸十卜卩厂厶又口囗土士夂夊夕大女子宀寸小尢尸屮山巛工己巾干幺广廴廾弋弓彐彡彳心戈戶手支攴文斗斤方无日曰月木欠止歹殳毋比毛氏气水火爪父爻爿片牙牛犬玄玉瓜瓦甘生用田疋疒癶白皮皿目矛矢石示禸禾穴立竹米糸缶网羊羽老而耒耳聿肉臣自至臼舌舛舟艮色艸虍虫血行衣襾見角言谷豆豕豸貝赤走足身車辛辰辵邑酉釆里金長門阜隶隹雨靑非面革韋韭音頁風飛食首香馬骨高髟鬥鬯鬲鬼魚鳥鹵鹿麥麻黃黍黑黹黽鼎鼓鼠鼻齊齒龍龜龠";
+
+/// Is the PDF's glyph `o` for `text` the installed `face`'s glyph for it? The outlines' bounds must
+/// agree within a tenth of an em: a different font under the same PostScript name, or a wrong
+/// ToUnicode entry, would open as other letters. Ligatures (several characters) aren't checked,
+/// nor CJK punctuation set vertically (its vertical form differs from the installed glyph).
+/// How far glyph `o` (the PDF's, for `text`) is from the installed `face`'s glyph for it: the
+/// largest difference between their boxes, in thousandths of an em. `None` when they are clearly
+/// different glyphs (or the face lacks the character); `Some(0)` when there is nothing to compare
+/// (several characters, a vertical form, no ink in either).
+fn glyph_deviation(face: &vectorcraft_text::FontFace, text: &str, o: &hayro_interpret::font::OutlineGlyph, vertical: bool) -> Option<f64> {
+    let mut chars = text.chars();
+    let (Some(c), None) = (chars.next(), chars.next()) else { return Some(0.0) };
+    if vertical && matches!(c as u32, 0x2014 | 0x2015 | 0x2025 | 0x2026 | 0x3000..=0x303F | 0x30FC | 0xFE30..=0xFE4F | 0xFF00..=0xFF65) {
+        return Some(0.0);
+    }
+    let gid = face.glyph_for(c);
+    if gid == 0 {
+        return None;
+    }
+    let embedded = o.outline();
+    let installed = vectorcraft_text::FontDb::global().outline(face, gid);
+    match (embedded.elements().is_empty(), installed.elements().is_empty()) {
+        (true, true) => Some(0.0),
+        (false, false) => {
+            let e = embedded.bounding_box();
+            let k = 1000.0 / face.units_per_em();
+            // Installed outlines are y-down; the PDF's glyph space is y-up.
+            let i = installed.bounding_box();
+            let i = Rect::new(i.x0 * k, -i.y1 * k, i.x1 * k, -i.y0 * k);
+            let off = [(e.x0, i.x0), (e.x1, i.x1), (e.y0, i.y0), (e.y1, i.y1)].iter().fold(0.0f64, |m, (a, b)| m.max((a - b).abs()));
+            (off <= 100.0).then_some(off)
+        }
+        _ => None,
+    }
+}
+
+/// The face of `face`'s family that draws glyph `o` (for `text`): `face` itself, or the style whose
+/// glyph is closest (a variable font's named instances, or a family whose PostScript names don't
+/// tell its styles apart, draw a character differently in each style). `None`: no style of the
+/// family has that glyph, so the font isn't the installed one.
+fn matching_face(
+    face: &Arc<vectorcraft_text::FontFace>,
+    text: &str,
+    o: &hayro_interpret::font::OutlineGlyph,
+    vertical: bool,
+) -> Option<Arc<vectorcraft_text::FontFace>> {
+    let own = glyph_deviation(face, text, o, vertical);
+    if own == Some(0.0) {
+        return Some(face.clone());
+    }
+    let db = vectorcraft_text::FontDb::global();
+    let others =
+        db.styles(&face.family).into_iter().filter(|s| !s.eq_ignore_ascii_case(&face.style)).take(64).filter_map(|s| db.face(&face.family, &s));
+    let mut best = own.map(|d| (d, face.clone()));
+    for f in others {
+        if let Some(d) = glyph_deviation(&f, text, o, vertical)
+            && best.as_ref().is_none_or(|(b, _)| d < *b)
+        {
+            best = Some((d, f));
+        }
+    }
+    best.map(|(_, f)| f)
+}
+
+pub(crate) fn unify_radical(c: char) -> char {
+    let i = (c as u32).wrapping_sub(0x2F00);
+    if i < 214 { KANGXI.chars().nth(i as usize).unwrap_or(c) } else { c }
+}
+
+/// The font a PDF font draws with ([`Builder::font_name`]).
+#[derive(Clone)]
+struct FontInfo {
+    family: String,
+    style: String,
+    /// Available (installed or loaded).
+    found: bool,
+    /// The installed face of its PostScript name.
+    face: Option<Arc<vectorcraft_text::FontFace>>,
 }
 
 /// Is this art text and nothing else (in groups and clips), with some text?
@@ -311,9 +453,17 @@ struct Builder<'p> {
     warnings: Vec<String>,
     /// Fonts by cache key → base font name (from [`scan_page`]).
     fonts: HashMap<u128, String>,
-    font_names: HashMap<u128, (String, String)>,
+    font_names: HashMap<u128, FontInfo>,
     families: Option<Families>,
     missing_fonts: Vec<String>,
+    /// Font (cache key) → its characters by glyph, for CID-keyed fonts embedded without a
+    /// ToUnicode map.
+    cid_text: HashMap<u128, Option<Arc<CidText>>>,
+    /// A line in a font that isn't installed: its glyphs keep their outlines, and this editable
+    /// copy goes to the page's non-printing layer ([`COPIES_LAYER`]).
+    copy_line: Option<TextLine>,
+    /// The page's editable copies.
+    copies: Vec<Arc<Node>>,
     /// The soft mask of the graphics state, the art drawn through it so far, and the masks read.
     mask: Option<Arc<MaskSpec>>,
     masked: Vec<Arc<Node>>,
@@ -427,6 +577,9 @@ impl<'p> Builder<'p> {
             font_names: HashMap::new(),
             families: None,
             missing_fonts: vec![],
+            cid_text: HashMap::new(),
+            copy_line: None,
+            copies: vec![],
             mask: None,
             masked: vec![],
             masks: HashMap::new(),
@@ -479,6 +632,8 @@ impl<'p> Builder<'p> {
         self.blend = BlendMode::Normal;
         self.glyphs = None;
         self.text = None;
+        self.copy_line = None;
+        self.copies.clear();
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
@@ -503,6 +658,7 @@ impl<'p> Builder<'p> {
     /// Finish the open runs and frames → the root frame's children.
     fn close_frames(&mut self) -> Vec<Arc<Node>> {
         self.flush();
+        self.flush_copy();
         while self.stack.len() > 1 {
             self.pop_frame();
         }
@@ -844,26 +1000,39 @@ impl<'p> Builder<'p> {
         self.push_node(content);
     }
 
-    /// The family and style of font `key` (drawing glyph `o`).
-    fn font_name(&mut self, key: u128, o: &hayro_interpret::font::OutlineGlyph) -> (String, String) {
+    /// The family and style of font `key` (drawing glyph `o`): the installed face of its PostScript
+    /// name, else the available family its name reads as; whether it is available.
+    fn font_name(&mut self, key: u128, o: &hayro_interpret::font::OutlineGlyph) -> FontInfo {
         if let Some(n) = self.font_names.get(&key) {
             return n.clone();
         }
         let data = o.font_data();
         let name = self.fonts.get(&key).cloned().or_else(|| data.as_ref().and_then(|d| d.postscript_name.clone()));
         let (weight, italic) = data.as_ref().map_or((None, false), |d| (d.weight, d.is_italic));
-        let families = self.families.get_or_insert_with(Families::available);
-        let n = match name {
-            Some(name) => {
+        // A subset's six-letter tag.
+        let ps = name.as_deref().map(|n| match n.split_once('+') {
+            Some((tag, rest)) if tag.len() == 6 && tag.chars().all(|c| c.is_ascii_uppercase()) => rest.to_string(),
+            _ => n.to_string(),
+        });
+        let installed = ps.as_deref().and_then(|ps| vectorcraft_text::FontDb::global().find_postscript(ps));
+        let n = match (installed, name) {
+            (Some(face), _) => FontInfo { family: face.family.clone(), style: face.style.clone(), found: true, face: Some(face) },
+            (None, Some(name)) => {
+                let families = self.families.get_or_insert_with(Families::available);
                 let (family, style, found) = families.resolve(&name, weight, italic);
+                // Not installed: named by its PostScript name, which finds the font once it is.
+                let (family, style) = match (&ps, found) {
+                    (Some(ps), false) if !ps.is_empty() => (ps.clone(), "Regular".to_string()),
+                    _ => (family, style),
+                };
                 if !found && !family.is_empty() && !self.missing_fonts.contains(&family) {
                     self.missing_fonts.push(family.clone());
                 }
-                (family, style)
+                FontInfo { family, style, found, face: None }
             }
-            None => {
+            (None, None) => {
                 let d = vectorcraft_doc::CharStyle::default();
-                (d.font_family, d.font_style)
+                FontInfo { family: d.font_family, style: d.font_style, found: true, face: None }
             }
         };
         self.font_names.insert(key, n.clone());
@@ -883,35 +1052,90 @@ impl<'p> Builder<'p> {
         if self.text_as != TextAs::Text || self.nested > 0 {
             return false;
         }
-        let text = match o.as_unicode() {
+        let key = o.font_cache_key();
+        let unicode = o.as_unicode().or_else(|| {
+            let cid = self.cid_text.entry(key).or_insert_with(|| o.font_data().and_then(|d| CidText::of(d.data.as_ref().as_ref())).map(Arc::new));
+            cid.as_ref().and_then(|c| c.unicode(o.glyph_id().to_u32()))
+        });
+        let text: String = match unicode {
             Some(BfString::Char(c)) => c.to_string(),
             Some(BfString::String(s)) => s,
             None => return false,
         };
+        let text: String = text.chars().map(unify_radical).collect();
         let Some(at) = Placement::of(m) else { return false };
         if text.is_empty() || text.chars().any(|c| c.is_control()) {
             return false;
         }
-        self.flush_glyphs();
-        let font = o.font_cache_key();
+        let width = o.advance_width().filter(|w| w.is_finite());
+        // Set vertically (WMode 1): no horizontal advance; its em box is a full em wide.
+        let upright = width.is_some_and(|w| w.abs() <= 1.0);
+        let top = m * kurbo::Point::new(f64::from(width.filter(|w| *w > 1.0).unwrap_or(1000.0)) * 0.5, 880.0);
+        let mut info = self.font_name(key, o);
+        if let Some(face) = &info.face {
+            let Some(f) = matching_face(face, &text, o, upright) else {
+                self.warn("text whose glyphs differ from the installed font of the same name was kept as outlines");
+                return false;
+            };
+            info = FontInfo { family: f.family.clone(), style: f.style.clone(), found: true, face: Some(f) };
+        }
         let (paint, opacity) = self.paint(paint, stroke.is_some());
         let stroke = stroke.map(|p| (paint.clone(), p.line_width as f64 * scale));
+        let look = Look {
+            font: key,
+            family: info.family,
+            style: info.style,
+            size: at.size,
+            h_scale: at.h_scale,
+            fill: stroke.is_none().then_some(paint),
+            stroke,
+        };
+        let advance = width.map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
+        let place = |line: &mut TextLine| {
+            if upright { line.push_upright(&look, at, opacity, Upright { top }, &text) } else { line.push(&look, at, opacity, advance, &text) }
+        };
+        if !info.found {
+            // Not installed: the outlines are what prints; an editable copy goes over them on a
+            // non-printing layer, one per glyph: a fill-and-stroke glyph's stroke pass adds nothing
+            // to it, a stroke-only glyph gets one too.
+            if look.fill.is_none()
+                && let (Some(s), Some(line)) = (&look.stroke, &mut self.copy_line)
+                && line.stroke_last(key, at, s.clone())
+            {
+                return false;
+            }
+            if !self.copy_line.as_mut().is_some_and(place) {
+                self.flush_copy();
+                let mut line = TextLine::new(at, opacity);
+                place(&mut line);
+                self.copy_line = Some(line);
+            }
+            return false;
+        }
+        self.flush_glyphs();
         // A stroke over the glyph just filled (fill and stroke rendering).
-        if let (Some(s), Some(line)) = (&stroke, &mut self.text)
-            && line.stroke_last(font, at, s.clone())
+        if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
+            && look.fill.is_none()
+            && line.stroke_last(key, at, s.clone())
         {
             return true;
         }
-        let (family, style) = self.font_name(font, o);
-        let look = Look { font, family, style, size: at.size, h_scale: at.h_scale, fill: stroke.is_none().then_some(paint), stroke };
-        let advance = o.advance_width().filter(|w| w.is_finite()).map_or(at.size * 0.5, |w| w as f64 / 1000.0 * at.size * at.h_scale / 100.0);
-        if !self.text.as_mut().is_some_and(|l| l.push(&look, at, opacity, advance, &text)) {
+        if !self.text.as_mut().is_some_and(place) {
             self.flush_text();
             let mut line = TextLine::new(at, opacity);
-            line.push(&look, at, opacity, advance, &text);
+            place(&mut line);
             self.text = Some(line);
         }
         true
+    }
+
+    /// The editable copy of a line in a missing font, in pink, to the page's copies.
+    fn flush_copy(&mut self) {
+        let Some(mut line) = self.copy_line.take() else { return };
+        line.recolor(&Paint::solid(Color::rgb(1.0, 0.2, 0.6)));
+        let Some((t, _)) = line.finish() else { return };
+        let n = Node::new(self.id(), NodeKind::Text(Box::new(t)));
+        self.copies.push(Arc::new(n));
     }
 }
 
@@ -1196,7 +1420,6 @@ impl<'a> Device<'a> for Builder<'_> {
         if self.nested > 0 {
             return;
         }
-        self.flush();
         let at = self.tag_at;
         self.tag_at += 1;
         let group = match self.scan.tags.get(at) {
@@ -1210,6 +1433,11 @@ impl<'a> Device<'a> for Builder<'_> {
             }
         }
         .filter(|_| self.route);
+        // Only a layer's marked content ends the runs gathered so far: other tags (a span with its
+        // actual text, an artifact) leave a line of type whole.
+        if group.is_some() {
+            self.flush();
+        }
         if let Some(g) = group
             && self.stack.len() > 1
             && let Some(f) = self.stack.last_mut()
@@ -1223,7 +1451,8 @@ impl<'a> Device<'a> for Builder<'_> {
         if self.nested > 0 {
             return;
         }
-        self.flush();
-        self.marked.pop();
+        if self.marked.pop().flatten().is_some() {
+            self.flush();
+        }
     }
 }
