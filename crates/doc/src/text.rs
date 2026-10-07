@@ -327,7 +327,7 @@ struct ParaStyleFile {
     mojikumi: Mojikumi,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     direction: Option<ParaDirection>,
-    #[serde(default, rename = "leadingModel", skip_serializing_if = "crate::skip::is_default")]
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     leading_model: LeadingModel,
 }
 

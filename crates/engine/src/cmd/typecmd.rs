@@ -428,9 +428,9 @@ mod area_tests {
         let t = text(&s);
         assert_eq!(t.para.leading_model, LeadingModel::EmBoxTop);
         assert_ne!(t.cached_bounds, before, "the first line moves up to the frame's top");
-        assert_eq!(serde_json::to_value(&t.para).unwrap()["leadingModel"], "emBoxTop");
+        assert_eq!(serde_json::to_value(&t.para).unwrap()["leading_model"], "emBoxTop");
         s.execute("edit.undo", &json!({})).unwrap();
-        assert!(serde_json::to_value(&text(&s).para).unwrap().get("leadingModel").is_none());
+        assert!(serde_json::to_value(&text(&s).para).unwrap().get("leading_model").is_none());
     }
 
     #[test]

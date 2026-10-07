@@ -150,14 +150,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     for l in [tl!("Roman Hanging Punctuation"), tl!("Justification…"), tl!("Hyphenation…")] {
         menu_item(ui, l, false, false);
     }
-    ui.separator();
-    // How leading is measured (Japanese layout measures it from em box top to em box top).
-    let top_to_top = style.as_ref().is_some_and(|(_, p)| p.leading_model == vectorcraft_doc::LeadingModel::EmBoxTop);
-    if menu_item(ui, tl!("Top-to-Top Leading"), has, top_to_top) {
-        format(app, json!({"leadingModel": "emBoxTop"}));
-    }
-    if menu_item(ui, tl!("Bottom-to-Bottom Leading"), has, has && !top_to_top) {
-        format(app, json!({"leadingModel": "romanBaseline"}));
+    // How leading is measured (Japanese layout measures it from em box top to em box top), with
+    // the East Asian options.
+    if app.session.prefs.show_east_asian_options {
+        ui.separator();
+        let top_to_top = style.as_ref().is_some_and(|(_, p)| p.leading_model == vectorcraft_doc::LeadingModel::EmBoxTop);
+        if menu_item(ui, tl!("Top-to-Top Leading"), has, top_to_top) {
+            format(app, json!({"leadingModel": "emBoxTop"}));
+        }
+        if menu_item(ui, tl!("Bottom-to-Bottom Leading"), has, has && !top_to_top) {
+            format(app, json!({"leadingModel": "romanBaseline"}));
+        }
     }
     ui.separator();
     menu_item(ui, tl!("Single-line Composer"), false, false);
@@ -167,7 +170,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
         format(
             app,
-            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto"}),
+            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline"}),
         );
     }
 }
