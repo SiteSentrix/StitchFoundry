@@ -277,8 +277,10 @@ mod open_tests {
     fn list_says_how_each_font_resolved() {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        // "Black Wide" is a style no Source Sans 3 has, bundled or installed, so it is always a
+        // substitute (the installed family can hold a real Black).
         for (text, font, style) in
-            [("Exact", "Source Sans 3", "Semibold"), ("Closest", "Source Sans 3", "Black"), ("Gone", "No Such Font Family", "Regular")]
+            [("Exact", "Source Sans 3", "Semibold"), ("Closest", "Source Sans 3", "Black Wide"), ("Gone", "No Such Font Family", "Regular")]
         {
             s.execute("text.create", &json!({"x": 10, "y": 20, "text": text, "font": font, "style": style})).unwrap();
         }
@@ -298,8 +300,8 @@ mod open_tests {
             .collect();
         let row = |style: &str| rows.iter().find(|r| r.0 == style).cloned().unwrap();
         assert_eq!(row("Semibold").1, "exact");
-        assert_eq!(row("Black").1, "substitute", "{rows:?}");
-        assert_eq!(row("Black").2, "Source Sans 3");
+        assert_eq!(row("Black Wide").1, "substitute", "{rows:?}");
+        assert_eq!(row("Black Wide").2, "Source Sans 3");
         assert_eq!((row("Regular").1.as_str(), row("Regular").2.as_str()), ("missing", vectorcraft_text::FALLBACK_FAMILY));
         s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Ab 雅楽", "font": "Inter"})).unwrap();
         let inter = s.execute("text.fonts", &json!({})).unwrap().as_array().unwrap().iter().find(|f| f["family"] == "Inter").cloned().unwrap();
