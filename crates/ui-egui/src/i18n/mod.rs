@@ -312,6 +312,14 @@ pub fn trn(lang: Lang, n: u64, one: &str, other: &str) -> String {
     fmt(text, &[("n", &n.to_string())])
 }
 
+/// An entry of a list that mixes interface labels with names (user, file or system data) as
+/// shown: a built-in entry in `lang`, a name exactly as it is (a library the user calls "Layers"
+/// stays "Layers"). Show the result with the non-translating widgets (`dropdown_names`,
+/// `menu_item_name`, `dim_name`).
+pub fn label_or_name(lang: Lang, s: &str, built_in: bool) -> &str {
+    if built_in { tr(lang, s) } else { s }
+}
+
 /// [`trn`] in the current language.
 pub fn tn(n: u64, one: &str, other: &str) -> String {
     trn(current(), n, one, other)

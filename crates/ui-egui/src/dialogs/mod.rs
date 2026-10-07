@@ -383,7 +383,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// What a dropdown shows for `names`, a list mixing built-in labels (`builtin(index)`: translated
 /// into `lang`) with names the user saved or a file or the system supplied (shown as they are).
 pub(crate) fn shown_names<'a>(lang: crate::i18n::Lang, names: &[&'a str], builtin: impl Fn(usize) -> bool) -> Vec<&'a str> {
-    names.iter().enumerate().map(|(k, n)| if builtin(k) { crate::i18n::tr(lang, n) } else { *n }).collect()
+    names.iter().enumerate().map(|(k, n)| crate::i18n::label_or_name(lang, n, builtin(k))).collect()
 }
 
 /// [`widgets::dropdown_names`] over such a mixed list ([`shown_names`] in the UI language), showing
