@@ -285,6 +285,39 @@ fn inspect_lists_everything() {
     assert!(s.commands().len() > 100);
 }
 
+/// Type reports the paint its characters show, and its own object-level paint apart from it.
+#[test]
+fn inspect_reports_the_paint_of_types_characters() {
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 50, "y": 60, "text": "HI", "size": 24})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [id]})).unwrap();
+    let node = |s: &mut Session| {
+        let v = s.execute("document.inspect", &json!({})).unwrap();
+        v["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).cloned().unwrap()
+    };
+    let t = node(&mut s);
+    assert_eq!((t["fill"].as_str(), t["stroke"].as_str(), t["strokeWidth"].as_f64()), (Some("#ff0000"), Some("None"), Some(0.0)), "{t}");
+    assert!(t.get("objectFill").is_none(), "no object-level paint: {t}");
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [id]})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#00ff00", "ids": [id]})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3, "ids": [id]})).unwrap();
+    let t = node(&mut s);
+    assert_eq!((t["fill"].as_str(), t["stroke"].as_str(), t["strokeWidth"].as_f64()), (Some("#0000ff"), Some("#00ff00"), Some(3.0)), "{t}");
+    // An object-level fill on the type stays distinguishable from its characters' paint.
+    s.execute("appearance.addFill", &json!({"ids": [id]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffff00", "item": 0, "ids": [id]})).unwrap();
+    let t = node(&mut s);
+    assert_eq!(t["objectFill"], "#ffff00", "{t}");
+    assert_eq!(t["fill"], "#0000ff", "{t}");
+    // A path keeps reporting its own appearance.
+    let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [r]})).unwrap();
+    let v = s.execute("document.inspect", &json!({})).unwrap();
+    let rect = v["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == r).cloned().unwrap();
+    assert_eq!(rect["fill"], "#ff0000");
+    assert!(rect.get("objectFill").is_none());
+}
+
 #[test]
 fn every_command_has_unique_id_and_doc() {
     let mut ids: Vec<&str> = command_specs().iter().map(|c| c.id).collect();

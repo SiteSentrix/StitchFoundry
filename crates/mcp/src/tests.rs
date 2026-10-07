@@ -284,6 +284,25 @@ fn headless_path_gesture_undo() {
     assert_eq!(&std::fs::read(tmp("x.png")).unwrap()[..4], b"\x89PNG");
 }
 
+/// inspect_document reads back the paint type's characters show, as add_text and set_paint give it.
+#[test]
+fn inspect_document_reports_the_paint_of_type() {
+    let mut s = server();
+    let r = call(&mut s, 2, "add_text", json!({"text": "HI", "x": 50, "y": 60, "size": 24, "color": "#ff0000"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let id = serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].clone();
+    let node = |s: &mut Server, n: u64| {
+        let v: Value = serde_json::from_str(&text_of(&call(s, n, "inspect_document", json!({})))).unwrap();
+        v["layers"][0]["children"].as_array().unwrap().iter().find(|c| c["id"] == id).cloned().unwrap()
+    };
+    let t = node(&mut s, 3);
+    assert_eq!((t["fill"].as_str(), t["stroke"].as_str()), (Some("#ff0000"), Some("None")), "{t}");
+    let r = call(&mut s, 4, "set_paint", json!({"fill": "#0000ff", "stroke": "#00ff00", "strokeWidth": 3, "ids": [id]}));
+    assert_eq!(r["isError"], false, "{r}");
+    let t = node(&mut s, 5);
+    assert_eq!((t["fill"].as_str(), t["stroke"].as_str(), t["strokeWidth"].as_f64()), (Some("#0000ff"), Some("#00ff00"), Some(3.0)), "{t}");
+}
+
 #[test]
 fn errors_are_tool_results_not_crashes() {
     let mut s = server();
