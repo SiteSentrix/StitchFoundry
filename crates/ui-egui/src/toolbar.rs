@@ -43,7 +43,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["shapeBuilder", "livePaintBucket", "livePaintSelection", "blend"],
         ],
     ),
-    ("Type", &[&["areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath"], &["type", "touchType"]]),
+    ("Type", &[&["areaType", "typeOnPath", "verticalAreaType", "verticalTypeOnPath"], &["type", "verticalType", "touchType"]]),
     ("Navigate", &[&["zoom"], &["hand", "printTiling"], &["rotateView"]]),
     ("Color", &[&["gradient", "mesh"], &["eyedropper", "measure"]]),
 ];
@@ -167,8 +167,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                                     Stroke::NONE,
                                 ));
                             }
-                            let long_press = resp.is_pointer_button_down_on()
-                                && ui.input(|inp| inp.pointer.press_start_time().is_some_and(|s| inp.time - s > 0.35));
+                            let held_for = resp
+                                .is_pointer_button_down_on()
+                                .then(|| ui.input(|inp| inp.pointer.press_start_time().map(|s| inp.time - s)))
+                                .flatten();
+                            if slot.len() > 1
+                                && let Some(seconds) = held_for
+                                && seconds < 0.35
+                            {
+                                ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(0.35 - seconds));
+                            }
+                            let long_press = held_for.is_some_and(|seconds| seconds >= 0.35);
                             let alt = ui.input(|inp| inp.modifiers.alt);
                             if (resp.secondary_clicked() || long_press) && slot.len() > 1 {
                                 open_flyout = Some((slot.clone(), rect));
@@ -565,5 +574,34 @@ pub(crate) mod tests {
         frame(&mut app, &ctx, 4.0, vec![Event::PointerMoved(away), c(true)]);
         frame(&mut app, &ctx, 4.05, vec![c(false)]);
         assert_eq!((app.session.tool_id(), app.ui.flyout), ("roundedRectangle", None));
+    }
+    #[test]
+    fn type_button_long_press_selects_vertical_type_in_both_layouts() {
+        for advanced in [false, true] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.ui.toolbar_advanced = advanced;
+            let all = slots(&app);
+            let index = all.iter().position(|(_, tools)| tools.contains(&"type")).unwrap();
+            assert!(all[index].1.contains(&"verticalType"));
+            for id in ["type", "verticalType", "areaType", "verticalAreaType", "typeOnPath", "verticalTypeOnPath"] {
+                assert_eq!(all.iter().filter(|(_, tools)| tools.contains(&id)).count(), 1);
+            }
+            let ctx = egui::Context::default();
+            let at = frame_in(&mut app, &ctx, 0.0, vec![], 2000.0)[index].center();
+            let pointer = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame_in(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), pointer(at, true)], 2000.0);
+            frame_in(&mut app, &ctx, 1.36, vec![], 2000.0);
+            frame_in(&mut app, &ctx, 1.4, vec![pointer(at, false)], 2000.0);
+            frame_in(&mut app, &ctx, 1.45, vec![], 2000.0);
+            assert_eq!(app.session.tool_id(), "selection");
+            let tools: Vec<String> = ctx.data(|d| d.get_temp(egui::Id::new("flyout-tools"))).unwrap();
+            let row_index = tools.iter().position(|id| id == "verticalType").unwrap();
+            let menu = ctx.memory(|m| m.area_rect(egui::Id::new("tool-flyout"))).unwrap();
+            let row = egui::pos2(menu.left() + 60.0, menu.top() + 15.0 + row_index as f32 * 30.0);
+            frame_in(&mut app, &ctx, 2.0, vec![Event::PointerMoved(row), pointer(row, true)], 2000.0);
+            frame_in(&mut app, &ctx, 2.05, vec![pointer(row, false)], 2000.0);
+            assert_eq!(app.session.tool_id(), "verticalType");
+            assert_eq!(app.ui.flyout, None);
+        }
     }
 }
