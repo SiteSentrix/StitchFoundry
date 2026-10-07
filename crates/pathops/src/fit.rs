@@ -69,7 +69,12 @@ fn fit_rec(pts: &[Point], t0: Vec2, t1: Vec2, tol: f64, out: &mut Vec<CubicBez>,
 /// Best single cubic for `pts` with the given end tangents. Returns (curve, max error, index of
 /// the worst point).
 pub(crate) fn fit_single(pts: &[Point], t0: Vec2, t1: Vec2) -> (CubicBez, f64, usize) {
-    let mut u = chord_params(pts);
+    fit_single_from(pts, chord_params(pts), t0, t1)
+}
+
+/// [`fit_single`] starting from the parameters `u` (one per point, 0 to 1) instead of the
+/// chord-length ones.
+pub(crate) fn fit_single_from(pts: &[Point], mut u: Vec<f64>, t0: Vec2, t1: Vec2) -> (CubicBez, f64, usize) {
     let mut best = generate(pts, &u, t0, t1);
     let (mut best_err, mut best_split) = max_error(pts, &best, &u);
     for _ in 0..MAX_REPARAM {

@@ -87,11 +87,11 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!(
             "path.deleteAnchors",
-            "Remove Anchor Points",
-            ["Object", "Path"],
+            "Delete Anchor Points",
+            [],
             None,
-            "{} delete direct-selected anchors",
-            has_selection,
+            "{} delete the direct-selected anchors and their segments, opening closed paths there (the Delete key)",
+            has_anchors,
             delete_anchors
         ),
         cmd!(

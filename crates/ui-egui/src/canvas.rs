@@ -1425,7 +1425,7 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let is_text = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Text(_)));
     let mut items: Vec<(&str, &str, &str)> = vec![]; // (label, icon, command)
     if !st.selection.anchors.is_empty() {
-        items.push((tl!("Smart Remove Anchor Points"), "dc-anchor", "path.smartRemoveAnchor"));
+        items.push((tl!("Remove Anchor Points"), "dc-pen-delete", "path.removeAnchors"));
     }
     if n > 1 {
         items.push((tl!("Group"), "group", "object.group"));

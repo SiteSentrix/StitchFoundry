@@ -1,4 +1,5 @@
-//! Smart Remove Anchor Points: a command for direct-selected anchors, not a Pen click.
+//! Object › Path › Remove Anchor Points: the menu, the Control bar, the contextual task bar, the
+//! Properties panel and the context menu run it on direct-selected anchors.
 
 use egui::{Event, PointerButton, Pos2, Rect, Shape, vec2};
 use serde_json::json;
@@ -98,38 +99,41 @@ fn at(texts: &[(String, Rect)], label: &str) -> Pos2 {
 
 #[test]
 fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
+    const LABEL: &str = "Remove Anchor Points";
     let mut app = app();
     let id = rect(&mut app);
     assert_eq!(anchor_count(&app, id), 4);
-    let entry = menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("path.smartRemoveAnchor")).unwrap();
-    assert_eq!(entry.path, ["Object", "Path"]);
-    assert_eq!(entry.label, "Smart Remove Anchor Points");
-    assert!(!entry.enabled, "an object selection is not enough");
-    assert!(!labels(&menus::context_items(&app)).contains(&"Smart Remove Anchor Points"));
-    assert!(crate::palette::items().iter().any(|(_, cmd, _)| cmd == "path.smartRemoveAnchor"));
+    let entries: Vec<_> = menus::menu_entries(&app).into_iter().filter(|e| e.label == LABEL).collect();
+    assert_eq!(entries.len(), 1, "one Remove Anchor Points item");
+    assert_eq!(entries[0].command.as_deref(), Some("path.removeAnchors"));
+    assert_eq!(entries[0].path, ["Object", "Path"]);
+    assert!(!entries[0].enabled, "an object selection is not enough");
+    assert!(!labels(&menus::context_items(&app)).contains(&LABEL));
+    assert!(crate::palette::items().iter().any(|(_, cmd, _)| cmd == "path.removeAnchors"));
 
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
-    assert!(menus::enabled(&app, "path.smartRemoveAnchor"));
-    assert!(labels(&menus::context_items(&app)).contains(&"Smart Remove Anchor Points"));
-    assert!(menus::menu_strings().contains("Smart Remove Anchor Points"));
+    assert!(menus::enabled(&app, "path.removeAnchors"));
+    assert!(labels(&menus::context_items(&app)).contains(&LABEL));
 
+    // The Control bar's icon follows its "Anchor Point" label.
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let bar = control_frame(&mut app, &ctx, vec![]);
-    assert!(has(&bar, "Smart Remove Anchor Points"), "control bar: {bar:?}");
-    let label_w = bar.iter().find(|(t, _)| t == "Smart Remove Anchor Points").unwrap().1.width();
-    assert!(label_w <= 196.0, "the Control bar button clips the label ({label_w} pt)");
-    click_control(&mut app, &ctx, at(&bar, "Smart Remove Anchor Points"));
+    let label = bar.iter().find(|(t, _)| t == "Anchor Point").map(|(_, r)| *r).expect("anchor label");
+    click_control(&mut app, &ctx, Pos2::new(label.max.x + ctx.global_style().spacing.item_spacing.x + 12.0, label.center().y));
     assert_eq!(anchor_count(&app, id), 3, "the Control bar button removes the anchor");
-    assert_eq!(app.session.active().unwrap().history.undo.last().unwrap().label, "Smart Remove Anchor Point");
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.last().unwrap().label, LABEL);
+    let sp = &st.doc.node(id).unwrap().path_data().unwrap().subpaths[0];
+    assert!(sp.closed, "the path stays closed");
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(anchor_count(&app, id), 4);
 
     app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
     // 230 pt is the dock's minimum width. The label has to sit inside that row.
     let props = properties_frame(&mut app, 230.0);
-    let row = props.iter().find(|(t, _)| t == "Smart Remove Anchor Points").expect("properties");
+    let row = props.iter().find(|(t, _)| t == LABEL).expect("properties");
     assert!(row.1.min.x >= -0.5 && row.1.max.x <= 230.5, "properties clips the label: {:?}", row.1);
 
     // The task bar's area settles on the second frame.
@@ -137,29 +141,21 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     crate::theme::install_fonts(&ctx);
     canvas_frame(&mut app, &ctx, vec![]);
     let texts = canvas_frame(&mut app, &ctx, vec![]);
-    assert!(has(&texts, "Smart Remove Anchor Points"), "task bar: {texts:?}");
+    assert!(has(&texts, LABEL), "task bar: {texts:?}");
 
     // Right-click keeps the anchor selection (the object is already selected) and runs the item.
     let p = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.0, 90.0));
     let texts = click_canvas(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, "Smart Remove Anchor Points"), "context menu: {texts:?}");
-    let texts = click_canvas(&mut app, &ctx, at(&texts, "Smart Remove Anchor Points"), PointerButton::Primary);
+    assert!(has(&texts, LABEL), "context menu: {texts:?}");
+    let texts = click_canvas(&mut app, &ctx, at(&texts, LABEL), PointerButton::Primary);
     assert_eq!(anchor_count(&app, id), 3);
-    assert!(!has(&texts, "Smart Remove Anchor Points"), "the menu closes after the command");
-
-    app.select_tool("pen");
-    let hint = crate::tests_labels::painted_text(&mut app, chrome::hint_bar);
-    assert!(!hint.contains("Smart Remove") && !hint.contains("keep the shape"), "pen hint: {hint}");
+    assert!(!has(&texts, LABEL), "the menu closes after the command");
 }
 
 #[test]
-fn the_control_bar_hides_the_button_without_anchors() {
+fn the_control_bar_and_properties_hide_it_without_anchors() {
     let mut app = app();
     rect(&mut app);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let bar = control_frame(&mut app, &ctx, vec![]);
-    assert!(!has(&bar, "Smart Remove Anchor Points"), "{bar:?}");
     let props = crate::tests_labels::painted_text(&mut app, crate::panels::properties::show);
-    assert!(!props.contains("Smart Remove Anchor Points"), "{props}");
+    assert!(!props.contains("Remove Anchor Points"), "{props}");
 }

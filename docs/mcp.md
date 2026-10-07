@@ -936,6 +936,20 @@ paths and compound paths, and `path.reverse {reversed?}` makes subpaths run coun
 {"name":"run_command","arguments":{"command":"path.setFillRule","params":{"rule":"evenOdd"}}}
 ```
 
+## Removing anchor points
+
+`path.removeAnchors {}` (Object › Path › Remove Anchor Points) removes the direct-selected anchors (`select.anchors
+{id, anchors: [[subpath, anchor]…], mode?}`) without opening their paths, in one undo step, and answers
+`{removedObjects}` (paths left with no segment go). Each removed point's neighbours keep their handle directions and
+their facing handles are refitted so one cubic follows the two old segments; two straight sides become one.
+`path.removeAnchor {id, subpath?, anchor}` (the Delete Anchor Point tool) removes one anchor the same way, and
+`path.deleteAnchors {}` (the Delete key) deletes the selected anchors with their segments, opening closed paths there.
+
+```json
+{"name":"run_command","arguments":{"command":"select.anchors","params":{"id":12,"anchors":[[0,1],[0,3]]}}}
+{"name":"run_command","arguments":{"command":"path.removeAnchors","params":{}}}
+```
+
 ## Registration and trim marks
 
 Every document has the built-in `[Registration]` swatch (listed after None by `swatch.list`): a colour that prints on

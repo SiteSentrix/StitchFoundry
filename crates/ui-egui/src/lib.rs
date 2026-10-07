@@ -96,13 +96,13 @@ mod tests_recolor;
 #[cfg(test)]
 mod tests_recovery;
 #[cfg(test)]
+mod tests_removeanchors;
+#[cfg(test)]
 mod tests_save;
 #[cfg(test)]
 mod tests_saveext;
 #[cfg(test)]
 mod tests_slices;
-#[cfg(test)]
-mod tests_smartremove;
 #[cfg(test)]
 mod tests_svg;
 #[cfg(test)]

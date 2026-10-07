@@ -99,8 +99,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         actions.push((tl!("Recolor"), "ui.recolorDialog"));
     }
     // One column: the label is wider than half of the narrowest dock.
-    if anchor_mode && widgets::flat_button(ui, "Smart Remove Anchor Points", ui.available_width()).clicked() {
-        crate::menus::invoke(app, "path.smartRemoveAnchor", json!({}));
+    if anchor_mode && widgets::flat_button(ui, "Remove Anchor Points", ui.available_width()).clicked() {
+        crate::menus::invoke(app, "path.removeAnchors", json!({}));
     }
     actions.push((tl!("Offset Path"), "object.path.offsetPath"));
     actions.push((tl!("Simplify"), "object.path.simplify"));
