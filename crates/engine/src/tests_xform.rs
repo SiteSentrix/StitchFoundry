@@ -292,6 +292,27 @@ fn artboard_alt_drag_duplicates_it_with_its_art() {
     assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (1, 1));
 }
 
+/// `artboard.move` with `copy` reports the copies it moved, and copies only the artboard when Move/Copy
+/// Artwork with Artboard is off.
+#[test]
+fn artboard_move_copy_reports_the_copies_and_follows_move_art() {
+    let mut s = session();
+    let r = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    let out = s.execute("artboard.move", &json!({"index": 0, "dx": 900, "dy": 0, "copy": true, "moveArt": true})).unwrap();
+    assert_eq!(out["index"], 1);
+    let copies: Vec<NodeId> = out["moved"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(copies.len(), 1);
+    assert_ne!(copies[0], r);
+    assert_eq!(s.doc().unwrap().doc.node(copies[0]).unwrap().geometric_bounds().unwrap().x0, 1000.0);
+    let out = s.execute("artboard.move", &json!({"index": 0, "dx": 0, "dy": 900, "copy": true})).unwrap();
+    assert_eq!(out["moved"], json!([]));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (3, 2), "an artboard alone");
+    assert_eq!(d.artboards[2].name, "Artboard 1 copy 2", "a name of its own");
+    let ids: std::collections::HashSet<u32> = d.artboards.iter().map(|a| a.id).collect();
+    assert_eq!(ids.len(), 3, "every artboard has an id of its own");
+}
+
 #[test]
 fn magic_wand_selects_same_fill() {
     let mut s = session();

@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Artboard",
             [],
             None,
-            "{index, dx, dy, moveArt?: bool, copy?: bool} move an artboard (and the unlocked art fully inside it); copy leaves them and moves a duplicate → {index}",
+            "{index, dx, dy, moveArt?: bool, copy?: bool} move an artboard (and the unlocked art fully inside it); `copy` (Alt-drag) leaves them and moves copies → {index, moved: the art moved or the copies}",
             has_doc,
             artboard_move
         ),
@@ -400,32 +400,29 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let scale_strokes = s.prefs.scale_strokes;
     let copy = bool_or(p, "copy", false);
-    let index = s.edit(if copy { "Duplicate Artboard" } else { "Move Artboard" }, |d, _| {
+    let (index, moved) = s.edit(if copy { "Duplicate Artboard" } else { "Move Artboard" }, |d, _| {
         let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
         // A copy keeps the artboard (and its art) where they are and moves duplicates instead.
-        let target = if copy {
-            let mut a = src.clone();
-            a.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
-            a.name = format!("{} copy", src.name);
-            d.artboards.push(a);
-            d.artboards.len() - 1
-        } else {
-            i
-        };
-        if let Some(a) = d.artboards.get_mut(target) {
-            a.rect = src.rect + dv;
-        }
-        for id in &art {
-            if copy {
-                let (Some((parent, at, _)), Some(n)) = (d.position(*id), d.node(*id).cloned()) else { continue };
-                let mut c = d.reid(&n);
-                c.transform(Affine::translate(dv), scale_strokes);
-                d.insert(parent, at + 1, c)?;
-            } else if let Some(n) = d.node_mut(*id) {
-                n.transform(Affine::translate(dv), scale_strokes);
+        if !copy {
+            if let Some(a) = d.artboards.get_mut(i) {
+                a.rect = src.rect + dv;
             }
+            for id in &art {
+                if let Some(n) = d.node_mut(*id) {
+                    n.transform(Affine::translate(dv), scale_strokes);
+                }
+            }
+            return Ok((i, art.clone()));
         }
-        Ok(target)
+        let index = super::panelcmds::push_artboard_copy(d, &src, src.rect + dv);
+        let mut copies = Vec::with_capacity(art.len());
+        for id in &art {
+            let (Some((parent, at, _)), Some(n)) = (d.position(*id), d.node(*id).cloned()) else { continue };
+            let mut c = d.reid(&n);
+            c.transform(Affine::translate(dv), scale_strokes);
+            copies.push(d.insert(parent, at + 1, c)?);
+        }
+        Ok((index, copies))
     })?;
-    Ok(json!({ "index": index, "moved": art.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(json!({ "index": index, "moved": moved.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
