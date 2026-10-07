@@ -228,24 +228,10 @@ fn all_layers(d: &Document) -> Vec<&Node> {
     out
 }
 
-/// The next unused `Layer N` name, counting sublayers too.
-pub(crate) fn next_layer_name(d: &Document) -> String {
-    let layers = all_layers(d);
-    let taken: HashSet<&str> = layers.iter().filter_map(|l| l.name.as_deref()).collect();
-    let mut i = layers.len() + 1;
-    loop {
-        let name = format!("Layer {i}");
-        if !taken.contains(name.as_str()) {
-            return name;
-        }
-        i += 1;
-    }
-}
-
 /// A new layer named `name` (default: the next `Layer N`) in the next layer colour.
 pub(crate) fn make_layer(d: &mut Document, name: Option<&str>) -> Node {
     let n = all_layers(d).len();
-    let name = name.map(str::to_string).unwrap_or_else(|| next_layer_name(d));
+    let name = name.map(str::to_string).unwrap_or_else(|| d.next_layer_name());
     let id = d.alloc_id();
     Node::layer(id, &name, LayerColor::Preset((n % LAYER_COLORS.len()) as u8))
 }

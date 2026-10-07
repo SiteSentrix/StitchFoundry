@@ -810,15 +810,17 @@ impl Document {
         self.layers.push(Arc::new(Node::layer(id, &name, LayerColor::Preset((n % LAYER_COLORS.len()) as u8))));
         id
     }
+    /// The default name of a new layer or sublayer, "Layer N". Layers and sublayers share the
+    /// numbering: it starts after the number of layers there are and skips any layer's name.
     pub fn next_layer_name(&self) -> String {
-        let mut i = self.layers.len() + 1;
-        loop {
-            let name = format!("Layer {i}");
-            if !self.layers.iter().any(|l| l.name.as_deref() == Some(&name)) {
-                return name;
+        let (mut count, mut taken) = (0, std::collections::HashSet::new());
+        self.walk(|n| {
+            if n.is_layer() {
+                count += 1;
+                taken.extend(n.name.as_deref());
             }
-            i += 1;
-        }
+        });
+        (count + 1..).map(|i| format!("Layer {i}")).find(|name| !taken.contains(name.as_str())).unwrap_or_default()
     }
 
     /// Visit every node depth first in paint order (bottom to top).

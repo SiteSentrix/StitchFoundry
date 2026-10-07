@@ -570,3 +570,20 @@ fn a_panicking_command_rolls_back_instead_of_crashing() {
     assert!(s.doc().unwrap().doc.node(b).is_some());
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("shape.rectangle"));
 }
+
+/// New layers and sublayers share one "Layer N" numbering, whatever art the document holds, and
+/// never repeat a name.
+#[test]
+fn new_layers_and_sublayers_are_numbered_together() {
+    let name = |s: &Session, id: &Value| s.doc().unwrap().doc.node(NodeId(id["id"].as_u64().unwrap())).unwrap().display_name().to_string();
+    let mut s = session();
+    let sub = s.execute("layer.newSublayer", &json!({})).unwrap();
+    assert_eq!(name(&s, &sub), "Layer 2", "not its parent's name");
+    for x in [0.0, 60.0, 120.0, 180.0, 240.0] {
+        rect(&mut s, x, 0.0, 50.0, 50.0);
+    }
+    let layer = s.execute("layer.new", &json!({})).unwrap();
+    assert_eq!(name(&s, &layer), "Layer 3", "after the sublayer, not a repeat of it");
+    let sub = s.execute("layer.newSublayer", &json!({})).unwrap();
+    assert_eq!(name(&s, &sub), "Layer 4", "the art doesn't count");
+}
