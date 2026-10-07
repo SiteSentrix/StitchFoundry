@@ -109,7 +109,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - **Cutting:** Eraser, Scissors, Knife, Mirror & Cut, Line Cut and Rectangle Cut (real geometry, compound paths keep their holes).
   - **Transform:** Rotate, Reflect, Scale, Shear (click or Alt-click snaps the reference point to anchors and centres), Reshape, Free Transform (free and perspective distort and shear, switched by the keys held during a handle drag).
   - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout. Corners stay circular when the rectangle is scaled unevenly or along its own sides when rotated (the radius keeps its size, or scales by the mean scale with Scale Corners on); only a shear distorts them.
-  - **Pen:** Alt pressed in the middle of dragging out an anchor splits its handles and keeps the curve already shaped into it (only the outgoing handle follows the pointer).
+  - **Pen:** Alt pressed in the middle of dragging out an anchor splits its handles and keeps the curve already shaped into it (only the outgoing handle follows the pointer); Space held while dragging out an anchor moves it, handles and all.
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
   - **Editing type:** double-clicking type with a selection tool switches to the Type tool with the caret where it was clicked.
