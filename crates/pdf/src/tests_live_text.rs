@@ -98,6 +98,31 @@ fn letter_spacing_in_the_pdf_becomes_tracking() {
     assert!((ink_width(&t[0]) - expected).abs() < 0.3, "{} vs {expected}", ink_width(&t[0]));
 }
 
+/// Embedded font data is untrusted: anything that isn't a CID-keyed CFF is no table, never a panic.
+#[test]
+fn cid_tables_ignore_fonts_that_are_not_cid_keyed_cff() {
+    assert!(crate::import::CidText::of(&[]).is_none());
+    assert!(crate::import::CidText::of(b"not a font at all").is_none());
+    let mut x: u32 = 0x9E37_79B9;
+    for len in [4usize, 64, 1024, 65_536] {
+        let junk: Vec<u8> = (0..len)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 17;
+                x ^= x << 5;
+                x as u8
+            })
+            .collect();
+        assert!(crate::import::CidText::of(&junk).is_none(), "{len} bytes");
+        // A CFF header in front of the junk.
+        let mut cff = vec![1, 0, 4, 4];
+        cff.extend_from_slice(&junk);
+        let _ = crate::import::CidText::of(&cff);
+    }
+    let sans = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/fonts/SourceSans3-Regular.ttf")).unwrap();
+    assert!(crate::import::CidText::of(&sans).is_none(), "a TrueType font has no CID charset");
+}
+
 #[test]
 fn kangxi_radicals_from_cid_tables_become_ideographs() {
     assert_eq!(crate::import::unify_radical('\u{2FD3}'), '龍');
@@ -148,75 +173,29 @@ fn uninstalled_font() -> Vec<u8> {
 }
 
 #[test]
-fn text_in_a_missing_font_is_outlined_with_a_pink_editable_copy_that_does_not_print() {
-    let mut pdf = krilla::Document::new();
-    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
-    let mut s = page.surface();
-    let font = Font::new(uninstalled_font().into(), 0).unwrap();
-    s.draw_text(KPoint::from_xy(20.0, 50.0), font, 24.0, "Gagaku", false, TextDirection::Auto);
-    s.finish();
-    page.finish();
-    let r = import_with_report(&pdf.finish().unwrap(), &ImportOptions::default()).unwrap();
-    let d = &r.document;
-    assert_eq!(d.layers.len(), 2, "the page and its copies");
-    // The page keeps the outlines.
-    let page_layer = &d.layers[0];
-    let mut outlines = 0;
-    page_layer.walk(&mut |n| outlines += usize::from(n.name.as_deref() == Some("<Text Outlines>")));
-    assert!(outlines > 0);
-    // Over it, a non-printing layer of editable copies, named by the font's PostScript name.
-    let copies = &d.layers[1];
-    let NodeKind::Layer { printable, .. } = &copies.kind else { panic!() };
-    assert!(!printable && copies.name.as_deref().unwrap().starts_with(crate::import::COPIES_LAYER));
-    let mut t = vec![];
-    copies.walk(&mut |n| {
-        if let NodeKind::Text(x) = &n.kind {
-            t.push((**x).clone());
+fn text_in_a_missing_font_stays_live_type() {
+    for stroke_only in [false, true] {
+        let mut pdf = krilla::Document::new();
+        let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+        let mut s = page.surface();
+        let font = Font::new(uninstalled_font().into(), 0).unwrap();
+        if stroke_only {
+            s.set_fill(None);
+            s.set_stroke(Some(krilla::paint::Stroke::default()));
         }
-    });
-    assert_eq!(t.len(), 1);
-    assert_eq!(t[0].plain_text(), "Gagaku");
-    let st = t[0].first_style();
-    assert_eq!(st.font_family, "SourceSans9-Regular");
-    assert_eq!(st.fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.2, 0.6)));
-    assert!(r.warnings.iter().any(|w| w.contains("SourceSans9-Regular") && w.contains("editable copies")), "{:?}", r.warnings);
-    // Exports leave the non-printing copies out (compared with the copies made printable).
-    let count = |d: &Document| {
-        let bytes = crate::export(d, &Default::default()).unwrap();
-        let back = import_with_report(&bytes, &ImportOptions::default()).unwrap().document;
-        let mut n = 0;
-        back.walk(|x| n += usize::from(!x.is_container()));
-        n
-    };
-    let mut printed = d.clone();
-    if let Some(l) = printed.layers.get_mut(1).map(std::sync::Arc::make_mut)
-        && let NodeKind::Layer { printable, .. } = &mut l.kind
-    {
-        *printable = true;
+        s.draw_text(KPoint::from_xy(20.0, 50.0), font, 24.0, "Gagaku", false, TextDirection::Auto);
+        s.finish();
+        page.finish();
+        let r = import_with_report(&pdf.finish().unwrap(), &ImportOptions::default()).unwrap();
+        assert_eq!(r.document.layers.len(), 1, "no extra layers");
+        let t = texts(&r.document);
+        assert_eq!(t.len(), 1, "stroke only {stroke_only}");
+        assert_eq!(t[0].plain_text(), "Gagaku");
+        // Named by the family its PostScript name reads as, so it picks the font up once installed.
+        let family = t[0].first_style().font_family.clone();
+        assert_eq!(family, "Source Sans 9");
+        assert!(r.warnings.iter().any(|w| w.contains(family.as_str()) && w.contains("fallback font")), "{:?}", r.warnings);
     }
-    assert!(count(d) < count(&printed), "{} vs {}", count(d), count(&printed));
-}
-
-#[test]
-fn stroke_only_text_in_a_missing_font_gets_an_editable_copy_too() {
-    let mut pdf = krilla::Document::new();
-    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
-    let mut s = page.surface();
-    let font = Font::new(uninstalled_font().into(), 0).unwrap();
-    s.set_fill(None);
-    s.set_stroke(Some(krilla::paint::Stroke::default()));
-    s.draw_text(KPoint::from_xy(20.0, 50.0), font, 24.0, "Gagaku", false, TextDirection::Auto);
-    s.finish();
-    page.finish();
-    let d = import_with_report(&pdf.finish().unwrap(), &ImportOptions::default()).unwrap().document;
-    let copies = d.layers.get(1).expect("a layer of editable copies");
-    let mut t = vec![];
-    copies.walk(&mut |n| {
-        if let NodeKind::Text(x) = &n.kind {
-            t.push(x.plain_text());
-        }
-    });
-    assert_eq!(t, ["Gagaku"]);
 }
 
 #[test]

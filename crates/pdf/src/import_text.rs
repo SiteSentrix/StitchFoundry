@@ -247,14 +247,6 @@ impl TextLine {
         true
     }
 
-    /// Paint every run's fill with `paint` (editable copies of text in missing fonts).
-    pub fn recolor(&mut self, paint: &Paint) {
-        for (look, _) in &mut self.runs {
-            look.fill = Some(paint.clone());
-            look.stroke = None;
-        }
-    }
-
     /// The point type object and its opacity.
     pub fn finish(mut self) -> Option<(TextObject, f32)> {
         // Turned along a curve: type on a path through the glyphs.
@@ -293,16 +285,20 @@ impl TextLine {
         // layout sets them by their advances. Spread over the gaps between characters (tracking
         // follows each character, the last one's past the end of the line).
         let length = (self.next - start).dot(along);
-        let natural: f64 = vectorcraft_text::layout(db, &t).glyphs.iter().map(|g| g.advance).sum();
+        let laid = vectorcraft_text::layout(db, &t);
+        let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
         let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
         let size = self.at.size;
+        let mut bounds = laid.bounds;
         if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
             let tracking = ((length - natural) / (chars - 1) as f64 / size * 1000.0).clamp(-1000.0, 1000.0).round();
             for r in &mut t.runs {
                 r.style.tracking = tracking;
             }
+            // Tracked: laid out again for its bounds.
+            bounds = vectorcraft_text::layout(db, &t).bounds;
         }
-        t.cached_bounds = Some(vectorcraft_text::layout(db, &t).bounds);
+        t.cached_bounds = Some(bounds);
         Some((t, self.opacity))
     }
 }
