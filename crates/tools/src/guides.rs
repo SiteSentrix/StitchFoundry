@@ -38,6 +38,16 @@ pub struct Targets {
 
 impl Targets {
     pub fn collect(doc: &Document, exclude: &[NodeId], visible: Option<Rect>) -> Self {
+        Self::collect_inner(doc, exclude, None, visible)
+    }
+
+    /// Targets for dragging artboard `index`: everything except that artboard and `exclude` (the
+    /// art that moves along with it).
+    pub fn for_artboard(doc: &Document, index: usize, exclude: &[NodeId]) -> Self {
+        Self::collect_inner(doc, exclude, Some(index), None)
+    }
+
+    fn collect_inner(doc: &Document, exclude: &[NodeId], skip_artboard: Option<usize>, visible: Option<Rect>) -> Self {
         let mut t = Targets::default();
         let excluded = |id: NodeId| exclude.iter().any(|e| doc.ancestry(id).is_some_and(|a| a.contains(e)));
         let add_rect = |t: &mut Targets, r: Rect, kind: Kind| {
@@ -50,7 +60,7 @@ impl Targets {
             t.xs.push((c.x, c, Kind::Center));
             t.ys.push((c.y, c, Kind::Center));
         };
-        for ab in &doc.artboards {
+        for (_, ab) in doc.artboards.iter().enumerate().filter(|(i, _)| Some(*i) != skip_artboard) {
             add_rect(&mut t, ab.rect, Kind::Artboard);
         }
         let mut budget = 20_000usize;

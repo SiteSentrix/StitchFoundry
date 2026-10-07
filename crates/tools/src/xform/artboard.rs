@@ -3,20 +3,40 @@
 //! Click an artboard to make it active (dashed bounds, 8 handles and its name). Drag inside moves
 //! it (with its artwork when the `moveArt` option is on, Shift constrains), drag a handle resizes it
 //! (Shift proportional, Alt from centre), drag on the pasteboard draws a new artboard, Delete removes
-//! the active one and Escape returns to the Selection tool.
+//! the active one and Escape returns to the Selection tool. Moving and resizing snap like drawing
+//! does: to whole pixels, to the grid, or with Smart Guides to other artboards and objects (never to
+//! the dragged artboard or the art moving with it).
 
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, move_delta, scale_for_drag};
+use crate::guides::Targets;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug)]
 enum Drag {
-    Move { index: usize, start: Point, began: bool },
-    Resize { index: usize, handle: Handle, rect: Rect, began: bool },
-    Create { start: Point, cur: Point },
+    /// `rect` is the artboard as it was when the drag started: during the drag the document
+    /// already shows the preview, so it can't be read back from there.
+    Move {
+        index: usize,
+        start: Point,
+        rect: Rect,
+        began: bool,
+    },
+    /// `grab` is the handle's offset from the pointer, so the handle itself follows and snaps.
+    Resize {
+        index: usize,
+        handle: Handle,
+        rect: Rect,
+        grab: Vec2,
+        began: bool,
+    },
+    Create {
+        start: Point,
+        cur: Point,
+    },
 }
 
 pub struct ArtboardTool {
@@ -26,11 +46,15 @@ pub struct ArtboardTool {
     pub move_art: bool,
     drag: Option<Drag>,
     preview: Option<Rect>,
+    /// Smart Guide targets, gathered when a move or resize starts.
+    targets: Option<Targets>,
+    /// Smart Guides shown while dragging.
+    guides: Vec<Overlay>,
 }
 
 impl Default for ArtboardTool {
     fn default() -> Self {
-        Self { active: 0, move_art: true, drag: None, preview: None }
+        Self { active: 0, move_art: true, drag: None, preview: None, targets: None, guides: vec![] }
     }
 }
 
@@ -42,6 +66,64 @@ impl ArtboardTool {
     fn active_rect(&self, cx: &ToolContext) -> Option<Rect> {
         cx.doc.artboards.get(self.active).map(|a| a.rect)
     }
+
+    /// Gather the Smart Guide targets for dragging artboard `index` (call before the first preview,
+    /// while the document still shows where everything started).
+    fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool) {
+        self.guides.clear();
+        self.targets = cx.smart_guides.then(|| {
+            let art = match cx.doc.artboards.get(index) {
+                Some(a) if art_moves => cx.doc.art_on_artboard(a.rect),
+                _ => vec![],
+            };
+            Targets::for_artboard(cx.doc, index, &art)
+        });
+    }
+
+    /// Snap a dragged handle: to whole pixels, the grid, or Smart Guides (in that order, as when
+    /// drawing).
+    fn snap_point(&mut self, cx: &ToolContext, p: Point) -> Point {
+        self.guides.clear();
+        if cx.snap_to_pixel {
+            return Point::new(p.x.round(), p.y.round());
+        }
+        if cx.snap_to_grid {
+            return vectorcraft_geom::snap::snap_point_to_grid(p, grid_step(cx));
+        }
+        let Some(t) = &self.targets else { return p };
+        let (q, ov) = t.snap_point(p, cx.tol(5.0));
+        self.guides = ov;
+        q
+    }
+
+    /// Snap a move of `rect` by `d`: its top-left to whole pixels or the grid, or any of its edges
+    /// and centre to Smart Guides. Returns the snapped delta.
+    fn snap_move(&mut self, cx: &ToolContext, rect: Rect, d: Vec2) -> Vec2 {
+        self.guides.clear();
+        let tl = Point::new(rect.x0, rect.y0);
+        if cx.snap_to_pixel {
+            return Vec2::new((tl.x + d.x).round() - tl.x, (tl.y + d.y).round() - tl.y);
+        }
+        if cx.snap_to_grid {
+            return vectorcraft_geom::snap::snap_point_to_grid(tl + d, grid_step(cx)) - tl;
+        }
+        let Some(t) = &self.targets else { return d };
+        let (adj, ov) = t.snap_rect(rect + d, cx.tol(5.0));
+        self.guides = ov;
+        d + adj
+    }
+
+    fn end_drag(&mut self) {
+        self.drag = None;
+        self.preview = None;
+        self.targets = None;
+        self.guides.clear();
+    }
+}
+
+/// The grid's snapping step (gridline spacing over subdivisions), as `guides::snap_draw` uses.
+fn grid_step(cx: &ToolContext) -> f64 {
+    cx.doc.grid.spacing / cx.doc.grid.subdivisions.max(1) as f64
 }
 
 impl Tool for ArtboardTool {
@@ -61,39 +143,44 @@ impl Tool for ArtboardTool {
                 if let Some(r) = self.active_rect(cx)
                     && let Some(handle) = hit_handle(r, p, cx.tol(5.0))
                 {
-                    self.drag = Some(Drag::Resize { index: self.active, handle, rect: r, began: false });
+                    self.drag = Some(Drag::Resize { index: self.active, handle, rect: r, grab: handle.pos(r) - p, began: false });
                     return vec![];
                 }
-                if let Some(i) = (0..cx.doc.artboards.len()).rev().find(|i| cx.doc.artboards[*i].rect.contains(p)) {
+                if let Some(i) = cx.doc.artboard_at(p)
+                    && let Some(a) = cx.doc.artboards.get(i)
+                {
                     self.active = i;
-                    self.drag = Some(Drag::Move { index: i, start: p, began: false });
+                    self.drag = Some(Drag::Move { index: i, start: p, rect: a.rect, began: false });
                 } else {
                     let (p, _) = crate::guides::snap_draw(cx, p, &[]);
                     self.drag = Some(Drag::Create { start: p, cur: p });
                 }
                 vec![]
             }
-            (PointerKind::Drag, Some(Drag::Move { index, start, began })) => {
+            (PointerKind::Drag, Some(Drag::Move { index, start, rect, began })) => {
                 let mut out = vec![];
                 if !began {
                     if p.distance(start) < cx.tol(3.0) {
                         return out;
                     }
                     out.push(Action::Begin("Move Artboard".into()));
+                    self.begin_snapping(cx, index, self.move_art);
                 }
-                self.drag = Some(Drag::Move { index, start, began: true });
-                let d = move_delta(start, p, m.shift);
-                self.preview = cx.doc.artboards.get(index).map(|a| a.rect + d);
+                self.drag = Some(Drag::Move { index, start, rect, began: true });
+                let d = self.snap_move(cx, rect, move_delta(start, p, m.shift));
+                self.preview = Some(rect + d);
                 out.push(Action::Preview("artboard.move".into(), json!({ "index": index, "dx": d.x, "dy": d.y, "moveArt": self.move_art })));
                 out
             }
-            (PointerKind::Drag, Some(Drag::Resize { index, handle, rect, began })) => {
+            (PointerKind::Drag, Some(Drag::Resize { index, handle, rect, grab, began })) => {
                 let mut out = vec![];
                 if !began {
                     out.push(Action::Begin("Resize Artboard".into()));
+                    self.begin_snapping(cx, index, false);
                 }
-                self.drag = Some(Drag::Resize { index, handle, rect, began: true });
-                let nr = scale_for_drag(rect, handle, p, m.shift, m.alt).transform_rect_bbox(rect);
+                self.drag = Some(Drag::Resize { index, handle, rect, grab, began: true });
+                let h = self.snap_point(cx, p + grab);
+                let nr = scale_for_drag(rect, handle, h, m.shift, m.alt).transform_rect_bbox(rect);
                 self.preview = Some(nr);
                 out.push(Action::Preview("artboard.setProps".into(), rect_json(index, nr)));
                 out
@@ -109,8 +196,7 @@ impl Tool for ArtboardTool {
                 vec![]
             }
             (PointerKind::Up, Some(d)) => {
-                self.drag = None;
-                self.preview = None;
+                self.end_drag();
                 match d {
                     Drag::Move { began: true, .. } | Drag::Resize { began: true, .. } => vec![Action::Commit],
                     Drag::Create { start, cur } => {
@@ -127,7 +213,7 @@ impl Tool for ArtboardTool {
                 }
             }
             (PointerKind::DoubleClick, _) => {
-                self.drag = None;
+                self.end_drag();
                 match cx.doc.artboards.get(self.active) {
                     Some(a) => {
                         let mut v = rect_json(self.active, a.rect);
@@ -153,8 +239,7 @@ impl Tool for ArtboardTool {
             }
             ToolKey::Escape => {
                 let busy = matches!(self.drag, Some(Drag::Move { began: true, .. } | Drag::Resize { began: true, .. }));
-                self.drag = None;
-                self.preview = None;
+                self.end_drag();
                 if busy { vec![Action::Cancel] } else { vec![Action::SwitchTool("selection".into())] }
             }
             _ => vec![],
@@ -188,6 +273,9 @@ impl Tool for ArtboardTool {
                 text: cx.size_label(r.width(), r.height()),
             });
         }
+        if self.drag.is_some() {
+            o.extend(self.guides.iter().cloned());
+        }
         o
     }
 
@@ -219,8 +307,7 @@ impl Tool for ArtboardTool {
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         let busy = matches!(self.drag, Some(Drag::Move { began: true, .. } | Drag::Resize { began: true, .. }));
-        self.drag = None;
-        self.preview = None;
+        self.end_drag();
         if busy { vec![Action::Cancel] } else { vec![] }
     }
 }
@@ -233,6 +320,123 @@ mod tests {
 
     fn ev(kind: PointerKind, x: f64, y: f64) -> PointerEvent {
         PointerEvent::new(kind, x, y)
+    }
+
+    /// [`doc_with_rect`] (artboard 1 at 0–500, a rectangle at 100–200) plus Artboard 2 at x 600–800,
+    /// y 0–200.
+    fn two_boards() -> vectorcraft_doc::Document {
+        let (mut d, _) = doc_with_rect();
+        let mut ab = d.artboards[0].clone();
+        ab.rect = Rect::new(600.0, 0.0, 800.0, 200.0);
+        ab.name = "Artboard 2".into();
+        d.artboards.push(ab);
+        d
+    }
+
+    fn preview_params(a: &[Action]) -> Value {
+        a.iter()
+            .find_map(|a| match a {
+                Action::Preview(_, p) => Some(p.clone()),
+                _ => None,
+            })
+            .unwrap()
+    }
+
+    /// Drag artboard 2 from (700, 100) by (dx, dy) and return the preview's params.
+    fn drag_board2(cx: &ToolContext, t: &mut ArtboardTool, dx: f64, dy: f64) -> Value {
+        t.pointer(cx, &ev(PointerKind::Down, 700.0, 100.0));
+        preview_params(&t.pointer(cx, &ev(PointerKind::Drag, 700.0 + dx, 100.0 + dy)))
+    }
+
+    #[test]
+    fn bounds_follow_the_artboard_while_the_document_shows_the_preview() {
+        let mut d = two_boards();
+        let (s, p) = (Selection::default(), paint());
+        let mut t = ArtboardTool::default();
+        assert_eq!(drag_board2(&cx(&d, &s, &p), &mut t, 10.0, 0.0)["dx"], 10.0);
+        // The engine applies the preview to the document, as it does during a drag.
+        d.artboards[1].rect = Rect::new(610.0, 0.0, 810.0, 200.0);
+        let cx = cx(&d, &s, &p);
+        assert_eq!(preview_params(&t.pointer(&cx, &ev(PointerKind::Drag, 720.0, 100.0)))["dx"], 20.0);
+        let corners: Vec<Point> = t
+            .overlays(&cx)
+            .iter()
+            .filter_map(|o| match o {
+                Overlay::Anchor { p, .. } => Some(*p),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(corners[0], Point::new(620.0, 0.0), "the handles sit on the moved artboard, not 10 pt past it");
+    }
+
+    #[test]
+    fn moving_snaps_to_other_artboards_with_smart_guides() {
+        let d = two_boards();
+        let (s, p) = (Selection::default(), paint());
+        let mut t = ArtboardTool::default();
+        let mut c = cx(&d, &s, &p);
+        // Left edge 3 pt right of artboard 1's right edge (500) → lands on it.
+        assert_eq!(drag_board2(&c, &mut t, -97.0, 0.0)["dx"], -100.0);
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Line { color, .. } if *color == crate::guides::MAGENTA)));
+        t.pointer(&c, &ev(PointerKind::Up, 603.0, 100.0));
+        assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Line { .. })), "guides go away on release");
+        c.smart_guides = false;
+        assert_eq!(drag_board2(&c, &mut t, -97.0, 0.0)["dx"], -97.0);
+    }
+
+    #[test]
+    fn moving_never_snaps_to_itself_or_the_art_it_carries() {
+        let mut d = two_boards();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let art = vectorcraft_geom::shapes::rectangle(Rect::new(650.0, 50.0, 660.0, 60.0));
+        d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, art, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = ArtboardTool::default();
+        // Its own old left edge (600) isn't a target.
+        assert_eq!(drag_board2(&c, &mut t, 4.0, 0.0)["dx"], 4.0);
+        t.pointer(&c, &ev(PointerKind::Up, 704.0, 100.0));
+        // The rectangle moves along: its left edge (650) isn't a target either…
+        assert_eq!(drag_board2(&c, &mut t, 52.0, 0.0)["dx"], 52.0);
+        t.pointer(&c, &ev(PointerKind::Up, 752.0, 100.0));
+        // …unless it stays behind.
+        t.move_art = false;
+        assert_eq!(drag_board2(&c, &mut t, 52.0, 0.0)["dx"], 50.0);
+    }
+
+    #[test]
+    fn moving_snaps_to_grid_and_pixels() {
+        let d = two_boards();
+        let (s, p) = (Selection::default(), paint());
+        let mut t = ArtboardTool::default();
+        let mut c = cx(&d, &s, &p);
+        c.snap_to_grid = true;
+        // Grid step 72 / 8 = 9: x 610 → 612, y 4 → 0.
+        let v = drag_board2(&c, &mut t, 10.0, 4.0);
+        assert_eq!((v["dx"].as_f64(), v["dy"].as_f64()), (Some(12.0), Some(0.0)));
+        t.pointer(&c, &ev(PointerKind::Up, 710.0, 104.0));
+        c.snap_to_grid = false;
+        c.snap_to_pixel = true;
+        let v = drag_board2(&c, &mut t, 10.4, 3.6);
+        assert_eq!((v["dx"].as_f64(), v["dy"].as_f64()), (Some(10.0), Some(4.0)));
+    }
+
+    #[test]
+    fn resizing_snaps_the_dragged_handle() {
+        let d = two_boards();
+        let (s, p) = (Selection::default(), paint());
+        let mut t = ArtboardTool { active: 1, ..Default::default() };
+        let c = cx(&d, &s, &p);
+        // Left handle to 3 pt off artboard 1's right edge.
+        t.pointer(&c, &ev(PointerKind::Down, 600.0, 100.0));
+        let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 503.0, 100.0)));
+        assert_eq!((v["x"].as_f64(), v["width"].as_f64()), (Some(500.0), Some(300.0)));
+        t.pointer(&c, &ev(PointerKind::Up, 503.0, 100.0));
+        // The handle, not the pointer, follows: grabbed 2 pt left of it, dragged 10 pt.
+        t.pointer(&c, &ev(PointerKind::Down, 798.0, 100.0));
+        let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 808.0, 100.0)));
+        assert_eq!(v["width"].as_f64(), Some(210.0));
     }
 
     #[test]

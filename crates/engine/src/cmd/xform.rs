@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Node, NodeId, NodeKind};
+use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::edit::selected_roots;
@@ -374,30 +374,7 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     let move_art = bool_or(p, "moveArt", false);
     let st = s.doc()?;
     let rect = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-    // Top-level objects (children of layers) lying entirely inside the artboard.
-    let mut art = vec![];
-    if move_art {
-        fn collect(n: &Node, rect: Rect, out: &mut Vec<NodeId>) {
-            for c in n.children().into_iter().flatten() {
-                if c.locked {
-                    continue;
-                }
-                if c.is_layer() {
-                    collect(c, rect, out);
-                } else if let Some(b) = c.geometric_bounds()
-                    && rect.contains(Point::new(b.x0, b.y0))
-                    && rect.contains(Point::new(b.x1, b.y1))
-                {
-                    out.push(c.id);
-                }
-            }
-        }
-        for l in &st.doc.layers {
-            if !l.locked {
-                collect(l, rect, &mut art);
-            }
-        }
-    }
+    let art = if move_art { st.doc.art_on_artboard(rect) } else { vec![] };
     let scale_strokes = s.prefs.scale_strokes;
     s.edit("Move Artboard", |d, _| {
         let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
