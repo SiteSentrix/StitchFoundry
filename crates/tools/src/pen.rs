@@ -3,7 +3,8 @@
 //! Click adds a corner anchor; click-drag adds a smooth anchor with symmetric handles (Alt breaks
 //! them: the incoming handle stays where it was when Alt went down and only the outgoing one
 //! follows the pointer; Space held moves the anchor, handles and all); Shift constrains to 45°.
-//! Clicking the first anchor closes the path.
+//! Clicking the first anchor closes the path. Clicking the last one retracts its outgoing handle, so
+//! the next segment leaves it as a corner; dragging from it pulls a new one out on its own.
 //! Enter/Esc (or switching tools) ends the path. Clicking the end of a selected open path continues
 //! it. The rubber-band preview shows the next segment. On a selected blend's spine a click adds a
 //! point (on a point no key object sits on: deletes it).
@@ -24,6 +25,9 @@ pub struct PenTool {
     in_h: Point,
     /// The pointer at the last button-down or drag: Space held moves the anchor as far as it moves.
     last: Point,
+    /// The last anchor of the path being drawn, while a click retracts its outgoing handle or a
+    /// drag pulls a new one out: (path, subpath, anchor, its position).
+    handle: Option<(NodeId, usize, usize, Point)>,
 }
 
 /// The open path the pen is extending: the single selected open path.
@@ -43,12 +47,28 @@ fn active_path(cx: &ToolContext) -> Option<(NodeId, Point, Point, Point)> {
     Some((id, first, last.p, last.h_out))
 }
 
+/// The last anchor of `id`'s last subpath: (subpath, anchor).
+fn last_anchor(cx: &ToolContext, id: NodeId) -> Option<(usize, usize)> {
+    let pd = cx.doc.node(id)?.path_data()?;
+    let si = pd.subpaths.len().checked_sub(1)?;
+    let ai = pd.subpaths.get(si)?.anchors.len().checked_sub(1)?;
+    Some((si, ai))
+}
+
+/// Preview the outgoing handle of anchor `ai` of subpath `si` at `h`, the incoming one left alone.
+fn set_out_handle(id: NodeId, si: usize, ai: usize, h: Point) -> Action {
+    Action::Preview(
+        "path.setHandle".into(),
+        json!({"id": id.0, "subpath": si, "anchor": ai, "which": "out", "x": h.x, "y": h.y, "independent": true}),
+    )
+}
+
 impl Tool for PenTool {
     fn id(&self) -> &'static str {
         "pen"
     }
     fn busy(&self) -> bool {
-        self.drag.is_some()
+        self.drag.is_some() || self.handle.is_some()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let exclude: Vec<vectorcraft_doc::NodeId> = if self.drawing { cx.selection.objects.clone() } else { vec![] };
@@ -69,9 +89,17 @@ impl Tool for PenTool {
                     if ev.mods.shift {
                         p = last + vectorcraft_geom::constrain_angle(p - last, 45.0);
                     }
-                    if p.distance(first) <= tol {
+                    let end = last_anchor(cx, id);
+                    // A one-anchor path doesn't close on itself: its anchor is the last one too.
+                    if p.distance(first) <= tol && end.is_some_and(|(_, ai)| ai > 0) {
                         self.drag = Some((first, true));
                         return vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0}))];
+                    }
+                    if p.distance(last) <= tol
+                        && let Some((si, ai)) = end
+                    {
+                        self.handle = Some((id, si, ai, last));
+                        return vec![Action::Begin("Convert Anchor Point".into()), set_out_handle(id, si, ai, last)];
                     }
                     self.drag = Some((p, false));
                     self.in_h = p;
@@ -95,6 +123,13 @@ impl Tool for PenTool {
                 vec![Action::Begin("Pen".into()), Action::Preview("path.create".into(), json!({"anchors": [{"x": p.x, "y": p.y}]}))]
             }
             PointerKind::Drag => {
+                if let Some((id, si, ai, a)) = self.handle {
+                    let mut h = ev.pos;
+                    if ev.mods.shift {
+                        h = a + vectorcraft_geom::constrain_angle(ev.pos - a, 45.0);
+                    }
+                    return vec![set_out_handle(id, si, ai, h)];
+                }
                 let Some((mut a, closing)) = self.drag else { return vec![] };
                 // Space held moves the anchor being placed, handles and all.
                 if ev.mods.space && !closing {
@@ -133,6 +168,9 @@ impl Tool for PenTool {
                 )]
             }
             PointerKind::Up => {
+                if self.handle.take().is_some() {
+                    return vec![Action::Commit];
+                }
                 let Some((_, closing)) = self.drag.take() else { return vec![] };
                 if closing {
                     self.drawing = false;
@@ -147,6 +185,7 @@ impl Tool for PenTool {
             ToolKey::Enter | ToolKey::Escape => {
                 self.drawing = false;
                 self.drag = None;
+                self.handle = None;
                 vec![]
             }
             _ => vec![],
@@ -157,7 +196,7 @@ impl Tool for PenTool {
         vec![]
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        if !self.drawing || self.drag.is_some() {
+        if !self.drawing || self.drag.is_some() || self.handle.is_some() {
             return vec![];
         }
         let (Some((id, _, last, out)), Some(h)) = (active_path(cx), self.hover) else { return vec![] };
@@ -179,9 +218,13 @@ impl Tool for PenTool {
                 _ => {}
             }
         }
-        if let Some((_, first, last, _)) = active_path(cx) {
-            if self.drawing && p.distance(first) <= cx.tol(5.0) {
+        if let Some((id, first, last, _)) = active_path(cx) {
+            let one = last_anchor(cx, id).is_some_and(|(_, ai)| ai == 0);
+            if self.drawing && p.distance(first) <= cx.tol(5.0) && !one {
                 return Cursor::PenClose;
+            }
+            if self.drawing && p.distance(last) <= cx.tol(5.0) {
+                return Cursor::PenConvert;
             }
             if !self.drawing && (p.distance(last) <= cx.tol(5.0) || p.distance(first) <= cx.tol(5.0)) {
                 return Cursor::PenContinue;
@@ -302,6 +345,59 @@ mod tests {
                 json!({"id": id.0, "x": 400.0, "y": 400.0, "in": [350.0, 400.0], "out": [450.0, 450.0]})
             )]
         );
+    }
+
+    /// A document with an open path of `anchors`, selected, being drawn by a Pen.
+    fn drawing(anchors: vectorcraft_geom::SubPath) -> (vectorcraft_doc::Document, NodeId, Selection) {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let path = vectorcraft_geom::PathData::single(anchors);
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut s = Selection::default();
+        s.set([id]);
+        (d, id, s)
+    }
+
+    fn set_out(id: NodeId, ai: usize, x: f64, y: f64) -> Action {
+        Action::Preview("path.setHandle".into(), json!({"id": id.0, "subpath": 0, "anchor": ai, "which": "out", "x": x, "y": y, "independent": true}))
+    }
+
+    #[test]
+    fn clicking_the_last_anchor_retracts_its_handle_and_dragging_pulls_a_new_one() {
+        // The last anchor is smooth: handles at 40 and 80 either side of (60, 300).
+        let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0), Point::new(60.0, 300.0)], false);
+        sp.anchors[1].h_in = Point::new(40.0, 300.0);
+        sp.anchors[1].h_out = Point::new(80.0, 300.0);
+        let (d, id, s) = drawing(sp);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        assert_eq!(t.cursor(&cx, Point::new(61.0, 301.0), Mods::default()), Cursor::PenConvert);
+        // A click retracts the outgoing handle and adds no anchor.
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 61.0, 301.0));
+        assert_eq!(a, vec![Action::Begin("Convert Anchor Point".into()), set_out(id, 1, 60.0, 300.0)]);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 61.0, 301.0)), vec![Action::Commit]);
+        // A drag pulls a new outgoing handle out.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 60.0, 300.0));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 280.0)), vec![set_out(id, 1, 70.0, 280.0)]);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 70.0, 280.0)), vec![Action::Commit]);
+        // Elsewhere a click still adds an anchor, and the first anchor still closes the path.
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 400.0));
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.appendAnchor"), "{a:?}");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 400.0));
+        assert_eq!(t.cursor(&cx, Point::new(10.0, 300.0), Mods::default()), Cursor::PenClose);
+    }
+
+    #[test]
+    fn a_one_anchor_path_does_not_close_on_itself() {
+        let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0)], false));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        assert_eq!(t.cursor(&cx, Point::new(10.0, 300.0), Mods::default()), Cursor::PenConvert);
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 300.0));
+        assert_eq!(a, vec![Action::Begin("Convert Anchor Point".into()), set_out(id, 0, 10.0, 300.0)]);
     }
 
     #[test]

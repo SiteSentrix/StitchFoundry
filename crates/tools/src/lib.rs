@@ -322,6 +322,8 @@ pub enum Cursor {
     PenDelete,
     PenClose,
     PenContinue,
+    /// Over the last anchor of the path being drawn: a click retracts its outgoing handle.
+    PenConvert,
     Text,
     Hand,
     HandGrab,
