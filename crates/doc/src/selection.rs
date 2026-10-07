@@ -98,11 +98,11 @@ impl Selection {
         }
         self.slices.retain(|id| doc.is_slice(*id));
     }
-    /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected,
-    /// anything else is selected itself.
+    /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected
+    /// (the art of its sublayers too), anything else is selected itself.
     pub fn set_target(&mut self, doc: &Document, id: NodeId) {
         match doc.node(id) {
-            Some(n) if n.is_layer() => self.set(n.children().into_iter().flatten().filter(|c| c.visible && !c.locked).map(|c| c.id)),
+            Some(n) if n.is_layer() => self.set(n.layer_art(true)),
             _ => self.set([id]),
         }
         self.target = Some(id);

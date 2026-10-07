@@ -115,8 +115,8 @@ fn the_top_object_must_be_able_to_clip() {
     assert_eq!(layer(&s), before);
     // An explicit id picks the layer even with a group selected.
     let l = before.id;
-    s.execute("layer.newSublayer", &json!({"parent": l.0})).unwrap();
-    let sub = layer(&s).children().unwrap().last().unwrap().id;
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": l.0})).unwrap());
+    assert_eq!(s.doc().unwrap().doc.node(l).unwrap().children().unwrap().last().unwrap().id, sub, "on top of the layer's contents");
     let err = s.execute("layer.clippingMask.toggle", &json!({"id": sub.0}));
     assert!(err.is_err(), "an empty sublayer has nothing to clip by");
 }
