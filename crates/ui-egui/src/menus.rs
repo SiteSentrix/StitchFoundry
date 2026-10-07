@@ -171,7 +171,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
-    ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke"),
+    ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
     (
         "window.collapseDock",
         "Collapse Panels to Icons",
@@ -711,6 +711,28 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
+/// Canonical panel id for `window.panel`: the dock tabs (`properties`, `layers`, `libraries`)
+/// and every `ICON_PANELS` id, matched case-insensitively. Each icon panel's display label
+/// is accepted too, so `"Layers"` and `"Swatches"` work the way agents write them.
+fn normalize_panel(input: &str) -> Option<&'static str> {
+    let name = input.trim();
+    if name.eq_ignore_ascii_case("properties") {
+        return Some("properties");
+    }
+    if name.eq_ignore_ascii_case("layers") {
+        return Some("layers");
+    }
+    if name.eq_ignore_ascii_case("libraries") {
+        return Some("libraries");
+    }
+    for &(id, label, _) in ICON_PANELS.iter() {
+        if name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label) {
+            return Some(id);
+        }
+    }
+    None
+}
+
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
 pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     if id == "app.language" {
@@ -935,25 +957,29 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(json!(collapsed))
         }
         "window.panel" => {
-            let panel = s("panel").unwrap_or_default();
-            match (panel.as_str(), DockTab::from_id(&panel)) {
+            let raw = s("panel").unwrap_or_default();
+            // Canonical id (case-insensitive; display labels work too), then the
+            // dock tab it names, if any.
+            let canonical = normalize_panel(&raw);
+            let tab = canonical.and_then(DockTab::from_id);
+            match (canonical, tab) {
                 // A collapsed dock pops the panel out of its icon, like the icon panels.
-                (p, Some(tab)) if app.ui.dock_collapsed => {
+                (Some(p), Some(tab)) if app.ui.dock_collapsed => {
                     app.ui.dock_tab = tab;
                     app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(p) { None } else { Some(p.to_string()) };
                     app.ui.dock = true;
                     Ok(json!({"open": app.ui.open_panel}))
                 }
-                (_, Some(tab)) => {
+                (Some(_), Some(tab)) => {
                     app.ui.dock_tab = tab;
                     Ok(Value::Null)
                 }
-                (p, None) if ICON_PANELS.iter().any(|(id, _, _)| *id == p) => {
+                (Some(p), None) => {
                     app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(p) { None } else { Some(p.to_string()) };
                     app.ui.dock = true;
                     Ok(json!({"open": app.ui.open_panel}))
                 }
-                (other, None) => Err(format!("unknown panel `{other}`")),
+                (None, _) => Err(format!("unknown panel `{raw}`")),
             }
         }
         "window.brightness" => match s("brightness").as_deref().and_then(Brightness::parse) {
@@ -1237,9 +1263,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.taskBar" => app.ui.task_bar,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            match DockTab::from_id(panel) {
+            let canonical = normalize_panel(panel);
+            match canonical.and_then(DockTab::from_id) {
                 Some(tab) if !app.ui.dock_collapsed => app.ui.dock_tab == tab,
-                _ => app.ui.open_panel.as_deref() == Some(panel),
+                _ => canonical.is_some_and(|id| app.ui.open_panel.as_deref() == Some(id)),
             }
         }
         "window.collapseDock" => app.ui.dock_collapsed,
@@ -3165,6 +3192,34 @@ mod tests {
             app.run(id, json!({})).unwrap();
             assert_eq!(dynamic_label(&app, id, ""), off);
         }
+    }
+
+    #[test]
+    fn panel_ids_are_case_insensitive_and_labels_work() {
+        assert_eq!(normalize_panel("layers"), Some("layers"));
+        assert_eq!(normalize_panel("Layers"), Some("layers"));
+        assert_eq!(normalize_panel("LAYERS"), Some("layers"));
+        assert_eq!(normalize_panel("Swatches"), Some("swatches"));
+        assert_eq!(normalize_panel("swatches"), Some("swatches"));
+        assert_eq!(normalize_panel("Color Guide"), Some("colorGuide"));
+        assert_eq!(normalize_panel("colorguide"), Some("colorGuide"));
+        assert_eq!(normalize_panel("  Stroke  "), Some("stroke"));
+        assert_eq!(normalize_panel("nope"), None);
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("window.panel", json!({"panel": "Layers"})).unwrap();
+        assert_eq!(app.ui.dock_tab, crate::state::DockTab::Layers);
+        app.run("window.panel", json!({"panel": "Swatches"})).unwrap();
+        assert_eq!(app.ui.open_panel.as_deref(), Some("swatches"));
+        assert!(checked(&app, "window.panel", &json!({"panel": "Swatches"})).unwrap());
+        assert!(app.run("window.panel", json!({"panel": "nope"})).is_err());
+        // A collapsed dock pops the panel out of its icon, by canonical id.
+        app.ui.dock_collapsed = true;
+        app.run("window.panel", json!({"panel": "Layers"})).unwrap();
+        assert_eq!(app.ui.open_panel.as_deref(), Some("layers"));
+        assert!(checked(&app, "window.panel", &json!({"panel": "Layers"})).unwrap());
+        app.ui.dock_collapsed = false;
     }
 
     #[test]

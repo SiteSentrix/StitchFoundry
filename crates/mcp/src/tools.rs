@@ -233,8 +233,8 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "open_panel",
             "Open panel",
-            "Open a panel in the desktop app's dock (e.g. Layers, Swatches, Stroke, Align, Pathfinder, Transform). Desktop app only.",
-            obj(json!({"panel": string("Panel name")}), &["panel"]),
+            "Open a panel in the desktop app's dock by id (layers, swatches, stroke, align, pathfinder, transform, …; case-insensitive, display labels like \"Layers\" work too). Desktop app only.",
+            obj(json!({"panel": string("Panel id or display label")}), &["panel"]),
             false,
         ),
         tool(

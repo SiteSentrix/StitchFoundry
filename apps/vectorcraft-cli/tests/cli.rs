@@ -83,6 +83,119 @@ fn mcp_headless_over_stdio() {
     assert_eq!(replies[3]["result"]["content"][0]["type"], "image");
 }
 
+/// End-to-end protocol sweep over stdio against the compiled binary. The in-process
+/// tests drive `Server::handle_line` directly, so the binary's own wiring (argument
+/// parsing, logger install, stdout pollution, notification order) is untested: this
+/// drives the real `mcp --headless` process through prompts, completions, resource
+/// templates, logging and the error taxonomy instead.
+#[test]
+fn mcp_protocol_over_stdio() {
+    use std::io::{BufRead, BufReader};
+    let mut child =
+        Command::new(BIN).args(["mcp", "--headless"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut notes = vec![];
+
+    fn send(stdin: &mut std::process::ChildStdin, v: Value) {
+        writeln!(stdin, "{v}").unwrap();
+    }
+    // Next reply with this id; notifications (no id) are stashed for later.
+    fn recv(lines: &mut std::io::Lines<BufReader<std::process::ChildStdout>>, notes: &mut Vec<Value>, id: u64) -> Value {
+        loop {
+            let line = lines.next().unwrap().unwrap();
+            let v: Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(v["jsonrpc"], "2.0", "{v}");
+            if v.get("id").and_then(|i| i.as_u64()) == Some(id) {
+                return v;
+            }
+            notes.push(v);
+        }
+    }
+
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}),
+    );
+    let r = recv(&mut lines, &mut notes, 1);
+    assert_eq!(r["result"]["serverInfo"]["name"], "vectorcraft");
+    assert!(r["result"]["capabilities"]["prompts"].is_object(), "{r}");
+    send(&mut stdin, json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":2,"method":"prompts/list","params":{}}));
+    let r = recv(&mut lines, &mut notes, 2);
+    assert!(r["result"]["prompts"].as_array().is_some_and(|p| !p.is_empty()), "{r}");
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"poster","arguments":{"brief":"a jazz festival"}}}));
+    let r = recv(&mut lines, &mut notes, 3);
+    assert!(r["result"]["messages"][0]["content"]["text"].as_str().is_some_and(|t| t.contains("a jazz festival")), "{r}");
+
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":4,"method":"completion/complete","params":{"ref":{"type":"ref/prompt","name":"export-set"},"argument":{"name":"formats","value":"sv"}}}),
+    );
+    let r = recv(&mut lines, &mut notes, 4);
+    assert!(r["result"]["completion"]["values"].as_array().is_some_and(|v| v.contains(&json!("svg"))), "{r}");
+
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":5,"method":"resources/list","params":{}}));
+    assert!(recv(&mut lines, &mut notes, 5)["result"]["resources"].as_array().is_some_and(|v| v.len() == 2));
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":6,"method":"resources/templates/list","params":{}}));
+    assert!(recv(&mut lines, &mut notes, 6)["result"]["resourceTemplates"].as_array().is_some_and(|v| v.len() >= 4));
+
+    send(
+        &mut stdin,
+        json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"draw_shape","arguments":{"shape":"rectangle","x":10,"y":10,"width":60,"height":40}}}),
+    );
+    let r = recv(&mut lines, &mut notes, 7);
+    assert_eq!(r["result"]["isError"], false, "{r}");
+    let id: i64 = serde_json::from_str::<Value>(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap()["id"].as_i64().unwrap();
+
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":8,"method":"resources/read","params":{"uri": format!("vectorcraft://object/{id}")}}));
+    let r = recv(&mut lines, &mut notes, 8);
+    let body: Value = serde_json::from_str(r["result"]["contents"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(body["id"].as_i64(), Some(id), "{body}");
+
+    // Unknown resources (-32002) and bad template values (-32602) stay apart.
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":9,"method":"resources/read","params":{"uri":"vectorcraft://nope" }}));
+    assert_eq!(recv(&mut lines, &mut notes, 9)["error"]["code"], -32002);
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":10,"method":"resources/read","params":{"uri":"vectorcraft://object/"}}));
+    assert_eq!(recv(&mut lines, &mut notes, 10)["error"]["code"], -32602);
+
+    // The binary installed its logger: records arrive as notifications/message, and only
+    // after the client asked for them.
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":11,"method":"logging/setLevel","params":{"level":"debug"}}));
+    assert!(recv(&mut lines, &mut notes, 11).get("error").is_none());
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":12,"method":"tools/list","params":{}}));
+    assert!(recv(&mut lines, &mut notes, 12)["result"]["tools"].as_array().is_some_and(|v| !v.is_empty()));
+
+    // Malformed input is a parse error, and the server keeps serving afterwards.
+    stdin.write_all(b"{not json\n").unwrap();
+    let parse_err: Value = loop {
+        let line = lines.next().unwrap().unwrap();
+        let v: Value = serde_json::from_str(&line).unwrap();
+        if v.get("error").is_some() {
+            break v;
+        }
+        notes.push(v);
+    };
+    assert_eq!(parse_err["error"]["code"], -32700);
+    assert!(parse_err["id"].is_null(), "{parse_err}");
+    send(&mut stdin, json!({"jsonrpc":"2.0","id":13,"method":"ping","params":{}}));
+    assert!(recv(&mut lines, &mut notes, 13).get("error").is_none());
+    drop(stdin);
+    // Drain whatever the debug window queued; every line off the protocol stream parses.
+    for line in lines.by_ref() {
+        let line = line.unwrap();
+        let v: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["jsonrpc"], "2.0", "{v}");
+        notes.push(v);
+    }
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("panicked"));
+    let messages = notes.iter().filter(|n| n["method"] == "notifications/message").count();
+    assert!(messages > 0, "no log records after logging/setLevel: {notes:?}");
+}
+
 /// `vectorcraft-cli commands | head -1` panicked with "failed printing to
 /// stdout: Broken pipe (os error 32)" and exit status 101.
 #[test]
