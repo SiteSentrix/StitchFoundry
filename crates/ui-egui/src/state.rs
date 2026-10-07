@@ -17,11 +17,15 @@ pub struct View {
     pub fitted: bool,
     /// View rotation in degrees (Rotate View tool).
     pub rotation: f64,
+    /// The artboard the status bar's navigator is on (an index): Fit Artboard in Window and Actual
+    /// Size show it.
+    #[serde(default)]
+    pub artboard: usize,
 }
 
 impl Default for View {
     fn default() -> Self {
-        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0 }
+        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0 }
     }
 }
 
@@ -34,6 +38,7 @@ impl View {
                 center: v.center,
                 fitted: true,
                 rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
+                artboard: 0,
             },
             _ => Self::default(),
         }

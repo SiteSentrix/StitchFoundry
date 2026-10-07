@@ -147,6 +147,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.fitAll", "Fit All in Window", "Cmd+Alt+0", "{}"),
     ("view.actualSize", "Actual Size", "Cmd+1", "{}"),
     ("view.setZoom", "Set Zoom", "", "{zoom: percent, center?: [x,y]}"),
+    (
+        "view.goToArtboard",
+        "Go to Artboard",
+        "",
+        "{index: 0-based number | \"first\" | \"previous\" | \"next\" | \"last\"} make that artboard the status bar navigator's (the one Fit Artboard in Window and Actual Size show) and fit it in the window → {index}",
+    ),
     ("view.edges", "Hide Edges", "Cmd+H", "{}"),
     ("view.artboards", "Hide Artboards", "Cmd+Shift+H", "{}"),
     ("view.rulers", "Show Rulers", "Cmd+R", "{}"),
@@ -859,6 +865,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             crate::canvas::fit(app, id);
             Ok(Value::Null)
         }
+        "view.goToArtboard" => go_to_artboard(app, p),
         "view.presentation" => {
             app.ui.screen_mode = if app.ui.screen_mode == 3 { 0 } else { 3 };
             Ok(json!(app.ui.screen_mode))
@@ -1116,6 +1123,31 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         _ => return None,
     };
     Some(r)
+}
+
+/// `view.goToArtboard`: make artboard `index` (a number, or first / previous / next / last from
+/// the current one) the navigator's, and fit it in the window.
+fn go_to_artboard(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let n = app.session.active().map(|d| d.doc.artboards.len()).ok_or("no document open")?;
+    let last = n.checked_sub(1).ok_or("the document has no artboards")?;
+    let current = app.view().map_or(0, |v| v.artboard).min(last);
+    let to = match p.get("index") {
+        Some(Value::String(s)) => match s.as_str() {
+            "first" => 0,
+            "previous" => current.saturating_sub(1),
+            "next" => current + 1,
+            "last" => last,
+            other => return Err(format!("index must be a number or first, previous, next or last, not `{other}`")),
+        },
+        Some(v) => v.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or("index must be a number or first, previous, next or last")?,
+        None => return Err("missing index".into()),
+    }
+    .min(last);
+    if let Some(v) = app.view_mut() {
+        v.artboard = to;
+    }
+    crate::canvas::fit(app, "view.fitArtboard");
+    Ok(json!({ "index": to }))
 }
 
 /// Checked state for toggle items.

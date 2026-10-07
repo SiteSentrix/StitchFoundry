@@ -372,13 +372,25 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     },
                 );
                 ui.separator();
+                // The artboard navigator: first, previous, the current artboard's number, next, last.
                 let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
-                for icon in ["chevrons-left", "chevron-left"] {
-                    widgets::icon_button(ui, icon, "", false, 18.0);
+                let cur = app.view().map_or(0, |v| v.artboard).min(nab.saturating_sub(1));
+                let mut go = None;
+                for (icon, to) in [("chevrons-left", "first"), ("chevron-left", "previous")] {
+                    if widgets::icon_button_enabled(ui, icon, "", false, cur > 0, 18.0).clicked() {
+                        go = Some(to);
+                    }
                 }
-                ui.label(egui::RichText::new(if nab > 0 { "1" } else { "–" }).size(11.5));
-                for icon in ["chevron-right", "chevrons-right"] {
-                    widgets::icon_button(ui, icon, "", false, 18.0);
+                ui.label(egui::RichText::new(if nab > 0 { (cur + 1).to_string() } else { "–".into() }).size(11.5));
+                for (icon, to) in [("chevron-right", "next"), ("chevrons-right", "last")] {
+                    if widgets::icon_button_enabled(ui, icon, "", false, cur + 1 < nab, 18.0).clicked() {
+                        go = Some(to);
+                    }
+                }
+                if let Some(to) = go
+                    && let Err(e) = app.run("view.goToArtboard", json!({ "index": to }))
+                {
+                    app.status(e);
                 }
                 ui.separator();
                 let tool = vectorcraft_tools::tool_info(app.session.tool_id())
@@ -665,6 +677,62 @@ mod tests {
         if !cfg!(target_os = "macos") {
             assert!(text("zoom").contains("Alt+Click") && text("paintbrush").contains("Ctrl+Shift+/"));
         }
+    }
+
+    /// One headless frame of the status bar; returns the artboard navigator's buttons, left to
+    /// right: first, previous, next, last.
+    fn navigator(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Rect> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 300.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::status_bar(app, ui));
+        out.textures_delta.clear();
+        let size = egui::vec2(18.0, 18.0);
+        let mut r: Vec<egui::Rect> =
+            ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect());
+        r.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        r
+    }
+
+    #[test]
+    fn the_artboard_navigator_goes_to_artboards_and_fitting_shows_the_current_one() {
+        use vectorcraft_geom::Point;
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        // Three 200 × 100 artboards in a row, centred at x = 100, 320 and 540.
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("artboard.new", json!({})).unwrap();
+        app.run("artboard.new", json!({})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0)));
+        let ctx = egui::Context::default();
+        let buttons = navigator(&mut app, &ctx, vec![]);
+        assert_eq!(buttons.len(), 4);
+        let click = |app: &mut crate::VectorcraftApp, r: egui::Rect| {
+            let b = |pressed| egui::Event::PointerButton {
+                pos: r.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            navigator(app, &ctx, vec![egui::Event::PointerMoved(r.center())]);
+            navigator(app, &ctx, vec![b(true)]);
+            navigator(app, &ctx, vec![b(false)]);
+        };
+        let at = |app: &crate::VectorcraftApp| (app.view().unwrap().artboard, app.view().unwrap().center);
+        click(&mut app, buttons[2]);
+        assert_eq!(at(&app), (1, Point::new(320.0, 50.0)), "next");
+        click(&mut app, buttons[3]);
+        assert_eq!(at(&app), (2, Point::new(540.0, 50.0)), "last");
+        click(&mut app, buttons[1]);
+        assert_eq!(at(&app), (1, Point::new(320.0, 50.0)), "previous");
+        // Fit Artboard in Window and Actual Size show the navigator's artboard.
+        app.run("view.setZoom", json!({"zoom": 300, "center": [0, 0]})).unwrap();
+        app.run("view.fitArtboard", json!({})).unwrap();
+        assert_eq!(at(&app), (1, Point::new(320.0, 50.0)));
+        app.run("view.actualSize", json!({})).unwrap();
+        assert_eq!((at(&app).1, app.view().unwrap().zoom), (Point::new(320.0, 50.0), 1.0));
+        click(&mut app, buttons[0]);
+        assert_eq!(at(&app), (0, Point::new(100.0, 50.0)), "first");
+        // The command also takes an index, clamped to the last artboard.
+        assert_eq!(app.run("view.goToArtboard", json!({"index": 9})), Ok(json!({"index": 2})));
+        assert!(app.run("view.goToArtboard", json!({"index": "sideways"})).is_err());
     }
 
     #[test]
