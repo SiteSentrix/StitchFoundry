@@ -120,12 +120,14 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         }
         return;
     };
+    let current = app.view().map_or(0, |v| v.artboard);
     let Some(st) = app.session.active() else { return };
     let target = match how {
         "view.fitAll" => {
             st.doc.art_bounds().map(|a| st.doc.artboards.iter().fold(a, |r, ab| r.union(ab.rect))).or(st.doc.artboards.first().map(|a| a.rect))
         }
-        _ => st.doc.artboards.first().map(|a| a.rect),
+        // The navigator's artboard (the first if it has gone).
+        _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };
     let Some(target) = target else { return };
     let Some(v) = app.view_mut() else { return };

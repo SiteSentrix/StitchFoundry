@@ -988,6 +988,7 @@
 	Global Process Color, CMYK	整體印刷色，CMYK
 	glyph {id}	字符 {id}
 	Glyphs	字符
+	Go to Artboard	前往工作區域
 	Go To Link	前往連結
 	GPL palettes keep solid colours only, as RGB.	GPL 調色盤僅保留純色，並以 RGB 儲存。
 	GPU Performance	GPU 效能
