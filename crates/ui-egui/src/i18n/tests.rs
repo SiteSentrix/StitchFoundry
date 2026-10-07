@@ -11,6 +11,10 @@ fn tags_map_to_languages() {
     assert_eq!(lang_from_tag("fr_FR"), None);
     assert_eq!(lang_from_tag("ja_JP.UTF-8"), Lang::from_code("ja"));
     assert_eq!(lang_from_tag("ja"), Lang::from_code("ja"));
+    // Spanish: every region (and Latin America as a whole) resolves to the one catalog.
+    for tag in ["es", "es_ES.UTF-8", "es-MX", "es_AR", "es-419", "es-US"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("es"), "{tag}");
+    }
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -387,9 +391,9 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 3] = ["cs", "ja", "pt-br"];
+const KEEPS_MENU_NAMES: [&str; 4] = ["cs", "es", "ja", "pt-br"];
 
-/// Menu labels the menu-complete catalogs (Czech, Japanese) show as they are: the product name, a format name, the built-in workspace
+/// Menu labels the menu-complete catalogs (Czech, Spanish, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
 /// Each language's own name in the Language menu is left alone too.
 const MENU_KEEP_AS_IS: &[&str] = &[
@@ -479,8 +483,8 @@ fn toggled_labels() -> Vec<String> {
     labels
 }
 
-/// Czech, Japanese and Brazilian Portuguese cover every menu label, the Show/Hide pairs and the
-/// canvas context menu included (panels and dialogs not yet).
+/// Czech, Spanish, Japanese and Brazilian Portuguese cover every menu label, the Show/Hide pairs
+/// and the canvas context menu included (panels and dialogs not yet).
 #[test]
 fn menu_catalogs_translate_every_menu_label() {
     let labels = menu_labels();
@@ -509,6 +513,44 @@ fn menu_catalogs_translate_every_menu_label() {
     assert_eq!(tr(cs(), "File"), "Soubor");
     assert_eq!(tr(Lang::from_code("ja").expect("ja"), "File"), "ファイル");
     assert_eq!(tr(Lang::from_code("pt-br").expect("pt-br"), "File"), "Arquivo");
+    assert_eq!(tr(es(), "File"), "Archivo");
+}
+
+fn es() -> Lang {
+    Lang::from_code("es").expect("es registered")
+}
+
+/// Spanish uses the vector-illustration vocabulary its users know, has two plural forms like
+/// English, and reads the same in the menus and in the panels.
+#[test]
+fn spanish_reads_as_spanish() {
+    for (en, want) in [
+        ("Artboard Tool", "Herramienta Mesa de trabajo"),
+        ("Swatches", "Muestras"),
+        ("Pathfinder", "Buscatrazos"),
+        ("Stroke", "Trazo"),
+        ("Fill", "Relleno"),
+        ("Direct Selection Tool", "Herramienta Selección directa"),
+        ("Save As…", "Guardar como…"),
+        ("Undo", "Deshacer"),
+    ] {
+        assert_eq!(tr(es(), en), want);
+    }
+    assert_eq!(trn(es(), 1, "{n} Layer", "{n} Layers"), "1 capa");
+    assert_eq!(trn(es(), 0, "{n} Layer", "{n} Layers"), "0 capas");
+    assert_eq!(trn(es(), 3, "{n} Layer", "{n} Layers"), "3 capas");
+}
+
+/// Catalogs written with spaces between words keep a fragment's leading and trailing spaces: the
+/// hint bar and a few labels are joined from pieces (" to finish", "Press ").
+#[test]
+fn spaced_catalogs_keep_the_spaces_around_fragments() {
+    let edge = |s: &str| (s.len() - s.trim_start_matches(' ').len(), s.len() - s.trim_end_matches(' ').len());
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty() && !l.source.chars().any(is_cjk)) {
+        let (entries, _) = parse_entries(l.source);
+        let bad: Vec<_> = entries.iter().filter(|(ctx, src, tr)| ctx.is_empty() && edge(src) != edge(tr)).map(|(_, src, _)| src).collect();
+        assert!(bad.is_empty(), "{}: spaces differ around {bad:?}", l.code);
+    }
 }
 
 #[test]
@@ -517,11 +559,11 @@ fn czech_plurals_have_three_forms() {
     assert_eq!(forms, [2, 0, 1, 1, 2, 2, 2]);
 }
 
-/// Czech letters (and the punctuation Czech text uses) come from each family's own first font, not
+/// Czech and Spanish letters (and the punctuation their text uses) come from each family's own first font, not
 /// from a fallback further down the stack. (`has_glyph` can't tell: it counts characters of the
 /// face that draws missing glyphs, the first one, as missing.)
 #[test]
-fn czech_glyphs_are_available_without_system_fonts() {
+fn czech_and_spanish_glyphs_are_available_without_system_fonts() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -532,7 +574,7 @@ fn czech_glyphs_are_available_without_system_fonts() {
             let first = first.unwrap();
             let mut font = fonts.fonts.font(&family);
             let chars = font.characters();
-            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–".chars() {
+            for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”".chars() {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
             }
         }
