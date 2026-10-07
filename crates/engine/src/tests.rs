@@ -252,6 +252,33 @@ fn pen_tool_draws_closed_path() {
     assert!(p.is_closed());
 }
 
+/// Auto Add/Delete: a Pen click on a selected path's segment adds an anchor, unless General →
+/// Disable Auto Add/Delete is on.
+#[test]
+fn pen_click_on_a_selected_path_adds_an_anchor_unless_disabled() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("path.create", &json!({"anchors": [{"x": 10, "y": 100}, {"x": 110, "y": 100}, {"x": 210, "y": 100}]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.all", &json!({})).unwrap();
+    s.select_tool("pen", v).unwrap();
+    let click = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 60.0, 101.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 60.0, 101.0), v).unwrap();
+    };
+    click(&mut s);
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers[0].children().unwrap().len(), 1);
+    assert_eq!(d.node(id).unwrap().path_data().unwrap().anchor_count(), 4);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("prefs.set", &json!({"key": "disableAutoAddDelete", "value": true})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    click(&mut s);
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers[0].children().unwrap().len(), 2, "a new path starts");
+    assert_eq!(d.node(id).unwrap().path_data().unwrap().anchor_count(), 3);
+}
+
 #[test]
 fn direct_selection_moves_one_anchor() {
     let mut s = session();
