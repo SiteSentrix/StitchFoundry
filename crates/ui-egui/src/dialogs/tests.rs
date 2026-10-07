@@ -246,3 +246,30 @@ fn dialogs_do_not_stretch_to_the_screen() {
     }
     assert!(checked >= 10, "only {checked} dialogs drew in the shared frame");
 }
+
+/// The dialog window of `app`'s open dialog after a few frames in a `w` × 900 window.
+fn dialog_rect(app: &mut VectorcraftApp, w: f32) -> egui::Rect {
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 900.0));
+    let kind = app.ui.dialog.as_ref().unwrap().kind.clone();
+    for _ in 0..3 {
+        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        ctx.run_ui(input, |ui| show(app, ui.ctx())).textures_delta.clear();
+    }
+    ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", kind.as_str())))).unwrap()
+}
+
+#[test]
+fn a_form_dialog_is_as_wide_as_its_fields_not_the_window() {
+    let mut app = app();
+    // Clean Up: three check boxes in the generic parameter dialog.
+    let params = json!({"emptyTextPaths": true, "strayPoints": true, "unpaintedObjects": true});
+    app.run("ui.paramDialog", json!({"command": "object.path.cleanUp", "label": "Clean Up", "params": params})).unwrap();
+    let wide = dialog_rect(&mut app, 1600.0);
+    assert!(wide.width() < 500.0, "Clean Up is {:.0} wide in a 1600-point window", wide.width());
+    // The same dialog in a narrow window still fits it.
+    let narrow = dialog_rect(&mut app, 360.0);
+    assert!(narrow.width() <= 360.0, "{:.0} wide in a 360-point window", narrow.width());
+}
