@@ -66,8 +66,8 @@ text at render time from one catalog per language (`i18n/<code>.tsv`; the format
 always use the English ids and labels, so agents and scripts never see translated text.
 
 Languages shipped: English (`en`, the source), Traditional Chinese (`zh-hant`, complete, in the vocabulary used
-in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Czech (`cs`, every menu
-label) and Japanese (`ja`, the main menus so far). Untranslated text falls back to English until its rows are
+in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*` locales all resolve to it), Czech (`cs`) and Japanese (`ja`), every menu
+label for both. Untranslated text falls back to English until its rows are
 added. Simplified Chinese locales
 (`zh-CN`, `zh-SG`, `zh-Hans`) fall back to English until a `zh-hans` catalog is registered: the resolver already
 tells the two scripts apart, so the Traditional catalog is never shown to a Simplified locale.
