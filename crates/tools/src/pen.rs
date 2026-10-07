@@ -501,4 +501,26 @@ mod tests {
         let a = click(&mut t, &cx, 325.0, 351.0, shift);
         assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"), "{a:?}");
     }
+
+    #[test]
+    fn alt_click_on_an_anchor_does_not_remove_it() {
+        let (d, id) = doc_with_rect();
+        let mut sel = Selection::default();
+        sel.set([id]);
+        let p = paint();
+        let cx = cx(&d, &sel, &p);
+        let mut t = PenTool::default();
+        let mods = Mods { alt: true, ..Mods::default() };
+        // Alt over an anchor stays the Pen. Convert Anchor Point will use this key later.
+        assert_eq!(t.cursor(&cx, Point::new(200.0, 100.0), mods), Cursor::Pen);
+        let down = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 100.0).with_mods(mods));
+        let up = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 100.0).with_mods(mods));
+        for act in down.iter().chain(&up) {
+            let name = match act {
+                Action::Begin(c) | Action::Preview(c, _) | Action::Exec(c, _) | Action::Dialog(c, _) => c.as_str(),
+                _ => "",
+            };
+            assert_ne!(name, "path.smartRemoveAnchor", "{act:?}");
+        }
+    }
 }

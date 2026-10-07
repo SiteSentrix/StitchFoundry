@@ -1530,6 +1530,11 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     if waits_for_ime(app, id) {
         return false;
     }
+    // The menu, the palette and the context menu run this on direct-selected anchors. An explicit
+    // id still works over MCP: the engine only requires a selection.
+    if id == "path.smartRemoveAnchor" {
+        return app.session.active().is_some_and(|d| !d.selection.anchors.is_empty());
+    }
     if let Some(c) = vectorcraft_engine::find_command(id) {
         // The system clipboard's contents can be pasted with an empty internal clipboard.
         return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
@@ -1814,6 +1819,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                         c("Simplify…", "object.path.simplify"),
                         c("Add Anchor Points", "object.path.addAnchorPoints"),
                         c("Remove Anchor Points", "path.deleteAnchors"),
+                        c("Smart Remove Anchor Points", "path.smartRemoveAnchor"),
                         c("Divide Objects Below", "object.path.divideObjectsBelow"),
                         c("Split Into Grid…", "object.path.splitIntoGrid"),
                         Sep,
@@ -2313,6 +2319,9 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         let paths = any(|k| matches!(k, NodeKind::Path { .. }));
         if paths {
             v.extend([c("Join", "path.join"), c("Average…", "path.average")]);
+        }
+        if !st.selection.anchors.is_empty() {
+            v.push(c("Smart Remove Anchor Points", "path.smartRemoveAnchor"));
         }
         if several {
             v.push(c("Make Clipping Mask", "object.clippingMask.make"));

@@ -1,6 +1,6 @@
 //! The anchor-based editable path model.
 
-use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveNearest, PathEl, Point, Rect, Shape};
+use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveNearest, PathEl, Point, Rect, Shape, Vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::EPS;
@@ -171,6 +171,147 @@ impl Anchor {
     }
 }
 
+fn anchor_finite(a: &Anchor) -> bool {
+    [a.p, a.h_in, a.h_out].into_iter().all(|p| p.x.is_finite() && p.y.is_finite())
+}
+
+fn unit(v: Vec2) -> Vec2 {
+    let l = v.hypot();
+    if l > 1e-9 { v / l } else { Vec2::ZERO }
+}
+
+/// Direction of the handle that leaves `prev` toward `mid`. A missing handle takes the
+/// tangent of that segment, then the chord.
+fn ray_out(prev: &Anchor, mid: &Anchor) -> Vec2 {
+    let v = prev.h_out - prev.p;
+    if v.hypot() > 1e-9 {
+        return unit(v);
+    }
+    let toward_in = mid.h_in - prev.p;
+    if toward_in.hypot() > 1e-9 {
+        return unit(toward_in);
+    }
+    unit(mid.p - prev.p)
+}
+
+/// Direction of the handle that arrives at `next` from `mid`.
+fn ray_in(next: &Anchor, mid: &Anchor) -> Vec2 {
+    let v = next.h_in - next.p;
+    if v.hypot() > 1e-9 {
+        return unit(v);
+    }
+    let toward_out = mid.h_out - next.p;
+    if toward_out.hypot() > 1e-9 {
+        return unit(toward_out);
+    }
+    unit(mid.p - next.p)
+}
+
+/// Points along the two segments that meet at `index`, in order, including both ends.
+fn sample_pair(sp: &SubPath, index: usize) -> Vec<Point> {
+    let n = sp.anchors.len();
+    let left = sp.segment((index + n - 1) % n);
+    let right = sp.segment(index);
+    const N: usize = 8;
+    let mut pts = Vec::with_capacity(N * 2 + 1);
+    for i in 0..=N {
+        pts.push(left.eval(i as f64 / N as f64));
+    }
+    for i in 1..=N {
+        pts.push(right.eval(i as f64 / N as f64));
+    }
+    pts
+}
+
+fn shape_error(p0: Point, p3: Point, d0: Vec2, d1: Vec2, s0: f64, s1: f64, samples: &[Point]) -> f64 {
+    if !s0.is_finite() || !s1.is_finite() {
+        return f64::MAX;
+    }
+    let c = CubicBez::new(p0, p0 + d0 * s0, p3 + d1 * s1, p3);
+    samples.iter().map(|p| c.nearest(*p, 1e-3).distance_sq).sum()
+}
+
+/// True when `(s0, s1)` matches the samples more closely, or matches them the same and is shorter.
+/// Equal shapes keep the retracted handles: a straight line needs no handles.
+fn prefer(err: f64, s0: f64, s1: f64, best_e: f64, best: (f64, f64)) -> bool {
+    err < best_e - 1e-6 || ((err - best_e).abs() <= 1e-6 && s0 + s1 < best.0 + best.1 - 1e-6)
+}
+
+struct ScaleFit {
+    cap: f64,
+    p0: Point,
+    p3: Point,
+    d0: Vec2,
+    d1: Vec2,
+}
+
+impl ScaleFit {
+    fn consider(&self, s0: f64, s1: f64, samples: &[Point], best: &mut (f64, f64), best_e: &mut f64) {
+        let s0 = s0.clamp(0.0, self.cap);
+        let s1 = s1.clamp(0.0, self.cap);
+        let err = shape_error(self.p0, self.p3, self.d0, self.d1, s0, s1, samples);
+        if prefer(err, s0, s1, *best_e, *best) {
+            *best_e = err;
+            *best = (s0, s1);
+        }
+    }
+}
+
+/// Lengths along `d0` and `d1`. A grid search on the nearest-point error, then a tighter grid
+/// around the winner. The handles already on the path, and retracted handles, are candidates too.
+fn best_scales(p0: Point, p3: Point, d0: Vec2, d1: Vec2, keep0: f64, keep1: f64, samples: &[Point]) -> (f64, f64) {
+    let fit = ScaleFit { cap: (p3 - p0).hypot().max(1.0) * 4.0, p0, p3, d0, d1 };
+    let mut best = (0.0_f64, 0.0_f64);
+    let mut best_e = f64::MAX;
+    fit.consider(keep0, keep1, samples, &mut best, &mut best_e);
+    fit.consider(0.0, 0.0, samples, &mut best, &mut best_e);
+    const N: usize = 16;
+    for i in 0..=N {
+        for j in 0..=N {
+            fit.consider(fit.cap * (i as f64 / N as f64), fit.cap * (j as f64 / N as f64), samples, &mut best, &mut best_e);
+        }
+    }
+    let mut window = fit.cap / N as f64;
+    for _ in 0..4 {
+        let step = window / 6.0;
+        if step < 1e-3 {
+            break;
+        }
+        let center = best;
+        for i in 0..=12 {
+            for j in 0..=12 {
+                fit.consider(center.0 + (i as f64 - 6.0) * step, center.1 + (j as f64 - 6.0) * step, samples, &mut best, &mut best_e);
+            }
+        }
+        window *= 0.5;
+    }
+    best
+}
+
+/// Facing handles of the anchors on either side of `index`, as absolute positions.
+fn fit_facing_handles(sp: &SubPath, index: usize) -> Option<(Point, Point)> {
+    let n = sp.anchors.len();
+    let pi = (index + n - 1) % n;
+    let ni = (index + 1) % n;
+    let prev = sp.anchors.get(pi)?;
+    let mid = sp.anchors.get(index)?;
+    let next = sp.anchors.get(ni)?;
+    let d0 = ray_out(prev, mid);
+    let d1 = ray_in(next, mid);
+    let samples = sample_pair(sp, index);
+    if samples.len() < 3 {
+        return None;
+    }
+    let (p0, p3) = (prev.p, next.p);
+    let keep0 = (prev.h_out - p0).hypot();
+    let keep1 = (next.h_in - p3).hypot();
+    let (s0, s1) = best_scales(p0, p3, d0, d1, keep0, keep1, &samples);
+    let cap = (p3 - p0).hypot().max(1.0) * 8.0;
+    let s0 = if s0.is_finite() { s0.clamp(0.0, cap) } else { 0.0 };
+    let s1 = if s1.is_finite() { s1.clamp(0.0, cap) } else { 0.0 };
+    Some((p0 + d0 * s0, p3 + d1 * s1))
+}
+
 fn is_collinear(p: Point, a: Point, b: Point) -> bool {
     let va = a - p;
     let vb = b - p;
@@ -267,6 +408,32 @@ impl SubPath {
         };
         self.anchors.insert(seg + 1, mid);
         seg + 1
+    }
+    /// Remove anchor `index`. When `fit` is set and the anchor has a neighbour on both sides, the
+    /// facing handles are lengthened or shortened along their current direction so one cubic stays
+    /// close to the two segments that met at the removed point. Positions of the other anchors do
+    /// not move. Returns false when `index` is out of range.
+    pub fn remove_anchor(&mut self, index: usize, fit: bool) -> bool {
+        let n = self.anchors.len();
+        if index >= n {
+            return false;
+        }
+        let interior = self.closed || (index > 0 && index + 1 < n);
+        if fit
+            && interior
+            && n >= 3
+            && self.anchors.iter().all(anchor_finite)
+            && let Some((hout, hin)) = fit_facing_handles(self, index)
+        {
+            let pi = (index + n - 1) % n;
+            let ni = (index + 1) % n;
+            let prev = self.anchors[pi];
+            let next = self.anchors[ni];
+            self.anchors[pi] = Anchor::with_handles(prev.p, prev.h_in, hout);
+            self.anchors[ni] = Anchor::with_handles(next.p, hin, next.h_out);
+        }
+        self.anchors.remove(index);
+        true
     }
     /// Signed area via the shoelace formula on the Bézier path (positive = clockwise in y-down).
     pub fn area(&self) -> f64 {
@@ -555,5 +722,64 @@ mod tests {
         let s = serde_json::to_string(&p).unwrap();
         let back: PathData = serde_json::from_str(&s).unwrap();
         assert_eq!(p, back);
+    }
+
+    #[test]
+    fn smart_remove_restores_a_split_cubic() {
+        let mut sp = SubPath::new(
+            vec![
+                Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(30.0, 80.0)),
+                Anchor::with_handles(Point::new(100.0, 0.0), Point::new(70.0, 80.0), Point::new(100.0, 0.0)),
+            ],
+            false,
+        );
+        let original = sp.clone();
+        let idx = sp.insert_anchor(0, 0.4);
+        assert!(sp.remove_anchor(idx, true));
+        assert_eq!(sp.anchors.len(), 2);
+        assert!(sp.anchors[0].h_out.distance(original.anchors[0].h_out) < 0.5, "{:?}", sp.anchors[0].h_out);
+        assert!(sp.anchors[1].h_in.distance(original.anchors[1].h_in) < 0.5, "{:?}", sp.anchors[1].h_in);
+    }
+
+    #[test]
+    fn smart_remove_of_a_line_stays_a_line() {
+        let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(100.0, 0.0)], false);
+        assert!(sp.remove_anchor(1, true));
+        assert_eq!(sp.anchors.len(), 2);
+        assert!(!sp.anchors[0].has_out());
+        assert!(!sp.anchors[1].has_in());
+    }
+
+    #[test]
+    fn smart_remove_of_a_corner_beats_the_straight_chord() {
+        let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(50.0, 40.0), Point::new(100.0, 0.0)], false);
+        assert!(sp.remove_anchor(1, true));
+        let d = sp.segment(0).nearest(Point::new(50.0, 40.0), 1e-4).distance_sq.sqrt();
+        assert!(d < 40.0, "curve stays closer to the removed corner than the chord does ({d})");
+    }
+
+    #[test]
+    fn remove_without_fit_keeps_handles() {
+        let mut sp = SubPath::new(
+            vec![
+                Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(10.0, 30.0)),
+                Anchor::corner(Point::new(50.0, 10.0)),
+                Anchor::with_handles(Point::new(100.0, 0.0), Point::new(80.0, 25.0), Point::new(100.0, 0.0)),
+            ],
+            false,
+        );
+        let before = sp.clone();
+        assert!(sp.remove_anchor(1, false));
+        assert_eq!(sp.anchors[0].h_out, before.anchors[0].h_out);
+        assert_eq!(sp.anchors[1].h_in, before.anchors[2].h_in);
+        assert!(!sp.remove_anchor(9, true));
+    }
+
+    #[test]
+    fn remove_endpoint_drops_the_point() {
+        let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(20.0, 5.0)], false);
+        assert!(sp.remove_anchor(0, true));
+        assert_eq!(sp.anchors[0].p, Point::new(10.0, 0.0));
+        assert_eq!(sp.anchors.len(), 2);
     }
 }

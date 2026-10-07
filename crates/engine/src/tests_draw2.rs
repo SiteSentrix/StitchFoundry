@@ -1,5 +1,6 @@
 //! Drawing / path-editing tools driven through the session (tools → actions → `path.*` commands).
 
+use kurbo::ParamCurveNearest;
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Point};
@@ -375,6 +376,8 @@ fn draw2_commands_reject_bad_params() {
         ("path.freehand", json!({"points": [[1, 2]]})),
         ("path.curvature", json!({"points": []})),
         ("path.removeAnchor", json!({"id": id.0, "anchor": 99})),
+        ("path.smartRemoveAnchor", json!({})),
+        ("path.smartRemoveAnchor", json!({"id": id.0, "anchor": 99})),
         ("path.convertAnchor", json!({"id": 9999, "anchor": 0, "to": "corner"})),
         ("path.reshapeSegment", json!({"id": id.0, "segment": 42})),
         ("path.split", json!({"id": id.0})),
@@ -479,4 +482,78 @@ fn shift_drag_keeps_a_smooth_anchor_smooth_and_alt_breaks_it() {
             assert_eq!(a.h_in, Point::new(150.0, 100.0), "{mods:?}");
         }
     }
+}
+
+#[test]
+fn smart_remove_refits_a_split_curve_and_undo_restores_it() {
+    let mut s = session();
+    let made = s
+        .execute(
+            "path.create",
+            &json!({"anchors": [
+                {"x": 0, "y": 0, "out": [30, 80]},
+                {"x": 100, "y": 0, "in": [70, 80]}
+            ]}),
+        )
+        .unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    let before = path(&s, id);
+    let inserted = s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 0, "t": 0.4})).unwrap();
+    let ai = inserted["anchor"].as_u64().unwrap();
+    s.execute("path.smartRemoveAnchor", &json!({"id": id.0, "anchor": ai})).unwrap();
+    let after = path(&s, id);
+    assert_eq!(after.subpaths[0].anchors.len(), 2);
+    let (got, orig) = (&after.subpaths[0].anchors, &before.subpaths[0].anchors);
+    assert!(got[0].h_out.distance(orig[0].h_out) < 0.5, "{:?}", got[0].h_out);
+    assert!(got[1].h_in.distance(orig[1].h_in) < 0.5, "{:?}", got[1].h_in);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 3);
+}
+
+#[test]
+fn smart_remove_without_fit_leaves_handles() {
+    let mut s = session();
+    let made = s
+        .execute(
+            "path.create",
+            &json!({"anchors": [
+                {"x": 0, "y": 0, "out": [10, 30]},
+                {"x": 50, "y": 10},
+                {"x": 100, "y": 0, "in": [80, 25]}
+            ]}),
+        )
+        .unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    s.execute("path.smartRemoveAnchor", &json!({"id": id.0, "anchor": 1, "fit": false})).unwrap();
+    let pd = path(&s, id);
+    let sp = &pd.subpaths[0];
+    assert_eq!(sp.anchors.len(), 2);
+    assert_eq!(sp.anchors[0].h_out, Point::new(10.0, 30.0));
+    assert_eq!(sp.anchors[1].h_in, Point::new(80.0, 25.0));
+}
+
+#[test]
+fn smart_remove_uses_the_direct_selected_anchors() {
+    let mut s = session();
+    let made = s
+        .execute(
+            "path.create",
+            &json!({"anchors": [
+                {"x": 0, "y": 0},
+                {"x": 50, "y": 40},
+                {"x": 100, "y": 0}
+            ]}),
+        )
+        .unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();
+    s.execute("path.smartRemoveAnchor", &json!({})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    assert_eq!(sp.anchors.len(), 2);
+    let d = sp.segment(0).nearest(Point::new(50.0, 40.0), 1e-4).distance_sq.sqrt();
+    assert!(d < 40.0, "the refit stays closer to the removed corner than the chord ({d})");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 3);
+    let spec = find_command("path.smartRemoveAnchor").unwrap();
+    assert_eq!(spec.menu, &["Object", "Path"][..]);
 }

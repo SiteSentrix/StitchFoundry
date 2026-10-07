@@ -138,6 +138,12 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     _ => tl!(crate::panels::appearance::object_label(app)),
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
+                if anchor_mode {
+                    ui.add_space(8.0);
+                    if widgets::flat_button(ui, "Smart Remove Anchor Points", 204.0).clicked() {
+                        crate::menus::invoke(app, "path.smartRemoveAnchor", json!({}));
+                    }
+                }
                 ui.add_space(6.0);
                 crate::place::control_bar_details(app, ui);
                 crate::toolbar::control_bar_options(app, ui);
