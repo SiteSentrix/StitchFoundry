@@ -176,3 +176,25 @@ fn the_timer_asks_for_frames_while_idle() {
     app.session.prefs.autosave_recovery = false;
     assert!(recovery::frame(&mut app, 1.0).is_none());
 }
+
+/// Issue #367: a tab whose timers were paused (in the background) long enough for another tab to
+/// take it for gone and discard its copy writes the copy again on its first heartbeat after it
+/// resumes, even with the timer off (the copy was written by hand).
+#[test]
+fn a_resumed_tab_writes_again_the_copies_another_tab_discarded() {
+    let store = Arc::new(MemoryStore::without_locks());
+    let mut a = app_with(&store, Services::default());
+    a.session.prefs.autosave_recovery = false;
+    a.run("file.recovery.save", json!({})).unwrap();
+    recovery::frame(&mut a, 0.0);
+    store.set_now(1_000_000 + 400);
+    let mut b = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store.clone()), ..Default::default() });
+    b.run("file.recovery.discard", json!({})).unwrap();
+    assert_eq!(copies(&store), 0);
+    store.set_now(1_000_000 + 410);
+    recovery::frame(&mut a, 30.0);
+    assert_eq!(copies(&store), 0, "the store is looked at with the heartbeat, not every frame");
+    recovery::frame(&mut a, 410.0);
+    assert_eq!(copies(&store), 1);
+    assert_eq!(a.ui.status, "Saved recovery data for Untitled-1");
+}

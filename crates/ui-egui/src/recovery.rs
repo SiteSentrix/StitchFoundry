@@ -4,8 +4,10 @@
 //! left copies behind (a crash). The copies themselves are the engine's
 //! ([`vectorcraft_engine::cmd::recovery`]).
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::recovery;
+use vectorcraft_engine::cmd::recovery::{self, RecoveryStore};
 
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
@@ -36,7 +38,14 @@ pub fn frame(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     tick(app, now);
     if !(0.0..recovery::HEARTBEAT_EVERY).contains(&(now - app.recovery.beat)) {
         app.recovery.beat = now;
-        recovery::heartbeat(&app.session);
+        // Copies another app removed while this one's timers were paused (it took this one for
+        // gone) are written again at once.
+        let lost = recovery::heartbeat(&mut app.session);
+        if !lost.is_empty()
+            && let Some(store) = recovery::store(&app.session)
+        {
+            write(app, &store, |uid| lost.contains(&uid));
+        }
     }
     let interval = f64::from(app.session.prefs.autosave_interval.max(1)) * 60.0;
     let next = app.recovery.last.map(|t| t + interval - now)?;
@@ -77,10 +86,16 @@ pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
             return 0;
         }
     }
+    write(app, &store, |_| true)
+}
+
+/// Start a recovery copy of every document that needs one and `pick` picks (by uid) → how many
+/// were started.
+fn write(app: &mut VectorcraftApp, store: &Arc<dyn RecoveryStore>, pick: impl Fn(u64) -> bool) -> usize {
     recovery::forget_clean(&mut app.session);
-    let jobs = match recovery::jobs(&mut app.session, &store) {
+    let jobs = match recovery::jobs(&mut app.session, store) {
         // A document whose save or last copy is still being written waits for the next round.
-        Ok((jobs, _)) => jobs.into_iter().filter(|j| !app.background.busy_with(j.uid)).collect::<Vec<_>>(),
+        Ok((jobs, _)) => jobs.into_iter().filter(|j| pick(j.uid) && !app.background.busy_with(j.uid)).collect::<Vec<_>>(),
         Err(e) => {
             app.status(format!("Couldn't save recovery data: {e}"));
             return 0;
