@@ -110,6 +110,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout.
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
+  - **Tool double-clicks:** double-clicking a tool's button opens its options: Hand fits the artboard in the window, Zoom shows 100 %, Rotate, Scale, Reflect and Shear open their Object › Transform dialogs, Gradient, Eyedropper, Blend and the Liquify tools their panels or options.
 - **Drawing aids:** Smart Guides and snapping, guides dragged out of the rulers, and Draw Normal / Behind / Inside modes.
 - **Geometry and effects:**
   - Pathfinder (10 exact curve booleans), Offset, Outline Stroke, Simplify, Clean Up, Split Into Grid, Divide Objects Below.

@@ -87,7 +87,9 @@ point (`paint.freeform.selectPoint`); its fields are `color` (hex), `opacity` an
 Tool options: double-clicking a tool button runs `tool.options {tool}`. For `gradient` it opens the Gradient panel;
 for `eyedropper` it opens Eyedropper Options, an `eyedropperOptions` dialog (fields `sampleSize` 1/3/5, `pickUp` and
 `apply`, the attribute trees of `eyedropper.setOptions`) whose `ui.dialog.confirm` runs `eyedropper.setOptions` (what
-`appearance.copyFrom` copies). Gradient tool handles snap to
+`appearance.copyFrom` copies). For `hand` it fits the artboard in the window (`view.fitArtboard`) and for `zoom` it
+shows 100% (`view.actualSize`). For `rotate`, `scale`, `reflect` and `shear` it opens the same dialog as Object ›
+Transform (dialog kind = the tool id), or fails with `nothing selected`. Gradient tool handles snap to
 anchors, edges and smart guides; Shift constrains them to 45° steps from the `constrainAngle` preference.
 
 Effect dialogs: `engine.execute {command: "effect.dialog", params: {effect, index?, item?}}` opens the `effect` dialog

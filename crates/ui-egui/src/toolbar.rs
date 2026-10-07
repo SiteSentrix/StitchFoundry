@@ -208,9 +208,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// Open a tool's options (`tool.options`, a double-click on its button): the Gradient tool's are
 /// the Gradient panel, the Eyedropper's the Eyedropper Options dialog, a Liquify tool's its Tool
 /// Options dialog, the Blend tool's Blend
-/// Options; the Print Tiling tool's resets the print tiling.
+/// Options; the Print Tiling tool's resets the print tiling. As in the reference app, the Hand
+/// tool's fits the artboard in the window, the Zoom tool's shows it at 100%, and the Rotate, Scale,
+/// Reflect and Shear tools' are their Object › Transform dialogs.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
+        "hand" => app.run("view.fitArtboard", json!({})),
+        "zoom" => app.run("view.actualSize", json!({})),
+        "rotate" | "scale" | "reflect" | "shear" => {
+            let id = format!("object.{tool}");
+            if let Some(c) = vectorcraft_engine::find_command(&id) {
+                (c.enabled)(&app.session)?;
+            }
+            crate::menus::invoke(app, &id, json!({}));
+            Ok(json!({ "dialog": tool }))
+        }
         "gradient" if app.ui.open_panel.as_deref() == Some("gradient") => Ok(json!({ "open": "gradient" })),
         "gradient" => app.run("window.panel", json!({ "panel": "gradient" })),
         "eyedropper" => {
@@ -486,7 +498,35 @@ pub(crate) mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let o = app.session.prefs.eyedropper;
         assert!(o.pick_up.appearance.transparency && !o.apply.appearance.transparency && o.apply.appearance.fill.color);
-        assert!(app.run("tool.options", json!({"tool": "zoom"})).is_err());
+        assert!(app.run("tool.options", json!({"tool": "lasso"})).is_err());
+    }
+
+    #[test]
+    fn double_clicking_the_hand_zoom_and_transform_tools() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(660.0, 460.0)));
+        app.run("view.setZoom", json!({"zoom": 333, "center": [10, 10]})).unwrap();
+        // Hand: the artboard fits the window. Zoom: 100%.
+        app.run("tool.options", json!({"tool": "hand"})).unwrap();
+        let v = *app.view().unwrap();
+        assert_eq!((v.center.x, v.center.y, v.zoom), (150.0, 100.0, 2.0));
+        app.run("tool.options", json!({"tool": "zoom"})).unwrap();
+        assert_eq!(app.view().unwrap().zoom, 1.0);
+        // The transform tools open their dialogs, like Object › Transform: not with nothing selected.
+        assert_eq!(app.run("tool.options", json!({"tool": "rotate"})), Err("nothing selected".into()));
+        assert!(app.ui.dialog.is_none());
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        for tool in ["rotate", "scale", "reflect", "shear"] {
+            app.run("tool.options", json!({"tool": tool})).unwrap();
+            assert_eq!(app.ui.dialog.take().map(|d| d.kind), Some(tool.to_string()));
+        }
+        // OK in Rotate turns the selection about its centre.
+        app.run("tool.options", json!({"tool": "rotate"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(90));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+        assert!((b.x0 - 20.0).abs() < 1e-9 && (b.y0 - 0.0).abs() < 1e-9 && (b.width() - 20.0).abs() < 1e-9, "{b:?}");
     }
 
     #[test]
