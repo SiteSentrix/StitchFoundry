@@ -883,6 +883,30 @@ impl Document {
     pub fn artboard_at(&self, p: Point) -> Option<usize> {
         self.artboards.iter().rposition(|a| a.rect.contains(p))
     }
+    /// The art that moves with an artboard at `rect`: unlocked top-level objects (children of
+    /// unlocked layers and sublayers) lying entirely inside it.
+    pub fn art_on_artboard(&self, rect: Rect) -> Vec<NodeId> {
+        fn collect(n: &Node, rect: Rect, out: &mut Vec<NodeId>) {
+            for c in n.children().into_iter().flatten() {
+                if c.locked {
+                    continue;
+                }
+                if c.is_layer() {
+                    collect(c, rect, out);
+                } else if let Some(b) = c.geometric_bounds()
+                    && rect.contains(Point::new(b.x0, b.y0))
+                    && rect.contains(Point::new(b.x1, b.y1))
+                {
+                    out.push(c.id);
+                }
+            }
+        }
+        let mut art = vec![];
+        for l in self.layers.iter().filter(|l| !l.locked) {
+            collect(l, rect, &mut art);
+        }
+        art
+    }
     pub fn next_artboard_id(&self) -> u32 {
         self.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1
     }
@@ -1001,6 +1025,17 @@ mod tests {
         assert_eq!(d.layers.len(), 1);
         assert_eq!(d.layers[0].display_name(), "Layer 1");
         assert_eq!(d.artboards[0].rect, Rect::new(0.0, 0.0, 612.0, 792.0));
+    }
+
+    #[test]
+    fn art_on_artboard_takes_unlocked_objects_wholly_inside() {
+        let (mut d, a, b) = doc_with_rects();
+        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 15.0, 15.0)), vec![a]);
+        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 25.0, 15.0)), vec![a], "b only half inside");
+        d.node_mut(a).unwrap().locked = true;
+        assert_eq!(d.art_on_artboard(Rect::new(-1.0, -1.0, 40.0, 15.0)), vec![b]);
+        Arc::make_mut(&mut d.layers[0]).locked = true;
+        assert!(d.art_on_artboard(Rect::new(-1.0, -1.0, 40.0, 15.0)).is_empty());
     }
 
     #[test]
