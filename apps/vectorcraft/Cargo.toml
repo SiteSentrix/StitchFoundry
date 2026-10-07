@@ -9,10 +9,17 @@ default-run = "vectorcraft"
 [lints]
 workspace = true
 
+[features]
+default = ["wgpu", "accessibility"]
+wgpu = ["eframe/wgpu"]
+accessibility = ["eframe/accesskit"]
+# Build with --no-default-features --features windows7 and the win7 Rust target.
+windows7 = ["eframe/glow"]
+
 [dependencies]
 vectorcraft-engine = { workspace = true }
 vectorcraft-ui-egui = { workspace = true }
-eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
+eframe = { workspace = true, features = ["default_fonts", "wayland", "x11"] }
 egui = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }

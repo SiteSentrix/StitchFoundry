@@ -176,6 +176,8 @@ claude mcp add vectorcraft -- /path/to/vectorcraft-cli mcp
 
 The details are in [`docs/mcp.md`](docs/mcp.md) and [`docs/control-protocol.md`](docs/control-protocol.md).
 
+For the experimental, unsupported 64-bit Windows 7 build, see [Windows 7 instructions](docs/windows7.md).
+
 ## Status
 
 VectorCraft is under active development. [**ROADMAP.md**](ROADMAP.md) covers what ships today, the
