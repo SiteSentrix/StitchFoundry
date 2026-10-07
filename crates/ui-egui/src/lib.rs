@@ -293,6 +293,9 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
+    /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
+    pub graphics_adapter: Option<String>,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
@@ -367,6 +370,7 @@ impl VectorcraftApp {
             canvas_rect: None,
             hover_doc: None,
             custom_titlebar: false,
+            graphics_adapter: None,
             place: Default::default(),
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,

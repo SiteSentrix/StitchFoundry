@@ -122,3 +122,33 @@ fn prefs_serde_round_trip_and_tolerates_missing_fields() {
     assert_eq!(partial.keyboard_increment, 4.0);
     assert_eq!(partial.corner_radius, 12.0);
 }
+
+/// Performance › Graphics Processor (#306): power saving by default, set by value or label, kept
+/// through a save/load round trip, and a bad value is an error that changes nothing.
+#[test]
+fn gpu_preference_defaults_to_power_saving_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.gpu_preference, "powerSaving");
+    assert_eq!(s.execute("prefs.get", &json!({"key": "gpuPreference"})).unwrap(), json!("powerSaving"));
+    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "highPerformance"})).unwrap();
+    assert_eq!(s.prefs.gpu_preference, "highPerformance");
+    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "Power Saving (integrated)"})).unwrap();
+    assert_eq!(s.prefs.gpu_preference, "powerSaving");
+    for bad in [json!("turbo"), json!(""), json!(1), json!(null), json!(["highPerformance"])] {
+        assert!(s.execute("prefs.set", &json!({"key": "gpuPreference", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.gpu_preference, "powerSaving");
+    }
+    let p = Prefs { gpu_preference: "highPerformance".into(), ..Default::default() };
+    let back: Prefs = serde_json::from_value(p.to_json()).unwrap();
+    assert_eq!(back.gpu_preference, "highPerformance");
+    // Preference files written before the preference existed get the default.
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert_eq!(old.gpu_preference, "powerSaving");
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "gpuPreference").unwrap().clone();
+    assert_eq!(row["category"], "Performance");
+    assert_eq!(row["options"], json!(["powerSaving", "highPerformance"]));
+    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "highPerformance"})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert_eq!(s.prefs.gpu_preference, "powerSaving");
+}

@@ -180,6 +180,13 @@ a swatch clicked there runs `paint.setFill` / `paint.setStroke`. Panel keys (Col
 Appearance Shift+F6, Graphic Styles Shift+F5, Stroke Cmd+F10, Gradient Cmd+F9, Transparency Cmd+Shift+F10) run
 `window.panel {panel}` and can be pressed with `ui.key`; `ui.menu.list` shows them on the Window menu's items.
 
+Collapsing the dock: `window.collapseDock {collapsed?}` (the » at the top of the dock; omitted toggles) hides the
+Properties | Layers | Libraries group and puts its three panels as icons at the top of the icon column, under a «
+that expands them again. While collapsed, those icons and `window.panel {panel: "properties"|"layers"|"libraries"}`
+pop the panel out next to the column like the other icon panels (`ui.dock_collapsed`, `ui.open_panel` in
+`ui.inspect`); expanding with one popped out shows its tab. The state is saved with the preferences and in user
+workspaces; the built-in workspaces expand the dock.
+
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
 `object.flattenTransparency`: `balance` 0–100, `lineArtPpi` and `gradientPpi` 1–2400, `textToOutlines`,

@@ -148,6 +148,7 @@
 	Appearance Panel	外觀面板
 	Appearance panel	外觀面板
 	Applies when the linked file is relinked or updated.	重新連結或更新連結檔案時套用。
+	Applies the next time VectorCraft starts.	下次啟動 VectorCraft 時生效。
 	Apply Brush	套用筆刷
 	Apply Character Style	套用字元樣式
 	Apply Effect	套用效果
@@ -361,6 +362,8 @@
 	CMYK	CMYK
 	CMYK Color	CMYK 色彩
 	CMYK colours print with their own values; off, they go through the colour settings too.	CMYK 顏色以其本身的數值列印；關閉時，也會經過色彩設定處理。
+	Collapse Panels to Icons	將面板收合為圖示
+	Collapse to Icons	收合為圖示
 	Collate	逐份列印
 	Collect for Export	收集以供匯出
 	Collect in New Layer	收集至新圖層
@@ -815,6 +818,7 @@
 	Expand Gradient Mesh	展開漸層網格
 	Expand Gradient To	展開漸層為
 	Expand Options	展開選項
+	Expand Panels	展開面板
 	Expand Repeat	展開重複
 	Expand Shape	展開形狀
 	Expand:	展開：
@@ -1017,6 +1021,8 @@
 	Graphic Styles	繪圖樣式
 	Graphic Styles Options	繪圖樣式選項
 	Graphics	圖形
+	Graphics Processor	圖形處理器
+	Graphics: {adapter}	圖形：{adapter}
 	Gravity	重力
 	Grays	灰色
 	Grays and Neutrals	灰色與中性色
@@ -1073,6 +1079,7 @@
 	Hide Transparency Grid	隱藏透明度格點
 	High	高
 	High (300 ppi)	高 (300 ppi)
+	High Performance (discrete)	高效能 (獨立顯示卡)
 	Highlight Alternate Glyphs	醒目提示替代字符
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
 	Highlight Substituted Fonts	醒目提示被取代的字體
@@ -1775,6 +1782,7 @@
 	Polygon Properties:	多邊形內容：
 	Polygon Tool	多邊形工具
 	Portrait	直向
+	Power Saving (integrated)	節能 (內建顯示晶片)
 	Portuguese	葡萄牙文
 	Position	位置
 	Postcard	明信片

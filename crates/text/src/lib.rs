@@ -18,6 +18,8 @@ mod fontdb;
 pub mod hyphen;
 mod layout;
 mod shape;
+#[cfg(any(test, feature = "test-fonts"))]
+pub mod test_fonts;
 pub mod thread;
 
 pub use craft_fonts::{CRAFT_FONTS, CraftFont};
@@ -384,5 +386,7 @@ mod tests_snap;
 mod tests_sysfonts;
 #[cfg(test)]
 mod tests_typo;
+#[cfg(test)]
+mod tests_variable;
 #[cfg(test)]
 mod tests_vertical;

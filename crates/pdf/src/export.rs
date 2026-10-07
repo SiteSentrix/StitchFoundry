@@ -1444,7 +1444,11 @@ impl Exporter<'_> {
         let name = format!("{} {}", face.family, face.style);
         let font = match face.embedding() {
             Embedding::Subset => {
-                let font = krilla::text::Font::new(face.file_data().to_vec().into(), face.face_index()).map(|f| (f, face.units_per_em()));
+                // A named instance of a variable font is embedded instanced (its own outlines and
+                // widths, not the default instance's).
+                let coords: Vec<(krilla::text::Tag, f32)> = face.variations().iter().map(|(t, v)| (krilla::text::Tag::new(t), *v)).collect();
+                let font =
+                    krilla::text::Font::new_variable(face.file_data().to_vec().into(), face.face_index(), &coords).map(|f| (f, face.units_per_em()));
                 if font.is_none() {
                     self.warn(format!("the font “{name}” can't be embedded: its text is exported as outlines"));
                 }

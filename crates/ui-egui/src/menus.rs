@@ -172,6 +172,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     ("window.dock", "Panels", "Tab", "{} show/hide all panels"),
     ("window.panel", "Show Panel", "", "{panel: id} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too)"),
+    (
+        "window.collapseDock",
+        "Collapse Panels to Icons",
+        "",
+        "{collapsed?: bool} collapse the dock's Properties | Layers | Libraries group to icons (true), expand it (false) or toggle (omitted), as the double arrow at the top of the dock does; returns the new state",
+    ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     ("window.workspace", "Workspace", "", "{name} switch workspace (Essentials, Essentials Classic, Painting, …)"),
     ("window.workspace.reset", "Reset Essentials", "", "{} reset the current workspace"),
@@ -917,27 +923,39 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             app.ui.control_bar = on;
             Ok(json!(on))
         }
+        "window.collapseDock" => {
+            let collapsed = match p.get("collapsed") {
+                None | Some(Value::Null) => !app.ui.dock_collapsed,
+                Some(Value::Bool(b)) => *b,
+                Some(_) => return Some(Err("collapsed must be true or false".into())),
+            };
+            crate::dock::set_collapsed(app, collapsed);
+            Ok(json!(collapsed))
+        }
         "window.panel" => {
             let raw = s("panel").unwrap_or_default();
-            match normalize_panel(&raw) {
-                Some("properties") => {
-                    app.ui.dock_tab = DockTab::Properties;
-                    Ok(Value::Null)
-                }
-                Some("layers") => {
-                    app.ui.dock_tab = DockTab::Layers;
-                    Ok(Value::Null)
-                }
-                Some("libraries") => {
-                    app.ui.dock_tab = DockTab::Libraries;
-                    Ok(Value::Null)
-                }
-                Some(p) => {
+            // Canonical id (case-insensitive; display labels work too), then the
+            // dock tab it names, if any.
+            let canonical = normalize_panel(&raw);
+            let tab = canonical.and_then(DockTab::from_id);
+            match (canonical, tab) {
+                // A collapsed dock pops the panel out of its icon, like the icon panels.
+                (Some(p), Some(tab)) if app.ui.dock_collapsed => {
+                    app.ui.dock_tab = tab;
                     app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(p) { None } else { Some(p.to_string()) };
                     app.ui.dock = true;
                     Ok(json!({"open": app.ui.open_panel}))
                 }
-                None => Err(format!("unknown panel `{raw}`")),
+                (Some(_), Some(tab)) => {
+                    app.ui.dock_tab = tab;
+                    Ok(Value::Null)
+                }
+                (Some(p), None) => {
+                    app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(p) { None } else { Some(p.to_string()) };
+                    app.ui.dock = true;
+                    Ok(json!({"open": app.ui.open_panel}))
+                }
+                (None, _) => Err(format!("unknown panel `{raw}`")),
             }
         }
         "window.brightness" => match s("brightness").as_deref().and_then(Brightness::parse) {
@@ -1217,14 +1235,13 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.taskBar" => app.ui.task_bar,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            match normalize_panel(panel) {
-                Some("properties") => app.ui.dock_tab == DockTab::Properties,
-                Some("layers") => app.ui.dock_tab == DockTab::Layers,
-                Some("libraries") => app.ui.dock_tab == DockTab::Libraries,
-                Some(id) => app.ui.open_panel.as_deref() == Some(id),
-                None => false,
+            let canonical = normalize_panel(panel);
+            match canonical.and_then(DockTab::from_id) {
+                Some(tab) if !app.ui.dock_collapsed => app.ui.dock_tab == tab,
+                _ => canonical.is_some_and(|id| app.ui.open_panel.as_deref() == Some(id)),
             }
         }
+        "window.collapseDock" => app.ui.dock_collapsed,
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
         "view.slices.lock" => app.session.slices_locked(),
@@ -3166,6 +3183,12 @@ mod tests {
         assert_eq!(app.ui.open_panel.as_deref(), Some("swatches"));
         assert!(checked(&app, "window.panel", &json!({"panel": "Swatches"})).unwrap());
         assert!(app.run("window.panel", json!({"panel": "nope"})).is_err());
+        // A collapsed dock pops the panel out of its icon, by canonical id.
+        app.ui.dock_collapsed = true;
+        app.run("window.panel", json!({"panel": "Layers"})).unwrap();
+        assert_eq!(app.ui.open_panel.as_deref(), Some("layers"));
+        assert!(checked(&app, "window.panel", &json!({"panel": "Layers"})).unwrap());
+        app.ui.dock_collapsed = false;
     }
 
     #[test]
