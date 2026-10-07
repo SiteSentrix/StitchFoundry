@@ -11,7 +11,9 @@
 //!   another row moves the selected art there (Alt copies it).
 //! - The eye and lock columns toggle a row (`layer.setProps`); dragging down a column sets every
 //!   row it passes to the same state, in one undo step. Ctrl/Cmd-click an eye switches the layer
-//!   between Preview and Outline.
+//!   between Preview and Outline. Alt-click an eye hides the other layers (`layer.hideOthers`), or
+//!   shows every layer when they are hidden (`layer.showAll`); Alt-click a lock does the same with
+//!   `layer.lockOthers` and `layer.unlockAll`.
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
 //!   a box shows where); Alt copies them; dropped on the trash they are deleted.
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
@@ -543,6 +545,21 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
     }
 }
 
+/// Alt-clicking row `n`'s eye (`eye`) or lock: Hide Others or Lock Others, every top-level layer
+/// but the one holding the row; when they all are hidden (locked) already, Show All Layers (Unlock
+/// All Layers). Each is one undo step.
+fn others_action(doc: &Document, n: &Node, eye: bool) -> (String, Value) {
+    let own = doc.layer_of(n.id);
+    let mut others = doc.layers.iter().filter(|l| Some(l.id) != own);
+    let cmd = match (eye, if eye { others.any(|l| l.visible) } else { others.any(|l| !l.locked) }) {
+        (true, true) => "layer.hideOthers",
+        (true, false) => "layer.showAll",
+        (false, true) => "layer.lockOthers",
+        (false, false) => "layer.unlockAll",
+    };
+    (cmd.into(), json!({ "ids": [n.id.0] }))
+}
+
 /// The eye and lock columns of row `n` at `r`.
 fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out) {
     let t = &view.t;
@@ -574,14 +591,18 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
     }
     let m = ui.input(|i| i.modifiers);
     if er.clicked() {
-        if m.command && n.is_layer() {
+        if m.alt {
+            out.actions.push(others_action(view.doc, n, true));
+        } else if m.command && n.is_layer() {
             // Ctrl/Cmd-click: Preview ↔ Outline for this layer.
             out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "preview": !preview})));
         } else {
             out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "visible": !n.visible})));
         }
     }
-    if lr.clicked() {
+    if lr.clicked() && m.alt {
+        out.actions.push(others_action(view.doc, n, false));
+    } else if lr.clicked() {
         out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
     }
     // Dragging down a column gives every row it passes this row's new state.
@@ -991,6 +1012,55 @@ mod tests {
         for e in steps {
             frame(app, ctx, e, alt);
         }
+    }
+
+    #[test]
+    fn alt_clicking_an_eye_or_lock_toggles_the_other_layers() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        run(&mut app, "layer.new", json!({}));
+        run(&mut app, "layer.new", json!({}));
+        let ctx = egui::Context::default();
+        // Rows top first: Layers 3, 2, 1.
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 3);
+        let state =
+            |app: &VectorcraftApp| -> Vec<(bool, bool)> { app.session.active().unwrap().doc.layers.iter().map(|l| (l.visible, l.locked)).collect() };
+        let click = |app: &mut VectorcraftApp, at: egui::Pos2, alt: bool| {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)], alt);
+            frame(app, &ctx, vec![button(at, true)], alt);
+            frame(app, &ctx, vec![button(at, false)], alt);
+        };
+        let (eye, lock) = (egui::pos2(12.0, circles[1].y), egui::pos2(37.0, circles[1].y));
+        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let before = undo(&app);
+        // Alt-click Layer 2's eye: Layers 1 and 3 hide in one step; again, they show.
+        click(&mut app, eye, true);
+        assert_eq!(state(&app), [(false, false), (true, false), (false, false)]);
+        assert_eq!(undo(&app), before + 1);
+        click(&mut app, eye, true);
+        assert_eq!(state(&app), [(true, false); 3]);
+        // Alt-click its lock: the others lock; again, every layer unlocks.
+        click(&mut app, lock, true);
+        assert_eq!(state(&app), [(true, true), (true, false), (true, true)]);
+        assert_eq!(app.session.active().unwrap().history.undo.last().map(|u| u.label.as_str()), Some("Lock Others"));
+        // A plain click still toggles only that layer.
+        click(&mut app, eye, false);
+        assert_eq!(state(&app), [(true, true), (false, false), (true, true)]);
+        click(&mut app, lock, true);
+        assert_eq!(state(&app), [(true, false), (false, false), (true, false)]);
+        // A sublayer's row stands for its top-level layer: the other layers hide.
+        click(&mut app, eye, false);
+        let layer2 = app.session.active().unwrap().doc.layers[1].id.0;
+        let sub = run(&mut app, "layer.newSublayer", json!({"parent": layer2}));
+        // Rows: Layer 3, Layer 2, its sublayer, Layer 1.
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 4);
+        click(&mut app, egui::pos2(12.0, circles[2].y), true);
+        assert_eq!(state(&app), [(false, false), (true, false), (false, false)]);
+        let doc = &app.session.active().unwrap().doc;
+        assert!(doc.node(NodeId(sub["id"].as_u64().unwrap())).unwrap().visible);
     }
 
     /// A document with two rectangles on one layer → (app, layer, [bottom, top]).
