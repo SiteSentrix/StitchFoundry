@@ -1,5 +1,7 @@
 //! The command palette: fuzzy search over every command and tool.
 
+use std::sync::Arc;
+
 use serde_json::json;
 
 use crate::theme::Tokens;
@@ -23,10 +25,46 @@ pub fn items() -> Vec<(String, String, String)> {
     items
 }
 
-/// A palette label in the UI language: each `›`-separated menu segment and the command label
-/// translate on their own.
-fn shown_label(label: &str) -> String {
-    label.split(" › ").map(crate::i18n::t).collect::<Vec<_>>().join(" › ")
+/// A palette label in `lang`: each `›`-separated menu segment and the command label translate on
+/// their own.
+fn shown_label(lang: crate::i18n::Lang, label: &str) -> String {
+    label.split(" › ").map(|s| crate::i18n::tr(lang, s)).collect::<Vec<_>>().join(" › ")
+}
+
+/// One palette entry, with what it shows and what a query matches worked out once.
+struct Entry {
+    id: String,
+    shortcut: String,
+    /// The label in the UI language.
+    shown: String,
+    /// The English label (what agents document), the shown label and the id, lowercased, one per
+    /// line: a query word (which has no line break) matches within one of them.
+    haystack: String,
+}
+
+/// The palette's entries in `lang`. They are built when the language or the installed plug-ins
+/// change, not on every frame while a query is typed.
+fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
+    type Cached = ((&'static str, u64), Arc<Vec<Entry>>);
+    let key = (lang.code(), menus::plugin_revision());
+    let id = egui::Id::new("palette-entries");
+    if let Some((k, v)) = ctx.data(|d| d.get_temp::<Cached>(id))
+        && k == key
+    {
+        return v;
+    }
+    let built: Arc<Vec<Entry>> = Arc::new(
+        items()
+            .into_iter()
+            .map(|(label, id, shortcut)| {
+                let shown = shown_label(lang, &label);
+                let haystack = format!("{}\n{}\n{}", label.to_lowercase(), shown.to_lowercase(), id.to_lowercase());
+                Entry { id, shortcut, shown, haystack }
+            })
+            .collect(),
+    );
+    ctx.data_mut(|d| d.insert_temp::<Cached>(id, (key, built.clone())));
+    built
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -35,18 +73,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
-    let items = items();
-    let matches: Vec<&(String, String, String)> = items
-        .iter()
-        .filter(|(l, id, _)| {
-            q.is_empty() || {
-                // Match the English text (what agents document), the shown text and the id.
-                let shown = shown_label(l).to_lowercase();
-                q.split_whitespace().all(|w| l.to_lowercase().contains(w) || shown.contains(w) || id.to_lowercase().contains(w))
-            }
-        })
-        .take(14)
-        .collect();
+    let entries = entries(ctx, crate::i18n::current());
+    let matches: Vec<&Entry> = entries.iter().filter(|e| q.split_whitespace().all(|w| e.haystack.contains(w))).take(14).collect();
     let mut run: Option<String> = None;
     egui::Area::new(egui::Id::new("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
@@ -54,21 +82,21 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let r = ui.add(egui::TextEdit::singleline(&mut app.ui.palette_query).hint_text(tl!("Search commands and tools…")).desired_width(500.0));
             r.request_focus();
             ui.add_space(6.0);
-            for (i, (label, id, sc)) in matches.iter().enumerate() {
+            for (i, e) in matches.iter().enumerate() {
                 let resp = ui.add(
-                    egui::Button::new(shown_label(label))
-                        .shortcut_text(menus::pretty_shortcut(sc))
+                    egui::Button::new(e.shown.as_str())
+                        .shortcut_text(menus::pretty_shortcut(&e.shortcut))
                         .min_size(egui::vec2(500.0, 24.0))
                         .selected(i == 0),
                 );
                 if resp.clicked() {
-                    run = Some(id.clone());
+                    run = Some(e.id.clone());
                 }
             }
             if ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && let Some(first) = matches.first()
             {
-                run = Some(first.1.clone());
+                run = Some(first.id.clone());
             }
         });
     });
@@ -78,6 +106,28 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             app.select_tool(tool);
         } else {
             menus::invoke(app, &id, json!({}));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::i18n::Lang;
+
+    #[test]
+    fn entries_are_built_once_per_language_and_match_english_shown_text_and_ids() {
+        let ctx = egui::Context::default();
+        let zh = Lang::from_code("zh-hant").unwrap();
+        let en = entries(&ctx, Lang::EN);
+        assert!(Arc::ptr_eq(&en, &entries(&ctx, Lang::EN)), "kept while the language stays");
+        let zh_entries = entries(&ctx, zh);
+        assert!(!Arc::ptr_eq(&en, &zh_entries), "rebuilt for another language");
+        let group = zh_entries.iter().find(|e| e.id == "object.group").unwrap();
+        assert!(group.shown.ends_with(crate::i18n::tr(zh, "Group")), "{}", group.shown);
+        // A query matches the English label, the shown label or the id.
+        for word in ["group", crate::i18n::tr(zh, "Group"), "object.group"] {
+            assert!(group.haystack.contains(&word.to_lowercase()), "{word}");
         }
     }
 }

@@ -88,8 +88,14 @@ pub fn divider(ui: &mut Ui) {
 }
 
 pub fn dim_label(ui: &mut Ui, text: &str) -> Response {
+    dim_name(ui, tl!(text))
+}
+
+/// [`dim_label`] for a name that is user or file data (a swatch, style, artboard or font name):
+/// shown as it is, never translated.
+pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(tl!(text)).color(t.text).size(12.5))
+    ui.label(egui::RichText::new(text).color(t.text).size(12.5))
 }
 
 /// A recessed numeric field showing `value` (points) in `unit`. Returns the new value (points)
@@ -395,9 +401,24 @@ pub fn fill_stroke_proxy(ui: &mut Ui, fill: &Paint, stroke: &Paint, mixed: (bool
     }
 }
 
-/// A compact dropdown. Returns the chosen index.
+/// A compact dropdown of interface labels (shown in the UI language). Returns the chosen index.
 pub fn dropdown(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str, options: &[&str], width: f32) -> Option<usize> {
     dropdown_with(ui, id, current, options, width, |_| true)
+}
+
+/// [`dropdown`] of names that are user, file or system data (font styles, artboards, presets the
+/// user saved, printers, profiles), shown as they are, never translated. For a list that mixes
+/// built-in labels with such names, translate the built-in ones (`tl!`) before passing them.
+pub fn dropdown_names(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, current: &str, options: &[&str], width: f32) -> Option<usize> {
+    combo(ui, id, current, width, false, |ui| {
+        let mut chosen = None;
+        for (i, o) in options.iter().enumerate() {
+            if ui.add(egui::Button::selectable(*o == current, *o)).clicked() {
+                chosen = Some(i);
+            }
+        }
+        chosen
+    })
 }
 
 /// [`dropdown`] whose options can be disabled (`enabled(index)`: greyed and not choosable).
@@ -1057,7 +1078,11 @@ pub fn bottom_bar(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 
 /// A menu row for panel (≡) menus: label, optional check mark, disabled when not implemented.
 pub fn menu_item(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool {
-    let label = tl!(label);
+    menu_item_name(ui, tl!(label), enabled, checked)
+}
+
+/// [`menu_item`] for a name that is user or file data (a library, a recent URL), never translated.
+pub fn menu_item_name(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool {
     let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
     ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame(false)).clicked()
 }

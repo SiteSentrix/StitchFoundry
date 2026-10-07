@@ -246,6 +246,7 @@ fn app_icon() -> egui::IconData {
 const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
 
 fn main() -> eframe::Result {
+    vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
     let mut control_port: Option<u16> = std::env::var("VECTORCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok());
     let mut files = Vec::new();
     let mut args = std::env::args().skip(1);
