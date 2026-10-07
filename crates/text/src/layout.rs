@@ -40,13 +40,10 @@ impl Ctx<'_> {
             tate_chu_yoko(&mut v, |g| self.style_at(g.byte).size);
             // An upright glyph advances at least one em down the column (the vertical advance of
             // CJK fonts), centred in it: a narrow mark like § must not overlap its neighbours.
-            for g in v.iter_mut().filter(|g| stands_upright(g)) {
-                let natural = g.face.advance(g.gid) * g.sx;
-                let em = g.face.units_per_em() * g.sx;
-                if natural < em && g.adv > 0.0 {
-                    g.dx += (em - natural) * 0.5;
-                    g.adv += em - natural;
-                }
+            for g in v.iter_mut().filter(|g| g.adv > 0.0 && stands_upright(g)) {
+                let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
+                g.dx += extra * 0.5;
+                g.adv += extra;
             }
         }
         v
@@ -68,9 +65,12 @@ impl Ctx<'_> {
             let squeeze = Affine::translate((centre.x, 0.0)) * Affine::scale_non_uniform(t.squeeze, 1.0) * Affine::translate((-centre.x, 0.0));
             m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, centre) * squeeze * across * m;
         } else if self.vertical && stands_upright(g) {
-            // Turned about the centre of its em box, which the column's centre line runs through.
+            // Turned about the centre of its em box, which the column's centre line runs through:
+            // the middle of its own cell, not of its advance (tracking and justification add space
+            // after the cell, and must not push the glyph off the centre line).
             let em = self.style_at(g.byte).size;
-            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + advance * 0.5, origin.y - EM_CENTER * em)) * m;
+            let cell = if g.adv > 0.0 { upright_cell(g) } else { advance };
+            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - EM_CENTER * em)) * m;
         }
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
@@ -212,6 +212,12 @@ fn tate_chu_yoko(g: &mut [SGlyph], size: impl Fn(&SGlyph) -> f64) {
         }
         i = end;
     }
+}
+
+/// The length an upright glyph takes down the column before tracking and justification: its
+/// advance, at least one em.
+fn upright_cell(g: &SGlyph) -> f64 {
+    (g.face.advance(g.gid) * g.sx).max(g.face.units_per_em() * g.sx)
 }
 
 /// Height of the centre of the ideographic em box above the baseline, in ems (the em box runs
@@ -829,8 +835,11 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                     // Composed lines may shrink word spaces (never below zero).
                     per_space =
                         ((width - w) / spaces as f64).max(-sg[i..trimmed].iter().filter(|g| g.is_space()).map(|g| g.adv).fold(f64::MAX, f64::min));
-                } else if para.justify == Justify::JustifyAll && trimmed - i > 1 && width > w {
-                    per_gap = (width - w) / (trimmed - i - 1) as f64;
+                } else if para.justify == Justify::JustifyAll && width > w {
+                    let gaps = sg.get(i + 1..trimmed).map_or(0, |s| s.iter().filter(|g| !g.continues_tcy()).count());
+                    if gaps > 0 {
+                        per_gap = (width - w) / gaps as f64;
+                    }
                 }
             }
             let start_x = if justify {
@@ -861,7 +870,8 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 } else if j < trimmed {
                     if g.is_space() {
                         adv += per_space;
-                    } else if j + 1 < trimmed {
+                    } else if j + 1 < trimmed && sg.get(j + 1).is_some_and(|next| !next.continues_tcy()) {
+                        // Between glyphs, never inside a tate-chu-yoko block (one cell).
                         adv += per_gap;
                     }
                 }

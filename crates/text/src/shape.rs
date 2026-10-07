@@ -74,6 +74,10 @@ impl SGlyph {
     pub fn is_letter(&self) -> bool {
         self.ch.is_alphabetic() || matches!(self.ch, '\'' | '’')
     }
+    /// Vertical type: a tate-chu-yoko glyph after its block's first, sharing that glyph's cell.
+    pub fn continues_tcy(&self) -> bool {
+        self.tcy.is_some_and(|t| t.pen > 0.0)
+    }
 }
 
 pub(crate) const SOFT_HYPHEN: char = '\u{00AD}';
