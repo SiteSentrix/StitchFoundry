@@ -491,3 +491,34 @@ fn vertical_area_type_wraps_into_columns_inside_the_frame() {
     assert!(l.glyphs.iter().all(|g| g.origin.x >= 0.0 && g.origin.x <= 100.0 && g.origin.y >= 0.0 && g.origin.y <= 65.0));
     assert!(l.glyphs[l.lines[1].glyph_start].origin.x < l.glyphs[0].origin.x);
 }
+
+/// Justified Japanese lines (no word spaces) spread the leftover room over the gaps between their
+/// characters (JLREQ 3.8), not inside a Latin word; the last line of a paragraph stays set solid.
+#[test]
+fn justified_japanese_lines_spread_between_characters() {
+    // The ideographs' advance in the fonts at hand, measured; five fit a line, 10 pt left over.
+    let measure = layout(db(), &point("一", style(20.0)));
+    let a = measure.glyphs[0].advance;
+    let width = 5.0 * a + 10.0;
+    let t = area("一二三四五六七", style(20.0), Rect::new(0.0, 0.0, width, 400.0), Justify::JustifyLeft);
+    let l = layout(db(), &t);
+    let first = &l.glyphs[l.lines[0].glyph_start..l.lines[0].glyph_end];
+    assert_eq!(first.len(), 5);
+    for w in first.windows(2) {
+        assert!((w[1].origin.x - w[0].origin.x - (a + 2.5)).abs() < 0.01, "10 pt over 4 gaps");
+    }
+    let end = first.last().map(|g| g.origin.x + a).unwrap();
+    assert!((end - width).abs() < 0.01, "the line reaches the frame's edge: {end} vs {width}");
+    // The last line keeps its natural spacing.
+    let last = &l.glyphs[l.lines[1].glyph_start..l.lines[1].glyph_end];
+    assert!((last[1].origin.x - last[0].origin.x - a).abs() < 0.01);
+    // A Latin word inside a Japanese line keeps its letters together; the gaps around it share.
+    let t = area("一二ABC三四五六七八九十一二三", style(20.0), Rect::new(0.0, 0.0, 8.0 * a + 10.0, 400.0), Justify::JustifyLeft);
+    let l = layout(db(), &t);
+    let g = &l.glyphs[l.lines[0].glyph_start..l.lines[0].glyph_end];
+    let at = g.iter().position(|g| g.byte == "一二".len()).unwrap();
+    let solid =
+        |k: usize| (g[k + 1].origin.x - g[k].origin.x - layout(db(), &point(&"ABC"[k - at..=k - at], style(20.0))).glyphs[0].advance).abs() < 0.01;
+    assert!(solid(at) && solid(at + 1), "A–B–C set solid");
+    assert!(g[at].origin.x - g[at - 1].origin.x > a + 0.1, "二–A takes its share");
+}
