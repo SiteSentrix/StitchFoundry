@@ -149,6 +149,27 @@ fn free_transform_distort_mode_via_pointer() {
 }
 
 #[test]
+fn free_transform_cmd_held_once_a_corner_drag_started_distorts_in_one_step() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    let before = undo_len(&s);
+    let cmd = Mods { cmd: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 210.0, 210.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 260.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 260.0).with_mods(cmd), v).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let pts: Vec<Point> = d.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect();
+    for p in [Point::new(250.0, 260.0), Point::new(100.0, 100.0), Point::new(200.0, 100.0), Point::new(100.0, 200.0)] {
+        assert!(pts.iter().any(|q| q.distance(p) < 1e-6), "{p:?} not in {pts:?}");
+    }
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Distort"));
+}
+
+#[test]
 fn free_transform_side_handle_scales() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);

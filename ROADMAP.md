@@ -106,7 +106,7 @@ grade by behaviour against `plan/illustrator/`, not by whether a menu item exist
   - **Drawing:** Pen, Curvature, anchor tools, Pencil, Paintbrush, Blob Brush, Smooth, Path Eraser, Join.
   - **Shapes:** all shape tools (including Flare) and the line, arc, spiral and grid tools.
   - **Cutting:** Eraser, Scissors, Knife, Mirror & Cut, Line Cut and Rectangle Cut (real geometry, compound paths keep their holes).
-  - **Transform:** Rotate, Reflect, Scale, Shear (click or Alt-click snaps the reference point to anchors and centres), Reshape, Free Transform (distort/perspective).
+  - **Transform:** Rotate, Reflect, Scale, Shear (click or Alt-click snaps the reference point to anchors and centres), Reshape, Free Transform (free and perspective distort and shear, switched by the keys held during a handle drag).
   - **Live Corners:** drag a live rectangle's corner widgets (Selection or Direct Selection) to round all corners, with a radius readout.
   - **Graphs:** Column, Stacked Column, Bar, Stacked Bar, Line, Area, Scatter, Pie and Radar graph tools with Graph Data and Graph Type.
   - **Other:** Eyedropper, Gradient annotator, Artboard, Measure, Type, Hand, Zoom, Rotate View.
