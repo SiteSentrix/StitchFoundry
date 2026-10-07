@@ -148,6 +148,12 @@ pub fn rich_session() -> Session {
     exec(&mut s, "paint.setFill", json!({"color": "#22aa44"}));
     select(&mut s, &[inner, clip]);
     exec(&mut s, "object.clippingMask.make", json!({}));
+    // Type with an inline graphic: a symbol (a small circle, drawn here) set in a line of text.
+    let dot = ellipse(&mut s, 440.0, 40.0, 12.0, 12.0);
+    select(&mut s, &[dot]);
+    exec(&mut s, "symbol.new", json!({"name": "Dot"}));
+    let t = id_of(&exec(&mut s, "text.create", json!({"x": 250, "y": 370, "text": "Tap  to add", "size": 18})));
+    exec(&mut s, "text.insertInline", json!({"id": t.0, "at": 4, "symbol": "Dot"}));
     let _ = (a, b, c, l);
     exec(&mut s, "select.none", json!({}));
     s

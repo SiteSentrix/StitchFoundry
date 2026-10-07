@@ -468,7 +468,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         vertical: p.get("vertical").and_then(Value::as_bool).unwrap_or(false),
         kind,
         xf: Affine::IDENTITY,
-        runs: vec![TextRun { text, style }],
+        runs: vec![TextRun { text, style, inline: None }],
         para: super::create::new_type_para(),
         paras: Vec::new(),
         area: Default::default(),

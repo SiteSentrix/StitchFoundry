@@ -211,7 +211,7 @@ fn select_all_and_styled_paste() {
     let c = cx(&d, &sel, &p);
     tool.key(&c, ToolKey::Right, SHIFT);
     assert_eq!(tool.sel(), (0, 3));
-    let big = TextRun { text: "XY".into(), style: CharStyle { size: 40.0, ..Default::default() } };
+    let big = TextRun { text: "XY".into(), style: CharStyle { size: 40.0, ..Default::default() }, inline: None };
     tool.set_option("copy", &serde_json::to_value(vec![big.clone()]).unwrap());
     let acts = tool.text_input(&c, "XY");
     let Action::Preview(_, params) = acts.last().unwrap() else { panic!() };

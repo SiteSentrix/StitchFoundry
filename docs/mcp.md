@@ -775,6 +775,31 @@ some characters, use `text.setRangeStyle {id, start, end, strokeOptions: {weight
 dashOffset?, alignDashes?}}`. `inspect_document` reports each object's stroke as `strokeOptions` (type: its first
 run's) in `stroke.set` terms. `stroke.set` on a group leaves the images and symbol instances in it alone.
 
+## Inline graphics in type
+
+A document symbol can sit in a line of type like a character (beyond Illustrator; like InDesign's inline
+anchored objects), e.g. mana symbols in card rules text. `text.insertInline {id?, at?, symbol?, scale?: 1,
+shift?: 0}` inserts one at byte offset `at` (default: the Type tool's selection, which it replaces) of text `id`
+(default: the text being edited), showing `symbol` (default: the Symbols panel's current symbol) → `{id, caret}`;
+Type → Insert Inline Symbol does the same at the caret. The graphic is one character, U+FFFC, in a run of its own:
+`text.getRange` reports it as `{text: "\uFFFC", style, inline: {symbol, scale, baseline_shift}}`, plain text (and
+copied text) shows U+FFFC, and `text.editRange` with styled `runs` can insert one. Typing over it, Backspace and
+Delete remove it whole; neighbouring text never merges into it.
+
+Layout: the art is scaled uniformly to `scale` × the run's font size tall, its left edge on the pen and its
+vertical centre on the middle of the cap height raised by `shift` points. Its advance is the scaled art width plus
+the run's tracking, so it breaks like a word (no break between it and punctuation stuck to it) and justifies like
+a glyph; a graphic taller than the font's ascent or descent opens up its line. Its art follows the symbol
+(Redefine Symbol resizes it); a missing or deleted symbol leaves an empty slot one em square that draws nothing.
+Its em box is its run's, whatever its scale: Character Alignment moves it with its run's text (it is one of
+the line's largest characters only when its run's size is), and Top-to-Top leading spaces its line by its run's
+em box (Roman leading by its run's leading). In right-to-left text it is a bidi neutral (U+FFFC): it takes the
+direction of the text around it and the line's reordering places it.
+The canvas draws the art inside the type's transparency (its opacity and blend mode apply). SVG keeps the text live
+(the text after a graphic is positioned after it) and writes each graphic as a `<use>` of the symbol's `<symbol>`
+def (or a copy of its art); type on a path with graphics is written as outlines. PDF draws the art as vector paths
+where the layout puts it.
+
 ## Flatten Transparency
 
 `object.flattenTransparency {ids?, preset?, …options}` turns transparent art into opaque art that looks the same, in

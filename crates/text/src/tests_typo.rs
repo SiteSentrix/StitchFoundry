@@ -15,7 +15,7 @@ fn style(size: f64) -> CharStyle {
 }
 
 fn run(text: &str, size: f64) -> TextRun {
-    TextRun { text: text.into(), style: style(size) }
+    TextRun { text: text.into(), style: style(size), inline: None }
 }
 
 fn area_path(text: &str, st: CharStyle, frame: &BezPath, justify: Justify) -> TextObject {
@@ -613,7 +613,7 @@ fn vertical_align_with_top_to_top_leading() {
     use vectorcraft_doc::LeadingModel;
     let st = |size: f64| CharStyle { size, leading: Some(size * 1.5), ..style(size) };
     let mut t = area("", st(40.0), Rect::new(0.0, 0.0, 200.0, 300.0), Justify::Left);
-    t.runs = vec![TextRun { text: "大\n".into(), style: st(40.0) }, TextRun { text: "小\n中".into(), style: st(20.0) }];
+    t.runs = vec![TextRun { text: "大\n".into(), style: st(40.0), inline: None }, TextRun { text: "小\n中".into(), style: st(20.0), inline: None }];
     t.para.leading_model = LeadingModel::EmBoxTop;
     let top = layout(db(), &t);
     assert_eq!(top.lines.len(), 3);

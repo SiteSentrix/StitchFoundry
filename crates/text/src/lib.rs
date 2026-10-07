@@ -135,6 +135,22 @@ pub struct LineInfo {
     pub region: usize,
 }
 
+/// An inline graphic ([`vectorcraft_doc::TextRun::inline`]) placed by the layout: draw the art of
+/// the run's symbol through `xf`. Missing symbols reserve their room but get no entry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InlineGlyph {
+    /// Index of the run (`TextObject::runs`).
+    pub run: usize,
+    /// Byte offset of its character in the plain text.
+    pub byte: usize,
+    /// Index of its (outline-less) glyph in [`TextLayout::glyphs`].
+    pub glyph: usize,
+    /// The symbol's art at its natural size (`Document::symbol_natural_xf`) → text space.
+    pub xf: Affine,
+    /// The art's bounds in text space.
+    pub bounds: Rect,
+}
+
 #[derive(Clone, Debug)]
 pub struct TextLayout {
     /// Lines retain inline/block coordinates; glyph geometry is in physical text space.
@@ -156,6 +172,8 @@ pub struct TextLayout {
     /// Shrink Text to Fit: the factor the text's sizes, leading and baseline shifts were scaled
     /// by to fit its frame (1.0 when the text is not shrunk).
     pub fit_scale: f64,
+    /// Inline graphics, in text order.
+    pub inlines: Vec<InlineGlyph>,
 }
 
 impl Default for TextLayout {
@@ -170,6 +188,7 @@ impl Default for TextLayout {
             on_path: false,
             frames: Vec::new(),
             fit_scale: 1.0,
+            inlines: Vec::new(),
         }
     }
 }
@@ -217,7 +236,8 @@ impl TextLayout {
             return false;
         }
         let mut moved = false;
-        for g in self.glyphs.iter_mut().filter(|g| g.angle == 0.0) {
+        let mut shifts = vec![];
+        for (gi, g) in self.glyphs.iter_mut().enumerate().filter(|(_, g)| g.angle == 0.0) {
             let p = to_device * g.origin;
             let shift = Vec2::new((p.x.round() - p.x) / a, (p.y.round() - p.y) / d);
             if shift == Vec2::ZERO {
@@ -226,7 +246,17 @@ impl TextLayout {
             g.origin += shift;
             g.outline.apply_affine(Affine::translate(shift));
             g.xf = Affine::translate(shift) * g.xf;
+            if !self.inlines.is_empty() {
+                shifts.push((gi, shift));
+            }
             moved = true;
+        }
+        // Inline graphics move with their glyphs.
+        for i in &mut self.inlines {
+            if let Some(&(_, s)) = shifts.iter().find(|(gi, _)| *gi == i.glyph) {
+                i.xf = Affine::translate(s) * i.xf;
+                i.bounds = i.bounds + s;
+            }
         }
         moved
     }
@@ -474,6 +504,8 @@ mod tests_bidi;
 mod tests_embed;
 #[cfg(test)]
 mod tests_fit;
+#[cfg(test)]
+mod tests_inline;
 #[cfg(test)]
 mod tests_scripts;
 #[cfg(test)]

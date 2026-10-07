@@ -132,7 +132,7 @@ fn shrink_text_follows_top_to_top_leading_and_character_alignment() {
     let mut t = area(COPY, 14.0, Rect::new(0.0, 0.0, 200.0, 90.0), shrink(20.0));
     t.para.leading_model = LeadingModel::EmBoxTop;
     let big = CharStyle { size: 28.0, leading: Some(32.0), char_align: CharAlign::EmBoxCenter, ..CharStyle::default() };
-    t.runs.insert(0, TextRun { text: "Big ".into(), style: big });
+    t.runs.insert(0, TextRun { text: "Big ".into(), style: big, inline: None });
     for r in &mut t.runs {
         r.style.char_align = CharAlign::EmBoxCenter;
     }
