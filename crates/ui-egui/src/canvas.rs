@@ -614,6 +614,14 @@ fn drag_art_out(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, p: Pos
 /// Send a pointer event to the active tool and act on UI requests (dialogs, tool switches).
 pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_engine::ViewInfo) {
     let r = app.session.pointer(ev, view);
+    // The artboard the Artboard tool makes active is the active one (the navigator's, the
+    // Artboards panel's).
+    if app.session.tool_id() == "artboard"
+        && let Some(i) = app.session.tool_options()["active"].as_u64().and_then(|i| usize::try_from(i).ok())
+        && let Some(v) = app.view_mut()
+    {
+        v.artboard = i;
+    }
     apply_requests(app, r);
 }
 
