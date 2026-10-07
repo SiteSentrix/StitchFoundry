@@ -1,6 +1,6 @@
 //! PDF → Document (hayro-interpret device that builds a VectorCraft node tree).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use hayro_interpret::font::Glyph;
@@ -462,6 +462,8 @@ struct Builder<'p> {
     text_as: TextAs,
     images: HashMap<String, ImageBlob>,
     image_keys: HashMap<u128, (String, u32, u32)>,
+    /// The images kept with their CMYK samples ([`crate::import_image`]).
+    cmyk_keys: HashSet<u128>,
     warnings: Vec<String>,
     /// Fonts by cache key → base font name (from [`scan_page`]).
     fonts: HashMap<u128, String>,
@@ -582,6 +584,7 @@ impl<'p> Builder<'p> {
             text_as,
             images: HashMap::new(),
             image_keys: HashMap::new(),
+            cmyk_keys: HashSet::new(),
             warnings: vec![],
             fonts: HashMap::new(),
             font_names: HashMap::new(),
@@ -1335,8 +1338,23 @@ impl<'a> Device<'a> for Builder<'_> {
         match image {
             Image::Raster(r) => {
                 let key = hayro_interpret::CacheKey::cache_key(&r);
-                // JPEG passthrough for plain DeviceRGB/DeviceGray DCT images.
                 let st = r.stream();
+                let (w, h) = (r.width(), r.height());
+                // CMYK images keep their samples (read once per image).
+                let known = self.cmyk_keys.contains(&key);
+                let cmyk = if known {
+                    None
+                } else {
+                    crate::import_image::cmyk(st, w, h).unwrap_or_else(|why| {
+                        self.warn(why);
+                        None
+                    })
+                };
+                if known || cmyk.is_some() {
+                    self.cmyk_keys.insert(key);
+                    return self.add_image(key, || cmyk.map(|blob| (blob, w, h)), transform);
+                }
+                // JPEG passthrough for plain DeviceRGB/DeviceGray DCT images.
                 let dict = st.dict();
                 let filters = st.filters();
                 let cs_ok = dict.get::<Name<'_>>(b"ColorSpace").is_some_and(|n| matches!(n.as_ref(), b"DeviceRGB" | b"DeviceGray"));
@@ -1347,7 +1365,6 @@ impl<'a> Device<'a> for Builder<'_> {
                     && !dict.contains_key(b"Mask")
                     && !dict.contains_key(b"Decode");
                 if jpeg {
-                    let (w, h) = (r.width(), r.height());
                     let bytes = st.raw_data().to_vec();
                     self.add_image(key, || Some((ImageBlob::new("image/jpeg", bytes), w, h)), transform);
                     return;

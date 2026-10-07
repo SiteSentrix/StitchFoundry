@@ -6,7 +6,8 @@
 //!   model when their profile differs from the destination; `preserveNumbers` converts only the
 //!   colours of the other model (and Lab ones), keeping the numbers of those already in it.
 //!   Grey stays grey. Images (and freeform gradients' images) are converted the same way, pixel
-//!   by pixel; printer's marks are not. The destination is a profile name; empty, the document's
+//!   by pixel (CMYK images too: they keep their numbers unless converted, see [`CmykPixels`]);
+//!   printer's marks are not. The destination is a profile name; empty, the document's
 //!   profile for its colour mode.
 //! - Profiles ([`ProfileInclusion`]): with `all`, with `destination`, and with `taggedSource` on a
 //!   document that was assigned profiles, colours are written in ICC-based colour spaces: CMYK
@@ -23,8 +24,9 @@
 
 use std::sync::{Arc, OnceLock};
 
+use krilla::image::ImageColorspace;
 use vectorcraft_color::Color;
-use vectorcraft_color::cms::{self, Cms, Intent, Model, ProfileKind, ProofLut};
+use vectorcraft_color::cms::{self, Cms, CmykLut, Intent, Model, ProfileKind, ProofLut};
 use vectorcraft_doc::{ColorMode, Document};
 
 use crate::patch::{Patch, Xref};
@@ -58,6 +60,8 @@ pub(crate) struct ColorOut {
     pub srgb_note: Option<String>,
     /// The image transform, built when the first image needs it.
     pixels: OnceLock<Option<Pixels>>,
+    /// The CMYK image transform, built when the first CMYK image needs it.
+    cmyk_pixels: OnceLock<Option<CmykPixels>>,
     intent: Intent,
     /// The output intent and Trapped entries to write.
     catalog: Option<Catalog>,
@@ -97,6 +101,7 @@ impl Default for ColorOut {
             cmyk_profile,
             srgb_note: None,
             pixels: OnceLock::new(),
+            cmyk_pixels: OnceLock::new(),
             intent,
             catalog: None,
             standard: Standard::None,
@@ -276,6 +281,30 @@ impl ColorOut {
             .as_ref()
     }
 
+    /// How CMYK images' ink amounts are converted; `None` when they keep their numbers (no
+    /// conversion, or to a CMYK destination that keeps them).
+    pub(crate) fn cmyk_pixels(&self) -> Option<&CmykPixels> {
+        self.cmyk_pixels
+            .get_or_init(|| {
+                let d = self.dest.as_ref().filter(|d| !(d.keep && d.model == Model::Cmyk))?;
+                let cmyk = d.model == Model::Cmyk;
+                // Each ink combination as a CMYK colour is written.
+                let lut = CmykLut::build(|[c, m, y, k]| {
+                    let out = self.color(&Color::Cmyk { c, m, y, k }, self.intent, false, true);
+                    if cmyk {
+                        return d.cms.to_cmyk(&out, self.intent);
+                    }
+                    let [r, g, b] = match out {
+                        Color::Rgb { r, g, b } => [r, g, b],
+                        other => d.cms.srgb_to_rgb(d.cms.display_rgb(&other)),
+                    };
+                    [r, g, b, 0.0]
+                });
+                Some(CmykPixels { lut, cmyk })
+            })
+            .as_ref()
+    }
+
     /// `pdf` with the output intent and Trapped entries, and a PDF/X file's identification
     /// ([`crate::pdfx`]) → (the file, warnings).
     pub(crate) fn write_catalog(&self, pdf: Vec<u8>) -> Result<(Vec<u8>, Vec<String>), PdfError> {
@@ -424,10 +453,6 @@ pub(crate) enum Pixels {
 }
 
 impl Pixels {
-    pub(crate) fn is_cmyk(&self) -> bool {
-        matches!(self, Self::Cmyk(_))
-    }
-
     /// Convert the RGB samples of straight RGBA pixels `rgba` in place (RGB destinations).
     pub(crate) fn rgb_in_place(&self, rgba: &mut [u8]) {
         if let Self::Rgb(lut) = self {
@@ -453,5 +478,32 @@ impl Pixels {
                 })
                 .collect(),
         )
+    }
+}
+
+/// How CMYK images' ink amounts are converted to the destination: a lookup table to its RGB
+/// values, or to its CMYK ones (another profile).
+pub(crate) struct CmykPixels {
+    lut: CmykLut,
+    /// The destination is CMYK.
+    cmyk: bool,
+}
+
+impl CmykPixels {
+    /// Ink amounts `inks` (four bytes a pixel) converted → (the samples, their colour space).
+    pub(crate) fn convert(&self, inks: &[u8]) -> (Vec<u8>, ImageColorspace) {
+        let n = if self.cmyk { 4 } else { 3 };
+        let mut out = Vec::with_capacity(inks.len() / 4 * n);
+        // Runs of one colour convert once.
+        let mut last: Option<([u8; 4], [u8; 4])> = None;
+        for p in inks.as_chunks::<4>().0 {
+            let v = match last {
+                Some((k, v)) if k == *p => v,
+                _ => self.lut.apply8(*p),
+            };
+            last = Some((*p, v));
+            out.extend_from_slice(v.get(..n).unwrap_or_default());
+        }
+        (out, if self.cmyk { ImageColorspace::Cmyk } else { ImageColorspace::Rgb })
     }
 }

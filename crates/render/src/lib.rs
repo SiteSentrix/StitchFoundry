@@ -325,6 +325,8 @@ pub struct Renderer {
     clip_paints: PtrMap<usize, ClipPaintEntry>,
     /// Placed images as painted in ink planes (see [`ink`]).
     ink_images: ink::InkImages,
+    /// CMYK images as shown through the working CMYK profile (see [`ink`]).
+    cmyk_images: ink::CmykImages,
     /// Gradients along or across strokes, keyed like `strokes` (see [`Self::fill_path_gradient`]).
     stroke_slices: PtrMap<(usize, i32), SliceEntry>,
     /// The keys and sizes of the recoloured images colour adjustments made in `images`, oldest
@@ -407,6 +409,7 @@ impl Renderer {
             clip_paths: vec![],
             clip_paints: PtrMap::default(),
             ink_images: Default::default(),
+            cmyk_images: Default::default(),
             stroke_slices: PtrMap::default(),
             adjusted: Default::default(),
             dim_images: None,
@@ -1320,7 +1323,7 @@ impl Renderer {
         };
         let pixels = if outline && !f.doc.setup.outline_images { None } else { self.image_pixmap(f.doc, &im.key, &cache_key, outline) };
         if let Some(pm) = pixels {
-            let pm = if outline { pm } else { self.ink_image(&cache_key, &pm, f.ink) };
+            let pm = if outline { pm } else { self.ink_image(&cache_key, &pm, f.ink, f.doc.images.get(&im.key)) };
             let sx = im.width as f64 / pm.width().max(1) as f64;
             let sy = im.height as f64 / pm.height().max(1) as f64;
             ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(pm), sampler: peniko::ImageSampler::default() });
@@ -1398,9 +1401,15 @@ impl Renderer {
         let colour = match self.images.get(cache_key) {
             Some(p) => p.clone(),
             None => {
-                let pm = Arc::new(paint::decode_pixmap(&doc.images.get(key)?.bytes)?);
-                self.images.insert(cache_key.to_string(), pm.clone());
-                pm
+                let blob = doc.images.get(key)?;
+                match self.cmyk_image(blob, cache_key) {
+                    Some(pm) => pm,
+                    None => {
+                        let pm = Arc::new(paint::decode_pixmap(&blob.bytes)?);
+                        self.images.insert(cache_key.to_string(), pm.clone());
+                        pm
+                    }
+                }
             }
         };
         if !grey {

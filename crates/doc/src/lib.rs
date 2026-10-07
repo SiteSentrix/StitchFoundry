@@ -9,6 +9,7 @@ pub mod appearance;
 pub mod assets;
 pub mod blend;
 pub mod clipnest;
+pub mod cmyk;
 pub mod graph;
 pub mod hit;
 pub mod inks;

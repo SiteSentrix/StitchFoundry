@@ -62,6 +62,10 @@ linesweeper = "0.4"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
+# CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG
+# decoders, read directly (the image crate converts CMYK to RGB).
+tiff = "0.11"
+zune-jpeg = "0.5"
 
 # ui
 egui = "0.36"

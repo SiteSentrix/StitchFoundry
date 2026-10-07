@@ -218,11 +218,12 @@ fn images_are_converted_too() {
     assert!(String::from_utf8_lossy(&plain.bytes).contains("/ColorSpace/DeviceRGB"));
     let r = pdf(&d, json!({"output": {"conversion": "preserveNumbers", "destination": GENERIC_CMYK}}));
     assert!(String::from_utf8_lossy(&r.bytes).contains("/ColorSpace/DeviceCMYK"), "a CMYK image");
-    // CMYK images aren't written as JPEG.
+    // Converted to CMYK and compressed with JPEG: a CMYK JPEG.
     let jpeg =
         pdf(&d, json!({"compression": {"color": {"compression": "jpeg"}}, "output": {"conversion": "destination", "destination": GENERIC_CMYK}}));
-    assert!(!String::from_utf8_lossy(&jpeg.bytes).contains("/DCTDecode"));
-    assert!(jpeg.warnings.iter().any(|w| w.contains("ZIP")), "{:?}", jpeg.warnings);
+    let t = String::from_utf8_lossy(&jpeg.bytes);
+    assert!(t.contains("/DCTDecode") && t.contains("/ColorSpace/DeviceCMYK"), "{t}");
+    assert!(jpeg.warnings.is_empty(), "{:?}", jpeg.warnings);
     // An RGB destination other than sRGB changes the pixels (unless their numbers are kept).
     assert_eq!(first_pixel(&plain.bytes), [200, 40, 30]);
     let p3 = |conversion: &str| first_pixel(&pdf(&d, json!({"output": {"conversion": conversion, "destination": cms::DISPLAY_P3}})).bytes);

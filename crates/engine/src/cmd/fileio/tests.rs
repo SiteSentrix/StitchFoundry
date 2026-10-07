@@ -104,6 +104,17 @@ fn webp_opens_at_its_pixel_size() {
 }
 
 #[test]
+fn cmyk_tiffs_keep_their_inks_and_other_tiffs_become_png() {
+    let inks = vectorcraft_doc::cmyk::Inks::new(2, 1, vec![0, 102, 255, 0, 10, 20, 30, 40]).unwrap();
+    let tiff = vectorcraft_doc::ImageBlob::cmyk_tiff(&inks).unwrap();
+    let r = raster_image(&tiff.bytes).unwrap();
+    assert_eq!((r.width, r.height, r.blob.mime.as_str()), (2, 1, "image/tiff"));
+    assert_eq!(r.blob.cmyk(), Some(inks));
+    let rgb = raster_image(&image_bytes(2, 1, image::ImageFormat::Tiff)).unwrap();
+    assert_eq!(rgb.blob.mime, "image/png");
+}
+
+#[test]
 fn content_beats_a_wrong_extension() {
     let png = image_bytes(2, 2, image::ImageFormat::Png);
     assert_eq!(detect("photo.jpg", &png).unwrap().id, "png");

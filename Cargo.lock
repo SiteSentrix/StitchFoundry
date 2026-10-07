@@ -4332,13 +4332,16 @@ name = "vectorcraft-doc"
 version = "0.4.0"
 dependencies = [
  "image",
+ "jpeg-encoder",
  "kurbo 0.13.1",
  "proptest",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "tiff",
  "vectorcraft-color",
  "vectorcraft-geom",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -4484,6 +4487,7 @@ dependencies = [
  "hayro-interpret",
  "hayro-syntax",
  "image",
+ "jpeg-encoder",
  "krilla",
  "kurbo 0.13.1",
  "log",

@@ -662,6 +662,60 @@ impl ProofLut {
     }
 }
 
+/// A 17⁴ CMYK → four values lookup table with quadrilinear interpolation: ink amounts to a
+/// colour (XYZ, RGB, or CMYK in another space).
+pub struct CmykLut {
+    data: Vec<[f32; 4]>,
+}
+
+impl CmykLut {
+    pub fn build(f: impl Fn([f32; 4]) -> [f32; 4]) -> Self {
+        let s = (LUT_N - 1) as f32;
+        let mut data = Vec::with_capacity(LUT_N.pow(4));
+        for c in 0..LUT_N {
+            for m in 0..LUT_N {
+                for y in 0..LUT_N {
+                    for k in 0..LUT_N {
+                        data.push(f([c, m, y, k].map(|i| i as f32 / s)));
+                    }
+                }
+            }
+        }
+        Self { data }
+    }
+
+    pub fn apply(&self, inks: [f32; 4]) -> [f32; 4] {
+        const STRIDE: [usize; 4] = [LUT_N * LUT_N * LUT_N, LUT_N * LUT_N, LUT_N, 1];
+        let p = inks.map(|v| v.clamp(0.0, 1.0) * (LUT_N - 1) as f32);
+        let i = p.map(|v| (v as usize).min(LUT_N - 2));
+        let base: usize = (0..4).map(|d| i[d] * STRIDE[d]).sum();
+        let mut out = [0.0f32; 4];
+        for corner in 0..16 {
+            let (mut w, mut at) = (1.0f32, base);
+            for d in 0..4 {
+                let t = p[d] - i[d] as f32;
+                if corner >> d & 1 == 1 {
+                    w *= t;
+                    at += STRIDE[d];
+                } else {
+                    w *= 1.0 - t;
+                }
+            }
+            if w > 0.0 {
+                for (o, v) in out.iter_mut().zip(self.data[at]) {
+                    *o += w * v;
+                }
+            }
+        }
+        out
+    }
+
+    /// [`Self::apply`] to 8-bit ink amounts, for 8-bit values.
+    pub fn apply8(&self, inks: [u8; 4]) -> [u8; 4] {
+        self.apply(inks.map(|v| v as f32 / 255.0)).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+    }
+}
+
 // ---------- the active (process-wide) settings ----------
 
 static ACTIVE: RwLock<Option<Arc<Cms>>> = RwLock::new(None);

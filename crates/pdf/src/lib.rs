@@ -47,6 +47,7 @@ mod forms;
 mod images;
 mod import;
 mod import_color;
+mod import_image;
 mod import_mask;
 mod import_scan;
 mod import_shading;
@@ -209,6 +210,8 @@ mod tests_blend;
 mod tests_charstroke;
 #[cfg(test)]
 mod tests_cmykblend;
+#[cfg(test)]
+mod tests_cmykimages;
 #[cfg(test)]
 mod tests_compression;
 #[cfg(test)]

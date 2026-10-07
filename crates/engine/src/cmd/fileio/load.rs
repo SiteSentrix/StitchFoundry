@@ -282,13 +282,15 @@ pub(super) fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
     open_template(s, src.name, &src.bytes, src.path)
 }
 
-/// Decode an image's header (and, for formats stored as PNG, its pixels).
+/// Decode an image's header (and, for formats stored as PNG, its pixels). CMYK TIFFs are kept as
+/// they are, with their ink amounts ([`ImageBlob::cmyk`]).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
     let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     let ppi = super::ppi::resolution(bytes);
-    let (bytes, mime, (width, height)) = if matches!(f.id, "png" | "jpg" | "gif" | "webp") {
+    let cmyk = || ImageBlob::new(f.mime, bytes.to_vec()).cmyk().is_some();
+    let (bytes, mime, (width, height)) = if matches!(f.id, "png" | "jpg" | "gif" | "webp") || (f.id == "tiff" && cmyk()) {
         (bytes.to_vec(), f.mime, reader.into_dimensions().map_err(err)?)
     } else {
         let img = reader.decode().map_err(err)?.to_rgba8();
