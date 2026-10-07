@@ -267,7 +267,13 @@ impl<'a> Interp<'a> {
     }
 
     fn tick(&mut self) -> Res {
-        self.ops += 1;
+        self.spend(1)
+    }
+
+    /// Count `ops` operations' worth of work against [`MAX_OPS`]: what an operator that costs
+    /// far more than one operation (laying out type) does in a loop has to end too.
+    pub fn spend(&mut self, ops: u64) -> Res {
+        self.ops = self.ops.saturating_add(ops);
         if self.ops > MAX_OPS {
             return Err(PsError::Limit("the program runs too long"));
         }

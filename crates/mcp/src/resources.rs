@@ -118,8 +118,6 @@ pub fn read(b: &mut dyn Backend, uri: &str) -> Result<Value, ReadError> {
         return Err(ReadError::Invalid(format!("{} needs a value for `{}`", template.uri, variable_name(template.uri))));
     }
     let found = match template.name {
-        // One direct `document.node` lookup through `engine.execute` (which reaches both
-        // backends), instead of pulling the whole layer tree out of `document.inspect`.
         "object" => read_object(b, &var).map_err(ReadError::Backend)?,
         // The command catalogue is a control method; the rest are engine commands.
         "command" => find_in(b.call("engine.commands", json!({})).map_err(ReadError::Backend)?, None, "id", &var),
@@ -174,21 +172,19 @@ fn decode(s: &str) -> String {
 }
 
 /// The layer or object with this id in the active document, as its compact summary
-/// (bounds, paint labels, subtree — the `document.inspect` shape for one node).
+/// (bounds, paint labels, subtree: the `document.inspect` shape for one node).
 ///
-/// One `document.node {summary: true}` lookup through `engine.execute` (which reaches
-/// both backends), instead of pulling the whole layer tree out of `document.inspect`
-/// and scanning it: the reply matches the old read field for field, without the
-/// O(document) serialize-and-summarize on every call.
-///
-/// A non-numeric id, or one that names nothing, is "not found" (the caller turns it into
-/// `-32602`); backend failures are swallowed the same way, matching how [`crate::prompts`]
-/// treats an unreachable catalogue (empty rather than an error).
+/// One `document.node {summary: true}` lookup instead of summarizing the whole document
+/// and searching it. A non-numeric id, or one that names nothing, is "not found" (the
+/// caller turns it into `-32602`); other failures (no document, an unreachable app) stay
+/// backend errors.
 fn read_object(b: &mut dyn Backend, id: &str) -> Result<Option<Value>, String> {
-    let Ok(num) = id.parse::<u64>() else { return Ok(None) };
-    match b.call("engine.execute", json!({"command": "document.node", "params": {"id": num, "summary": true}})) {
+    let Ok(id) = id.parse::<u64>() else { return Ok(None) };
+    match b.call("engine.execute", json!({"command": "document.node", "params": {"id": id, "summary": true}})) {
         Ok(v) => Ok(Some(v)),
-        Err(_) => Ok(None),
+        // `EngineError::NoNode`, as both backends word it.
+        Err(e) if e.starts_with("no such object") => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
@@ -246,6 +242,12 @@ mod tests {
         assert!(read(b.as_mut(), "vectorcraft://object/").is_err());
         assert!(read(b.as_mut(), "vectorcraft://object/99999").is_err());
         assert!(read(b.as_mut(), DOC_URI).is_ok());
+        // An id that names nothing is a bad value; without a document the backend says why.
+        for uri in ["vectorcraft://object/99999", "vectorcraft://object/abc"] {
+            assert!(matches!(read(b.as_mut(), uri), Err(ReadError::Invalid(_))), "{uri}");
+        }
+        let mut empty = Box::new(crate::Headless::new());
+        assert!(matches!(read(empty.as_mut(), "vectorcraft://object/1"), Err(ReadError::Backend(_))));
     }
 
     #[test]

@@ -15,7 +15,6 @@ mod cut;
 pub(crate) mod distortcmds;
 mod docinfo;
 mod docmenu;
-pub use docmenu::MAX_SAVED_SELECTIONS;
 pub(crate) mod docsetup;
 mod draw2;
 mod edit;

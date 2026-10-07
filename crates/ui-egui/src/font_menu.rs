@@ -69,8 +69,11 @@ const STAR: f32 = 18.0;
 const NAME_SHARE: f32 = 0.5;
 /// Width of the disclosure triangle of a family with several styles.
 const DISCLOSURE: f32 = 14.0;
-/// Samples rendered (or asked for) per frame, so a long list doesn't stall the UI.
+/// Samples rendered (or asked for) per frame, across every menu, so a long list doesn't stall the UI.
 const SAMPLES_PER_FRAME: usize = 4;
+/// Samples rendering at once (native).
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_PENDING: usize = 8;
 /// What a sample shows when the font lacks the selected text's characters (or there is none).
 const FALLBACK_SAMPLE: &str = "Sample";
 /// The script filter's choices: all, Japanese, Latin.
@@ -120,6 +123,10 @@ impl Row {
     }
 }
 
+/// What the rows were listed for: the query, the script, kind and favourites filters, the
+/// expanded families, the favourites and the font list's generation.
+type RowsKey = (String, usize, Option<FontClass>, bool, Vec<String>, Vec<String>, u64);
+
 /// The menu's state between frames.
 #[derive(Clone, Default)]
 struct MenuState {
@@ -138,6 +145,11 @@ struct MenuState {
     expanded: Vec<String>,
     /// What was previewed last (None: nothing is previewed).
     previewed: Option<(String, Option<String>)>,
+    /// The rows listed, and what for: built again only when that changes, not every frame.
+    rows: Arc<[Row]>,
+    rows_key: Option<RowsKey>,
+    /// The list's scroll offset last frame.
+    scrolled: f32,
 }
 
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
@@ -157,9 +169,8 @@ pub fn font_menu(
         drawn = true;
         list(ui, state_id, &mut st, current, sample, look)
     });
-    let pass = ui.ctx().cumulative_pass_nr();
     let mut out = picked;
-    if !drawn && st.last + 1 < pass && st.previewed.take().is_some() && out.is_none() {
+    if !drawn && out.is_none() && st.previewed.take().is_some() {
         // Closed (Escape, a click outside) with a preview showing.
         out = Some(FontPick::EndPreview);
     }
@@ -184,6 +195,8 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
         st.query.clear();
     }
     st.last = pass;
+    // For [`end_stale_preview`]: the menu is open, in this layer.
+    ui.ctx().data_mut(|d| d.insert_temp(open_id(), (pass, ui.layer_id())));
     let field = state_id.with("query");
     if opening_now {
         ui.data_mut(|d| d.insert_temp(field, String::new()));
@@ -229,32 +242,37 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
     });
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
     let db = vectorcraft_text::FontDb::global();
-    let families = db.family_list();
     // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック).
     let current = db.canonical(current, "").0;
     let current = current.as_str();
-    // Families named with a leading dot are the system's own (hidden from font menus).
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
-    let wanted = |f: &str| {
-        if f.starts_with('.') || !(query.is_empty() || f.to_lowercase().contains(&query)) {
-            return false;
+    // The generation is read first: fonts that load meanwhile make the next frame list them.
+    let key: RowsKey = (query.clone(), st.script, st.class, st.favorites_only, st.expanded.clone(), look.favorites.to_vec(), db.generation());
+    if st.rows_key.as_ref() != Some(&key) {
+        let wanted = |f: &str| {
+            if !(query.is_empty() || f.to_lowercase().contains(&query)) {
+                return false;
+            }
+            if st.favorites_only && !favorite(f) {
+                return false;
+            }
+            if st.script == 0 && st.class.is_none() {
+                return true;
+            }
+            let traits = db.family_traits(f);
+            (st.script == 0 || (st.script == 1) == traits.japanese) && st.class.is_none_or(|c| c == traits.class)
+        };
+        let mut rows: Vec<Row> = vec![];
+        for f in db.menu_family_list().iter().filter(|f| wanted(f)) {
+            rows.push(Row::Family(f.clone()));
+            if st.expanded.iter().any(|e| e.eq_ignore_ascii_case(f)) {
+                rows.extend(db.styles(f).into_iter().map(|s| Row::Style(f.clone(), s)));
+            }
         }
-        if st.favorites_only && !favorite(f) {
-            return false;
-        }
-        if st.script == 0 && st.class.is_none() {
-            return true;
-        }
-        let traits = db.family_traits(f);
-        (st.script == 0 || (st.script == 1) == traits.japanese) && st.class.is_none_or(|c| c == traits.class)
-    };
-    let mut rows: Vec<Row> = vec![];
-    for f in families.iter().filter(|f| wanted(f)) {
-        rows.push(Row::Family(f.clone()));
-        if st.expanded.iter().any(|e| e.eq_ignore_ascii_case(f)) {
-            rows.extend(db.styles(f).into_iter().map(|s| Row::Style(f.clone(), s)));
-        }
+        st.rows = rows.into();
+        st.rows_key = Some(key);
     }
+    let rows = st.rows.clone();
     if query != st.query || refilter {
         st.query = query.clone();
         st.highlight = None;
@@ -288,20 +306,34 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
         widgets::dim_label(ui, tl!("No matching fonts"));
         return None;
     }
-    // The rows: only those in view are laid out (there are thousands of families).
+    // The rows: only those in view are laid out (there are thousands of families). The list fills
+    // what the popup shows below the filters (its clip: the popup doesn't grow past its own size,
+    // and a taller list would scroll inside a scrolling popup), down to the window's bottom.
     const BOTTOM_GAP: f32 = 12.0;
-    let room = (ui.ctx().content_rect().bottom() - ui.next_widget_position().y - BOTTOM_GAP).max(120.0);
+    let bottom = ui.clip_rect().bottom().min(ui.ctx().content_rect().bottom() - BOTTOM_GAP);
+    let room = (bottom - ui.next_widget_position().y).max(120.0);
     let mut area = egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room.min(row_h * rows.len() as f32));
-    if let Some(i) = st.highlight.filter(|_| keyed || opening) {
-        area = area.vertical_scroll_offset((i as f32 * row_h - room * 0.5 + row_h * 0.5).max(0.0));
+    // The highlight in view: centred as the menu opens, scrolled just enough as the keys move it.
+    if let Some(top) = st.highlight.map(|i| i as f32 * row_h) {
+        let target = if opening {
+            Some(top - (room - row_h) * 0.5)
+        } else if keyed && top < st.scrolled {
+            Some(top)
+        } else if keyed && top + row_h > st.scrolled + room {
+            Some(top + row_h - room)
+        } else {
+            None
+        };
+        if let Some(y) = target {
+            area = area.vertical_scroll_offset(y.max(0.0));
+        }
     }
     let mut chosen: Option<(String, Option<String>)> = None;
     let mut hovered: Option<usize> = None;
     let mut toggled: Option<String> = None;
     let mut starred: Option<String> = None;
-    let mut budget = SAMPLES_PER_FRAME;
     ui.spacing_mut().item_spacing.y = 0.0;
-    area.show_rows(ui, row_h, rows.len(), |ui, range| {
+    let shown = area.show_rows(ui, row_h, rows.len(), |ui, range| {
         for i in range {
             let Some(row) = rows.get(i) else { continue };
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
@@ -349,19 +381,15 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
             ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
             let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 2.0), rect.max - vec2(STAR + 2.0, 2.0));
             if !look.samples {
-            } else if let Some(tex) = sample_texture(ui.ctx(), row.family(), row.style(), sample, sample_rect.height(), &mut budget) {
-                let ppp = ui.ctx().pixels_per_point();
-                let size = tex.size_vec2() / ppp;
-                let at = egui::Rect::from_min_size(sample_rect.left_center() - vec2(0.0, size.y * 0.5), size);
-                let shown_at = at.intersect(sample_rect);
-                let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2((shown_at.width() / size.x).clamp(0.0, 1.0), 1.0));
-                ui.painter_at(sample_rect).image(tex.id(), shown_at, uv, t.text);
+            } else if let Some(tex) = sample_texture(ui.ctx(), row.family(), row.style(), sample, sample_rect.height()) {
+                paint_sample(ui, sample_rect, &tex, t.text);
             }
             if resp.clicked() && !on_triangle && !on_star {
                 chosen = Some(row.pick());
             }
         }
     });
+    st.scrolled = shown.state.offset.y;
     if let Some(f) = toggled {
         if st.expanded.contains(&f) {
             st.expanded.retain(|e| *e != f);
@@ -399,21 +427,24 @@ fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, samp
 // ---------- samples ----------
 
 /// Width of the sample drawn at the end of a Type → Font menu item.
-const MENU_SAMPLE_WIDTH: f32 = 90.0;
+/// The room a Type → Font menu item keeps for its sample, after the family's name.
+pub(crate) const MENU_SAMPLE_SIZE: egui::Vec2 = vec2(90.0, 16.0);
 
-/// A generic sample of `family` drawn at the right end of the menu item `item` (Type → Font in
-/// the in-window menu bar; the native macOS menu shows names only).
-pub(crate) fn menu_item_sample(ui: &Ui, item: egui::Rect, family: &str) {
-    let t = Tokens::get(ui.ctx());
-    let mut budget = SAMPLES_PER_FRAME;
-    let area = egui::Rect::from_min_max(egui::pos2(item.max.x - MENU_SAMPLE_WIDTH, item.min.y + 2.0), item.max - vec2(4.0, 2.0));
-    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, area.height(), &mut budget) {
-        let size = tex.size_vec2() / ui.ctx().pixels_per_point();
-        let at = egui::Rect::from_min_size(area.left_center() - vec2(0.0, size.y * 0.5), size);
-        let shown = at.intersect(area);
-        let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2((shown.width() / size.x).clamp(0.0, 1.0), 1.0));
-        ui.painter_at(area).image(tex.id(), shown, uv, t.text_dim);
+/// A generic sample of `family` drawn in `slot` (the room a Type → Font item of the in-window
+/// menu bar keeps for it; the native macOS menu shows names only).
+pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str) {
+    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, slot.height()) {
+        paint_sample(ui, slot, &tex, Tokens::get(ui.ctx()).text_dim);
     }
+}
+
+/// Draw sample `tex` (tinted `tint`) at the left of `area`, centred vertically, cut at its right.
+fn paint_sample(ui: &Ui, area: egui::Rect, tex: &egui::TextureHandle, tint: Color32) {
+    let size = tex.size_vec2() / ui.ctx().pixels_per_point();
+    let at = egui::Rect::from_min_size(area.left_center() - vec2(0.0, size.y * 0.5), size);
+    let shown = at.intersect(area);
+    let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2((shown.width() / size.x).clamp(0.0, 1.0), 1.0));
+    ui.painter_at(area).image(tex.id(), shown, uv, tint);
 }
 
 type Key = (String, String, String, u32);
@@ -426,6 +457,26 @@ struct Samples {
     ready: HashMap<Key, Option<egui::TextureHandle>>,
     #[cfg(not(target_arch = "wasm32"))]
     pending: HashMap<Key, std::sync::mpsc::Receiver<Option<egui::ColorImage>>>,
+    /// The pass the budget is for, and the samples started in it.
+    pass: u64,
+    started: usize,
+}
+
+impl Samples {
+    /// Take one sample from this frame's budget ([`SAMPLES_PER_FRAME`]); `false` when it is spent
+    /// (another frame is asked for, to go on).
+    fn take_budget(&mut self, ctx: &egui::Context) -> bool {
+        let pass = ctx.cumulative_pass_nr();
+        if self.pass != pass {
+            (self.pass, self.started) = (pass, 0);
+        }
+        if self.started >= SAMPLES_PER_FRAME {
+            ctx.request_repaint();
+            return false;
+        }
+        self.started += 1;
+        true
+    }
 }
 
 thread_local! {
@@ -434,17 +485,12 @@ thread_local! {
 
 /// The sample of `family` for a row `height` points high: the selected text set in it (else a
 /// generic sample), white with coverage as alpha (tinted when drawn). Rendered off the UI thread
-/// on native, a few per frame; `None` until it is ready.
-fn sample_texture(
-    ctx: &egui::Context,
-    family: &str,
-    style: Option<&str>,
-    sample: Option<&str>,
-    height: f32,
-    budget: &mut usize,
-) -> Option<egui::TextureHandle> {
+/// on native (the worker asks for a frame when it is done), a few per frame; `None` until it is
+/// ready.
+fn sample_texture(ctx: &egui::Context, family: &str, style: Option<&str>, sample: Option<&str>, height: f32) -> Option<egui::TextureHandle> {
     let px = (height * ctx.pixels_per_point()).round().clamp(8.0, 96.0) as u32;
     let key: Key = (family.to_string(), style.unwrap_or("Regular").to_string(), sample.unwrap_or_default().to_string(), px);
+    let texture = |img: egui::ColorImage| ctx.load_texture(format!("font-sample-{family}-{px}"), img, egui::TextureOptions::LINEAR);
     SAMPLES.with(|s| {
         let mut s = s.borrow_mut();
         if let Some(t) = s.ready.get(&key) {
@@ -457,52 +503,41 @@ fn sample_texture(
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Some(rx) = s.pending.get(&key) {
-                match rx.try_recv() {
-                    Ok(img) => {
-                        s.pending.remove(&key);
-                        let tex = img.map(|img| ctx.load_texture(format!("font-sample-{}-{px}", key.0), img, egui::TextureOptions::LINEAR));
-                        s.ready.insert(key, tex.clone());
-                        return tex;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        ctx.request_repaint_after(std::time::Duration::from_millis(30));
-                        return None;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        s.pending.remove(&key);
-                        s.ready.insert(key, None);
-                        return None;
-                    }
-                }
+                let img = match rx.try_recv() {
+                    Ok(img) => img,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => return None,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => None,
+                };
+                s.pending.remove(&key);
+                let tex = img.map(texture);
+                s.ready.insert(key, tex.clone());
+                return tex;
             }
-            if *budget == 0 || s.pending.len() >= 8 {
-                ctx.request_repaint_after(std::time::Duration::from_millis(30));
+            if s.pending.len() >= MAX_PENDING || !s.take_budget(ctx) {
                 return None;
             }
-            *budget -= 1;
             let (tx, rx) = std::sync::mpsc::channel();
             let (f, style, text) = (key.0.clone(), key.1.clone(), key.2.clone());
+            let repaint = ctx.clone();
             let spawned = std::thread::Builder::new().name("font-sample".into()).spawn(move || {
                 // The receiver may be gone (the cache was cleared): nothing to do then.
                 let _ = tx.send(render_sample(&f, &style, &text, px));
+                repaint.request_repaint();
             });
             if spawned.is_ok() {
                 s.pending.insert(key, rx);
             } else {
                 s.ready.insert(key, None);
             }
-            ctx.request_repaint_after(std::time::Duration::from_millis(30));
             None
         }
+        // The web has no threads: a few samples per frame, on this one.
         #[cfg(target_arch = "wasm32")]
         {
-            if *budget == 0 {
-                ctx.request_repaint();
+            if !s.take_budget(ctx) {
                 return None;
             }
-            *budget -= 1;
-            let tex = render_sample(&key.0, &key.1, &key.2, px)
-                .map(|img| ctx.load_texture(format!("font-sample-{}-{px}", key.0), img, egui::TextureOptions::LINEAR));
+            let tex = render_sample(&key.0, &key.1, &key.2, px).map(texture);
             s.ready.insert(key, tex.clone());
             tex
         }
@@ -547,10 +582,40 @@ pub(crate) fn render_sample_for_test(family: &str, text: &str, px: u32) -> Optio
 
 // ---------- applying a pick ----------
 
+/// Is a font previewed on the text (an interaction is open for it)?
+const PREVIEWING: &str = "font-previewing";
+
+/// Where the open font menu was drawn last: (pass, its popup's layer).
+fn open_id() -> egui::Id {
+    egui::Id::new("font-menu-open")
+}
+
+/// Undo a preview whose menu is gone (its panel wasn't drawn: the text was deselected, the panel
+/// closed) or is closing (Escape, a press outside the menu), before anything else sees this
+/// frame's input: the canvas must not act inside the preview's interaction (a drag would be
+/// rolled back with the preview). The shell calls it at the start of each frame.
+pub(crate) fn end_stale_preview(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if !crate::panels::pstate::<bool>(ctx, PREVIEWING) {
+        return;
+    }
+    let drawn = ctx.data(|d| d.get_temp::<(u64, egui::LayerId)>(open_id()));
+    // Drawn in the last pass: still open.
+    let Some((_, layer)) = drawn.filter(|(pass, _)| pass + 1 >= ctx.cumulative_pass_nr()) else {
+        apply(app, ctx, FontPick::EndPreview);
+        return;
+    };
+    // (`layer_id_at` outside `input`: egui's context lock isn't re-entrant.)
+    let (escape, press) = ctx.input(|i| (i.key_pressed(egui::Key::Escape), i.pointer.any_pressed().then(|| i.pointer.interact_pos())));
+    let leaving = escape || press.is_some_and(|at| at.is_none_or(|p| ctx.layer_id_at(p) != Some(layer)));
+    if leaving {
+        apply(app, ctx, FontPick::EndPreview);
+    }
+}
+
 /// What the font menus preview on and apply to: the Type tool's selected range while it edits
 /// text (the whole text when nothing is selected), else the selected text objects.
 pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPick) {
-    let previewing = crate::panels::pstate::<bool>(ctx, "font-previewing");
+    let previewing = crate::panels::pstate::<bool>(ctx, PREVIEWING);
     match pick {
         FontPick::Preview(f, style) => {
             if !previewing {
@@ -558,7 +623,7 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
                 if app.session.begin_interaction("Font").is_err() {
                     return;
                 }
-                crate::panels::set_pstate(ctx, "font-previewing", true);
+                crate::panels::set_pstate(ctx, PREVIEWING, true);
             }
             let (cmd, params) = font_command(app, &f, style.as_deref());
             if let Err(e) = app.session.preview(cmd, &params) {
@@ -569,7 +634,7 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
         FontPick::EndPreview => {
             if previewing {
                 app.session.cancel_interaction().ok();
-                crate::panels::set_pstate(ctx, "font-previewing", false);
+                crate::panels::set_pstate(ctx, PREVIEWING, false);
                 app.sync_views();
             }
         }
@@ -585,7 +650,7 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
         FontPick::Chosen(f, style) => {
             if previewing {
                 app.session.cancel_interaction().ok();
-                crate::panels::set_pstate(ctx, "font-previewing", false);
+                crate::panels::set_pstate(ctx, PREVIEWING, false);
             }
             crate::panels::character::end_typing(app);
             let (cmd, params) = font_command(app, &f, style.as_deref());

@@ -736,26 +736,14 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Canonical panel id for `window.panel`: the dock tabs (`properties`, `layers`, `libraries`)
-/// and every `ICON_PANELS` id, matched case-insensitively. Each icon panel's display label
-/// is accepted too, so `"Layers"` and `"Swatches"` work the way agents write them.
+/// Canonical panel id for `window.panel`: a dock tab's or an icon panel's id or display label,
+/// matched case-insensitively (`"Layers"`, `"swatches"`, `"Color Guide"`).
 fn normalize_panel(input: &str) -> Option<&'static str> {
     let name = input.trim();
-    if name.eq_ignore_ascii_case("properties") {
-        return Some("properties");
-    }
-    if name.eq_ignore_ascii_case("layers") {
-        return Some("layers");
-    }
-    if name.eq_ignore_ascii_case("libraries") {
-        return Some("libraries");
-    }
-    for &(id, label, _) in ICON_PANELS.iter() {
-        if name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label) {
-            return Some(id);
-        }
-    }
-    None
+    let tabs = DockTab::ALL.into_iter().map(|t| (t.info().0, t.info().1));
+    tabs.chain(ICON_PANELS.iter().map(|&(id, label, _)| (id, label)))
+        .find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label))
+        .map(|(id, _)| id)
 }
 
 /// Handle a UI command. `None` = not a UI command (the engine handles it).
@@ -1562,7 +1550,7 @@ const PERSPECTIVE_SLOTS: [[&str; crate::dialogs::perspective_presets::SLOTS]; 3]
 ];
 
 /// Select → saved selections: the n-th saved selection of the active document.
-const SAVED_SELECTION_IDS: [&str; 25] = [
+const SAVED_SELECTION_IDS: [&str; vectorcraft_engine::doc::SavedSelection::MAX] = [
     "select.recall1",
     "select.recall2",
     "select.recall3",
@@ -2592,14 +2580,20 @@ fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks:
                     Some(false) => format!("     {label}"),
                     None => label,
                 };
-                let r = ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc));
-                // Type → Font: each family's sample beside its name (Enable in-menu font previews).
-                if *id == "text.setStyle"
-                    && app.session.prefs.font_preview
-                    && let Some(family) = p.get("font").and_then(Value::as_str)
-                {
-                    crate::font_menu::menu_item_sample(ui, r.rect, family);
-                }
+                // Type → Font: each family's sample after its name (Enable in-menu font previews).
+                let sampled = p.get("font").and_then(Value::as_str).filter(|_| *id == "text.setStyle" && app.session.prefs.font_preview);
+                let r = match sampled {
+                    Some(family) => {
+                        let slot = ui.id().with(("font-sample", family));
+                        let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
+                        let out = ui.add_enabled_ui(en, |ui| button.atom_ui(ui)).inner;
+                        if let Some(rect) = out.rect(slot) {
+                            crate::font_menu::menu_item_sample(ui, rect, family);
+                        }
+                        out.response
+                    }
+                    None => ui.add_enabled(en, egui::Button::new(text).shortcut_text(sc)),
+                };
                 if r.clicked() {
                     *clicked = Some(click_target(label_of(it), id, p));
                     ui.close();
@@ -2718,9 +2712,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
     // Save Selection…: a name dialog, starting from the first free "Selection N".
     if id == "select.save" && p.as_object().is_none_or(|o| o.is_empty()) {
-        let taken = app.session.execute("select.savedList", &json!({})).ok().unwrap_or_default();
-        let taken: Vec<&str> = taken.as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-        let name = (1..).map(|i| format!("Selection {i}")).find(|n| !taken.contains(&n.as_str())).unwrap_or_default();
+        let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedSelection::default_name(&d.doc.saved_selections)).unwrap_or_default();
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Save Selection", "params": {"name": name}}));
         return;
     }

@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Selection…",
             ["Select"],
             None,
-            "{name?} save the current selection under a name, in the document (default \"Selection N\"; an existing name is replaced; at most 25) → {name}",
+            "{name?} save the current selection under a name, in the document (default \"Selection N\"; an existing name is replaced; at most 25, names up to 255 characters) → {name}",
             has_selection,
             save_selection
         ),
@@ -273,21 +273,15 @@ fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "anchors": total }))
 }
 
-/// Illustrator-style saved selections per document, as many as the Select menu lists.
-pub const MAX_SAVED_SELECTIONS: usize = 25;
-
 fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "select.save";
     let st = s.doc()?;
     let ids = st.selection.objects.clone();
     let saved = &st.doc.saved_selections;
-    let name = match str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()) {
-        Some(n) => n.to_string(),
-        None => (1..).map(|i| format!("Selection {i}")).find(|n| !saved.iter().any(|x| &x.name == n)).unwrap_or_default(),
-    };
+    let name = str_param(p, "name").and_then(SavedSelection::clean_name).unwrap_or_else(|| SavedSelection::default_name(saved));
     let existing = saved.iter().position(|x| x.name == name);
-    if existing.is_none() && saved.len() >= MAX_SAVED_SELECTIONS {
-        return Err(bad(C, format!("a document keeps at most {MAX_SAVED_SELECTIONS} saved selections")));
+    if existing.is_none() && saved.len() >= SavedSelection::MAX {
+        return Err(bad(C, format!("a document keeps at most {} saved selections", SavedSelection::MAX)));
     }
     s.edit("Save Selection", |d, _| {
         let entry = SavedSelection { name: name.clone(), objects: ids };
@@ -335,10 +329,10 @@ fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
         let Some(slot) = after.get_mut(i) else { continue };
         if bool_or(e, "delete", false) {
             *slot = None;
-        } else if let Some(n) = str_param(e, "newName").map(str::trim).filter(|n| !n.is_empty())
+        } else if let Some(n) = str_param(e, "newName").and_then(SavedSelection::clean_name)
             && let Some(x) = slot
         {
-            x.name = n.to_string();
+            x.name = n;
         }
     }
     let after: Vec<SavedSelection> = after.into_iter().flatten().collect();

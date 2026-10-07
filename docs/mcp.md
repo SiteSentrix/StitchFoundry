@@ -75,12 +75,17 @@ is thousands of lines an agent pays for again on every change.
 
 | `uriTemplate` | Reads |
 |---|---|
-| `vectorcraft://object/{id}` | One layer or object with its children, bounds and paint |
+| `vectorcraft://object/{id}` | One layer or object with its children, bounds and paint: `document.node {id, summary: true}`, the node as `document.inspect` lists it |
 | `vectorcraft://command/{id}` | One command: label, menu path, shortcut, parameter description, enablement |
 | `vectorcraft://effect/{id}` | One live effect with its parameters and defaults |
 | `vectorcraft://swatch/{name}` | One swatch, colour, gradient or pattern swatch (percent-encode spaces) |
 
 An unknown URI is `-32002`; a template with no value, or a value that names nothing, is `-32602`.
+
+The same reads work as query commands through `run_command`: `document.node {id}` returns the object's full model
+JSON (geometry, appearance, every attribute) and `document.node {id, summary: true}` the compact summary
+`document.inspect` gives for it (id, name, kind, bounds, paint labels, children), without summarizing the whole
+document.
 
 ### Completions
 
@@ -157,7 +162,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `press_key` | `{key, mods?}` | Remote: a real key event. Headless: runs the command or tool bound to that shortcut, or sends the key to the busy tool (digits too: `5` while dragging with the Perspective Selection tool). |
 | `type_text` | `{text}` | Remote only. |
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. Includes UI commands such as `view.*` and `window.*` in remote mode. |
-| `open_panel` | `{panel}` | Remote only. |
+| `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
 | `screenshot` | `{path?, scale?, artboard?, window?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard; `window:true` captures the app window (remote only). |
 | `open_file` | `{path}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`, `.dxf`, `.emf`, `.wmf`, PNG, JPEG, GIF, WebP, TIFF, BMP (an image opens as a document of its pixel size). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. `run_command document.formats` lists the formats. |
 | `save_file` | `{path?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable). |
@@ -515,6 +520,18 @@ paints behind the clipped art and its stroke over it, not clipped, on screen and
 the one highlighted layer or group row, else the one selected group, else the current layer) becomes its clipping path (unpainted, moved to the bottom of the layer,
 so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
 underlines clipping-path names.
+
+## Saved selections
+
+Select → Save Selection… keeps the selected objects under a name, in the document: `select.save {name?}` (default
+the first free "Selection N"; an existing name is replaced with the current selection; at most 25 per document,
+names up to 255 characters) → `{name}`, one undo step. `select.savedList` lists the names in menu order, and
+`select.recall {name}` selects those objects again (ones deleted since are left out) → `{count}`. Edit Selection…
+renames and deletes: `select.editSaved {name, newName?, delete?}`, or several at once as
+`{edits: [{name, newName?, delete?}…]}` in one undo step, where every `name` is the name before the edit and the
+names must stay unique. In the desktop app the saved selections are listed at the bottom of the Select menu
+(`select.recall1` … `select.recall25`). A file's saved selections are checked when it opens: past 25, blank or
+repeated names, and ids the document doesn't have are dropped.
 
 ## Graphic styles
 

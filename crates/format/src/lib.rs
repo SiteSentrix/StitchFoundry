@@ -380,6 +380,8 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     // Saved before v3: the assigned profiles move out of `unknown`.
     doc.migrate_color_profiles();
     doc.fix_next_id();
+    // Untrusted: capped, named and pointing at objects the file has.
+    doc.tidy_saved_selections();
     let profiles = f.profiles.into_iter().filter_map(|(name, icc)| Some((name, base64_decode(&icc.data)?))).collect();
     Ok(NativeFile { doc, info: FileInfo { version: f.version, legacy: f.format == LEGACY_EXTENSION }, profiles })
 }
