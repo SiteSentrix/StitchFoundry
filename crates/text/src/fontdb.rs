@@ -142,6 +142,35 @@ impl FontFace {
             .map(|a| a as f64)
             .unwrap_or(self.upem * 0.5)
     }
+    /// Glyph `gid` set upright in vertical type, from the font's vertical metrics: (its advance down
+    /// the column, the height of its vertical origin, the top of its cell, above the baseline), in
+    /// font units. The origin is the `VORG` table's, else the glyph's top plus its top side bearing.
+    /// `None` when the font has no vertical metrics (`vhea`/`vmtx`), or they make no sense.
+    pub fn vertical_glyph(&self, gid: u32) -> Option<(f64, f64)> {
+        use skrifa::raw::TableProvider;
+        let f = self.skrifa()?;
+        let vmtx = f.vmtx().ok()?;
+        let g = GlyphId::new(gid);
+        let advance = f64::from(vmtx.advance(g)?);
+        let origin = match f.vorg() {
+            Ok(vorg) => f64::from(vorg.vertical_origin_y(g)),
+            Err(_) => {
+                let top = f.glyph_metrics(Size::unscaled(), self.location()).bounds(g).map_or(self.ascent, |b| f64::from(b.y_max));
+                top + f64::from(vmtx.side_bearing(g)?)
+            }
+        };
+        let em = self.upem;
+        // A glyph's cell is somewhere between a tenth of an em and a few ems, its top within a few
+        // ems of the baseline: anything else is a damaged table.
+        (advance > em * 0.1 && advance < em * 4.0 && origin.abs() < em * 4.0).then_some((advance, origin))
+    }
+    /// Height above the baseline of the centre of the face's ideographic em box, in ems: from its
+    /// vertical metrics (an ideograph's cell), else the usual 0.38 (the box running from 0.12 em
+    /// below the baseline to 0.88 em above it).
+    pub fn ideographic_centre(&self) -> f64 {
+        let gid = ['国', 'あ', '一'].into_iter().map(|c| self.glyph_for(c)).find(|g| *g != 0);
+        gid.and_then(|g| self.vertical_glyph(g)).map_or(0.38, |(advance, origin)| (origin - advance * 0.5) / self.upem)
+    }
     /// Glyph id for `c` (0 = .notdef).
     pub fn glyph_for(&self, c: char) -> u32 {
         self.skrifa().and_then(|f| f.charmap().map(c)).map(|g| g.to_u32()).unwrap_or(0)

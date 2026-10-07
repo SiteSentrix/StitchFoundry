@@ -35,7 +35,7 @@ since 2026-10-01.
 |---|---|---|
 | **Breadth:** menus, tools and panels exist | ~90% | 16 menu items still stubbed; every tool implemented except Touch Type; 51 panel modules |
 | **Depth:** each feature behaves like Illustrator | ~69–75% | Strong: paint, appearance and colour (M3), Pathfinder and booleans, selection, drawing, files (M4). Weak: advanced type (~45%), brushes and symbols (in progress), raster effects (~20%) |
-| **Large missing subsystems** | 0–20% | 3D & Materials (0%), Photoshop-style raster effects and the Effect Gallery (~1 of ~56 filters), SVG Filters, CJK composition (vertical type with kinsoku and tate-chu-yoko; ruby, mojikumi and vertical metrics open), Variables (data merge), scripting |
+| **Large missing subsystems** | 0–20% | 3D & Materials (0%), Photoshop-style raster effects and the Effect Gallery (~1 of ~56 filters), SVG Filters, CJK composition (vertical type with kinsoku, tate-chu-yoko and the font's vertical metrics; ruby, mojikumi and proportional vertical metrics open), Variables (data merge), scripting |
 | **Interaction fidelity:** modifiers, cursors, small behaviours | ~30–40% | The dedicated pass hasn't started, and there has been no side-by-side session with Illustrator yet. A power user notices this first |
 | **Look & feel** | ~75–80% | Measured against Illustrator 2026 screenshots (2026-10-02); the panels added since haven't been re-measured |
 | **File interop** | ~85% | SVG/SVGZ, PDF and PDF-compatible `.ai`, EPS, DXF, EMF/WMF, raster formats, PSD export, Place and Links, Package, Print, clipboard flavours. Native `.ai` private data is out of scope by design; DWG has no open spec |
@@ -58,7 +58,7 @@ Ordered by how much each gap blocks someone from switching. Sizes are one-agent 
 3. **3D and Materials:** Extrude & Bevel, Revolve, Inflate and Rotate with lighting and materials, using a software
    renderer in its own crate (layering allows it below L6), with output in SVG/PDF as rasters or projected vectors.
    The largest single gap. 50–80 h.
-4. **Advanced type:** CJK composition for vertical type (ruby, mojikumi, vertical font metrics, manual
+4. **Advanced type:** CJK composition for vertical type (ruby, mojikumi, proportional vertical metrics, manual
    tate-chu-yoko), Optical Margin Alignment, the composer/hyphenation options, tab leaders, a
    spell-check dictionary (open licence), Touch Type and Snap to Glyph. Vertical point, area and path type have
    initial support. 35–48 h across type core and advanced.
@@ -191,7 +191,7 @@ about 1–1.5 agent-hours each, so the other rows (estimated on the older scale)
 | Raster effects (Effect Gallery, Document Raster Effects Settings) | 4 | 20% | ~55 Photoshop-style filters (Artistic, Brush Strokes, Distort, Pixelate, Sketch, Stylize, Texture, Video) and the Effect Gallery; Document Raster Effects Settings and raster effects in PDF are done | 28–42 |
 | 3D and Materials | 4 | 0% | Extrude & Bevel, Revolve, Inflate, Rotate, lighting, materials (software renderer) | 50–80 |
 | Type core | 9 | 78% | composer/hyphenation options, Optical Margin Alignment, hidden characters, Transform Again after a type-area resize (it scales the type), partial selection of type-area anchors by marquee | 15–20 |
-| Type advanced | 4 | 48% | CJK composition for vertical type (ruby, mojikumi, vertical metrics, manual tate-chu-yoko), variable font axis sliders (named instances are styles), tab leaders, spell check (open dictionary), Touch Type, Retype; vertical point/area/path type and Type Orientation have initial support | 20–28 |
+| Type advanced | 4 | 49% | CJK composition for vertical type (ruby, mojikumi, proportional vertical metrics, manual tate-chu-yoko), variable font axis sliders (named instances are styles), tab leaders, spell check (open dictionary), Touch Type, Retype; vertical point/area/path type and Type Orientation have initial support | 20–28 |
 | Symbols, blends, envelopes, Repeat, perspective | 5 | 88% | symbol libraries (original), dynamic symbols, envelope Anti-Alias/Preserve Shape output and warp point editing, brush interpolation in blends (M8 fidelity pass done) | 5–8 |
 | Image Trace, graphs, image tools | 3 | 70% | graph Design/Column/Marker, Create Object Mosaic, Crop Image polish (Vector Halftone is done) | 6–10 |
 | Layers, artboards, document setup | 5 | 80% | Layers panel options depth, artboard presets/rearrange polish (Document Setup and New Document are done) | 5–8 |

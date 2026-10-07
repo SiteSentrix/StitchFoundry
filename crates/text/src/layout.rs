@@ -38,8 +38,9 @@ impl Ctx<'_> {
         shape_range(self.db, self.text, r, &self.runs, &self.opts.features, &mut v);
         if self.vertical {
             tate_chu_yoko(&mut v, |g| self.style_at(g.byte).size);
-            // An upright glyph advances at least one em down the column (the vertical advance of
-            // CJK fonts), centred in it: a narrow mark like § must not overlap its neighbours.
+            // An upright glyph advances down the column by its vertical advance (the font's vertical
+            // metrics; without them at least one em, as CJK fonts' is), centred across it: a narrow
+            // mark like § must not overlap its neighbours.
             for g in v.iter_mut().filter(|g| g.adv > 0.0 && stands_upright(g)) {
                 let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
                 g.dx += extra * 0.5;
@@ -60,17 +61,17 @@ impl Ctx<'_> {
             // Tate-chu-yoko: the block set across the column, centred on its em of it.
             let em = self.style_at(g.byte).size;
             let start = origin.x - t.pen;
-            let centre = Point::new(start + em * 0.5, origin.y - EM_CENTER * em);
+            let centre = Point::new(start + em * 0.5, origin.y - g.face.ideographic_centre() * em);
             let across = Affine::translate((centre.x - t.width * 0.5 + t.ink - origin.x, 0.0));
             let squeeze = Affine::translate((centre.x, 0.0)) * Affine::scale_non_uniform(t.squeeze, 1.0) * Affine::translate((-centre.x, 0.0));
             m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, centre) * squeeze * across * m;
         } else if self.vertical && stands_upright(g) {
-            // Turned about the centre of its em box, which the column's centre line runs through:
-            // the middle of its own cell, not of its advance (tracking and justification add space
+            // Turned about the centre of its cell, which the column's centre line runs through: the
+            // middle of its own cell, not of its advance (tracking and justification add space
             // after the cell, and must not push the glyph off the centre line).
             let em = self.style_at(g.byte).size;
             let cell = if g.adv > 0.0 { upright_cell(g) } else { advance };
-            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - EM_CENTER * em)) * m;
+            m = Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em))) * m;
         }
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
         let outline = if src.elements().is_empty() || g.is_soft_hyphen() || g.ch.is_control() {
@@ -149,7 +150,11 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
     let line_xf = match &t.kind {
         _ if !vertical => Affine::IDENTITY,
         TextKind::OnPath { .. } => Affine::IDENTITY,
-        TextKind::Point => Affine::translate((-EM_CENTER * cx.style_at(0).size, 0.0)) * QUARTER_TURN,
+        TextKind::Point => {
+            let first = cx.style_at(0);
+            let centre = db.face(&first.font_family, &first.font_style).map_or(EM_CENTER, |f| f.ideographic_centre());
+            Affine::translate((-centre * first.size, 0.0)) * QUARTER_TURN
+        }
         _ => QUARTER_TURN,
     };
     match &t.kind {
@@ -215,13 +220,26 @@ fn tate_chu_yoko(g: &mut [SGlyph], size: impl Fn(&SGlyph) -> f64) {
 }
 
 /// The length an upright glyph takes down the column before tracking and justification: its
-/// advance, at least one em.
+/// vertical advance (the font's vertical metrics), else its advance, at least one em.
 fn upright_cell(g: &SGlyph) -> f64 {
-    (g.face.advance(g.gid) * g.sx).max(g.face.units_per_em() * g.sx)
+    match g.face.vertical_glyph(g.gid) {
+        Some((advance, _)) => advance * g.sy,
+        None => (g.face.advance(g.gid) * g.sx).max(g.face.units_per_em() * g.sx),
+    }
+}
+
+/// Height above the baseline (line space) of the centre of an upright glyph's `cell`, the point it
+/// turns about: from the font's vertical metrics, the cell hanging from the glyph's vertical origin;
+/// else the centre of the ideographic em box ([`EM_CENTER`] of the size `em`).
+fn upright_centre(g: &SGlyph, cell: f64, em: f64) -> f64 {
+    match g.face.vertical_glyph(g.gid) {
+        Some((_, origin)) => origin * g.sy - cell * 0.5,
+        None => EM_CENTER * em,
+    }
 }
 
 /// Height of the centre of the ideographic em box above the baseline, in ems (the em box runs
-/// from 0.12 em below the baseline to 0.88 em above it).
+/// from 0.12 em below the baseline to 0.88 em above it), for fonts without vertical metrics.
 const EM_CENTER: f64 = 0.38;
 
 /// A quarter turn clockwise (y down), exact: line space → text space for vertical type.
