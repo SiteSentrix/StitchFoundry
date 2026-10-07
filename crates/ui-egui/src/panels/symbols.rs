@@ -59,15 +59,6 @@ pub(crate) fn chip(ui: &Ui, doc: &Document, r: egui::Rect, name: &str) {
     }
 }
 
-/// Art dragged off the canvas over the symbol list: outline it; dropped, the art becomes a new
-/// symbol (`ids`).
-fn art_drop(ui: &Ui, zone: &egui::Response) -> Option<Vec<u64>> {
-    let drag = zone.dnd_hover_payload::<PanelDrag>()?;
-    let PanelDrag::Art(ids) = &*drag else { return None };
-    ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
-    zone.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
-}
-
 fn current(app: &mut VectorcraftApp) -> Option<String> {
     app.run("symbol.list", json!({})).ok().and_then(|v| v["current"].as_str().map(str::to_string))
 }
@@ -141,7 +132,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.min_rect()
     });
     let zone = ui.interact(list_rect, ui.id().with("symbols-drop"), Sense::hover());
-    if let Some(ids) = art_drop(ui, &zone)
+    if let Some(ids) = widgets::art_drop(ui, &zone)
         && let Err(e) = app.run("symbol.new", json!({ "ids": ids }))
     {
         app.status(e);

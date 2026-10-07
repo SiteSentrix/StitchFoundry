@@ -1141,11 +1141,24 @@ pub enum PanelDrag {
     GraphicStyle(String),
     /// The selected art, dragged off the canvas with the Selection tool: the Graphic Styles panel
     /// makes a style of the first object (`graphicStyle.new`), the Symbols panel a symbol of it all
-    /// (`symbol.new`).
+    /// (`symbol.new`), the Swatches panel a pattern swatch of a copy (`object.pattern.make`) and the
+    /// Brushes panel an Art brush (`brush.new`).
     Art(Vec<vectorcraft_doc::NodeId>),
     /// A Symbols panel symbol: the canvas places an instance of it centred where it is dropped
     /// (`symbol.place`).
     Symbol(String),
+    /// A Brushes panel brush (`def`: its definition, for the chip at the pointer): the path it is
+    /// dropped on takes it (`brush.apply`).
+    Brush { name: String, def: serde_json::Value },
+}
+
+/// A panel list `zone` that takes art dragged off the canvas: outlined while art is held over it;
+/// → the dragged ids when it is released there.
+pub fn art_drop(ui: &Ui, zone: &Response) -> Option<Vec<u64>> {
+    let drag = zone.dnd_hover_payload::<PanelDrag>()?;
+    let PanelDrag::Art(ids) = &*drag else { return None };
+    ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
+    zone.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
 }
 
 /// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour
