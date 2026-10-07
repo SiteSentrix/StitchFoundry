@@ -8,7 +8,8 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Justify {
-    /// Align each paragraph to its automatically detected reading direction.
+    /// Align to the start of each paragraph's direction ([`ParaStyle::direction`]): left for
+    /// left-to-right paragraphs, right for right-to-left ones. New type's alignment.
     Auto,
     #[default]
     Left,
@@ -294,6 +295,19 @@ pub struct ParaStyle {
     /// it and imported text (already set) keep [`Mojikumi::None`].
     #[serde(default, skip_serializing_if = "Mojikumi::is_none")]
     pub mojikumi: Mojikumi,
+    /// Paragraph direction (Paragraph panel): the base direction of each paragraph for
+    /// bidirectional text (UAX #9). None: from each paragraph's first strong character (Hebrew or
+    /// Arabic: right to left).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<ParaDirection>,
+}
+
+/// A paragraph's base direction ([`ParaStyle::direction`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ParaDirection {
+    LeftToRight,
+    RightToLeft,
 }
 
 /// How Japanese punctuation is spaced (JLREQ 3.1). Full-width punctuation is half a glyph and half
@@ -471,7 +485,7 @@ impl TextObject {
             kind: TextKind::Point,
             xf: Affine::translate(origin.to_vec2()),
             runs: vec![TextRun { text: text.into(), style }],
-            para: ParaStyle { justify: Justify::Auto, ..ParaStyle::default() },
+            para: ParaStyle::default(),
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
             wrap: Vec::new(),

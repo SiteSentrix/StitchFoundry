@@ -1250,6 +1250,7 @@
 	Left Indent	左縮排
 	Left Plane	左平面
 	Left-Justified Tab	靠左定位點
+	Left-to-Right Paragraph Direction	從左至右段落方向
 	Left:	左：
 	Legacy Macintosh RGB (Gamma 1.8)	舊版 Macintosh RGB (Gamma 1.8)
 	Legacy vector clipboard	舊版向量剪貼簿
@@ -2085,6 +2086,7 @@
 	Right Indent	右縮排
 	Right Plane	右側平面
 	Right-Justified Tab	靠右定位點
+	Right-to-Left Paragraph Direction	從右至左段落方向
 	Right:	右：
 	Rise…	上升…
 	Roman Hanging Punctuation	羅馬懸掛標點
@@ -2973,5 +2975,3 @@
 	  — {n} characters from another font	  — {n} 個字符來自其他字體
 	[Normal Character Style]	[正常字元樣式]
 	[Normal Paragraph Style]	[正常段落樣式]
-
-	Automatic alignment	自動對齊

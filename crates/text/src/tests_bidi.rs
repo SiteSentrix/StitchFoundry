@@ -136,7 +136,7 @@ fn automatic_alignment_follows_each_paragraph_and_explicit_choices_win() {
     let db = FontDb::global();
     for s in ["שלום", "مرحبا", "123 שלום"] {
         let mut t = TextObject::point(Point::ZERO, s, CharStyle::default());
-        assert_eq!(t.para.justify, vectorcraft_doc::Justify::Auto);
+        t.para.justify = vectorcraft_doc::Justify::Auto;
         let l = layout(db, &t);
         assert!((l.lines[0].x1).abs() < 1e-6, "RTL point type grows left from its anchor: {s}");
         t.kind = TextKind::Area { frame: vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 200.0, 200.0).to_path(0.1)) };
@@ -148,10 +148,69 @@ fn automatic_alignment_follows_each_paragraph_and_explicit_choices_win() {
         let l = layout(db, &t);
         assert!((l.lines[0].x0 + l.lines[0].x1 - 200.0).abs() < 1e-6);
     }
-    let t = TextObject::point(Point::ZERO, "English\nשלום\nمرحبا\nEnglish again", CharStyle::default());
+    let mut t = TextObject::point(Point::ZERO, "English\nשלום\nمرحبا\nEnglish again", CharStyle::default());
+    t.para.justify = vectorcraft_doc::Justify::Auto;
     let l = layout(db, &t);
     assert_eq!(l.lines[0].x0, 0.0);
     assert!(l.lines[1].x0 < 0.0 && l.lines[1].x1.abs() < 1e-6);
     assert!(l.lines[2].x0 < 0.0 && l.lines[2].x1.abs() < 1e-6);
     assert_eq!(l.lines[3].x0, 0.0);
+}
+
+/// Paragraph Direction set on the text wins over its first strong character: English set right to
+/// left keeps its words but ends at the start of its line (Auto alignment: the right), its full
+/// stop on the left; Hebrew set left to right starts on the left.
+#[test]
+fn paragraph_direction_overrides_the_first_strong_character() {
+    use vectorcraft_doc::{Justify, ParaDirection};
+    let db = FontDb::global();
+    let order = |s: &str, direction| {
+        let mut t = TextObject::point(Point::ZERO, s, CharStyle::default());
+        (t.para.justify, t.para.direction) = (Justify::Auto, direction);
+        let l = layout(db, &t);
+        let visible: String = l.glyphs.iter().filter_map(|g| s.get(g.byte..)?.chars().next()).collect();
+        (visible, l.lines[0].rtl, l.lines[0].x1)
+    };
+    let (visible, rtl, x1) = order("Hello.", Some(ParaDirection::RightToLeft));
+    assert_eq!((visible.as_str(), rtl), (".Hello", true));
+    assert!(x1.abs() < 1e-6, "aligned to the right of the anchor: {x1}");
+    assert_eq!(order("Hello.", None).0, "Hello.");
+    assert!(!order("Hello.", None).1);
+    assert_eq!(order("שלום abc", None).0, "abc םולש", "a Hebrew paragraph starts on the right");
+    let (visible, rtl, _) = order("שלום abc", Some(ParaDirection::LeftToRight));
+    assert_eq!((visible.as_str(), rtl), ("םולש abc", false), "set left to right, the Hebrew word comes first on the left");
+    assert!(crate::paragraph_is_rtl("123 שלום", None) && !crate::paragraph_is_rtl("123 שלום", Some(ParaDirection::LeftToRight)));
+}
+
+/// Plain left-to-right text skips the bidi algorithm: nothing is marked right to left.
+#[test]
+fn left_to_right_text_is_untouched() {
+    let l = text_layout("Plain text, 123 (and more).");
+    assert!(l.glyphs.iter().all(|g| !g.rtl) && l.lines.iter().all(|l| !l.rtl));
+    let bytes: Vec<_> = l.glyphs.iter().map(|g| g.byte).collect();
+    assert!(bytes.windows(2).all(|w| w[0] < w[1]));
+}
+
+/// Text drawn in visual order (from a PDF) comes back in logical order, with the direction that
+/// shows it as it was drawn; left-to-right text is left alone.
+#[test]
+fn visual_text_comes_back_in_logical_order() {
+    let logical = |visual: &str| {
+        let (order, rtl) = logical_order(visual)?;
+        let chars: Vec<char> = visual.chars().collect();
+        Some((order.iter().filter_map(|&i| chars.get(i)).collect::<String>(), rtl))
+    };
+    assert_eq!(logical("םולש"), Some(("שלום".to_string(), true)));
+    assert_eq!(logical("123 םולש"), Some(("שלום 123".to_string(), true)));
+    assert_eq!(logical("abc םולש"), Some(("abc שלום".to_string(), false)));
+    assert_eq!(logical("plain text"), None);
+    // Laid out with that direction, the logical text shows as drawn.
+    for visual in ["123 םולש", "abc םולש"] {
+        let (text, rtl) = logical(visual).unwrap();
+        let mut t = TextObject::point(Point::ZERO, &text, CharStyle::default());
+        t.para.direction = Some(if rtl { vectorcraft_doc::ParaDirection::RightToLeft } else { vectorcraft_doc::ParaDirection::LeftToRight });
+        let l = layout(FontDb::global(), &t);
+        let shown: String = l.glyphs.iter().filter_map(|g| text.get(g.byte..)?.chars().next()).collect();
+        assert_eq!(shown, visual);
+    }
 }

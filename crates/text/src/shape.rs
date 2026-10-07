@@ -2,6 +2,8 @@
 
 use std::ops::Range;
 use std::sync::Arc;
+
+use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
 
 use harfrust::{Direction, Feature, ShapeOptions, UnicodeBuffer};
@@ -47,7 +49,7 @@ pub(crate) struct SGlyph {
     /// another, see [`crate::layout`]); the glyph is drawn that much earlier on the line.
     pub lead: f64,
     /// Resolved Unicode bidi embedding level (logical source order).
-    pub level: unicode_bidi::Level,
+    pub level: Level,
 }
 
 /// A glyph's place in a tate-chu-yoko block: the block takes one em of the column, its glyphs side
@@ -182,17 +184,19 @@ pub(crate) fn cap_x_heights(db: &FontDb, st: &CharStyle) -> (f64, f64) {
     (face.cap_height * k, face.x_height * k)
 }
 
-/// Shape `text[range]`, where `runs` gives each run's byte range in `text` and style.
+/// Shape `text[range]`, where `runs` gives each run's byte range in `text` and style, and `levels`
+/// each byte's bidi embedding level from `range.start` (empty: all left to right). Glyphs come out
+/// in logical order, right-to-left ones shaped right to left.
 pub(crate) fn shape_range(
     db: &FontDb,
     text: &str,
     range: Range<usize>,
     runs: &[(Range<usize>, &CharStyle)],
     feats: &OtFeatures,
+    levels: &[Level],
     out: &mut Vec<SGlyph>,
 ) {
-    let Some(part) = text.get(range.clone()) else { return };
-    let bidi = unicode_bidi::BidiInfo::new(part, None);
+    let level_at = |i: usize| levels.get(i - range.start).copied().unwrap_or_else(Level::ltr);
     let output_start = out.len();
     for (ri, (rr, st)) in runs.iter().enumerate() {
         let a = rr.start.max(range.start);
@@ -205,19 +209,12 @@ pub(crate) fn shape_range(
         // Synthesized Small Caps shape lowercase letters separately (as smaller capitals).
         let small_caps = st.small_caps.is_some() && !st.all_caps;
         // Split into segments by font coverage (and case, for Small Caps).
-        let mut seg = Segment {
-            range: a..a,
-            run: ri,
-            st,
-            face: primary.clone(),
-            small: false,
-            level: bidi.levels.get(a - range.start).copied().unwrap_or(unicode_bidi::Level::ltr()),
-        };
+        let mut seg = Segment { range: a..a, run: ri, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: Vec<(char, Arc<FontFace>)> = Vec::new();
         let mut script = Script::Common;
         for (i, c) in text[a..b].char_indices() {
             let i = a + i;
-            let level = bidi.levels.get(i - range.start).copied().unwrap_or(unicode_bidi::Level::ltr());
+            let level = level_at(i);
             let covered = c.is_whitespace() || c.is_control() || pmap.as_ref().is_none_or(|m| m.map(c).is_some());
             let face = if covered {
                 primary.clone()
@@ -229,7 +226,7 @@ pub(crate) fn shape_range(
                 f
             };
             let small = small_caps && c.is_lowercase();
-            let next_script = c.script();
+            let next_script = shaping_script(c);
             let strong_script = !matches!(next_script, Script::Common | Script::Inherited);
             let script_change = strong_script && script != Script::Common && script != next_script;
             // Combining marks stay with their base.
@@ -249,8 +246,22 @@ pub(crate) fn shape_range(
             shape_segment(text, &seg, feats, out);
         }
     }
-    // Line breaking works in logical order; visual ordering happens after wrapping.
-    out[output_start..].sort_by_key(|g| g.byte);
+    // Right-to-left segments come out of the shaper in visual order: back to logical order for
+    // line breaking (the lines are put in visual order once broken).
+    if levels.iter().any(|l| l.is_rtl())
+        && let Some(o) = out.get_mut(output_start..)
+    {
+        o.sort_by_key(|g| g.byte);
+    }
+}
+
+/// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
+/// Bopomofo, shaped together (splitting them would cost a shaper call per change of script).
+fn shaping_script(c: char) -> Script {
+    match c.script() {
+        Script::Hiragana | Script::Katakana | Script::Bopomofo => Script::Han,
+        s => s,
+    }
 }
 
 /// A piece of one run shaped in one go: one face and, for Small Caps, one case.
@@ -261,7 +272,7 @@ struct Segment<'a> {
     face: Arc<FontFace>,
     /// Lowercase letters drawn as synthesized small capitals.
     small: bool,
-    level: unicode_bidi::Level,
+    level: Level,
 }
 
 fn is_mark(c: char) -> bool {

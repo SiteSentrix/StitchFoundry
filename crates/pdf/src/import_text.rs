@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use kurbo::{Affine, BezPath, Point, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, ParaDirection, TextKind, TextObject, TextRun};
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
 #[derive(Clone, Copy, Debug)]
@@ -262,6 +262,9 @@ impl TextLine {
         let first = runs.next()?;
         let mut t = TextObject::point(Point::ORIGIN, &first.text, first.style);
         t.runs.extend(runs);
+        if self.upright.is_none() {
+            to_logical(&mut t);
+        }
         let angle = self.at.dir.atan2();
         t.xf = Affine::translate(self.at.origin.to_vec2()) * Affine::rotate(angle);
         let db = vectorcraft_text::FontDb::global();
@@ -369,4 +372,21 @@ impl Families {
             None => (spaced(strip_ps(fam)).trim().to_string(), style, false),
         }
     }
+}
+
+/// Hebrew or Arabic comes from a PDF in visual order (each glyph where it is drawn): put `t`'s text
+/// back in logical order, with the paragraph direction that shows it as drawn.
+fn to_logical(t: &mut TextObject) {
+    let Some((order, rtl)) = vectorcraft_text::logical_order(&t.plain_text()) else { return };
+    let chars: Vec<(char, usize)> = t.runs.iter().enumerate().flat_map(|(i, r)| r.text.chars().map(move |c| (c, i))).collect();
+    let mut runs: Vec<(usize, String)> = Vec::with_capacity(t.runs.len());
+    for &(c, i) in order.iter().filter_map(|&k| chars.get(k)) {
+        match runs.last_mut() {
+            Some((run, text)) if *run == i => text.push(c),
+            _ => runs.push((i, c.to_string())),
+        }
+    }
+    let runs = runs.into_iter().filter_map(|(i, text)| Some(TextRun { text, style: t.runs.get(i)?.style.clone() })).collect();
+    t.runs = runs;
+    t.para.direction = Some(if rtl { ParaDirection::RightToLeft } else { ParaDirection::LeftToRight });
 }

@@ -273,3 +273,36 @@ fn ink_width_of(_font: &Font, size: f32, text: &str) -> f32 {
     let style = vectorcraft_doc::CharStyle { font_family: "Source Sans 3".into(), size: f64::from(size), ..Default::default() };
     ink_width(&TextObject::point(vectorcraft_geom::Point::ZERO, text, style)) as f32
 }
+
+/// Hebrew drawn by a PDF (in visual order, as VectorCraft's own export draws it) comes back as type
+/// in logical order that shows as drawn. Needs an installed font with Hebrew (skipped without one).
+#[test]
+fn hebrew_comes_back_in_logical_order() {
+    let db = vectorcraft_text::FontDb::global();
+    let Some(face) =
+        ["Arial", "Noto Sans Hebrew", "DejaVu Sans", "Liberation Sans"].into_iter().filter_map(|f| db.face(f, "Regular")).find(|f| f.covers('ש'))
+    else {
+        return;
+    };
+    for text in ["שלום עולם", "שלום 123", "Hello שלום"] {
+        let style = vectorcraft_doc::CharStyle { font_family: face.family.clone(), size: 24.0, ..Default::default() };
+        let mut d = Document::new(300.0, 200.0);
+        let l = d.layers[0].id;
+        let n = vectorcraft_doc::Node::new(
+            d.alloc_id(),
+            NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), text, style))),
+        );
+        d.insert(Some(l), 0, n).unwrap();
+        let settings: PdfSettings = serde_json::from_value(serde_json::json!({"advanced": {"outlineText": false}})).unwrap();
+        let bytes = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
+        let r = import_with_report(&bytes, &ImportOptions::default()).unwrap();
+        let t = texts(&r.document);
+        assert_eq!(t.iter().map(TextObject::plain_text).collect::<Vec<_>>(), [text], "{:?}", r.warnings);
+        let shown = |t: &TextObject| -> String {
+            let plain = t.plain_text();
+            vectorcraft_text::layout(db, t).glyphs.iter().filter_map(|g| plain.get(g.byte..)?.chars().next()).collect()
+        };
+        let original = TextObject::point(vectorcraft_geom::Point::ZERO, text, vectorcraft_doc::CharStyle::default());
+        assert_eq!(shown(&t[0]), shown(&original), "{text}");
+    }
+}

@@ -26,7 +26,7 @@ use std::str::FromStr;
 
 use usvg::roxmltree;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, StrokeLayer, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, ParaDirection, StrokeLayer, TextKind, TextObject, TextRun};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect};
 use vectorcraft_text::{FontDb, TextLayout};
@@ -566,9 +566,6 @@ impl Ctx {
         });
         let vertical = self.css.prop(t, "writing-mode").is_some_and(|m| m.starts_with("tb") || m.starts_with("vertical"));
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
-        // Imported SVG anchors are resolved into positions below, including textPath offsets.
-        // Keep their explicit placement instead of applying the new-text automatic alignment.
-        obj.para.justify = Justify::Left;
         let mut breaks: Vec<Break> = vec![];
         if let Some((tp, bp)) = path {
             // Along the path: dx is extra advance, dy shifts off the path.
@@ -615,6 +612,13 @@ impl Ctx {
         }
         let (runs, servers) = assemble(&cells, &breaks).0;
         obj.runs = runs;
+        // SVG text runs left to right unless `direction: rtl` says otherwise, whatever its first
+        // strong character: pinned when that would read as right to left.
+        if self.css.prop(t, "direction").is_some_and(|d| d.trim() == "rtl") {
+            obj.para.direction = Some(ParaDirection::RightToLeft);
+        } else if obj.plain_text().split('\n').any(|p| vectorcraft_text::paragraph_is_rtl(p, None)) {
+            obj.para.direction = Some(ParaDirection::LeftToRight);
+        }
         // The placeholder covers the text (laid out when a paint server needs its bounding box).
         let b = if paints.is_empty() { obj.bounds() } else { Some(obj.xf.transform_rect_bbox(measure(&obj).bounds)) }.unwrap_or_default();
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
@@ -771,7 +775,6 @@ fn lines(
 /// A left-aligned point text of `runs` at the origin (for measuring).
 fn with_runs(runs: Vec<TextRun>) -> TextObject {
     let mut t = TextObject::point(Point::ZERO, "", CharStyle::default());
-    t.para.justify = Justify::Left;
     t.runs = runs;
     t
 }

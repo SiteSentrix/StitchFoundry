@@ -1642,10 +1642,11 @@ impl Writer<'_> {
     /// (`text-anchor`) at their centre or right end, so they stay aligned in a viewer whose font
     /// differs; other lines are placed where each style run (and, justified, each word) starts.
     fn text(&mut self, n: &Node, t: &TextObject) {
-        // SVG's live-text reconstruction assumes ascending source clusters. Preserve bidi
-        // shaping and placement exactly until directional live-text export is implemented.
+        // Live SVG text is written in logical order from left-aligned pieces: bidirectional text
+        // (and right-to-left paragraphs) keep their look as outlines until it is written with
+        // `direction`/`unicode-bidi`.
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-        if lay.glyphs.iter().any(|g| g.rtl) {
+        if lay.glyphs.iter().any(|g| g.rtl) || lay.lines.iter().any(|l| l.rtl) {
             self.warn("bidirectional text is outlined to preserve shaping and visual order");
             return self.text_outlines(n, t);
         }

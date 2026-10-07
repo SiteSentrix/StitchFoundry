@@ -400,23 +400,6 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
     out
 }
 
-#[cfg(test)]
-mod tests;
-#[cfg(test)]
-mod tests_embed;
-#[cfg(test)]
-mod tests_scripts;
-#[cfg(test)]
-mod tests_snap;
-#[cfg(test)]
-mod tests_sysfonts;
-#[cfg(test)]
-mod tests_typo;
-#[cfg(test)]
-mod tests_variable;
-#[cfg(test)]
-mod tests_vertical;
-
 /// Move horizontally through visual caret stops; source offsets stay in logical order.
 pub fn caret_horizontal(layout: &TextLayout, byte: usize, right: bool) -> usize {
     let li = layout.line_of(byte);
@@ -446,15 +429,40 @@ pub fn caret_horizontal(layout: &TextLayout, byte: usize, right: bool) -> usize 
         )
 }
 
+/// Does paragraph `text` run right to left: its `direction`, else (None) from its first strong
+/// character (numbers and punctuation don't count)?
+pub fn paragraph_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>) -> bool {
+    layout::is_rtl(layout::para_bidi(text, direction).as_ref())
+}
+
+/// Text stored in visual order (as PDF content draws it, each glyph where it is drawn), back in
+/// logical order: the order of its characters (indices into `visual.chars()`) and whether its
+/// paragraph runs right to left; laid out that way, it reads as drawn. `None` when nothing in it is
+/// right to left (the order stands).
+pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
+    let bidi = layout::para_bidi(visual, None)?;
+    let para = bidi.paragraphs.first()?;
+    // Reordering is its own inverse for runs of one direction (the usual case): the visual order
+    // of the visual text is its logical order.
+    let levels = bidi.reordered_levels_per_char(para, para.range.clone());
+    Some((unicode_bidi::BidiInfo::reorder_visual(&levels), para.level.is_rtl()))
+}
+
+#[cfg(test)]
+mod tests;
 #[cfg(test)]
 mod tests_bidi;
-
-/// Resolve automatic alignment from a paragraph's first strong Unicode character.
-/// Numbers and punctuation do not force a Hebrew/Arabic paragraph to align left.
-pub fn automatic_alignment(text: &str) -> vectorcraft_doc::Justify {
-    if unicode_bidi::BidiInfo::new(text, None).paragraphs.first().is_some_and(|p| p.level.is_rtl()) {
-        vectorcraft_doc::Justify::Right
-    } else {
-        vectorcraft_doc::Justify::Left
-    }
-}
+#[cfg(test)]
+mod tests_embed;
+#[cfg(test)]
+mod tests_scripts;
+#[cfg(test)]
+mod tests_snap;
+#[cfg(test)]
+mod tests_sysfonts;
+#[cfg(test)]
+mod tests_typo;
+#[cfg(test)]
+mod tests_variable;
+#[cfg(test)]
+mod tests_vertical;
