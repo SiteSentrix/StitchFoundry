@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Artboard",
             [],
             None,
-            "{index, dx, dy, moveArt?: bool} move an artboard (and the unlocked art fully inside it)",
+            "{index, dx, dy, moveArt?: bool, copy?: bool} move an artboard (and the unlocked art fully inside it); copy leaves them and moves a duplicate → {index}",
             has_doc,
             artboard_move
         ),
@@ -399,15 +399,33 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let scale_strokes = s.prefs.scale_strokes;
-    s.edit("Move Artboard", |d, _| {
-        let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-        a.rect = a.rect + dv;
+    let copy = bool_or(p, "copy", false);
+    let index = s.edit(if copy { "Duplicate Artboard" } else { "Move Artboard" }, |d, _| {
+        let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+        // A copy keeps the artboard (and its art) where they are and moves duplicates instead.
+        let target = if copy {
+            let mut a = src.clone();
+            a.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+            a.name = format!("{} copy", src.name);
+            d.artboards.push(a);
+            d.artboards.len() - 1
+        } else {
+            i
+        };
+        if let Some(a) = d.artboards.get_mut(target) {
+            a.rect = src.rect + dv;
+        }
         for id in &art {
-            if let Some(n) = d.node_mut(*id) {
+            if copy {
+                let (Some((parent, at, _)), Some(n)) = (d.position(*id), d.node(*id).cloned()) else { continue };
+                let mut c = d.reid(&n);
+                c.transform(Affine::translate(dv), scale_strokes);
+                d.insert(parent, at + 1, c)?;
+            } else if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(dv), scale_strokes);
             }
         }
-        Ok(())
+        Ok(target)
     })?;
-    Ok(json!({ "index": i, "moved": art.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(json!({ "index": index, "moved": art.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }

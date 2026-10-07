@@ -1,7 +1,8 @@
 //! Artboard tool (Shift+O).
 //!
 //! Click an artboard to make it active (dashed bounds, 8 handles and its name). Drag inside moves
-//! it (with its artwork when the `moveArt` option is on, Shift constrains), drag a handle resizes it
+//! it (with its artwork when the `moveArt` option is on, Shift constrains; Alt moves a copy and
+//! leaves the artboard where it was), drag a handle resizes it
 //! (Shift proportional, Alt from centre), drag on the pasteboard draws a new artboard, Delete removes
 //! the active one and Escape returns to the Selection tool.
 
@@ -14,9 +15,23 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 
 #[derive(Clone, Copy, Debug)]
 enum Drag {
-    Move { index: usize, start: Point, began: bool },
-    Resize { index: usize, handle: Handle, rect: Rect, began: bool },
-    Create { start: Point, cur: Point },
+    /// `copy`: Alt was held at the last drag event (the step under way is a duplicate).
+    Move {
+        index: usize,
+        start: Point,
+        began: bool,
+        copy: bool,
+    },
+    Resize {
+        index: usize,
+        handle: Handle,
+        rect: Rect,
+        began: bool,
+    },
+    Create {
+        start: Point,
+        cur: Point,
+    },
 }
 
 pub struct ArtboardTool {
@@ -66,25 +81,33 @@ impl Tool for ArtboardTool {
                 }
                 if let Some(i) = (0..cx.doc.artboards.len()).rev().find(|i| cx.doc.artboards[*i].rect.contains(p)) {
                     self.active = i;
-                    self.drag = Some(Drag::Move { index: i, start: p, began: false });
+                    self.drag = Some(Drag::Move { index: i, start: p, began: false, copy: false });
                 } else {
                     let (p, _) = crate::guides::snap_draw(cx, p, &[]);
                     self.drag = Some(Drag::Create { start: p, cur: p });
                 }
                 vec![]
             }
-            (PointerKind::Drag, Some(Drag::Move { index, start, began })) => {
+            (PointerKind::Drag, Some(Drag::Move { index, start, began, copy })) => {
                 let mut out = vec![];
+                let label = |copy: bool| if copy { "Duplicate Artboard" } else { "Move Artboard" };
                 if !began {
                     if p.distance(start) < cx.tol(3.0) {
                         return out;
                     }
-                    out.push(Action::Begin("Move Artboard".into()));
+                    out.push(Action::Begin(label(m.alt).into()));
+                } else if m.alt != copy {
+                    // Alt pressed or released mid-drag: start over as a copy or a move.
+                    out.push(Action::Cancel);
+                    out.push(Action::Begin(label(m.alt).into()));
                 }
-                self.drag = Some(Drag::Move { index, start, began: true });
+                self.drag = Some(Drag::Move { index, start, began: true, copy: m.alt });
                 let d = move_delta(start, p, m.shift);
                 self.preview = cx.doc.artboards.get(index).map(|a| a.rect + d);
-                out.push(Action::Preview("artboard.move".into(), json!({ "index": index, "dx": d.x, "dy": d.y, "moveArt": self.move_art })));
+                out.push(Action::Preview(
+                    "artboard.move".into(),
+                    json!({ "index": index, "dx": d.x, "dy": d.y, "moveArt": self.move_art, "copy": m.alt }),
+                ));
                 out
             }
             (PointerKind::Drag, Some(Drag::Resize { index, handle, rect, began })) => {
@@ -112,7 +135,14 @@ impl Tool for ArtboardTool {
                 self.drag = None;
                 self.preview = None;
                 match d {
-                    Drag::Move { began: true, .. } | Drag::Resize { began: true, .. } => vec![Action::Commit],
+                    Drag::Move { began: true, copy, .. } => {
+                        // The copy, last in the previewed document, becomes the active artboard.
+                        if copy {
+                            self.active = cx.doc.artboards.len().saturating_sub(1);
+                        }
+                        vec![Action::Commit]
+                    }
+                    Drag::Resize { began: true, .. } => vec![Action::Commit],
                     Drag::Create { start, cur } => {
                         let r = Rect::from_points(start, cur);
                         if r.width() < cx.tol(3.0) || r.height() < cx.tol(3.0) {
@@ -251,7 +281,7 @@ mod tests {
         assert_eq!(t.active, 1);
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 710.0, 120.0));
         assert_eq!(a[0], Action::Begin("Move Artboard".into()));
-        assert_eq!(a[1], Action::Preview("artboard.move".into(), json!({"index": 1, "dx": 10.0, "dy": 20.0, "moveArt": true})));
+        assert_eq!(a[1], Action::Preview("artboard.move".into(), json!({"index": 1, "dx": 10.0, "dy": 20.0, "moveArt": true, "copy": false})));
         assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 710.0, 120.0)), vec![Action::Commit]);
         assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "02 - Artboard 2")));
         // Handle drag resizes.
@@ -269,5 +299,26 @@ mod tests {
         // Delete removes the active artboard.
         assert_eq!(t.key(&cx, ToolKey::Delete, Mods::default()), vec![Action::Exec("artboard.delete".into(), json!({"index": 1}))]);
         assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::SwitchTool("selection".into())]);
+    }
+
+    #[test]
+    fn alt_drag_moves_a_copy_of_the_artboard() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Mods::default() };
+        let moved =
+            |dx: f64, copy: bool| Action::Preview("artboard.move".into(), json!({"index": 0, "dx": dx, "dy": 0.0, "moveArt": true, "copy": copy}));
+        let mut t = ArtboardTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 100.0, 100.0).with_mods(alt));
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 100.0).with_mods(alt));
+        assert_eq!(a, vec![Action::Begin("Duplicate Artboard".into()), moved(50.0, true)]);
+        // Alt released mid-drag: a plain move after all, and back.
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 100.0));
+        assert_eq!(a, vec![Action::Cancel, Action::Begin("Move Artboard".into()), moved(60.0, false)]);
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 170.0, 100.0).with_mods(alt));
+        assert_eq!(a, vec![Action::Cancel, Action::Begin("Duplicate Artboard".into()), moved(70.0, true)]);
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 100.0).with_mods(alt)), vec![Action::Commit]);
     }
 }
