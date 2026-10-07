@@ -966,8 +966,10 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
             let add = ui.input(|i| i.modifiers.alt);
             ("graphicStyle.apply", json!({"name": name, "ids": [hit.top_object(st.isolation).0], "add": add}))
         }
-        // A brush from the Brushes panel: the path it lands on takes it.
-        widgets::PanelDrag::Brush { name, .. } => ("brush.apply", json!({"name": name, "ids": [hit.leaf.0]})),
+        // A brush from the Brushes panel: the path it lands on takes it (a compound path as a whole).
+        widgets::PanelDrag::Brush { name, .. } => {
+            ("brush.apply", json!({"name": name, "ids": [vectorcraft_tools::xform::paint_owner(&st.doc, hit.leaf).0]}))
+        }
         // Art dragged back onto the canvas: its move was already dropped. (A symbol was placed
         // above.)
         widgets::PanelDrag::Art(_) | widgets::PanelDrag::Symbol(_) => return,
