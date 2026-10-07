@@ -8,7 +8,7 @@ use vectorcraft_doc::{CharStyle, Justify, ParaStyle, PathEffect, TextKind, TextO
 use crate::composer::{Breakpoint, compose};
 use crate::fontdb::FontDb;
 use crate::hyphen::hyphen_points;
-use crate::shape::{SGlyph, Tcy, cap_x_heights, hyphen_glyph, no_line_end, no_line_start, shape_range, style_metrics};
+use crate::shape::{SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, no_line_end, no_line_start, shape_range, style_metrics};
 use crate::{Composer, FirstBaseline, LayoutOptions, LineInfo, OtFeatures, PositionedGlyph, TextLayout};
 
 const EPS: f64 = 1e-6;
@@ -828,10 +828,24 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 Justify::JustifyAll => (0, true),
             };
             let justify = justify && regions.is_some();
-            let (mut per_space, mut per_gap) = (0.0, 0.0);
+            let (mut per_space, mut per_gap, mut per_cjk) = (0.0, 0.0, 0.0);
             let spaces = sg[i..trimmed].iter().filter(|g| g.is_space()).count();
+            // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
+            // gaps next to a CJK character, not inside a Latin word or a tate-chu-yoko block.
+            let cjk_gap = |j: usize| {
+                j + 1 < trimmed
+                    && sg
+                        .get(j)
+                        .zip(sg.get(j + 1))
+                        .is_some_and(|(a, b)| !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch)))
+            };
+            let cjk_gaps = (i..trimmed).filter(|&j| cjk_gap(j)).count();
             if justify && (width - w).abs() > EPS {
-                if spaces > 0 {
+                if cjk_gaps > 0 && width > w {
+                    // Spread over the CJK gaps and the word spaces alike.
+                    let per = (width - w) / (cjk_gaps + spaces) as f64;
+                    (per_space, per_cjk) = (per, per);
+                } else if spaces > 0 {
                     // Composed lines may shrink word spaces (never below zero).
                     per_space =
                         ((width - w) / spaces as f64).max(-sg[i..trimmed].iter().filter(|g| g.is_space()).map(|g| g.adv).fold(f64::MAX, f64::min));
@@ -870,6 +884,10 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 } else if j < trimmed {
                     if g.is_space() {
                         adv += per_space;
+                    } else if per_cjk != 0.0 {
+                        if cjk_gap(j) {
+                            adv += per_cjk;
+                        }
                     } else if j + 1 < trimmed && sg.get(j + 1).is_some_and(|next| !next.continues_tcy()) {
                         // Between glyphs, never inside a tate-chu-yoko block (one cell).
                         adv += per_gap;
