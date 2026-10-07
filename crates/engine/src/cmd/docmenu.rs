@@ -324,9 +324,14 @@ fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
     let before = s.doc()?.doc.saved_selections.clone();
     // Edits name the selections as they are now, so they don't depend on each other's order.
     let mut after: Vec<Option<SavedSelection>> = before.iter().cloned().map(Some).collect();
+    // Files may hold any number of saved selections: keep this linear.
+    let mut index = std::collections::HashMap::with_capacity(before.len());
+    for (i, x) in before.iter().enumerate() {
+        index.entry(x.name.as_str()).or_insert(i);
+    }
     for e in edits {
         let name = str_param(e, "name").ok_or_else(|| bad(C, "missing name"))?;
-        let i = before.iter().position(|x| x.name == name).ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
+        let i = *index.get(name).ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
         let Some(slot) = after.get_mut(i) else { continue };
         if bool_or(e, "delete", false) {
             *slot = None;
@@ -337,8 +342,9 @@ fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let after: Vec<SavedSelection> = after.into_iter().flatten().collect();
-    for (i, x) in after.iter().enumerate() {
-        if after.iter().take(i).any(|y| y.name == x.name) {
+    let mut names = std::collections::HashSet::with_capacity(after.len());
+    for x in &after {
+        if !names.insert(x.name.as_str()) {
             return Err(bad(C, format!("two saved selections would be named `{}`", x.name)));
         }
     }
