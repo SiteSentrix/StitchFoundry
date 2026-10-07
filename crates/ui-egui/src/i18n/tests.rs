@@ -254,7 +254,9 @@ fn complete_languages_translate_every_menu_string() {
     assert!(strings.len() > 500, "menu scan found only {} strings", strings.len());
     for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
         let cat = l.catalog();
-        let missing: Vec<_> = strings.iter().filter(|s| cat.plain(s).is_none()).collect();
+        // Languages that keep the product, workspace and perspective preset names in English.
+        let kept = |s: &str| KEEPS_MENU_NAMES.contains(&l.code) && MENU_KEEP_AS_IS.contains(&s);
+        let missing: Vec<_> = strings.iter().filter(|s| !kept(s) && cat.plain(s).is_none()).collect();
         assert!(missing.is_empty(), "{}: {} untranslated menu strings: {missing:#?}", l.code, missing.len());
     }
 }
@@ -325,6 +327,9 @@ fn cs() -> Lang {
 /// Menu labels the menu-complete catalogs (Czech, Japanese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
 /// Each language's own name in the Language menu is left alone too.
+/// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
+const KEEPS_MENU_NAMES: [&str; 2] = ["cs", "ja"];
+
 const MENU_KEEP_AS_IS: &[&str] = &[
     "VectorCraft",
     "OpenType",
@@ -430,7 +435,7 @@ fn menu_catalogs_translate_every_menu_label() {
     all.extend(crate::menus::CONTEXT_LABELS.iter().map(|l| l.to_string()));
     all.sort();
     all.dedup();
-    for code in ["cs", "ja"] {
+    for code in KEEPS_MENU_NAMES {
         let lang = Lang::from_code(code).expect("registered");
         let missing: Vec<&String> = all.iter().filter(|l| !has(lang, l)).collect();
         assert!(missing.is_empty(), "{code}: untranslated menu labels: {missing:?}");
