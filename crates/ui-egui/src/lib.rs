@@ -513,6 +513,9 @@ impl VectorcraftApp {
         {
             *slot = id.to_string();
         }
+        if canvas::is_selection_tool(id) {
+            self.ui.last_selection_tool = id.to_string();
+        }
         toolbar::remember(self, id);
         self.ui.flyout = None;
     }
