@@ -329,3 +329,38 @@ fn mojikumi_halves_line_end_and_consecutive_punctuation() {
         assert_eq!(adv("一二", Mojikumi::LineEndHalf), adv("一二", Mojikumi::None));
     }
 }
+
+/// Mojikumi (JLREQ 3.2.2): a quarter em between Japanese and Latin letters or digits, either way
+/// round, horizontal and vertical; none inside a tate-chu-yoko block, none left at a line's end, and
+/// none with Mojikumi None. Needs a font with full-width Japanese (skipped without one).
+#[test]
+fn mojikumi_spaces_japanese_from_latin_by_a_quarter_em() {
+    use vectorcraft_doc::Mojikumi;
+    let lay = |text: &str, m: Mojikumi, vertical_type: bool| {
+        let mut t = TextObject::point(Point::ZERO, text, CharStyle { size: 20.0, ..CharStyle::default() });
+        t.xf = Affine::IDENTITY;
+        t.vertical = vertical_type;
+        t.para.mojikumi = m;
+        layout(FontDb::global(), &t)
+    };
+    if (lay("雅", Mojikumi::None, false).glyphs[0].advance - 20.0).abs() > 2.0 {
+        return; // no font with full-width Japanese here
+    }
+    for vertical_type in [false, true] {
+        let extra = |text: &str| -> Vec<f64> {
+            let (on, off) = (lay(text, Mojikumi::LineEndHalf, vertical_type), lay(text, Mojikumi::None, vertical_type));
+            on.glyphs.iter().zip(&off.glyphs).map(|(a, b)| a.advance - b.advance).collect()
+        };
+        // 雅楽 2026 年: after 楽 and after 6.
+        assert_eq!(extra("雅楽2026年").iter().map(|x| (x * 100.0).round() / 100.0).collect::<Vec<_>>(), [0.0, 5.0, 0.0, 0.0, 0.0, 5.0, 0.0]);
+        // Latin first, and nothing after the last character of the line.
+        assert_eq!(extra("AB雅").iter().map(|x| x.round()).collect::<Vec<_>>(), [0.0, 5.0, 0.0]);
+        assert_eq!(extra("雅A").iter().map(|x| x.round()).collect::<Vec<_>>(), [5.0, 0.0]);
+        // Punctuation takes no Japanese–Latin space (the closing bracket isn't at the line's end).
+        assert!(extra("「A」です").iter().all(|x| x.abs() < 0.01), "{:?}", extra("「A」です"));
+    }
+    // A tate-chu-yoko block is set as a Japanese character, with no space inside or around it.
+    let on = lay("第10回", Mojikumi::LineEndHalf, true);
+    let off = lay("第10回", Mojikumi::None, true);
+    assert!(on.glyphs.iter().zip(&off.glyphs).all(|(a, b)| (a.advance - b.advance).abs() < 0.01));
+}

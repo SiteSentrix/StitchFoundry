@@ -264,6 +264,53 @@ fn compress_punctuation(sg: &mut [SGlyph]) -> Vec<bool> {
     lost_after
 }
 
+/// The space between Japanese and Latin letters or digits (JLREQ 3.2.2: a quarter em of the
+/// Japanese characters' size), with Line-end Punctuation Half Width.
+const WAKAN_AKI: f64 = 0.25;
+
+/// A Japanese character for the space next to Latin text: kana and kanji (and full-width
+/// letters), not punctuation or symbols.
+fn is_japanese_letter(c: char) -> bool {
+    is_cjk(c)
+        && !matches!(c as u32, 0x3000..=0x303F | 0xFF01..=0xFF0F | 0xFF1A..=0xFF20 | 0xFF3B..=0xFF40 | 0xFF5B..=0xFF65)
+        && c != '・'
+        && punct(c).is_none()
+}
+
+/// A Latin letter or digit (or another script's letter), set proportionally.
+fn is_latin_letter(c: char) -> bool {
+    c.is_alphanumeric() && !is_cjk(c)
+}
+
+/// Mojikumi (JLREQ 3.2.2): a quarter em between a Japanese character and a Latin letter or digit,
+/// either way round, added after the first of the two. Returns what each glyph got after it (taken
+/// off again when the line ends there).
+fn space_japanese_and_latin(sg: &mut [SGlyph]) -> Vec<f64> {
+    let mut added = vec![0.0; sg.len()];
+    for j in 1..sg.len() {
+        let (before, after) = sg.split_at_mut(j);
+        let (Some(a), Some(b)) = (before.last_mut(), after.first()) else { continue };
+        if a.tcy.is_some() || b.tcy.is_some() {
+            continue;
+        }
+        let japanese = if is_japanese_letter(a.ch) && is_latin_letter(b.ch) {
+            Some(&*a)
+        } else if is_latin_letter(a.ch) && is_japanese_letter(b.ch) {
+            Some(b)
+        } else {
+            None
+        };
+        if let Some(g) = japanese {
+            let aki = WAKAN_AKI * g.face.units_per_em() * g.sx;
+            a.adv += aki;
+            if let Some(x) = added.get_mut(j - 1) {
+                *x = aki;
+            }
+        }
+    }
+    added
+}
+
 /// The length an upright glyph takes down the column before tracking and justification: its
 /// vertical advance (the font's vertical metrics), else its advance, at least one em.
 fn upright_cell(g: &SGlyph) -> f64 {
@@ -825,6 +872,8 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
         let mut sg = cx.shape_para(pr.clone());
         // Japanese composition: consecutive punctuation shares one half-em space.
         let compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
+        // …and a quarter em between Japanese and Latin text.
+        let wakan = if para.mojikumi == Mojikumi::LineEndHalf { space_japanese_and_latin(&mut sg) } else { vec![] };
         let pm = {
             let (asc, desc, lead) = style_metrics(cx.db, cx.style_at(pr.start));
             let (cap, xh) = cap_x_heights(cx.db, cx.style_at(pr.start));
@@ -882,10 +931,14 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
                 trimmed -= 1;
             }
             let hyphen = (hyph && end > i).then(|| hyphen_glyph(&sg[end - 1]));
-            // Mojikumi: a closing bracket, comma or full stop ending the line is set half width.
+            // Mojikumi: a closing bracket, comma or full stop ending the line is set half width, and
+            // no Japanese–Latin space is left at the end of a line.
             let end_trim = match trimmed.checked_sub(1).filter(|&k| k >= i && para.mojikumi == Mojikumi::LineEndHalf) {
-                Some(k) if !compressed.get(k).copied().unwrap_or(false) => sg.get(k).and_then(|g| punct_half(g, Punct::Closing)).unwrap_or(0.0),
-                _ => 0.0,
+                Some(k) => {
+                    let half = if compressed.get(k).copied().unwrap_or(false) { None } else { sg.get(k).and_then(|g| punct_half(g, Punct::Closing)) };
+                    half.unwrap_or(0.0) + wakan.get(k).copied().unwrap_or(0.0)
+                }
+                None => 0.0,
             };
             let w: f64 = sg[i..trimmed].iter().map(|g| g.adv).sum::<f64>() + hyphen.as_ref().map_or(0.0, |h| h.adv) - end_trim;
             let (align, justify) = match para.justify {
