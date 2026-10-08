@@ -412,6 +412,10 @@ pub enum Cursor {
     BlendAnchor,
     /// Over a bracket of selected type on a path (a drag moves it): the arrow with a bracket.
     PathBracket,
+    /// The Shape Builder: a crosshair with a plus (merge mode)...
+    ShapeBuilder,
+    /// ...or, with Alt held, a minus (erase mode).
+    ShapeBuilderErase,
 }
 
 impl Cursor {
@@ -429,7 +433,9 @@ impl Cursor {
             | Cursor::Slice
             | Cursor::Blend
             | Cursor::BlendObject
-            | Cursor::BlendAnchor => Cursor::Crosshair,
+            | Cursor::BlendAnchor
+            | Cursor::ShapeBuilder
+            | Cursor::ShapeBuilderErase => Cursor::Crosshair,
             c => c,
         }
     }

@@ -423,7 +423,7 @@ fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::SliceSelect => C::Default,
         Cursor::Width | Cursor::WidthAdd => C::Crosshair,
         Cursor::WidthPoint => C::Move,
-        Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor => C::Crosshair,
+        Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
     }
 }
 
@@ -438,6 +438,14 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
     app.hover_doc = hover.map(|p| xf.to_doc(p));
     let view = app.view_info();
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
+    // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
+    // without moving the mouse (Alt switches the Shape Builder to erase mode).
+    let mods_changed = ui.data_mut(|d| {
+        let id = egui::Id::new("canvas-mods");
+        let prev = d.get_temp::<egui::Modifiers>(id);
+        d.insert_temp(id, m);
+        prev.is_some_and(|prev| prev != m)
+    });
 
     // Zoom around the pointer, or scroll ([`wheel`]).
     if resp.hovered() {
@@ -576,7 +584,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
             }
         }
     } else if let Some(p) = hover
-        && pointer.is_moving()
+        && (pointer.is_moving() || mods_changed)
     {
         let ev = PointerEvent { kind: PointerKind::Move, pos: xf.to_doc(p), mods: mods(m, space), pressure: 1.0 };
         dispatch(app, &ev, view);
@@ -595,7 +603,7 @@ fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: 
             }
         }
     }
-    if drag.is_some() || pointer.is_moving() {
+    if drag.is_some() || pointer.is_moving() || mods_changed {
         ui.ctx().request_repaint();
     }
 }
