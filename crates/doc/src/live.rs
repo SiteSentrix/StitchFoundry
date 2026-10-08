@@ -589,6 +589,46 @@ impl GradientMesh {
         self.rows >= 1 && self.cols >= 1 && self.points.len() == (self.rows as usize + 1) * (self.cols as usize + 1)
     }
 
+    /// A 1×1 mesh from its four corners (bottom-left, top-left, top-right, bottom-right in u/v
+    /// order: row 0 is v = 0, columns follow u), each with its handles ([`H_RIGHT`] …).
+    fn patch(corners: [(Point, [Vec2; 4], Color); 4]) -> Self {
+        let point = |(p, handles, color): (Point, [Vec2; 4], Color)| MeshPoint { p, color, opacity: 1.0, handles };
+        let [a, b, c, d] = corners;
+        Self { rows: 1, cols: 1, points: vec![point(a), point(d), point(b), point(c)] }
+    }
+
+    /// A 1×1 mesh from a Coons patch's twelve boundary points (in the order PDF and PostScript
+    /// shadings list them: v runs cp0 → cp3 along cp1 and cp2, u runs cp0 → cp9 along cp11 and
+    /// cp10) and its corner colours (at cp0, cp3, cp6, cp9); `None` if a point isn't finite.
+    pub fn coons(cp: &[Point; 12], colors: [Color; 4]) -> Option<Self> {
+        if !cp.iter().all(|p| p.is_finite()) {
+            return None;
+        }
+        let h = |a: usize, b: usize| cp[b] - cp[a];
+        let handles = |right: Vec2, left: Vec2, down: Vec2, up: Vec2| {
+            let mut h = [Vec2::ZERO; 4];
+            (h[H_RIGHT], h[H_LEFT], h[H_DOWN], h[H_UP]) = (right, left, down, up);
+            h
+        };
+        let [c0, c1, c2, c3] = colors;
+        Some(Self::patch([
+            (cp[0], handles(h(0, 11), Vec2::ZERO, h(0, 1), Vec2::ZERO), c0),
+            (cp[3], handles(h(3, 4), Vec2::ZERO, Vec2::ZERO, h(3, 2)), c1),
+            (cp[6], handles(Vec2::ZERO, h(6, 5), Vec2::ZERO, h(6, 7)), c2),
+            (cp[9], handles(Vec2::ZERO, h(9, 10), h(9, 8), Vec2::ZERO), c3),
+        ]))
+    }
+
+    /// A 1×1 mesh of a Gouraud-shaded triangle (a patch with two corners together); `None` if a
+    /// point isn't finite.
+    pub fn triangle(corners: [(Point, Color); 3]) -> Option<Self> {
+        if !corners.iter().all(|(p, _)| p.is_finite()) {
+            return None;
+        }
+        let [a, b, c] = corners.map(|(p, color)| (p, [Vec2::ZERO; 4], color));
+        Some(Self::patch([a, b, c, c]))
+    }
+
     /// A mesh over surface `s` (u, v ∈ [0,1]) with handles from its partial derivatives.
     pub fn from_surface(rows: u32, cols: u32, s: &dyn Fn(f64, f64) -> Point, color: &dyn Fn(f64, f64) -> Color) -> Self {
         let (us, vs) = (even_steps(cols), even_steps(rows));

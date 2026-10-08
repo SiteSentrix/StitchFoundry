@@ -3158,6 +3158,11 @@ axis	Both	Ambos
 @msg	`{tool}` isn't a Liquify tool	`{tool}` no es una herramienta de Licuar
 @msg	`{tool}` isn't a freehand tool	`{tool}` no es una herramienta de dibujo a mano alzada
 @msg	`{to}` is not an available name	`{to}` no es un nombre disponible
+@msg	a PostScript error ({name} in `{op}`)	un error de PostScript ({name} en `{op}`)
+@msg	a PostScript error ({name} in `{op}`), in {procs}	un error de PostScript ({name} en `{op}`), en {procs}
+@msg	a PostScript error ({name} in `{op}`: {at})	un error de PostScript ({name} en `{op}`: {at})
+@msg	a PostScript error ({name} in `{op}`: {at}), in {procs}	un error de PostScript ({name} en `{op}`: {at}), en {procs}
+@msg	a PostScript error ({name})	un error de PostScript ({name})
 @msg	a bitmap is empty	un mapa de bits está vacío
 @msg	a bitmap is too large to read	un mapa de bits es demasiado grande para leerlo
 @msg	a colour index is 0 to {_1}, not {n}	un índice de color va de 0 a {_1}, no {n}
@@ -3239,6 +3244,10 @@ axis	Both	Ambos
 @msg	invalid image data for `{0}`	datos de imagen no válidos para `{0}`
 @msg	invalid parameters for `{cmd}`: {msg}	parámetros no válidos para `{cmd}`: {msg}
 @msg	is not an image VectorCraft reads	no es una imagen que VectorCraft pueda leer
+@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know	usa `{at}`, que el lector de PostScript de VectorCraft no conoce
+@msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	usa `{at}`, que el lector de PostScript de VectorCraft no conoce, en {procs}
+@msg	its Windows metafile preview was opened instead, which may simplify the art	en su lugar se abrió su previsualización de metarchivo de Windows, que puede simplificar la ilustración
+@msg	its preview was placed instead, at screen resolution	en su lugar se colocó su previsualización, a resolución de pantalla
 @msg	join needs open paths	unir necesita trazados abiertos
 @msg	lang must be one of {_1}	lang debe ser uno de estos: {_1}
 @msg	layers can't be wrap objects	las capas no pueden ser objetos para ceñir
@@ -3366,6 +3375,7 @@ axis	Both	Ambos
 @msg	paths contain invalid coordinates	los trazados contienen coordenadas no válidas
 @msg	paths: give at least one file	paths: indica al menos un archivo
 @msg	pattern missing	falta el motivo
+@msg	patterns nested too deeply are filled with mid-grey	los motivos anidados a demasiada profundidad se rellenan de gris medio
 @msg	percent must be above 0 and at most 6400, not {p}	el porcentaje debe ser mayor que 0 y como máximo 6400, no {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	elige un color, degradado o motivo para guardarlo como muestra
 @msg	plane must be left, right or ground	plane debe ser left, right o ground
@@ -3411,6 +3421,9 @@ axis	Both	Ambos
 @msg	select two or more graphic styles to merge	selecciona dos o más estilos gráficos para combinarlos
 @msg	select type in perspective	selecciona texto en perspectiva
 @msg	selection has no bounds	la selección no tiene límites
+@msg	shadings of an unknown type were left out	se omitieron los sombreados de tipo desconocido
+@msg	shadings of more than 4096 patches or triangles were left out	se omitieron los sombreados de más de 4096 parches o triángulos
+@msg	shadings whose functions are of an unknown type are filled with their middle colour	los sombreados cuyas funciones son de tipo desconocido se rellenan con su color intermedio
 @msg	shortcut for `{k}` must be a string	el atajo de `{k}` debe ser un texto
 @msg	stop {i} needs `offset`	la parada {i} necesita `offset`
 @msg	stop {i} needs a valid `color`	la parada {i} necesita un `color` válido
@@ -3442,6 +3455,7 @@ axis	Both	Ambos
 @msg	the export returned unreadable data	la exportación devolvió datos ilegibles
 @msg	the export wrote no file	la exportación no escribió ningún archivo
 @msg	the file holds only a placeholder page, not its art (it was saved without PDF compatibility): save it again with PDF compatibility on, or as PDF or SVG	el archivo solo contiene una página provisional, no su ilustración (se guardó sin compatibilidad con PDF): vuelve a guardarlo con la compatibilidad con PDF activada, o como PDF o SVG
+@msg	the file was read up to an error ({why}): what follows it was left out	el archivo se leyó hasta un error ({why}): se omitió lo que sigue
 @msg	the file's preview header points outside the file	el encabezado de previsualización del archivo apunta fuera del archivo
 @msg	the image's pixels don't match its size	los píxeles de la imagen no coinciden con su tamaño
 @msg	the layer has no objects to clip by	la capa no tiene objetos con los que recortar
@@ -3471,6 +3485,7 @@ axis	Both	Ambos
 @msg	there are no objects to release	no hay objetos que soltar
 @msg	there are no printer settings to open here	aquí no hay ajustes de impresora que abrir
 @msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	no se puede leer este archivo PostScript ({_1}): guárdalo como PDF o SVG en la aplicación que lo creó
+@msg	this file's PostScript couldn't be read ({why}): {what}	no se pudo leer el PostScript de este archivo ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	este formato admite una sola mesa de trabajo: exporta varias como PDF o con document.exportForScreens
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	este es un dibujo DWG, que no se puede leer: guárdalo desde la aplicación de CAD como DXF ASCII y abre ese archivo
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	este es un archivo PostScript (un .ai guardado en un formato antiguo o sin compatibilidad con PDF, o un archivo EPS), que todavía no se puede abrir: guárdalo como PDF, .ai compatible con PDF o SVG

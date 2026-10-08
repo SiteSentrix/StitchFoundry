@@ -56,7 +56,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{lang: auto|<code>} the interface language, persisted as the `interfaceLanguage` preference (`auto` follows the system locale; codes: prefs.list › interfaceLanguage, e.g. en, ja, cs, es, zh-hant)",
     ),
-    ("file.open", "Open…", "Cmd+O", "{path?}"),
+    (
+        "file.open",
+        "Open…",
+        "Cmd+O",
+        "{path?} → with a path, document.open's result {index, title, format, warnings, …} (null when a dialog asks first or a library loads)",
+    ),
     (
         "file.save",
         "Save",
@@ -800,7 +805,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
             Ok(Value::Null)
         }
         "file.open" => match s("path") {
-            Some(path) => io::open_path(app, &path).map(|_| Value::Null),
+            Some(path) => io::open_path(app, &path),
             None => io::open_dialog(app).map(|_| Value::Null),
         },
         // Saves write through the app (save panel, download); with no path known the panel and the
@@ -817,7 +822,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "file.revert" if p.get("confirmed").and_then(Value::as_bool) != Some(true) => io::ask_revert(app),
         "file.reveal" => io::reveal(app),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
-            Some(path) => io::open_path(app, &path).map(|_| Value::Null),
+            Some(path) => io::open_path(app, &path),
             None => Err("no such recent file".into()),
         },
         "type.findFont" => {

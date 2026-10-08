@@ -10,7 +10,7 @@ use std::rc::Rc;
 use vectorcraft_geom::Affine;
 
 use super::graphics::{GState, Out};
-use super::lex::Lexer;
+use super::lex::{IMMEDIATE, Lexer};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
 /// Most operations one file may run.
@@ -49,6 +49,10 @@ pub(crate) struct Interp<'a> {
     /// Bytes asked for so far (see [`MAX_MEMORY`]).
     allocated: usize,
     seed: u32,
+    /// Where the error that is unwinding was raised (see [`Fault`]).
+    pub fault: Option<Fault>,
+    /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
+    pub glyph_width: Option<[f64; 2]>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -56,6 +60,17 @@ pub(crate) struct Interp<'a> {
     /// its prolog defines them as) are groups.
     pub illustrator: bool,
 }
+
+/// Where a PostScript error was raised: the operator that raised it (none for an unknown name)
+/// and the named procedures it ran in, innermost first, so the user and we can see the cause.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Fault {
+    pub op: Option<&'static str>,
+    pub procs: Vec<Rc<str>>,
+}
+
+/// Most procedure names a [`Fault`] keeps.
+const FAULT_PROCS: usize = 3;
 
 fn new_dict() -> DictRef {
     Rc::new(RefCell::new(Dict::new()))
@@ -128,6 +143,8 @@ impl<'a> Interp<'a> {
             ops: 0,
             allocated: 0,
             seed: 1,
+            fault: None,
+            glyph_width: None,
             g,
             saved: vec![],
             out,
@@ -139,6 +156,7 @@ impl<'a> Interp<'a> {
     pub fn run(&mut self) -> Res {
         loop {
             let Some(o) = self.lex.next()? else { return Ok(()) };
+            let o = self.scanned(o, self.lex.immediate)?;
             // An Illustrator group begins before its `u` runs (`Some(true)`) and ends after its `U`
             // has (`Some(false)`).
             let group = match &o {
@@ -306,8 +324,20 @@ impl<'a> Interp<'a> {
         self.tick()?;
         match o {
             Obj::Exec(name) => {
-                let v = self.lookup(&name).ok_or_else(|| PsError::Ps("undefined", name.to_string()))?;
-                self.call(v)
+                let Some(v) = self.lookup(&name) else {
+                    self.fault.get_or_insert_default();
+                    return ps_err("undefined", &name);
+                };
+                let proc = matches!(v, Obj::Array { exec: true, .. });
+                let r = self.call(v);
+                if proc
+                    && matches!(r, Err(PsError::Ps(..)))
+                    && let Some(f) = self.fault.as_mut()
+                    && f.procs.len() < FAULT_PROCS
+                {
+                    f.procs.push(name);
+                }
+                r
             }
             Obj::Op(op) => self.op(op),
             o => self.push(o),
@@ -357,7 +387,7 @@ impl<'a> Interp<'a> {
         let r = loop {
             match lex.next() {
                 Ok(Some(o)) => {
-                    if let Err(e) = self.exec_token(o) {
+                    if let Err(e) = self.scanned(o, lex.immediate).and_then(|o| self.exec_token(o)) {
                         break Err(e);
                     }
                 }
@@ -367,6 +397,32 @@ impl<'a> Interp<'a> {
         };
         self.depth -= 1;
         r
+    }
+
+    /// An object as the scanner gives it: with `immediate`, its `//name`s replaced by their
+    /// values (down through procedures), as they are when read.
+    pub fn scanned(&self, o: Obj, immediate: bool) -> Res<Obj> {
+        if immediate { self.resolve(o, 0) } else { Ok(o) }
+    }
+
+    fn resolve(&self, o: Obj, depth: usize) -> Res<Obj> {
+        match o {
+            Obj::Exec(n) if n.starts_with(IMMEDIATE) => {
+                let name = n.get(IMMEDIATE.len()..).unwrap_or_default();
+                self.lookup(&Rc::from(name)).ok_or_else(|| PsError::Ps("undefined", name.to_string()))
+            }
+            Obj::Array { items, exec: true } if depth < MAX_DEPTH as usize => {
+                for i in 0..items.len() {
+                    let Some(item) = items.get(i) else { break };
+                    if matches!(&item, Obj::Exec(n) if n.starts_with(IMMEDIATE)) || matches!(&item, Obj::Array { exec: true, .. }) {
+                        // A procedure the scanner just made: nothing else reads it.
+                        items.write(i, &[self.resolve(item, depth + 1)?]);
+                    }
+                }
+                Ok(Obj::Array { items, exec: true })
+            }
+            o => Ok(o),
+        }
     }
 
     fn run_items(&mut self, items: &Shared<Obj>) -> Res {
@@ -401,7 +457,11 @@ impl<'a> Interp<'a> {
 
     pub fn op(&mut self, op: Op) -> Res {
         self.op_inner(op).map_err(|e| match e {
-            PsError::Ps(name, at) if at.is_empty() => PsError::Ps(name, op.name().to_string()),
+            PsError::Ps(name, at) => {
+                // The innermost operator raised it (`exec` running a procedure doesn't).
+                self.fault.get_or_insert(Fault { op: Some(op.name()), procs: vec![] });
+                PsError::Ps(name, if at.is_empty() { op.name().to_string() } else { at })
+            }
             e => e,
         })
     }
@@ -683,6 +743,7 @@ impl<'a> Interp<'a> {
                     Ok(()) => self.push(Obj::Bool(false))?,
                     Err(PsError::Ps(..) | PsError::Stop | PsError::Exit) => {
                         self.depth = depth;
+                        self.fault = None;
                         self.push(Obj::Bool(true))?;
                     }
                     Err(e) => return Err(e),
@@ -973,12 +1034,60 @@ impl<'a> Interp<'a> {
                 }
             }
             Version => self.push(Obj::string(b"3010".to_vec()))?,
+            Revision => self.push(Obj::Int(1))?,
+            SerialNumber => self.push(Obj::Int(0))?,
             Product => self.push(Obj::string(b"VectorCraft".to_vec()))?,
             RealTime | UserTime => self.push(Obj::Int(0))?,
             Print | EqPrint | EqEqPrint => {
                 self.pop()?;
             }
             Pstack | Stack | Flush => {}
+            // What every interpreter (not only a distiller) answers, as Ghostscript does: the marks
+            // are dropped.
+            PdfMark => {
+                self.pop_to_mark()?;
+            }
+            Gcheck | Scheck => {
+                self.pop()?;
+                self.push(Obj::Bool(false))?;
+            }
+            CurrentShared => self.push(Obj::Bool(false))?,
+            SetShared | SetVmThreshold | VmReclaim | Echo => {
+                self.pop()?;
+            }
+            ClearDictStack => self.dicts.truncate(3),
+            ExecStack => {
+                let items = self.pop_array()?;
+                self.push_interval(Obj::Array { items, exec: false }, 0, 0)?;
+            }
+            SetCacheParams => {
+                self.pop_to_mark()?;
+            }
+            CurrentCacheParams | UCacheStatus => {
+                self.push(Obj::Mark)?;
+                for _ in 0..if op == UCacheStatus { 5 } else { 2 } {
+                    self.push(Obj::Int(1 << 20))?;
+                }
+            }
+            CacheStatus => {
+                for _ in 0..7 {
+                    self.push(Obj::Int(0))?;
+                }
+            }
+            StartJob => {
+                self.pop()?;
+                self.pop()?;
+                self.push(Obj::Bool(false))?;
+            }
+            CurrentObjectFormat => self.push(Obj::Int(0))?,
+            SetDevParams => {
+                self.pop_dict()?;
+                self.pop()?;
+            }
+            CurrentDevParams => {
+                self.pop()?;
+                self.push(Obj::dict(Dict::new()))?;
+            }
             _ => self.graphics_op(op)?,
         }
         Ok(())

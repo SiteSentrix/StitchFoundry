@@ -326,5 +326,21 @@ ops! {
     ResourceForAll = "resourceforall", Show = "show", AShow = "ashow",
     WidthShow = "widthshow", AWidthShow = "awidthshow", XShow = "xshow", YShow = "yshow", XYShow = "xyshow",
     KShow = "kshow", CShow = "cshow", GlyphShow = "glyphshow", StringWidth = "stringwidth", CharPath = "charpath",
-    SetCacheDevice = "setcachedevice", SetCharWidth = "setcharwidth",
+    SetCacheDevice = "setcachedevice", SetCharWidth = "setcharwidth", SetCacheDevice2 = "setcachedevice2", RootFont = "rootfont",
+    // Forms, devices and files programs probe (no output device or file system here).
+    ExecForm = "execform", NullDevice = "nulldevice", PdfMark = "pdfmark", Status = "status", Token = "token",
+    BytesAvailable = "bytesavailable", ResetFile = "resetfile", Write = "write", WriteString = "writestring",
+    WriteHexString = "writehexstring", Echo = "echo", StrokePath = "strokepath", PathForAll = "pathforall",
+    // Queries and settings without an effect on the art.
+    CurrentHsbColor = "currenthsbcolor", CurrentColorRendering = "currentcolorrendering",
+    FindColorRendering = "findcolorrendering", CurrentColorScreen = "currentcolorscreen", CurrentSmoothness = "currentsmoothness",
+    SetHalftonePhase = "sethalftonephase", CurrentHalftonePhase = "currenthalftonephase", SetDevParams = "setdevparams",
+    CurrentDevParams = "currentdevparams", Gcheck = "gcheck", Scheck = "scheck", CurrentShared = "currentshared",
+    SetShared = "setshared", ClearDictStack = "cleardictstack", ExecStack = "execstack", SetCacheParams = "setcacheparams",
+    CurrentCacheParams = "currentcacheparams", CacheStatus = "cachestatus", UCacheStatus = "ucachestatus",
+    SetVmThreshold = "setvmthreshold", VmReclaim = "vmreclaim", StartJob = "startjob", CurrentObjectFormat = "currentobjectformat",
+    Revision = "revision", SerialNumber = "serialnumber", Read = "read", FilePosition = "fileposition",
+    SetFilePosition = "setfileposition", DeleteFile = "deletefile", RenameFile = "renamefile", Run = "run",
+    // User paths.
+    UFill = "ufill", UEoFill = "ueofill", UStroke = "ustroke", UAppend = "uappend", UPath = "upath", SetBBox = "setbbox",
 }

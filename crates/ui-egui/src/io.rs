@@ -16,15 +16,16 @@ const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
 /// graphic style library files open in the library panel and flattener, PDF, print and perspective
-/// grid presets files are imported.
-pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<(), String> {
+/// grid presets files are imported. → `document.open`'s result for a document opened now (its
+/// `warnings` say what didn't come in as it was), else null.
+pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value, String> {
     let ext = fileio::extension(name);
     // A WebAssembly plug-in is installed.
     if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
         let r =
             app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}))?;
         app.status(format!("Installed plug-in {}", r["name"].as_str().unwrap_or(name)));
-        return Ok(());
+        return Ok(Value::Null);
     }
     let presets = [
         (vectorcraft_engine::cmd::flatten::PRESET_EXTS, "flattener.presets.import", "flattener presets"),
@@ -36,7 +37,7 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
         let r = app.run(import, serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
         let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
         app.status(format!("Imported {what}: {}", names.join(", ")));
-        return Ok(());
+        return Ok(Value::Null);
     }
     let swatches = vectorcraft_engine::cmd::swatchlib::LIBRARY_EXTS.contains(&ext.as_str());
     if swatches || ext == vectorcraft_doc::style_libs::STYLES_EXT {
@@ -45,27 +46,28 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
             None => serde_json::json!({"name": name, "data": String::from_utf8_lossy(bytes)}),
         };
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
-        return load(app, p).map(|_| ());
+        return load(app, p).map(|_| Value::Null);
     }
     // A PDF with several pages or a password asks first (the Import PDF dialog), and so does a
     // DXF drawing (DXF Import Options).
     if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None)
         || crate::dialogs::dxf_import::offer(app, name, bytes, path.clone(), None)
     {
-        return Ok(());
+        return Ok(Value::Null);
     }
     open_document(app, name, bytes, path, &Value::Null)
 }
 
-/// Open a document through the engine loader with the `document.open` options in `p`.
-pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<(), String> {
+/// Open a document through the engine loader with the `document.open` options in `p` →
+/// `document.open`'s result.
+pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
     let r = fileio::open_bytes_with(&mut app.session, name, bytes, path, p).map_err(|e| e.to_string())?;
     app.sync_views();
     if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
         app.status(format!("Opened with {} note(s): {}", w.len(), w[0].as_str().unwrap_or_default()));
     }
     crate::dialogs::missing_links::after_open(app, &r);
-    Ok(())
+    Ok(r)
 }
 
 /// A path from the open dialog, or "cancelled".
@@ -93,18 +95,19 @@ pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
         return Ok(());
     }
     let path = pick_open(app, &FilePick { filters: fileio::open_filters().collect(), ..Default::default() })?;
-    open_path(app, &path)
+    open_path(app, &path).map(|_| ())
 }
 
 fn read(app: &VectorcraftApp, path: &str) -> Result<Vec<u8>, String> {
     app.services.read.as_ref().ok_or("no file reader")?(path)
 }
 
-pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+/// Open the file at `path` (see [`open_bytes`]) → `document.open`'s result, or null.
+pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> {
     let bytes = read(app, path)?;
-    open_bytes(app, path, &bytes, Some(path.to_string()))?;
+    let r = open_bytes(app, path, &bytes, Some(path.to_string()))?;
     note_recent(app, path);
-    Ok(())
+    Ok(r)
 }
 
 /// File → New from Template…: a template (or any readable file) as a new untitled document. Without
