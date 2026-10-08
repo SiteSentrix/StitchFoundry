@@ -1,9 +1,9 @@
 //! Shape recognition for the Shaper tool: a rough freehand stroke becomes a clean shape.
 //!
 //! The stroke is classified by how closed it is, how many corners survive a coarse polyline
-//! simplification (Douglas–Peucker at a fraction of the stroke's size) and how well it fills its
-//! bounding box. A zig-zag stroke with several reversals is a scribble (the Shaper deletes what it
-//! covers).
+//! simplification independent of where drawing began, its edge/angle fit and how well it fills
+//! its bounding box. Samples are spaced by distance so pointer speed does not bias the fit.
+//! A zig-zag stroke with several reversals is a scribble (the Shaper deletes what it covers).
 
 use crate::{Point, Rect, Vec2};
 
@@ -48,30 +48,126 @@ fn dist_to_segment(p: Point, a: Point, b: Point) -> f64 {
     p.distance(a + ab * t)
 }
 
-/// Douglas–Peucker simplification.
+/// Douglas–Peucker simplification with bounded stack use, even for noisy strokes.
 fn simplify(pts: &[Point], tol: f64) -> Vec<Point> {
     if pts.len() < 3 {
         return pts.to_vec();
     }
-    let (a, b) = (pts[0], pts[pts.len() - 1]);
-    let (i, d) = pts[1..pts.len() - 1]
-        .iter()
-        .enumerate()
-        .map(|(i, p)| (i + 1, dist_to_segment(*p, a, b)))
-        .fold((0, 0.0), |m, x| if x.1 > m.1 { x } else { m });
-    if d <= tol {
-        return vec![a, b];
+    let mut keep = vec![false; pts.len()];
+    if let Some(first) = keep.first_mut() {
+        *first = true;
     }
-    let mut left = simplify(&pts[..=i], tol);
-    let right = simplify(&pts[i..], tol);
-    left.pop();
-    left.extend(right);
-    left
+    if let Some(last) = keep.last_mut() {
+        *last = true;
+    }
+    let mut pending = vec![(0, pts.len() - 1)];
+    while let Some((start, end)) = pending.pop() {
+        let Some(window) = pts.get(start..=end) else { continue };
+        let (Some(&a), Some(&b)) = (window.first(), window.last()) else { continue };
+        let (offset, deviation) = window
+            .iter()
+            .enumerate()
+            .skip(1)
+            .take(window.len().saturating_sub(2))
+            .map(|(i, p)| (i, dist_to_segment(*p, a, b)))
+            .fold((0, 0.0), |best, candidate| if candidate.1 > best.1 { candidate } else { best });
+        if deviation > tol {
+            let split = start + offset;
+            if let Some(k) = keep.get_mut(split) {
+                *k = true;
+            }
+            if split > start + 1 {
+                pending.push((start, split));
+            }
+            if end > split + 1 {
+                pending.push((split, end));
+            }
+        }
+    }
+    pts.iter().zip(keep).filter_map(|(p, keep)| keep.then_some(*p)).collect()
+}
+
+/// Sample by distance, so pointer speed/density cannot bias the shape fit. Bounds and length
+/// still come from the complete stroke, but simplification works on at most 256 samples.
+fn resample(pts: &[Point], length: f64) -> Vec<Point> {
+    const SAMPLES: usize = 256;
+    let (Some(&first), Some(&last)) = (pts.first(), pts.last()) else { return Vec::new() };
+    let mut out = vec![first];
+    let mut walked = 0.0;
+    for (&a, &b) in pts.iter().zip(pts.iter().skip(1)) {
+        let segment = a.distance(b);
+        if segment <= 0.0 {
+            continue;
+        }
+        while out.len() < SAMPLES - 1 {
+            let target = length * (out.len() as f64 / (SAMPLES - 1) as f64);
+            if target > walked + segment {
+                break;
+            }
+            out.push(a + (b - a) * ((target - walked) / segment).clamp(0.0, 1.0));
+        }
+        walked += segment;
+    }
+    out.push(last);
+    out
+}
+
+/// A closed stroke has no special starting corner. Split at distant points and simplify both
+/// halves, then discard collinear seam points instead of counting them as polygon vertices.
+fn closed_corners(pts: &[Point], tol: f64) -> Vec<Point> {
+    let Some(&first) = pts.first() else { return Vec::new() };
+    let start = pts.iter().enumerate().max_by(|(_, a), (_, b)| a.distance(first).total_cmp(&b.distance(first))).map_or(0, |(i, _)| i);
+    let ring: Vec<Point> = pts.iter().skip(start).chain(pts.iter().take(start)).copied().collect();
+    let Some(&first) = ring.first() else { return Vec::new() };
+    let split = ring.iter().enumerate().max_by(|(_, a), (_, b)| a.distance(first).total_cmp(&b.distance(first))).map_or(0, |(i, _)| i);
+    let (Some(left), Some(right)) = (ring.get(..=split), ring.get(split..)) else { return Vec::new() };
+    let mut corners = simplify(left, tol);
+    corners.pop();
+    let other: Vec<Point> = right.iter().copied().chain(std::iter::once(first)).collect();
+    let mut other = simplify(&other, tol);
+    other.pop();
+    corners.extend(other);
+    while corners.len() > 3 {
+        let n = corners.len();
+        let redundant = corners.iter().enumerate().find_map(|(i, p)| {
+            let (&a, &b) = (corners.get((i + n - 1) % n)?, corners.get((i + 1) % n)?);
+            (dist_to_segment(*p, a, b) <= tol).then_some(i)
+        });
+        let Some(i) = redundant else { break };
+        corners.remove(i);
+    }
+    corners
 }
 
 fn area(poly: &[Point]) -> f64 {
-    let n = poly.len();
-    (0..n).map(|i| poly[i].to_vec2().cross(poly[(i + 1) % n].to_vec2())).sum::<f64>().abs() / 2.0
+    let Some(&origin) = poly.first() else { return 0.0 };
+    // Translating to the first point avoids cancellation far from the document origin.
+    poly.iter().zip(poly.iter().skip(1)).map(|(&a, &b)| (a - origin).cross(b - origin)).sum::<f64>().abs() / 2.0
+}
+
+/// Four substantial, approximately perpendicular edges, even with uneven sides and corners.
+fn is_rectangle(pts: &[Point], corners: &[Point], size: f64) -> bool {
+    if corners.len() != 4 || !is_polygonal(pts, corners, size, 0.055) {
+        return false;
+    }
+    right_angles(corners, size)
+}
+
+fn right_angles(corners: &[Point], size: f64) -> bool {
+    let around: Vec<Point> = corners.iter().cycle().take(corners.len() + 2).copied().collect();
+    around.windows(3).all(|w| {
+        let [a, b, c] = w else { return false };
+        let (u, v) = (*b - *a, *c - *b);
+        let (lu, lv) = (u.hypot(), v.hypot());
+        lu > 0.03 * size && lv > 0.03 * size && (u.dot(v) / (lu * lv)).abs() < 0.45
+    })
+}
+
+fn axis_aligned(corners: &[Point]) -> bool {
+    corners.iter().zip(corners.iter().cycle().skip(1)).all(|(&a, &b)| {
+        let edge = b - a;
+        edge.x.abs().min(edge.y.abs()) < 0.4 * edge.hypot()
+    })
 }
 
 /// Number of sharp direction reversals (turns of more than 120°) along the stroke.
@@ -87,22 +183,27 @@ fn reversals(pts: &[Point], min_seg: f64) -> usize {
 
 /// Recognise a freehand stroke (document points, in drawing order).
 pub fn recognize(pts: &[Point]) -> Option<Recognized> {
-    if pts.len() < 2 {
+    if pts.len() < 2 || pts.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
         return None;
     }
     let b = bbox(pts);
     let size = b.width().max(b.height());
-    if size < 2.0 {
+    if size < 2.0 || !size.is_finite() {
         return None;
     }
     let len = path_len(pts);
-    let (first, last) = (pts[0], pts[pts.len() - 1]);
+    if !len.is_finite() || len <= 0.0 {
+        return None;
+    }
+    let samples = resample(pts, len);
+    let pts = samples.as_slice();
+    let (&first, &last) = (pts.first()?, pts.last()?);
+    let chord = first.distance(last);
     // Scribble: several sharp reversals packed into a small area relative to the stroke length.
     if reversals(pts, size * 0.08) >= 3 && len > 3.0 * size {
         return Some(Recognized::Scribble(b));
     }
     // Line: every point near the chord.
-    let chord = first.distance(last);
     let max_dev = pts.iter().map(|p| dist_to_segment(*p, first, last)).fold(0.0, f64::max);
     if chord > 0.5 * size && max_dev < 0.08 * chord.max(1.0) && len < 1.3 * chord {
         return Some(Recognized::Line { a: first, b: last });
@@ -111,13 +212,11 @@ pub fn recognize(pts: &[Point]) -> Option<Recognized> {
     if chord > 0.25 * size {
         return None;
     }
-    let mut closed: Vec<Point> = pts.to_vec();
-    closed.push(first);
-    let mut corners = simplify(&closed, size * 0.12);
-    if corners.len() > 1 && corners[0].distance(corners[corners.len() - 1]) < size * 0.15 {
-        corners.pop();
-    }
+    let corners = closed_corners(pts, size * 0.12);
     let fill = area(pts) / (b.width() * b.height()).max(1e-9);
+    if !fill.is_finite() {
+        return None;
+    }
     let center = b.center();
     let square = |r: Rect| {
         let (w, h) = (r.width(), r.height());
@@ -136,13 +235,13 @@ pub fn recognize(pts: &[Point]) -> Option<Recognized> {
             let rot = (top - center).atan2().to_degrees() + 90.0;
             Some(Recognized::Polygon { center, radius, sides: 3, rotation: rot })
         }
-        4 if fill > 0.86 => Some(Recognized::Rectangle(square(b))),
+        4 if is_rectangle(pts, &corners, size) && axis_aligned(&corners) => Some(Recognized::Rectangle(square(b))),
         // A diamond: a square standing on a corner.
-        4 if (0.4..0.62).contains(&fill) => {
+        4 if (0.4..0.62).contains(&fill) && is_rectangle(pts, &corners, size) => {
             let radius = corners.iter().map(|p| p.distance(center)).sum::<f64>() / 4.0;
             Some(Recognized::Polygon { center, radius, sides: 4, rotation: 0.0 })
         }
-        n @ 5..=8 if fill > 0.6 && fill < 0.85 && is_polygonal(pts, &corners, size) => {
+        n @ 5..=8 if fill > 0.6 && fill < 0.85 && is_polygonal(pts, &corners, size, 0.02) => {
             let radius = corners.iter().map(|p| p.distance(center)).sum::<f64>() / n as f64;
             Some(Recognized::Polygon { center, radius, sides: n as u32, rotation: 0.0 })
         }
@@ -153,11 +252,16 @@ pub fn recognize(pts: &[Point]) -> Option<Recognized> {
 
 /// Do the stroke's points hug the straight edges between `corners` (rather than bulging like an
 /// ellipse)?
-fn is_polygonal(pts: &[Point], corners: &[Point], size: f64) -> bool {
-    let n = corners.len();
-    let dev: f64 = pts.iter().map(|p| (0..n).map(|i| dist_to_segment(*p, corners[i], corners[(i + 1) % n])).fold(f64::MAX, f64::min)).sum::<f64>()
+fn is_polygonal(pts: &[Point], corners: &[Point], size: f64, tolerance: f64) -> bool {
+    if pts.is_empty() || corners.len() < 3 {
+        return false;
+    }
+    let dev: f64 = pts
+        .iter()
+        .map(|p| corners.iter().zip(corners.iter().cycle().skip(1)).map(|(&a, &b)| dist_to_segment(*p, a, b)).fold(f64::MAX, f64::min))
+        .sum::<f64>()
         / pts.len() as f64;
-    dev < 0.02 * size
+    dev < tolerance * size
 }
 
 #[cfg(test)]
@@ -200,6 +304,27 @@ mod tests {
     }
 
     #[test]
+    fn rough_squares_are_rectangles_from_any_starting_point() {
+        let cases = [
+            [Point::new(0.0, 0.0), Point::new(100.0, 8.0), Point::new(94.0, 100.0), Point::new(10.0, 91.0)],
+            [Point::new(0.0, 8.0), Point::new(94.0, 0.0), Point::new(100.0, 95.0), Point::new(7.0, 100.0)],
+        ];
+        for vertices in cases {
+            for wobble in [0.5, 4.0] {
+                let mut stroke = wobbly(&vertices, 24, wobble);
+                stroke.pop();
+                for start in [0, 5, 12, 20, 30, 47, 60, 79] {
+                    stroke.rotate_left(start);
+                    let mut closed = stroke.clone();
+                    closed.push(stroke[0] + Vec2::new(2.0, -1.0));
+                    assert!(matches!(recognize(&closed), Some(Recognized::Rectangle(_))), "wobble {wobble}, start {start}: {:?}", recognize(&closed));
+                    stroke.rotate_right(start);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn ellipse_circle_triangle_hexagon_line() {
         assert!(
             matches!(recognize(&circle(Point::new(100.0, 100.0), 80.0, 40.0, 72)), Some(Recognized::Ellipse(r)) if r.width() > 150.0 && r.height() < 100.0)
@@ -218,6 +343,63 @@ mod tests {
         assert!(matches!(recognize(&wobbly(&hex, 15, 0.5)), Some(Recognized::Polygon { sides: 6, .. })), "{:?}", recognize(&wobbly(&hex, 15, 0.5)));
         let line: Vec<Point> = (0..30).map(|i| Point::new(i as f64 * 10.0, i as f64 * 3.0 + (i as f64).sin())).collect();
         assert!(matches!(recognize(&line), Some(Recognized::Line { .. })));
+    }
+
+    #[test]
+    fn circles_and_real_polygons_keep_their_identity_across_stroke_seams() {
+        for (rx, ry) in [(50.0, 50.0), (80.0, 40.0), (50.0, 40.0)] {
+            let mut stroke = circle(Point::new(100.0, 100.0), rx, ry, 192);
+            stroke.pop();
+            for start in [0, 13, 37, 62, 109] {
+                stroke.rotate_left(start);
+                let mut closed = stroke.clone();
+                closed.push(stroke[0]);
+                assert!(matches!(recognize(&closed), Some(Recognized::Ellipse(_))), "ellipse {rx}/{ry}, seam {start}: {:?}", recognize(&closed));
+                stroke.rotate_right(start);
+            }
+        }
+        for sides in [3, 5, 6, 8] {
+            let corners: Vec<Point> = (0..sides)
+                .map(|i| {
+                    let a = std::f64::consts::TAU * i as f64 / sides as f64;
+                    Point::new(100.0 + 80.0 * a.cos(), 100.0 + 80.0 * a.sin())
+                })
+                .collect();
+            let mut stroke = wobbly(&corners, 24, 1.0);
+            stroke.pop();
+            for start in [0, 9, 17, 29, 45] {
+                stroke.rotate_left(start);
+                let mut closed = stroke.clone();
+                closed.push(stroke[0]);
+                assert!(
+                    matches!(recognize(&closed), Some(Recognized::Polygon { sides: n, .. }) if n == sides),
+                    "{sides} sides, seam {start}: {:?}",
+                    recognize(&closed)
+                );
+                stroke.rotate_right(start);
+            }
+        }
+    }
+
+    #[test]
+    fn square_fit_ignores_sampling_density_and_document_offset() {
+        let mut stroke = wobbly(&[Point::new(0.0, 0.0), Point::new(100.0, 8.0), Point::new(94.0, 100.0), Point::new(10.0, 91.0)], 24, 4.0);
+        for scale in [0.25, 1.0, 20.0] {
+            let shifted: Vec<Point> = stroke.iter().map(|p| Point::new(1e9 + p.x * scale, -1e9 + p.y * scale)).collect();
+            assert!(matches!(recognize(&shifted), Some(Recognized::Rectangle(_))), "scale {scale}: {:?}", recognize(&shifted));
+        }
+        let dense: Vec<Point> = stroke.iter().enumerate().flat_map(|(i, p)| std::iter::repeat_n(*p, if i < 24 { 100 } else { 1 })).collect();
+        assert_eq!(recognize(&stroke), recognize(&dense));
+        stroke.extend(std::iter::repeat_n(*stroke.last().unwrap(), 10_000));
+        assert!(matches!(recognize(&stroke), Some(Recognized::Rectangle(_))));
+    }
+
+    #[test]
+    fn non_finite_and_overflowing_strokes_are_not_shapes() {
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(recognize(&[Point::new(0.0, 0.0), Point::new(bad, 100.0)]), None);
+        }
+        assert_eq!(recognize(&[Point::new(-f64::MAX, 0.0), Point::new(f64::MAX, 100.0)]), None);
     }
 
     #[test]

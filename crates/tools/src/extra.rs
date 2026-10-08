@@ -244,6 +244,10 @@ impl Tool for ShaperTool {
                 vec![]
             }
             PointerKind::Up => {
+                // A fast final segment may arrive only on release; it still closes the stroke.
+                if !self.points.is_empty() && self.points.last().is_none_or(|p| *p != ev.pos) {
+                    self.points.push(ev.pos);
+                }
                 let pts = std::mem::take(&mut self.points);
                 let r = |x: vectorcraft_geom::Rect| json!({ "x": x.x0, "y": x.y0, "width": x.width(), "height": x.height() });
                 match recognize(&pts) {

@@ -732,6 +732,34 @@ fn shaper_turns_rough_strokes_into_live_shapes_and_scribbles_delete() {
 }
 
 #[test]
+fn shaper_square_started_mid_edge_closes_on_pointer_release_and_undoes_once() {
+    let mut s = session();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("shaper", v).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (kind, x, y) in [
+        (PointerKind::Down, 150.0, 100.0),
+        (PointerKind::Drag, 200.0, 105.0),
+        (PointerKind::Drag, 194.0, 200.0),
+        (PointerKind::Drag, 110.0, 191.0),
+        (PointerKind::Drag, 100.0, 100.0),
+        (PointerKind::Up, 150.0, 100.0),
+    ] {
+        s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+    }
+    let id = *s.doc().unwrap().selection.objects.first().expect("recognized square");
+    assert!(matches!(
+        s.doc().unwrap().doc.node(id).unwrap().kind,
+        vectorcraft_doc::NodeKind::Path { live: Some(vectorcraft_doc::LiveShape::Rectangle { .. }), .. }
+    ));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_none());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_some());
+}
+
+#[test]
 fn a_panicking_command_rolls_back_instead_of_crashing() {
     let mut s = session();
     let a = rect(&mut s, 10.0, 10.0, 100.0, 50.0);
