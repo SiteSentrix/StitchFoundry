@@ -83,10 +83,10 @@ impl ArtboardTool {
                 Some(a) if art_moves => cx.doc.art_on_artboard(a.rect, cx.move_locked_with_artboard),
                 _ => vec![],
             };
-            Targets::for_artboard(cx.doc, index, &art)
+            Targets::for_artboard(cx.doc, index, &art).styled(cx)
         });
         // Nothing to skip: no artboard has this index.
-        self.copy_targets = cx.smart_guides.then(|| Targets::for_artboard(cx.doc, usize::MAX, &[]));
+        self.copy_targets = cx.smart_guides.then(|| Targets::for_artboard(cx.doc, usize::MAX, &[]).styled(cx));
     }
 
     /// Snap a dragged handle: to whole pixels, the grid, or Smart Guides (in that order, as when
@@ -101,7 +101,7 @@ impl ArtboardTool {
         }
         let Some(t) = &self.targets else { return p };
         let offsets: &[Vec2] = if bleed == Vec2::ZERO { &[] } else { &[bleed] };
-        let (q, ov) = t.snap_point_with(p, offsets, cx.tol(5.0));
+        let (q, ov) = t.snap_point_with(p, offsets, cx.snap_tol());
         self.guides = ov;
         q
     }
@@ -120,9 +120,9 @@ impl ArtboardTool {
         let Some(t) = (if copy { &self.copy_targets } else { &self.targets }) else { return d };
         let moved = rect + d;
         let (adj, ov) = if cx.doc.setup.has_bleed() {
-            t.snap_rects(&[moved, cx.doc.setup.bleed_rect(moved)], cx.tol(5.0))
+            t.snap_rects(&[moved, cx.doc.setup.bleed_rect(moved)], cx.snap_tol())
         } else {
-            t.snap_rect(moved, cx.tol(5.0))
+            t.snap_rect(moved, cx.snap_tol())
         };
         self.guides = ov;
         d + adj
@@ -291,7 +291,9 @@ impl Tool for ArtboardTool {
         if let Some(Drag::Create { start, cur }) = self.drag {
             let r = Rect::from_points(start, cur);
             o.push(Overlay::Marquee(r));
-            o.push(Overlay::Measure { p: cur + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.size_label(r.width(), r.height()) });
+            if cx.measurement_labels {
+                o.push(Overlay::Measure { p: cur + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.size_label(r.width(), r.height()) });
+            }
             return o;
         }
         let Some(ab) = cx.doc.artboards.get(self.active) else { return o };
@@ -301,7 +303,7 @@ impl Tool for ArtboardTool {
             o.push(Overlay::Anchor { p: h.pos(r), color: BLUE, filled: false, size: 7.0 });
         }
         o.push(Overlay::Label { p: Point::new(r.x0, r.y0 - cx.tol(14.0)), text: format!("{:02} - {}", self.active + 1, ab.name), color: BLUE });
-        if let Some(Drag::Resize { began: true, .. }) = self.drag {
+        if let (Some(Drag::Resize { began: true, .. }), true) = (self.drag, cx.measurement_labels) {
             o.push(Overlay::Measure {
                 p: Point::new(r.x1, r.y1) + Vec2::new(cx.tol(12.0), cx.tol(12.0)),
                 text: cx.size_label(r.width(), r.height()),

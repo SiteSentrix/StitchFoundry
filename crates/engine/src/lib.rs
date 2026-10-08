@@ -624,7 +624,7 @@ impl Default for Prefs {
             grid_subdivisions: 8,
             grids_in_back: true,
             show_pixel_grid: true,
-            smart_guide_color: s("#ff4af0"),
+            smart_guide_color: s("#ff3dfc"),
             alignment_guides: true,
             object_highlighting: true,
             transform_tools_guides: true,

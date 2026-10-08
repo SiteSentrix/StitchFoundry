@@ -248,7 +248,7 @@ impl Tool for TransformTool {
         {
             o.push(Overlay::Line { a: d.origin, b: *p, color: super::CYAN, dashed: true });
         }
-        if let Some((p, t)) = &self.measure {
+        if let (Some((p, t)), true) = (&self.measure, cx.transform_tools_guides) {
             o.push(Overlay::Measure { p: *p + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: t.clone() });
         }
         o

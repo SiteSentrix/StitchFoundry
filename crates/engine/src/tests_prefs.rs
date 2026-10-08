@@ -279,6 +279,82 @@ fn snap_to_point_lands_a_dragged_selection_on_anchors() {
     assert_eq!(drag(&mut s, ViewInfo { snap_to_point: false, ..v }), (276.5, 76.0), "View › Snap to Point off");
 }
 
+/// Preferences › Smart Guides (#394): Color, Alignment Guides, Anchor/Path Labels, Measurement
+/// Labels, Transform Tools and Snapping Tolerance change what the Selection tool shows while a
+/// square is dragged into line with another, and how far the pull reaches; a hidden guide still
+/// snaps.
+#[test]
+fn smart_guide_display_preferences_filter_the_overlays() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let mut s = new_doc();
+    square(&mut s, 100.0, 100.0);
+    let b = square(&mut s, 200.0, 100.0);
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let count = |s: &mut Session, f: &dyn Fn(&Overlay) -> bool| s.overlays(v).iter().filter(|o| f(o)).count();
+    let line = |o: &Overlay| matches!(o, Overlay::Line { .. });
+    let label = |o: &Overlay| matches!(o, Overlay::Label { .. });
+    let measure = |o: &Overlay| matches!(o, Overlay::Measure { .. });
+    // `b` grabbed by its centre and dragged so its left edge comes `off` px from the first
+    // square's right edge (x = 150): the x of its left edge mid-drag, before the pointer is let go.
+    let drag_to = |s: &mut Session, off: f64| {
+        gesture(s, v, &[(Down, 225.0, 125.0), (Drag, 200.0, 125.0), (Drag, 175.0 + off, 125.0)]);
+        top_left(s, b).0
+    };
+    let release = |s: &mut Session| {
+        gesture(s, v, &[(Up, 175.0, 125.0)]);
+        s.execute("edit.undo", &json!({})).unwrap();
+    };
+    assert_eq!(drag_to(&mut s, 3.0), 150.0, "3 px off: into line");
+    assert!(count(&mut s, &line) > 0 && count(&mut s, &measure) == 1);
+    let magenta = s.overlays(v).iter().find_map(|o| if let Overlay::Line { color, .. } = o { Some(*color) } else { None });
+    assert_eq!(magenta, Some(vectorcraft_tools::guides::MAGENTA), "the default colour");
+    release(&mut s);
+    set_pref(&mut s, "smartGuideColor", json!("#00ff00"));
+    drag_to(&mut s, 3.0);
+    assert!(s.overlays(v).iter().all(|o| !matches!(o, Overlay::Line { color, .. } | Overlay::Label { color, .. } if *color != [0, 255, 0])));
+    release(&mut s);
+    set_pref(&mut s, "alignmentGuides", json!(false));
+    assert_eq!(drag_to(&mut s, 3.0), 150.0, "still into line");
+    assert_eq!(count(&mut s, &line), 0, "no line");
+    release(&mut s);
+    set_pref(&mut s, "measurementLabels", json!(false));
+    drag_to(&mut s, 3.0);
+    assert_eq!(count(&mut s, &measure), 0);
+    release(&mut s);
+    // Snapping Tolerance: 6 px is beyond the default 4, within 8.
+    assert_eq!(drag_to(&mut s, 6.0), 156.0);
+    release(&mut s);
+    set_pref(&mut s, "snappingTolerance", json!(8));
+    assert_eq!(drag_to(&mut s, 6.0), 150.0);
+    release(&mut s);
+    // Transform Tools: the size readout while a bounding-box handle is dragged.
+    let scale = |s: &mut Session| {
+        gesture(s, v, &[(Down, 225.0, 150.0), (Drag, 225.0, 170.0)]);
+        let n = count(s, &measure);
+        gesture(s, v, &[(Up, 225.0, 170.0)]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        n
+    };
+    assert_eq!(scale(&mut s), 1);
+    set_pref(&mut s, "transformToolsGuides", json!(false));
+    assert_eq!(scale(&mut s), 0);
+    // Anchor/Path Labels: a drawn corner pulled onto an anchor says "anchor" (and still lands there).
+    s.select_tool("rectangle", v).unwrap();
+    let draw = |s: &mut Session| {
+        gesture(s, v, &[(Down, 300.0, 300.0), (Drag, 153.0, 151.0)]);
+        let n = count(s, &label);
+        gesture(s, v, &[(Up, 153.0, 151.0)]);
+        let at = top_left(s, s.doc().unwrap().selection.objects[0]);
+        s.execute("edit.undo", &json!({})).unwrap();
+        (n, at)
+    };
+    assert_eq!(draw(&mut s), (1, (150.0, 150.0)));
+    set_pref(&mut s, "anchorPathLabels", json!(false));
+    assert_eq!(draw(&mut s), (0, (150.0, 150.0)));
+}
+
 /// Enable Rubber Band for Pen Tool / Curvature Tool (#394): off, no segment follows the pointer.
 #[test]
 fn rubber_band_preferences_hide_the_preview_to_the_pointer() {

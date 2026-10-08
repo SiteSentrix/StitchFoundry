@@ -198,7 +198,7 @@ impl FreeTransformTool {
             Op::Scale(h) => {
                 let mut a = scale_for_drag(d.rect, h, p, shift, m.alt);
                 if let Some(t) = &self.targets {
-                    (a, self.guides) = t.snap_scale(&vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt, cx.tol(5.0));
+                    (a, self.guides) = t.snap_scale(&vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt, cx.snap_tol());
                 }
                 let nr = a.transform_rect_bbox(d.rect);
                 self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
@@ -232,8 +232,8 @@ impl Tool for FreeTransformTool {
                 self.drag = None;
                 let Some(r) = selection_bounds(cx) else { return vec![] };
                 if let Some(op) = self.classify(cx, r, p, ev.mods) {
-                    self.targets =
-                        (cx.smart_guides && op.handle().is_some()).then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None));
+                    self.targets = (cx.smart_guides && op.handle().is_some())
+                        .then(|| crate::guides::Targets::collect(cx.doc, &cx.selection.objects, None).styled(cx));
                     self.drag = Some(Drag { op, rect: r, start: p, began: false });
                 }
                 vec![]
@@ -304,7 +304,7 @@ impl Tool for FreeTransformTool {
             }
         }
         o.extend(self.guides.iter().cloned());
-        if let Some((p, t)) = &self.measure {
+        if let (Some((p, t)), true) = (&self.measure, cx.transform_tools_guides) {
             o.push(Overlay::Measure { p: *p + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: t.clone() });
         }
         o

@@ -44,6 +44,14 @@ impl Default for ViewInfo {
     }
 }
 
+/// The RGB of a colour preference (`#rrggbb`), or `fallback` when it doesn't parse.
+fn rgb(hex: &str, fallback: [u8; 3]) -> [u8; 3] {
+    vectorcraft_color::Color::from_hex(hex).map_or(fallback, |c| {
+        let [r, g, b, _] = c.to_rgba8(1.0);
+        [r, g, b]
+    })
+}
+
 /// Requests from tools that only the frontend can fulfil.
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiRequest {
@@ -168,6 +176,12 @@ impl Session {
             pen_rubber_band: self.prefs.pen_rubber_band,
             curvature_rubber_band: self.prefs.curvature_rubber_band,
             placeholder_text: self.prefs.placeholder_text,
+            smart_guide_color: rgb(&self.prefs.smart_guide_color, vectorcraft_tools::guides::MAGENTA),
+            alignment_guides: self.prefs.alignment_guides,
+            anchor_path_labels: self.prefs.anchor_path_labels,
+            measurement_labels: self.prefs.measurement_labels,
+            transform_tools_guides: self.prefs.transform_tools_guides,
+            snapping_tolerance: self.prefs.snapping_tolerance,
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
         };

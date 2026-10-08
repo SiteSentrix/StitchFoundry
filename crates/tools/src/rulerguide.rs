@@ -67,7 +67,7 @@ impl GuideSnap {
         let targets = if cx.snap_to_pixel || cx.snap_to_grid {
             None
         } else if cx.smart_guides {
-            Some((targets(), 5.0))
+            Some((targets().styled(cx), cx.snapping_tolerance))
         } else if cx.snap_to_point {
             Some((targets().anchors_only(), cx.snap_tolerance))
         } else {
@@ -98,8 +98,10 @@ impl GuideSnap {
     /// The target the guide at `at` snapped to, and its position by the `pointer`.
     fn overlays(&self, cx: &ToolContext, vertical: bool, at: f64, pointer: Point) -> Vec<Overlay> {
         let mut o = self.snapped.clone();
-        let axis = if vertical { "X" } else { "Y" };
-        o.push(Overlay::Measure { p: pointer, text: format!("{axis}: {}", cx.len(at)) });
+        if cx.measurement_labels {
+            let axis = if vertical { "X" } else { "Y" };
+            o.push(Overlay::Measure { p: pointer, text: format!("{axis}: {}", cx.len(at)) });
+        }
         o
     }
 }

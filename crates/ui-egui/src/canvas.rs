@@ -1118,6 +1118,10 @@ fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf)
 
 fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
+    // Smart Guides › Object Highlighting: a Smart Guides display option, so it needs them on.
+    if !app.ui.view.smart_guides || !app.session.prefs.object_highlighting {
+        return;
+    }
     if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
         return;
     }
@@ -2014,6 +2018,32 @@ mod tests {
         assert!(dots(&mut app).is_empty(), "off: none for two anchors");
         select(&mut app, json!([[0, 1]]));
         assert_eq!(dots(&mut app).len(), 2, "one anchor still shows them");
+    }
+
+    /// Smart Guides › Object Highlighting (#394): the outline of the object under the pointer
+    /// shows with Smart Guides on and the option on, and not otherwise.
+    #[test]
+    fn object_highlighting_preference_hides_the_hover_outline() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let over = Xf::new(rect, app.view().unwrap()).to_screen(Point::new(150.0, 150.0));
+        let layer = egui::epaint::ColorMode::Solid(c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id))));
+        // The hover outline: 1.5 px lines in the layer colour.
+        let outlines = |app: &mut VectorcraftApp| {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(over)]);
+            shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(ps) if ps.stroke.width == 1.5 && ps.stroke.color == layer)).count()
+        };
+        assert!(outlines(&mut app) > 0, "highlighted by default");
+        app.session.execute("prefs.set", &json!({"key": "objectHighlighting", "value": false})).unwrap();
+        assert_eq!(outlines(&mut app), 0, "the option off");
+        app.session.execute("prefs.set", &json!({"key": "objectHighlighting", "value": true})).unwrap();
+        app.ui.view.smart_guides = false;
+        assert_eq!(outlines(&mut app), 0, "Smart Guides off");
     }
 
     /// Hide Corner Widget for angles greater than (#394): a rectangle's 90° corners lose their

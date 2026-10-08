@@ -301,6 +301,20 @@ pub struct ToolContext<'a> {
     /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
     /// placeholder text, selected.
     pub placeholder_text: bool,
+    /// Smart Guides → Color: the smart guides' lines and labels (RGB).
+    pub smart_guide_color: [u8; 3],
+    /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up
+    /// with show. Off, the art still snaps into line.
+    pub alignment_guides: bool,
+    /// Smart Guides → Anchor/Path Labels: the "anchor", "center", "path"… labels show.
+    pub anchor_path_labels: bool,
+    /// Smart Guides → Measurement Labels: the size and offset readouts while drawing and moving.
+    pub measurement_labels: bool,
+    /// Smart Guides → Transform Tools: the readouts while scaling, rotating and shearing.
+    pub transform_tools_guides: bool,
+    /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
+    /// pointer, a dragged edge or a drawn point.
+    pub snapping_tolerance: f64,
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
@@ -311,6 +325,10 @@ impl ToolContext<'_> {
     /// Tolerance in document units for `px` screen pixels.
     pub fn tol(&self, px: f64) -> f64 {
         px / self.zoom.max(1e-9)
+    }
+    /// How near (document units) a smart guide target pulls: Smart Guides → Snapping Tolerance.
+    pub fn snap_tol(&self) -> f64 {
+        self.tol(self.snapping_tolerance)
     }
     /// A length as measurement labels show it, in the General unit (`12.50 mm`).
     pub fn len(&self, v: f64) -> String {
@@ -637,6 +655,12 @@ pub(crate) mod testutil {
             pen_rubber_band: true,
             curvature_rubber_band: true,
             placeholder_text: false,
+            smart_guide_color: guides::MAGENTA,
+            alignment_guides: true,
+            anchor_path_labels: true,
+            measurement_labels: true,
+            transform_tools_guides: true,
+            snapping_tolerance: 4.0,
             screen: None,
             plane_widget: Some(Default::default()),
         }

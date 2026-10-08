@@ -186,7 +186,7 @@ impl Tool for FamilyTool {
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         match self.start {
-            Some(s) if self.began => {
+            Some(s) if self.began && cx.measurement_labels => {
                 let d = self.last - s;
                 vec![Overlay::Measure { p: self.last, text: cx.size_label(d.x.abs(), d.y.abs()) }]
             }
