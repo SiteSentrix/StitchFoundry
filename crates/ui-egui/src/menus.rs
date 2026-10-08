@@ -2642,9 +2642,24 @@ pub fn context_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut 
 /// The in-window menu bar. Returns where its titles end (x): the bar itself takes the full width.
 pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     let t = Tokens::get(ui.ctx());
+    let ctx = ui.ctx().clone();
+    // The press that opens a menu takes the keyboard from a focused text field: the field and its
+    // selection are kept while the menus are open, so their Select All, Cut, Copy and Paste act on
+    // its text (#516), the frame after the click that chose them (that click takes the keyboard
+    // from it again).
+    type Field = (egui::Id, egui::text_edit::TextEditState);
+    let (field_key, chosen_key) = (egui::Id::new("menu-bar-field"), egui::Id::new("menu-bar-field-event"));
+    if let Some(((field, state), e)) = ctx.data(|d| d.get_temp::<(Field, egui::Event)>(chosen_key)) {
+        ctx.data_mut(|d| d.remove::<(Field, egui::Event)>(chosen_key));
+        state.store(&ctx, field);
+        to_field(&ctx, field, e);
+    }
+    if let Some(field) = focused_text_field(&ctx).and_then(|id| Some((id, egui::TextEdit::load_state(&ctx, id)?))) {
+        ctx.data_mut(|d| d.insert_temp::<Field>(field_key, field));
+    }
     let mut clicked: Option<(String, Value)> = None;
     let tree = menu_tree();
-    let end = egui::MenuBar::new()
+    let (end, open) = egui::MenuBar::new()
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());
             for (i, (title, items)) in tree.iter().enumerate() {
@@ -2655,12 +2670,21 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
                 };
                 titles.push(ui.menu_button(text, |ui| menu_body(app, ui, items, &mut clicked)).response);
             }
-            switch_on_hover(ui.ctx(), &titles);
-            ui.cursor().min.x
+            (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
         })
         .inner;
+    let field = ctx.data(|d| d.get_temp::<Field>(field_key));
+    if !open && focused_text_field(&ctx).is_none() {
+        ctx.data_mut(|d| d.remove::<Field>(field_key));
+    }
     if let Some((id, p)) = clicked {
-        invoke(app, &id, p);
+        match field.and_then(|f| Some((f, field_event(app, &id)?))) {
+            Some(chosen) => {
+                ctx.data_mut(|d| d.insert_temp(chosen_key, chosen));
+                ctx.request_repaint();
+            }
+            None => invoke(app, &id, p),
+        }
     }
     end
 }
@@ -2673,29 +2697,25 @@ fn pointer_reaches_title(ctx: &egui::Context, title: &egui::Response, p: egui::P
 }
 
 /// Like a native menu bar: while one top-level menu is open, moving the pointer onto another
-/// title opens that menu instead (egui alone needs a click on each title).
-fn switch_on_hover(ctx: &egui::Context, titles: &[egui::Response]) {
+/// title opens that menu instead (egui alone needs a click on each title). Returns whether a menu
+/// is open.
+fn switch_on_hover(ctx: &egui::Context, titles: &[egui::Response]) -> bool {
     let ids: Vec<egui::Id> = titles.iter().map(egui::Popup::default_response_id).collect();
     let Some(open) = ids.iter().position(|id| egui::Popup::is_id_open(ctx, *id)) else {
-        return;
+        return false;
     };
     // `Response::hovered` is false while a menu's popup is open, so hit-test the titles here.
-    let Some(p) = ctx.pointer_hover_pos() else {
-        return;
-    };
     // Only a moving pointer switches: one resting on a title leaves the open menu alone.
-    if ctx.input(|i| i.pointer.delta() == egui::Vec2::ZERO) {
-        return;
-    }
-    let Some(i) = titles.iter().position(|title| pointer_reaches_title(ctx, title, p)) else {
-        return;
-    };
-    if i != open
+    let moving = ctx.input(|i| i.pointer.delta() != egui::Vec2::ZERO);
+    if let Some(p) = ctx.pointer_hover_pos().filter(|_| moving)
+        && let Some(i) = titles.iter().position(|title| pointer_reaches_title(ctx, title, p))
+        && i != open
         && let Some(id) = ids.get(i)
     {
         egui::Popup::open_id(ctx, *id);
         ctx.request_repaint();
     }
+    true
 }
 
 /// A top-level menu's popup: as wide as its widest item (label plus shortcut), at least 230 pt;
@@ -2840,13 +2860,21 @@ fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
 /// Copy and Paste act on the field's text, as their keys do; everything else (and those commands
 /// with no field focused) goes to [`invoke`].
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
-    if ctx.text_edit_focused()
-        && let Some(e) = field_event(app, id)
-    {
-        ctx.input_mut(|i| i.events.push(e));
-        return;
+    match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
+        Some((field, e)) => to_field(ctx, field, e),
+        None => invoke(app, id, p),
     }
-    invoke(app, id, p);
+}
+
+/// The text field that has the keyboard, if any.
+fn focused_text_field(ctx: &egui::Context) -> Option<egui::Id> {
+    ctx.memory(|m| m.focused()).filter(|&id| egui::TextEdit::load_state(ctx, id).is_some())
+}
+
+/// Give text field `field` the keyboard (back) and event `e`, a [`field_event`], this frame.
+fn to_field(ctx: &egui::Context, field: egui::Id, e: egui::Event) {
+    ctx.memory_mut(|m| m.request_focus(field));
+    ctx.input_mut(|i| i.events.push(e));
 }
 
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
