@@ -3060,3 +3060,7 @@ theme	Appearance	外観
 	Off: an editable copy of its art, embedded in this document.	オフ：アートの編集可能なコピーをこのドキュメントに埋め込みます。
 	Images: link to the file instead of only embedding it.	画像：埋め込むだけでなく、ファイルにリンクします。
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft ドキュメント：ロックされた 1 つのオブジェクト。ファイルの変更時に更新されます。
+	Shaper	Shaper
+	Expand Shaper Group	Shaper グループを拡張
+	Release Shaper Group	Shaper グループを解除
+	Select Shaper Face	Shaper の面を選択

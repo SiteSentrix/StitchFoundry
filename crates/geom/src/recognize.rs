@@ -5,7 +5,7 @@
 //! its bounding box. Samples are spaced by distance so pointer speed does not bias the fit.
 //! A zig-zag stroke with several reversals is a scribble (the Shaper deletes what it covers).
 
-use crate::{Point, Rect, Vec2};
+use crate::{Affine, Point, Rect, Vec2};
 
 /// What the Shaper recognised.
 #[derive(Clone, Debug, PartialEq)]
@@ -14,10 +14,16 @@ pub enum Recognized {
         a: Point,
         b: Point,
     },
-    /// Axis-aligned rectangle (squares snap when the sides are within 10%).
-    Rectangle(Rect),
-    /// Axis-aligned ellipse in `rect` (circles snap when the axes are within 10%).
-    Ellipse(Rect),
+    /// Rectangle at a 45° step (squares snap when the sides are within 10%).
+    Rectangle {
+        rect: Rect,
+        rotation: f64,
+    },
+    /// Ellipse at a 45° step (circles snap when the axes are within 10%).
+    Ellipse {
+        rect: Rect,
+        rotation: f64,
+    },
     /// Regular polygon (triangle, pentagon, hexagon…): centre, radius, side count and the rotation
     /// (degrees) of the first vertex from straight up.
     Polygon {
@@ -163,11 +169,59 @@ fn right_angles(corners: &[Point], size: f64) -> bool {
     })
 }
 
-fn axis_aligned(corners: &[Point]) -> bool {
-    corners.iter().zip(corners.iter().cycle().skip(1)).all(|(&a, &b)| {
-        let edge = b - a;
-        edge.x.abs().min(edge.y.abs()) < 0.4 * edge.hypot()
-    })
+/// Fit all vertices, so neither the starting point nor drawing direction picks the orientation.
+fn polygon_rotation(corners: &[Point], step: f64) -> f64 {
+    let Some(&origin) = corners.first() else { return 0.0 };
+    let n = corners.len() as f64;
+    let center = origin + corners.iter().fold(Vec2::ZERO, |sum, p| sum + (*p - origin) / n);
+    let period = 360.0 / n;
+    let error = |rotation: f64| {
+        corners
+            .iter()
+            .map(|p| {
+                let angle = (*p - center).atan2().to_degrees() + 90.0;
+                let delta = (angle - rotation).rem_euclid(period);
+                delta.min(period - delta).powi(2)
+            })
+            .sum::<f64>()
+    };
+    [0.0, 90.0, 180.0, 270.0].into_iter().filter(|r| r % step == 0.0).min_by(|a, b| error(*a).total_cmp(&error(*b))).unwrap_or(0.0)
+}
+
+fn rectangle_rotation(corners: &[Point]) -> f64 {
+    let (sin, cos) = corners.iter().zip(corners.iter().cycle().skip(1)).fold((0.0, 0.0), |(sin, cos), (&a, &b)| {
+        let angle = (b - a).atan2() * 4.0;
+        (sin + angle.sin(), cos + angle.cos())
+    });
+    (sin.atan2(cos).to_degrees() / 4.0 / 45.0).round().mul_add(45.0, 0.0).rem_euclid(180.0)
+}
+
+fn ellipse_rotation(pts: &[Point]) -> f64 {
+    let Some(&origin) = pts.first() else { return 0.0 };
+    let n = pts.len() as f64;
+    let center = origin + pts.iter().fold(Vec2::ZERO, |sum, p| sum + (*p - origin) / n);
+    let (xx, yy, xy) = pts.iter().fold((0.0, 0.0, 0.0), |(xx, yy, xy), p| {
+        let v = *p - center;
+        (xx + v.x * v.x, yy + v.y * v.y, xy + v.x * v.y)
+    });
+    // A near-circle has no useful orientation; keep it upright rather than following noise.
+    if (xx - yy).hypot(2.0 * xy) < 0.1 * (xx + yy) {
+        return 0.0;
+    }
+    ((2.0 * xy).atan2(xx - yy).to_degrees() / 2.0 / 45.0).round().mul_add(45.0, 0.0).rem_euclid(180.0)
+}
+
+/// Dimensions in the fitted frame, but the centre stays in document coordinates.
+fn oriented_bounds(pts: &[Point], rotation: f64) -> Rect {
+    if rotation == 0.0 {
+        return bbox(pts);
+    }
+    let origin = pts.first().copied().unwrap_or(Point::ZERO);
+    let rotate = Affine::rotate(rotation.to_radians());
+    let inverse = Affine::rotate(-rotation.to_radians());
+    let local: Vec<Point> = pts.iter().map(|p| inverse * (*p - origin).to_point()).collect();
+    let b = bbox(&local);
+    Rect::from_center_size(origin + (rotate * b.center()).to_vec2(), (b.width(), b.height()))
 }
 
 /// Number of sharp direction reversals (turns of more than 120°) along the stroke.
@@ -195,13 +249,21 @@ pub fn recognize(pts: &[Point]) -> Option<Recognized> {
     if !len.is_finite() || len <= 0.0 {
         return None;
     }
+    let original = pts;
     let samples = resample(pts, len);
     let pts = samples.as_slice();
     let (&first, &last) = (pts.first()?, pts.last()?);
     let chord = first.distance(last);
     // Scribble: several sharp reversals packed into a small area relative to the stroke length.
-    if reversals(pts, size * 0.08) >= 3 && len > 3.0 * size {
-        return Some(Recognized::Scribble(b));
+    if reversals(pts, size * 0.08) >= 2 && len > 1.5 * size {
+        // An equilateral triangle turns 120° at its vertices: drawing noise can make all
+        // three turns just exceed the reversal threshold. Its closed, straight edges and
+        // substantial area distinguish it from a deletion scribble.
+        let corners = closed_corners(pts, size * 0.12);
+        let triangle = chord <= 0.25 * size && corners.len() == 3 && area(pts) > 0.2 * size * size && is_polygonal(pts, &corners, size, 0.055);
+        if !triangle {
+            return Some(Recognized::Scribble(b));
+        }
     }
     // Line: every point near the chord.
     let max_dev = pts.iter().map(|p| dist_to_segment(*p, first, last)).fold(0.0, f64::max);
@@ -230,23 +292,21 @@ pub fn recognize(pts: &[Point]) -> Option<Recognized> {
     match corners.len() {
         3 => {
             let radius = corners.iter().map(|p| p.distance(center)).sum::<f64>() / 3.0;
-            // Rotation of the vertex nearest straight up (y grows downward).
-            let top = corners.iter().copied().min_by(|a, b| a.y.total_cmp(&b.y)).unwrap_or(center);
-            let rot = (top - center).atan2().to_degrees() + 90.0;
-            Some(Recognized::Polygon { center, radius, sides: 3, rotation: rot })
+            Some(Recognized::Polygon { center, radius, sides: 3, rotation: polygon_rotation(&corners, 180.0) })
         }
-        4 if is_rectangle(pts, &corners, size) && axis_aligned(&corners) => Some(Recognized::Rectangle(square(b))),
-        // A diamond: a square standing on a corner.
-        4 if (0.4..0.62).contains(&fill) && is_rectangle(pts, &corners, size) => {
-            let radius = corners.iter().map(|p| p.distance(center)).sum::<f64>() / 4.0;
-            Some(Recognized::Polygon { center, radius, sides: 4, rotation: 0.0 })
+        4 if is_rectangle(pts, &corners, size) => {
+            let rotation = rectangle_rotation(&corners);
+            Some(Recognized::Rectangle { rect: square(oriented_bounds(original, rotation)), rotation })
         }
         n @ 5..=8 if fill > 0.6 && fill < 0.85 && is_polygonal(pts, &corners, size, 0.02) => {
             let radius = corners.iter().map(|p| p.distance(center)).sum::<f64>() / n as f64;
-            Some(Recognized::Polygon { center, radius, sides: n as u32, rotation: 0.0 })
+            Some(Recognized::Polygon { center, radius, sides: n as u32, rotation: if n == 6 { polygon_rotation(&corners, 90.0) } else { 0.0 } })
         }
-        _ if fill > 0.6 => Some(Recognized::Ellipse(square(b))),
-        _ => None,
+        _ => {
+            let rotation = ellipse_rotation(pts);
+            let rect = oriented_bounds(original, rotation);
+            (area(pts) / (rect.width() * rect.height()).max(1e-9) > 0.6).then(|| Recognized::Ellipse { rect: square(rect), rotation })
+        }
     }
 }
 
@@ -296,10 +356,10 @@ mod tests {
     #[test]
     fn rough_rectangle_and_square() {
         let r = wobbly(&[Point::new(0.0, 0.0), Point::new(200.0, 0.0), Point::new(200.0, 100.0), Point::new(0.0, 100.0)], 20, 2.0);
-        let Some(Recognized::Rectangle(b)) = recognize(&r) else { panic!("{:?}", recognize(&r)) };
+        let Some(Recognized::Rectangle { rect: b, .. }) = recognize(&r) else { panic!("{:?}", recognize(&r)) };
         assert!((b.width() - 200.0).abs() < 8.0 && (b.height() - 100.0).abs() < 8.0);
         let s = wobbly(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 95.0), Point::new(0.0, 95.0)], 20, 1.0);
-        let Some(Recognized::Rectangle(b)) = recognize(&s) else { panic!() };
+        let Some(Recognized::Rectangle { rect: b, .. }) = recognize(&s) else { panic!() };
         assert!((b.width() - b.height()).abs() < 1e-9, "near-squares snap to squares");
     }
 
@@ -317,7 +377,11 @@ mod tests {
                     stroke.rotate_left(start);
                     let mut closed = stroke.clone();
                     closed.push(stroke[0] + Vec2::new(2.0, -1.0));
-                    assert!(matches!(recognize(&closed), Some(Recognized::Rectangle(_))), "wobble {wobble}, start {start}: {:?}", recognize(&closed));
+                    assert!(
+                        matches!(recognize(&closed), Some(Recognized::Rectangle { .. })),
+                        "wobble {wobble}, start {start}: {:?}",
+                        recognize(&closed)
+                    );
                     stroke.rotate_right(start);
                 }
             }
@@ -327,10 +391,10 @@ mod tests {
     #[test]
     fn ellipse_circle_triangle_hexagon_line() {
         assert!(
-            matches!(recognize(&circle(Point::new(100.0, 100.0), 80.0, 40.0, 72)), Some(Recognized::Ellipse(r)) if r.width() > 150.0 && r.height() < 100.0)
+            matches!(recognize(&circle(Point::new(100.0, 100.0), 80.0, 40.0, 72)), Some(Recognized::Ellipse { rect: r, .. }) if r.width() > 150.0 && r.height() < 100.0)
         );
         assert!(
-            matches!(recognize(&circle(Point::new(100.0, 100.0), 50.0, 48.0, 72)), Some(Recognized::Ellipse(r)) if (r.width() - r.height()).abs() < 1e-9)
+            matches!(recognize(&circle(Point::new(100.0, 100.0), 50.0, 48.0, 72)), Some(Recognized::Ellipse { rect: r, .. }) if (r.width() - r.height()).abs() < 1e-9)
         );
         let tri = wobbly(&[Point::new(100.0, 0.0), Point::new(200.0, 170.0), Point::new(0.0, 170.0)], 25, 1.5);
         assert!(matches!(recognize(&tri), Some(Recognized::Polygon { sides: 3, rotation, .. }) if rotation.abs() < 5.0), "{:?}", recognize(&tri));
@@ -354,7 +418,7 @@ mod tests {
                 stroke.rotate_left(start);
                 let mut closed = stroke.clone();
                 closed.push(stroke[0]);
-                assert!(matches!(recognize(&closed), Some(Recognized::Ellipse(_))), "ellipse {rx}/{ry}, seam {start}: {:?}", recognize(&closed));
+                assert!(matches!(recognize(&closed), Some(Recognized::Ellipse { .. })), "ellipse {rx}/{ry}, seam {start}: {:?}", recognize(&closed));
                 stroke.rotate_right(start);
             }
         }
@@ -382,16 +446,104 @@ mod tests {
     }
 
     #[test]
+    fn rough_triangles_snap_upright_or_upside_down() {
+        for direction in [0.0_f64, 180.0] {
+            for tilt in [-12.0_f64, -3.0, 4.0, 11.0] {
+                let corners: Vec<Point> = (0..3)
+                    .map(|i| {
+                        let a = (direction + tilt - 90.0).to_radians() + std::f64::consts::TAU * i as f64 / 3.0;
+                        Point::new(200.0 + 80.0 * a.cos(), 300.0 + 80.0 * a.sin())
+                    })
+                    .collect();
+                for reversed in [false, true] {
+                    let mut stroke = wobbly(&corners, 24, 1.5);
+                    stroke.pop();
+                    if reversed {
+                        stroke.reverse();
+                    }
+                    for seam in [0, 9, 28, 51] {
+                        stroke.rotate_left(seam);
+                        let mut closed = stroke.clone();
+                        closed.push(stroke[0]);
+                        let Some(Recognized::Polygon { sides: 3, rotation, .. }) = recognize(&closed) else {
+                            panic!("direction {direction}, tilt {tilt}, seam {seam}: {:?}", recognize(&closed));
+                        };
+                        assert_eq!(rotation, direction, "tilt {tilt}, seam {seam}, reversed {reversed}");
+                        stroke.rotate_right(seam);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn recognized_lines_keep_their_free_angle() {
+        for (dx, dy) in [(120.0, 7.0), (-130.0, -9.0), (8.0, 90.0), (-6.0, -140.0), (60.0, 50.0), (-50.0, -60.0)] {
+            let first = Point::new(200.0, 300.0);
+            let last = first + Vec2::new(dx, dy);
+            let stroke: Vec<Point> = (0..=30).map(|i| first + (last - first) * (i as f64 / 30.0)).collect();
+            assert_eq!(recognize(&stroke), Some(Recognized::Line { a: first, b: last }));
+        }
+    }
+
+    #[test]
+    fn tilted_rectangles_ellipses_and_hexagons_snap_to_their_angle_steps() {
+        for direction in [0.0_f64, 45.0, 90.0, 135.0] {
+            for tilt in [-7.0_f64, 7.0] {
+                let xf = Affine::translate((200.0, 300.0)) * Affine::rotate((direction + tilt).to_radians());
+                let corners: Vec<Point> =
+                    [(-90.0, -40.0), (90.0, -40.0), (90.0, 40.0), (-90.0, 40.0)].into_iter().map(|p| xf * Point::from(p)).collect();
+                let stroke = wobbly(&corners, 24, 1.0);
+                let Some(Recognized::Rectangle { rect, rotation }) = recognize(&stroke) else {
+                    panic!("rectangle {direction}: {:?}", recognize(&stroke))
+                };
+                assert_eq!(rotation % 45.0, 0.0);
+                assert!(rect.center().distance(Point::new(200.0, 300.0)) < 4.0);
+                assert!((rect.width().max(rect.height()) - 180.0).abs() < 15.0);
+                let ellipse: Vec<Point> = circle(Point::ZERO, 90.0, 40.0, 192).into_iter().map(|p| xf * p).collect();
+                let Some(Recognized::Ellipse { rect, rotation }) = recognize(&ellipse) else {
+                    panic!("ellipse {direction}: {:?}", recognize(&ellipse))
+                };
+                assert_eq!(rotation, direction);
+                assert!((rect.width() - 180.0).abs() < 4.0 && (rect.height() - 80.0).abs() < 4.0);
+            }
+        }
+        for direction in [0.0_f64, 90.0] {
+            for tilt in [-7.0_f64, 7.0] {
+                let corners: Vec<Point> = (0..6)
+                    .map(|i| {
+                        let a = (direction + tilt - 90.0).to_radians() + std::f64::consts::TAU * i as f64 / 6.0;
+                        Point::new(200.0 + 70.0 * a.cos(), 300.0 + 70.0 * a.sin())
+                    })
+                    .collect();
+                let stroke = wobbly(&corners, 24, 0.5);
+                let Some(Recognized::Polygon { sides: 6, rotation, .. }) = recognize(&stroke) else { panic!("hexagon: {:?}", recognize(&stroke)) };
+                assert_eq!(rotation, direction);
+            }
+        }
+        // Even sideways input can only produce an upright or inverted triangle.
+        for direction in [83.0_f64, 97.0, 263.0, 277.0] {
+            let corners: Vec<Point> = (0..3)
+                .map(|i| {
+                    let a = (direction - 90.0).to_radians() + std::f64::consts::TAU * i as f64 / 3.0;
+                    Point::new(200.0 + 70.0 * a.cos(), 300.0 + 70.0 * a.sin())
+                })
+                .collect();
+            assert!(matches!(recognize(&wobbly(&corners, 24, 0.5)), Some(Recognized::Polygon { sides: 3, rotation: 0.0 | 180.0, .. })));
+        }
+    }
+
+    #[test]
     fn square_fit_ignores_sampling_density_and_document_offset() {
         let mut stroke = wobbly(&[Point::new(0.0, 0.0), Point::new(100.0, 8.0), Point::new(94.0, 100.0), Point::new(10.0, 91.0)], 24, 4.0);
         for scale in [0.25, 1.0, 20.0] {
             let shifted: Vec<Point> = stroke.iter().map(|p| Point::new(1e9 + p.x * scale, -1e9 + p.y * scale)).collect();
-            assert!(matches!(recognize(&shifted), Some(Recognized::Rectangle(_))), "scale {scale}: {:?}", recognize(&shifted));
+            assert!(matches!(recognize(&shifted), Some(Recognized::Rectangle { .. })), "scale {scale}: {:?}", recognize(&shifted));
         }
         let dense: Vec<Point> = stroke.iter().enumerate().flat_map(|(i, p)| std::iter::repeat_n(*p, if i < 24 { 100 } else { 1 })).collect();
         assert_eq!(recognize(&stroke), recognize(&dense));
         stroke.extend(std::iter::repeat_n(*stroke.last().unwrap(), 10_000));
-        assert!(matches!(recognize(&stroke), Some(Recognized::Rectangle(_))));
+        assert!(matches!(recognize(&stroke), Some(Recognized::Rectangle { .. })));
     }
 
     #[test]

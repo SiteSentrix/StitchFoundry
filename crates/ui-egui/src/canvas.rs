@@ -1072,7 +1072,8 @@ fn too_many_anchors<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> bool {
                 None => return true,
             }
         }
-        !matches!(n.kind, NodeKind::Envelope { .. }) && n.children().into_iter().flatten().any(|c| over(c, left))
+        !matches!(n.kind, NodeKind::Envelope { .. })
+            && n.children().into_iter().flatten().skip(usize::from(n.shaper.is_some())).any(|c| over(c, left))
     }
     let mut left = OVERLAY_MAX_ANCHORS;
     nodes.into_iter().any(|n| over(n, &mut left))
@@ -1085,7 +1086,7 @@ fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     if matches!(n.kind, NodeKind::Envelope { .. }) {
         return;
     }
-    for c in n.children().into_iter().flatten() {
+    for c in n.children().into_iter().flatten().skip(usize::from(n.shaper.is_some())) {
         walk_drawn(c, f);
     }
 }
@@ -1100,6 +1101,7 @@ fn hit_at(app: &VectorcraftApp, p: Point, zoom: f64) -> Option<vectorcraft_doc::
         outline: app.ui.view.outline,
         path_only: prefs.object_selection_by_path_only,
         type_path_only: prefs.type_selection_by_path_only,
+        scope: app.session.active().and_then(|st| st.isolation),
     };
     vectorcraft_doc::hit::hit_test(&app.session.active()?.doc, p, opt)
 }
@@ -1837,6 +1839,24 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
+    use vectorcraft_geom::Shape as _;
+
+    #[test]
+    fn shaper_selection_highlights_only_the_visible_result() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        s.execute("shape.ellipse", &json!({"x":100,"y":100,"width":100,"height":100})).unwrap();
+        let line = vectorcraft_doc::NodeId(s.execute("shape.line", &json!({"x1":50,"y1":150,"x2":250,"y2":150})).unwrap()["id"].as_u64().unwrap());
+        for x in [0.0, 150.0] {
+            s.execute("shaper.scribble", &json!({"points":[[60.0+x,140],[70.0+x,160],[80.0+x,140],[90.0+x,160]]})).unwrap();
+        }
+        let st = s.active().unwrap();
+        let g = st.doc.node(st.selection.objects[0]).unwrap();
+        assert!(g.shaper.is_some());
+        let bounds = node_outline(g).bounding_box();
+        assert!((bounds.x0 - 100.0).abs() < 0.01 && (bounds.x1 - 200.0).abs() < 0.01, "{bounds:?}");
+        assert_eq!(node_outline(st.doc.node(line).unwrap()).bounding_box().x0, 50.0, "an isolated original still shows its full outline");
+    }
 
     /// One headless canvas frame on an 800 × 600 window.
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {

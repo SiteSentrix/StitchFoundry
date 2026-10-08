@@ -33,6 +33,7 @@ mod reach;
 pub mod recolor;
 pub mod selection;
 pub mod setup;
+pub mod shaper;
 pub mod slices;
 pub mod style_libs;
 pub mod swatches;

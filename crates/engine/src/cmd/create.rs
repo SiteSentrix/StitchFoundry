@@ -9,8 +9,16 @@ use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("shape.rectangle", "Rectangle", [], None, "{x, y, width, height, radius?: pt} → {id}", has_doc, rectangle),
-        cmd!("shape.ellipse", "Ellipse", [], None, "{x, y, width, height} → {id}", has_doc, ellipse),
+        cmd!(
+            "shape.rectangle",
+            "Rectangle",
+            [],
+            None,
+            "{x, y, width, height, radius?: pt, rotation?: deg (about centre)} → {id}",
+            has_doc,
+            rectangle
+        ),
+        cmd!("shape.ellipse", "Ellipse", [], None, "{x, y, width, height, rotation?: deg (about centre)} → {id}", has_doc, ellipse),
         cmd!("shape.polygon", "Polygon", [], None, "{cx, cy, radius, sides=6, rotation?: deg} → {id}", has_doc, polygon),
         cmd!("shape.star", "Star", [], None, "{cx, cy, radius1, radius2, points=5, rotation?: deg} → {id}", has_doc, star),
         cmd!(
@@ -163,6 +171,17 @@ fn rect_of(p: &Value, cmd: &str) -> Result<Rect> {
     Ok(Rect::new(x, y, x + w, y + h).abs())
 }
 
+fn rect_transform(r: Rect, p: &Value, cmd: &str) -> Result<Affine> {
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", cmd)? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad(cmd, "rotation must be finite"));
+    }
+    if rotation == 0.0 {
+        return Ok(Affine::translate(r.origin().to_vec2()));
+    }
+    Ok(Affine::translate(r.center().to_vec2()) * Affine::rotate(rotation.to_radians()) * Affine::translate((-r.width() / 2.0, -r.height() / 2.0)))
+}
+
 fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.rectangle")?;
     let radius = f64_or(p, "radius", 0.0).max(0.0);
@@ -171,7 +190,7 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
         h: r.height(),
         radii: [radius; 4],
         kinds: Default::default(),
-        xf: Affine::translate(r.origin().to_vec2()),
+        xf: rect_transform(r, p, "shape.rectangle")?,
     };
     let label = if radius > 0.0 { "Rounded Rectangle" } else { "Rectangle" };
     add_art(s, label, path_kind(live.to_path(), Some(live)), None)
@@ -179,7 +198,7 @@ fn rectangle(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let r = rect_of(p, "shape.ellipse")?;
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: rect_transform(r, p, "shape.ellipse")? };
     add_art(s, "Ellipse", path_kind(live.to_path(), Some(live)), None)
 }
 
