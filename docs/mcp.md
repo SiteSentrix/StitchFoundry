@@ -2077,6 +2077,19 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
 ```
 
+## Converting between point type and area type
+
+With the Selection tool, a single selected point or area type object shows the type widget: a small circle beside
+the middle of its bounding box's right side, hollow on point type and filled on area type. Double-clicking it runs
+`type.convertToAreaType` (point type gets a frame around its text, which keeps its place and doesn't rewrap) or
+`type.convertToPointType` (soft line wraps become line breaks), the same commands as the Type menu's Convert To Area
+Type and Convert To Point Type. Either keeps the text and its styles and is one undo step; `ids` picks the objects
+(default: the selection).
+
+```json
+{"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
+```
+
 ## Moving and flipping type on a path
 
 Type on a path flows between a start and an end bracket, stored as fractions of its path's length.

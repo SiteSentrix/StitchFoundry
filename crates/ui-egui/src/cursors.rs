@@ -149,6 +149,14 @@ fn path_bracket(p: &mut Ink, o: Pos2) {
     }
 }
 
+/// Over the type widget: the arrow with a type badge (a T) below right.
+fn type_widget(p: &mut Ink, o: Pos2) {
+    arrow(p, o, false);
+    let b = o + vec2(12.0, 13.0);
+    line(p, b, b + vec2(8.0, 0.0));
+    line(p, b + vec2(4.0, 0.0), b + vec2(4.0, 9.0));
+}
+
 /// The gradient annotator's stop cursors: the arrow with a plus (add a stop) or minus (delete it)
 /// badge.
 fn stop_badge(p: &mut Ink, o: Pos2, add: bool) {
@@ -272,6 +280,7 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::WidthPoint => width(ink, p, "point"),
         Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor => blend(ink, p, c),
         Cursor::PathBracket => path_bracket(ink, p),
+        Cursor::TypeWidget => type_widget(ink, p),
         Cursor::ShapeBuilder => shape_builder(ink, p, false),
         Cursor::ShapeBuilderErase => shape_builder(ink, p, true),
         _ => return None,
@@ -404,7 +413,7 @@ mod tests {
     use crate::VectorcraftApp;
 
     /// Every cursor with a glyph.
-    const GLYPHS: [Cursor; 31] = [
+    const GLYPHS: [Cursor; 32] = [
         Cursor::Arrow,
         Cursor::ArrowHollow,
         Cursor::Move,
@@ -434,6 +443,7 @@ mod tests {
         Cursor::BlendObject,
         Cursor::BlendAnchor,
         Cursor::PathBracket,
+        Cursor::TypeWidget,
         Cursor::ShapeBuilder,
         Cursor::ShapeBuilderErase,
     ];

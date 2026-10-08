@@ -416,7 +416,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn cursor_icon(c: Cursor) -> egui::CursorIcon {
     use egui::CursorIcon as C;
     match c {
-        Cursor::Arrow | Cursor::ArrowHollow | Cursor::CornerRadius | Cursor::PathBracket => C::Default,
+        Cursor::Arrow | Cursor::ArrowHollow | Cursor::CornerRadius | Cursor::PathBracket | Cursor::TypeWidget => C::Default,
         Cursor::Move => C::Move,
         Cursor::Crosshair => C::Crosshair,
         Cursor::ResizeH => C::ResizeHorizontal,
@@ -1439,6 +1439,12 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
             p.rect_filled(hr, 0.0, Color32::WHITE);
             p.rect_stroke(hr, 0.0, Stroke::new(1.0, color), StrokeKind::Inside);
         }
+        // The type widget beside it: hollow on point type, filled on area type.
+        if let Some(w) = vectorcraft_tools::typewidget::TypeWidget::of(&st.doc, &st.selection, &b, xf.zoom) {
+            let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::typewidget::RADIUS_PX);
+            p.circle_filled(c, r, if w.area { color } else { Color32::WHITE });
+            p.circle_stroke(c, r, Stroke::new(1.0, color));
+        }
     }
 }
 
@@ -2076,6 +2082,30 @@ mod tests {
         assert_eq!(widgets(&mut app), 4);
         app.session.execute("prefs.set", &json!({"key": "hideCornerWidgetAbove", "value": 80})).unwrap();
         assert_eq!(widgets(&mut app), 0);
+    }
+
+    /// The type widget beside selected type's bounding box: hollow (white) on point type, filled
+    /// in the layer colour on area type.
+    #[test]
+    fn the_type_widget_shows_which_kind_the_type_is() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type"})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let layer = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)));
+        let ctx = egui::Context::default();
+        let widget = |app: &mut VectorcraftApp| -> Vec<Color32> {
+            let r = vectorcraft_tools::typewidget::RADIUS_PX;
+            shapes(app, &ctx)
+                .iter()
+                .filter_map(|s| if let Shape::Circle(c) = s { (c.radius == r && c.fill != Color32::TRANSPARENT).then_some(c.fill) } else { None })
+                .collect()
+        };
+        assert_eq!(widget(&mut app), vec![Color32::WHITE]);
+        app.session.execute("type.convertToAreaType", &json!({})).unwrap();
+        assert_eq!(widget(&mut app), vec![layer]);
+        app.ui.view.bounding_box = false;
+        assert!(widget(&mut app).is_empty(), "no bounding box, no widget");
     }
 
     /// General › Zoom with Mouse Wheel (#394), through the control channel's `ui.wheel`: off,
