@@ -10,10 +10,16 @@ fn text_layout(s: &str) -> TextLayout {
 
 fn arabic_test_face(test: &str) -> Option<Arc<FontFace>> {
     let db = FontDb::global();
+    // OpenType (GSUB) shaping only: AAT fonts such as macOS's Geeza Pro shape with `morx`, which
+    // takes no context from outside the run, so their joining across a style boundary differs.
+    let opentype = |face: &FontFace| {
+        use skrifa::raw::TableProvider;
+        face.skrifa().is_some_and(|f| f.gsub().is_ok())
+    };
     let face = ["Geeza Pro", "Arial", "Noto Sans Arabic"]
         .into_iter()
         .filter_map(|name| db.face(name, "Regular"))
-        .find(|face| face.covers('ب') && face.covers('ل') && face.covers('ا'));
+        .find(|face| face.covers('ب') && face.covers('ل') && face.covers('ا') && opentype(face));
     if let Some(face) = &face {
         let path = face.path().map_or_else(|| "bundled font".to_string(), |p| p.display().to_string());
         eprintln!("ASSERTIONS RUN: {test}; Arabic font {} {} ({path})", face.family, face.style);
