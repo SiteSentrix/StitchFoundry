@@ -15,7 +15,9 @@
 //!   shows every layer when they are hidden (`layer.showAll`); Alt-click a lock does the same with
 //!   `layer.lockOthers` and `layer.unlockAll`.
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
-//!   a box shows where); Alt copies them; dropped on the trash they are deleted.
+//!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Dropped on
+//!   the trash they are deleted, on New Layer duplicated; on New Sublayer or Make/Release Clipping
+//!   Mask that button acts on their layer.
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
 //! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
@@ -107,6 +109,76 @@ fn key(name: &str) -> egui::Id {
 
 fn rename_id() -> egui::Id {
     egui::Id::new("layers-rename")
+}
+
+/// Ghost rows are drawn at this opacity.
+const GHOST_OPACITY: f32 = 0.5;
+
+/// The bottom-bar buttons besides the trash that dragged rows can be dropped on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DropTarget {
+    NewLayer,
+    NewSublayer,
+    ClippingMask,
+}
+
+/// The commands a drop of rows `ids` on `target` runs: New Layer duplicates them, as in
+/// Illustrator; New Sublayer and Make/Release Clipping Mask do what a click does, on the first
+/// row's layer (the nearest layer holding it; a dragged group is clipped itself).
+fn drop_actions(doc: &Document, ids: &[NodeId], target: DropTarget) -> Vec<(String, Value)> {
+    let Some((n, src)) = ids.first().and_then(|id| Some((doc.node(*id)?, *id))) else { return vec![] };
+    let layer = if n.is_layer() {
+        Some(src)
+    } else {
+        doc.ancestry(src).unwrap_or_default().into_iter().rev().find(|a| doc.node(*a).is_some_and(Node::is_layer))
+    };
+    let Some(layer) = layer else { return vec![] };
+    match target {
+        DropTarget::NewLayer => vec![("layer.duplicate".into(), json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))],
+        DropTarget::NewSublayer => vec![("layer.newSublayer".into(), json!({"parent": layer.0}))],
+        DropTarget::ClippingMask => {
+            let id = if matches!(n.kind, NodeKind::Group { .. }) { src } else { layer };
+            vec![("layer.clippingMask.toggle".into(), json!({"id": id.0}))]
+        }
+    }
+}
+
+/// The dragged row `src`, dimmed, following the pointer at `pos` above everything else: its
+/// colour bar, thumbnail and name.
+fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
+    let doc = view.doc;
+    let t = &view.t;
+    let h = view.h;
+    let Some(n) = doc.node(src) else { return };
+    let (grab, width, depth) = ui.data(|d| d.get_temp::<(egui::Vec2, f32, usize)>(key("grab"))).unwrap_or((vec2(h, h / 2.0), 240.0, 0));
+    // A plain Ui on the tooltip layer, not an Area: a new Area is invisible for a frame and fades in.
+    let r = egui::Rect::from_min_size(pos - grab, vec2(width, h));
+    let id = key("ghost");
+    let mut ui = Ui::new(ui.ctx().clone(), id, egui::UiBuilder::new().layer_id(egui::LayerId::new(egui::Order::Tooltip, id)).max_rect(r));
+    ui.set_opacity(GHOST_OPACITY);
+    let p = ui.painter();
+    p.rect_filled(r, 0.0, t.row_selected);
+    p.rect_stroke(r, 0.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+    let mut x = r.left() + 2.0 * COLUMN + 2.0;
+    let [cr, cg, cb] = doc.layer_color(src);
+    p.rect_filled(
+        egui::Rect::from_min_size(egui::pos2(x - 1.0, r.top()), vec2(if n.is_layer() { 4.0 } else { 2.0 }, h)),
+        0.0,
+        Color32::from_rgb(cr, cg, cb),
+    );
+    x += 22.0 + depth as f32 * INDENT;
+    if view.opts.thumb(n) {
+        let s = (h - 4.0).min(40.0);
+        let th = egui::Rect::from_min_size(egui::pos2(x, r.center().y - s / 2.0), vec2(s, s));
+        p.rect_filled(th, 0.0, Color32::WHITE);
+        p.rect_stroke(th, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
+        if !real_thumb(&ui, doc, n, th) {
+            thumb(&ui, n, th);
+        }
+        x += s + 4.0;
+    }
+    let name = painted_name(n, &n.display_name(), crate::i18n::current());
+    ui.painter().text(egui::pos2(x, r.center().y), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(13.0), t.text);
 }
 
 /// Where a dragged row goes relative to the row it is dropped on.
@@ -268,6 +340,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if released {
         ui.data_mut(|d| d.remove::<u64>(egui::Id::new("layers-drag")));
     }
+    // Dragged rows show as a dimmed row under the pointer.
+    if !released
+        && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
+        && let LayersDrag::Rows(ids) = &*drag
+        && let Some(src) = ids.first()
+        && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
+    {
+        drag_ghost(ui, &view, *src, pos);
+    }
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
@@ -305,7 +386,9 @@ fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc: &Document
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
     let trash = widgets::icon_button(&mut child, "trash-2", tl!("Delete Selection"), false, 24.0);
     // A target circle dropped on the trash clears that appearance; dragged rows are deleted.
-    if let Some(d) = trash.dnd_release_payload::<PanelDrag>()
+    // Peek at the payload's type before taking it: egui's take drops a payload of another type.
+    if trash.dnd_hover_payload::<PanelDrag>().is_some()
+        && let Some(d) = trash.dnd_release_payload::<PanelDrag>()
         && let PanelDrag::Appearance(id) = *d
     {
         actions.push(("appearance.clear".into(), json!({"ids": [id.0]})));
@@ -321,18 +404,36 @@ fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc: &Document
         }
     }
     // Create New Layer: Alt asks for its options first, Ctrl/Cmd puts it on top of every layer.
-    if widgets::icon_button(&mut child, "file-plus", tl!("Create New Layer"), false, 24.0).clicked() {
+    let new_layer = widgets::icon_button(&mut child, "file-plus", tl!("Create New Layer"), false, 24.0);
+    if new_layer.clicked() {
         if m.alt {
             actions.push(("ui.newLayer".into(), json!({})));
         } else {
             actions.push(("layer.new".into(), json!({"top": m.command})));
         }
     }
-    if widgets::icon_button(&mut child, "plus", tl!("Create New Sublayer"), false, 24.0).clicked() {
+    let new_sublayer = widgets::icon_button(&mut child, "plus", tl!("Create New Sublayer"), false, 24.0);
+    if new_sublayer.clicked() {
         actions.push(if m.alt { ("ui.newLayer".into(), json!({"sublayer": true})) } else { ("layer.newSublayer".into(), json!({})) });
     }
-    if widgets::icon_button(&mut child, "frame", tl!("Make/Release Clipping Mask"), false, 24.0).clicked() {
+    let clip = widgets::icon_button(&mut child, "frame", tl!("Make/Release Clipping Mask"), false, 24.0);
+    if clip.clicked() {
         actions.push(("layer.clippingMask.toggle".into(), json!({})));
+    }
+    // Rows dragged onto a button: outlined while over it, its action when dropped.
+    for (button, target) in [(&new_layer, DropTarget::NewLayer), (&new_sublayer, DropTarget::NewSublayer), (&clip, DropTarget::ClippingMask)] {
+        if let Some(d) = button.dnd_release_payload::<LayersDrag>()
+            && let LayersDrag::Rows(ids) = &*d
+        {
+            actions.extend(drop_actions(doc, ids, target));
+        } else if button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| matches!(*d, LayersDrag::Rows(_))) {
+            child.painter().rect_stroke(button.rect, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+        }
+    }
+    let over_trash = trash.dnd_hover_payload::<LayersDrag>().is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
+        || trash.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_)));
+    if over_trash {
+        child.painter().rect_stroke(trash.rect, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
     }
     if widgets::icon_button(&mut child, "search", tl!("Locate Object"), false, 24.0).clicked() {
         actions.push(("layer.locate".into(), json!({})));
@@ -533,6 +634,8 @@ fn row(ui: &mut Ui, view: &View, n: &Node, depth: usize, clip_path: bool, expand
     if resp.drag_started() && view.column.is_none() {
         let ids = if view.rows.contains(&n.id) { view.rows.clone() } else { vec![n.id] };
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Rows(ids));
+        let grab = resp.interact_pointer_pos().map_or(vec2(h, h / 2.0), |p| p - r.min);
+        ui.data_mut(|d| d.insert_temp(key("grab"), (grab, r.width(), depth)));
     }
     if resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
@@ -1116,21 +1219,39 @@ mod tests {
         // Dropped on the trash, the layer's appearance is cleared (and nothing is deleted).
         let st = app.session.active().unwrap();
         let count = st.doc.node_count();
-        let trash = {
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
-            out.textures_delta.clear();
-            // The bottom bar's rightmost button, under the right end of its top divider.
-            let divider = Tokens::get(&ctx).divider;
-            let corner = out.shapes.iter().rev().find_map(|c| match &c.shape {
-                egui::Shape::LineSegment { points, stroke } if stroke.color == divider => Some(points[1]),
-                _ => None,
-            });
-            corner.unwrap() + vec2(-12.0, 15.0)
-        };
+        let trash = trash_pos(&mut app, &ctx);
         drag(&mut app, &ctx, c[0], trash, false);
         let st = app.session.active().unwrap();
         assert_eq!(st.doc.node(layer).unwrap().opacity, 1.0);
         assert_eq!(st.doc.node_count(), count);
+    }
+
+    /// The trash button: the bottom bar's rightmost button, under the right end of its top divider.
+    fn trash_pos(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Pos2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        let divider = Tokens::get(ctx).divider;
+        let corner = out.shapes.iter().rev().find_map(|c| match &c.shape {
+            egui::Shape::LineSegment { points, stroke } if stroke.color == divider => Some(points[1]),
+            _ => None,
+        });
+        corner.unwrap() + vec2(-12.0, 15.0)
+    }
+
+    #[test]
+    fn dragging_rows_onto_the_trash_deletes_them() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("layer.new", &json!({})).unwrap();
+        let ctx = egui::Context::default();
+        // Rows top first: Layer 2, Layer 1. Grab Layer 2 by its name, left of its target circle.
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        let top = app.session.active().unwrap().doc.layers[1].id;
+        let trash = trash_pos(&mut app, &ctx);
+        drag(&mut app, &ctx, c[0] - vec2(100.0, 0.0), trash, false);
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!(doc.layers.len(), 1);
+        assert!(doc.node(top).is_none());
     }
 
     #[test]
@@ -1394,6 +1515,68 @@ mod tests {
         assert_eq!(parent(&app, g), Some(sub));
         assert_eq!(app.session.active().unwrap().doc.node_count(), count + 2, "the group and its rectangle, copied");
         let _ = (layer, c);
+    }
+
+    /// The centres of the bottom bar's buttons, right to left: Delete, New Layer, New Sublayer,
+    /// Make/Release Clipping Mask, Locate Object.
+    fn bar_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<egui::Pos2> {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        let divider = Tokens::get(ctx).divider;
+        let corner = out
+            .shapes
+            .iter()
+            .rev()
+            .find_map(|c| match &c.shape {
+                egui::Shape::LineSegment { points, stroke } if stroke.color == divider => Some(points[1]),
+                _ => None,
+            })
+            .unwrap();
+        let step = 24.0 + ctx.global_style().spacing.item_spacing.x;
+        (0..5).map(|k| corner + vec2(-12.0 - k as f32 * step, 15.0)).collect()
+    }
+
+    /// How many texts reading `s` the frame after `events` paints.
+    fn texts(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, s: &str) -> usize {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == s)).count()
+    }
+
+    /// Drag the row at `a` to `b` and drop it there. Returns how many times its `name` was painted
+    /// while it hung over `b`.
+    fn drag_row(app: &mut VectorcraftApp, ctx: &egui::Context, a: egui::Pos2, b: egui::Pos2, name: &str) -> usize {
+        frame(app, ctx, vec![egui::Event::PointerMoved(a)], false);
+        frame(app, ctx, vec![button(a, true)], false);
+        frame(app, ctx, vec![egui::Event::PointerMoved(a + vec2(0.0, 6.0))], false);
+        let shown = texts(app, ctx, vec![egui::Event::PointerMoved(b)], name);
+        frame(app, ctx, vec![button(b, false)], false);
+        frame(app, ctx, vec![], false);
+        shown
+    }
+
+    #[test]
+    fn dropping_rows_on_a_bottom_button_runs_it_and_new_layer_duplicates() {
+        let (mut app, first, [a, _]) = two_rects();
+        let second = app.session.execute("layer.new", &json!({"name": "Top"})).unwrap()["id"].as_u64().map(NodeId).unwrap();
+        let doc = app.session.active().unwrap().doc.clone();
+        assert_eq!(drop_actions(&doc, &[a], DropTarget::NewLayer), vec![("layer.duplicate".to_string(), json!({"ids": [a.0]}))]);
+        assert_eq!(drop_actions(&doc, &[a], DropTarget::NewSublayer), vec![("layer.newSublayer".to_string(), json!({"parent": first.0}))]);
+        assert_eq!(drop_actions(&doc, &[a], DropTarget::ClippingMask), vec![("layer.clippingMask.toggle".to_string(), json!({"id": first.0}))]);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let layers = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+        // Rows top down: Top, Layer 1 (expanded: its two rectangles).
+        let (c, _) = frame(&mut app, &ctx, vec![], false);
+        let buttons = bar_buttons(&mut app, &ctx);
+        // Layer 1 dropped on New Layer: a copy of it right above it.
+        let shown = drag_row(&mut app, &ctx, egui::pos2(150.0, c[1].y), buttons[1], "Layer 1");
+        assert_eq!(shown, 2, "the row and its ghost under the pointer");
+        let after = layers(&app);
+        assert_eq!(after.len(), 3);
+        assert_eq!((after[0], after[2]), (first, second));
+        assert_eq!(app.session.active().unwrap().doc.node(after[1]).unwrap().children().map(Vec::len), Some(2));
+        assert_eq!(texts(&mut app, &ctx, vec![], "Layer 1"), 1, "the ghost is gone after the drop");
     }
 
     #[test]
