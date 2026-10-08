@@ -184,7 +184,7 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let tall = (screen.height() - FLYOUT_TOP - 26.0 - 20.0 - 40.0).clamp(160.0, 560.0);
     let mut open = true;
     let area = egui::Area::new(egui::Id::new("icon-panel")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP);
-    let shown = area.fixed_pos(egui::pos2(right, FLYOUT_TOP)).show(ctx, |ui| {
+    area.fixed_pos(egui::pos2(right, FLYOUT_TOP)).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).corner_radius(CornerRadius::same(4)).inner_margin(egui::Margin::ZERO).show(ui, |ui| {
             ui.set_width(width);
             let (strip, _) = ui.allocate_exact_size(vec2(width, 26.0), Sense::hover());
@@ -228,12 +228,15 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     // User Interface › Auto-Collapse Iconic Panels (#394): a press away from the flyout puts it
-    // away. Not one on the icon column (its icons swap or close the flyout themselves, on release),
-    // nor one in a popup the flyout opened (a panel menu, a dropdown), which lies outside its rect.
-    if open && app.session.prefs.auto_collapse_icon_panels {
-        let flyout = shown.response.rect;
-        let pressed_away = ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.interact_pos()).flatten());
-        if pressed_away.is_some_and(|p| !flyout.contains(p) && p.x < column) && !egui::Popup::is_any_open(ctx) {
+    // away, on the canvas or a docked panel. Not one on the icon column (its icons swap or close the
+    // flyout themselves, on release), nor one on a foreground layer (the flyout itself, a dialog, a palette) or a modal dialog's
+    // backdrop, nor one that closes a popup (a panel menu, a dropdown the flyout opened).
+    if open && app.session.prefs.auto_collapse_icon_panels && !egui::Popup::is_any_open(ctx) {
+        let away = |p: egui::Pos2| {
+            !(column..=column + ICON_COL).contains(&p.x)
+                && ctx.layer_id_at(p).is_none_or(|l| l.order != egui::Order::Foreground && l != crate::dialogs::modal::backdrop())
+        };
+        if ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.interact_pos()).flatten()).is_some_and(away) {
             open = false;
         }
     }
@@ -329,6 +332,7 @@ mod tests {
                 .run_ui(input, |ui| {
                     show(app, ui);
                     floating_panel(app, ui.ctx());
+                    crate::dialogs::show(app, ui.ctx());
                 })
                 .textures_delta
                 .clear();
@@ -452,6 +456,25 @@ mod tests {
         assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"), "another icon swaps it");
         h.click(properties.center());
         assert_eq!(h.app.ui.open_panel, None, "the same icon puts it away");
+        // A dialog (one a panel menu opens, say): a click in it or on its backdrop keeps the panel.
+        h.click(layers.center());
+        h.app.ui.dialog = Some(crate::state::Dialog::new("move", json!({"dx": "0 pt", "dy": "0 pt"})));
+        h.settle();
+        let dialog = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", "move")))).expect("the Move dialog");
+        h.click(dialog.left_top() + vec2(20.0, 30.0));
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "a click in the dialog keeps it");
+        h.click(egui::pos2(dialog.left() - 40.0, dialog.center().y));
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "a click on the backdrop keeps it");
+        h.app.ui.dialog = None;
+        // The dock expanded: a click in its panel group puts a popped-out icon panel away too.
+        h.app.run("window.collapseDock", json!({"collapsed": false})).unwrap();
+        h.settle();
+        let icon = h.icons()[0];
+        h.click(icon.center());
+        let open = h.app.ui.open_panel.clone();
+        assert!(open.is_some(), "an icon panel pops out beside the expanded dock");
+        h.click(egui::pos2(SCREEN.x - 100.0, 300.0));
+        assert_eq!(h.app.ui.open_panel, None, "a click in the docked group puts {open:?} away");
     }
 
     #[test]

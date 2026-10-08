@@ -12,7 +12,8 @@ use crate::theme::{self, Tokens};
 /// should start with [`heading`] (or [`drag_band`]) so the window can be moved.
 pub(crate) fn show<R>(ctx: &egui::Context, title: &str, id: Id, nudge: f32, margin: i8, add: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
     let t = Tokens::get(ctx);
-    egui::Area::new(Id::new("modal-dim")).order(egui::Order::Middle).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
+    let dim = backdrop();
+    egui::Area::new(dim.id).order(dim.order).fixed_pos(egui::Pos2::ZERO).show(ctx, |ui| {
         // Modal, but the canvas isn't dimmed so previews stay readable (as in the reference app).
         ui.allocate_rect(ctx.content_rect(), egui::Sense::click());
     });
@@ -26,6 +27,12 @@ pub(crate) fn show<R>(ctx: &egui::Context, title: &str, id: Id, nudge: f32, marg
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(margin)))
         .show(ctx, add)
         .and_then(|r| r.inner)
+}
+
+/// The layer of the backdrop behind a modal dialog window, which takes the clicks the rest of
+/// the app would get.
+pub(crate) fn backdrop() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, Id::new("modal-dim"))
 }
 
 /// The dialog's heading, which also moves the window ([`drag_band`]).
