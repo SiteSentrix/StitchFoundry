@@ -21,6 +21,9 @@ pub struct Loaded {
     /// An older native file (the former `.drawcraft` name or format version): saving it again
     /// rewrites it in today's format.
     pub converted: bool,
+    /// Only a stand-in picture of the file (an Affinity document whose native data couldn't be
+    /// read): Open shows it with its warning; Place, templates and libraries refuse it.
+    pub preview_only: bool,
 }
 
 /// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
@@ -138,6 +141,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     })?;
     let title = file_name(name);
     let mut converted = false;
+    let mut preview_only = false;
     let (mut doc, warnings, restored) = match format.id {
         // EPS and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if format.id == "eps" || vectorcraft_pdf::is_postscript(bytes) => {
@@ -178,8 +182,9 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             (doc, warnings, false)
         }
         "affinity" => {
-            let (doc, warnings) = super::affinity::import(&title, bytes)?;
-            (doc, warnings, false)
+            let i = super::affinity::import(&title, bytes)?;
+            preview_only = i.preview_only;
+            (i.doc, i.warnings, false)
         }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
@@ -192,7 +197,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     if !matches!(format.id, "vectorcraft" | "template") || doc.title.is_empty() {
         doc.title = title;
     }
-    Ok(Loaded { doc, format, warnings, restored, converted })
+    Ok(Loaded { doc, format, warnings, restored, converted, preview_only })
 }
 
 /// Import SVG text, reading the files its images link to (relative links from `folder`, the SVG's
@@ -228,9 +233,9 @@ pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<S
 /// from there) as a new untitled document.
 pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value> {
     let loaded = load(name, bytes)?;
-    if loaded.format.id == "affinity" {
+    if loaded.preview_only {
         return Err(err(
-            "Affinity templates are not supported: use File › Open to inspect the embedded preview with its warning, or export SVG, PDF or full-resolution PNG from Affinity first",
+            "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
     open_loaded(s, loaded, path.map(str::to_string), &LoadOptions::default(), true)
@@ -238,7 +243,7 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
 
 /// Make a loaded file the new active document; `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted } = loaded;
+    let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded;
     let links = crate::cmd::links::resolve(&mut doc, path.as_deref(), s.prefs.update_links == "automatically");
     // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
     // document.

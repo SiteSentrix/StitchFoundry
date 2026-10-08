@@ -12,12 +12,19 @@ use std::fmt;
 
 mod access;
 pub mod container;
+mod geometry;
+pub mod model;
+pub mod paint;
 pub mod preview;
+mod raster;
+mod shapes;
 pub mod stream;
 #[cfg(any(test, feature = "synth"))]
 pub mod synth;
+mod text;
 
 pub use container::{Archive, Limits, MAGIC, is_affinity};
+pub use model::{Document, read};
 pub use preview::{MAX_PREVIEW_BYTES, MAX_PREVIEW_DIMENSION, Preview, preview};
 
 /// Why a file could not be read. Messages are short reasons; callers add advice.

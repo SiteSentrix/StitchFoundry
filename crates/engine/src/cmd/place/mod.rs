@@ -129,15 +129,8 @@ pub(crate) fn pt_per_px(ppi: Option<(f64, f64)>) -> (f64, f64) {
 fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
     let src = fileio::source(p, cmd)?;
     let name = fileio::file_name(src.name);
-    // Place and the queued place cursor do not surface successful import warnings. An Affinity
-    // preview must never silently stand in for the full document there, even under another name.
-    if vectorcraft_affinity::is_affinity(&src.bytes) || fileio::format_for_name(src.name).is_some_and(|f| f.id == "affinity") {
-        return Err(bad(
-            cmd,
-            "Affinity placement is not supported: use File › Open to inspect the embedded preview with its warning, or export SVG, PDF or full-resolution PNG from Affinity before placing",
-        ));
-    }
-    if fileio::TEXT_EXTS.contains(&fileio::extension(src.name).as_str()) {
+    // An Affinity file is recognised by its signature, whatever its name says.
+    if fileio::TEXT_EXTS.contains(&fileio::extension(src.name).as_str()) && !vectorcraft_affinity::is_affinity(&src.bytes) {
         let text = text::import(&src.bytes, text::TextOptions::parse(p, cmd)?, cmd)?;
         if text.trim().is_empty() {
             return Err(bad(cmd, format!("`{name}` has no text to place")));
@@ -184,6 +177,16 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>) -> Result<Loaded> {
             // Of the open options, only a DXF drawing's apply (the colour mode stays the file's).
             let o = fileio::LoadOptions { dxf: opts.dxf, ..Default::default() };
             let mut l = fileio::load_with(src.name, &src.bytes, &o)?;
+            // An Affinity file whose native document couldn't be read is only its preview: it
+            // must never silently stand in for the art.
+            if l.preview_only {
+                return Err(bad(
+                    cmd,
+                    format!(
+                        "{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing"
+                    ),
+                ));
+            }
             // Linked images (a native document's) show their files, found from its folder.
             super::links::resolve(&mut l.doc, src.path, false);
             (l.doc, l.warnings)

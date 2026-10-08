@@ -556,7 +556,7 @@ pub const FORMATS: &[Format] = &[
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "tga", label: "Targa", extensions: &["tga"], mime: "image/x-tga", read: false, write: true, raster: true, options: TGA_OPTIONS },
     Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: false, write: true, raster: true, options: PSD_OPTIONS },
-    reader("affinity", "Affinity (embedded preview)", &["af"], "application/affinity", false),
+    reader("affinity", "Affinity", &["af", "afdesign", "afphoto", "afpub"], "application/vnd.affinity", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -582,6 +582,9 @@ pub const OPEN_EXTS: &[&str] = &[
     "wmf",
     "eps",
     "af",
+    "afdesign",
+    "afphoto",
+    "afpub",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -599,7 +602,7 @@ pub fn export_extensions() -> Vec<&'static str> {
 /// Text files: File → Place sets them as area type (Text Import Options).
 pub const TEXT_EXTS: &[&str] = &["txt"];
 
-/// Every extension File → Place reads: [`OPEN_EXTS`] except preview-only Affinity, plus [`TEXT_EXTS`].
+/// Every extension File → Place reads: [`OPEN_EXTS`] and [`TEXT_EXTS`].
 pub const PLACE_EXTS: &[&str] = &[
     "vectorcraft",
     "drawcraft",
@@ -621,6 +624,10 @@ pub const PLACE_EXTS: &[&str] = &[
     "emf",
     "wmf",
     "eps",
+    "af",
+    "afdesign",
+    "afphoto",
+    "afpub",
     "txt",
 ];
 

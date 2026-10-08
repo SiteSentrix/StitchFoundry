@@ -223,8 +223,8 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
             Some(t) => style_libs::read(t, stem(file)).map_err(|e| bad(C, e)),
             None => {
                 let loaded = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?;
-                if loaded.format.id == "affinity" {
-                    return Err(bad(C, "Affinity graphic styles are not decoded; use File › Open to inspect the embedded preview with its warning"));
+                if loaded.preview_only {
+                    return Err(bad(C, "only this Affinity file's embedded preview could be read; use File › Open to see it with its warning"));
                 }
                 StyleLibrary::from_document(&loaded.doc, &[], stem(file).to_string()).map_err(|e| bad(C, e))
             }

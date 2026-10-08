@@ -194,9 +194,11 @@ milestones, and honest time-to-parity estimates.
 "a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and
 files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats and PSD, Print, Package).
-Affinity `.af` files with a verified version-12 embedded PNG preview open as that preview,
-with a warning; native Affinity vectors, layers and full document resolution are not imported.
-Save makes a new VectorCraft copy. Place, templates and style/swatch library import are refused; export SVG, PDF or full-resolution PNG from Affinity first. [Preview scope and limits](crates/affinity/README.md).
+Affinity documents (`.af` from Affinity 3, `.afdesign`, `.afphoto` and `.afpub` from Affinity 1 and 2) open
+and place natively: layers, groups, artboards and pages, curves and shapes, fills, gradients and strokes, clipping
+and masks, text and images, with what didn't come in (effects, adjustments, brushes, master pages…) listed in the
+import warning; a file whose native data can't be read opens as its embedded preview, saying why. VectorCraft
+doesn't write Affinity files. [Scope and limits](crates/affinity/README.md).
 The interface
 speaks English, Japanese, Traditional and Simplified Chinese and Spanish (and Czech and Brazilian Portuguese in the menus).
 The scores are

@@ -9,11 +9,18 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-vectorcraft-affinity = { path = ".." }
+vectorcraft-affinity = { path = "..", features = ["synth"] }
 
 [[bin]]
 name = "container"
 path = "fuzz_targets/container.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stream"
+path = "fuzz_targets/stream.rs"
 test = false
 doc = false
 bench = false

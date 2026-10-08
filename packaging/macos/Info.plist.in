@@ -89,8 +89,8 @@
       <key>LSHandlerRank</key><string>Alternate</string>
     </dict>
     <dict>
-      <key>CFBundleTypeName</key><string>Affinity (embedded preview)</string>
-      <key>CFBundleTypeExtensions</key><array><string>af</string></array>
+      <key>CFBundleTypeName</key><string>Affinity</string>
+      <key>CFBundleTypeExtensions</key><array><string>af</string><string>afdesign</string><string>afpub</string></array>
       <key>CFBundleTypeRole</key><string>Viewer</string>
       <key>LSHandlerRank</key><string>Alternate</string>
     </dict>

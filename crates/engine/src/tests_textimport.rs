@@ -76,10 +76,9 @@ fn text_files_report_and_queue_with_their_options() {
 }
 
 #[test]
-fn place_reads_open_formats_and_text_except_affinity_previews() {
+fn place_reads_what_open_reads_and_text_files() {
     use cmd::fileio::{OPEN_EXTS, PLACE_EXTS, TEXT_EXTS};
-    let open: Vec<_> = OPEN_EXTS.iter().copied().filter(|ext| *ext != "af").collect();
-    assert_eq!(PLACE_EXTS, [open.as_slice(), TEXT_EXTS].concat());
+    assert_eq!(PLACE_EXTS, [OPEN_EXTS, TEXT_EXTS].concat());
     let filters: Vec<_> = cmd::fileio::place_filters().collect();
     assert_eq!((filters.first(), filters.last()), (Some(&("All placeable files", PLACE_EXTS)), Some(&("Text", TEXT_EXTS))));
     assert!(!cmd::fileio::open_filters().any(|(_, exts)| exts.contains(&"txt")), "Open doesn't read text files");
