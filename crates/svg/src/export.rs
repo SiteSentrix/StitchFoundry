@@ -545,15 +545,25 @@ impl Writer<'_> {
     }
     /// ` id="…"` for a named object, plus ` data-name="…"` with the name itself when the id had to
     /// differ from it (spaces, punctuation, duplicates, the unique prefix).
+    /// The id of `n`'s element (with its name when the id isn't it), then the object's own data
+    /// as `data-*` attributes.
     fn id_attr(&self, n: &Node) -> String {
         if self.anonymous {
             return String::new();
         }
-        let Some(id) = self.names.get(&n.id) else { return String::new() };
-        match n.name.as_deref() {
-            Some(name) if name != id => format!(" id=\"{}\" data-name=\"{}\"", xml_escape(id), xml_escape(name)),
-            _ => format!(" id=\"{}\"", xml_escape(id)),
+        let mut out = match (self.names.get(&n.id), n.name.as_deref()) {
+            (Some(id), Some(name)) if name != id => format!(" id=\"{}\" data-name=\"{}\"", xml_escape(id), xml_escape(name)),
+            (Some(id), _) => format!(" id=\"{}\"", xml_escape(id)),
+            (None, _) => String::new(),
+        };
+        for (k, v) in n.attrs.as_deref().map_or(&[][..], |a| a.data.as_slice()) {
+            // Names as XML takes them; ours (`name`, `vc-…`) are written by the export itself.
+            let valid = k.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && k != "name" && !k.starts_with("vc-");
+            if valid && !k.is_empty() {
+                out.push_str(&format!(" data-{k}=\"{}\"", xml_escape(v)));
+            }
         }
+        out
     }
     fn matrix(&self, m: Affine) -> String {
         let c = m.as_coeffs();
@@ -1130,14 +1140,11 @@ impl Writer<'_> {
         std::mem::replace(&mut self.body, body)
     }
 
-    /// Props of a group (or layer): a knockout group is isolated, a hidden layer not displayed.
+    /// Props of a group (or layer): a knockout group is isolated, a hidden one not displayed.
     fn group_props(&self, n: &Node) -> Props {
         let mut p = css::transparency(n);
         if !n.isolate && n.knocks_out(self.knockout) {
             p.push(("isolation", "isolate".into()));
-        }
-        if !n.visible {
-            p.push(("display", "none".into()));
         }
         p
     }
@@ -1221,9 +1228,9 @@ impl Writer<'_> {
     }
 
     fn node_body(&mut self, n: &Node) {
-        // Hidden objects are left out; hidden layers too, unless the options keep them (hidden).
-        let kept = self.opts.hidden_layers && matches!(n.kind, NodeKind::Layer { template: false, .. });
-        if !(n.visible || kept) {
+        // Hidden layers and objects are left out, unless the options keep them (hidden). Template
+        // layers never print.
+        if !(n.visible || self.opts.hidden_layers) {
             return;
         }
         if has_raster(&n.appearance.effects) {

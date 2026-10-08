@@ -1,6 +1,7 @@
 //! Symbols export as one `<symbol>` def and a `<use>` per instance (instances the def can't stand
-//! for get their own art), hidden layers are kept hidden when asked and come back hidden, clipped
-//! layers come in as clipping layers, and the editing data notices edits made elsewhere.
+//! for get their own art), hidden layers and objects are kept hidden when asked and come back
+//! hidden with their `data-*` attributes, clipped layers come in as clipping layers, and the
+//! editing data notices edits made elsewhere.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -202,6 +203,61 @@ fn hidden_layers_are_kept_hidden_when_asked() {
         assert_eq!((notes.name.as_deref(), notes.visible), (Some("Notes"), false));
         assert_eq!(notes.children().unwrap().len(), 1);
         assert!(back.layers[0].visible);
+    }
+}
+
+/// An animation rig (#522): hidden alternates (a group and a lone path) and rotation pivots kept as
+/// `data-*` attributes.
+const RIG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <g id="character" data-pivot="100,180">
+    <g id="arm" data-pivot="60,100" data-z-order="2"><path d="M40 100 L60 90 L80 110 Z" fill="#b5835a"/></g>
+    <g id="arm-raised" data-pivot="60,100" display="none"><path d="M40 100 L50 60 L70 70 Z" fill="#b5835a"/></g>
+    <path id="eye-closed" d="M90 80 L110 80 L100 95 Z" fill="#000" style="display:none" data-blink="1"/>
+  </g>
+</svg>"##;
+
+/// The `data-*` attributes of the object named `name`.
+fn data_of(d: &Document, name: &str) -> Vec<(String, String)> {
+    let mut found = vec![];
+    d.walk(|n| {
+        if n.name.as_deref() == Some(name) {
+            found = n.attrs.as_deref().map(|a| a.data.clone()).unwrap_or_default();
+        }
+    });
+    found
+}
+
+#[test]
+fn hidden_objects_and_data_attributes_round_trip() {
+    let d = import(RIG).unwrap();
+    let pivot = |v: &str| vec![("pivot".to_string(), v.to_string())];
+    assert_eq!(data_of(&d, "character"), pivot("100,180"));
+    assert_eq!(data_of(&d, "arm"), [("pivot".to_string(), "60,100".to_string()), ("z-order".to_string(), "2".to_string())]);
+    assert_eq!(data_of(&d, "arm-raised"), pivot("60,100"));
+    let hidden = |d: &Document| {
+        let mut v = vec![];
+        d.walk(|n| {
+            if !n.visible {
+                v.push(n.name.clone().unwrap_or_default());
+            }
+        });
+        v
+    };
+    assert_eq!(hidden(&d), ["arm-raised", "eye-closed"]);
+    // An export leaves the hidden objects out, their data with them; the others keep theirs.
+    let plain = export(&d, &ExportOptions::default());
+    assert!(!plain.contains("arm-raised") && !plain.contains("eye-closed") && plain.contains("data-pivot=\"60,100\""), "{plain}");
+    let styles = [vectorcraft_svg::Styling::PresentationAttributes, vectorcraft_svg::Styling::InlineStyle, vectorcraft_svg::Styling::InternalCss];
+    for styling in styles {
+        // Kept (Save, or asked), they are written hidden and come back hidden, with every attribute.
+        let kept = export(&d, &ExportOptions { hidden_layers: true, styling, ..Default::default() });
+        assert!(kept.contains("data-pivot=\"100,180\"") && kept.contains("data-z-order=\"2\"") && kept.contains("data-blink=\"1\""), "{kept}");
+        assert_eq!(resvg_render(&kept, 200, 200).pixel(100, 85), [255, 255, 255, 255], "hidden, not drawn: {kept}");
+        let back = import(&kept).unwrap();
+        assert_eq!(hidden(&back), ["arm-raised", "eye-closed"], "{kept}");
+        for name in ["character", "arm", "arm-raised", "eye-closed"] {
+            assert_eq!(data_of(&back, name), data_of(&d, name), "{name}: {kept}");
+        }
     }
 }
 

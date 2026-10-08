@@ -150,7 +150,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Object Properties",
             [],
             None,
-            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool}",
+            "{ids?|id?, name?, visible?, locked?, opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, data?: {key: \"value\" | null (removes it)} (the object's own data, SVG data-* attributes: {pivot: \"100,180\"} is data-pivot; document.node → attrs.data)}",
             has_doc,
             set_props
         ),
@@ -738,12 +738,43 @@ fn exit_isolation(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
+/// The most data entries `object.setProps` takes at once.
+const MAX_DATA: usize = 256;
+
+/// `object.setProps`'s `data`: each key (a data-* attribute's name: letters, digits, `-`, `_`,
+/// `.`) with its value, or `None` to remove it.
+fn data_param(m: &serde_json::Map<String, Value>) -> Result<Vec<(String, Option<String>)>> {
+    const C: &str = "object.setProps";
+    if m.len() > MAX_DATA {
+        return Err(bad(C, format!("data takes at most {MAX_DATA} keys at once")));
+    }
+    m.iter()
+        .map(|(k, v)| {
+            let k = k.strip_prefix("data-").unwrap_or(k);
+            if k.is_empty() || !k.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) || k == "name" || k.starts_with("vc-") {
+                return Err(bad(C, format!("data key `{k}`: letters, digits, -, _ and . (not name or vc-…)")));
+            }
+            let v = match v {
+                Value::Null => None,
+                Value::String(s) => Some(s.clone()),
+                other => Some(other.to_string()),
+            };
+            Ok((k.to_string(), v))
+        })
+        .collect()
+}
+
 fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = targets(s, p)?;
     let opacity = p.get("opacity").and_then(Value::as_f64).map(percent);
     let blend = match str_param(p, "blend") {
         Some(b) => Some(BlendMode::parse(b).ok_or_else(|| bad("object.setProps", format!("unknown blend mode `{b}`")))?),
         None => None,
+    };
+    let data = match p.get("data") {
+        None | Some(Value::Null) => None,
+        Some(Value::Object(m)) => Some(data_param(m)?),
+        Some(v) => return Err(bad("object.setProps", format!("data must be an object of key: value, not {v}"))),
     };
     let knockout = match p.get("knockout") {
         Some(v) => Some(
@@ -778,6 +809,24 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(v) = p.get("knockoutShape").and_then(Value::as_bool) {
                 n.knockout_shape = v;
+            }
+            if let Some(changes) = &data {
+                n.edit_attrs(|a| {
+                    for (k, v) in changes {
+                        match (a.data.iter().position(|(key, _)| key == k), v) {
+                            (Some(i), Some(v)) => {
+                                if let Some(e) = a.data.get_mut(i) {
+                                    e.1 = v.clone();
+                                }
+                            }
+                            (Some(i), None) => {
+                                a.data.remove(i);
+                            }
+                            (None, Some(v)) => a.data.push((k.clone(), v.clone())),
+                            (None, None) => {}
+                        }
+                    }
+                });
             }
         }
         Ok(())

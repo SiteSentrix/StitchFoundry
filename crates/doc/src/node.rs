@@ -1214,6 +1214,10 @@ pub struct ObjectAttributes {
     /// The note shown in the Attributes panel.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+    /// The object's own data, in order: SVG's `data-*` attributes (`data-pivot="100,180"` is
+    /// `("pivot", "100,180")`), kept from import to export (`object.setProps {data}`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub data: Vec<(String, String)>,
 }
 
 /// The Attributes panel's Image Map shapes.

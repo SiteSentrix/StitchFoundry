@@ -64,6 +64,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
         blends: fx::blends(&xml),
         files,
         non_scaling: found.non_scaling,
+        data: found.data,
         screen: (kx * ky).sqrt(),
     };
     if im.files.nested_text() {
@@ -124,6 +125,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<S
             }
             im.add_unclipped(&mut l, 0, std::mem::take(&mut loose));
             l.visible = !im.hidden.contains(g.id());
+            im.keep_data(g.id(), &mut l);
             im.doc.layers.push(Arc::new(l));
         }
     } else {
@@ -210,6 +212,8 @@ struct Importer {
     files: files::Files,
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
+    /// The `data-*` attributes of elements, by id ([`user_data`]).
+    data: HashMap<String, Vec<(String, String)>>,
     /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
     /// stroke's width is measured in.
     screen: f64,
@@ -320,6 +324,8 @@ struct Found {
     files: files::Files,
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
+    /// The `data-*` attributes of elements, by id ([`user_data`]).
+    data: HashMap<String, Vec<(String, String)>>,
     warnings: Vec<String>,
 }
 
@@ -390,7 +396,7 @@ impl Edits {
 fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
-    if !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING].iter().any(|t| svg.contains(t)) {
+    if !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-"].iter().any(|t| svg.contains(t)) {
         return (svg.into(), found);
     }
     let Ok(xml) = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else {
@@ -401,6 +407,14 @@ fn prepass<'s>(svg: &'s str, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
     for a in elements().filter(|n| n.tag_name().name() == "a") {
         if let Some(url) = href(a) {
             found.links.insert(edits.id(svg, a), url.to_string());
+        }
+    }
+    if svg.contains("data-") {
+        for e in elements().filter(|e| OBJECT_ELEMENTS.contains(&e.tag_name().name())) {
+            let data = user_data(e);
+            if !data.is_empty() {
+                found.data.insert(edits.id(svg, e), data);
+            }
         }
     }
     let symbols: HashSet<&str> = elements().filter(|n| n.tag_name().name() == "symbol").filter_map(|n| n.attribute("id")).collect();
@@ -454,6 +468,24 @@ fn hidden_objects(svg: &str, xml: &roxmltree::Document, css: &css::Styles, edits
 fn tag_name_end(svg: &str, n: XNode) -> usize {
     let start = n.range().start;
     svg.get(start + 1..).and_then(|s| s.find(|c: char| c.is_whitespace() || c == '/' || c == '>')).map_or(start + 2, |i| start + 1 + i)
+}
+
+/// The elements that become objects, whose `data-*` attributes are kept.
+const OBJECT_ELEMENTS: &[&str] = &["g", "a", "use", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "image"];
+
+/// The most `data-*` attributes kept per element (the file is untrusted).
+const MAX_DATA: usize = 64;
+
+/// The `data-*` attributes of element `e`, in order, without the `data-` (ours, `data-name` and
+/// `data-vc-*`, aside).
+fn user_data(e: XNode) -> Vec<(String, String)> {
+    e.attributes()
+        .filter(|a| a.namespace().is_none())
+        .filter_map(|a| Some((a.name().strip_prefix("data-")?, a.value())))
+        .filter(|(k, _)| !k.is_empty() && *k != "name" && !k.starts_with("vc-"))
+        .take(MAX_DATA)
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
 }
 
 /// Make `n` link to `url`, unless it links somewhere already (an inner link wins).
@@ -592,7 +624,16 @@ impl Importer {
         if self.hidden.contains(n.id()) {
             out.visible = false;
         }
+        self.keep_data(n.id(), &mut out);
         Some(out)
+    }
+
+    /// Give `n` the `data-*` attributes of element `id`, unless it has data already (what an
+    /// inner element made of it keeps).
+    fn keep_data(&self, id: &str, n: &mut Node) {
+        if let Some(data) = self.data.get(id).filter(|_| n.attrs.as_ref().is_none_or(|a| a.data.is_empty())) {
+            n.edit_attrs(|a| a.data = data.clone());
+        }
     }
 
     /// A gradient's stops, midpoints restored.
@@ -1114,9 +1155,10 @@ impl Importer {
             std::mem::take(&mut self.uses),
             std::mem::take(&mut self.labels),
             std::mem::take(&mut self.non_scaling),
+            std::mem::take(&mut self.data),
         );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels, self.non_scaling) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data) = outer;
         art
     }
 }
