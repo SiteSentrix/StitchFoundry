@@ -370,9 +370,24 @@ fn opentype_ligature_switches() {
     assert_eq!(layout(db(), &t).glyphs.len(), 1, "fi ligature by default");
     let off = LayoutOptions { features: OtFeatures { ligatures: false, ..Default::default() }, ..Default::default() };
     assert_eq!(layout_with(db(), &t, &off).glyphs.len(), 2);
-    // Tracking suppresses ligatures (as letterspaced type should).
-    let tracked = TextObject::point(Point::ZERO, "fi", CharStyle { tracking: 100.0, ..serif });
-    assert_eq!(layout(db(), &tracked).glyphs.len(), 2);
+    let fi = |tracking: f64, features: &[&str]| {
+        let st = CharStyle { tracking, features: features.iter().map(|s| s.to_string()).collect(), ..serif.clone() };
+        layout(db(), &TextObject::point(Point::ZERO, "fi", st)).glyphs.len()
+    };
+    // Small tracking adjustments (fitting a line) keep the ligature.
+    assert_eq!(fi(-5.0, &[]), 1, "tracking -5 keeps fi");
+    assert_eq!(fi(20.0, &[]), 1, "tracking +20 keeps fi");
+    let (tight, loose) = LIGATURE_TRACKING_LIMITS;
+    assert_eq!((fi(tight, &[]), fi(loose, &[])), (1, 1), "the limits themselves keep fi");
+    // Real letterspacing suppresses ligatures (as letterspaced type should), condensing sooner...
+    assert_eq!(fi(100.0, &[]), 2, "tracking 100 drops fi");
+    assert_eq!(fi(-30.0, &[]), 2, "tracking -30 drops fi");
+    assert_eq!(fi(-100.0, &[]), 2, "tracking -100 drops fi");
+    // ...unless the character turns them on explicitly.
+    assert_eq!(fi(100.0, &["liga"]), 1, "explicit liga wins over tracking");
+    assert_eq!(fi(100.0, &["+liga"]), 1);
+    assert_eq!(fi(100.0, &["liga", "-liga"]), 2, "the last tag wins");
+    assert_eq!(fi(0.0, &["-liga"]), 2, "explicit off still turns it off");
     let f = OtFeatures::from_tags(["dlig", "-liga", "smcp", "onum", "bogus"]);
     assert!(f.discretionary_ligatures && !f.ligatures && f.small_caps && f.oldstyle_figures && !f.fractions);
 }

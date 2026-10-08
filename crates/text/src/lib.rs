@@ -23,7 +23,7 @@ pub mod test_fonts;
 pub mod thread;
 
 pub use craft_fonts::{CRAFT_FONTS, CraftFont};
-pub use features::OtFeatures;
+pub use features::{LIGATURE_TRACKING_LIMITS, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, style_weight, system_font_dirs};
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 pub use layout::{layout, layout_with};
