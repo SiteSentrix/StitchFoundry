@@ -185,6 +185,10 @@ fn opacity_popup_blend_dropdown_sets_the_blend_mode() {
     // The popup is still open after choosing.
     let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
     assert!(texts.iter().any(|(t, _)| t == "Multiply"), "{texts:?}");
+    // A frame without the panel closes it, as egui closes the popups it remembers.
+    frame_events(&ctx, &mut app, vec![], |_, _| {});
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(!texts.iter().any(|(t, _)| t == "Multiply"), "{texts:?}");
 }
 
 #[test]

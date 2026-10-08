@@ -560,14 +560,16 @@ pub(crate) fn combo<R>(
 }
 
 /// A popover anchored to `resp`, opened and closed by `toggle` (usually `resp.clicked()`), and
-/// closed by Escape or a click outside it and outside any popup it opened. Use it instead of
-/// `egui::Popup::menu` when the popover holds dropdowns or popups of its own: egui remembers one
-/// open popup at a time, so opening a dropdown inside a remembered popup would close the popup
-/// (and the dropdown with it). This one keeps its open state itself.
+/// closed by Escape, a click outside it and outside any popup it opened, or a frame in which its
+/// anchor isn't shown. Use it instead of `egui::Popup::menu` when the popover holds dropdowns or
+/// popups of its own: egui remembers one open popup at a time, so opening a dropdown inside a
+/// remembered popup would close the popup (and the dropdown with it). This one keeps its open
+/// state itself: the last frame it was open in.
 pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -> R) -> Option<R> {
     let ctx = &resp.ctx;
     let id = resp.id.with("popover");
-    let was_open = ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+    let frame = ctx.cumulative_frame_nr();
+    let was_open = ctx.data(|d| d.get_temp::<u64>(id)).is_some_and(|f| f + 1 >= frame);
     let mut open = if toggle {
         !was_open
     } else {
@@ -580,7 +582,13 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
     };
     let inner =
         egui::Popup::menu(resp).id(id).open_bool(&mut open).close_behavior(egui::PopupCloseBehavior::IgnoreClicks).show(content).map(|r| r.inner);
-    ctx.data_mut(|d| d.insert_temp(id, open));
+    ctx.data_mut(|d| {
+        if open {
+            d.insert_temp(id, frame);
+        } else {
+            d.remove::<u64>(id);
+        }
+    });
     inner
 }
 
