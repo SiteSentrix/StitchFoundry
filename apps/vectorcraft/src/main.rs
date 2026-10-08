@@ -16,6 +16,8 @@ compile_error!("the win7 target requires --no-default-features --features window
 
 mod clipboard;
 mod control_server;
+#[cfg(feature = "wgpu")]
+mod gpu;
 mod logging;
 #[cfg(target_os = "macos")]
 mod native_menu;
@@ -297,23 +299,6 @@ fn app_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }
 
-/// The power preference wgpu picks the window's graphics adapter with (#306): the
-/// `WGPU_POWER_PREF` environment variable (`low`, `high`, `none`) when set, otherwise Preferences ›
-/// Performance › Graphics Processor (`gpuPreference`). Power saving unless the preference asks for
-/// high performance: the canvas is rasterized on the CPU and the GPU only composites it, which the
-/// integrated GPU of a hybrid-graphics laptop does easily, while presenting frames rendered on the
-/// discrete GPU through the integrated one made the window flicker on some laptops. With a single
-/// GPU both preferences pick it.
-#[cfg(feature = "wgpu")]
-fn power_preference(pref: Option<&str>, env: Option<eframe::wgpu::PowerPreference>) -> eframe::wgpu::PowerPreference {
-    use eframe::wgpu::PowerPreference;
-    match (env, pref) {
-        (Some(p), _) => p,
-        (None, Some("highPerformance")) => PowerPreference::HighPerformance,
-        (None, _) => PowerPreference::LowPower,
-    }
-}
-
 /// "name (backend, kind)" of the adapter the window renders with, for Help › About and bug reports.
 #[cfg(feature = "wgpu")]
 fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
@@ -324,7 +309,7 @@ fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
 /// macOS keeps its traffic lights over the integrated title strip.
 const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
 
-fn main() -> eframe::Result {
+fn main() -> std::process::ExitCode {
     // First, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
     vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
@@ -336,7 +321,7 @@ fn main() -> eframe::Result {
             "--control" => control_port = args.next().and_then(|p| p.parse().ok()),
             "--version" => {
                 println!("vectorcraft {}", env!("CARGO_PKG_VERSION"));
-                return Ok(());
+                return std::process::ExitCode::SUCCESS;
             }
             _ => files.push(a),
         }
@@ -360,7 +345,9 @@ fn main() -> eframe::Result {
     #[cfg(feature = "wgpu")]
     let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
     #[cfg(feature = "wgpu")]
-    let power = power_preference(gpu_pref, eframe::wgpu::PowerPreference::from_env());
+    let power = gpu::power_preference(gpu_pref, eframe::wgpu::PowerPreference::from_env());
+    #[cfg(feature = "wgpu")]
+    let startup = std::sync::Arc::new(gpu::Startup::default());
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("VectorCraft")
@@ -383,86 +370,94 @@ fn main() -> eframe::Result {
         // One frame queued, not two: the canvas is rasterized on the CPU and the GPU only
         // composites it, so the window answers the pointer a frame sooner (#444).
         options.wgpu_options.surface = eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY;
+        // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-            create.power_preference = power;
+            create.native_adapter_selector = Some(gpu::selector(power, startup.clone()));
         }
         options
     };
+    #[cfg(feature = "wgpu")]
+    gpu::watch_panics();
     // Files opened from Finder and the Dock arrive as events, not arguments.
     #[cfg(target_os = "macos")]
     open_documents::install();
-    eframe::run_native(
-        "VectorCraft",
-        options,
-        Box::new(move |cc| {
-            let mut app = VectorcraftApp::new(Session::new(), services());
-            load_prefs(&mut app, saved);
-            // Fit the window to its monitor, or put it back where it was (still hidden).
-            if let Some(w) = cc.winit_window() {
-                app.ui.window = Some(window::restore(w, saved_window));
-            }
-            // User Defined swatch and graphic style libraries live next to the preferences.
-            let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
-            app.session.swatch_libraries.set_user_dir(swatches);
-            let styles = prefs_path().and_then(|p| Some(p.parent()?.join("Graphic Styles").to_string_lossy().to_string()));
-            app.session.style_libraries.set_user_dir(styles);
-            // Data Recovery copies live next to the preferences too (none for runs without
-            // preferences, such as agents' test runs, unless the recoveryFolder preference is set).
-            if std::env::var_os("VECTORCRAFT_NO_PREFS").is_none() {
-                let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
-                app.session.recovery.set_default_folder(recovery);
-            }
-            let graphics_loss = GraphicsLoss::default();
-            #[cfg(feature = "wgpu")]
-            if let Some(rs) = &cc.wgpu_render_state {
-                let summary = adapter_summary(&rs.adapter.get_info());
-                log::info!("rendering with {summary} (power preference {power:?})");
-                app.graphics_adapter = Some(summary);
-                let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
-                rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
-            }
-            #[cfg(feature = "windows7")]
-            {
-                app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
-            }
-            app.integrated_titlebar = cfg!(target_os = "macos");
-            app.custom_titlebar = CUSTOM_TITLEBAR;
-            if let Some(port) = control_port {
-                let rx = control_server::start(port, cc.egui_ctx.clone());
-                app = app.with_control(rx);
-            }
-            #[cfg(target_os = "macos")]
-            open_documents::set_ui(&cc.egui_ctx);
-            open_files(&mut app, files);
-            Ok(Box::new(App {
-                app,
-                graphics_loss,
-                graphics_lost: false,
+    #[cfg(feature = "wgpu")]
+    let created = startup.clone();
+    // A panic that ends the window (egui-wgpu's own, #502) is caught here: never a crash.
+    let outcome = vectorcraft_engine::guard::catch_panic(|| {
+        eframe::run_native(
+            "VectorCraft",
+            options,
+            Box::new(move |cc| {
+                let mut app = VectorcraftApp::new(Session::new(), services());
+                load_prefs(&mut app, saved);
+                // Fit the window to its monitor, or put it back where it was (still hidden).
+                if let Some(w) = cc.winit_window() {
+                    app.ui.window = Some(window::restore(w, saved_window));
+                }
+                // User Defined swatch and graphic style libraries live next to the preferences.
+                let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
+                app.session.swatch_libraries.set_user_dir(swatches);
+                let styles = prefs_path().and_then(|p| Some(p.parent()?.join("Graphic Styles").to_string_lossy().to_string()));
+                app.session.style_libraries.set_user_dir(styles);
+                // Data Recovery copies live next to the preferences too (none for runs without
+                // preferences, such as agents' test runs, unless the recoveryFolder preference is set).
+                if std::env::var_os("VECTORCRAFT_NO_PREFS").is_none() {
+                    let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
+                    app.session.recovery.set_default_folder(recovery);
+                }
+                let graphics_loss = GraphicsLoss::default();
+                #[cfg(feature = "wgpu")]
+                if let Some(rs) = &cc.wgpu_render_state {
+                    let summary = adapter_summary(&rs.adapter.get_info());
+                    log::info!("rendering with {summary} (power preference {power:?})");
+                    created.created(&cc.egui_ctx);
+                    if !gpu::skipped().is_empty() {
+                        app.status(format!("The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}"));
+                    }
+                    app.graphics_adapter = Some(summary);
+                    let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
+                    rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
+                }
+                #[cfg(feature = "windows7")]
+                {
+                    app.graphics_adapter = Some("OpenGL (Windows 7 compatibility)".into());
+                }
+                app.integrated_titlebar = cfg!(target_os = "macos");
+                app.custom_titlebar = CUSTOM_TITLEBAR;
+                if let Some(port) = control_port {
+                    let rx = control_server::start(port, cc.egui_ctx.clone());
+                    app = app.with_control(rx);
+                }
                 #[cfg(target_os = "macos")]
-                menu: None,
-            }))
-        }),
-    )
+                open_documents::set_ui(&cc.egui_ctx);
+                open_files(&mut app, files);
+                Ok(Box::new(App {
+                    app,
+                    graphics_loss,
+                    graphics_lost: false,
+                    #[cfg(target_os = "macos")]
+                    menu: None,
+                }))
+            }),
+        )
+    });
+    #[cfg(feature = "wgpu")]
+    let outcome = gpu::finish(outcome, &startup);
+    #[cfg(not(feature = "wgpu"))]
+    let outcome = outcome.and_then(|r| r.map_err(|e| e.to_string()));
+    match outcome {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            log::error!("VectorCraft stopped: {e}");
+            std::process::ExitCode::FAILURE
+        }
+    }
 }
 
 #[cfg(all(test, feature = "wgpu"))]
 mod tests {
     use super::*;
-    use eframe::wgpu::PowerPreference;
-
-    #[test]
-    fn power_saving_unless_the_preference_or_the_environment_says_otherwise() {
-        assert_eq!(power_preference(None, None), PowerPreference::LowPower);
-        assert_eq!(power_preference(Some("powerSaving"), None), PowerPreference::LowPower);
-        assert_eq!(power_preference(Some("highPerformance"), None), PowerPreference::HighPerformance);
-        // A value this version doesn't know (a newer or damaged preference file) is the default.
-        assert_eq!(power_preference(Some("turbo"), None), PowerPreference::LowPower);
-        assert_eq!(power_preference(Some(""), None), PowerPreference::LowPower);
-        // WGPU_POWER_PREF wins over the preference, either way.
-        assert_eq!(power_preference(Some("powerSaving"), Some(PowerPreference::HighPerformance)), PowerPreference::HighPerformance);
-        assert_eq!(power_preference(Some("highPerformance"), Some(PowerPreference::LowPower)), PowerPreference::LowPower);
-        assert_eq!(power_preference(None, Some(PowerPreference::None)), PowerPreference::None);
-    }
 
     /// The file extensions the macOS bundle declares: its document types and its own exported type.
     fn plist_extensions(plist: &str) -> Vec<&str> {
@@ -491,17 +486,5 @@ mod tests {
         let types = plist.matches("<key>CFBundleTypeName</key>").count();
         assert!(types > 1 && plist.matches("<key>LSHandlerRank</key>").count() == types, "every document type has a rank");
         assert_eq!(plist.matches("<string>Owner</string>").count(), 2, "only VectorCraft documents and templates are owned");
-    }
-
-    /// The preference the engine saves is the one the app reads back before the window opens.
-    #[test]
-    fn the_saved_engine_preference_is_found() {
-        let mut prefs = vectorcraft_engine::Prefs::default();
-        let saved = prefs.to_json();
-        assert_eq!(saved.get("gpuPreference").and_then(serde_json::Value::as_str), Some("powerSaving"));
-        prefs.gpu_preference = "highPerformance".into();
-        let saved = prefs.to_json();
-        let pref = saved.get("gpuPreference").and_then(serde_json::Value::as_str);
-        assert_eq!(power_preference(pref, None), PowerPreference::HighPerformance);
     }
 }

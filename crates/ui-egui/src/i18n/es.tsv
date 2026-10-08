@@ -3571,6 +3571,7 @@ axis	Both	Ambos
 @msg	Sent to {_1}	Se envió a {_1}
 @msg	{_1} files	{_1} archivos
 @msg	The graphics were lost and have been restarted	Se perdieron los gráficos y se reiniciaron
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	El procesador gráfico probado primero no pudo mostrar la ventana, así que VectorCraft se inició de nuevo con {summary}
 @msg	Loading VectorCraft…	Cargando VectorCraft…
 @msg	VectorCraft failed to start: {e}	VectorCraft no pudo iniciarse: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Se necesita un navegador con WebGPU o WebGL2.
