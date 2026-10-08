@@ -539,6 +539,30 @@ fn selection_preferences_apply_to_pointer_gestures() {
     assert_eq!(click(&mut s, 7, 250.0, json!({})), json!([front]), "the path does");
 }
 
+/// A Shift-drag marquee reaches agents (#483): `pointer_gesture` with `mods.shift` toggles the
+/// objects it reaches, so a selected one leaves the selection and an unselected one joins it.
+#[test]
+fn shift_marquee_gesture_toggles_the_selection() {
+    let mut s = server();
+    let square = |s: &mut Server, id: u64, x: u64| {
+        let r = call(s, id, "draw_shape", json!({"shape": "rectangle", "x": x, "y": 100, "width": 50, "height": 50}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b, c) = (square(&mut s, 1, 100), square(&mut s, 2, 200), square(&mut s, 3, 300));
+    let r = call(&mut s, 4, "run_command", json!({"command": "select.set", "params": {"ids": [a, b]}}));
+    assert_eq!(r["isError"], false, "{r}");
+    let events = json!([{"kind": "down", "x": 180, "y": 80}, {"kind": "drag", "x": 300, "y": 200}, {"kind": "up", "x": 380, "y": 200}]);
+    for tool in ["selection", "directSelection"] {
+        let r = call(&mut s, 5, "pointer_gesture", json!({"tool": tool, "events": events, "mods": {"shift": true}}));
+        assert_eq!(r["isError"], false, "{r}");
+        let sel = &serde_json::from_str::<Value>(&text_of(&r)).unwrap()["selection"];
+        // The Selection tool takes b out and adds c; Direct Selection's marquee then toggles their
+        // anchors back: b's are selected again and c, whole, leaves.
+        let want = if tool == "selection" { json!([a, c]) } else { json!([a, b]) };
+        assert_eq!(*sel, want, "{tool}");
+    }
+}
+
 /// Type preferences reach agents (#394): type the Type tool places starts with placeholder text,
 /// selected; Alt+→ tracks it by Tracking and Cmd+Shift+. steps its size by Size/Leading.
 #[test]

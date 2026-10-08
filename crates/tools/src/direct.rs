@@ -5,10 +5,12 @@
 //! anchors, segments and Smart Guides, or with them off Snap to Point; Shift keeps the move at 45°
 //! steps), drag a direction handle to
 //! reshape (Shift keeps it at 45° steps round its anchor, Alt moves it alone; smart guides snap
-//! it), marquee to select anchors, drag a live rectangle's corner widget to round its corners
+//! it), marquee to select anchors (Shift-drag toggles them: the selected ones inside are
+//! deselected, the others selected), drag a live rectangle's corner widget to round its corners
 //! (the selected ones when anchors are selected; Alt-click cycles their kind, double-click opens
 //! the Corners dialog).
-//! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
+//! Group Selection: click selects the leaf; each further click on it adds the next enclosing group;
+//! its marquee works as Direct Selection's.
 //! Both move objects selected as a whole as the Selection tool does, snapping alike.
 //! Both pick the key objects of a blend, and click or drag ruler guides ([`crate::rulerguide`]).
 //! Direct Selection also edits a blend's spine: drag its points (a key object on a point moves
@@ -69,7 +71,8 @@ enum State {
     Marquee {
         start: Point,
         cur: Point,
-        add: bool,
+        /// Shift: the anchors inside leave the selection if selected, else join it.
+        toggle: bool,
     },
     Corner(CornerDrag),
     /// Dragging a bracket of type on a path.
@@ -285,7 +288,7 @@ impl Tool for DirectSelectionTool {
                     return out;
                 }
                 let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else {
-                    self.state = State::Marquee { start: p, cur: p, add: ev.mods.shift };
+                    self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift };
                     return vec![];
                 };
                 // Walk up from the leaf: select the first ancestor not yet selected (below the layer).
@@ -393,7 +396,7 @@ impl Tool for DirectSelectionTool {
                     }
                     return vec![];
                 }
-                self.state = State::Marquee { start: p, cur: p, add: ev.mods.shift };
+                self.state = State::Marquee { start: p, cur: p, toggle: ev.mods.shift };
                 vec![]
             }
             (PointerKind::Drag, State::MoveAnchors { start, grab, began }) => {
@@ -497,8 +500,8 @@ impl Tool for DirectSelectionTool {
                 self.state = State::Idle;
                 self.mesh.release().unwrap_or_default()
             }
-            (PointerKind::Drag, State::Marquee { start, add, .. }) => {
-                self.state = State::Marquee { start, cur: p, add };
+            (PointerKind::Drag, State::Marquee { start, toggle, .. }) => {
+                self.state = State::Marquee { start, cur: p, toggle };
                 vec![]
             }
             (PointerKind::Drag, State::Corner(mut c)) => {
@@ -537,11 +540,11 @@ impl Tool for DirectSelectionTool {
                 self.guides.clear();
                 vec![Action::Commit]
             }
-            (PointerKind::Up, State::Marquee { start, add, .. }) => {
+            (PointerKind::Up, State::Marquee { start, toggle, .. }) => {
                 self.state = State::Idle;
                 let r = Rect::from_points(start, p);
                 if r.width() < cx.tol(3.0) && r.height() < cx.tol(3.0) {
-                    return if add { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
+                    return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
                 // Collect anchors inside the rect for every editable path.
                 let mut sel: Vec<(NodeId, Vec<AnchorRef>)> = vec![];
@@ -555,7 +558,7 @@ impl Tool for DirectSelectionTool {
                 });
                 sel.retain(|(id, _)| cx.doc.is_editable(*id));
                 let items: Vec<Value> = sel.iter().map(|(id, v)| json!({"id": id.0, "anchors": anchors_json(v)})).collect();
-                vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "add": add}))]
+                vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": if toggle { "toggle" } else { "set" }}))]
             }
             _ => vec![],
         }
@@ -792,8 +795,25 @@ mod tests {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
-        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "add": false}))]);
+        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
     }
+    /// Shift-drag a marquee: the anchors inside toggle (#483), with Group Selection too.
+    #[test]
+    fn shift_marquee_toggles_anchors() {
+        let (d, id) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let shift = Mods { shift: true, ..Default::default() };
+        for group in [false, true] {
+            let mut t = DirectSelectionTool::new(group);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0).with_mods(shift));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0).with_mods(shift));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0).with_mods(shift));
+            assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "toggle"}))]);
+        }
+    }
+
     /// An open path from (100, 300) to (200, 300) arching up through (150, 262.5).
     fn arch_doc() -> (vectorcraft_doc::Document, NodeId) {
         let (mut d, _) = doc_with_rect();

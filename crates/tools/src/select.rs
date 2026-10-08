@@ -1,4 +1,5 @@
-//! The Selection tool (V): click/shift-click, marquee, move (Alt copies, Shift constrains; Smart
+//! The Selection tool (V): click/shift-click, marquee (Shift-drag toggles the objects it reaches:
+//! the selected ones are deselected, the others selected), move (Alt copies, Shift constrains; Smart
 //! Guides, or with them off View › Snap to Point, snap it),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's corner widget to round its corners (Alt-click cycles their kind,
@@ -49,7 +50,8 @@ enum State {
     Marquee {
         start: Point,
         cur: Point,
-        add: bool,
+        /// Shift: the objects inside leave the selection if selected, else join it.
+        toggle: bool,
     },
     /// Dragging a Live Corners widget.
     Corner(CornerDrag),
@@ -256,7 +258,7 @@ impl Tool for SelectionTool {
                         out
                     }
                     None => {
-                        self.state = State::Marquee { start: p, cur: p, add: m.shift };
+                        self.state = State::Marquee { start: p, cur: p, toggle: m.shift };
                         vec![]
                     }
                 }
@@ -299,8 +301,8 @@ impl Tool for SelectionTool {
                 self.measure = cx.transform_tools_guides.then(|| (p, format!("{:.1}°", -deg)));
                 vec![Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(a), "copy": false }))]
             }
-            (PointerKind::Drag, State::Marquee { start, add, .. }) => {
-                self.state = State::Marquee { start, cur: p, add };
+            (PointerKind::Drag, State::Marquee { start, toggle, .. }) => {
+                self.state = State::Marquee { start, cur: p, toggle };
                 vec![]
             }
             (PointerKind::Drag, State::Corner(mut c)) => {
@@ -339,18 +341,14 @@ impl Tool for SelectionTool {
                 self.targets = None;
                 vec![Action::Commit]
             }
-            (PointerKind::Up, State::Marquee { start, add, .. }) => {
+            (PointerKind::Up, State::Marquee { start, toggle, .. }) => {
                 self.state = State::Idle;
                 let r = Rect::from_points(start, p);
                 if r.width() < Self::drag_threshold(cx) && r.height() < Self::drag_threshold(cx) {
-                    return if add { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
+                    return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
                 let ids: Vec<NodeId> = marquee(cx.doc, r, cx.isolation, false);
-                if add {
-                    vec![Action::Exec("select.add".into(), json!({ "ids": json_ids(&ids) }))]
-                } else {
-                    vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) }))]
-                }
+                vec![Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }))]
             }
             _ => vec![],
         }
@@ -554,6 +552,24 @@ mod tests {
         assert_eq!(t.overlays(&cx).len(), 1);
         let a = t.pointer(&cx, &ev(PointerKind::Up, 120.0, 120.0));
         assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    }
+
+    /// Shift-drag a marquee: the objects it reaches toggle (#483), so selected ones can be
+    /// taken out of the selection; a Shift-click on empty canvas leaves the selection alone.
+    #[test]
+    fn shift_marquee_toggles() {
+        let (d, id) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        let shift = Mods { shift: true, ..Default::default() };
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0).with_mods(shift));
+        t.pointer(&cx, &ev(PointerKind::Drag, 120.0, 120.0).with_mods(shift));
+        let a = t.pointer(&cx, &ev(PointerKind::Up, 120.0, 120.0).with_mods(shift));
+        assert_eq!(a, vec![Action::Exec("select.toggle".into(), json!({"ids": [id.0]}))]);
+        t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0).with_mods(shift));
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, 50.0, 50.0).with_mods(shift)).is_empty());
     }
 
     #[test]

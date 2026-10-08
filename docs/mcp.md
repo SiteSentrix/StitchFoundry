@@ -189,6 +189,16 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
 | `undo` / `redo` | `{}` | |
 
+With `mods.shift`, a marquee dragged with the Selection tool toggles the objects it reaches (the selected ones leave
+the selection, the others join it, the rest stays), and one dragged with Direct or Group Selection toggles the anchors
+inside it (a path left with none leaves the selection, one with all of them is selected whole). The Lasso adds anchors
+with `mods.shift` and takes them away with `mods.alt`. They run `select.toggle {ids}` and `select.anchorsMany {items,
+mode: "set"|"add"|"toggle"|"subtract"}`:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"selection","mods":{"shift":true},"events":[{"kind":"down","x":180,"y":80},{"kind":"drag","x":300,"y":200},{"kind":"up","x":380,"y":200}]}}
+```
+
 Appearance stacks: an object can carry several fills and strokes (`appearance.addFill`, `appearance.addStroke`), indexed
 in paint order (0 is painted first, the bottom row of the Appearance panel). `paint.setFill`, `paint.setStroke`,
 `stroke.set`, `stroke.setAdvanced`, `paint.editGradient`, `paint.setGradientGeom` and `transparency.set` take
