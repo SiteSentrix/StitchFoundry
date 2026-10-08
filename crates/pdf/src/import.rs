@@ -21,7 +21,7 @@ use vectorcraft_geom::{FillRule, PathData};
 
 use crate::import_color::{Colors, Native};
 use crate::import_mask::{MaskSpec, contains, is_rectangle, luminance, mask_spec, white_cover};
-use crate::import_scan::{MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page};
+use crate::import_scan::{MAX_NESTING, Ocgs, Scan, all_on, hides_forms, scan_page, tag_key};
 use crate::import_shading::{clipped, extend_clip, fold_stop_opacity, mesh_shading, shading_gradient};
 use crate::import_text::{Families, Look, Placement, TextLine, Upright};
 use crate::{CropTo, ImportOptions, ImportReport, PdfError, TextAs};
@@ -32,6 +32,9 @@ const TEXT_OUTLINES: &str = "<Text Outlines>";
 const MAX_NESTED: u32 = 8;
 /// A tiling pattern read this many times with the same art is taken to always draw it.
 const PATTERN_REUSE: u32 = 16;
+/// Stands for the group of art whose group couldn't be told (see [`Builder::unsure`]): it goes
+/// to a hidden, non-printing layer of its page.
+const UNSORTED: usize = usize::MAX;
 
 /// Import a PDF (or PDF-compatible `.ai`) with default options.
 pub fn import(bytes: &[u8]) -> Result<Document, PdfError> {
@@ -146,6 +149,9 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
     doc.layers.clear();
     let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
     let mut b = Builder::new(doc.peek_next_id(), Colors::new(&pdf, taken.clone()), opts.text_as, route);
+    // The art of a group that is off (drawn as `all_on` turned it on) or doesn't print mustn't
+    // show or print on its page's layer.
+    b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
     b.taken = taken;
     b.warnings = notes;
     let cache = InterpreterCache::new();
@@ -198,19 +204,22 @@ pub fn import_with_report(bytes: &[u8], opts: &ImportOptions) -> Result<ImportRe
             show_center_mark: false,
             show_cross_hairs: false,
         });
-        let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>| {
-            let mut layer = Node::layer(b.id(), &format!("Page {}", number + 1), LayerColor::Preset((i % 27) as u8));
-            if let NodeKind::Layer { children: c, .. } = &mut layer.kind {
-                *c = art;
+        let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>, shown: bool| {
+            let name = if shown { format!("Page {}", number + 1) } else { format!("Page {} (unsorted)", number + 1) };
+            let mut layer = Node::layer(b.id(), &name, LayerColor::Preset((i % 27) as u8));
+            layer.visible = shown;
+            if let NodeKind::Layer { children: c, printable, .. } = &mut layer.kind {
+                (*c, *printable) = (art, shown);
             }
             Slot::Page(Box::new(layer))
         };
         if parts.is_empty() {
-            slots.push(page_layer(&mut b, vec![]));
+            slots.push(page_layer(&mut b, vec![], true));
         }
         for (key, art) in parts {
             match key {
-                None => slots.push(page_layer(&mut b, art)),
+                None => slots.push(page_layer(&mut b, art, true)),
+                Some(UNSORTED) => slots.push(page_layer(&mut b, art, false)),
                 Some(g) => {
                     let into = group_art.entry(g).or_insert_with(|| {
                         place_group(g, &ocgs, &mut slots, &mut nesting);
@@ -542,6 +551,9 @@ struct Builder<'p> {
     aligned: bool,
     /// Whether optional content groups become layers.
     route: bool,
+    /// Some groups are hidden or don't print: art in marked content whose group can't be told
+    /// (once the scan and the interpreter part) is [`UNSORTED`] rather than the page's.
+    unsure: bool,
     /// The marked-content sequences open: the group each marks.
     marked: Vec<Option<usize>>,
     /// A transparency group was just pushed: a form's (whose flags come next) or an image's.
@@ -678,6 +690,7 @@ impl<'p> Builder<'p> {
             group_at: 0,
             aligned: true,
             route,
+            unsure: false,
             marked: vec![],
             pending: false,
             nested: 0,
@@ -1521,13 +1534,15 @@ impl<'a> Device<'a> for Builder<'_> {
         let at = self.tag_at;
         self.tag_at += 1;
         let group = match self.scan.tags.get(at) {
-            Some((t, g)) if self.aligned && t.as_slice() == tag => *g,
+            Some((t, g)) if self.aligned && *t == tag_key(tag) => *g,
             _ => {
                 if self.route && self.aligned {
                     self.aligned = false;
-                    self.warn("some art couldn't be told apart by layer and went to its page's layer");
+                    let why = if self.scan.cut { "a page draws more than can be read for its layers: " } else { "" };
+                    let went = if self.unsure { "a hidden, non-printing layer of its page" } else { "its page's layer" };
+                    self.warn(&format!("{why}some art couldn't be told apart by layer and went to {went}"));
                 }
-                None
+                self.unsure.then_some(UNSORTED)
             }
         }
         .filter(|_| self.route);
