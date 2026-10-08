@@ -459,6 +459,11 @@ fn burasagari_hangs_a_comma_or_full_stop_outside_the_line() {
             let l = lay("一二三四五」六七", b, vertical_type);
             assert_ne!(l.glyphs[4].line, l.glyphs[0].line, "vertical {vertical_type} {b:?}");
         }
+        // The full-width comma and full stop hang too.
+        for mark in ['，', '．'] {
+            let l = lay(&format!("一二三四五{mark}六七"), Burasagari::Standard, vertical_type);
+            assert_eq!(l.glyphs[5].line, l.glyphs[0].line, "vertical {vertical_type}: {mark} hangs");
+        }
     }
     // Horizontal: the hanging mark starts at the frame's edge.
     let l = lay("一二三四五、六七", Burasagari::Standard, false);

@@ -585,3 +585,23 @@ fn character_alignment_lines_small_characters_up_with_the_largest_em_box() {
         assert!(near(place(CharAlign::EmBoxBottom), -0.12 * 20.0), "bottom: {}", place(CharAlign::EmBoxBottom));
     }
 }
+
+/// Burasagari leaves Latin punctuation alone: in a measure of exactly "abcd", the full stop of
+/// "abcd. ef" doesn't hang with Standard or Forced (the line breaks as it does with None), and a
+/// Latin line ending in a full stop isn't shortened by Forced.
+#[test]
+fn burasagari_leaves_latin_commas_and_full_stops_inside_the_line() {
+    use vectorcraft_doc::Burasagari;
+    let measure = width(&point("abcd", style(20.0)));
+    let lay = |text: &str, b: Burasagari| {
+        let mut t = area(text, style(20.0), Rect::new(0.0, 0.0, measure + 0.01, 400.0), Justify::JustifyLeft);
+        t.para.burasagari = b;
+        layout(db(), &t).glyphs.iter().map(|g| (g.line, (g.origin.x * 100.0).round())).collect::<Vec<_>>()
+    };
+    for text in ["abcd. ef", "a b. efgh", "ab, cd, efgh"] {
+        let none = lay(text, Burasagari::None);
+        for b in [Burasagari::Standard, Burasagari::Forced] {
+            assert_eq!(lay(text, b), none, "{text} {b:?}");
+        }
+    }
+}

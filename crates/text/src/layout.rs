@@ -762,8 +762,13 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
     while j < g.len() {
         let gl = &g[j];
         if j > i && !gl.is_space() && x + gl.adv > width + EPS {
+            // It ends the line with the spaces after it.
             if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, j) && g.get(j + 1).is_none_or(|n| n.byte != gl.byte) {
-                return (j + 1, false);
+                let mut end = j + 1;
+                while g.get(end).is_some_and(SGlyph::is_space) {
+                    end += 1;
+                }
+                return (end, false);
             }
             break;
         }
@@ -811,10 +816,11 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
     (end, hy)
 }
 
-/// Can glyph `g` hang outside the line (burasagari)? A Japanese comma or full stop, not a closing
-/// bracket.
+/// Can glyph `g` hang outside the line (burasagari)? An East Asian comma or full stop, full width
+/// (、。，．) or half width (､｡); not a closing bracket, nor Latin punctuation (Latin text keeps
+/// its line breaks and composer).
 fn hangs(g: &SGlyph) -> bool {
-    matches!(g.ch, '、' | '。') && g.tcy.is_none()
+    matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none()
 }
 
 /// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a

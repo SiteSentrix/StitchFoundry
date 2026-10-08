@@ -162,7 +162,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if menu_item(ui, tl!("Bottom-to-Bottom Leading"), has, has && !top_to_top) {
             format(app, json!({"leadingModel": "romanBaseline"}));
         }
-        // Hanging punctuation: a Japanese comma or full stop ending a line stands outside it.
+        // Hanging punctuation: a comma or full stop ending a line stands outside it.
         let hang = style.as_ref().map(|(_, p)| p.burasagari);
         ui.add_enabled_ui(has, |ui| {
             // Indented like the items beside it (their check column).
@@ -170,8 +170,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 use vectorcraft_doc::Burasagari;
                 for (label, b, key) in [
                     (tl!("None"), Burasagari::None, "none"),
-                    (tl!("Standard"), Burasagari::Standard, "standard"),
-                    (tl!("Forced"), Burasagari::Forced, "forced"),
+                    (tl!("Regular"), Burasagari::Standard, "standard"),
+                    (tl!("Force"), Burasagari::Forced, "forced"),
                 ] {
                     if menu_item(ui, label, true, hang == Some(b)) {
                         format(app, json!({"burasagari": key}));
@@ -188,7 +188,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         para_cmd(app, "text.setStyle", json!({"justify": "auto"}));
         format(
             app,
-            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "none"}),
+            json!({"leftIndent": 0, "rightIndent": 0, "firstLineIndent": 0, "spaceBefore": 0, "spaceAfter": 0, "hyphenate": false, "direction": "auto", "leadingModel": "romanBaseline", "burasagari": "standard"}),
         );
     }
 }

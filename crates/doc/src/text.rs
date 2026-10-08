@@ -475,9 +475,10 @@ impl Mojikumi {
     }
 }
 
-/// Hanging punctuation (burasagari): a Japanese comma or full stop ending a line
+/// Hanging punctuation (burasagari): an East Asian comma or full stop ending a line (、。，．､｡)
 /// stands outside the line's measure, in the space its punctuation spacing gives it (half width
-/// with Line-end Punctuation Half Width). Closing brackets don't hang.
+/// with Line-end Punctuation Half Width). Closing brackets and Latin punctuation don't hang. Shown
+/// as None / Regular / Force.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Burasagari {
