@@ -32,6 +32,8 @@ pub(crate) enum Obj {
     /// An executable name: looked up and run.
     Exec(Rc<str>),
     Str(Shared<u8>),
+    /// An executable string (`cvx`): run, it runs its text as a program.
+    ExecStr(Shared<u8>),
     /// An array; executable ones are procedures.
     Array {
         items: Shared<Obj>,
@@ -85,7 +87,7 @@ impl Obj {
     pub fn text(&self) -> Option<Rc<str>> {
         match self {
             Self::Name(n) | Self::Exec(n) => Some(n.clone()),
-            Self::Str(s) => Some(Rc::from(String::from_utf8_lossy(&s.borrow()).as_ref())),
+            Self::Str(s) | Self::ExecStr(s) => Some(Rc::from(String::from_utf8_lossy(&s.borrow()).as_ref())),
             _ => None,
         }
     }
@@ -117,7 +119,7 @@ impl Obj {
             Self::Int(_) => "integertype",
             Self::Real(_) => "realtype",
             Self::Name(_) | Self::Exec(_) => "nametype",
-            Self::Str(_) => "stringtype",
+            Self::Str(_) | Self::ExecStr(_) => "stringtype",
             Self::Array { .. } => "arraytype",
             Self::Dict(_) => "dicttype",
             Self::Op(_) => "operatortype",

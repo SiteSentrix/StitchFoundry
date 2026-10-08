@@ -948,6 +948,8 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             "/T3 << /FontType 3 /FontMatrix [0.1 0 0 0.1 0 0] /FontBBox [0 0 9 9] /Encoding [/a /b] /BuildChar { pop pop 9 0 setcharwidth 0 0 5 5 rectfill } >> definefont setfont",
             "/T4 << /FontType 3 /FontMatrix [1 0 0 1 0 0] /BuildGlyph { pop pop (x) show } /Encoding [/a] >> definefont setfont",
             "glyphshow", "xshow", "xyshow", "awidthshow", "kshow", "/a", "[1 2 3]",
+            // Executable strings and integer keys (Illustrator 8's procsets).
+            "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit"
         ])
         .prop_map(str::to_string),
     ]

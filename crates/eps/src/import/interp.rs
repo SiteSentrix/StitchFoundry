@@ -260,7 +260,7 @@ impl<'a> Interp<'a> {
 
     pub fn pop_str(&mut self) -> Res<Shared<u8>> {
         match self.pop()? {
-            Obj::Str(s) => Ok(s),
+            Obj::Str(s) | Obj::ExecStr(s) => Ok(s),
             _ => ps_err("typecheck", "a string"),
         }
     }
@@ -291,8 +291,12 @@ impl<'a> Interp<'a> {
 
     /// The value of name `name` on the dictionary stack.
     pub fn lookup(&self, name: &Rc<str>) -> Option<Obj> {
-        let key = Key::Name(name.clone());
-        self.dicts.iter().rev().find_map(|d| d.borrow().get(&key).cloned())
+        self.lookup_key(&Key::Name(name.clone()))
+    }
+
+    /// The value of any key (`load` takes numbers too) on the dictionary stack.
+    fn lookup_key(&self, key: &Key) -> Option<Obj> {
+        self.dicts.iter().rev().find_map(|d| d.borrow().get(key).cloned())
     }
 
     /// Count `bytes` the program makes against [`MAX_MEMORY`].
@@ -340,6 +344,8 @@ impl<'a> Interp<'a> {
                 r
             }
             Obj::Op(op) => self.op(op),
+            // An executable string runs, as an operator does (procedures are pushed).
+            s @ Obj::ExecStr(_) => self.call(s),
             o => self.push(o),
         }
     }
@@ -349,7 +355,11 @@ impl<'a> Interp<'a> {
     pub fn call(&mut self, v: Obj) -> Res {
         match v {
             Obj::Array { items, exec: true } => self.run_proc(&items),
-            Obj::File { stream, exec: true } => self.run_file(&stream),
+            Obj::File { stream, exec: true } => match self.program_of(&stream)? {
+                Some(program) => self.run_program(&program),
+                None => Ok(()),
+            },
+            Obj::ExecStr(s) => self.run_program(&s.to_vec()),
             Obj::Op(op) => self.op(op),
             Obj::Exec(name) => {
                 self.enter()?;
@@ -379,11 +389,10 @@ impl<'a> Interp<'a> {
         r
     }
 
-    /// Run what is left of an executable file as a program, token by token.
-    fn run_file(&mut self, f: &Rc<RefCell<super::data::Stream>>) -> Res {
-        let Some(program) = self.program_of(f)? else { return Ok(()) };
+    /// Run `program` (what is left of an executable file, an executable string), token by token.
+    fn run_program(&mut self, program: &[u8]) -> Res {
         self.enter()?;
-        let mut lex = Lexer::new(&program);
+        let mut lex = Lexer::new(program);
         let r = loop {
             match lex.next() {
                 Ok(Some(o)) => {
@@ -760,6 +769,7 @@ impl<'a> Interp<'a> {
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => Obj::Array { items, exec: true },
                     Obj::File { stream, .. } => Obj::File { stream, exec: true },
+                    Obj::Str(s) => Obj::ExecStr(s),
                     Obj::Name(n) => Obj::Exec(n),
                     o => o,
                 };
@@ -769,6 +779,7 @@ impl<'a> Interp<'a> {
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => Obj::Array { items, exec: false },
                     Obj::File { stream, .. } => Obj::File { stream, exec: false },
+                    Obj::ExecStr(s) => Obj::Str(s),
                     Obj::Exec(n) => Obj::Name(n),
                     o => o,
                 };
@@ -776,7 +787,10 @@ impl<'a> Interp<'a> {
             }
             Xcheck => {
                 let o = self.pop()?;
-                self.push(Obj::Bool(matches!(o, Obj::Array { exec: true, .. } | Obj::File { exec: true, .. } | Obj::Exec(_) | Obj::Op(_))))?;
+                self.push(Obj::Bool(matches!(
+                    o,
+                    Obj::Array { exec: true, .. } | Obj::File { exec: true, .. } | Obj::ExecStr(_) | Obj::Exec(_) | Obj::Op(_)
+                )))?;
             }
             Cvn => {
                 let s = self.pop_str()?;
@@ -829,7 +843,7 @@ impl<'a> Interp<'a> {
             Length => {
                 let n = match self.pop()? {
                     Obj::Array { items, .. } => items.len(),
-                    Obj::Str(s) => s.len(),
+                    Obj::Str(s) | Obj::ExecStr(s) => s.len(),
                     Obj::Dict(d) => d.borrow().len(),
                     Obj::Name(n) | Obj::Exec(n) => n.len(),
                     _ => return ps_err("typecheck", ""),
@@ -845,7 +859,7 @@ impl<'a> Interp<'a> {
                 let k = self.pop()?;
                 let o = match self.pop()? {
                     Obj::Array { items, .. } => items.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?,
-                    Obj::Str(s) => Obj::Int(i64::from(s.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?)),
+                    Obj::Str(s) | Obj::ExecStr(s) => Obj::Int(i64::from(s.get(index(&k)?).ok_or(PsError::Ps("rangecheck", String::new()))?)),
                     Obj::Dict(d) => {
                         let key = k.key().ok_or(PsError::Ps("typecheck", String::new()))?;
                         let v = d.borrow().get(&key).cloned();
@@ -958,8 +972,8 @@ impl<'a> Interp<'a> {
             }
             Load => {
                 let k = self.pop()?;
-                let name = k.text().ok_or(PsError::Ps("typecheck", String::new()))?;
-                let v = self.lookup(&name).ok_or_else(|| PsError::Ps("undefined", name.to_string()))?;
+                let key = k.key().ok_or(PsError::Ps("typecheck", String::new()))?;
+                let v = self.lookup_key(&key).ok_or_else(|| PsError::Ps("undefined", show_text(&k)))?;
                 self.push(v)?;
             }
             Store => {
@@ -1143,6 +1157,7 @@ impl<'a> Interp<'a> {
         let r = match o {
             Obj::Array { items, exec } => Obj::Array { items: items.sub(at, n).ok_or_else(range)?, exec },
             Obj::Str(s) => Obj::Str(s.sub(at, n).ok_or_else(range)?),
+            Obj::ExecStr(s) => Obj::ExecStr(s.sub(at, n).ok_or_else(range)?),
             _ => return ps_err("typecheck", "getinterval"),
         };
         self.push(r)
@@ -1161,7 +1176,7 @@ impl<'a> Interp<'a> {
                     }
                 }
             }
-            Obj::Str(s) => {
+            Obj::Str(s) | Obj::ExecStr(s) => {
                 for b in s.to_vec() {
                     self.push(Obj::Int(i64::from(b)))?;
                     if !self.body(&p)? {
@@ -1321,7 +1336,7 @@ fn show_text(o: &Obj) -> String {
         }
         Obj::Bool(b) => b.to_string(),
         Obj::Name(n) | Obj::Exec(n) => n.to_string(),
-        Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).into_owned(),
+        Obj::Str(s) | Obj::ExecStr(s) => String::from_utf8_lossy(&s.borrow()).into_owned(),
         Obj::Op(op) => op.name().to_string(),
         _ => "--nostringval--".into(),
     }

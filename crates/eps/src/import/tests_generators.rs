@@ -949,3 +949,45 @@ fn hostile_patterns_glyphs_and_shadings_end() {
     clean(&r);
     assert_eq!(objects(&r.document).len(), 1);
 }
+
+/// Illustrator 8 EPS (what stock art often comes as, #474): its gradient procset builds shading
+/// dictionaries with `bd` … `ed`, where `ed` is an executable string (`(>>) cvx`, or a Level 1
+/// dictionary builder), and its `discard` runs procedures it `load`s by integer keys.
+#[test]
+fn illustrator_8_gradients_and_executable_strings() {
+    let program = r##"%%BeginProlog
+userdict /AGM_Gradient 20 dict dup begin put
+/AGM_Gradient_private 201 dict def
+/initialize {
+  AGM_Gradient begin AGM_Gradient_private begin
+  /bd systemdict /mark get def
+  /ed /languagelevel where { pop languagelevel 2 ge } { false } ifelse
+    { (>>) } { (counttomark 2 idiv dup dict begin {def} repeat pop currentdict end) } ifelse cvx def
+  /ed1 (counttomark 2 idiv dup dict begin {def} repeat pop currentdict end) cvx def
+  end end
+} def
+userdict /discardDict 4 dict dup begin put
+0 { 0 1 0 setrgbcolor } def
+2 { 0 0 1 setrgbcolor } def
+end
+/gt38? false def
+/discard { discardDict begin /endString exch def gt38? { 2 add } if load stopped pop end } bind def
+%%EndProlog
+initialize
+AGM_Gradient begin AGM_Gradient_private begin
+bd /ShadingType 3 /ColorSpace /DeviceRGB
+  /Function bd /FunctionType 2 /Domain [0 1] /C0 [1 1 0] /C1 [0 0.5 0] /N 1 ed
+  /Extend [true true] /Coords [50 50 0 50 50 40] ed
+gsave 10 10 80 80 rectclip shfill grestore
+bd /Width 3 ed1 /Width get 3 eq { 0 (%AI5_EndPalette) discard 10 10 20 20 rectfill } if
+end end
+(x) cvx xcheck (x) cvx cvlit xcheck not and { 50 50 10 10 rectfill } if
+showpage"##;
+    let r = open("Adobe Illustrator(R) 8.0", program);
+    let d = &r.document;
+    let Some(Paint::Gradient(g)) = all(d).into_iter().find_map(|n| fill(&n).cloned()) else { panic!("no gradient") };
+    assert_eq!(g.gradient.kind, vectorcraft_color::GradientKind::Radial);
+    // `discard` ran the procedure under key 0 (green), not the one under 2.
+    assert!(all(d).iter().any(|n| fill(n).and_then(Paint::color) == Some(Color::rgb(0.0, 1.0, 0.0))));
+    assert_eq!(objects(d).len(), 3);
+}
