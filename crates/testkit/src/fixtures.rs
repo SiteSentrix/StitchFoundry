@@ -112,7 +112,9 @@ pub fn rich_session() -> Session {
     exec(&mut s, "effect.apply", json!({"effect": "distort.roughen", "params": {"size": 3, "detail": 5, "seed": 7}}));
     let l = id_of(&exec(&mut s, "shape.line", json!({"x1": 20, "y1": 300, "x2": 200, "y2": 350})));
     exec(&mut s, "stroke.set", json!({"weight": 3, "endArrow": "Arrow"}));
-    let _ = id_of(&exec(&mut s, "text.create", json!({"x": 250, "y": 300, "text": "VectorCraft", "size": 30})));
+    let tx = id_of(&exec(&mut s, "text.create", json!({"x": 250, "y": 300, "text": "VectorCraft", "size": 30})));
+    // A non-default paragraph composer, so format round trips cover it.
+    exec(&mut s, "text.setFormat", json!({"ids": [tx.0], "composer": "singleLine"}));
     exec(&mut s, "layer.new", json!({"name": "Top"}));
     let d = rect(&mut s, 350.0, 200.0, 80.0, 80.0);
     let e = ellipse(&mut s, 380.0, 230.0, 80.0, 80.0);

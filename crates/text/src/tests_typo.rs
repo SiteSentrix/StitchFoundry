@@ -227,7 +227,7 @@ fn composer_lines_never_exceed_frame() {
     for (hy, composer) in [(false, Composer::EveryLine), (true, Composer::EveryLine), (false, Composer::SingleLine), (true, Composer::SingleLine)] {
         let mut t = area(&COPY.repeat(2), style(12.0), Rect::new(0.0, 0.0, 180.0, 2000.0), Justify::JustifyLeft);
         t.para.hyphenate = hy;
-        let l = layout_with(db(), &t, &LayoutOptions { composer, ..Default::default() });
+        let l = layout_with(db(), &t, &LayoutOptions { composer: Some(composer), ..Default::default() });
         assert!(l.lines.len() > 10);
         for (i, li) in l.lines.iter().enumerate() {
             assert!(li.x1 - li.x0 <= 180.0 + 1e-6, "{composer:?} hy={hy} line {i} too wide: {li:?}");
@@ -246,7 +246,7 @@ fn composer_lines_never_exceed_frame() {
 fn every_line_composer_is_more_even() {
     let t = area(&COPY.repeat(2), style(12.0), Rect::new(0.0, 0.0, 190.0, 2000.0), Justify::JustifyLeft);
     let spread = |c: Composer| {
-        let l = layout_with(db(), &t, &LayoutOptions { composer: c, ..Default::default() });
+        let l = layout_with(db(), &t, &LayoutOptions { composer: Some(c), ..Default::default() });
         // Worst word-space stretch (space glyph advance) over all justified lines.
         let mut worst: f64 = 0.0;
         for li in &l.lines[..l.lines.len() - 1] {
@@ -269,13 +269,109 @@ fn burasagari_keeps_the_every_line_composer_for_latin_text() {
     // A measure where the two composers break the copy differently.
     let mut t = area(&COPY.repeat(2), style(12.0), Rect::new(0.0, 0.0, 300.0, 4000.0), Justify::JustifyLeft);
     let ends = |t: &TextObject, c: Composer| {
-        let l = layout_with(db(), t, &LayoutOptions { composer: c, ..Default::default() });
+        let l = layout_with(db(), t, &LayoutOptions { composer: Some(c), ..Default::default() });
         l.lines.iter().map(|li| li.glyph_end).collect::<Vec<_>>()
     };
     let every_line = ends(&t, Composer::EveryLine);
     assert_ne!(every_line, ends(&t, Composer::SingleLine));
     t.para.burasagari = vectorcraft_doc::Burasagari::Standard;
     assert_eq!(ends(&t, Composer::EveryLine), every_line);
+}
+
+/// Width of `s` set on one line.
+fn natural_width(s: &str, size: f64) -> f64 {
+    let l = layout(db(), &TextObject::point(Point::ZERO, s, style(size)));
+    l.lines[0].x1 - l.lines[0].x0
+}
+
+/// The text of each line.
+fn line_texts(t: &TextObject, l: &TextLayout) -> Vec<String> {
+    let text = t.plain_text();
+    l.lines.iter().map(|li| text[li.start..li.end].trim_end().to_string()).collect()
+}
+
+/// Ragged text: Every-line breaks before a word that would fit, to avoid leaving a lone short
+/// word on the last line (single-line keeps filling the first line). Auto alignment is ragged
+/// too, in either paragraph direction: set right to left, the lines break the same and stay
+/// flush right.
+#[test]
+fn every_line_composer_balances_ragged_lines() {
+    use vectorcraft_doc::ParaDirection;
+    const S: &str = "Destroy all creatures with toughness X or less.";
+    let w = natural_width("Destroy all creatures with toughness X or", 12.0) + 2.0;
+    assert!(w < natural_width(S, 12.0), "the sentence needs two lines");
+    let cases = [
+        (Justify::Left, None),
+        (Justify::Center, None),
+        (Justify::Right, None),
+        (Justify::Auto, None),
+        (Justify::Auto, Some(ParaDirection::RightToLeft)),
+        (Justify::Left, Some(ParaDirection::RightToLeft)),
+    ];
+    for (justify, direction) in cases {
+        let mut t = area(S, style(12.0), Rect::new(0.0, 0.0, w, 400.0), justify);
+        t.para.direction = direction;
+        t.para.composer = Composer::SingleLine;
+        let greedy = line_texts(&t, &layout(db(), &t));
+        assert_eq!(greedy, ["Destroy all creatures with toughness X or", "less."], "{justify:?} {direction:?}");
+        t.para.composer = Composer::EveryLine;
+        let every = line_texts(&t, &layout(db(), &t));
+        assert_eq!(every, ["Destroy all creatures with toughness X", "or less."], "{justify:?} {direction:?}");
+        // Burasagari (new type's Standard) leaves Latin text to the every-line composer.
+        t.para.burasagari = vectorcraft_doc::Burasagari::Standard;
+        assert_eq!(line_texts(&t, &layout(db(), &t)), every, "{justify:?} {direction:?} with burasagari");
+        if (justify, direction) == (Justify::Auto, Some(ParaDirection::RightToLeft)) {
+            let l = layout(db(), &t);
+            assert!(l.lines.iter().all(|li| li.rtl && (li.x1 - w).abs() < 1e-6), "right to left Auto is flush right: {:?}", l.lines);
+        }
+        // The options override wins over the object's setting.
+        let forced = layout_with(db(), &t, &LayoutOptions { composer: Some(Composer::SingleLine), ..Default::default() });
+        assert_eq!(line_texts(&t, &forced), greedy);
+    }
+}
+
+/// Every-line evens the rag of a long ragged paragraph: the spread of the line ends is no worse
+/// than greedy breaking, every line fits, and nothing is lost.
+#[test]
+fn every_line_composer_evens_the_rag() {
+    for (width, hy) in [(150.0, false), (190.0, false), (240.0, true), (310.0, false)] {
+        let mut t = area(&COPY.repeat(2), style(12.0), Rect::new(0.0, 0.0, width, 4000.0), Justify::Left);
+        t.para.hyphenate = hy;
+        let rag = |c: Composer| {
+            let mut t = t.clone();
+            t.para.composer = c;
+            let l = layout(db(), &t);
+            assert!(!l.overflow);
+            for li in &l.lines {
+                assert!(li.x1 - li.x0 <= width + 1e-6, "{c:?} {width}: line too wide {li:?}");
+            }
+            let clusters: std::collections::BTreeSet<(usize, usize)> = l.glyphs.iter().filter(|g| g.len > 0).map(|g| (g.byte, g.len)).collect();
+            assert_eq!(clusters.iter().map(|c| c.1).sum::<usize>(), COPY.len() * 2, "every character placed");
+            // Leftover space of all lines but the last: its sum of squares (how ragged) and the
+            // sum of squared differences between neighbours (how jagged).
+            let slack: Vec<f64> = l.lines[..l.lines.len() - 1].iter().map(|li| width - (li.x1 - li.x0)).collect();
+            let jag: f64 = slack.windows(2).map(|p| (p[0] - p[1]).powi(2)).sum();
+            (slack.iter().map(|s| s * s).sum::<f64>(), jag, l.lines.len())
+        };
+        let ((kp, kp_jag, kp_lines), (greedy, greedy_jag, greedy_lines)) = (rag(Composer::EveryLine), rag(Composer::SingleLine));
+        assert!(kp <= greedy + 1e-6, "{width}: every-line rag {kp} vs greedy {greedy}");
+        assert!(kp_jag <= greedy_jag + 1e-6, "{width}: every-line jag {kp_jag} vs greedy {greedy_jag}");
+        assert!(kp_lines <= greedy_lines + 1, "{width}: {kp_lines} lines vs {greedy_lines}");
+    }
+}
+
+/// Single-line breaking is the greedy breaker: each line takes as many words as fit.
+#[test]
+fn single_line_composer_is_greedy() {
+    let width = 190.0;
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, width, 2000.0), Justify::Left);
+    t.para.composer = Composer::SingleLine;
+    let l = layout(db(), &t);
+    let lines = line_texts(&t, &l);
+    for pair in lines.windows(2) {
+        let next_word = pair[1].split(' ').next().unwrap();
+        assert!(natural_width(&format!("{} {next_word}", pair[0]), 12.0) > width - 1e-6, "{pair:?}");
+    }
 }
 
 #[test]
@@ -419,17 +515,22 @@ fn uncovered_characters_do_not_break_layout() {
 #[test]
 fn layout_10k_area_text_is_fast() {
     let text: String = COPY.chars().cycle().take(10_000).collect();
-    let mut t = area(&text, style(10.0), Rect::new(0.0, 0.0, 400.0, 20_000.0), Justify::JustifyLeft);
-    t.para.hyphenate = true;
-    let _ = layout(db(), &t);
-    let n = 5;
-    let start = std::time::Instant::now();
-    for _ in 0..n {
-        let l = layout(db(), &t);
-        assert!(!l.overflow);
+    for (justify, composer) in
+        [(Justify::JustifyLeft, Composer::EveryLine), (Justify::Left, Composer::EveryLine), (Justify::Left, Composer::SingleLine)]
+    {
+        let mut t = area(&text, style(10.0), Rect::new(0.0, 0.0, 400.0, 20_000.0), justify);
+        t.para.hyphenate = true;
+        t.para.composer = composer;
+        let _ = layout(db(), &t);
+        let n = 5;
+        let start = std::time::Instant::now();
+        for _ in 0..n {
+            let l = layout(db(), &t);
+            assert!(!l.overflow);
+        }
+        let per = start.elapsed().as_secs_f64() * 1000.0 / n as f64;
+        eprintln!("layout of 10k chars ({justify:?}, {composer:?}, hyphenated): {per:.3} ms");
+        let budget = if cfg!(debug_assertions) { 400.0 } else { 10.0 };
+        assert!(per < budget, "{justify:?} {composer:?}: {per} ms");
     }
-    let per = start.elapsed().as_secs_f64() * 1000.0 / n as f64;
-    eprintln!("layout of 10k chars (justified, hyphenated): {per:.3} ms");
-    let budget = if cfg!(debug_assertions) { 400.0 } else { 10.0 };
-    assert!(per < budget, "{per} ms");
 }

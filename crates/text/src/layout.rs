@@ -9,7 +9,7 @@ use vectorcraft_doc::{
 };
 use vectorcraft_geom::{ArcPath, PathData};
 
-use crate::composer::{Breakpoint, compose};
+use crate::composer::{Breakpoint, Params, compose};
 use crate::fontdb::FontDb;
 use crate::hyphen::hyphen_points;
 use crate::shape::{Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, no_line_end, no_line_start, punct, shape_range, style_metrics};
@@ -914,14 +914,18 @@ fn candidates(text: &str, g: &[SGlyph], hyphenate: bool) -> Vec<Breakpoint> {
     v
 }
 
-/// Every-line composition of paragraph glyphs `sg` if applicable (justified area text with uniform
-/// line metrics); `None` falls back to the greedy single-line composer.
-fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) -> Option<Vec<(usize, bool)>> {
-    let justified = !matches!(para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
+/// Paragraphs longer than this (glyphs) are always broken line by line.
+const MAX_COMPOSE_GLYPHS: usize = 200_000;
+
+/// Every-line composition of paragraph glyphs `sg` if applicable (area text with uniform line
+/// metrics, justified or ragged); `None` falls back to the greedy single-line composer.
+fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>, rtl: bool) -> Option<Vec<(usize, bool)>> {
+    let ragged = matches!(para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
+    let composer = cx.opts.composer.unwrap_or(para.composer);
     // A paragraph whose commas or full stops may hang is composed line by line (as the Japanese
     // single-line composer does).
     let may_hang = para.burasagari != Burasagari::None && sg.iter().any(hangs);
-    if cx.opts.composer != Composer::EveryLine || !justified || pen.regions.is_none() || sg.len() < 2 || may_hang {
+    if composer != Composer::EveryLine || pen.regions.is_none() || sg.len() < 2 || sg.len() > MAX_COMPOSE_GLYPHS || may_hang {
         return None;
     }
     let m = Metrics::of(&sg[0]);
@@ -948,9 +952,21 @@ fn compose_para(cx: &Ctx<'_>, sg: &[SGlyph], para: &ParaStyle, pen: &Pen<'_>) ->
     }
     let last = *widths.last()?;
     let width = |k: usize| widths.get(k).copied().unwrap_or(last);
+    // Lines from `uniform_from` on are interchangeable (same width).
+    let uniform_from = widths.iter().rposition(|&w| (w - last).abs() > EPS).map_or(0, |k| k + 1);
     let cands = candidates(cx.text, sg, para.hyphenate);
     let justify_last = para.justify == Justify::JustifyAll;
-    compose(sg, &width, &cands, justify_last, 1.0).or_else(|| compose(sg, &width, &cands, justify_last, 4.0))
+    let params = |tolerance| Params { justify_last, ragged, tolerance, uniform_from };
+    // Ragged: first look for breaks that leave at most one rag zone (a sixth of the width) on
+    // each line, then accept any lines that fit.
+    let (strict, loose) = if ragged { (1.0, f64::INFINITY) } else { (1.0, 4.0) };
+    // The same rule as the line loop below: an opening bracket starting a wrapped line gives up
+    // the space before it.
+    let start_credit = |i: usize| {
+        let flush = !rtl && para.mojikumi == Mojikumi::LineEndHalf;
+        sg.get(i).filter(|g| flush && g.lead <= 0.0).and_then(|g| punct_half(g, Punct::Opening)).unwrap_or(0.0)
+    };
+    compose(sg, &width, &start_credit, &cands, &params(strict)).or_else(|| compose(sg, &width, &start_credit, &cands, &params(loose)))
 }
 
 fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Option<&[Region]>) {
@@ -985,7 +1001,7 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
             pen.pending += para.space_before;
         }
         let n = sg.len();
-        let composed = compose_para(cx, &sg, para, &pen);
+        let composed = compose_para(cx, &sg, para, &pen, rtl);
         let mut li_para = 0;
         let mut i = 0;
         loop {

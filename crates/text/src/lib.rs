@@ -31,15 +31,8 @@ pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::FirstBaseline;
 
-/// Paragraph composer (Paragraph panel menu).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Composer {
-    /// Break each line as soon as it is full.
-    SingleLine,
-    /// Knuth–Plass total fit over the paragraph (justified area text only).
-    #[default]
-    EveryLine,
-}
+/// Paragraph composer; stored per text object in [`vectorcraft_doc::ParaStyle::composer`].
+pub use vectorcraft_doc::Composer;
 
 /// Layout parameters that the document model doesn't store per object (Area Type Options,
 /// composer, OpenType features). [`layout`] takes rows/columns/inset/first baseline from the object.
@@ -55,7 +48,8 @@ pub struct LayoutOptions {
     pub first_baseline: FirstBaseline,
     /// Minimum first-baseline offset in points.
     pub first_baseline_min: f64,
-    pub composer: Composer,
+    /// Overrides the object's paragraph composer (`None` = use `ParaStyle::composer`).
+    pub composer: Option<Composer>,
     pub features: OtFeatures,
 }
 
@@ -68,7 +62,7 @@ impl Default for LayoutOptions {
             inset: 0.0,
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,
-            composer: Composer::EveryLine,
+            composer: None,
             features: OtFeatures::default(),
         }
     }

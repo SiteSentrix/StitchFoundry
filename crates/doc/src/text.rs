@@ -285,6 +285,24 @@ fn default_align_on() -> char {
 /// Distance between default tab stops when no explicit stop applies (½ inch).
 pub const DEFAULT_TAB_INTERVAL: f64 = 36.0;
 
+/// Paragraph composer (Paragraph panel menu): how lines are broken.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Composer {
+    /// Break each line as soon as it is full.
+    SingleLine,
+    /// Total fit over the whole paragraph (Illustrator's default): justified lines get even word
+    /// spacing, ragged lines an even rag.
+    #[default]
+    EveryLine,
+}
+
+impl Composer {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// Paragraph attributes (the Paragraph panel).
 ///
 /// Saved through [`ParaStyleFile`], which keeps files with text openable by builds from before
@@ -299,6 +317,8 @@ pub struct ParaStyle {
     pub space_before: f64,
     pub space_after: f64,
     pub hyphenate: bool,
+    /// Line breaking: Single-line or Every-line Composer.
+    pub composer: Composer,
     /// Tab stops (Tabs panel), sorted by position.
     pub tabs: Vec<TabStop>,
     /// Paragraph style (Paragraph Styles panel) these attributes come from; None = Normal.
@@ -341,6 +361,8 @@ struct ParaStyleFile {
     space_after: f64,
     #[serde(default)]
     hyphenate: bool,
+    #[serde(default, skip_serializing_if = "Composer::is_default")]
+    composer: Composer,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     tabs: Vec<TabStop>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -370,6 +392,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,
@@ -387,6 +410,7 @@ impl From<ParaStyle> for ParaStyleFile {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,
@@ -407,6 +431,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,
@@ -423,6 +448,7 @@ impl From<ParaStyleFile> for ParaStyle {
             space_before,
             space_after,
             hyphenate,
+            composer,
             tabs,
             style_name,
             mojikumi,

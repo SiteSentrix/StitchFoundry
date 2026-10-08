@@ -2549,6 +2549,20 @@ canvas as they export. `object.blend.expand` and `object.blend.release` keep the
 opacity mask and appearance (Release on a group around the keys and spine when the blend has any), and
 `object.expand` with `object: true` expands the blends in the selection.
 
+## Paragraph composer
+
+`text.setFormat {ids?, composer: "singleLine"|"everyLine"}` sets how a text object's lines are broken (the Paragraph
+panel menu's Single-line and Every-line Composer; stored in the paragraph attributes as `para.composer`, saved only
+when it is Single-line). Every-line, the default, picks the breaks of the whole paragraph together in area type:
+justified text gets even word spacing, ragged text (left, centre or right aligned) an even rag, so it may move a word
+that fits to the next line to avoid a lone short word on the last line or a full line next to a short one.
+Single-line fills each line as far as it goes. Point type and type on a path have no line width, so both composers
+give the same result there; paragraphs that mix type sizes fall back to Single-line.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"ids":[7],"composer":"singleLine"}}}
+```
+
 ## Editing envelopes
 
 `object.envelope.editContents {editing}` switches between editing the envelope and its contents (the menu item reads
