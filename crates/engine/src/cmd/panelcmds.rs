@@ -1,11 +1,12 @@
-//! Commands the panels need beyond the core set: artboard reorder/duplicate and the advanced
+//! Commands the panels need beyond the core set: artboard reorder, duplicate, copy and cut, and the advanced
 //! Character/Paragraph attributes.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
+use vectorcraft_geom::{Rect, Vec2};
 
 use super::*;
-use crate::EngineError;
+use crate::{Clipboard, EngineError};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -15,9 +16,27 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Artboard",
             ["Window", "Artboards"],
             None,
-            "{index} copy placed right of the last artboard",
+            "{index?: n (default: the Artboard tool's artboard), art?: bool (default: the Artboard tool's moveArt option)} copy placed right of the last artboard, with copies of the art fully inside it when `art` (locked and hidden art only with prefs moveLockedWithArtboard) → {index, ids: the art's copies}",
             has_doc,
             artboard_duplicate
+        ),
+        cmd!(
+            "artboard.copy",
+            "Copy Artboard",
+            [],
+            None,
+            "{index?, art?} (defaults as artboard.duplicate) put the artboard, and the art fully inside it when `art`, on the clipboard: edit.paste adds a copy right of the last artboard, edit.pasteInPlace/InFront/InBack where it was, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
+            has_doc,
+            |s, p| artboard_copy(s, p, false)
+        ),
+        cmd!(
+            "artboard.cut",
+            "Cut Artboard",
+            [],
+            None,
+            "{index?, art?} artboard.copy, then delete the artboard and that art in one undo step (not the only artboard); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
+            has_doc,
+            |s, p| artboard_copy(s, p, true)
         ),
         cmd!(
             "text.setFormat",
@@ -49,24 +68,101 @@ fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let index = s.edit("Duplicate Artboard", |d, _| {
-        let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-        let right = d.artboards.iter().map(|a| a.rect.x1).fold(f64::MIN, f64::max);
-        let dx = right + 20.0 - src.rect.x0;
-        Ok(push_artboard_copy(d, &src, vectorcraft_geom::Rect::new(src.rect.x0 + dx, src.rect.y0, src.rect.x1 + dx, src.rect.y1)))
-    })?;
-    Ok(json!({"index": index}))
+/// The artboard (`index`) and whether its art comes along (`art`) for the artboard copy
+/// commands: by default the Artboard tool's artboard and its Move/Copy Artwork with Artboard option.
+fn board_and_art(s: &Session, p: &Value) -> (usize, bool) {
+    let t = s.tool_options_of("artboard");
+    let i = p.get("index").and_then(Value::as_u64).or_else(|| t["active"].as_u64()).unwrap_or(0) as usize;
+    (i, bool_or(p, "art", t["moveArt"].as_bool().unwrap_or(true)))
 }
 
-/// Add a copy of artboard `src` at `rect`, named `<name> copy` (`<name> copy 2`… when taken),
-/// with an id of its own → its index.
-pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vectorcraft_doc::Artboard, rect: vectorcraft_geom::Rect) -> usize {
+/// The art that goes with artboard `i` when `art`: the objects fully inside it (locked and hidden
+/// ones only with prefs moveLockedWithArtboard), in paint order.
+pub(crate) fn artboard_art(s: &Session, i: usize, art: bool) -> Result<Vec<NodeId>> {
+    let d = &s.doc()?.doc;
+    let rect = d.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    Ok(if art { d.art_on_artboard(rect, s.prefs.move_locked_with_artboard) } else { vec![] })
+}
+
+/// How far a copy of `rect` moves to sit right of the last artboard (Duplicate Artboards, Paste).
+pub(crate) fn beside_artboards(d: &vectorcraft_doc::Document, rect: Rect) -> Vec2 {
+    let right = d.artboards.iter().map(|a| a.rect.x1).fold(f64::MIN, f64::max);
+    Vec2::new(right + 20.0 - rect.x0, 0.0)
+}
+
+fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
+    let (i, art) = board_and_art(s, p);
+    let art = artboard_art(s, i, art)?;
+    let scale_strokes = s.prefs.scale_strokes;
+    let (index, ids) = s.edit("Duplicate Artboard", |d, _| {
+        let dv = d.artboards.get(i).map(|a| beside_artboards(d, a.rect)).unwrap_or_default();
+        copy_artboard(d, i, dv, &art, scale_strokes)
+    })?;
+    Ok(json!({"index": index, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+}
+
+/// Artboard Copy / Cut: the artboard and its art onto the clipboard (pasting brings both); a cut
+/// then deletes them.
+pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Value> {
+    let (i, art) = board_and_art(s, p);
+    let art = artboard_art(s, i, art)?;
+    let st = s.doc()?;
+    if cut && st.doc.artboards.len() <= 1 {
+        return Err(EngineError::Other("a document needs at least one artboard".into()));
+    }
+    let board = st.doc.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    let clip = Clipboard { source_artboard: Some(board.rect), artboard: Some(board), ..Clipboard::copy(st, &art) };
+    let copied = clip.nodes.len();
+    if cut {
+        s.edit("Cut Artboard", |d, sel| {
+            if i >= d.artboards.len() {
+                return Err(EngineError::Other("no such artboard".into()));
+            }
+            d.artboards.remove(i);
+            for id in &art {
+                // Always there: none of the art is inside another of it.
+                let _ = d.remove(*id);
+            }
+            sel.prune(d);
+            Ok(())
+        })?;
+        if s.tool_id() == "artboard" {
+            s.set_tool_option("active", &json!(i.saturating_sub(1)));
+        }
+    }
+    s.clipboard = clip;
+    Ok(json!({"copied": copied}))
+}
+
+/// Add a copy of artboard `i` moved by `dv`, with copies of its `art` (each just above its
+/// original) moved along → (the copy's index, the art's copies). Duplicate Artboards and Alt-drag.
+pub(crate) fn copy_artboard(
+    d: &mut vectorcraft_doc::Document,
+    i: usize,
+    dv: Vec2,
+    art: &[NodeId],
+    scale_strokes: bool,
+) -> Result<(usize, Vec<NodeId>)> {
+    let src = d.artboards.get(i).cloned().ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    let index = push_artboard_copy(d, &src, src.rect + dv);
+    let mut copies = Vec::with_capacity(art.len());
+    for id in art {
+        let (Some((parent, at, _)), Some(n)) = (d.position(*id), d.node(*id).cloned()) else { continue };
+        let mut c = d.reid(&n);
+        c.transform(Affine::translate(dv), scale_strokes);
+        copies.push(d.insert(parent, at + 1, c)?);
+    }
+    Ok((index, copies))
+}
+
+/// Add a copy of artboard `src` at `rect`, with an id of its own and its name, or `<name> copy`
+/// (`<name> copy 2`…) when that is taken → its index.
+pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vectorcraft_doc::Artboard, rect: Rect) -> usize {
     let mut a = src.clone();
     a.id = d.artboards.iter().map(|a| a.id).max().unwrap_or(0).saturating_add(1);
     let taken = |name: &str| d.artboards.iter().any(|a| a.name == name);
-    a.name = std::iter::once(format!("{} copy", src.name))
+    a.name = [src.name.clone(), format!("{} copy", src.name)]
+        .into_iter()
         .chain((2u64..).map(|i| format!("{} copy {i}", src.name)))
         .find(|name| !taken(name))
         .unwrap_or_default();

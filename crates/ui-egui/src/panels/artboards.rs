@@ -1,5 +1,6 @@
 //! Artboards panel: numbered list with inline rename (double-click the name), move up / down, new,
-//! delete. The highlighted row is the active artboard, the one the status bar's navigator shows and
+//! delete; a row dragged onto New Artboard duplicates its artboard (as Duplicate Artboards does, with
+//! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
 //! Fit Artboard in Window fits: clicking a row makes it active, double-clicking its number also
 //! fits it in the window.
 
@@ -27,6 +28,19 @@ fn select(app: &mut VectorcraftApp, i: usize) {
     }
 }
 
+/// A row dragged in the list: the artboard's index.
+#[derive(Clone, Copy)]
+struct RowDrag(usize);
+
+/// Duplicate artboard `i` (`artboard.duplicate`) and make the copy the active artboard.
+fn duplicate(app: &mut VectorcraftApp, i: usize) {
+    if let Ok(r) = app.run("artboard.duplicate", json!({ "index": i }))
+        && let Some(copy) = r["index"].as_u64()
+    {
+        select(app, copy as usize);
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
@@ -41,7 +55,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.spacing_mut().item_spacing.y = 0.0;
         egui::ScrollArea::vertical().id_salt("ab-scroll").max_height(220.0).show(ui, |ui| {
             for (i, name) in abs.iter().enumerate() {
-                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click_and_drag());
+                if resp.drag_started() {
+                    egui::DragAndDrop::set_payload(ui.ctx(), RowDrag(i));
+                }
                 if i == sel {
                     ui.painter().rect_filled(r, 0.0, t.row_selected);
                 } else if resp.hovered() {
@@ -108,7 +125,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         {
             select(app, sel + 1);
         }
-        if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() && app.run("artboard.new", json!({})).is_ok() {
+        let new = widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0);
+        if new.dnd_hover_payload::<RowDrag>().is_some() {
+            ui.painter().rect_stroke(new.rect, 3.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+        }
+        if let Some(row) = new.dnd_release_payload::<RowDrag>() {
+            duplicate(app, row.0);
+        } else if new.clicked() && app.run("artboard.new", json!({})).is_ok() {
             select(app, n);
         }
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
@@ -124,7 +147,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("artboard.new", json!({})).ok();
     }
     if menu_item(ui, tl!("Duplicate Artboards"), n > 0, false) {
-        app.run("artboard.duplicate", json!({"index": sel})).ok();
+        duplicate(app, sel);
     }
     if menu_item(ui, tl!("Delete Artboards"), n > 1, false) {
         app.run("artboard.delete", json!({"index": sel})).ok();
@@ -239,5 +262,43 @@ mod tests {
             crate::canvas::dispatch(&mut app, &vectorcraft_tools::PointerEvent::new(kind, 100.0, 100.0), view);
         }
         assert_eq!((app.session.tool_options()["active"].clone(), selected(&app, 2)), (json!(0), 0));
+    }
+
+    /// A row dragged onto New Artboard duplicates its artboard with its art (#446), outlining the
+    /// button while it is held over it, and the copy becomes the active artboard.
+    #[test]
+    fn dragging_a_row_onto_new_artboard_duplicates_it() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes
+        };
+        let shapes = frame(&mut app, vec![]);
+        let t = Tokens::get(&ctx);
+        let rect_of = |fill| {
+            shapes.iter().find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.fill == fill => Some(r.rect),
+                _ => None,
+            })
+        };
+        let row = rect_of(t.row_selected).unwrap().center();
+        // The bottom bar's buttons sit under its divider, New Artboard second from the right.
+        let bar = rect_of(t.divider).unwrap();
+        let new = pos2(bar.right() - 24.0 - 4.0 - 12.0, bar.bottom() + 2.0 + 12.0);
+        let button =
+            |at, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(row), button(row, true)]);
+        frame(&mut app, vec![egui::Event::PointerMoved(row + vec2(0.0, 12.0))]);
+        let held = frame(&mut app, vec![egui::Event::PointerMoved(new)]);
+        assert!(held.iter().any(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.stroke.color == t.accent)), "New Artboard is outlined");
+        frame(&mut app, vec![button(new, false)]);
+        let d = &app.session.active().unwrap().doc;
+        assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (2, 2), "the artboard and its art");
+        assert_eq!(app.view().unwrap().artboard, 1);
     }
 }

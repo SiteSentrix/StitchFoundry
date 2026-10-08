@@ -4,7 +4,8 @@
 //! it (with its artwork when the `moveArt` option is on, Shift constrains; Alt moves a copy and
 //! leaves the artboard where it was), drag a handle resizes it
 //! (Shift proportional, Alt from centre), drag on the pasteboard draws a new artboard, Delete removes
-//! the active one and Escape returns to the Selection tool. Moving and resizing snap like drawing
+//! the active one (Copy, Cut and Paste take it with its art: `artboard.copy`) and Escape returns to
+//! the Selection tool. Moving and resizing snap like drawing
 //! does: to whole pixels, to the grid, or with Smart Guides to other artboards, their bleed and
 //! objects (never to the dragged artboard or the art moving with it); the artboard's own bleed edges
 //! snap too.
