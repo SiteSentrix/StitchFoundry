@@ -2430,7 +2430,7 @@
 	Simplify…	Simplificar…
 	Simulate Colored Paper	Simular papel de color
 	Simulate Paper	Simular papel
-	Single / Double Column	Columna simple / doble
+	Double Column	Columna doble
 	Single Left Quotation Mark	Comilla simple de apertura
 	Single Quotes:	Comillas simples:
 	Single Right Quotation Mark	Comilla simple de cierre
@@ -3539,3 +3539,4 @@ axis	Both	Ambos
 @msg	floating must be true or false	floating debe ser true o false
 @msg	tool (a tool id) is required	se requiere tool (un id de herramienta)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no está en un grupo de la barra de herramientas con varias herramientas
+@msg	double must be true or false	double debe ser true o false

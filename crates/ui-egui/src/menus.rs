@@ -197,7 +197,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
     ("window.toolbar", "Tools", "", "{}"),
-    ("window.toolbarColumns", "Toolbar: Single/Double Column", "", "{}"),
+    (
+        "window.toolbarColumns",
+        "Toolbar: Single/Double Column",
+        "",
+        "{double?: bool} show the toolbar's tools in two columns (true), one (false) or toggle (omitted), as the double arrow at the top of the toolbar does; returns the new state",
+    ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
     (
         "window.floatTools",
@@ -984,7 +989,14 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.toolbar" => flag(&mut app.ui.toolbar),
-        "window.toolbarColumns" => flag(&mut app.ui.toolbar_double),
+        "window.toolbarColumns" => {
+            app.ui.toolbar_double = match p.get("double") {
+                None | Some(Value::Null) => !app.ui.toolbar_double,
+                Some(Value::Bool(b)) => *b,
+                Some(_) => return Some(Err("double must be true or false".into())),
+            };
+            Ok(json!(app.ui.toolbar_double))
+        }
         "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
         "window.floatTools" => {
             let floating = match p.get("floating") {
@@ -1317,6 +1329,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control" => app.ui.control_bar,
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolbarColumns" => app.ui.toolbar_double,
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
             app.ui.floating_flyouts.iter().any(|f| f.tools.iter().any(|id| id == tool))
@@ -2305,7 +2318,7 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Control", "window.control"),
                 c("Contextual Task Bar", "window.taskBar"),
                 c("Tools", "window.toolbar"),
-                sub("Toolbars", vec![c("Advanced", "window.toolbarAdvanced"), c("Single / Double Column", "window.toolbarColumns")]),
+                sub("Toolbars", vec![c("Advanced", "window.toolbarAdvanced"), c("Double Column", "window.toolbarColumns")]),
                 Sep,
                 panel("Actions", "actions"),
                 panel("Align", "align"),
