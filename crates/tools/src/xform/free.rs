@@ -192,7 +192,7 @@ impl FreeTransformTool {
             }
             Op::Move => {
                 let v = move_delta(d.start, p, shift);
-                self.measure = Some((p, cx.offset_label(v.x, v.y)));
+                self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(v.x, v.y)));
                 Affine::translate(v)
             }
             Op::Scale(h) => {
@@ -201,13 +201,13 @@ impl FreeTransformTool {
                     (a, self.guides) = t.snap_scale(&vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt, cx.snap_tol());
                 }
                 let nr = a.transform_rect_bbox(d.rect);
-                self.measure = Some((p, cx.size_label(nr.width(), nr.height())));
+                self.measure = cx.transform_tools_guides.then(|| (p, cx.size_label(nr.width(), nr.height())));
                 a
             }
             Op::Shear(h) => shear_for_side(d.rect, h, delta, m.alt),
             Op::Rotate => {
                 let (a, deg) = rotate_for_drag(d.rect.center(), d.start, p, shift);
-                self.measure = Some((p, format!("{:.1}°", -deg)));
+                self.measure = cx.transform_tools_guides.then(|| (p, format!("{:.1}°", -deg)));
                 a
             }
         };
@@ -304,7 +304,7 @@ impl Tool for FreeTransformTool {
             }
         }
         o.extend(self.guides.iter().cloned());
-        if let (Some((p, t)), true) = (&self.measure, cx.transform_tools_guides) {
+        if let Some((p, t)) = &self.measure {
             o.push(Overlay::Measure { p: *p + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: t.clone() });
         }
         o

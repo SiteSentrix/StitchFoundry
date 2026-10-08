@@ -380,6 +380,25 @@ mod tests {
         assert_eq!(drag(true, 320.0), (320.0, None), "nothing within reach");
     }
 
+    /// Preferences › Smart Guides (#394) reach a guide dragged out of a ruler: Snapping
+    /// Tolerance sets how far a target pulls it, Anchor/Path Labels and Measurement Labels what
+    /// shows by it.
+    #[test]
+    fn a_new_guide_follows_the_smart_guide_preferences() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let drag = |c: &ToolContext| {
+            let mut g = NewGuide::new(c, true, None);
+            let a = g.pointer(c, &ev(PointerKind::Drag, 497.0, 50.0, Mods::default()), true);
+            let Some(Action::Preview(_, p)) = a.last() else { panic!("{a:?}") };
+            (p["pos"].as_f64().unwrap(), g.overlays(c))
+        };
+        let (at, ov) = drag(&ToolContext { snapping_tolerance: 2.0, ..cx(&d, &s, &p) });
+        assert_eq!((at, ov.len()), (497.0, 1), "3 px off is beyond 2: only the readout {ov:?}");
+        let (at, ov) = drag(&ToolContext { anchor_path_labels: false, measurement_labels: false, ..cx(&d, &s, &p) });
+        assert_eq!((at, ov), (500.0, vec![]), "onto the artboard's edge, nothing said");
+    }
+
     #[test]
     fn a_new_guide_is_made_on_release_over_the_canvas_only() {
         let (d, _) = doc_with_rect();

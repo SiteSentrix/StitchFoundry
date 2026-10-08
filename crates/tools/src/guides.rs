@@ -243,7 +243,7 @@ impl Targets {
     /// What a dragged selection's grabbed point snaps to with View → Snap to Point and Smart
     /// Guides off: the anchors of the art but `exclude` and the ruler guides.
     pub fn snap_to_point(cx: &ToolContext, exclude: &[NodeId]) -> Option<Self> {
-        (cx.snap_to_point && !cx.smart_guides).then(|| Self::collect(cx.doc, exclude, None).for_snap_to_point(cx).styled(cx))
+        (cx.snap_to_point && !cx.smart_guides).then(|| Self::collect(cx.doc, exclude, None).for_snap_to_point(cx))
     }
 
     /// Anchors and centres of the visible leaves under `roots` (the roots included) whose bounds
@@ -338,9 +338,9 @@ impl Targets {
             return self.snap_point(p, tol);
         }
         let rects: Vec<Rect> = std::iter::once(Vec2::ZERO).chain(offsets.iter().copied()).map(|o| Rect::from_points(p + o, p + o)).collect();
-        let (adj, mut ov) = self.snap_rects(&rects, tol);
+        let (adj, mut ov, aligned) = self.align_rects(&rects, tol);
         let out = p + adj;
-        if adj != Vec2::ZERO {
+        if aligned {
             ov.extend(self.label(out, "align"));
         }
         (out, ov)
@@ -354,6 +354,13 @@ impl Targets {
     /// Snap rectangles that move together (an artboard and its bleed): the edge or centre of any
     /// of them nearest a target, per axis. Returns the shift and the guides.
     pub fn snap_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>) {
+        let (d, ov, _) = self.align_rects(rects, tol);
+        (d, ov)
+    }
+
+    /// [`Self::snap_rects`], also saying whether an axis lined up (even with Alignment Guides
+    /// off, or already in line, when there is no line or shift to tell).
+    fn align_rects(&self, rects: &[Rect], tol: f64) -> (Vec2, Vec<Overlay>, bool) {
         let nearest = |targets: &[(f64, Point, Kind)], along: fn(&Rect) -> [f64; 3]| {
             rects
                 .iter()
@@ -378,7 +385,7 @@ impl Targets {
             let (x0, x1) = (from.x.min(r.x0), from.x.max(r.x1));
             ov.extend(self.line(Point::new(x0, y), Point::new(x1, y)));
         }
-        (d, ov)
+        (d, ov, best_x.is_some() || best_y.is_some())
     }
 
     /// Snap a bounding-box resize. `a` is the scale [`crate::bbox::scale_for_drag`] gave for
@@ -646,7 +653,7 @@ mod tests {
         assert!(
             ov.iter().any(|o| matches!(o, Overlay::Line { .. })) && ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align"))
         );
-        // Alignment Guides off: the point still lines up, no line and no "align" label.
+        // Alignment Guides off: the point still lines up and says so, without the line.
         let c = ToolContext { alignment_guides: false, ..cx(&d, &s, &p) };
         let t = Targets::collect(&d, &[], None).styled(&c);
         let (q, ov) = t.snap_point(Point::new(301.0, 199.0), 4.0);
@@ -655,6 +662,10 @@ mod tests {
         assert!(ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align")), "{ov:?}");
         let (dv, ov) = t.snap_rect(Rect::new(2.0, 50.0, 52.0, 90.0), 4.0);
         assert_eq!((dv.x, ov.len()), (-2.0, 0));
+        // A handle already in line moves nowhere, yet is still "align".
+        let (q, ov) = t.snap_point_with(Point::new(400.0, 200.0), &[], 4.0);
+        assert_eq!(q, Point::new(400.0, 200.0));
+        assert!(matches!(&ov[..], [Overlay::Label { text, .. }] if text == "align"), "{ov:?}");
         // Anchor/Path Labels off: on the anchor, without saying so.
         let c = ToolContext { anchor_path_labels: false, ..cx(&d, &s, &p) };
         let t = Targets::collect(&d, &[], None).styled(&c);
