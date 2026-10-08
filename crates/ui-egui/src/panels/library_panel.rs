@@ -154,7 +154,7 @@ pub(crate) fn pick_library_file(app: &mut VectorcraftApp, path: Option<String>) 
     }
     path.or_else(|| {
         let pick = crate::FilePick { filters: vectorcraft_engine::cmd::fileio::open_filters().collect(), ..Default::default() };
-        app.services.pick_open.as_mut().and_then(|f| f(&pick))
+        crate::picks::open(app, &pick)
     })
     .map(Some)
     .ok_or_else(|| "cancelled".into())

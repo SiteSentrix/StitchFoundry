@@ -116,15 +116,23 @@ fn report(app: &mut VectorcraftApp, r: Result<Value, String>, done: impl FnOnce(
 
 /// Relink images `ids` to a picked file.
 pub(crate) fn relink(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    crate::picks::button(app, move |app| relink_picked(app, ids.clone()));
+}
+
+fn relink_picked(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let pick = crate::FilePick { filters: vectorcraft_engine::cmd::fileio::place_filters().collect(), ..Default::default() };
-    let Some(path) = app.services.pick_open.as_mut().and_then(|f| f(&pick)) else { return };
+    let Some(path) = crate::picks::open(app, &pick) else { return };
     let r = app.run("links.relink", json!({ "ids": ids, "path": path }));
     report(app, r, |v| format!("Relinked {} image(s)", v["relinked"].as_array().map_or(0, Vec::len)));
 }
 
 /// Relink images `ids` (none: every missing one) to the files of their names in a picked folder.
 fn relink_to_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
-    let Some(folder) = app.services.pick_folder.as_mut().and_then(|f| f()) else { return };
+    crate::picks::button(app, move |app| relink_to_picked_folder(app, ids.clone()));
+}
+
+fn relink_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
+    let Some(folder) = crate::picks::folder(app) else { return };
     let ids = Some(ids).filter(|i| !i.is_empty());
     let r = app.run("links.relink", json!({ "ids": ids, "folder": folder }));
     report(app, r, |v| {
@@ -154,9 +162,12 @@ pub(crate) fn unembed(app: &mut VectorcraftApp, id: u64, name: &str) {
         }
         return;
     }
-    let Some(path) = app.services.pick_save.as_mut().and_then(|f| f(&crate::FilePick::named(name))) else { return };
-    let r = app.run("links.unembed", json!({ "id": id, "path": path }));
-    report(app, r, |v| format!("Unembedded to {}", v["path"].as_str().unwrap_or_default()));
+    let name = name.to_string();
+    crate::picks::button(app, move |app| {
+        let Some(path) = crate::picks::save(app, &crate::FilePick::named(&name)) else { return };
+        let r = app.run("links.unembed", json!({ "id": id, "path": path }));
+        report(app, r, |v| format!("Unembedded to {}", v["path"].as_str().unwrap_or_default()));
+    });
 }
 
 /// The UI commands `links.editOriginal` (open the linked file in its app) and `links.reveal`
