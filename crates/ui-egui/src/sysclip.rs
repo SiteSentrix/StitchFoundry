@@ -89,6 +89,14 @@ impl VectorcraftApp {
         })
     }
 
+    /// The text on the system clipboard, if any.
+    pub(crate) fn system_clipboard_text(&mut self) -> Option<String> {
+        match self.services.system_clipboard.as_mut() {
+            Some(cb) => cb.read(&[TEXT]).map(|f| String::from_utf8_lossy(&f.data).into_owned()),
+            None => self.services.clipboard_read.as_mut().and_then(|read| read()),
+        }
+    }
+
     /// Does the system clipboard hold something Paste can take (with nothing copied in the app)?
     pub(crate) fn system_clipboard_pasteable(&mut self) -> bool {
         match self.services.system_clipboard.as_mut() {

@@ -1890,6 +1890,18 @@ square to the page. `object.resetBoundingBox` squares the box again without movi
 {"name":"run_command","arguments":{"command":"object.rotate","params":{"angle":45,"absolute":true}}}
 ```
 
+## Select All while editing type
+
+While the Type tool edits text (a click into type, `pointer_gesture` with `"tool":"type"`), `select.all` (Cmd+A,
+`press_key {key: "A", mods: {cmd: true}}`) selects all of that text instead of the art, as in the reference app, and
+returns `{editing, start, end}` (the text's id and the selected byte range, which `text.getRange` and
+`text.setRangeStyle` take); the art selection stays as it is. Without text being edited it selects every object and
+returns `{count}`. Text in threaded frames is selected one frame at a time.
+
+```json
+{"name":"press_key","arguments":{"key":"A","mods":{"cmd":true}}}
+```
+
 ## Empty point type
 
 Point type the Type tool places with a click and leaves empty is discarded when editing ends: Escape, another tool,

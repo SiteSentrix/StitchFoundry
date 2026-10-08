@@ -261,7 +261,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
             return;
         }
-        // Editing keys with modifiers, clipboard and Cmd+A.
+        // Editing keys with modifiers and the clipboard (Cmd+A is Select All's, below: the text).
         crate::panels::character::route_type_input(app, ctx);
         // Enter was already delivered above as ToolKey::Enter (newline).
         let fire = all_shortcuts().into_iter().filter(|(sc, ..)| sc.modifiers.command).find(|(sc, ..)| ctx.input_mut(|i| consume(i, sc, false)));

@@ -106,6 +106,8 @@ mod tests_save;
 #[cfg(test)]
 mod tests_saveext;
 #[cfg(test)]
+mod tests_selectall;
+#[cfg(test)]
 mod tests_slices;
 #[cfg(test)]
 mod tests_svg;

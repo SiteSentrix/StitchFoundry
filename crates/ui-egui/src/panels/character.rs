@@ -123,8 +123,8 @@ fn text_paste(app: &mut VectorcraftApp, s: Option<String>) {
     }
 }
 
-/// Edit-menu commands while the Type tool edits text act on the text (Cut/Copy/Paste/Select
-/// All/Clear). `None` = not intercepted.
+/// Edit-menu commands while the Type tool edits text act on the text (Cut/Copy/Paste/Clear;
+/// Select All is the engine's `select.all`). `None` = not intercepted.
 pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
     if !app.session.tool_wants_text() {
         return None;
@@ -139,7 +139,6 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
             }
         }
         "edit.paste" | "edit.pasteWithoutFormatting" => text_paste(app, None),
-        "select.all" => app.session.set_tool_option("selectAll", &json!(true)),
         "edit.clear" => text_key(app, ToolKey::Delete, Mods::default()),
         _ => return None,
     }
@@ -152,10 +151,10 @@ enum TextInput {
     Copy,
     Cut,
     Paste(Option<String>),
-    SelectAll,
 }
 
-/// Route editing keys (with modifiers), clipboard events and Cmd+A/C/X/V to the Type tool.
+/// Route editing keys (with modifiers), clipboard events and Cmd+C/X/V to the Type tool (Cmd+A is
+/// left to the Select All shortcut, which selects the text being edited).
 pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
     CTX.get_or_init(|| ctx.clone());
     let mut todo = vec![];
@@ -193,10 +192,9 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     }
                     return false;
                 }
-                if m.command && !m.shift && !m.alt && matches!(key, Key::A | Key::C | Key::X | Key::V) {
+                if m.command && !m.shift && !m.alt && matches!(key, Key::C | Key::X | Key::V) {
                     if *pressed {
                         todo.push(match key {
-                            Key::A => TextInput::SelectAll,
                             Key::C => TextInput::Copy,
                             Key::X => TextInput::Cut,
                             _ => TextInput::Paste(None),
@@ -221,7 +219,6 @@ pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             }
             TextInput::Paste(s) => text_paste(app, s),
-            TextInput::SelectAll => app.session.set_tool_option("selectAll", &json!(true)),
         }
     }
 }

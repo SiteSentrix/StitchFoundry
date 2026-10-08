@@ -1,5 +1,6 @@
 //! `press_key` with the Width and Puppet Warp tools: Delete and Backspace reach the selected width
-//! point or pin, and clear the selected art when the tool has nothing selected.
+//! point or pin, and clear the selected art when the tool has nothing selected. Cmd+A while the
+//! Type tool edits selects the text, not the art.
 
 use serde_json::{Value, json};
 
@@ -63,4 +64,16 @@ fn delete_and_backspace_reach_the_puppet_warp_tool() {
         ok(&mut h, "press_key", json!({"key": key}));
         assert!(!exists(&h, id), "{key} cleared the art");
     }
+}
+
+#[test]
+fn cmd_a_while_the_type_tool_edits_selects_the_text() {
+    let mut h = session();
+    run(&mut h, "shape.rectangle", json!({"x": 300, "y": 300, "width": 20, "height": 20}));
+    let id = run(&mut h, "text.create", json!({"x": 100, "y": 100, "text": "Hello", "size": 20}))["id"].as_u64().unwrap();
+    click(&mut h, "type", 102.0, 95.0);
+    let r = ok(&mut h, "press_key", json!({"key": "A", "mods": {"cmd": true}}));
+    assert_eq!(r["command"], "select.all");
+    assert_eq!(r["result"], json!({"editing": id, "start": 0, "end": 5}));
+    assert_eq!(h.session.doc().unwrap().selection.objects, [vectorcraft_doc::NodeId(id)], "the art selection stays");
 }

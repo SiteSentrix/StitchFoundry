@@ -2653,6 +2653,32 @@ fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
     })
 }
 
+/// The event a focused text field takes for Edit-menu command `id` (Select All, Cut, Copy,
+/// Paste), as the same keys would send it.
+fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Event> {
+    Some(match id {
+        "select.all" => egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND },
+        "edit.copy" => egui::Event::Copy,
+        "edit.cut" => egui::Event::Cut,
+        "edit.paste" | "edit.pasteWithoutFormatting" => egui::Event::Paste(app.system_clipboard_text()?),
+        _ => return None,
+    })
+}
+
+/// Invoke an item of the system menu bar (macOS), chosen by a click or by its key equivalent: the
+/// system takes those keys before the window sees them. While a text field has the keyboard,
+/// Select All, Cut, Copy and Paste act on the field's text, as their keys do in the window;
+/// everything else (and those commands with no field focused) goes to [`invoke`].
+pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
+    if ctx.text_edit_focused()
+        && let Some(e) = field_event(app, id)
+    {
+        ctx.input_mut(|i| i.events.push(e));
+        return;
+    }
+    invoke(app, id, p);
+}
+
 /// Invoke a menu/command id with UI side effects (dialogs for "…" commands that need input).
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {

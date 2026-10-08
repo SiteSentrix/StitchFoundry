@@ -33,7 +33,7 @@ pub struct NativeMenu {
 }
 
 /// Accelerator for a shortcut like "Cmd+Shift+]" (modifier-less shortcuts stay in the app so they
-/// don't steal keys from text fields).
+/// don't steal keys from text fields; a focused field still gets Cmd+A/X/C/V, see [`NativeMenu::poll`]).
 fn accel(sc: &str) -> Option<Accelerator> {
     if !(sc.contains("Cmd") || sc.contains("Ctrl") || sc.contains("Alt") || sc.starts_with('F')) {
         return None;
@@ -72,12 +72,13 @@ impl NativeMenu {
         }
     }
 
-    /// Dispatch clicked items and refresh state.
-    pub fn poll(&mut self, app: &mut VectorcraftApp) {
+    /// Dispatch chosen items (a focused text field takes Select All and the clipboard) and refresh
+    /// state.
+    pub fn poll(&mut self, app: &mut VectorcraftApp, ctx: &egui::Context) {
         while let Ok(ev) = MenuEvent::receiver().try_recv() {
             if let Some((cmd, params, _, _)) = self.items.get(ev.id.as_ref()) {
                 let p = if params.is_null() { serde_json::json!({}) } else { params.clone() };
-                menus::invoke(app, cmd, p);
+                menus::invoke_from_system_menu(app, ctx, cmd, p);
             }
         }
         let now = vectorcraft_ui_egui::now_ms();

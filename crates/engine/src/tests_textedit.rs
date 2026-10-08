@@ -310,15 +310,18 @@ fn character_panel_flow_styles_the_selected_range_while_editing() {
 fn select_all_and_cut_like_ui() {
     let mut s = session();
     let v = ViewInfo::default();
+    s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 10, "height": 10})).unwrap();
     let id = text(&mut s, "abc def");
     s.select_tool("type", v).unwrap();
     let t = obj(&s, id);
     let p = t.xf * Point::new(2.0, -5.0);
     click(&mut s, p.x, p.y);
-    s.set_tool_option("selectAll", &json!(true));
-    let o = s.tool_options();
-    let len = obj(&s, id).plain_text().len() as u64;
-    let r = s.execute("text.getRange", &json!({"id": o["editing"], "start": o["start"], "end": o["end"].as_u64().unwrap().min(len)})).unwrap();
+    // Select All while editing takes the text, not the art (the rectangle stays unselected).
+    assert!(s.tool_wants_text());
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": id.0, "start": 0, "end": 7}));
+    assert_eq!(s.doc().unwrap().selection.objects, [id]);
+    let r = s.execute("text.getRange", &json!({"id": o["editing"], "start": o["start"], "end": o["end"]})).unwrap();
     assert_eq!(r["text"], json!("abc def"));
     s.set_tool_option("copy", &r["runs"]);
     key(&mut s, ToolKey::Delete, Mods::default());
@@ -326,6 +329,10 @@ fn select_all_and_cut_like_ui() {
     s.tool_text("abc def", v).unwrap();
     s.tool_text("abc def", v).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "abc defabc def");
+    // Not editing: Select All selects the art again.
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert!(!s.tool_wants_text());
+    assert_eq!(s.execute("select.all", &json!({})).unwrap(), json!({"count": 2}));
 }
 
 #[test]

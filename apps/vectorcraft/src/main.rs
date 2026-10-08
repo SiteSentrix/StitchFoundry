@@ -61,7 +61,7 @@ impl eframe::App for App {
                 self.menu = Some(native_menu::NativeMenu::install(&mut self.app));
             }
             if let Some(m) = &mut self.menu {
-                m.poll(&mut self.app);
+                m.poll(&mut self.app, ctx);
             }
             open_files(&mut self.app, open_documents::take());
         }
