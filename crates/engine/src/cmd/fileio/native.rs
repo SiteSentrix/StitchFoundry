@@ -127,6 +127,13 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
 /// The `.vectorcraft` file of `doc` with the options in `p`.
 pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Vec<u8>> {
     let (mut so, extras) = save_options(cmd, f, doc, p)?;
+    // Include Linked Files keeps placed documents' files; older versions get their art.
+    let full = if so.include_linked || so.version < vectorcraft_format::VERSION {
+        crate::cmd::place::document::full_documents(doc).0
+    } else {
+        std::borrow::Cow::Borrowed(doc)
+    };
+    let doc = &*full;
     if extras.preview {
         so.preview = preview_png(doc)?;
     }

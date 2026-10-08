@@ -364,6 +364,22 @@ pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(
 
 /// [`encode`], with every file the export writes.
 pub fn encode_all(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
+    // Placed documents output their files' art (a native file keeps what it keeps: see
+    // `native::encode`).
+    if !matches!(format, "vectorcraft" | "template") {
+        let (full, warnings) = crate::cmd::place::document::full_documents(doc);
+        if !warnings.is_empty() {
+            let mut enc = encode_all_of(&full, format, p)?;
+            enc.warnings.extend(warnings);
+            return Ok(enc);
+        }
+        return encode_all_of(&full, format, p);
+    }
+    encode_all_of(doc, format, p)
+}
+
+/// [`encode_all`] of `doc` as it is.
+fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     let f = super::writable(C, Some(format), None)?;
     let mut enc = encode_files(doc, f, p)?;
     // Formats that draw type: missing fonts come out in the fallback font (PDF and SVG say so

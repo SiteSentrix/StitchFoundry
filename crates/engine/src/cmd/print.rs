@@ -118,6 +118,9 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         let preset = given.or(Some(set.advanced.flattener_preset.as_str()).filter(|n| !n.trim().is_empty())).unwrap_or("medium");
         set.advanced.flattener_preset = preset.to_string();
     }
+    // Placed documents print their files' art.
+    let (full, _) = super::place::document::full_documents(doc);
+    let doc = &*full;
     // Raster effects print as images at the document's raster effects resolution.
     let flat = super::rasterfx::flatten_raster_effects(doc);
     let doc = flat.as_ref().unwrap_or(doc);

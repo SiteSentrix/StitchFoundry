@@ -801,6 +801,9 @@ impl Default for Session {
 
 impl Session {
     pub fn new() -> Self {
+        // Placed documents are read by the native format's loader.
+        vectorcraft_doc::placed_document::set_loader(cmd::place::document::read_document);
+        vectorcraft_doc::placed_document::set_file_reader(cmd::place::document::read_file_again);
         Self {
             docs: vec![],
             active: None,
@@ -1449,6 +1452,8 @@ mod tests_persp_text;
 mod tests_perspgrid;
 #[cfg(test)]
 mod tests_place;
+#[cfg(test)]
+mod tests_placed_document;
 #[cfg(test)]
 mod tests_plugins;
 #[cfg(test)]
