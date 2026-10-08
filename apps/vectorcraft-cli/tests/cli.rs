@@ -181,6 +181,21 @@ fn mcp_protocol_over_stdio() {
     send(&mut stdin, run(24, "document.node", json!({"id": group, "summary": true, "depth": -1})));
     assert_eq!(recv(&mut lines, &mut notes, 24)["result"]["isError"], true);
 
+    // Skeleton then drill: a depth-0 inspect is the layer skeleton with counts, and
+    // document.find locates nodes without dumping the tree.
+    send(&mut stdin, run(25, "document.inspect", json!({"depth": 0})));
+    let r = recv(&mut lines, &mut notes, 25);
+    let skel: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert!(skel["layers"][0].get("children").is_none(), "{skel}");
+    assert!(skel["artboards"].as_array().is_some_and(|a| !a.is_empty()), "{skel}");
+    send(&mut stdin, run(26, "document.find", json!({"kind": "ellipse"})));
+    let r = recv(&mut lines, &mut notes, 26);
+    let found: Value = serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(found["total"], 1, "{found}");
+    assert!(found["matches"][0]["path"].as_array().is_some_and(|p| !p.is_empty()), "{found}");
+    send(&mut stdin, run(27, "document.find", json!({})));
+    assert_eq!(recv(&mut lines, &mut notes, 27)["result"]["isError"], true);
+
     // The binary installed its logger: records arrive as notifications/message, and only
     // after the client asked for them.
     send(&mut stdin, json!({"jsonrpc":"2.0","id":11,"method":"logging/setLevel","params":{"level":"debug"}}));

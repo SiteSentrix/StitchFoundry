@@ -24,8 +24,9 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("file.close", "Close", ["File"], Some("Cmd+W"), "{index?}", has_doc, file_close),
         cmd!("document.activate", "Activate Document", [], None, "{index}", always, doc_activate),
-        cmd!(query "document.inspect", "Inspect Document", [], None, "{} → layer tree, artboards, selection, history", has_doc, |s, _| Ok(inspect::document(s))),
+        cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?} → layer tree, artboards, selection, history (a sliced tree reports childCount)", has_doc, |s, p| Ok(inspect::document_opts(s, slice_opts(p, "document.inspect")?))),
         cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
+        cmd!(query "document.find", "Find Objects", [], None, "{name?: substring of the Layers panel name, kind?: panel label such as Group, Path, Type or Image (exact), text?: substring of type content, limit?: max matches (default 100, 0 counts only)} → {matches: [{id, name, kind, path}], total}", has_doc, doc_find),
         cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
         cmd!(
             "document.setUnits",
@@ -113,7 +114,7 @@ fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
-    let opts = slice_opts(p)?;
+    let opts = slice_opts(p, "document.node")?;
     let summary = bool_or(p, "summary", false);
     if !summary && (opts.depth.is_some() || opts.child_limit.is_some()) {
         // The full object JSON is never truncated: a slice without `summary` would
@@ -127,12 +128,26 @@ fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
 /// `depth` / `childLimit` for a summary read: absent (or null) means no limit.
 /// A present value that is not a non-negative integer is rejected rather than
 /// silently reinterpreted.
-fn slice_opts(p: &Value) -> Result<inspect::SummaryOpts> {
+fn slice_opts(p: &Value, cmd: &str) -> Result<inspect::SummaryOpts> {
     let opt = |key: &str| match p.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("document.node", format!("`{key}` must be a non-negative integer"))),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a non-negative integer"))),
     };
     Ok(inspect::SummaryOpts { depth: opt("depth")?, child_limit: opt("childLimit")? })
+}
+
+fn doc_find(s: &mut Session, p: &Value) -> Result<Value> {
+    let substring = |key: &str| str_param(p, key).filter(|v| !v.is_empty()).map(|v| v.to_lowercase());
+    let filter = inspect::FindFilter { name: substring("name"), kind: substring("kind"), text: substring("text") };
+    if filter.is_empty() {
+        return Err(bad("document.find", "give at least one of `name`, `kind`, `text`"));
+    }
+    let limit = match p.get("limit") {
+        None | Some(Value::Null) => 100,
+        Some(v) => v.as_u64().ok_or_else(|| bad("document.find", "`limit` must be a non-negative integer"))?,
+    };
+    let (matches, total) = inspect::find_nodes(&s.doc()?.doc, &filter, limit);
+    Ok(json!({"matches": matches, "total": total}))
 }
 
 /// Document Setup's units (also `document.setup {units}`).

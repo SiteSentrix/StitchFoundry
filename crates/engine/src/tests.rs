@@ -414,6 +414,60 @@ fn document_node_summary_slices_with_depth_and_limit() {
     }
 }
 
+/// `document.inspect` slices the layer tree with the same options; artboards and the
+/// rest always come whole, and the default output is unchanged.
+#[test]
+fn document_inspect_slices_the_layer_tree() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+
+    let full = s.execute("document.inspect", &json!({})).unwrap();
+    assert!(full["layers"][0].get("childCount").is_none(), "{full}");
+    let flat = s.execute("document.inspect", &json!({"depth": 0})).unwrap();
+    assert!(flat["layers"][0].get("children").is_none(), "{flat}");
+    assert_eq!(flat["layers"][0]["childCount"], 1);
+    assert_eq!(flat["artboards"], full["artboards"]);
+    assert_eq!(flat["objects"], full["objects"]);
+    let one = s.execute("document.inspect", &json!({"childLimit": 0})).unwrap();
+    assert_eq!(one["layers"][0]["children"], json!([]));
+    assert_eq!(one["layers"][0]["childCount"], 1);
+    assert!(s.execute("document.inspect", &json!({"depth": "deep"})).is_err());
+}
+
+/// `document.find` searches names, kinds and type content across the whole tree and
+/// answers ids with ancestor paths plus the total, so capped replies stay explicit.
+#[test]
+fn document_find_searches_names_kinds_and_text() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0).0;
+    s.execute("object.setProps", &json!({"ids": [a], "name": "Hero Banner"})).unwrap();
+    rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    s.execute("select.all", &json!({})).unwrap();
+    let group = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let mut find = |p: Value| s.execute("document.find", &p).unwrap();
+
+    let v = find(json!({"name": "hero"}));
+    assert_eq!(v["total"], 1);
+    assert_eq!(v["matches"][0]["id"], a);
+    assert_eq!(v["matches"][0]["path"], json!([1, group]));
+
+    let v = find(json!({"kind": "group"}));
+    assert_eq!(v["total"], 1);
+    assert_eq!(v["matches"][0]["id"], group);
+
+    // `limit: 0` counts without listing; a missing filter is rejected, not a full dump.
+    let v = find(json!({"kind": "rectangle", "limit": 0}));
+    assert_eq!(v["matches"].as_array().map(Vec::len), Some(0));
+    assert_eq!(v["total"], 2);
+    assert!(s.execute("document.find", &json!({})).is_err());
+    assert!(s.execute("document.find", &json!({"name": ""})).is_err());
+    assert!(s.execute("document.find", &json!({"name": "hero", "limit": "many"})).is_err());
+    assert_eq!(s.execute("document.find", &json!({"kind": "nope"})).unwrap()["total"], 0);
+}
+
 /// Type reports the paint its characters show, and its own object-level paint apart from it.
 #[test]
 fn inspect_reports_the_paint_of_types_characters() {

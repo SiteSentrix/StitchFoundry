@@ -1,7 +1,7 @@
 //! Agent-friendly document summaries and view-models for panels.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{ArrowAlign, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, WidthProfile};
 
 use crate::Session;
 
@@ -98,6 +98,12 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts) -> Value {
 }
 
 pub fn document(s: &Session) -> Value {
+    document_opts(s, SummaryOpts::default())
+}
+
+/// The same summary with [`SummaryOpts`] applied to the layer tree (artboards and
+/// the rest always come whole): `depth: 0` is the skeleton — top layers with counts.
+pub fn document_opts(s: &Session, opts: SummaryOpts) -> Value {
     let Some(st) = s.active() else { return Value::Null };
     let d = &st.doc;
     json!({
@@ -109,7 +115,7 @@ pub fn document(s: &Session) -> Value {
         "colorMode": format!("{:?}", d.color_mode),
         "artboards": d.artboards.iter().map(|a| json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()})).collect::<Vec<_>>(),
         // Top of the stack first, like the Layers panel.
-        "layers": d.layers.iter().rev().map(|l| node_summary(l)).collect::<Vec<_>>(),
+        "layers": d.layers.iter().rev().map(|l| node_summary_opts(l, opts)).collect::<Vec<_>>(),
         "currentLayer": st.active_layer.map(|l| l.0),
         // The rows highlighted in the Layers panel (`layer.setCurrent`, `layer.highlight`).
         "layerRows": st.highlighted_rows().iter().map(|i| i.0).collect::<Vec<_>>(),
@@ -127,6 +133,69 @@ pub fn document(s: &Session) -> Value {
         "paint": {"fill": s.paint.fill.label(), "stroke": s.paint.stroke.label(), "strokeWidth": s.paint.stroke_width, "fillActive": s.fill_active, "appearanceItem": s.appearance_item()},
         "pasteRemembersLayers": d.paste_remembers_layers,
     })
+}
+
+/// What `document.find` matches: every given filter must hit (AND). All matching is
+/// case-insensitive; `name` and `text` are substrings, `kind` is the exact panel label
+/// (`Layer`, `Group`, `Path`, `Type`, `Image`, ...).
+pub struct FindFilter {
+    pub name: Option<String>,
+    pub kind: Option<String>,
+    pub text: Option<String>,
+}
+
+impl FindFilter {
+    /// True when no effective filter was given (empty strings count as absent).
+    pub fn is_empty(&self) -> bool {
+        [self.name.as_ref(), self.kind.as_ref(), self.text.as_ref()].iter().all(|f| f.is_none())
+    }
+
+    fn hits(&self, n: &Node) -> bool {
+        if let Some(needle) = &self.name
+            && !n.display_name().to_lowercase().contains(needle)
+        {
+            return false;
+        }
+        if let Some(kind) = &self.kind
+            && !n.kind_label().eq_ignore_ascii_case(kind)
+        {
+            return false;
+        }
+        if let Some(needle) = &self.text {
+            let NodeKind::Text(t) = &n.kind else { return false };
+            if !t.plain_text().to_lowercase().contains(needle) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// Search the whole layer tree, top of the stack first like the Layers panel.
+/// Returns at most `limit` hits as `{id, name, kind, path}` (`path` is the ancestor
+/// chain, layer first) plus the total hit count, so a capped reply stays explicit.
+pub fn find_nodes(doc: &Document, filter: &FindFilter, limit: u64) -> (Vec<Value>, u64) {
+    use std::sync::Arc;
+    let mut out = Vec::new();
+    let mut total = 0u64;
+    let mut ancestors: Vec<u64> = Vec::new();
+    fn walk(nodes: &[Arc<Node>], ancestors: &mut Vec<u64>, filter: &FindFilter, limit: u64, out: &mut Vec<Value>, total: &mut u64) {
+        for n in nodes.iter().rev() {
+            if filter.hits(n) {
+                *total += 1;
+                if (out.len() as u64) < limit {
+                    out.push(json!({"id": n.id.0, "name": n.display_name(), "kind": n.kind_label(), "path": ancestors}));
+                }
+            }
+            if let Some(ch) = n.children() {
+                ancestors.push(n.id.0);
+                walk(ch, ancestors, filter, limit, out, total);
+                ancestors.pop();
+            }
+        }
+    }
+    walk(&doc.layers, &mut ancestors, filter, limit, &mut out, &mut total);
+    (out, total)
 }
 
 /// Cap names as `stroke.set` takes them.

@@ -91,6 +91,12 @@ that shows fewer children than it has reports their total as `childCount`, so tr
 nothing truncated the reply is the plain summary. Both must be non-negative integers and need `summary: true`
 (the full object JSON is never truncated); anything else is an error.
 
+On a large document, drill instead of dumping: `run_command document.inspect {depth: 0}` is the skeleton
+(artboards with top layers and counts), `run_command document.find {name?|kind?|text?, limit?}` locates nodes
+across the whole tree (at least one filter is required; answers `{matches: [{id, name, kind, path}], total}`),
+and `document.node` reads the interesting ones sliced. `document.json` stays whole: it is the fidelity path,
+not the way to look around.
+
 ### Completions
 
 `completion/complete` answers for a prompt argument (`ref/prompt`) or a template variable
