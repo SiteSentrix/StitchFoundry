@@ -227,6 +227,19 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
+    // User Interface › Auto-Collapse Iconic Panels (#394): a press away from the flyout puts it
+    // away, on the canvas or a docked panel. Not one on the icon column (its icons swap or close the
+    // flyout themselves, on release), nor one on a foreground layer (the flyout itself, a dialog, a palette) or a modal dialog's
+    // backdrop, nor one that closes a popup (a panel menu, a dropdown the flyout opened).
+    if open && app.session.prefs.auto_collapse_icon_panels && !egui::Popup::is_any_open(ctx) {
+        let away = |p: egui::Pos2| {
+            !(column..=column + ICON_COL).contains(&p.x)
+                && ctx.layer_id_at(p).is_none_or(|l| l.order != egui::Order::Foreground && l != crate::dialogs::modal::backdrop())
+        };
+        if ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.interact_pos()).flatten()).is_some_and(away) {
+            open = false;
+        }
+    }
     if !open {
         app.ui.open_panel = None;
     }
@@ -319,6 +332,7 @@ mod tests {
                 .run_ui(input, |ui| {
                     show(app, ui);
                     floating_panel(app, ui.ctx());
+                    crate::dialogs::show(app, ui.ctx());
                 })
                 .textures_delta
                 .clear();
@@ -414,6 +428,53 @@ mod tests {
         // Taller than the 400 points egui sizes a new area at: its sections (Align, Quick
         // Actions) aren't cut off below Appearance.
         assert!(rect.height() > 450.0 && rect.bottom() <= SCREEN.y, "Properties flyout {rect:?}");
+    }
+
+    /// User Interface › Auto-Collapse Iconic Panels (#394): on, a click away from a popped-out
+    /// panel puts it away; off (the default), the panel stays until its » or its icon.
+    #[test]
+    fn auto_collapse_puts_a_flyout_away_on_a_click_elsewhere() {
+        let mut h = Harness::new();
+        h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
+        h.settle();
+        let (properties, layers) = (h.icons()[0], h.icons()[1]);
+        let away = egui::pos2(300.0, 500.0);
+        h.click(layers.center());
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"));
+        h.click(away);
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "off: a click elsewhere leaves it");
+        h.app.session.execute("prefs.set", &json!({"key": "autoCollapseIconPanels", "value": true})).unwrap();
+        h.click(away);
+        assert_eq!(h.app.ui.open_panel, None, "on: a click elsewhere puts it away");
+        h.click(layers.center());
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "its icon still pops it out");
+        let rect = h.ctx.memory(|m| m.area_rect(egui::Id::new("icon-panel"))).unwrap();
+        h.click(egui::pos2(rect.center().x, rect.top() + 13.0 + 26.0 + 10.0));
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "a click inside keeps it");
+        // The icons still swap the flyout and put it away.
+        h.click(properties.center());
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"), "another icon swaps it");
+        h.click(properties.center());
+        assert_eq!(h.app.ui.open_panel, None, "the same icon puts it away");
+        // A dialog (one a panel menu opens, say): a click in it or on its backdrop keeps the panel.
+        h.click(layers.center());
+        h.app.ui.dialog = Some(crate::state::Dialog::new("move", json!({"dx": "0 pt", "dy": "0 pt"})));
+        h.settle();
+        let dialog = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", "move")))).expect("the Move dialog");
+        h.click(dialog.left_top() + vec2(20.0, 30.0));
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "a click in the dialog keeps it");
+        h.click(egui::pos2(dialog.left() - 40.0, dialog.center().y));
+        assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "a click on the backdrop keeps it");
+        h.app.ui.dialog = None;
+        // The dock expanded: a click in its panel group puts a popped-out icon panel away too.
+        h.app.run("window.collapseDock", json!({"collapsed": false})).unwrap();
+        h.settle();
+        let icon = h.icons()[0];
+        h.click(icon.center());
+        let open = h.app.ui.open_panel.clone();
+        assert!(open.is_some(), "an icon panel pops out beside the expanded dock");
+        h.click(egui::pos2(SCREEN.x - 100.0, 300.0));
+        assert_eq!(h.app.ui.open_panel, None, "a click in the docked group puts {open:?} away");
     }
 
     #[test]
