@@ -9,7 +9,15 @@ use super::*;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("select.all", "All", ["Select"], Some("Cmd+A"), "{}", has_doc, all),
+        cmd!(
+            "select.all",
+            "All",
+            ["Select"],
+            Some("Cmd+A"),
+            "{} → {count}; while the Type tool edits text, all of that text instead → {editing, start, end} (byte offsets)",
+            has_doc,
+            all
+        ),
         cmd!("select.allOnArtboard", "All on Active Artboard", ["Select"], Some("Cmd+Alt+A"), "{artboard?: index}", has_doc, all_on_artboard),
         cmd!("select.none", "Deselect", ["Select"], Some("Cmd+Shift+A"), "{}", has_doc, none),
         cmd!("select.reselect", "Reselect", ["Select"], Some("Cmd+6"), "{}", has_doc, reselect),
@@ -107,6 +115,18 @@ fn selectable(d: &Document, iso: Option<NodeId>) -> Vec<NodeId> {
 }
 
 fn all(s: &mut Session, _: &Value) -> Result<Value> {
+    // While the Type tool edits text, Select All takes all of that text and leaves the art
+    // selection as it is (Illustrator: text cursor in a text object).
+    if s.tool_wants_text() {
+        s.set_tool_option("selectAll", &json!(true));
+        let editing = s.tool_options()["editing"].clone();
+        let id = editing.as_u64().map(NodeId);
+        let end = id.and_then(|id| match &s.doc().ok()?.doc.node(id)?.kind {
+            NodeKind::Text(t) => Some(t.plain_text().len()),
+            _ => None,
+        });
+        return Ok(json!({ "editing": editing, "start": 0, "end": end.unwrap_or(0) }));
+    }
     let st = s.doc()?;
     let ids = selectable(&st.doc, st.isolation);
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
