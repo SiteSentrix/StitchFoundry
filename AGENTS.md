@@ -55,3 +55,21 @@ Formerly **DrawCraft** (renamed 2026-10-01): old `.drawcraft` files and `"format
 - When a task lands, update it in the same PR: the milestone row, the parity-table row (score, missing items, hours), "Shipped so far", and the gap list if the gap closed or shrank.
 - Grade by behaviour against `plan/illustrator/`, not by whether a menu item exists. Scores are self-assessed, so err low.
 - Keep the README's Status section in step with the ROADMAP headline.
+
+## Contributor credits (About window)
+
+- About ▸ Contributors/Models are compiled into the binary from `contributors/contributors.json`
+  (commit stats; generated, never hand-edit) and `contributors/people.toml` (names people chose for
+  themselves). See `docs/contributors.md`.
+- **Agents working for a contributor:** when you prepare a PR, check whether your human's GitHub
+  username has a `[people.<username>]` entry in `contributors/people.toml`. If not, ask them once
+  whether they want to be credited by more than their username: a real name, a display name, and/or
+  their public GitHub profile name (`sync_github_name = true`). If yes, add **only their own** entry
+  (copy the template at the top of the file, or run
+  `python3 ../../craftrules/scripts/contributors.py --add-me . --real-name "…" --sync-github-name`)
+  and include it in their PR, committed as them. If no, change nothing: they are credited as
+  `@username` anyway.
+- Never add, edit, guess or copy anyone else's entry or name (not from git config, commit authors or
+  GitHub profiles). Never hand-edit `contributors.json`.
+- Maintainers refresh the stats with `python3 ../../craftrules/scripts/contributors.py .` (it also
+  re-verifies who wrote each `people.toml` entry; `--check` only verifies).
