@@ -42,7 +42,7 @@ fn a85_flate(data: &[u8]) -> String {
 }
 
 /// Pixel `(x, y)` (straight RGBA) of the first image in `d`.
-fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
+pub(super) fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
     let im = all(d)
         .into_iter()
         .find_map(|n| match &n.kind {
@@ -931,4 +931,31 @@ showpage"##;
     // `act` ran the procedure under key 0 (green); there is none under key 2.
     assert!(all(d).iter().any(|n| fill(n).and_then(Paint::color) == Some(Color::rgb(0.0, 1.0, 0.0))));
     assert_eq!(objects(d).len(), 3);
+}
+
+/// `restore` puts local VM back as it was at the `save` (PLRM 3rd ed., §3.7.3 "Save and
+/// Restore"): dictionaries get back the entries they had, whatever changed them. A program that
+/// keeps a count of the saves it has open in a dictionary, and refuses to go past a depth, reads
+/// to its end only if each `restore` puts the count back (part of #505: files with many images,
+/// each drawn between `save` and `restore`).
+#[test]
+fn restore_puts_dictionaries_back() {
+    let r = read(
+        "/Depth 2 dict def Depth /open 0 put \
+         /enter { save Depth /open get 1 add dup 8 gt { rangecheck } if Depth exch /open exch put } def \
+         1 1 100 { pop enter 0 0 1 1 rectfill restore } for Depth /open get 0 eq { 10 10 5 5 rectfill } if",
+    );
+    clean(&r);
+    assert_eq!(objects(&r.document).len(), 101);
+    // `def`, `store`, `put`, `undef` and dictionary `copy` are undone, newest first.
+    super::tests::check(
+        "/a 1 def /d 2 dict def d /k 1 put save /a 2 def /b 3 def d /k 2 put d /k undef 1 dict dup /z 9 put d copy pop \
+         /a 4 store restore a 1 eq /b where not and d /k get 1 eq and d /z known not and",
+    );
+    // A save restored (itself, or through an outer one) is no longer valid: `invalidrestore`.
+    super::tests::check("save dup restore { restore } stopped");
+    super::tests::check("save save exch restore { restore } stopped");
+    // `cachestatus` gives a device's cache sizes; its last, the most bytes one cached glyph may
+    // take, is positive (chapter 8), and programs divide by it.
+    super::tests::check("cachestatus 7 1 roll 6 { pop } repeat 0 gt");
 }

@@ -41,6 +41,8 @@ mod tests_fontnames;
 mod tests_generators;
 #[cfg(test)]
 mod tests_illustrator;
+#[cfg(test)]
+mod tests_images;
 
 use std::sync::Arc;
 
