@@ -3095,3 +3095,6 @@ axis	Both	兩者
 	Expand Shaper Group	展開 Shaper 群組
 	Release Shaper Group	釋放 Shaper 群組
 	Select Shaper Face	選取 Shaper 區域
+	Constrain	強制
+	Free Transform	任意變形
+	Perspective Distort	透視扭曲
