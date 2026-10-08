@@ -3041,4 +3041,10 @@ axis	Both	両方
 	Drag to move	移動するにはドラッグ
 	Drag to float as a toolbar	ドラッグしてツールバーとして浮かせる
 	Put back in the toolbar	ツールバーに戻す
+	Float Panel	パネルをフローティング
+	Dock Panel	パネルをドッキング
+	Drag to float the panel group	ドラッグしてパネルグループをフローティング
+	Put back in the dock	ドックに戻す
+	Drag to float the toolbar	ドラッグしてツールバーをフローティング
+	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング

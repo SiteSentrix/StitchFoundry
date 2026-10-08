@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::state::{Dialog, DockTab, FloatingFlyout, UiState};
+use crate::state::{Dialog, DockTab, FloatingFlyout, FloatingPanels, UiState};
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
@@ -29,6 +29,10 @@ pub struct Workspace {
     pub status_bar: bool,
     /// Tool groups torn off the toolbar into floating strips (built-in workspaces: none).
     pub floating_flyouts: Vec<FloatingFlyout>,
+    /// Panels dragged out of the dock, where they float (built-in workspaces: none).
+    pub floating_panels: Vec<FloatingPanels>,
+    /// Where the Tools panel floats (built-in workspaces: docked).
+    pub toolbar_pos: Option<[f32; 2]>,
 }
 
 impl Default for Workspace {
@@ -123,6 +127,8 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         open_panel: ui.open_panel.clone(),
         status_bar: ui.status_bar,
         floating_flyouts: ui.floating_flyouts.clone(),
+        floating_panels: ui.floating_panels.clone(),
+        toolbar_pos: ui.toolbar_pos,
     }
 }
 
@@ -140,6 +146,9 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.open_panel = w.open_panel.clone();
     ui.status_bar = w.status_bar;
     ui.floating_flyouts = w.floating_flyouts.clone();
+    ui.floating_panels = w.floating_panels.clone();
+    ui.toolbar_pos = w.toolbar_pos;
+    FloatingPanels::sanitize(&mut ui.floating_panels, &mut ui.toolbar_pos);
     ui.flyout = None;
     ui.workspace = w.name.clone();
 }

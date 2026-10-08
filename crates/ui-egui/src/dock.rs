@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::state::{DockTab, ICON_PANEL_GROUPS, ICON_PANELS};
 use crate::theme::{self, Tokens};
-use crate::{VectorcraftApp, icons, panels, widgets};
+use crate::{VectorcraftApp, floating, icons, panels, widgets};
 
 const ICON_COL: f32 = 38.0;
 /// Height of the strip along the top of a dock column that carries its double arrow.
@@ -57,18 +57,26 @@ fn toggle(app: &mut VectorcraftApp, collapsed: bool) {
     }
 }
 
-/// One icon of the column: a click pops its panel out (or puts it away).
-fn panel_icon(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, label: &str, icon: &str) {
+/// One icon of the column: a click pops its panel out (or puts it away); dragged out of the
+/// column (`column`), the panel floats.
+fn panel_icon(app: &mut VectorcraftApp, ui: &mut Ui, id: &'static str, label: &str, icon: &str, column: Rect) {
     let open = app.ui.open_panel.as_deref() == Some(id);
-    if widgets::icon_button(ui, icon, label, open, 30.0).clicked() {
+    // Its own id: the icons below it move up when it floats, and mustn't take over its drag.
+    let (_, rect) = ui.allocate_space(vec2(30.0, 30.0));
+    let resp = widgets::paint_icon_button(ui, ui.interact(rect, ui.id().with(("panel-icon", id)), Sense::click_and_drag()), icon, label, open);
+    if resp.clicked() {
         app.ui.open_panel = if open { None } else { Some(id.to_string()) };
+    }
+    if resp.dragged() && ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| !column.contains(p)) {
+        floating::tear(app, ui.ctx(), &[id], id, floating::strip_grab(ui.ctx(), resp.rect.left()));
     }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    // Main tabbed group, unless it is collapsed to icons.
-    if !app.ui.dock_collapsed {
+    let shown = floating::shown_tab(&app.ui);
+    // Main tabbed group, unless it is collapsed to icons or all its panels float.
+    let group = shown.filter(|_| !app.ui.dock_collapsed).map(|active| {
         egui::Panel::right("dock")
             .resizable(true)
             .default_size(DOCK_WIDTH)
@@ -78,47 +86,31 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if collapse_header(ui, false) {
                     toggle(app, true);
                 }
-                // Tab strip.
-                let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), 33.0), Sense::hover());
-                ui.painter().rect_filled(strip, 0.0, t.tab_strip);
-                ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
-                let mut x = strip.left();
-                for tab in DockTab::ALL {
-                    let (_, label, _) = tab.info();
-                    let active = app.ui.dock_tab == tab;
-                    let galley =
-                        ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.5), if active { t.text_strong } else { t.text_dim });
-                    let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(galley.size().x + 24.0, strip.height() - 1.0));
-                    let resp = ui.interact(r, ui.id().with(("docktab", label)), Sense::click());
-                    if active {
-                        ui.painter().rect_filled(r, 0.0, t.panel);
-                    }
-                    ui.painter().galley(egui::pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0), galley, t.text);
-                    ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.0, t.border));
-                    if resp.clicked() {
-                        app.ui.dock_tab = tab;
-                    }
-                    x = r.right();
+                if tab_strip(app, ui, active) {
+                    // It floats from this frame on.
+                    return;
                 }
-                let menu_id = app.ui.dock_tab.info().0;
-                panels::panel_menu(app, ui, menu_id, egui::Rect::from_center_size(strip.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)));
-                egui::Frame::NONE.inner_margin(egui::Margin { left: 12, right: 10, top: 10, bottom: 8 }).show(ui, |ui| match app.ui.dock_tab {
+                egui::Frame::NONE.inner_margin(egui::Margin { left: 12, right: 10, top: 10, bottom: 8 }).show(ui, |ui| match active {
                     DockTab::Properties => {
                         egui::ScrollArea::vertical().id_salt("props").auto_shrink([false, false]).show(ui, |ui| panels::properties::show(app, ui));
                     }
                     DockTab::Layers => panels::layers::show(app, ui),
                     DockTab::Libraries => panels::libraries(app, ui),
                 });
-            });
-    }
+            })
+            .response
+            .rect
+    });
     // Collapsed icon-panel strip, left of the expanded panel group (like Illustrator's dock). A
-    // collapsed group's panels head it, under the « that expands them again.
-    let collapsed = app.ui.dock_collapsed;
+    // collapsed group's panels head it, under the « that expands them again. Floating panels leave
+    // it.
+    let collapsed = app.ui.dock_collapsed && shown.is_some();
     let column = egui::Panel::right("icon_column")
         .resizable(false)
         .exact_size(ICON_COL)
         .frame(egui::Frame::NONE.fill(t.panel).stroke(Stroke::new(1.5, t.border)))
         .show(ui, |ui| {
+            let bounds = ui.max_rect();
             if collapsed && collapse_header(ui, true) {
                 toggle(app, false);
             }
@@ -129,41 +121,98 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     if collapsed {
                         for tab in DockTab::ALL {
                             let (id, label, icon) = tab.info();
-                            panel_icon(app, ui, id, label, icon);
+                            if floating::group_of(&app.ui, id).is_none() {
+                                panel_icon(app, ui, id, label, icon, bounds);
+                            }
                         }
                     }
-                    for (gi, group) in ICON_PANEL_GROUPS.iter().enumerate() {
-                        if gi > 0 || collapsed {
-                            let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 7.0), Sense::hover());
-                            ui.painter()
-                                .line_segment([r.left_center() + vec2(4.0, 0.0), r.right_center() - vec2(4.0, 0.0)], Stroke::new(1.0, t.divider));
-                        }
+                    // A divider above each group with icons left, but the first.
+                    let mut divider = collapsed;
+                    for group in ICON_PANEL_GROUPS {
+                        let mut first = true;
                         for id in group.iter() {
                             let Some((_, label, icon)) = ICON_PANELS.iter().find(|p| p.0 == *id) else { continue };
-                            panel_icon(app, ui, id, label, icon);
+                            if floating::group_of(&app.ui, id).is_some() {
+                                continue;
+                            }
+                            if std::mem::take(&mut first) && std::mem::replace(&mut divider, true) {
+                                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 7.0), Sense::hover());
+                                ui.painter()
+                                    .line_segment([r.left_center() + vec2(4.0, 0.0), r.right_center() - vec2(4.0, 0.0)], Stroke::new(1.0, t.divider));
+                            }
+                            panel_icon(app, ui, id, label, icon, bounds);
                         }
                     }
                 });
             });
         });
-    let left = column.response.rect.left();
-    ui.ctx().data_mut(|d| d.insert_temp(column_left_id(), left));
+    let column = column.response.rect;
+    let dock = group.map_or(column, |g| g.union(column));
+    ui.ctx().data_mut(|d| {
+        d.insert_temp(column_left_id(), column.left());
+        d.insert_temp(floating::dock_rect_id(), dock);
+    });
+}
+
+/// The tabbed group's tab strip, showing `active`: a click on a tab shows it, a tab dragged out of
+/// the strip floats on its own, and the strip right of the tabs floats the whole group. True when
+/// the shown panel floats now.
+fn tab_strip(app: &mut VectorcraftApp, ui: &mut Ui, active: DockTab) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), 33.0), Sense::hover());
+    ui.painter().rect_filled(strip, 0.0, t.tab_strip);
+    ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
+    let out = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| !strip.contains(p));
+    // What a drag out of the strip floats: the panels, the one shown, where its tab began.
+    let mut tear: Option<(Vec<&'static str>, &'static str, f32)> = None;
+    let mut x = strip.left();
+    for tab in DockTab::ALL {
+        let (id, label, _) = tab.info();
+        if floating::group_of(&app.ui, id).is_some() {
+            continue;
+        }
+        let galley =
+            ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.5), if tab == active { t.text_strong } else { t.text_dim });
+        let r = Rect::from_min_size(egui::pos2(x, strip.top()), vec2(galley.size().x + 24.0, strip.height() - 1.0));
+        let resp = ui.interact(r, ui.id().with(("docktab", label)), Sense::click_and_drag());
+        if tab == active {
+            ui.painter().rect_filled(r, 0.0, t.panel);
+        }
+        ui.painter().galley(egui::pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0), galley, t.text);
+        ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.0, t.border));
+        if resp.clicked() {
+            app.ui.dock_tab = tab;
+        } else if resp.dragged() && out {
+            tear = Some((vec![id], id, r.left()));
+        }
+        x = r.right();
+    }
+    let menu = Rect::from_center_size(strip.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0));
+    let rest = Rect::from_min_max(egui::pos2(x, strip.top()), egui::pos2(menu.left() - 4.0, strip.bottom()));
+    if rest.width() > 0.0 {
+        let resp = ui.interact(rest, ui.id().with("dock-group-bar"), Sense::drag());
+        if resp.dragged() && out {
+            tear = Some((floating::docked_tabs(&app.ui).map(|t| t.info().0).collect(), active.info().0, strip.left()));
+        }
+        resp.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(tl!("Drag to float the panel group"));
+    }
+    panels::panel_menu(app, ui, active.info().0, menu);
+    if let Some((ids, id, left)) = tear {
+        floating::tear(app, ui.ctx(), &ids, id, floating::strip_grab(ui.ctx(), left));
+    }
+    // Torn off, or floated from its menu.
+    floating::group_of(&app.ui, active.info().0).is_some()
 }
 
 /// A panel popped out next to the icon column: an icon panel, or one of the tabbed group's panels
-/// while the dock is collapsed.
+/// while the dock is collapsed. Dragging its title floats it.
 pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(id) = app.ui.open_panel.clone() else { return };
-    let tab = DockTab::from_id(&id);
-    let label = match tab {
-        Some(tab) if app.ui.dock_collapsed => tab.info().1,
-        // Expanded, the group shows its panels in the dock itself.
-        Some(_) => return,
-        None => match ICON_PANELS.iter().find(|p| p.0 == id) {
-            Some((_, label, _)) => *label,
-            None => return,
-        },
-    };
+    let Some((id, label)) = app.ui.open_panel.as_deref().and_then(|p| crate::state::all_panels().find(|(q, _)| *q == p)) else { return };
+    let tab = DockTab::from_id(id);
+    // Expanded, the group shows its panels in the dock itself; a floating panel shows in its group.
+    if tab.is_some() && !app.ui.dock_collapsed || floating::group_of(&app.ui, id).is_some() {
+        return;
+    }
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     // Pinned by its right edge, 6 points left of the icon column wherever the dock's width (or its
@@ -179,52 +228,39 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let right = column - 6.0;
     // The tabbed group's panels fill their height (Layers) or scroll (Properties): give them one
     // that keeps the flyout on screen.
-    // The tabbed group's panels keep the width the dock gives them; icon panels are 256 points.
-    let width = if tab.is_some() { DOCK_WIDTH } else { 256.0 };
+    let width = panel_width(id);
     let tall = (screen.height() - FLYOUT_TOP - 26.0 - 20.0 - 40.0).clamp(160.0, 560.0);
     let mut open = true;
+    let mut torn = None;
     let area = egui::Area::new(egui::Id::new("icon-panel")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP);
     area.fixed_pos(egui::pos2(right, FLYOUT_TOP)).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).corner_radius(CornerRadius::same(4)).inner_margin(egui::Margin::ZERO).show(ui, |ui| {
             ui.set_width(width);
             let (strip, _) = ui.allocate_exact_size(vec2(width, 26.0), Sense::hover());
             ui.painter().rect_filled(strip, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, t.panel_darker);
-            let title = egui::Rect::from_min_size(
+            let title = Rect::from_min_size(
                 strip.min,
                 vec2(ui.painter().layout_no_wrap(tl!(label).to_string(), theme::semibold(12.0), t.text).size().x + 24.0, 26.0),
             );
             ui.painter().rect_filled(title, CornerRadius { nw: 4, ne: 0, sw: 0, se: 0 }, t.panel);
             ui.painter().text(title.left_center() + vec2(12.0, 0.0), egui::Align2::LEFT_CENTER, tl!(label), theme::semibold(12.0), t.text);
-            let close = egui::Rect::from_center_size(strip.right_center() - vec2(13.0, 0.0), vec2(14.0, 14.0));
+            let close = Rect::from_center_size(strip.right_center() - vec2(13.0, 0.0), vec2(14.0, 14.0));
             let cr = ui.interact(close, ui.id().with("close-panel"), Sense::click());
             icons::paint(ui, "chevrons-right", close, if cr.hovered() { t.text } else { t.text_dim });
             if cr.clicked() {
                 open = false;
             }
-            let menu_r = egui::Rect::from_center_size(strip.right_center() - vec2(34.0, 0.0), vec2(16.0, 16.0));
-            panels::panel_menu(app, ui, &id, menu_r);
-            egui::Frame::NONE.inner_margin(egui::Margin::same(10)).show(ui, |ui| {
-                ui.set_width(width - 20.0);
-                match tab {
-                    Some(DockTab::Properties) => {
-                        // At least `tall` when the sections are taller: the flyout's area keeps the
-                        // size its content needs, and egui sizes a new area at most 400 points high,
-                        // so a scroll area that only took the room it was given never grew past it.
-                        egui::ScrollArea::vertical()
-                            .id_salt("props-flyout")
-                            .max_height(tall)
-                            .min_scrolled_height(tall)
-                            .auto_shrink([false, true])
-                            .show(ui, |ui| panels::properties::show(app, ui));
-                    }
-                    Some(DockTab::Layers) => {
-                        ui.set_max_height(tall);
-                        panels::layers::show(app, ui);
-                    }
-                    Some(DockTab::Libraries) => panels::libraries(app, ui),
-                    None => panels::show_icon_panel(app, ui, &id),
-                }
-            });
+            let menu_r = Rect::from_center_size(strip.right_center() - vec2(34.0, 0.0), vec2(16.0, 16.0));
+            panels::panel_menu(app, ui, id, menu_r);
+            let drag = ui.interact(title, ui.id().with("title"), Sense::drag()).on_hover_cursor(egui::CursorIcon::Grab);
+            if drag.dragged() && ui.input(|i| i.pointer.is_decidedly_dragging()) {
+                torn = Some(title.left());
+            }
+            // Torn off, or floated from its menu: it floats from this frame on.
+            if torn.is_some() || floating::group_of(&app.ui, id).is_some() {
+                return;
+            }
+            panel_body(app, ui, id, width, tall);
         });
     });
     // User Interface › Auto-Collapse Iconic Panels (#394): a press away from the flyout puts it
@@ -240,9 +276,44 @@ pub fn floating_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
             open = false;
         }
     }
-    if !open {
+    if let Some(left) = torn {
+        floating::tear(app, ctx, &[id], id, floating::strip_grab(ctx, left));
+    } else if !open {
         app.ui.open_panel = None;
     }
+}
+
+/// The width of a popped-out or floating panel: the tabbed group's panels keep the width the dock
+/// gives them; icon panels are 256 points.
+pub(crate) fn panel_width(id: &str) -> f32 {
+    if DockTab::from_id(id).is_some() { DOCK_WIDTH } else { 256.0 }
+}
+
+/// Panel `id`'s contents in a popped-out or floating panel `width` wide; the tabbed group's panels
+/// fill (Layers) or scroll (Properties) `tall` points.
+pub(crate) fn panel_body(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32, tall: f32) {
+    egui::Frame::NONE.inner_margin(egui::Margin::same(10)).show(ui, |ui| {
+        ui.set_width(width - 20.0);
+        match DockTab::from_id(id) {
+            Some(DockTab::Properties) => {
+                // At least `tall` when the sections are taller: the flyout's area keeps the size its
+                // content needs, and egui sizes a new area at most 400 points high, so a scroll area
+                // that only took the room it was given never grew past it.
+                egui::ScrollArea::vertical()
+                    .id_salt("props-flyout")
+                    .max_height(tall)
+                    .min_scrolled_height(tall)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| panels::properties::show(app, ui));
+            }
+            Some(DockTab::Layers) => {
+                ui.set_max_height(tall);
+                panels::layers::show(app, ui);
+            }
+            Some(DockTab::Libraries) => panels::libraries(app, ui),
+            None => panels::show_icon_panel(app, ui, id),
+        }
+    });
 }
 
 #[cfg(test)]
