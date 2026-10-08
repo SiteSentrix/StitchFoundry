@@ -194,7 +194,7 @@ milestones, and honest time-to-parity estimates.
 "a power user can't tell the difference". Everyday vector illustration is close to usable: drawing and path tools,
 Pathfinder and Shape Builder, paint, gradients, appearance and transparency, type with styles, threading and Hebrew/Arabic bidirectional layout, and
 files (SVG, PDF and PDF-compatible `.ai` with PDF/X, EPS, DXF, EMF/WMF, raster formats and PSD, Print, Package). The interface
-speaks English, Japanese, Traditional and Simplified Chinese, Spanish, Italian and Russian (and Czech and Brazilian Portuguese in the menus).
+speaks English, Japanese, Traditional and Simplified Chinese, Spanish, Italian, Russian and French (and Czech and Brazilian Portuguese in the menus).
 The scores are
 self-assessed, so the [honest assessment](ROADMAP.md#honest-assessment-2026-10-05) explains how far to trust them.
 

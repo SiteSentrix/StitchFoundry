@@ -54,6 +54,11 @@ fn plural_none(_: u64) -> usize {
     0
 }
 
+/// French: 0 and 1 are `one` (« 0 calque »), everything else `other`.
+fn plural_french(n: u64) -> usize {
+    usize::from(n > 1)
+}
+
 /// Czech: 1 is `one`, 2–4 `few`, everything else (0, 5…) `other`.
 fn plural_czech(n: u64) -> usize {
     match n {
@@ -76,7 +81,7 @@ fn plural_russian(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 9] = [
+pub static LANGUAGES: [LangInfo; 10] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Japanese: the whole interface (every menu string and `tl!` literal), keeping the product,
     // workspace and perspective preset names in English (`MENU_KEEP_AS_IS`).
@@ -103,6 +108,9 @@ pub static LANGUAGES: [LangInfo; 9] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    // French: the whole interface and the status and error messages, keeping the same names in
+    // English as Spanish; every `fr-*` locale (`fr-FR`, `fr-BE`, `fr-CA`, `fr-CH` …) resolves here.
+    LangInfo { code: "fr", name: "Français", source: include_str!("fr.tsv"), plural: plural_french, complete_menus: true, catalog: OnceLock::new() },
     // Russian: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `ru-*` locale (`ru-RU`, `ru-BY`, `ru-KZ` …) resolves here.
     LangInfo {
