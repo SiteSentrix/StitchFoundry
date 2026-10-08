@@ -152,6 +152,11 @@ impl Session {
             slices_hidden: self.menu.slices_hidden,
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
+            selection_tolerance: self.prefs.selection_tolerance,
+            path_only: self.prefs.object_selection_by_path_only,
+            double_click_isolate: self.prefs.double_click_to_isolate,
+            select_behind: self.prefs.ctrl_click_selects_behind,
+            highlight_anchors: self.prefs.highlight_anchors_on_hover,
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
         };
@@ -265,8 +270,11 @@ impl Session {
         v
     }
 
+    /// The pointer the active tool shows at `p` (General › Use Precise Cursors makes the drawing
+    /// tools' a crosshair, [`Cursor::precise`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
-        self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods))
+        let c = self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods));
+        if self.prefs.use_precise_cursors { c.precise() } else { c }
     }
 
     pub fn tool_options(&self) -> Value {

@@ -1,13 +1,14 @@
 //! The Selection tool (V): click/shift-click, marquee, move (Alt copies, Shift constrains),
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's corner widget to round its corners (Alt-click cycles their kind,
-//! double-click opens the Corners dialog), double-click to enter isolation mode.
+//! double-click opens the Corners dialog), double-click to enter isolation mode (Double Click To
+//! Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind).
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{hit_test, marquee};
+use vectorcraft_doc::hit::{hit_test, marquee, objects_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect};
 
@@ -114,7 +115,7 @@ impl Tool for SelectionTool {
                 }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     let top = h.top_object(cx.isolation);
-                    if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. })) {
+                    if cx.double_click_isolate && cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. })) {
                         return vec![Action::Exec("object.isolate".into(), json!({ "id": top.0 }))];
                     }
                     if cx.doc.node(top).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Text(_))) {
@@ -152,7 +153,14 @@ impl Tool for SelectionTool {
                         None => {}
                     }
                 }
-                // 2. Objects.
+                // 2. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
+                if m.cmd
+                    && cx.select_behind
+                    && let Some(behind) = object_behind(cx, p)
+                {
+                    self.state = State::Moving { start: p, began: false, deselect: None };
+                    return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
+                }
                 match hit_test(cx.doc, p, cx.hit_options()) {
                     Some(h) => {
                         let top = h.top_object(cx.isolation);
@@ -319,6 +327,14 @@ impl Tool for SelectionTool {
         }
         Cursor::Arrow
     }
+}
+
+/// Select Behind: of the objects under `p` (topmost first), the one below the lowest selected
+/// one, back to the topmost after the bottom one; the topmost when none is selected.
+fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
+    let stack = objects_at(cx.doc, p, cx.hit_options(), cx.isolation);
+    let next = stack.iter().rposition(|id| cx.selection.contains(*id)).map_or(0, |i| i + 1);
+    stack.get(next).or(stack.first()).copied()
 }
 
 /// Is `n` area type (text in a frame) whose frame the tools reshape? Type in perspective isn't:

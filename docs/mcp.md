@@ -1072,6 +1072,29 @@ Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","bounds":"preview"}}}
 ```
 
+## Selection preferences
+
+The Selection & Anchor Display and General preferences apply to `pointer_gesture` as they do to the mouse:
+
+- `selectionTolerance` (1–8 px, 3 by default): how near a click must be to a path to pick it, and to an anchor or
+  handle for Direct Selection.
+- `objectSelectionByPathOnly`: a click inside a filled path or compound path doesn't select it, one on its path does.
+- `ctrlClickSelectsBehind` (on by default): a Selection tool click with `mods: {cmd: true}` (Command on macOS, Ctrl
+  elsewhere) selects the object under the selected one there, the next such click the one under that, then the
+  topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
+- `doubleClickToIsolate` (on by default): off, a `doubleclick` on a group with the Selection tool no longer isolates it.
+- `usePreciseCursors`: the Pen, Eyedropper, Slice and Blend tools' pointers are a crosshair.
+
+```json
+{"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"objectSelectionByPathOnly","value":true}}}
+{"name":"pointer_gesture","arguments":{"tool":"selection","mods":{"cmd":true},"events":[{"kind":"down","x":175,"y":125},{"kind":"up","x":175,"y":125}]}}
+```
+
+The preferences for the view need the desktop app (`vectorcraft-cli mcp --connect`): `zoomWithMouseWheel` (the
+wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel sideways; the control channel's
+`ui.wheel` turns the wheel), `zoomToSelection` (on: Zoom In and Zoom Out centre the selection), `showToolTips`,
+`anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle` and `recentFontsCount`.
+
 ## Width points
 
 `stroke.widthPoint.set {id, t, left, right, index?, adjustAdjoining?}` adds a width point (side widths in points) or,

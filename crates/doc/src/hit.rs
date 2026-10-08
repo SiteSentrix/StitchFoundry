@@ -60,6 +60,25 @@ impl Default for HitOptions {
 
 /// Topmost editable object under `p`.
 pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
+    hit_test_skipping(doc, p, opt, &|_| false)
+}
+
+/// The objects under `p` that [`Hit::top_object`] picks in `scope` (isolation mode), topmost
+/// first: what clicks there select, one below the other (Cmd/Ctrl-click selects behind).
+pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
+    let mut tops: Vec<NodeId> = vec![];
+    // Each round leaves out the objects found so far (and everything inside them).
+    while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id)).map(|h| h.top_object(scope)) {
+        if tops.contains(&top) {
+            break;
+        }
+        tops.push(top);
+    }
+    tops
+}
+
+/// [`hit_test`] passing over the nodes `skip` names (and their contents).
+fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool) -> Option<Hit> {
     let mut chain = Vec::new();
     for layer in doc.layers.iter().rev() {
         if !layer.visible || layer.locked {
@@ -74,7 +93,7 @@ pub fn hit_test(doc: &Document, p: Point, opt: HitOptions) -> Option<Hit> {
         }
         chain.push(layer.id);
         let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
-        if let Some(mut h) = hit_children(layer, p, opt, &mut chain) {
+        if let Some(mut h) = hit_children(layer, p, opt, skip, &mut chain) {
             h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
             h.layers = h.ancestry.iter().take_while(|a| doc.node(**a).is_some_and(Node::is_layer)).count();
             return Some(h);
@@ -99,7 +118,7 @@ fn clip_contains(clip: &Node, p: Point) -> bool {
     clip.clip_shapes(Some(&frame)).iter().any(|(bp, rule)| fill_contains(bp, *rule, p))
 }
 
-fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId>) -> Option<Hit> {
+fn hit_children(parent: &Node, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool, chain: &mut Vec<NodeId>) -> Option<Hit> {
     let children = parent.children()?;
     // A clip group (or a layer with a clipping mask) only hits inside its clipping path.
     if parent.clips()
@@ -110,7 +129,7 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
     }
     for c in children.iter().rev() {
         // Hidden, locked and template sublayers block clicks like top-level layers do.
-        if !c.visible || c.locked || c.is_template() {
+        if !c.visible || c.locked || c.is_template() || skip(c.id) {
             continue;
         }
         // (An envelope's content sits where it was, not where the envelope draws it.)
@@ -123,13 +142,13 @@ fn hit_children(parent: &Node, p: Point, opt: HitOptions, chain: &mut Vec<NodeId
         chain.push(c.id);
         let hit = match &c.kind {
             // A sublayer whose Preview is off is clicked in outline, like an outline view.
-            NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, chain),
-            NodeKind::Layer { .. } | NodeKind::Group { .. } => hit_children(c, p, opt, chain),
+            NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, skip, chain),
+            NodeKind::Layer { .. } | NodeKind::Group { .. } => hit_children(c, p, opt, skip, chain),
             // Edit Contents: the envelope's content hits, undistorted.
-            NodeKind::Envelope { editing: true, .. } => hit_children(c, p, opt, chain),
+            NodeKind::Envelope { editing: true, .. } => hit_children(c, p, opt, skip, chain),
             // A blend's key objects first (Direct and Group Selection pick them); its steps hit
             // as the blend.
-            NodeKind::Blend { .. } => hit_children(c, p, opt, chain)
+            NodeKind::Blend { .. } => hit_children(c, p, opt, skip, chain)
                 .or_else(|| hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 })),
             _ => hit_leaf(c, p, opt).map(|kind| Hit { leaf: c.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 }),
         };
@@ -169,7 +188,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
             if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
                 return Some(k);
             }
-            (!opt.outline && fill_contains(&bp, *rule, p)).then_some(HitKind::Fill)
+            (!opt.outline && !opt.path_only && fill_contains(&bp, *rule, p)).then_some(HitKind::Fill)
         }
         NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::SymbolInstance { .. } | NodeKind::Blend { .. } | NodeKind::Envelope { .. } => {
             n.geometric_bounds().filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
@@ -364,6 +383,46 @@ mod tests {
         }
         assert!(hit_test(&d, Point::new(25.0, 25.0), HitOptions::default()).is_none());
         assert!(hit_test(&d, Point::new(0.5, 25.0), HitOptions::default()).is_some());
+    }
+
+    /// Object Selection by Path Only: a filled path or compound path hits on its outline only.
+    #[test]
+    fn path_only_leaves_out_fills() {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let (a, c) = (d.alloc_id(), d.alloc_id());
+        d.insert(Some(l), 0, Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default_art())).unwrap();
+        let inner = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 150.0, 50.0)), Appearance::default());
+        let mut compound = Node::new(c, NodeKind::Compound { children: vec![Arc::new(inner)], rule: vectorcraft_geom::FillRule::NonZero });
+        compound.appearance = Appearance::default_art();
+        d.insert(Some(l), 9, compound).unwrap();
+        let path_only = HitOptions { path_only: true, ..Default::default() };
+        for (id, inside, edge) in [(a, Point::new(25.0, 25.0), Point::new(0.5, 25.0)), (c, Point::new(125.0, 25.0), Point::new(100.5, 25.0))] {
+            assert_eq!(hit_test(&d, inside, HitOptions::default()).map(|h| h.leaf), Some(id), "the fill hits");
+            assert!(hit_test(&d, inside, path_only).is_none(), "path only: the fill of {id:?} doesn't hit");
+            assert_eq!(hit_test(&d, edge, path_only).map(|h| h.leaf), Some(id), "path only: the outline does");
+        }
+    }
+
+    /// `objects_at`: every object under the point, topmost first; a group counts once.
+    #[test]
+    fn objects_at_lists_the_stack() {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let rect =
+            |d: &mut Document, x: f64| Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 0.0, x + 50.0, 50.0)), Appearance::default_art());
+        let a = rect(&mut d, 0.0);
+        let (b, c) = (rect(&mut d, 10.0), rect(&mut d, 20.0));
+        let (a_id, b_id, c_id, g) = (a.id, b.id, c.id, d.alloc_id());
+        d.insert(Some(l), 0, a).unwrap();
+        d.insert(Some(l), 9, Node::group(g, vec![Arc::new(b), Arc::new(c)])).unwrap();
+        let far = rect(&mut d, 120.0);
+        d.insert(Some(l), 9, far).unwrap();
+        let at = |x: f64, scope| objects_at(&d, Point::new(x, 25.0), HitOptions::default(), scope);
+        assert_eq!(at(30.0, None), vec![g, a_id]);
+        assert_eq!(at(30.0, Some(g))[..2], [c_id, b_id], "isolated: the group's own objects");
+        assert_eq!(at(5.0, None), vec![a_id]);
+        assert!(at(90.0, None).is_empty());
     }
 
     #[test]

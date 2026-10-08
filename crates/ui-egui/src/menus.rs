@@ -124,6 +124,11 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("type.recentFont8", "Recent Font 8", "", "{} apply the 8. most recently used font"),
     ("type.recentFont9", "Recent Font 9", "", "{} apply the 9. most recently used font"),
     ("type.recentFont10", "Recent Font 10", "", "{} apply the 10. most recently used font"),
+    ("type.recentFont11", "Recent Font 11", "", "{} apply the 11. most recently used font"),
+    ("type.recentFont12", "Recent Font 12", "", "{} apply the 12. most recently used font"),
+    ("type.recentFont13", "Recent Font 13", "", "{} apply the 13. most recently used font"),
+    ("type.recentFont14", "Recent Font 14", "", "{} apply the 14. most recently used font"),
+    ("type.recentFont15", "Recent Font 15", "", "{} apply the 15. most recently used font"),
     ("file.clearRecent", "Clear Recent Files", "", "{}"),
     ("type.findFont", "Find Font…", "", "{} open the Find Font dialog (engine: text.fonts / text.replaceFont / select.font)"),
     ("file.recentFiles", "Recent Files", "", "{} → [path…] most recent first"),
@@ -896,7 +901,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         },
         id if id.starts_with("type.recentFont") => {
             let n: usize = id["type.recentFont".len()..].parse().unwrap_or(0);
-            match n.checked_sub(1).and_then(|i| app.ui.recent_fonts.get(i)).cloned() {
+            match n.checked_sub(1).and_then(|i| app.recent_fonts().get(i)).cloned() {
                 Some(font) => app.run("text.setStyle", json!({ "font": font })),
                 None => Err("no such recent font".into()),
             }
@@ -912,9 +917,14 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.snapToPoint" => flag(&mut app.ui.view.snap_to_point),
         "view.zoomIn" | "view.zoomOut" => {
             let up = id == "view.zoomIn";
+            // Selection & Anchor Display › Zoom to Selection: the selection comes to the middle.
+            let focus = if app.session.prefs.zoom_to_selection { app.selection_box().map(|b| b.center()) } else { None };
             match app.view_mut() {
                 Some(v) => {
                     v.zoom = next_zoom(v.zoom, up);
+                    if let Some(c) = focus {
+                        v.center = c;
+                    }
                     Ok(json!({"zoom": v.zoom * 100.0}))
                 }
                 None => Err("no document".into()),
@@ -1333,7 +1343,7 @@ pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         },
         id if id.starts_with("type.recentFont") => {
             let n: usize = id["type.recentFont".len()..].parse().unwrap_or(0);
-            n.checked_sub(1).and_then(|i| app.ui.recent_fonts.get(i)).cloned().unwrap_or_else(|| "—".into())
+            n.checked_sub(1).and_then(|i| app.recent_fonts().get(i)).cloned().unwrap_or_else(|| "—".into())
         }
         id if id.starts_with("view.goto") => {
             let n: usize = id["view.goto".len()..].parse().unwrap_or(0);
@@ -1590,8 +1600,8 @@ fn saved_selection_slot(id: &str) -> Option<usize> {
     id.strip_prefix("select.recall")?.parse().ok()
 }
 
-/// Type → Recent Fonts slots.
-const RECENT_FONT_IDS: [&str; 10] = [
+/// Type → Recent Fonts slots (Preferences › Type › Number of Recent Fonts shows up to 15).
+const RECENT_FONT_IDS: [&str; crate::MAX_RECENT_FONTS] = [
     "type.recentFont1",
     "type.recentFont2",
     "type.recentFont3",
@@ -1602,6 +1612,11 @@ const RECENT_FONT_IDS: [&str; 10] = [
     "type.recentFont8",
     "type.recentFont9",
     "type.recentFont10",
+    "type.recentFont11",
+    "type.recentFont12",
+    "type.recentFont13",
+    "type.recentFont14",
+    "type.recentFont15",
 ];
 
 /// Effective shortcut of a command: the user's override (Edit → Keyboard Shortcuts) or the default.
@@ -1647,7 +1662,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
         id if id.starts_with("type.recentFont") => {
-            id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.ui.recent_fonts.len()) && app.session.active().is_some()
+            id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.recent_fonts().len()) && app.session.active().is_some()
         }
         id if saved_selection_slot(id).is_some() => saved_selection_name(app, id).is_some(),
         id if id.starts_with("view.goto") => {
@@ -3453,6 +3468,39 @@ mod tests {
         assert_eq!(dynamic_label(&app, "view.cornerWidget", ""), "Hide Corner Widget");
         app.run("view.cornerWidget", json!({})).unwrap();
         assert_eq!(dynamic_label(&app, "view.cornerWidget", ""), "Show Corner Widget");
+    }
+
+    /// Selection & Anchor Display › Zoom to Selection (#394): Zoom In and Zoom Out bring the
+    /// selection to the middle; off, they keep the view's centre.
+    #[test]
+    fn zoom_to_selection_centres_the_selection() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 20})).unwrap();
+        let center = |app: &VectorcraftApp| app.view().unwrap().center;
+        let start = center(&app);
+        app.run("prefs.set", json!({"key": "zoomToSelection", "value": false})).unwrap();
+        app.run("view.zoomIn", json!({})).unwrap();
+        assert_eq!(center(&app), start, "off: the view's centre stays");
+        app.run("prefs.set", json!({"key": "zoomToSelection", "value": true})).unwrap();
+        app.run("view.zoomOut", json!({})).unwrap();
+        assert_eq!(center(&app), vectorcraft_geom::Point::new(30.0, 30.0), "on: the selection's centre");
+    }
+
+    /// Preferences › Type › Number of Recent Fonts (#394): Type › Recent Fonts lists that many.
+    #[test]
+    fn number_of_recent_fonts_sets_how_many_are_listed() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        app.ui.recent_fonts = (1..=15).map(|i| format!("Font {i}")).collect();
+        let listed = |app: &VectorcraftApp| RECENT_FONT_IDS.iter().filter(|id| enabled(app, id)).count();
+        assert_eq!(listed(&app), 10, "10 by default");
+        for n in [15, 2] {
+            app.run("prefs.set", json!({"key": "recentFontsCount", "value": n})).unwrap();
+            assert_eq!(listed(&app), n);
+        }
+        assert_eq!(dynamic_label(&app, "type.recentFont2", "Recent Font"), "Font 2");
+        assert!(app.run("type.recentFont3", json!({})).is_err(), "past the count");
     }
 
     #[test]

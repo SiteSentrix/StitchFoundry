@@ -152,3 +152,78 @@ fn gpu_preference_defaults_to_power_saving_and_validates() {
     s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
     assert_eq!(s.prefs.gpu_preference, "powerSaving");
 }
+
+/// Selection & Anchor Display › Tolerance, Object Selection by Path Only and Command Click to
+/// Select Objects Behind, and General › Double Click To Isolate, as the Selection tool sees them
+/// (#394).
+#[test]
+fn selection_preferences_drive_the_selection_tool() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = |s: &mut Session, x: f64| {
+        NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    // Two filled squares overlapping between x = 150 and 200, `front` on top.
+    let (back, front) = (rect(&mut s, 100.0), rect(&mut s, 150.0));
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    let set = |s: &mut Session, key: &str, value: Value| s.execute("prefs.set", &json!({"key": key, "value": value})).unwrap();
+    let click = |s: &mut Session, x: f64, mods: Mods| {
+        for k in [PointerKind::Down, PointerKind::Up] {
+            // Halfway between the bounding box's handles.
+            s.pointer(&PointerEvent::new(k, x, 125.0).with_mods(mods), ViewInfo::default()).unwrap();
+        }
+        s.doc().unwrap().selection.objects.clone()
+    };
+    let plain = Mods::default();
+    // Tolerance: the right edge's stroke ends at x = 250.5.
+    assert_eq!(click(&mut s, 252.5, plain), vec![front], "2 px out: within the default 3 px");
+    assert!(click(&mut s, 256.5, plain).is_empty(), "6 px out: beyond 3 px");
+    set(&mut s, "selectionTolerance", json!(8));
+    assert_eq!(click(&mut s, 256.5, plain), vec![front], "6 px out: within 8 px");
+    set(&mut s, "selectionTolerance", json!(1));
+    assert!(click(&mut s, 252.5, plain).is_empty(), "2 px out: beyond 1 px");
+    set(&mut s, "selectionTolerance", json!(3));
+    // Object Selection by Path Only: the fill no longer selects, the path does.
+    assert_eq!(click(&mut s, 225.0, plain), vec![front]);
+    set(&mut s, "objectSelectionByPathOnly", json!(true));
+    assert!(click(&mut s, 225.0, plain).is_empty(), "a click inside the fill selects nothing");
+    assert_eq!(click(&mut s, 250.0, plain), vec![front], "a click on the path selects it");
+    set(&mut s, "objectSelectionByPathOnly", json!(false));
+    // Command Click to Select Objects Behind (on by default): each Cmd/Ctrl-click goes one down,
+    // then back to the top.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    assert_eq!(click(&mut s, 175.0, plain), vec![front]);
+    assert_eq!(click(&mut s, 175.0, cmd), vec![back], "the object behind");
+    assert_eq!(click(&mut s, 175.0, cmd), vec![front], "back to the topmost");
+    set(&mut s, "ctrlClickSelectsBehind", json!(false));
+    assert_eq!(click(&mut s, 175.0, cmd), vec![front], "off: a plain click");
+    // Double Click To Isolate (on by default) isolates a group; off, it doesn't.
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let double = |s: &mut Session| {
+        s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 175.0, 150.0), ViewInfo::default()).unwrap();
+        s.doc().unwrap().isolation
+    };
+    set(&mut s, "doubleClickToIsolate", json!(false));
+    assert_eq!(double(&mut s), None, "off: no isolation");
+    set(&mut s, "doubleClickToIsolate", json!(true));
+    assert!(double(&mut s).is_some(), "on: the group is isolated");
+}
+
+/// General › Use Precise Cursors (#394): the Pen's pointer becomes a crosshair; the Selection
+/// tool's arrow stays.
+#[test]
+fn use_precise_cursors_makes_drawing_cursors_crosshairs() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let cursor = |s: &mut Session, tool: &str| {
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        s.cursor(vectorcraft_geom::Point::new(300.0, 300.0), Mods::default(), ViewInfo::default())
+    };
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Pen);
+    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
+    assert_eq!(cursor(&mut s, "pen"), Cursor::Crosshair);
+    assert_eq!(cursor(&mut s, "selection"), Cursor::Arrow);
+}
