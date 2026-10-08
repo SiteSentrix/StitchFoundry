@@ -7,11 +7,11 @@
 //! (the selected ones when anchors are selected; Alt-click cycles their kind, double-click opens
 //! the Corners dialog).
 //! Group Selection: click selects the leaf; each further click on it adds the next enclosing group.
-//! Both pick the key objects of a blend. Direct Selection also edits a blend's spine: drag its
-//! points (a key object on a point moves with it) and, once a point is clicked, its handles; and
-//! the points of selected gradient meshes and mesh envelopes and their handles ([`MeshEdit`]).
-//! Dragging a corner or an edge of area type's frame reshapes the type area (`text.reshapeArea`):
-//! the text reflows at its size.
+//! Both pick the key objects of a blend, and click or drag ruler guides ([`crate::rulerguide`]).
+//! Direct Selection also edits a blend's spine: drag its points (a key object on a point moves
+//! with it) and, once a point is clicked, its handles; and the points of selected gradient meshes
+//! and mesh envelopes and their handles ([`MeshEdit`]). Dragging a corner or an edge of area
+//! type's frame reshapes the type area (`text.reshapeArea`): the text reflows at its size.
 //!
 //! A press on the stroke of a path that isn't selected as a whole selects that segment's two anchors
 //! (the fill, or Alt, selects the whole path); dragging the segment bends it if it's curved, else
@@ -27,6 +27,7 @@ use vectorcraft_geom::{PathData, Point, Rect};
 use crate::bbox::move_delta;
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::meshedit::MeshEdit;
+use crate::rulerguide::GuideEdit;
 use crate::select::{is_area_type, matrix_json};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
 
@@ -97,11 +98,12 @@ pub struct DirectSelectionTool {
     guides: Vec<Overlay>,
     /// The anchor under the pointer (Highlight anchors on mouse over): its path, where it is.
     hover: Option<(NodeId, Point)>,
+    guide: GuideEdit,
 }
 
 impl DirectSelectionTool {
     pub fn new(group: bool) -> Self {
-        Self { group, state: State::Idle, spine: None, mesh: MeshEdit::default(), guides: vec![], hover: None }
+        Self { group, state: State::Idle, spine: None, mesh: MeshEdit::default(), guides: vec![], hover: None, guide: GuideEdit::default() }
     }
 }
 
@@ -234,13 +236,20 @@ impl Tool for DirectSelectionTool {
         if self.group { "groupSelection" } else { "directSelection" }
     }
     fn busy(&self) -> bool {
-        !matches!(self.state, State::Idle)
+        !matches!(self.state, State::Idle) || self.guide.busy()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        if let Some(out) = self.guide.pointer(cx, ev) {
+            return out;
+        }
         let p = ev.pos;
         let tol = cx.pick_tol();
         match (ev.kind, self.state.clone()) {
             (PointerKind::Down, _) if self.group => {
+                if let Some(out) = self.guide.press(cx, ev) {
+                    self.state = State::Idle;
+                    return out;
+                }
                 let Some(h) = hit_test(cx.doc, p, cx.hit_options()) else {
                     self.state = State::Marquee { start: p, cur: p, add: ev.mods.shift };
                     return vec![];
@@ -308,6 +317,10 @@ impl Tool for DirectSelectionTool {
                 }
                 if let Some((id, anchors)) = hit_frame_edge(cx, p, tol) {
                     return self.press_type_area(cx, id, anchors, p, ev.mods.shift);
+                }
+                if let Some(out) = self.guide.press(cx, ev) {
+                    self.state = State::Idle;
+                    return out;
                 }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     // A segment of a path that isn't selected as a whole: its two anchors get
@@ -501,6 +514,7 @@ impl Tool for DirectSelectionTool {
                 if let Some((id, p)) = self.hover.filter(|_| matches!(self.state, State::Idle)) {
                     out.push(Overlay::Anchor { p, color: cx.doc.layer_color(id), filled: false, size: 8.0 });
                 }
+                out.extend(self.guide.overlays(cx));
                 out
             }
         }
@@ -509,7 +523,8 @@ impl Tool for DirectSelectionTool {
         if !self.group && (matches!(self.state, State::Corner(_)) || over_widget(cx, p)) {
             return Cursor::CornerRadius;
         }
-        Cursor::ArrowHollow
+        // A press on the highlighted anchor picks it, not the guide.
+        self.guide.cursor(cx, p).filter(|_| self.hover.is_none() || self.guide.busy()).unwrap_or(Cursor::ArrowHollow)
     }
 }
 
@@ -569,6 +584,26 @@ mod tests {
     use super::*;
     use crate::testutil::*;
     use vectorcraft_doc::Selection;
+
+    /// #414: a ruler guide is picked over the art, but an anchor on it is picked first.
+    #[test]
+    fn direct_and_group_selection_pick_ruler_guides() {
+        let (mut d, id) = doc_with_rect();
+        d.guides.push(vectorcraft_doc::Guide { vertical: true, pos: 100.0 });
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let down = |t: &mut DirectSelectionTool, y: f64| t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, y));
+        let pick = vec![Action::Exec("guide.select".into(), json!({"indexes": [0]}))];
+        for group in [false, true] {
+            let mut t = DirectSelectionTool::new(group);
+            assert_eq!(down(&mut t, 150.0), pick, "on the rect's edge (group: {group})");
+            assert!(t.busy());
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, 100.0, 150.0));
+            assert_eq!(t.cursor(&c, Point::new(101.0, 300.0), Mods::default()), Cursor::ResizeH);
+        }
+        let mut t = DirectSelectionTool::new(false);
+        assert_eq!(down(&mut t, 100.0), vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}))]);
+    }
 
     /// A blend of two 20 pt squares centred on (110, 310) and (210, 310), selected.
     fn blend_doc() -> (vectorcraft_doc::Document, NodeId, NodeId) {

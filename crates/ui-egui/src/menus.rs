@@ -910,7 +910,15 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         "view.artboards" => flag(&mut app.ui.view.artboards),
         "view.rulers" => flag(&mut app.ui.view.rulers),
         "view.boundingBox" => flag(&mut app.ui.view.bounding_box),
-        "view.guides" => flag(&mut app.ui.view.guides),
+        "view.guides" => {
+            let r = flag(&mut app.ui.view.guides);
+            // Hidden guides can't stay selected (selected, they are all that is).
+            if !app.ui.view.guides && app.session.active().is_some_and(|d| !d.selection.guides.is_empty()) {
+                // Deselecting a document that is open can't fail.
+                let _ = app.run("select.none", json!({}));
+            }
+            r
+        }
         "view.smartGuides" => flag(&mut app.ui.view.smart_guides),
         "view.grid" => flag(&mut app.ui.view.grid),
         "view.snapToGrid" => flag(&mut app.ui.view.snap_to_grid),

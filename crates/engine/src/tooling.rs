@@ -13,6 +13,8 @@ pub struct ViewInfo {
     pub zoom: f64,
     pub outline: bool,
     pub smart_guides: bool,
+    /// View → Show Guides: the ruler guides show (and, unlocked, can be picked).
+    pub guides: bool,
     pub snap_to_grid: bool,
     pub show_bbox: bool,
     /// View → Snap to Pixel: drawing and moving land on whole pixels (points at 72 ppi).
@@ -31,6 +33,7 @@ impl Default for ViewInfo {
             zoom: 1.0,
             outline: false,
             smart_guides: true,
+            guides: true,
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,
@@ -134,6 +137,7 @@ impl Session {
             paint: &self.paint,
             outline: view.outline,
             smart_guides: view.smart_guides,
+            guides: view.guides && !self.menu.guides_locked,
             snap_to_grid: view.snap_to_grid,
             show_bbox: view.show_bbox,
             snap_to_pixel: view.snap_to_pixel,

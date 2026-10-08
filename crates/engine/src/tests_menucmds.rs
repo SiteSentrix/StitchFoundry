@@ -740,6 +740,99 @@ fn ruler_guides_and_lock() {
     assert!(s.execute("guide.remove", &json!({"index": 0})).is_err());
 }
 
+fn guides(s: &Session) -> Vec<(bool, f64)> {
+    s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect()
+}
+
+fn selected_guides(s: &Session) -> Vec<usize> {
+    s.doc().unwrap().selection.guides.clone()
+}
+
+/// #414: ruler guides are selected, moved, copied, nudged and deleted like art, over commands.
+#[test]
+fn ruler_guides_select_move_and_delete() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    for (vertical, pos) in [(true, 100.0), (false, 50.0), (true, 300.0)] {
+        s.execute("guide.add", &json!({"vertical": vertical, "pos": pos})).unwrap();
+    }
+    sel(&mut s, &[a]);
+    // Selecting guides deselects the art; toggle adds and removes.
+    assert_eq!(s.execute("guide.select", &json!({"indexes": [0]})).unwrap()["selected"], json!([0]));
+    assert!(selected(&s).is_empty());
+    assert_eq!(s.execute("guide.select", &json!({"indexes": [1], "toggle": true})).unwrap()["selected"], json!([0, 1]));
+    assert_eq!(s.execute("guide.list", &json!({})).unwrap()[1], json!({"index": 1, "vertical": false, "pos": 50.0, "selected": true}));
+    assert!(s.execute("guide.select", &json!({"indexes": [7]})).is_err());
+    // A move takes each selected guide along its own axis, in one undo step.
+    let n = undo_len(&s);
+    s.execute("guide.move", &json!({"dx": 10, "dy": -5})).unwrap();
+    assert_eq!(guides(&s), [(true, 110.0), (false, 45.0), (true, 300.0)]);
+    assert_eq!(undo_len(&s), n + 1);
+    // Alt: copies, which are then the selection.
+    s.execute("guide.move", &json!({"dx": 20, "copy": true})).unwrap();
+    assert_eq!(guides(&s).len(), 5);
+    assert_eq!(&guides(&s)[3..], [(true, 130.0), (false, 45.0)]);
+    assert_eq!(selected_guides(&s), [3, 4]);
+    // The arrow keys nudge them.
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0, "big": true})).unwrap();
+    assert_eq!(guides(&s)[3], (true, 140.0));
+    // Delete (edit.clear) deletes the selected guides; the others keep their places.
+    s.execute("guide.select", &json!({"indexes": [1, 3]})).unwrap();
+    assert_eq!(s.execute("guide.list", &json!({})).unwrap().as_array().unwrap().len(), 5);
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert_eq!(guides(&s), [(true, 110.0), (true, 300.0), (false, 45.0)]);
+    assert!(selected_guides(&s).is_empty());
+    assert!(s.doc().unwrap().doc.node(a).is_some(), "the art stays");
+    // Removing one keeps the rest of the selection pointing at the same guides.
+    s.execute("guide.select", &json!({"indexes": [1, 2]})).unwrap();
+    assert_eq!(s.execute("guide.remove", &json!({"index": 0})).unwrap()["count"], 1);
+    assert_eq!((guides(&s), selected_guides(&s)), (vec![(true, 300.0), (false, 45.0)], vec![0, 1]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![1, 2]));
+    // Out of range positions are refused.
+    assert!(s.execute("guide.move", &json!({"index": 0, "pos": 1e300})).is_err());
+    assert!(s.execute("guide.add", &json!({"vertical": true, "pos": -1e300})).is_err());
+    // Locking deselects them, and they can't be picked again until unlocked.
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert!(selected_guides(&s).is_empty());
+    assert!(matches!(s.execute("guide.select", &json!({"indexes": [0]})), Err(EngineError::Disabled(..))));
+    assert!(matches!(s.execute("edit.clear", &json!({})), Err(EngineError::Disabled(..))));
+}
+
+/// #414: the Selection tool picks a ruler guide over the art and drags it in one undo step; with
+/// guides hidden or locked the press goes to the art.
+#[test]
+fn selection_tool_drags_a_ruler_guide() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 150})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let v = ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("selection", v).unwrap();
+    let drag = |s: &mut Session, v: ViewInfo, from: (f64, f64), to: (f64, f64)| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.0, from.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1), v).unwrap();
+    };
+    let n = undo_len(&s);
+    drag(&mut s, v, (151.0, 120.0), (171.0, 140.0));
+    assert_eq!(guides(&s), [(true, 170.0)]);
+    assert_eq!(selected_guides(&s), [0]);
+    assert!(selected(&s).is_empty());
+    assert_eq!(bounds(&s, a).x0, 100.0, "the art stays");
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Move Guide");
+    // Hidden guides: the press takes the art.
+    let hidden = ViewInfo { guides: false, ..v };
+    drag(&mut s, hidden, (170.0, 120.0), (180.0, 120.0));
+    assert_eq!((guides(&s), bounds(&s, a).x0), (vec![(true, 170.0)], 110.0));
+    // Locked guides too.
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    drag(&mut s, v, (170.0, 120.0), (180.0, 120.0));
+    assert_eq!((guides(&s), bounds(&s, a).x0), (vec![(true, 170.0)], 120.0));
+}
+
 // ---------- File ----------
 
 #[test]

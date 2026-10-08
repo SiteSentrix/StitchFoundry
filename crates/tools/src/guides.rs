@@ -142,6 +142,23 @@ impl Targets {
         (out, ov)
     }
 
+    /// Snap a ruler guide at `v` (the x of a vertical one, the y of a horizontal one) into line
+    /// with the nearest edge, centre or anchor within `tol`: where it goes, and a label there.
+    pub fn snap_guide(&self, vertical: bool, v: f64, tol: f64) -> (f64, Vec<Overlay>) {
+        let along = |q: &Point| if vertical { q.x } else { q.y };
+        let lines = if vertical { &self.xs } else { &self.ys };
+        let best = lines
+            .iter()
+            .map(|(t, from, k)| (*t, *from, *k))
+            .chain(self.points.iter().map(|(q, k)| (along(q), *q, *k)))
+            .filter(|(t, ..)| (t - v).abs() <= tol)
+            .min_by(|a, b| (a.0 - v).abs().total_cmp(&(b.0 - v).abs()));
+        match best {
+            Some((t, from, k)) => (t, vec![Overlay::Label { p: from, text: k.label().into(), color: MAGENTA }]),
+            None => (v, vec![]),
+        }
+    }
+
     /// Snap a dragged point that carries others along at `offsets` (a resize handle and the
     /// bleed edge beyond it): onto an anchor or centre near the point itself, otherwise into line
     /// with targets, each axis on whichever of them comes nearest.
@@ -298,8 +315,7 @@ fn snap_with(cx: &ToolContext, p: Point, targets: impl FnOnce() -> Targets) -> (
         return (Point::new(p.x.round(), p.y.round()), vec![]);
     }
     if cx.snap_to_grid {
-        let s = cx.doc.grid.spacing / cx.doc.grid.subdivisions.max(1) as f64;
-        return (vectorcraft_geom::snap::snap_point_to_grid(p, s), vec![]);
+        return (vectorcraft_geom::snap::snap_point_to_grid(p, cx.grid_step()), vec![]);
     }
     if !cx.smart_guides {
         return (p, vec![]);

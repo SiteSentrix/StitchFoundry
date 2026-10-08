@@ -85,7 +85,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_clipboard,
             |s, p| paste(s, p, PasteMode::AllArtboards)
         ),
-        cmd!("edit.clear", "Clear", ["Edit"], Some("Delete"), "{ids?}", has_selection, clear),
+        cmd!(
+            "edit.clear",
+            "Clear",
+            ["Edit"],
+            Some("Delete"),
+            "{ids?} delete the objects `ids`, else the selection (direct-selected anchors, else objects, else ruler guides)",
+            has_selection_or_guides,
+            clear
+        ),
         cmd!("edit.duplicate", "Duplicate", [], None, "{dx?, dy?} duplicate the selection in place (offset optional)", has_selection, duplicate),
     ]
 }
@@ -223,6 +231,10 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     // Direct-selected anchors: delete those anchors instead of whole objects.
     if ids_param(p, "ids").is_none() && !s.doc()?.selection.anchors.is_empty() {
         return super::path::delete_anchors(s, p);
+    }
+    // Selected ruler guides (selected on their own).
+    if ids_param(p, "ids").is_none() && s.doc()?.selection.is_empty() {
+        return super::docmenu::guide_remove(s, &json!({}));
     }
     let ids = match ids_param(p, "ids") {
         Some(v) => v,

@@ -23,6 +23,7 @@ pub mod params;
 pub mod pen;
 pub mod place;
 pub mod printtiling;
+pub mod rulerguide;
 pub mod select;
 pub mod settings;
 pub mod shape;
@@ -201,6 +202,13 @@ impl ScreenFrame {
     pub fn at(&self, x: f64, y: f64) -> Point {
         self.origin + self.right * x + self.down * y
     }
+    /// Where the document point `p` is, in screen pixels from the window's top-left corner (the
+    /// inverse of [`Self::at`]); none for a degenerate frame.
+    pub fn to_screen(&self, p: Point) -> Option<(f64, f64)> {
+        let (r, d, v) = (self.right, self.down, p - self.origin);
+        let det = r.x * d.y - d.x * r.y;
+        (det.is_finite() && det.abs() > 1e-12).then(|| ((v.x * d.y - d.x * v.y) / det, (r.x * v.y - v.x * r.y) / det))
+    }
 }
 
 /// Read-only context a tool sees.
@@ -213,6 +221,8 @@ pub struct ToolContext<'a> {
     pub paint: &'a PaintDefaults,
     pub outline: bool,
     pub smart_guides: bool,
+    /// View → Show Guides with Lock Guides off: the selection tools pick and drag ruler guides.
+    pub guides: bool,
     pub snap_to_grid: bool,
     /// Bounding box shown (View → Show/Hide Bounding Box).
     pub show_bbox: bool,
@@ -291,6 +301,10 @@ impl ToolContext<'_> {
     /// A move label: `dX: …` over `dY: …`.
     pub fn offset_label(&self, dx: f64, dy: f64) -> String {
         format!("dX: {}\ndY: {}", self.len(dx), self.len(dy))
+    }
+    /// What Snap to Grid snaps to: the grid's subdivisions (or its lines without any).
+    pub fn grid_step(&self) -> f64 {
+        self.doc.grid.spacing / self.doc.grid.subdivisions.max(1) as f64
     }
     /// The selection tolerance in document units ([`Self::selection_tolerance`]).
     pub fn pick_tol(&self) -> f64 {
@@ -547,6 +561,7 @@ pub(crate) mod testutil {
             paint: p,
             outline: false,
             smart_guides: true,
+            guides: true,
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,

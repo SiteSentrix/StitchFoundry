@@ -293,7 +293,9 @@ fn strip_replay_only(id: &str, p: &mut Value) {
 /// have finite, in-range geometry, so saved files always reload and renderers never see NaN/∞.
 fn doc_sane(d: &Document, sel: &Selection) -> bool {
     let ok = |r: vectorcraft_geom::Rect| [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD);
-    d.artboards.iter().all(|a| ok(a.rect)) && sel.objects.iter().all(|id| d.node(*id).and_then(|n| n.geometric_bounds()).is_none_or(ok))
+    d.artboards.iter().all(|a| ok(a.rect))
+        && d.guides.iter().all(|g| g.pos.is_finite() && g.pos.abs() <= MAX_COORD)
+        && sel.objects.iter().all(|id| d.node(*id).and_then(|n| n.geometric_bounds()).is_none_or(ok))
 }
 
 /// Where new art goes (Illustrator's drawing modes, Shift+D cycles).

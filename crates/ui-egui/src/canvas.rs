@@ -315,7 +315,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if app.ui.view.guides {
         let look = LineLook::guides(&app.session.prefs, &t);
-        for g in &doc.guides {
+        // Selected guides in the selection colour.
+        let picked = LineLook { color: t.selection, ..look };
+        let selected: &[usize] = app.session.active().map_or(&[], |st| &st.selection.guides);
+        for (i, g) in doc.guides.iter().enumerate() {
             let (a, b) = if g.vertical {
                 let x = xf.to_screen(Point::new(g.pos, 0.0)).x;
                 (pos2(x, rect.top()), pos2(x, rect.bottom()))
@@ -323,7 +326,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let y = xf.to_screen(Point::new(0.0, g.pos)).y;
                 (pos2(rect.left(), y), pos2(rect.right(), y))
             };
-            look.guide(&painter, a, b);
+            if selected.contains(&i) { picked } else { look }.guide(&painter, a, b);
         }
     }
 
@@ -817,23 +820,32 @@ fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
 }
 
 /// A drag from a ruler onto the canvas makes a guide where the button is released: a horizontal
-/// one from the top ruler, a vertical one from the left ruler. Released anywhere else, it makes
-/// none.
+/// one from the top ruler, a vertical one from the left ruler; with Shift on the nearest ruler
+/// tick. Released anywhere else, it makes none.
 fn ruler_guides(app: &mut VectorcraftApp, ui: &Ui, full: egui::Rect, canvas: egui::Rect, xf: &Xf, t: &Tokens) {
     let [top, left, _] = ruler_rects(full);
+    let shift = ui.input(|i| i.modifiers.shift);
     for (r, vertical, id) in [(top, false, "ruler-top"), (left, true, "ruler-left")] {
         let resp = ui.interact(r, egui::Id::new(id), Sense::drag());
         let Some(p) = resp.interact_pointer_pos().filter(|p| canvas.contains(*p)) else { continue };
+        let d = xf.to_doc(p);
+        let mut pos = if vertical { d.x } else { d.y };
+        if shift {
+            pos = app.session.general_unit().snap_to_ruler_tick(pos, xf.zoom);
+        }
         if resp.drag_stopped() {
-            let d = xf.to_doc(p);
             // The new guide shows even if guides were hidden.
             app.ui.view.guides = true;
-            if let Err(e) = app.run("guide.add", json!({ "vertical": vertical, "pos": if vertical { d.x } else { d.y } })) {
+            if let Err(e) = app.run("guide.add", json!({ "vertical": vertical, "pos": pos })) {
                 app.status(e);
             }
         } else if resp.dragged() {
-            let (a, b) =
-                if vertical { (pos2(p.x, canvas.top()), pos2(p.x, canvas.bottom())) } else { (pos2(canvas.left(), p.y), pos2(canvas.right(), p.y)) };
+            let at = xf.to_screen(if vertical { Point::new(pos, d.y) } else { Point::new(d.x, pos) });
+            let (a, b) = if vertical {
+                (pos2(at.x, canvas.top()), pos2(at.x, canvas.bottom()))
+            } else {
+                (pos2(canvas.left(), at.y), pos2(canvas.right(), at.y))
+            };
             LineLook::guides(&app.session.prefs, t).guide(&ui.painter_at(canvas), a, b);
         }
     }
@@ -853,8 +865,7 @@ fn rulers(ui: &Ui, full: egui::Rect, xf: &Xf, hover: Option<Point>, unit: Unit, 
     // Pick a label step (in `unit`) that gives ≥ 50 px between labels; positions below are in `unit`
     // (`per` points each).
     let per = unit.points();
-    let steps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0];
-    let step = steps.iter().copied().find(|s| s * per * xf.zoom >= 50.0).unwrap_or(10000.0);
+    let step = unit.ruler_step(xf.zoom);
     let minor = step / 10.0;
     let font = egui::FontId::proportional(9.5);
     let a = xf.to_doc(top.left_top());
@@ -1691,6 +1702,69 @@ mod tests {
         drag(&mut app, pos2(rect.center().x, rect.top() - RULER / 2.0), pos2(rect.center().x + 40.0, rect.top() - 4.0));
         assert_eq!(guides(&app).len(), 2);
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the tool drew nothing");
+    }
+
+    /// #414: guides dragged out of the rulers are picked and dragged with the Selection tool
+    /// (highlighted while selected), go with Delete or Backspace, and dragged back onto their
+    /// ruler.
+    #[test]
+    fn the_selection_tool_moves_and_deletes_ruler_guides() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // A square under the guides: the press takes the guide.
+        app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 300, "height": 200})).unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let art = app.session.active().unwrap().doc.art_bounds();
+        app.ui.view.rulers = true;
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let rect = app.canvas_rect.unwrap();
+        let xf = Xf::new(rect, app.view().unwrap());
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let drag = |app: &mut VectorcraftApp, from: Pos2, to: Pos2| {
+            frame(app, &ctx, vec![egui::Event::PointerMoved(from)]);
+            frame(app, &ctx, vec![button(from, true)]);
+            frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
+            frame(app, &ctx, vec![button(to, false)]);
+        };
+        let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+        // Two guides out of the rulers.
+        let (h, v) = (pos2(rect.center().x + 30.0, rect.center().y + 20.0), pos2(rect.center().x - 40.0, rect.center().y));
+        drag(&mut app, pos2(h.x, rect.top() - RULER / 2.0), h);
+        drag(&mut app, pos2(rect.left() - RULER / 2.0, v.y), v);
+        assert_eq!(guides(&app), [(false, xf.to_doc(h).y), (true, xf.to_doc(v).x)]);
+        // Drag the horizontal one down 30 px (across the vertical one: the nearer is picked).
+        let to = pos2(h.x + 10.0, h.y + 30.0);
+        drag(&mut app, h, to);
+        let st = app.session.active().unwrap();
+        assert_eq!(guides(&app), [(false, xf.to_doc(to).y), (true, xf.to_doc(v).x)]);
+        assert_eq!((st.selection.guides.clone(), st.selection.objects.clone()), (vec![0], vec![]));
+        assert_eq!(st.history.undo.last().unwrap().label, "Move Guide");
+        let picked = Tokens::get(&ctx).selection;
+        let s = shapes(&mut app, &ctx);
+        assert!(s.iter().any(|s| matches!(s, Shape::LineSegment { points, stroke } if stroke.color == picked && points[0].y == to.y)), "highlighted");
+        // Backspace deletes the selected guide; Delete too.
+        let press = |app: &mut VectorcraftApp, key| {
+            let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+            let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
+            out.textures_delta.clear();
+        };
+        press(&mut app, egui::Key::Backspace);
+        assert_eq!(guides(&app), [(true, xf.to_doc(v).x)]);
+        app.session.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+        press(&mut app, egui::Key::Delete);
+        assert!(guides(&app).is_empty());
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        // Hide Guides deselects them.
+        app.session.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+        app.run("view.guides", json!({})).unwrap();
+        assert!(app.session.active().unwrap().selection.guides.is_empty());
+        app.run("view.guides", json!({})).unwrap();
+        // Dragged back onto its ruler, the vertical guide goes.
+        drag(&mut app, v, pos2(rect.left() - RULER / 2.0, v.y + 20.0));
+        assert!(guides(&app).is_empty(), "{:?}", guides(&app));
+        assert_eq!(app.session.active().unwrap().doc.art_bounds(), art, "the square stayed");
     }
 
     #[test]

@@ -167,6 +167,18 @@ impl Unit {
             Unit::Feet => "Feet",
         }
     }
+    /// The rulers' label step at `zoom` (screen pixels per point), in this unit: the first of
+    /// 1, 2, 5 × 10ⁿ that puts labels at least 50 pixels apart. Ticks mark every tenth of it.
+    pub fn ruler_step(self, zoom: f64) -> f64 {
+        const STEPS: [f64; 19] =
+            [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0];
+        STEPS.iter().copied().find(|s| s * self.points() * zoom >= 50.0).unwrap_or(10000.0)
+    }
+    /// `v` (points) on the nearest ruler tick at `zoom` ([`Self::ruler_step`]).
+    pub fn snap_to_ruler_tick(self, v: f64, zoom: f64) -> f64 {
+        let tick = self.ruler_step(zoom) / 10.0 * self.points();
+        (v / tick).round() * tick
+    }
     pub fn from_pt(self, v: f64) -> f64 {
         v / self.points()
     }
