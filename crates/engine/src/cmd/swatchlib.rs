@@ -69,7 +69,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Swatch Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches or .gpl library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl or .ase (swatch exchange) library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits) → {library: id, name, count}",
             always,
             load
         ),
@@ -98,23 +98,24 @@ struct Extra<L> {
 pub trait LibraryFile: Sized {
     /// The extensions of its files (lower case).
     const EXTS: &'static [&'static str];
-    /// Read a library file whose name without the extension is `stem` (an unnamed library's name).
-    fn read(text: &str, stem: &str) -> std::result::Result<Self, String>;
+    /// Read the bytes of a library file whose name without the extension is `stem` (an unnamed
+    /// library's name).
+    fn read(bytes: &[u8], stem: &str) -> std::result::Result<Self, String>;
     fn name(&self) -> &str;
 }
 
 impl LibraryFile for SwatchLibrary {
     const EXTS: &'static [&'static str] = LIBRARY_EXTS;
-    fn read(text: &str, stem: &str) -> std::result::Result<Self, String> {
-        palette_io::read(text, stem)
+    fn read(bytes: &[u8], stem: &str) -> std::result::Result<Self, String> {
+        palette_io::read_bytes(bytes, stem)
     }
     fn name(&self) -> &str {
         &self.name
     }
 }
 
-/// The extensions of library files [`palette_io::read`] reads.
-pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl"];
+/// The extensions of library files [`palette_io::read_bytes`] reads.
+pub const LIBRARY_EXTS: &[&str] = &["vcswatches", "gpl", "ase"];
 
 impl<L: LibraryFile> Libraries<L> {
     pub fn user_dir(&self) -> Option<&str> {
@@ -133,7 +134,7 @@ impl<L: LibraryFile> Libraries<L> {
         let Some(dir) = self.user_dir.clone() else { return };
         for path in library_files(&dir, L::EXTS) {
             let file = file_name(&path);
-            let Some(lib) = read_file(&path).ok().and_then(|b| L::read(&String::from_utf8_lossy(&b), stem(&file)).ok()) else { continue };
+            let Some(lib) = read_file(&path).ok().and_then(|b| L::read(&b, stem(&file)).ok()) else { continue };
             let info = LibraryInfo { id: format!("user/{file}"), name: lib.name().to_string(), category: "user" };
             self.extra.push(Extra { info, path: Some(path), lib: Arc::new(lib) });
         }
@@ -351,12 +352,11 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.load";
     let (info, lib) = s.swatch_libraries.load(p, C, |bytes, file| {
         // A library file, or a document whose swatches become the library.
-        match std::str::from_utf8(bytes).ok().filter(|t| palette_io::sniff(t)) {
-            Some(t) => palette_io::read(t, stem(file)).map_err(|e| bad(C, e)),
-            None => {
-                let doc = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?.doc;
-                document_library(&doc, &[], stem(file).to_string(), C)
-            }
+        if palette_io::sniff_bytes(bytes) {
+            palette_io::read_bytes(bytes, stem(file)).map_err(|e| bad(C, e))
+        } else {
+            let doc = super::fileio::load(file, bytes).map_err(|e| bad(C, e.to_string()))?.doc;
+            document_library(&doc, &[], stem(file).to_string(), C)
         }
     })?;
     Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
@@ -417,12 +417,17 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         s.edit("Add to Swatches", |d, _| {
             let mut out = vec![];
+            // Each library group goes into one document group: the group of that name the document
+            // already had, or one made here.
+            let before = d.swatch_groups.len();
+            let mut placed: Vec<(&str, usize)> = vec![];
             for (group, w) in fresh {
                 let name = d.free_swatch_name(&w.name);
                 let sw = Swatch { name: name.clone(), ..(*w).clone() };
                 match group {
                     Some(g) => {
-                        let i = match d.swatch_groups.iter().position(|x| x.name == *g) {
+                        let found = placed.iter().find(|(n, _)| *n == g).map(|&(_, i)| i);
+                        let i = match found.or_else(|| d.swatch_groups.iter().take(before).position(|x| x.name == *g)) {
                             Some(i) => i,
                             None => {
                                 let name = d.free_swatch_name(g);
@@ -430,6 +435,9 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                                 d.swatch_groups.len() - 1
                             }
                         };
+                        if found.is_none() {
+                            placed.push((g, i));
+                        }
                         d.swatch_groups[i].swatches.push(sw);
                     }
                     None => d.swatches.push(sw),

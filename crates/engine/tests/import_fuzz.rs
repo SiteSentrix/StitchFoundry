@@ -1,5 +1,5 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
-//! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`), graphic style (`.vcstyles`) and flattener preset
+//! mutated raster images placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`) and flattener preset
 //! (`.vcflattener`) libraries, and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
@@ -529,12 +529,21 @@ fn saved(cmd: &str, params: Value) -> String {
     rich_session().execute(cmd, &params).unwrap()["data"].as_str().unwrap().to_string()
 }
 
+/// `r`, after failing the case if the command panicked. The engine's guard reports a panic as
+/// `EngineError::Internal`.
+fn no_panic(r: Result<Value, vectorcraft_engine::EngineError>) -> Result<Value, vectorcraft_engine::EngineError> {
+    if let Err(vectorcraft_engine::EngineError::Internal { cmd, msg }) = &r {
+        panic!("{cmd} panicked: {msg}");
+    }
+    r
+}
+
 /// Library file `data` loaded with `load`; what it holds is then used on the rich document
 /// (`then`, given the load's result), which renders and exports.
 fn survive_library(what: &str, load: &str, data: &str, then: impl FnOnce(&mut vectorcraft_engine::Session, &Value)) -> Result<(), TestCaseError> {
     survive(what, || {
         let mut s = rich_session();
-        let r = s.execute(load, &json!({"data": data, "name": "fuzz"})).ok()?;
+        let r = no_panic(s.execute(load, &json!({"data": data, "name": "fuzz"}))).ok()?;
         then(&mut s, &r);
         Some((*s.doc().ok()?.doc).clone())
     })
@@ -542,24 +551,52 @@ fn survive_library(what: &str, load: &str, data: &str, then: impl FnOnce(&mut ve
 
 fn swatches(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "swatch.library.load", data, |s, r| {
-        let _ = s.execute("swatch.library.add", &json!({"library": r["library"], "apply": "fill"}));
+        let _ = no_panic(s.execute("swatch.library.add", &json!({"library": r["library"], "apply": "fill"})));
     })
 }
 
 fn styles(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "graphicStyle.loadLibrary", data, |s, r| {
-        let _ = s.execute("select.all", &json!({}));
-        let _ = s.execute("graphicStyle.addFromLibrary", &json!({"library": r["library"], "apply": true}));
+        let _ = no_panic(s.execute("select.all", &json!({})));
+        let _ = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": r["library"], "apply": true})));
     })
 }
 
 fn flattener_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "flattener.presets.import", data, |s, r| {
-        let _ = s.execute("select.all", &json!({}));
+        let _ = no_panic(s.execute("select.all", &json!({})));
         if let Some(name) = r["imported"].get(0) {
-            let _ = s.execute("flattener.preview", &json!({"preset": name, "highlight": "allAffected"}));
-            let _ = s.execute("object.flattenTransparency", &json!({"preset": name, "lineArtPpi": 36, "gradientPpi": 36}));
+            let _ = no_panic(s.execute("flattener.preview", &json!({"preset": name, "highlight": "allAffected"})));
+            let _ = no_panic(s.execute("object.flattenTransparency", &json!({"preset": name, "lineArtPpi": 36, "gradientPpi": 36})));
         }
+    })
+}
+
+/// Swatch exchange (`.ase`) bytes loaded as a swatch library, then added to the rich document.
+fn swatch_exchange(what: &str, bytes: &[u8]) -> Result<(), TestCaseError> {
+    survive(what, || {
+        let mut s = rich_session();
+        let load = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": "fuzz.ase"});
+        let r = no_panic(s.execute("swatch.library.load", &load)).ok()?;
+        let _ = no_panic(s.execute("swatch.library.add", &json!({"library": r["library"], "apply": "fill"})));
+        Some((*s.doc().ok()?.doc).clone())
+    })
+}
+
+/// A random swatch exchange block (type, body). The body holds a name, a color model when the block
+/// is a color, and random bytes for the rest.
+fn arb_ase_block() -> impl Strategy<Value = (u16, Vec<u8>)> {
+    let kind = prop::sample::select(vec![0xC001u16, 0xC002, 0x0001, 0x0042]);
+    let model = prop::sample::select(vec![*b"RGB ", *b"CMYK", *b"LAB ", *b"Gray", *b"HSB "]);
+    (kind, "[ -~]{0,8}", model, prop::collection::vec(any::<u8>(), 0..24)).prop_map(|(kind, name, model, rest)| {
+        let units: Vec<u16> = name.encode_utf16().chain([0]).collect();
+        let mut body = (units.len() as u16).to_be_bytes().to_vec();
+        body.extend(units.iter().flat_map(|u| u.to_be_bytes()));
+        if kind == 0x0001 {
+            body.extend(model);
+        }
+        body.extend(rest);
+        (kind, body)
     })
 }
 
@@ -595,6 +632,32 @@ proptest! {
     fn mutated_flattener_presets_never_panic(cut in 0usize..5_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
         let text = saved("flattener.presets.export", json!({"names": ["high", "medium", "low"]}));
         flattener_presets("mutated flattener presets", &mutate_text(&text, cut, &edits))?;
+    }
+
+    #[test]
+    fn swatch_exchange_garbage_never_panics(blocks in prop::collection::vec(arb_ase_block(), 0..12), tail in prop::collection::vec(any::<u8>(), 0..16)) {
+        let mut bytes = b"ASEF\0\x01\0\0".to_vec();
+        bytes.extend((blocks.len() as u32).to_be_bytes());
+        for (kind, body) in &blocks {
+            bytes.extend(kind.to_be_bytes());
+            bytes.extend((body.len() as u32).to_be_bytes());
+            bytes.extend(body);
+        }
+        bytes.extend(tail);
+        swatch_exchange("swatch exchange garbage", &bytes)?;
+    }
+
+    #[test]
+    fn mutated_swatch_exchange_files_never_panic(cut in prop::option::of(0usize..200), edits in prop::collection::vec((0usize..200, any::<u8>()), 0..12)) {
+        let mut bytes = vectorcraft_testkit::ase::sample();
+        for (at, b) in edits {
+            let n = bytes.len();
+            bytes[at % n] = b;
+        }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        swatch_exchange("mutated swatch exchange file", &bytes)?;
     }
 }
 
@@ -704,8 +767,8 @@ proptest! {
 fn pdf_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "pdf.preset.import", data, |s, r| {
         for name in r["imported"].as_array().into_iter().flatten() {
-            let _ = s.execute("document.exportPdf", &json!({"preset": name}));
-            let _ = s.execute("document.save", &json!({"format": "ai", "preset": name}));
+            let _ = no_panic(s.execute("document.exportPdf", &json!({"preset": name})));
+            let _ = no_panic(s.execute("document.save", &json!({"format": "ai", "preset": name})));
         }
     })
 }
@@ -1219,14 +1282,14 @@ proptest! {
 /// each one imported.
 fn print_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "print.presets.import", data, |s, r| {
-        let list = s.execute("print.presets.list", &json!({})).unwrap_or_default();
+        let list = no_panic(s.execute("print.presets.list", &json!({}))).unwrap_or_default();
         for name in r["imported"].as_array().into_iter().flatten() {
             let Some(p) = list["presets"].as_array().into_iter().flatten().find(|p| &p["name"] == name) else { continue };
             let settings = json!({ "settings": p["settings"] });
-            let pages = s.execute("print.preview", &settings).ok().and_then(|v| v["pages"].as_u64());
-            let _ = s.execute("print.setup", &settings);
+            let pages = no_panic(s.execute("print.preview", &settings)).ok().and_then(|v| v["pages"].as_u64());
+            let _ = no_panic(s.execute("print.setup", &settings));
             if pages.is_some_and(|n| n <= 8) {
-                let _ = s.execute("file.print", &settings);
+                let _ = no_panic(s.execute("file.print", &settings));
             }
         }
     })
@@ -1256,9 +1319,11 @@ proptest! {
 fn perspective_presets(what: &str, data: &str) -> Result<(), TestCaseError> {
     survive_library(what, "perspective.presets.import", data, |s, r| {
         for name in r["imported"].as_array().into_iter().flatten() {
-            let _ = s.execute("perspective.grid.preset", &json!({"name": name}));
-            let _ = s.execute("perspective.grid.define", &json!({"name": name, "gridline": 3}));
-            let _ = s.execute("perspective.draw", &json!({"command": "shape.rectangle", "params": {"x": 300, "y": 400, "width": 40, "height": 30}}));
+            let _ = no_panic(s.execute("perspective.grid.preset", &json!({"name": name})));
+            let _ = no_panic(s.execute("perspective.grid.define", &json!({"name": name, "gridline": 3})));
+            let _ = no_panic(
+                s.execute("perspective.draw", &json!({"command": "shape.rectangle", "params": {"x": 300, "y": 400, "width": 40, "height": 30}})),
+            );
         }
     })
 }

@@ -616,4 +616,16 @@ mod tests {
         }
         assert!(!builtin_library(&open.id) && builtin_library(vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES));
     }
+
+    #[test]
+    fn swatch_exchange_files_without_a_path_open_in_the_library_panel() {
+        // A file opened on the web has no path; open_bytes passes its bytes as dataBase64.
+        let mut app = app();
+        crate::io::open_bytes(&mut app, "Brand.ase", &vectorcraft_testkit::ase::sample(), None).unwrap();
+        let open = app.ui.library_panel.clone().unwrap();
+        assert_eq!(open.id, "loaded/Brand.ase");
+        let (_, lib) = SwatchLibraries::get(&app, &open.id).unwrap();
+        assert_eq!((lib.len(), lib.groups.len()), (4, 1));
+        assert_eq!(app.session.documents().len(), 1, "not opened as a document");
+    }
 }

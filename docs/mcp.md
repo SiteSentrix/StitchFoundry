@@ -740,7 +740,9 @@ swatch in the library panel does). `swatch.resetDefaults {replace?}` brings back
 as a library (`.vcswatches` keeps colour models, global, spot, gradients and colour groups; `.gpl` is 8-bit RGB;
 CSS writes custom properties); without `path` it returns `{data}`, and `user: true` saves into the user library
 folder of the desktop app (listed as category `user`, User Defined). `swatch.library.load {path? | data? |
-dataBase64?, name?}` loads a `.vcswatches` or `.gpl` file, or another document's swatches, as a library to add from.
+dataBase64?, name?}` loads a `.vcswatches`, `.gpl` or swatch exchange (`.ase`) file, or another document's swatches,
+as a library to add from. From an `.ase` file it reads RGB, CMYK, Lab and Gray colors as global, spot or process
+swatches and keeps their color groups.
 
 ## Graphic style libraries
 

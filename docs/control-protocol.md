@@ -154,7 +154,7 @@ Clicking a swatch there runs `swatch.library.add {library, names: [name], apply}
 one with Alt), so one undo step adds and applies it; Shift/Cmd-clicks select swatches and colour groups for
 Add to Swatches.
 `window.swatchLibrary.other {path?}` loads a library file (or another document's swatches) and opens it there;
-opening a `.vcswatches` or `.gpl` file with `app.open` does the same. `ui.saveSwatchLibrary {names?}` opens the
+opening a `.vcswatches`, `.gpl` or `.ase` file with `app.open` does the same. `ui.saveSwatchLibrary {names?}` opens the
 `saveSwatchLibrary` dialog (fields `name`, `format`: `vcswatches`/`gpl`/`css`, `user`: save to the user library
 folder, `selectedOnly` with `names`); `ui.dialog.confirm` runs `swatch.library.save` (to a file it asks for a path).
 
