@@ -31,6 +31,7 @@ pub mod shape;
 pub mod slice;
 pub mod symbolism;
 pub mod text;
+pub mod typewidget;
 pub mod xform;
 
 use serde::{Deserialize, Serialize};
@@ -430,6 +431,9 @@ pub enum Cursor {
     BlendAnchor,
     /// Over a bracket of selected type on a path (a drag moves it): the arrow with a bracket.
     PathBracket,
+    /// Over the type widget of selected type (a double-click converts point type to area type and
+    /// back): the arrow with a type badge.
+    TypeWidget,
     /// The Shape Builder: a crosshair with a plus (merge mode)...
     ShapeBuilder,
     /// ...or, with Alt held, a minus (erase mode).

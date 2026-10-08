@@ -5,7 +5,8 @@
 //! double-click opens the Corners dialog), double-click to enter isolation mode (Double Click To
 //! Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
 //! click or drag a ruler guide ([`crate::rulerguide`]), drag the brackets of type on a path
-//! ([`crate::pathtype`]).
+//! ([`crate::pathtype`]), double-click the type widget to convert point type to area type and back
+//! ([`crate::typewidget`]).
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
@@ -20,6 +21,7 @@ use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::Targets;
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::rulerguide::GuideEdit;
+use crate::typewidget;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
 
 #[derive(Clone, Debug, Default)]
@@ -165,7 +167,7 @@ impl Tool for SelectionTool {
         match (ev.kind, self.state.clone()) {
             (PointerKind::DoubleClick, _) => {
                 self.state = State::Idle;
-                if let Some(a) = corners::double_click(cx, p) {
+                if let Some(a) = corners::double_click(cx, p).or_else(|| typewidget::double_click(cx, p)) {
                     return vec![a];
                 }
                 if crate::rulerguide::guide_at(cx, p).is_some() {
@@ -193,6 +195,11 @@ impl Tool for SelectionTool {
                 }
                 if let Some(b) = BracketDrag::hit(cx, ev) {
                     self.state = State::Bracket(b);
+                    return vec![];
+                }
+                // The type widget answers a double-click only: its clicks neither drag nor deselect.
+                if typewidget::over_widget(cx, p) {
+                    self.state = State::Idle;
                     return vec![];
                 }
                 if cx.show_bbox
@@ -381,6 +388,9 @@ impl Tool for SelectionTool {
         }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
+        }
+        if typewidget::over_widget(cx, p) {
+            return Cursor::TypeWidget;
         }
         if cx.show_bbox
             && let Some(bx) = selection_box(cx)
