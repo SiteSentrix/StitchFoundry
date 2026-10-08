@@ -3,8 +3,9 @@
 //!
 //! The object keeps the file's bytes (in the document's images, like image data) and the link; the
 //! art it shows is read from them the way placing the file without Link reads it
-//! ([`document_art`]: the artboard's art, with the file's own linked images found). The Links
-//! commands ([`super::super::links`]) tell when the file changed and read it again.
+//! ([`document_art`]: the artboard's art, with the file's own linked images found), so Break Link
+//! and Object › Expand ([`expand`]) give exactly that editable copy. The Links commands
+//! ([`super::super::links`]) tell when the file changed and read it again.
 //!
 //! Each placed file also gets a preview ([`PREVIEW_PX_PER_PT`]; JPEG when opaque, else PNG), kept
 //! as the blob's [`ImageBlob::proxy`]: a save writes only the preview (unless Include Linked
@@ -243,4 +244,30 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         out.placed_as_previews(&previews);
     }
     (Cow::Owned(out), warnings)
+}
+
+/// Placed document `id` of `d` replaced by an editable copy of its art, as placing its file
+/// without Link gives (its resources joining `d`, renamed where `d` uses a name for something
+/// else), keeping the object's id, place, name and transparency: Break Link and Object › Expand.
+pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
+    let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let NodeKind::PlacedDocument(p) = &n.kind else { return Err(bad(cmd, format!("object {} is not a placed document", id.0))) };
+    let blob = d.images.get(&p.key).ok_or_else(|| bad(cmd, format!("object {} has lost its file's contents: relink it", id.0)))?;
+    let bytes = vectorcraft_doc::placed_document::full_bytes(p, blob)
+        .ok_or_else(|| bad(cmd, format!("{} can't be read, or changed since it was read: relink or update it first", p.link.path)))?;
+    let a = document_art(p.link.name(), &bytes, Some(&p.link.path), p.page(), p.bounding, cmd)?;
+    let m = p.art_xf(a.frame).ok_or_else(|| bad(cmd, format!("object {} has no size", id.0)))?;
+    let mut nodes = a.nodes;
+    super::adopt::adopt(d, &a.doc, &mut nodes);
+    let mut children: Vec<Arc<Node>> = nodes.iter().map(|n| Arc::new(d.reid(n))).collect();
+    if let Some(r) = a.clip {
+        children.insert(0, Arc::new(super::clip_path(d.alloc_id(), r)));
+    }
+    let art = super::transformed(Node::new(d.alloc_id(), NodeKind::Group { children, clip: a.clip.is_some() }), m);
+    let mut out = n.clone();
+    out.kind = art.kind;
+    let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
+    d.remove(id)?;
+    d.insert(par, index, out)?;
+    Ok(())
 }
