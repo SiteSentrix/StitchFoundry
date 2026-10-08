@@ -42,7 +42,7 @@ fn a85_flate(data: &[u8]) -> String {
 }
 
 /// Pixel `(x, y)` (straight RGBA) of the first image in `d`.
-fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
+pub(super) fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
     let im = all(d)
         .into_iter()
         .find_map(|n| match &n.kind {
