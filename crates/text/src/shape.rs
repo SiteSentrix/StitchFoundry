@@ -196,20 +196,43 @@ pub(crate) fn shape_range(
     levels: &[Level],
     out: &mut Vec<SGlyph>,
 ) {
+    if text.get(range.clone()).is_none() || range.is_empty() {
+        return;
+    }
     let level_at = |i: usize| levels.get(i - range.start).copied().unwrap_or_else(Level::ltr);
     let output_start = out.len();
+
+    // Text runs also carry non-shaping attributes (fill, stroke, etc.). Coalesce adjacent equal
+    // styles so an editor split does not become an accidental OpenType shaping boundary. Keep
+    // original run spans: each emitted cluster is attributed by its source byte below.
+    let mut spans: Vec<(Range<usize>, &CharStyle, Range<usize>)> = Vec::new();
     for (ri, (rr, st)) in runs.iter().enumerate() {
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
-        if a >= b {
+        if a >= b || text.get(a..b).is_none() {
             continue;
         }
+        if let Some((previous, previous_style, source_runs)) = spans.last_mut()
+            && previous.end == a
+            && *previous_style == *st
+        {
+            previous.end = b;
+            source_runs.end = ri + 1;
+            continue;
+        }
+        spans.push((a..b, *st, ri..ri + 1));
+    }
+
+    for (span, st, source_runs) in spans {
+        let a = span.start;
+        let b = span.end;
         let Some(primary) = db.face(&st.font_family, &st.font_style) else { continue };
         let pmap = primary.skrifa().map(|f| f.charmap());
         // Synthesized Small Caps shape lowercase letters separately (as smaller capitals).
         let small_caps = st.small_caps.is_some() && !st.all_caps;
         // Split into segments by font coverage (and case, for Small Caps).
-        let mut seg = Segment { range: a..a, run: ri, st, face: primary.clone(), small: false, level: level_at(a) };
+        let group_output_start = out.len();
+        let mut seg = Segment { range: a..a, run: source_runs.start, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: Vec<(char, Arc<FontFace>)> = Vec::new();
         let mut script = Script::Common;
         for (i, c) in text[a..b].char_indices() {
@@ -233,7 +256,7 @@ pub(crate) fn shape_range(
             if (face.id() != seg.face.id() || small != seg.small || level != seg.level || script_change) && !is_mark(c) {
                 if i > seg.range.start {
                     seg.range.end = i;
-                    shape_segment(text, &seg, feats, out);
+                    shape_segment(text, &range, &seg, feats, out);
                 }
                 seg = Segment { range: i..i, face, small, level, ..seg };
             }
@@ -243,7 +266,10 @@ pub(crate) fn shape_range(
         }
         if b > seg.range.start {
             seg.range.end = b;
-            shape_segment(text, &seg, feats, out);
+            shape_segment(text, &range, &seg, feats, out);
+        }
+        for glyph in &mut out[group_output_start..] {
+            glyph.run = source_run_at(runs, &source_runs, glyph.byte).unwrap_or(source_runs.start);
         }
     }
     // Right-to-left segments come out of the shaper in visual order: back to logical order for
@@ -253,6 +279,15 @@ pub(crate) fn shape_range(
     {
         o.sort_by_key(|g| g.byte);
     }
+}
+
+/// Index in the original run list containing `byte`, limited to one coalesced shaping span.
+/// Source runs are ordered and non-overlapping; partitioning keeps attribution bounded when a
+/// document contains many adjacent style runs.
+fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte: usize) -> Option<usize> {
+    let source = runs.get(span.clone())?;
+    let i = source.partition_point(|(range, _)| range.end <= byte);
+    source.get(i).filter(|(range, _)| range.contains(&byte)).map(|_| span.start + i)
 }
 
 /// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
@@ -281,7 +316,7 @@ fn is_mark(c: char) -> bool {
         || matches!(c, '\u{200D}' | '\u{FE00}'..='\u{FE0F}')
 }
 
-fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
+fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
     let Segment { range, run, st, face, small, level } = seg;
     let (range, run, small) = (range.clone(), *run, *small);
     let text_seg = &text[range.clone()];
@@ -320,6 +355,15 @@ fn shape_segment(text: &str, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SG
         }
         buf.set_direction(if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight });
         buf.guess_segment_properties();
+        // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
+        // glyphs for it. This retains context at real style/font segmentation boundaries without
+        // shaping across those boundaries or claiming cross-style ligatures/mark attachment.
+        if let Some(pre) = text.get(context.start..range.start) {
+            buf.set_pre_context(pre);
+        }
+        if let Some(post) = text.get(range.end..context.end) {
+            buf.set_post_context(post);
+        }
         let feats: Vec<Feature> = feats.resolve(st);
         let gb = shaper.shape(buf, ShapeOptions::new().features(&feats));
         for (info, pos) in gb.glyph_infos().iter().zip(gb.glyph_positions()) {
