@@ -530,7 +530,10 @@ mod area_tests {
         s.execute("text.setFormat", &json!({"leadingModel": "emBoxTop"})).unwrap();
         let t = text(&s);
         assert_eq!(t.para.leading_model, LeadingModel::EmBoxTop);
-        assert_ne!(t.cached_bounds, before, "the first line moves up to the frame's top");
+        // The fallback used without craft-fonts has no glyph metrics to move the first line.
+        if !vectorcraft_text::CRAFT_FONTS.is_empty() {
+            assert_ne!(t.cached_bounds, before, "the first line moves up to the frame's top");
+        }
         assert_eq!(serde_json::to_value(&t.para).unwrap()["leading_model"], "emBoxTop");
         s.execute("edit.undo", &json!({})).unwrap();
         assert!(serde_json::to_value(&text(&s).para).unwrap().get("leading_model").is_none());
