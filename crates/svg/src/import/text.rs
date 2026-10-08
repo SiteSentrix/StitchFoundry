@@ -15,12 +15,16 @@
 //! line spacing), other vertical moves become baseline shift, horizontal moves become kerning (an
 //! absolute `x` is measured against the laid-out text), and rotations become character rotation.
 //! `<textPath>` becomes type on a path; vertical `writing-mode` becomes type on a vertical path.
+//!
+//! Type takes the size it draws at: the scale of the transforms and `viewBox` above a `<text>`
+//! moves into its sizes ([`size_scale`], [`fold_scale`]), and the rest (a stretch, skew,
+//! rotation or reflection) stays its transform.
 
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -651,6 +655,52 @@ fn stroke_under(cells: &mut [Cell], label: &str, warnings: &mut Vec<String>) -> 
         c.stroke = None;
     }
     first
+}
+
+/// The type sizes the Character panel takes, in points.
+const SIZES: RangeInclusive<f64> = 0.1..=1296.0;
+
+/// How much of `xf` (text space → document) [`fold_scale`] makes the type's size: the scale
+/// across the baseline for point type (a stretch along it, a skew, a rotation and a reflection
+/// stay in the transform), the mean scale for type on a path, whose baseline turns. Not past the
+/// Character panel's sizes (the rest stays in the transform); 1 when `xf` collapses the text.
+pub(super) fn size_scale(t: &TextObject, xf: Affine) -> f64 {
+    let [a, b, ..] = xf.as_coeffs();
+    let det = xf.determinant().abs();
+    let k = match t.kind {
+        TextKind::OnPath { .. } => det.sqrt(),
+        _ => det / a.hypot(b),
+    };
+    // To 6 significant digits: usvg's transforms are single precision, and `rotate(30) scale(2)`
+    // makes 7 pt type 14 pt, not 13.9999998 pt (the type draws the same either way).
+    let p = 10f64.powi((5.0 - k.log10().floor()) as i32);
+    let k = (k * p).round() / p;
+    if !(k.is_finite() && k > 0.0) {
+        return 1.0;
+    }
+    let (lo, hi) = t.runs.iter().map(|r| r.style.size).fold((f64::INFINITY, 0.0f64), |(lo, hi), s| (lo.min(s), hi.max(s)));
+    // Sizes already outside the range don't move further out.
+    if k > 1.0 { k.min((SIZES.end() / hi).max(1.0)) } else { k.max((SIZES.start() / lo).min(1.0)) }
+}
+
+/// Make text space `k` times larger and the transform `1 / k` times smaller, so the type draws
+/// the same at `k` times its size (and leading, baseline shift, character strokes and path): the
+/// size the Character panel shows is the size it draws at.
+pub(super) fn fold_scale(t: &mut TextObject, k: f64) {
+    for r in &mut t.runs {
+        let st = &mut r.style;
+        st.size *= k;
+        st.leading = st.leading.map(|l| l * k);
+        st.baseline_shift *= k;
+    }
+    t.scale_char_strokes(k);
+    let up = Affine::scale(k);
+    match &mut t.kind {
+        TextKind::OnPath { path, .. } | TextKind::Area { frame: path } => path.transform(up),
+        TextKind::Point => {}
+    }
+    t.cached_bounds = t.cached_bounds.map(|b| up.transform_rect_bbox(b));
+    t.xf *= Affine::scale(1.0 / k);
 }
 
 /// `v`, or 0 when far-off positions added up past f64's range.

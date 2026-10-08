@@ -677,9 +677,12 @@ impl Importer {
             return Some(vec![]);
         }
         let text::PendingText { name, mut obj, servers, paints, non_scaling, under, .. } = self.slots.texts.get(i)?.clone();
+        // The scale the type draws at becomes its size (last, below): text space grows by `grow`.
+        let xf = ts * obj.xf;
+        let grow = text::size_scale(&obj, xf);
         // usvg resolved the `url(#…)` paints (the paths after the main one) in the element's user
         // space; runs paint in text space.
-        let to_text = obj.xf.inverse();
+        let to_text = Affine::scale(grow) * obj.xf.inverse();
         let slot_paint = |im: &mut Self, k: usize, m: Affine| match kids.get(main + 1 + k) {
             Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
                 let area = kurbo::Shape::bounding_box(&bezpath(p.data(), m));
@@ -697,7 +700,7 @@ impl Importer {
                 run.style.stroke = server(k);
             }
         }
-        obj.xf = ts * obj.xf;
+        obj.xf = xf;
         if non_scaling && !vector_effect::unscale_text(&mut obj, self.screen) {
             let label = if name.is_empty() || made_up(&name) { "a text".to_string() } else { format!("text '{name}'") };
             self.warn(format!("non-scaling stroke on {label} approximated: the text is stretched or skewed"));
@@ -712,6 +715,7 @@ impl Importer {
             ap.set_contents_at(1);
             ap
         });
+        text::fold_scale(&mut obj, grow);
         let mut n = self.named(&name, NodeKind::Text(Box::new(obj)));
         if let Some(ap) = under {
             n.appearance = ap;

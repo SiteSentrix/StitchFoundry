@@ -84,9 +84,10 @@ fn type_keeps_its_non_scaling_stroke_width() {
     let (d, warnings) = import_with_report(svg).unwrap();
     let t = text(&d);
     let st = &t.runs[0].style;
-    // Text space is scaled 2×: half the width there is the width on screen.
+    // The scale became the type's size: the stroke and its dashes keep their width on screen.
+    assert!(close(st.size, 40.0) && close(t.xf.determinant(), 1.0), "{} {:?}", st.size, t.xf);
     assert!(close(st.stroke_width * t.xf.determinant().sqrt(), 3.0), "{} {:?}", st.stroke_width, t.xf);
-    assert_eq!(st.stroke_dash.as_ref().map(|d| d.pattern.clone()), Some(vec![2.0, 1.0]));
+    assert_eq!(st.stroke_dash.as_ref().map(|d| d.pattern.clone()), Some(vec![4.0, 2.0]));
     assert!(warnings.is_empty(), "{warnings:?}");
 
     let (_, warnings) = import_with_report(&svg.replace("scale(2)", "scale(2 1)")).unwrap();

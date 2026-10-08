@@ -385,3 +385,136 @@ fn far_off_positions_stay_finite() {
         assert!(r.style.baseline_shift.is_finite() && r.style.kerning.is_none_or(f64::is_finite) && r.style.rotation.is_finite(), "{r:?}");
     }
 }
+
+/// Drawn bounds of the laid-out text in the document.
+fn drawn(t: &TextObject) -> Rect {
+    t.xf.transform_rect_bbox(layout(FontDb::global(), t).bounds)
+}
+
+/// The linear part of a transform.
+fn linear(t: &TextObject) -> [f64; 4] {
+    let [a, b, c, d, ..] = t.xf.as_coeffs();
+    [a, b, c, d]
+}
+
+fn close4(a: [f64; 4], b: [f64; 4]) -> bool {
+    // usvg's transforms are single precision.
+    a.iter().zip(b).all(|(a, b)| close(*a, b, 1e-6))
+}
+
+#[test]
+fn a_scale_above_text_becomes_its_size() {
+    // #396: a group's or the text's own scale is the size the type shows and draws at.
+    let d = open(
+        r#"<text x="50" y="100" font-size="7">HHHH Hamburg</text>
+        <g transform="scale(3)"><text x="16" y="60" font-size="7">HHHH Hamburg</text></g>
+        <text x="50" y="400" font-size="7" transform="scale(2)">HHHH Hamburg</text>"#,
+    );
+    let t = texts(&d);
+    let sizes: Vec<f64> = t.iter().map(|t| t.first_style().size).collect();
+    assert!(close(sizes[0], 7.0, 1e-9) && close(sizes[1], 21.0, 1e-9) && close(sizes[2], 14.0, 1e-9), "{sizes:?}");
+    for t in &t {
+        assert!(close4(linear(t), [1.0, 0.0, 0.0, 1.0]), "{:?}", t.xf);
+    }
+    assert!(t[1].xf.translation().to_point().distance(Point::new(48.0, 180.0)) < 1e-9, "{:?}", t[1].xf);
+    assert!(t[2].xf.translation().to_point().distance(Point::new(100.0, 800.0)) < 1e-9, "{:?}", t[2].xf);
+    // Drawn as large as their sizes say.
+    let h: Vec<f64> = t.iter().map(|t| drawn(t).height() / t.first_style().size).collect();
+    assert!(close(h[1], h[0], 1e-6) && close(h[2], h[0], 1e-6), "{h:?}");
+}
+
+#[test]
+fn a_viewbox_scale_becomes_the_size() {
+    let d = import(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="306" height="396" viewBox="0 0 612 792"><text x="50" y="100" font-size="7">HH</text></svg>"#,
+    )
+    .unwrap();
+    let t = only_text(&d);
+    assert!(close(t.first_style().size, 3.5, 1e-9), "{}", t.first_style().size);
+    assert!(close4(linear(t), [1.0, 0.0, 0.0, 1.0]), "{:?}", t.xf);
+    assert!(t.xf.translation().to_point().distance(Point::new(25.0, 50.0)) < 1e-9, "{:?}", t.xf);
+}
+
+#[test]
+fn a_rotated_scale_scales_every_length_and_keeps_the_rotation() {
+    // The same text written at twice the size: the scale moves into size, leading, baseline
+    // shift and the character strokes; spacing in ems stays.
+    let scaled = open(
+        r#"<text transform="translate(100 50) rotate(30) scale(2)" x="5" y="10" font-size="7" letter-spacing="1" word-spacing="2" stroke="red" stroke-width="0.5" stroke-dasharray="1 2">Ab <tspan baseline-shift="3">c</tspan><tspan x="5" dy="12">Two</tspan></text>"#,
+    );
+    let written = open(
+        r#"<text transform="translate(100 50) rotate(30)" x="10" y="20" font-size="14" letter-spacing="2" word-spacing="4" stroke="red" stroke-width="1" stroke-dasharray="2 4">Ab <tspan baseline-shift="6">c</tspan><tspan x="10" dy="24">Two</tspan></text>"#,
+    );
+    let (s, w) = (only_text(&scaled), only_text(&written));
+    assert_eq!(s.runs, w.runs);
+    assert!(s.runs.iter().any(|r| r.style.leading == Some(24.0) && r.text.contains("Two")), "{:?}", s.runs);
+    assert!(close(s.xf.determinant(), 1.0, 1e-6), "{:?}", s.xf);
+    let r = 30f64.to_radians();
+    assert!(close4(linear(s), [r.cos(), r.sin(), -r.sin(), r.cos()]), "{:?}", s.xf);
+    for (a, b) in glyph_origins(s).iter().zip(glyph_origins(w)) {
+        assert!(a.distance(b) < 1e-6, "{a:?} {b:?}");
+    }
+}
+
+#[test]
+fn a_stretch_or_skew_stays_the_transform() {
+    // The scale across the baseline is the size; a stretch along it or a skew stays.
+    let d = open(
+        r#"<text x="10" y="20" font-size="7" transform="scale(3 1)">HH</text>
+        <text x="10" y="20" font-size="7" transform="scale(1 3)">HH</text>
+        <text x="10" y="20" font-size="7" transform="skewX(20)">HH</text>"#,
+    );
+    let t = texts(&d);
+    let sizes: Vec<f64> = t.iter().map(|t| t.first_style().size).collect();
+    assert!(close(sizes[0], 7.0, 1e-9) && close(sizes[1], 21.0, 1e-9) && close(sizes[2], 7.0, 1e-9), "{sizes:?}");
+    assert!(close4(linear(t[0]), [3.0, 0.0, 0.0, 1.0]), "{:?}", t[0].xf);
+    assert!(close4(linear(t[1]), [1.0 / 3.0, 0.0, 0.0, 1.0]), "{:?}", t[1].xf);
+    assert!(close4(linear(t[2]), [1.0, 0.0, 20f64.to_radians().tan(), 1.0]), "{:?}", t[2].xf);
+    // `scale(1 3)` draws three times as tall as `scale(3 1)`, a third as wide.
+    let (wide, tall) = (drawn(t[0]), drawn(t[1]));
+    assert!(close(tall.height(), 3.0 * wide.height(), 1e-6) && close(3.0 * tall.width(), wide.width(), 1e-6), "{wide:?} {tall:?}");
+    assert!(t[1].xf.translation().to_point().distance(Point::new(10.0, 60.0)) < 1e-9, "{:?}", t[1].xf);
+}
+
+#[test]
+fn type_on_a_scaled_path_takes_the_scale() {
+    let d = open(
+        r##"<g transform="scale(2)"><path id="p" d="M10 100 L110 100" fill="none"/>
+        <text font-size="10"><textPath href="#p">Curve</textPath></text></g>"##,
+    );
+    let t = only_text(&d);
+    assert!(close(t.first_style().size, 20.0, 1e-9), "{}", t.first_style().size);
+    assert!(close(t.xf.determinant(), 1.0, 1e-6), "{:?}", t.xf);
+    let TextKind::OnPath { path, .. } = &t.kind else { panic!("{:?}", t.kind) };
+    let b = t.xf.transform_rect_bbox(path.bounds().unwrap());
+    assert!(close(b.x0, 20.0, 1e-9) && close(b.x1, 220.0, 1e-9) && close(b.y0, 200.0, 1e-9), "{b:?}");
+}
+
+#[test]
+fn folded_sizes_stay_in_the_character_panels_range() {
+    // Past 1296 pt (or under 0.1 pt) the rest of the scale stays the transform.
+    let d = open(
+        r#"<g transform="scale(20)"><text y="10" font-size="100">Big</text></g>
+        <g transform="scale(0.001)"><text y="10" font-size="7">Small</text></g>
+        <text y="10" font-size="2000">Huge</text>"#,
+    );
+    let t = texts(&d);
+    let size = |i: usize| t[i].first_style().size;
+    assert!(close(size(0), 1296.0, 1e-9) && close(size(0) * linear(t[0])[0], 2000.0, 1e-9), "{:?}", t[0].xf);
+    assert!(close(size(1), 0.1, 1e-9) && close(size(1) * linear(t[1])[0], 0.007, 1e-9), "{:?}", t[1].xf);
+    assert!(close(size(2), 2000.0, 1e-9) && close4(linear(t[2]), [1.0, 0.0, 0.0, 1.0]), "unscaled type keeps its size");
+}
+
+#[test]
+fn gradients_on_scaled_text_stay_in_place() {
+    let d = open(
+        r##"<defs><linearGradient id="user" gradientUnits="userSpaceOnUse" x1="20" y1="0" x2="120" y2="0"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f"/></linearGradient></defs>
+        <g transform="scale(2)"><text x="20" y="50" font-size="20" fill="url(#user)">Gradient</text></g>"##,
+    );
+    let t = only_text(&d);
+    assert!(close(t.first_style().size, 40.0, 1e-9));
+    let Paint::Gradient(g) = &t.runs[0].style.fill else { panic!("{:?}", t.runs[0].style.fill) };
+    let geom = g.geom.unwrap();
+    let (start, end) = (t.xf * geom.start, t.xf * geom.end);
+    assert!(start.distance(Point::new(40.0, 0.0)) < 1e-6 && end.distance(Point::new(240.0, 0.0)) < 1e-6, "{start:?} {end:?}");
+}
