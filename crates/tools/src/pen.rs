@@ -91,11 +91,11 @@ fn last_anchor(cx: &ToolContext, id: NodeId) -> Option<(usize, usize)> {
 /// Alt held over a handle end, an anchor or a segment of a selected path: the Anchor Point tool's
 /// gesture, within its tolerance.
 fn alt_converts(cx: &ToolContext, p: Point, m: Mods) -> bool {
-    let tol = cx.pick_tol();
+    let point = cx.point_tol();
     m.alt
-        && (hit_handle(cx, p, tol).is_some()
-            || crate::draw2::anchor_in(cx, editable_paths(cx), p, tol).is_some()
-            || crate::draw2::segment_in(cx, editable_paths(cx), p, tol).is_some())
+        && (hit_handle(cx, p, point).is_some()
+            || crate::draw2::anchor_in(cx, editable_paths(cx), p, point).is_some()
+            || crate::draw2::segment_in(cx, editable_paths(cx), p, cx.pick_tol()).is_some())
 }
 
 /// The selected paths the pen edits (not guides, nor locked or hidden ones).
@@ -123,7 +123,7 @@ impl Tool for PenTool {
         self.drag.is_some() || self.handle.is_some() || self.convert.is_some()
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
-        let tol = cx.tol(5.0);
+        let tol = cx.tol(5.0).max(cx.point_tol());
         // The path a press began is the selected one by the next event.
         if self.drawing && self.path.is_none() {
             self.path = active_path(cx).map(|a| a.0);
@@ -297,7 +297,7 @@ impl Tool for PenTool {
         o
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
-        let tol = cx.tol(5.0);
+        let tol = cx.tol(5.0).max(cx.point_tol());
         if let Some((id, first, last, _)) = self.active(cx) {
             let one = last_anchor(cx, id).is_some_and(|(_, ai)| ai == 0);
             if p.distance(first) <= tol && !one {
