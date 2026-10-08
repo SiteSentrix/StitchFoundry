@@ -3013,3 +3013,11 @@
 	Version	Versión
 	% of all commits	% de todos los commits
 	Lines +/−	Líneas +/−
+	Joins	Uniones
+	Miter	Inglete
+	Bevel	Bisel
+	Offset	Desplazamiento
+	Axis	Eje
+axis	Horizontal	Horizontal
+axis	Vertical	Vertical
+axis	Both	Ambos

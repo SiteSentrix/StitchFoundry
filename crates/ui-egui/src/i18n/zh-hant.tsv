@@ -3033,3 +3033,11 @@
 	Version	版本
 	% of all commits	佔全部提交的比例
 	Lines +/−	行數 +/−
+	Joins	轉角
+	Miter	尖角
+	Bevel	斜角
+	Offset	位移
+	Axis	軸
+axis	Horizontal	水平
+axis	Vertical	垂直
+axis	Both	兩者
