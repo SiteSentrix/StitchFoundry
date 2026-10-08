@@ -1202,6 +1202,16 @@ point lands:
   a dragged selection, a bounding-box handle, a ruler guide or an artboard. With Smart Guides off, Snap to Point uses
   `snapToPointTolerance` instead.
 
+With Smart Guides on, a bounding-box handle dragged with the Selection or Free Transform tool (`mods.shift`
+proportional, `mods.alt` from the centre) lands on another object's anchor or centre (labelled "anchor" or
+"center"), else its corners and side line up with the edges and centres of the other objects and the artboards (a
+line and "align"). The Rotate, Scale, Shear and Reflect tools start a drag from the anchor or centre they grab and
+snap the pointer as drawing tools do, so dragging a corner onto another object's anchor scales exactly onto it:
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"scale","events":[{"kind":"down","x":100,"y":100},{"kind":"up","x":100,"y":100},{"kind":"down","x":199,"y":198},{"kind":"drag","x":302,"y":262},{"kind":"up","x":302,"y":262}]}}
+```
+
 Not read yet: Construction Guides and their Angles, and Spacing Guides (the tools draw neither).
 
 ## Type preferences
