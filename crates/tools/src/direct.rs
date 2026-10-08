@@ -201,13 +201,19 @@ fn anchor_owners(cx: &ToolContext, f: fn(&Node) -> bool) -> Vec<NodeId> {
     v
 }
 
-/// Anchor of any visible path or area type frame under `p`, topmost first: (id, si, ai, where it is).
+/// The anchor within `tol` of `p` nearest to it, of the topmost visible path or area type frame
+/// that has one: (id, si, ai, where it is).
 fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, Point)> {
     let owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n));
     owners.into_iter().find_map(|id| {
         let pd = cx.doc.node(id).and_then(editable_path)?;
-        pd.anchors().find(|(_, _, a)| a.p.distance(p) <= tol).map(|(si, ai, a)| (id, si, ai, a.p))
+        nearest_anchor(&pd, p, tol).map(|(si, ai, a)| (id, si, ai, a))
     })
+}
+
+/// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is).
+fn nearest_anchor(pd: &PathData, p: Point, tol: f64) -> Option<(usize, usize, Point)> {
+    pd.anchors().map(|(si, ai, a)| (si, ai, a.p)).filter(|(.., a)| a.distance(p) <= tol).min_by(|x, y| x.2.distance(p).total_cmp(&y.2.distance(p)))
 }
 
 /// An edge of an area type frame under `p`, topmost first: (text, the edge's two anchors).
@@ -290,7 +296,8 @@ impl Tool for DirectSelectionTool {
             return out;
         }
         let p = ev.pos;
-        let tol = cx.pick_tol();
+        // Anchors and handle ends are picked from a little further than segments and objects.
+        let (tol, point) = (cx.pick_tol(), cx.point_tol());
         match (ev.kind, self.state.clone()) {
             (PointerKind::Down, _) if self.group => {
                 if let Some(out) = self.guide.press(cx, ev) {
@@ -332,7 +339,7 @@ impl Tool for DirectSelectionTool {
                     return vec![];
                 }
                 if let Some(sel) = self.spine.filter(|(id, _)| cx.selection.contains(*id))
-                    && let Some(out) = hit_spine_handle(cx, sel, p, tol)
+                    && let Some(out) = hit_spine_handle(cx, sel, p, point)
                 {
                     self.state = State::SpineHandle { id: sel.0, anchor: sel.1, out };
                     return vec![Action::Begin("Reshape Spine".into())];
@@ -343,17 +350,17 @@ impl Tool for DirectSelectionTool {
                     return self.mesh.press(g);
                 }
                 self.mesh.unfocus();
-                if let Some((id, si, ai, out)) = hit_handle(cx, p, tol) {
+                if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
                     self.state = State::Handle { id, si, ai, out };
                     self.handle_snap = HandleSnap::default();
                     return vec![Action::Begin("Reshape".into())];
                 }
-                if let Some((id, anchor, from)) = hit_spine_point(cx, p, tol) {
+                if let Some((id, anchor, from)) = hit_spine_point(cx, p, point) {
                     self.spine = Some((id, anchor));
                     self.state = State::SpinePoint { id, anchor, from, start: p, began: false };
                     return if cx.selection.contains(id) { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
                 }
-                if let Some((id, si, ai, grab)) = hit_anchor(cx, p, tol) {
+                if let Some((id, si, ai, grab)) = hit_anchor(cx, p, point) {
                     if cx.doc.node(id).is_some_and(is_area_type) {
                         return self.press_type_area(cx, id, vec![(si, ai)], p, ev.mods.shift);
                     }
@@ -608,14 +615,14 @@ impl Tool for DirectSelectionTool {
     }
 }
 
-/// The anchor within the selection tolerance of `p`, of a selected path or the path under `p`:
-/// what Highlight anchors on mouse over marks (a press there picks it).
+/// The anchor within a press's reach of `p` ([`ToolContext::point_tol`]), of a selected path or the
+/// path under `p`: what Highlight anchors on mouse over marks (a press there picks it).
 fn hovered_anchor(cx: &ToolContext, p: Point) -> Option<(NodeId, Point)> {
     let under = hit_test(cx.doc, p, cx.hit_options()).map(|h| h.leaf);
-    let tol = cx.pick_tol();
+    let tol = cx.point_tol();
     cx.selection.objects.iter().copied().chain(under).find_map(|id| {
         let path = cx.doc.node(id).and_then(editable_path)?;
-        path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol).map(|(_, _, a)| (id, a.p))
+        nearest_anchor(&path, p, tol).map(|(.., a)| (id, a))
     })
 }
 
@@ -683,6 +690,29 @@ mod tests {
         }
         let mut t = DirectSelectionTool::new(false);
         assert_eq!(down(&mut t, 100.0), vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}))]);
+    }
+
+    /// An anchor is picked from 2 px past its drawn square even where its segment is nearer, and
+    /// further with a larger anchor Size or Tolerance (#593); away from it the segment is.
+    #[test]
+    fn anchors_are_picked_before_the_segments_through_them() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let corner = vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "set"}))];
+        let press = |cx: &ToolContext, x: f64, y: f64| DirectSelectionTool::new(false).pointer(cx, &PointerEvent::new(PointerKind::Down, x, y));
+        let c = cx(&d, &s, &p);
+        // 4.3 px from the corner, 0.5 px from the top edge.
+        assert_eq!(press(&c, 104.2, 100.5), corner);
+        assert_ne!(press(&c, 110.0, 100.5), corner, "the segment, away from the anchor");
+        assert_ne!(press(&c, 105.0, 100.5), corner, "past the default reach (4.5 px)");
+        let large = ToolContext { anchor_size: 7, ..cx(&d, &s, &p) };
+        assert_eq!(press(&large, 106.0, 100.5), corner, "Size 7 draws them 9 px wide");
+        let loose = ToolContext { selection_tolerance: 8.0, ..cx(&d, &s, &p) };
+        assert_eq!(press(&loose, 107.5, 100.5), corner);
+        // On screen: at 200% the reach is half as far in the document.
+        let zoomed = ToolContext { zoom: 2.0, ..cx(&d, &s, &p) };
+        assert_eq!(press(&zoomed, 102.1, 100.2), corner);
+        assert_ne!(press(&zoomed, 102.6, 100.2), corner);
     }
 
     /// A blend of two 20 pt squares centred on (110, 310) and (210, 310), selected.

@@ -129,6 +129,15 @@ pub fn rich_session() -> Session {
         json!({"x": 300, "y": 330, "size": 14, "text": "Area type shrinks its text to fit the frame.",
                "area": {"width": 150, "height": 40, "fit": "shrinkText", "fitMinPercent": 40}}),
     ));
+    // Area type whose paragraphs differ (alignment, spacing, tabs).
+    let para = id_of(&exec(
+        &mut s,
+        "text.create",
+        json!({"x": 20, "y": 360, "text": "Heading\nBody one\tx\nBody two", "size": 9, "area": {"width": 160, "height": 36}}),
+    ));
+    exec(&mut s, "text.setStyle", json!({"id": para, "justify": "center", "start": 0, "end": 0}));
+    exec(&mut s, "text.setFormat", json!({"ids": [para], "spaceBefore": 3, "firstLineIndent": 6, "start": 9, "end": 9}));
+    exec(&mut s, "text.tabs.set", json!({"ids": [para], "stops": [{"position": 80, "align": "right"}], "start": 9, "end": 9}));
     exec(&mut s, "layer.new", json!({"name": "Top"}));
     let d = rect(&mut s, 350.0, 200.0, 80.0, 80.0);
     let e = ellipse(&mut s, 380.0, 230.0, 80.0, 80.0);

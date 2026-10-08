@@ -812,6 +812,11 @@ fn reverse_from_end(path: &mut PathData) {
 }
 
 /// A text object. `runs` split into paragraphs at `\n`.
+///
+/// Paragraph attributes: `para` is paragraph 0's (and, while `paras` is empty, every
+/// paragraph's). Invariant (kept by [`TextObject::normalize_paras`]): `paras` is either empty —
+/// every paragraph uses `para` — or holds one style per paragraph with `paras[0] == para` and at
+/// least two different styles. Readers that only know `para` see the first paragraph's style.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TextObject {
     /// Top-to-bottom, right-to-left writing. Defaults to horizontal for old documents.
@@ -823,6 +828,9 @@ pub struct TextObject {
     pub runs: Vec<TextRun>,
     #[serde(default)]
     pub para: ParaStyle,
+    /// Per-paragraph attributes (see the type's docs); empty = every paragraph uses `para`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paras: Vec<ParaStyle>,
     /// Area Type Options (area type only).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub area: AreaOptions,
@@ -857,6 +865,7 @@ impl TextObject {
             xf: Affine::translate(origin.to_vec2()),
             runs: vec![TextRun { text: text.into(), style }],
             para: ParaStyle::default(),
+            paras: Vec::new(),
             area: AreaOptions::default(),
             path_effect: PathEffect::default(),
             path_align: PathAlign::default(),
@@ -868,6 +877,103 @@ impl TextObject {
     }
     pub fn plain_text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
+    }
+    /// Number of paragraphs (`\n`-separated; empty text has one).
+    pub fn paragraph_count(&self) -> usize {
+        1 + self.runs.iter().map(|r| r.text.bytes().filter(|&b| b == b'\n').count()).sum::<usize>()
+    }
+    /// Attributes of paragraph `i` (the last paragraph's past the end).
+    pub fn para_at(&self, i: usize) -> &ParaStyle {
+        self.paras.get(i).or(self.paras.last()).unwrap_or(&self.para)
+    }
+    /// Every paragraph's attributes, one per paragraph.
+    pub fn paragraph_styles(&self) -> Vec<ParaStyle> {
+        (0..self.paragraph_count()).map(|i| self.para_at(i).clone()).collect()
+    }
+    /// Set every paragraph's attributes from `styles` (one per paragraph; a short list repeats its
+    /// last entry, a long one is cut).
+    pub fn set_paragraph_styles(&mut self, styles: Vec<ParaStyle>) {
+        if let Some(first) = styles.first() {
+            self.para = first.clone();
+        }
+        self.paras = styles;
+        self.normalize_paras();
+    }
+    /// The same attributes for every paragraph.
+    pub fn set_all_paras(&mut self, style: ParaStyle) {
+        self.para = style;
+        self.paras.clear();
+    }
+    /// Re-establish the `paras` invariant: one entry per paragraph (cut, or extended with the
+    /// last), `paras[0] == para`, and empty when every paragraph is alike.
+    pub fn normalize_paras(&mut self) {
+        if self.paras.is_empty() {
+            return;
+        }
+        let n = self.paragraph_count();
+        let last = self.paras.last().cloned().unwrap_or_default();
+        self.paras.resize(n, last);
+        if let Some(first) = self.paras.first_mut() {
+            first.clone_from(&self.para);
+        }
+        if self.paras.iter().all(|p| *p == self.para) {
+            self.paras.clear();
+        }
+    }
+    /// Indices of the paragraphs that byte range `start..end` of the plain text touches (a caret
+    /// touches its paragraph).
+    pub fn paragraphs_in(&self, start: usize, end: usize) -> std::ops::Range<usize> {
+        let text = self.plain_text();
+        let (a, b) = (start.min(end).min(text.len()), start.max(end).min(text.len()));
+        let index = |byte: usize| text.as_bytes().get(..byte).map_or(0, |s| s.iter().filter(|&&c| c == b'\n').count());
+        index(a)..index(b) + 1
+    }
+    /// Apply `f` to the attributes of paragraphs `range` (indices; None = every paragraph).
+    pub fn edit_paras(&mut self, range: Option<std::ops::Range<usize>>, mut f: impl FnMut(&mut ParaStyle)) {
+        match range {
+            None => {
+                f(&mut self.para);
+                for p in &mut self.paras {
+                    f(p);
+                }
+            }
+            Some(r) => {
+                let mut v = self.paragraph_styles();
+                for p in v.iter_mut().take(r.end).skip(r.start) {
+                    f(p);
+                }
+                self.set_paragraph_styles(v);
+            }
+        }
+        self.normalize_paras();
+    }
+    /// Every stored paragraph style (`para` and the per-paragraph ones), for scans and renames.
+    pub fn para_styles_mut(&mut self) -> impl Iterator<Item = &mut ParaStyle> {
+        std::iter::once(&mut self.para).chain(self.paras.iter_mut())
+    }
+    /// Every stored paragraph style (`para` and the per-paragraph ones).
+    pub fn para_styles(&self) -> impl Iterator<Item = &ParaStyle> {
+        std::iter::once(&self.para).chain(self.paras.iter())
+    }
+    /// Update the paragraph styles for replacing bytes `start..end` of the current plain text by
+    /// `insert` (call before changing the runs). The paragraph the range starts in keeps its
+    /// style (merging paragraphs: the first one's wins); paragraphs the insertion starts take that
+    /// style too (Return continues the paragraph it splits); later paragraphs keep theirs.
+    pub fn splice_paras(&mut self, start: usize, end: usize, insert: &str) {
+        if self.paras.is_empty() {
+            return;
+        }
+        let r = self.paragraphs_in(start, end);
+        let v = self.paragraph_styles();
+        let Some(keep) = v.get(r.start).cloned() else { return };
+        let added = insert.bytes().filter(|&b| b == b'\n').count();
+        let mut out: Vec<ParaStyle> = v.iter().take(r.start + 1).cloned().collect();
+        out.extend(std::iter::repeat_n(keep, added));
+        out.extend(v.iter().skip(r.end).cloned());
+        self.paras = out;
+        if let Some(first) = self.paras.first() {
+            self.para = first.clone();
+        }
     }
     pub fn first_style(&self) -> CharStyle {
         self.runs.first().map(|r| r.style.clone()).unwrap_or_default()
@@ -994,6 +1100,56 @@ mod tests {
         let b = t.bounds().unwrap();
         assert!(b.x0 >= 10.0 - 1e-9 && b.y1 > 20.0);
         assert_eq!(CharStyle::default().effective_leading(), 14.399999999999999);
+    }
+
+    fn justified(j: Justify) -> ParaStyle {
+        ParaStyle { justify: j, ..ParaStyle::default() }
+    }
+
+    #[test]
+    fn paragraph_styles_split_merge_and_normalize() {
+        let mut t = TextObject::point(Point::ZERO, "one\ntwo\nthree", CharStyle::default());
+        assert_eq!((t.paragraph_count(), t.paras.len()), (3, 0), "one style for all: nothing stored");
+        assert_eq!(t.paragraphs_in(0, 0), 0..1);
+        assert_eq!(t.paragraphs_in(4, 4), 1..2);
+        assert_eq!(t.paragraphs_in(2, 9), 0..3);
+        assert_eq!(t.paragraphs_in(99, 99), 2..3, "clamped to the text");
+        t.edit_paras(Some(1..2), |p| p.justify = Justify::Center);
+        let js = |t: &TextObject| t.paragraph_styles().iter().map(|p| p.justify).collect::<Vec<_>>();
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Left]);
+        // Return inside "two": the new paragraph continues its style.
+        t.splice_paras(5, 5, "\n");
+        t.runs[0].text.insert(5, '\n');
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Center, Justify::Left]);
+        // Deleting the break between "one" and "t": the first paragraph's style wins.
+        t.splice_paras(3, 4, "");
+        t.runs[0].text.remove(3);
+        assert_eq!(t.plain_text(), "onet\nwo\nthree");
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Left]);
+        // An edit that skips the splice is repaired by normalizing (the last style continues).
+        t.runs[0].text.push_str("\nfour");
+        t.normalize_paras();
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Left, Justify::Left]);
+        // `para` is paragraph 0's; all alike collapses to `para` alone.
+        t.edit_paras(Some(0..1), |p| p.justify = Justify::Right);
+        assert_eq!(t.para.justify, Justify::Right);
+        t.edit_paras(None, |p| p.justify = Justify::Right);
+        assert!(t.paras.is_empty() && t.para.justify == Justify::Right);
+        // A short list repeats its last entry, a long one is cut.
+        t.set_paragraph_styles(vec![justified(Justify::Left), justified(Justify::Center)]);
+        assert_eq!(js(&t), [Justify::Left, Justify::Center, Justify::Center, Justify::Center]);
+        t.set_paragraph_styles(vec![justified(Justify::Center); 9]);
+        assert!(t.paras.is_empty() && t.para.justify == Justify::Center);
+        // Old documents (no `paras`) load; new ones keep paragraph 0 in `para`.
+        t.edit_paras(Some(3..4), |p| p.space_before = 4.0);
+        let json = serde_json::to_value(&t).unwrap();
+        assert_eq!(json["para"]["justify"], json["paras"][0]["justify"]);
+        let mut old = json.clone();
+        old.as_object_mut().unwrap().remove("paras");
+        let back: TextObject = serde_json::from_value(old).unwrap();
+        assert!(back.paras.is_empty() && back.para_at(3).justify == Justify::Center);
+        let back: TextObject = serde_json::from_value(json).unwrap();
+        assert_eq!(back.para_at(3).space_before, 4.0);
     }
 
     /// 120 × 40 area type at (40, 40), its text drawn at twice its size.

@@ -1100,27 +1100,30 @@ impl Session {
         let before_sel = st.selection.clone();
         let doc = Arc::make_mut(&mut st.doc);
         let result = match f(doc, &mut st.selection) {
-            Ok(v) => {
-                // Text Wrap: area type follows its wrap objects; then threads re-flow.
-                cmd::textwrap::refresh(Arc::make_mut(&mut st.doc));
-                // Opacity-mask editing: the mask follows its art on the editing layer.
-                if st.doc.mask_edit.is_some() {
-                    cmd::maskedit::sync(Arc::make_mut(&mut st.doc));
+            Ok(v) => match cmd::shaper::refresh(&before, Arc::make_mut(&mut st.doc)) {
+                Err(e) => Err(e),
+                Ok(()) => {
+                    // Text Wrap: area type follows its wrap objects; then threads re-flow.
+                    cmd::textwrap::refresh(Arc::make_mut(&mut st.doc));
+                    // Opacity-mask editing: the mask follows its art on the editing layer.
+                    if st.doc.mask_edit.is_some() {
+                        cmd::maskedit::sync(Arc::make_mut(&mut st.doc));
+                    }
+                    // Threaded text re-flows when any of its frames changed.
+                    if !st.doc.text_threads.is_empty() {
+                        cmd::threads::reflow(&before, Arc::make_mut(&mut st.doc));
+                    }
+                    // Asset Export: assets let go of deleted art.
+                    if !st.doc.assets.is_empty() {
+                        Arc::make_mut(&mut st.doc).prune_assets();
+                    }
+                    if doc_sane(&st.doc, &st.selection) {
+                        Ok(v)
+                    } else {
+                        Err(EngineError::Other("result would exceed the canvas (coordinates out of range)".into()))
+                    }
                 }
-                // Threaded text re-flows when any of its frames changed.
-                if !st.doc.text_threads.is_empty() {
-                    cmd::threads::reflow(&before, Arc::make_mut(&mut st.doc));
-                }
-                // Asset Export: assets let go of deleted art.
-                if !st.doc.assets.is_empty() {
-                    Arc::make_mut(&mut st.doc).prune_assets();
-                }
-                if doc_sane(&st.doc, &st.selection) {
-                    Ok(v)
-                } else {
-                    Err(EngineError::Other("result would exceed the canvas (coordinates out of range)".into()))
-                }
-            }
+            },
             Err(e) => Err(e),
         };
         match result {
@@ -1431,6 +1434,8 @@ mod tests_paintproxy;
 #[cfg(test)]
 mod tests_panelcmds;
 #[cfg(test)]
+mod tests_paragraphs;
+#[cfg(test)]
 mod tests_pathops;
 #[cfg(test)]
 mod tests_pathtype;
@@ -1492,6 +1497,8 @@ mod tests_save;
 mod tests_saveoptions;
 #[cfg(test)]
 mod tests_scalestrokes;
+#[cfg(test)]
+mod tests_shaper;
 #[cfg(test)]
 mod tests_slices;
 #[cfg(test)]

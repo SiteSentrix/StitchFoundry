@@ -1683,18 +1683,27 @@ impl Writer<'_> {
         }
         self.note_fonts(t, &lay);
         let lines = text_lines(t, &lay, self.opts.fewer_tspans);
-        // A tab starts a new chunk at its stop: only lines without tabs can be anchored.
-        let anchor = match t.para.justify {
-            Justify::Center => Some(("middle", 0.5)),
-            Justify::Right => Some(("end", 1.0)),
-            _ => None,
-        }
-        .filter(|_| !lines.iter().flatten().any(|s| s.brk));
+        // Each line is anchored as its paragraph is aligned. A tab starts a new chunk at its
+        // stop: lines with tabs are never anchored.
+        let anchors: Vec<Option<(&str, f64)>> = lines
+            .iter()
+            .map(|l| {
+                match t.para_at(l.para).justify {
+                    Justify::Center => Some(("middle", 0.5)),
+                    Justify::Right => Some(("end", 1.0)),
+                    _ => None,
+                }
+                .filter(|_| !l.segs.iter().any(|s| s.brk))
+            })
+            .collect();
+        // Every line anchored alike (the text's only paragraph style, typically): the <text>
+        // carries the anchor. Otherwise each anchored line is a <tspan> carrying its own.
+        let uniform = anchors.first().copied().filter(|a| a.is_some() && anchors.iter().all(|b| b == a)).flatten();
         // The <text> element's user space is text space.
         let space = (lay.bounds, Affine::IDENTITY);
-        let base = TextBase { props: self.char_props(&t.first_style(), space), space, anchored: anchor.is_some() };
+        let base = TextBase { props: self.char_props(&t.first_style(), space), space, anchored: uniform.is_some() };
         let mut props = base.props.clone();
-        if let Some((a, _)) = anchor {
+        if let Some((a, _)) = uniform {
             props.push(("text-anchor", a.into()));
         }
         props.extend(css::transparency(n));
@@ -1702,7 +1711,7 @@ impl Writer<'_> {
         let a = self.attrs(&props);
         let m = self.xf * t.xf;
         let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
-        let starts: Vec<Option<(f64, f64)>> = lines.iter().map(|l| line_start(l, anchor.map(|a| a.1))).collect();
+        let starts: Vec<Option<(f64, f64)>> = lines.iter().zip(&anchors).map(|(l, a)| line_start(&l.segs, a.map(|a| a.1))).collect();
         // The `<text>` carries the first line's position too, so readers that place text by its
         // own x/y start where the first line does.
         let at = match starts.iter().flatten().next() {
@@ -1710,9 +1719,17 @@ impl Writer<'_> {
             None => String::new(),
         };
         let mut s = format!("<text{id}{tr}{at} xml:space=\"preserve\"{a}>");
-        for (line, start) in lines.iter().zip(starts) {
-            if let Some(start) = start {
-                self.text_line(&mut s, t, line, start, &base);
+        for ((line, start), anchor) in lines.iter().zip(starts).zip(&anchors) {
+            let Some(start) = start else { continue };
+            match anchor.filter(|_| uniform.is_none()) {
+                // A line anchored on its own: one positioned <tspan> with the anchor around it.
+                Some((a, _)) => {
+                    s.push_str(&format!("<tspan x=\"{}\" y=\"{}\" text-anchor=\"{a}\">", self.num(start.0), self.num(start.1)));
+                    let inner = TextBase { anchored: true, ..base.clone() };
+                    self.text_line(&mut s, t, &line.segs, start, &inner, false);
+                    s.push_str("</tspan>");
+                }
+                None => self.text_line(&mut s, t, &line.segs, start, &base, true),
             }
         }
         s.push_str("</text>");
@@ -1723,12 +1740,13 @@ impl Writer<'_> {
     /// (only the first of an anchored line). Fewer tspans: one positioned `<tspan>` per line with
     /// the style changes nested in it, positioned again only after tabs and justified word spaces.
     /// Baseline shifts are relative (`dy`), undone by the next segment that isn't shifted.
-    fn text_line(&mut self, s: &mut String, t: &TextObject, line: &[Segment], start: (f64, f64), base: &TextBase) {
-        let fewer = self.opts.fewer_tspans;
+    /// `positioned`: false when the caller already positioned the line (an outer `<tspan>`).
+    fn text_line(&mut self, s: &mut String, t: &TextObject, line: &[Segment], start: (f64, f64), base: &TextBase, positioned: bool) {
+        let fewer = self.opts.fewer_tspans && positioned;
         if fewer {
             s.push_str(&format!("<tspan x=\"{}\" y=\"{}\">", self.num(start.0), self.num(start.1)));
         }
-        let mut place = !fewer;
+        let mut place = !fewer && positioned;
         let mut first = true;
         // The baseline shift the current text position carries.
         let mut shift = 0.0;
@@ -1746,7 +1764,7 @@ impl Writer<'_> {
                 shift = st.baseline_shift;
             }
             // After a tab or a justified word space the next segment is placed.
-            place = seg.brk || (!fewer && !base.anchored);
+            place = seg.brk || (!fewer && !base.anchored && positioned);
             if (st.h_scale - st.v_scale).abs() > 1e-9 {
                 attrs.push_str(&format!(" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\"", self.num(seg.advance)));
             }
@@ -1848,7 +1866,7 @@ impl Writer<'_> {
         let space = (lay.bounds, self.xf * t.xf);
         let base = self.char_props(&t.first_style(), space);
         let mut props = base.clone();
-        match t.para.justify {
+        match t.para_at(0).justify {
             Justify::Center | Justify::JustifyCenter => props.push(("text-anchor", "middle".into())),
             Justify::Right | Justify::JustifyRight => props.push(("text-anchor", "end".into())),
             _ => {}
@@ -1917,6 +1935,7 @@ fn has_raster(effects: &[vectorcraft_doc::Effect]) -> bool {
 }
 
 /// What the lines of one `<text>` share.
+#[derive(Clone)]
 struct TextBase {
     /// The `<text>` element's character properties, which each `<tspan>` differs from.
     props: Props,
@@ -1924,6 +1943,12 @@ struct TextBase {
     space: (Rect, Affine),
     /// Lines anchored at their centre or right end (`text-anchor`), positioned once each.
     anchored: bool,
+}
+
+/// One laid-out line: its paragraph (index) and its segments.
+struct Line {
+    para: usize,
+    segs: Vec<Segment>,
 }
 
 /// Characters of one style on one line, written as one `<tspan>`.
@@ -1944,11 +1969,12 @@ struct Segment {
 /// on justified lines, after each word space (unless `fewer`). The text comes from the clusters
 /// the layout placed: soft hyphens draw nothing, a line broken by hyphenation ends in `-`, all
 /// caps are upper case.
-fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Vec<Segment>> {
+fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Line> {
     let plain = t.plain_text();
-    let split_words = !fewer && !matches!(t.para.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
     let mut lines = Vec::with_capacity(lay.lines.len());
     for line in &lay.lines {
+        let para = plain.as_bytes().get(..line.start).map_or(0, |b| b.iter().filter(|&&c| c == b'\n').count());
+        let split_words = !fewer && !matches!(t.para_at(para).justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
         let mut segs: Vec<Segment> = Vec::new();
         let mut cluster = None;
         let source = |g: &vectorcraft_text::PositionedGlyph| if g.len == 0 { "-" } else { plain.get(g.byte..g.byte + g.len).unwrap_or("") };
@@ -1983,7 +2009,7 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
         }
         segs.retain(|s| !s.text.is_empty());
         if !segs.is_empty() {
-            lines.push(segs);
+            lines.push(Line { para, segs });
         }
     }
     lines

@@ -122,7 +122,7 @@ fn node_refs(n: &Node, f: Visit) {
                         f(Ref::Name(Res::CharStyle, s));
                     }
                 }
-                if let Some(s) = &t.para.style_name {
+                for s in t.para_styles().filter_map(|pa| pa.style_name.as_ref()) {
                     f(Ref::Name(Res::ParaStyle, s));
                 }
             }
@@ -440,8 +440,10 @@ impl Relink {
                         self.name(Res::CharStyle, s);
                     }
                 }
-                if let Some(s) = &mut t.para.style_name {
-                    self.name(Res::ParaStyle, s);
+                for pa in t.para_styles_mut() {
+                    if let Some(s) = &mut pa.style_name {
+                        self.name(Res::ParaStyle, s);
+                    }
                 }
             }
             NodeKind::Image(im) => self.name(Res::Image, &mut im.key),

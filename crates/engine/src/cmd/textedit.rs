@@ -135,6 +135,13 @@ fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     let insert = str_param(p, "insert").unwrap_or("").to_string();
     let caret = s.edit("Typing", |d, _| {
         let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
+        // Paragraph styles follow the edit: a split paragraph's new one continues its style, a
+        // merge keeps the first paragraph's.
+        let inserted: String = match &styled {
+            Some(r) => r.iter().map(|r| r.text.as_str()).collect(),
+            None => insert.clone(),
+        };
+        t.splice_paras(a, b, &inserted);
         let caret = match &styled {
             Some(r) => edit::replace_range_styled(&mut t.runs, a, b, r),
             None => edit::replace_range(&mut t.runs, a, b, &insert),
@@ -463,6 +470,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         xf: Affine::IDENTITY,
         runs: vec![TextRun { text, style }],
         para: super::create::new_type_para(),
+        paras: Vec::new(),
         area: Default::default(),
         path_effect: Default::default(),
         path_align: Default::default(),
@@ -600,6 +608,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             xf: Affine::IDENTITY,
             runs: head.clone(),
             para: Default::default(),
+            paras: Vec::new(),
             area: Default::default(),
             path_effect: Default::default(),
             path_align: Default::default(),

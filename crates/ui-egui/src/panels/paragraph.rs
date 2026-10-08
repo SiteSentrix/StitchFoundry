@@ -22,15 +22,18 @@ pub const ALIGNMENTS: [(Justify, &str, &str, &str); 7] = [
     (Justify::JustifyAll, "dc-para-justify-all", "Justify all lines", "justifyAll"),
 ];
 
-/// Paragraph attributes apply to the whole text object (ending a Type tool typing session first).
+/// Paragraph attributes apply to the selected text objects' paragraphs or, while the Type tool
+/// edits text, to the paragraphs its selection (or caret) touches (ending its typing session).
 fn format(app: &mut VectorcraftApp, p: Value) {
     para_cmd(app, "text.setFormat", p);
 }
 
 fn para_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
-    if let Some((id, _, _)) = super::character::text_editing(app) {
+    if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
         p["ids"] = json!([id.0]);
+        p["start"] = json!(a);
+        p["end"] = json!(b);
     }
     app.run(cmd, p).ok();
 }

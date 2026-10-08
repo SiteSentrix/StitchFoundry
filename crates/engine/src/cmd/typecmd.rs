@@ -75,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType}",
+            "{ids?|id?, font?, style?, size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour, features?: [\"dlig\", \"-liga\", …] OpenType, start?: byte, end?: byte} (with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text)",
             has_doc,
             set_style
         ),
@@ -102,6 +102,8 @@ fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
 /// ([`vectorcraft_doc::AreaFit::AutoHeight`]) fits its frame to the text: part of the same undo
 /// step as the edit.
 pub(crate) fn refresh_bounds(t: &mut TextObject) {
+    // Edits that changed the paragraph count keep one paragraph style per paragraph.
+    t.normalize_paras();
     auto_height(t);
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
@@ -255,6 +257,60 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
     Ok(t)
 }
 
+/// Optional `start`/`end` byte offsets of a text command: the character range it styles and the
+/// paragraphs it touches. Without either, the command applies to all the text.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct TextRange {
+    start: Option<usize>,
+    end: Option<usize>,
+}
+
+impl TextRange {
+    /// `start`/`end` of `p`, if either is given (non-negative integers).
+    pub(crate) fn parse(p: &Value, cmd: &str) -> Result<Option<Self>> {
+        let get = |k: &str| -> Result<Option<usize>> {
+            match p.get(k) {
+                None | Some(Value::Null) => Ok(None),
+                Some(v) => {
+                    v.as_u64().map(|n| Some(usize::try_from(n).unwrap_or(usize::MAX))).ok_or_else(|| bad(cmd, format!("`{k}` must be a byte offset")))
+                }
+            }
+        };
+        let (start, end) = (get("start")?, get("end")?);
+        Ok((start.is_some() || end.is_some()).then_some(Self { start, end }))
+    }
+    /// The byte range in `t`, clamped and ordered.
+    pub(crate) fn bytes(&self, t: &TextObject) -> (usize, usize) {
+        let len = vectorcraft_text::edit::runs_len(&t.runs);
+        let a = self.start.unwrap_or(0).min(len);
+        let b = self.end.unwrap_or(len).min(len);
+        (a.min(b), a.max(b))
+    }
+    /// The paragraphs of `t` the range touches.
+    pub(crate) fn paras(&self, t: &TextObject) -> std::ops::Range<usize> {
+        let (a, b) = self.bytes(t);
+        t.paragraphs_in(a, b)
+    }
+}
+
+/// Paragraphs of `t` an optional range touches (None: every paragraph).
+pub(crate) fn para_span(range: Option<TextRange>, t: &TextObject) -> Option<std::ops::Range<usize>> {
+    range.map(|r| r.paras(t))
+}
+
+/// Apply `f` to the character styles of `range` of `t` (None: every run).
+pub(crate) fn style_chars(t: &mut TextObject, range: Option<TextRange>, mut f: impl FnMut(&mut vectorcraft_doc::CharStyle)) {
+    match range {
+        None => t.runs.iter_mut().for_each(|r| f(&mut r.style)),
+        Some(r) => {
+            let (a, b) = r.bytes(t);
+            if a < b {
+                vectorcraft_text::edit::style_range(&mut t.runs, a, b, f);
+            }
+        }
+    }
+}
+
 fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
     let text = str_param(p, "text").ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
     let ids = text_targets(s, p, "text.setText")?;
@@ -262,6 +318,8 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let style = t.first_style();
+            // Every paragraph of the new text takes the first paragraph's attributes.
+            t.splice_paras(0, vectorcraft_text::edit::runs_len(&t.runs), &text);
             t.runs = vec![vectorcraft_doc::TextRun { text: text.clone(), style }];
             refresh_bounds(t);
         }
@@ -319,14 +377,14 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "nothing to change"));
     }
+    let range = TextRange::parse(p, C)?;
     let ids = text_targets(s, p, C)?;
     let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
     s.edit("Character", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let before = protect.then(|| t.runs.clone());
-            for r in &mut t.runs {
-                let st = &mut r.style;
+            style_chars(t, range, |st| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
                 }
@@ -348,12 +406,13 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(f) = &features {
                     st.features = f.clone();
                 }
-            }
+            });
             if let Some(before) = before {
                 super::textedit::protect_missing_glyphs(&before, &mut t.runs);
             }
             if let Some(j) = justify {
-                t.para.justify = j;
+                let span = para_span(range, t);
+                t.edit_paras(span, |pa| pa.justify = j);
             }
             refresh_bounds(t);
         }
@@ -788,7 +847,8 @@ fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
     let cell = lay.frames.first()?;
     let line = lay.lines.first()?;
-    let avail = cell.width() - 2.0 * t.area.inset - t.para.left_indent - t.para.right_indent;
+    let para = t.para_at(0);
+    let avail = cell.width() - 2.0 * t.area.inset - para.left_indent - para.right_indent;
     Some((line.x1 - line.x0, avail, lay.lines.iter().filter(|l| l.start < para_end).count()))
 }
 

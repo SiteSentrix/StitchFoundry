@@ -10,10 +10,16 @@ fn text_layout(s: &str) -> TextLayout {
 
 fn arabic_test_face(test: &str) -> Option<Arc<FontFace>> {
     let db = FontDb::global();
+    // OpenType (GSUB) shaping only: AAT fonts such as macOS's Geeza Pro shape with `morx`, which
+    // takes no context from outside the run, so their joining across a style boundary differs.
+    let opentype = |face: &FontFace| {
+        use skrifa::raw::TableProvider;
+        face.skrifa().is_some_and(|f| f.gsub().is_ok())
+    };
     let face = ["Geeza Pro", "Arial", "Noto Sans Arabic"]
         .into_iter()
         .filter_map(|name| db.face(name, "Regular"))
-        .find(|face| face.covers('ب') && face.covers('ل') && face.covers('ا'));
+        .find(|face| face.covers('ب') && face.covers('ل') && face.covers('ا') && opentype(face));
     if let Some(face) = &face {
         let path = face.path().map_or_else(|| "bundled font".to_string(), |p| p.display().to_string());
         eprintln!("ASSERTIONS RUN: {test}; Arabic font {} {} ({path})", face.family, face.style);
@@ -311,4 +317,28 @@ fn visual_text_comes_back_in_logical_order() {
         let shown: String = l.glyphs.iter().filter_map(|g| text.get(g.byte..)?.chars().next()).collect();
         assert_eq!(shown, visual);
     }
+}
+
+/// Paragraph Direction is a paragraph attribute: in one text object a right-to-left paragraph
+/// reads and aligns (Auto) right to left while the next, left to right, starts on the left.
+#[test]
+fn paragraph_direction_is_per_paragraph() {
+    use vectorcraft_doc::{Justify, ParaDirection, ParaStyle};
+    let s = "Hello.\nHello.";
+    let mut t = TextObject::point(Point::ZERO, s, CharStyle::default());
+    let dir = |direction| ParaStyle { justify: Justify::Auto, direction, ..ParaStyle::default() };
+    t.set_paragraph_styles(vec![dir(Some(ParaDirection::RightToLeft)), dir(Some(ParaDirection::LeftToRight))]);
+    assert_eq!(t.paras.len(), 2, "stored per paragraph");
+    let l = layout(FontDb::global(), &t);
+    assert_eq!(l.lines.len(), 2);
+    let shown = |line: &crate::LineInfo| -> String {
+        let mut gs: Vec<_> = l.glyphs.iter().filter(|g| g.byte >= line.start && g.byte < line.end).collect();
+        gs.sort_by(|a, b| a.origin.x.total_cmp(&b.origin.x));
+        gs.iter().filter_map(|g| s.get(g.byte..)?.chars().next()).filter(|c| *c != '\n').collect()
+    };
+    assert!(l.lines[0].rtl && !l.lines[1].rtl);
+    assert_eq!(shown(&l.lines[0]), ".Hello", "the first paragraph runs right to left");
+    assert_eq!(shown(&l.lines[1]), "Hello.", "the second runs left to right");
+    assert!(l.lines[0].x1.abs() < 1e-6, "Auto aligns the right-to-left paragraph right: {}", l.lines[0].x1);
+    assert!(l.lines[1].x0.abs() < 1e-6, "…and the left-to-right one left: {}", l.lines[1].x0);
 }

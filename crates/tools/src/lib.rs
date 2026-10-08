@@ -274,6 +274,8 @@ pub struct ToolContext<'a> {
     /// Selection & Anchor Display → Tolerance: how near (screen pixels) a click must be to a path
     /// or an anchor to pick it.
     pub selection_tolerance: f64,
+    /// Selection & Anchor Display → Size (1–7, default 3): how big anchors and handles are drawn.
+    pub anchor_size: u32,
     /// Selection & Anchor Display → Object Selection by Path Only: a click inside a filled path
     /// doesn't pick it, only one on its path does.
     pub path_only: bool,
@@ -362,12 +364,21 @@ impl ToolContext<'_> {
     pub fn pick_tol(&self) -> f64 {
         self.tol(self.selection_tolerance)
     }
+    /// How near (document units) a press picks an anchor or a direction handle's end: the
+    /// selection tolerance, but at least 2 px past the drawn point, so a point is easy to catch
+    /// and wins over the segments through it, which are tested after it (#593).
+    pub fn point_tol(&self) -> f64 {
+        // Anchors are drawn 5 px wide at the default Size 3, a pixel more or less per step.
+        let half = (5.0 + f64::from(self.anchor_size.clamp(1, 7)) - 3.0) / 2.0;
+        self.tol(self.selection_tolerance.max(half + 2.0))
+    }
     pub fn hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
         vectorcraft_doc::hit::HitOptions {
             tol: self.pick_tol(),
             outline: self.outline,
             path_only: self.path_only,
             type_path_only: self.type_path_only,
+            scope: self.isolation,
         }
     }
 }
@@ -666,6 +677,7 @@ pub(crate) mod testutil {
             slices_locked: false,
             auto_add_delete: true,
             selection_tolerance: 3.0,
+            anchor_size: 3,
             path_only: false,
             type_path_only: false,
             double_click_isolate: true,
