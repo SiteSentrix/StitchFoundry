@@ -1041,6 +1041,9 @@ fn node_outline(n: &Node) -> BezPath {
     bp
 }
 
+/// The width of the key object's outline (Align to Key Object), thicker than the selection's.
+const KEY_OUTLINE: f32 = 2.5;
+
 /// The most anchor points the selection's outlines and anchors, and the hover highlight, are drawn
 /// for: an Image Trace of a photo selects hundreds of thousands of paths at once, whose outlines
 /// would make a mesh larger than the GPU takes in one buffer (#525).
@@ -1390,6 +1393,18 @@ fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     // Too many paths to outline: the selection's bounds stand for them.
     if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
         stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
+    }
+    // The key object (Align to Key Object): its outline drawn thicker, or its bounds when it has
+    // too many paths to outline.
+    if let Some((k, n)) = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?))) {
+        let outline = if too_many_anchors([n]) {
+            n.geometric_bounds().map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath())
+        } else {
+            Some(node_outline(n))
+        };
+        if let Some(bp) = outline {
+            stroke_path(p, &bp, xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
+        }
     }
     for id in st.selection.objects.iter().filter(|_| !big) {
         let Some(n) = st.doc.node(*id) else { continue };
@@ -2075,6 +2090,23 @@ mod tests {
         assert!(points < 100 && squares < 100, "{points} outline points, {squares} squares");
         let (points, squares) = drawn(200);
         assert!(points > 200 && squares > 200, "{points} outline points, {squares} squares");
+    }
+
+    /// #541: the key object's outline is drawn thicker than the rest of the selection's.
+    #[test]
+    fn the_key_object_has_a_thicker_outline() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let a = app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 50, "height": 50})).unwrap()["id"].clone();
+        let b = app.session.execute("shape.ellipse", &json!({"x": 200, "y": 100, "width": 60, "height": 40})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let thick =
+            |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(ps) if ps.stroke.width == KEY_OUTLINE)).count();
+        assert_eq!(thick(&mut app), 0, "no key yet");
+        app.session.execute("select.key", &json!({"id": b})).unwrap();
+        assert!(thick(&mut app) > 0, "the key's outline");
     }
 
     /// One headless canvas frame → the shapes drawn, `Shape::Vec`s flattened.

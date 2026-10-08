@@ -198,6 +198,37 @@ fn align_left() {
     assert_eq!(s.doc().unwrap().doc.node(b).unwrap().geometric_bounds().unwrap().x0, 0.0);
 }
 
+/// #541: with the Selection tool, a click on one object of the selection makes it the key object:
+/// aligning to the key moves the others to it, Distribute Spacing spaces them from it, and a click
+/// on the key again lets it go.
+#[test]
+fn a_click_sets_the_key_object_that_align_and_spacing_keep_still() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 100.0, 30.0, 20.0, 20.0);
+    let c = rect(&mut s, 300.0, 60.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let click = |s: &mut Session| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 110.0, 40.0), v).unwrap();
+        }
+    };
+    click(&mut s);
+    assert_eq!(s.doc().unwrap().selection.key, Some(b));
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 3, "the selection stays");
+    let x0 = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+    // With a key object, aligning aligns to it (the Control bar and Properties name no target).
+    s.execute("object.align", &json!({"horizontal": "left", "bounds": "geometric"})).unwrap();
+    assert_eq!((x0(&s, a), x0(&s, b), x0(&s, c)), (100.0, 100.0, 100.0), "the others moved to the key");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.distributeSpacing", &json!({"axis": "horizontal", "spacing": 5, "bounds": "geometric"})).unwrap();
+    assert_eq!((x0(&s, a), x0(&s, b), x0(&s, c)), (85.0, 100.0, 125.0), "5 pt apart, the key still");
+    click(&mut s);
+    assert_eq!(s.doc().unwrap().selection.key, None, "a click on the key again lets it go");
+}
+
 #[test]
 fn selection_tool_drag_is_one_undo_step() {
     let mut s = session();
