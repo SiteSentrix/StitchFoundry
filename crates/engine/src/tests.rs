@@ -381,6 +381,8 @@ fn document_node_summary_slices_with_depth_and_limit() {
     let g = read(json!({"id": outer, "summary": true}));
     assert_eq!(g["children"].as_array().map(Vec::len), Some(2));
     assert!(g.get("childCount").is_none(), "nothing truncated: {g}");
+    // Limits beyond the tree are the whole tree, byte for byte.
+    assert_eq!(read(json!({"id": outer, "summary": true, "depth": u64::MAX, "childLimit": u64::MAX})), g);
 
     let one = read(json!({"id": outer, "summary": true, "childLimit": 1}));
     assert_eq!(one["children"].as_array().map(Vec::len), Some(1));
@@ -400,7 +402,14 @@ fn document_node_summary_slices_with_depth_and_limit() {
     assert!(nested.get("children").is_none(), "{nested}");
     assert_eq!(nested["childCount"], 2);
 
-    for bad in [json!({"id": outer, "summary": true, "depth": -1}), json!({"id": outer, "summary": true, "childLimit": "many"})] {
+    for bad in [
+        json!({"id": outer, "summary": true, "depth": -1}),
+        json!({"id": outer, "summary": true, "depth": 1.5}),
+        json!({"id": outer, "summary": true, "childLimit": "many"}),
+        // A slice of the full object JSON would silently be the whole subtree.
+        json!({"id": outer, "depth": 0}),
+        json!({"id": outer, "summary": false, "childLimit": 1}),
+    ] {
         assert!(s.execute("document.node", &bad).is_err(), "{bad}");
     }
 }

@@ -85,7 +85,11 @@ An unknown URI is `-32002`; a template with no value, or a value that names noth
 The same reads work as query commands through `run_command`: `document.node {id}` returns the object's full model
 JSON (geometry, appearance, every attribute) and `document.node {id, summary: true}` the compact summary
 `document.inspect` gives for it (id, name, kind, bounds, paint labels, children), without summarizing the whole
-document.
+document. A summary read slices a large container: `depth` is how many child levels it includes (`0`: the node
+alone) and `childLimit` how many children each node shows, top of the stack first (both default to all). A level
+that shows fewer children than it has reports their total as `childCount`, so truncation is never silent; with
+nothing truncated the reply is the plain summary. Both must be non-negative integers and need `summary: true`
+(the full object JSON is never truncated); anything else is an error.
 
 ### Completions
 

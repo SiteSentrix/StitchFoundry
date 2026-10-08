@@ -105,8 +105,15 @@ fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
     let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
+    let opts = slice_opts(p)?;
+    let summary = bool_or(p, "summary", false);
+    if !summary && (opts.depth.is_some() || opts.child_limit.is_some()) {
+        // The full object JSON is never truncated: a slice without `summary` would
+        // otherwise silently return the whole subtree.
+        return Err(bad("document.node", "`depth` and `childLimit` slice the summary: pass `summary: true`"));
+    }
     let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;
-    if bool_or(p, "summary", false) { Ok(inspect::node_summary_opts(n, slice_opts(p)?)) } else { Ok(serde_json::to_value(n).unwrap_or(Value::Null)) }
+    if summary { Ok(inspect::node_summary_opts(n, opts)) } else { Ok(serde_json::to_value(n).unwrap_or(Value::Null)) }
 }
 
 /// `depth` / `childLimit` for a summary read: absent (or null) means no limit.
