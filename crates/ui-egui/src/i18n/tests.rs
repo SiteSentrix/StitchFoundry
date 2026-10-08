@@ -172,7 +172,8 @@ fn partial_catalogs_only_translate_strings_the_ui_shows() {
 }
 
 /// The engine learns the language the UI is drawn in each frame: new type takes the Japanese
-/// defaults while it is Japanese (#432).
+/// defaults while it is Japanese (#432). The frames stay in English: the drawing language is
+/// process-wide, and a Japanese frame would translate the tests running beside this one.
 #[test]
 fn the_engine_follows_the_interface_language() {
     let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -183,10 +184,14 @@ fn the_engine_follows_the_interface_language() {
     frame(&mut app);
     assert_eq!(app.session.ui_language.as_deref(), Some("en"), "tests resolve `auto` to English");
     assert!(!app.session.japanese_interface());
-    app.session.prefs.interface_language = "ja".into();
-    frame(&mut app);
-    assert_eq!(app.session.ui_language.as_deref(), Some("ja"));
+    // Each frame hands the engine the language it draws in, whatever the engine had.
+    app.session.ui_language = Some("ja".into());
     assert!(app.session.japanese_interface());
+    frame(&mut app);
+    assert_eq!(app.session.ui_language.as_deref(), Some("en"));
+    // The language a frame would draw in follows the preference.
+    app.session.prefs.interface_language = "ja".into();
+    assert_eq!(app.ui_language().code(), "ja");
 }
 
 /// VectorCraft › Language (`app.language`) sets the `interfaceLanguage` preference, which is what
