@@ -10,8 +10,9 @@ use crate::state::Dialog;
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |d| tl!(&d.str("__label")).to_string(),
     body: |app, ui, d| {
-        let lengths = lengths(&d.str("__command"));
-        form::param_fields(ui, d, &|k| lengths.contains(&k), app.session.general_unit());
+        let command = d.str("__command");
+        let lengths = lengths(&command);
+        form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), app.session.general_unit());
         false
     },
     confirm,
@@ -27,9 +28,22 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "perspective.grid.set" => &["cell", "distance"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
         "text.areaOptions" => &["width", "height", "gutter", "inset", "firstBaselineMin"],
+        "type.pathOptions" => &["spacing"],
         _ => &[],
     }
 }
+
+/// The parameters of the commands this dialog edits that pick one of some values.
+fn choices(command: &str, key: &str) -> Option<form::Choices> {
+    match (command, key) {
+        ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
+        ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
+        _ => None,
+    }
+}
+
+/// Type on a Path Options › Align to Path.
+const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "descender"), ("Center", "center"), ("Baseline", "baseline")];
 
 /// Closes before running, so a dialog the command opens stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {

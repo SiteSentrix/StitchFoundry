@@ -328,24 +328,6 @@ pub fn caret_vertical(layout: &TextLayout, byte: usize, delta: i32, goal_x: f64)
     byte_in_line(layout, li as usize, goal_x)
 }
 
-/// Nearest point on `path` to `p`: (fraction of the path's arc length 0..1, distance). Used to
-/// start type on a path where the user clicked.
-pub fn path_fraction_at(path: &BezPath, p: Point) -> (f64, f64) {
-    use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
-    let mut total = 0.0;
-    let mut best = (0.0, f64::INFINITY);
-    for seg in path.segments() {
-        let len = seg.arclen(1e-3);
-        let n = seg.nearest(p, 1e-4);
-        let d = n.distance_sq.sqrt();
-        if d < best.1 {
-            best = (total + seg.subsegment(0.0..n.t).arclen(1e-3), d);
-        }
-        total += len;
-    }
-    if total <= 0.0 { (0.0, best.1) } else { ((best.0 / total).clamp(0.0, 1.0), best.1) }
-}
-
 /// Highlight quads (text space, clockwise from top-left) covering the selected bytes `a..b`.
 pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4]> {
     let (a, b) = (a.min(b), a.max(b));

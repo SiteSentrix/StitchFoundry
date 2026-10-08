@@ -7,6 +7,7 @@
 //! Coordinates are document points (1/72 in), y pointing down.
 #![forbid(unsafe_code)]
 
+pub mod arc;
 pub mod bez;
 pub mod hit;
 pub mod path;
@@ -15,6 +16,7 @@ pub mod recognize;
 pub mod shapes;
 pub mod snap;
 
+pub use arc::ArcPath;
 pub use kurbo;
 pub use kurbo::{Affine, BezPath, CubicBez, Line, ParamCurve, PathEl, PathSeg, Point, Rect, Shape, Size, Vec2};
 pub use path::{Anchor, AnchorKind, FillRule, PathData, SubPath};

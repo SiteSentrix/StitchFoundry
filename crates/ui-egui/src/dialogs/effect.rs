@@ -131,7 +131,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let changed = match vectorcraft_plugins::effect::installed(&id) {
         Some(plugin) => form::schema_fields(ui, d, &plugin.manifest().params),
         None if vectorcraft_effects::is_adjustment(&id) => adjust_fields(ui, d),
-        None => form::param_fields(ui, d, &|k| vectorcraft_effects::is_length(&id, k, relative), app.session.general_unit()),
+        None => form::param_fields(ui, d, &|k| vectorcraft_effects::is_length(&id, k, relative), &|_| None, app.session.general_unit()),
     };
     ui.add_space(6.0);
     let mut pv = d.bool("preview");

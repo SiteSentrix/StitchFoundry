@@ -2075,15 +2075,11 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
                 c("Area Type Options…", "text.areaOptions"),
                 sub(
                     "Type on a Path",
-                    vec![
-                        cp("Rainbow", "type.pathOptions", json!({"effect": "rainbow"})),
-                        cp("Skew", "type.pathOptions", json!({"effect": "skew"})),
-                        cp("3D Ribbon", "type.pathOptions", json!({"effect": "3dRibbon"})),
-                        cp("Stair Step", "type.pathOptions", json!({"effect": "stairStep"})),
-                        cp("Gravity", "type.pathOptions", json!({"effect": "gravity"})),
-                        Sep,
-                        cp("Type on a Path Options…", "type.pathOptions", json!({"start": 0})),
-                    ],
+                    PATH_EFFECTS
+                        .iter()
+                        .map(|&(label, effect)| cp(label, "type.pathOptions", json!({ "effect": effect })))
+                        .chain([Sep, c("Type on a Path Options…", "type.pathOptions")])
+                        .collect(),
                 ),
                 sub(
                     "Threaded Text",
@@ -2658,6 +2654,17 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     (id.to_string(), if p.is_null() { json!({}) } else { p.clone() })
 }
 
+/// The dialog of command `id` that shows the selection's current values (its query): its heading
+/// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
+/// are.
+fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
+    Some(match id {
+        "text.areaOptions" => ("Area Type Options", &[]),
+        "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
+        _ => return None,
+    })
+}
+
 /// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
 fn menu_dialog(id: &str) -> Option<(&'static str, Value)> {
     Some(match id {
@@ -2728,11 +2735,17 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Repeat Options", "params": fields}));
         return;
     }
-    // Area Type Options: a dialog with the selected area type's current values.
-    if id == "text.areaOptions" && p.as_object().is_none_or(|o| o.is_empty()) {
+    // Area Type Options and Type on a Path Options: dialogs with the selected type's current
+    // values (the command's query), less those the dialog leaves alone.
+    if let Some((label, hidden)) = queried_dialog(id)
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
         match app.session.execute(id, &json!({})) {
-            Ok(fields) => {
-                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Area Type Options", "params": fields}));
+            Ok(mut fields) => {
+                if let Some(o) = fields.as_object_mut() {
+                    o.retain(|k, _| !hidden.contains(&k.as_str()));
+                }
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields}));
             }
             Err(e) => app.status(e.to_string()),
         }
@@ -2936,6 +2949,11 @@ const TYPE_SIZES: [(&str, u32); 14] = [
     ("60 pt", 60),
     ("72 pt", 72),
 ];
+
+/// Type → Type on a Path effects (label, `type.pathOptions` effect), also the choices of its
+/// Options dialog.
+pub(crate) const PATH_EFFECTS: &[(&str, &str)] =
+    &[("Rainbow", "rainbow"), ("Skew", "skew"), ("3D Ribbon", "3dRibbon"), ("Stair Step", "stairStep"), ("Gravity", "gravity")];
 
 const INSERT_SPECIAL: &[(&str, &str)] = &[
     ("Bullet", "bullet"),

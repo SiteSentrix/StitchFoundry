@@ -182,6 +182,7 @@
 	Artwork Colors	Colores de la ilustración
 	As Multiple Assets	Como varios recursos
 	As Single Asset	Como un solo recurso
+	Ascender	Ascendente
 	Ask When Modified	Preguntar al modificar
 	Aspect Ratio	Proporción
 	Asset Export	Exportación de recursos
@@ -212,6 +213,7 @@
 	Background:	Fondo:
 	Backspace	Retroceso
 	Bar Graph Tool	Herramienta Gráfico de barras
+	Baseline	Línea de base
 	Baseline Shift	Desplazamiento de línea de base
 	Basic Latin	Latín básico
 	Batch	Lote
@@ -283,6 +285,7 @@
 	Cap	Extremo
 	Cap:	Extremo:
 	Cascade	Cascada
+	Center	Centro
 	Center Artwork	Centrar ilustración
 	Center on Artboard	Centrar en la mesa de trabajo
 	Center-Justified Tab	Tabulación centrada
@@ -472,6 +475,8 @@
 	Corners	Esquinas
 	Chamfer	Chaflán
 	Corners…	Esquinas…
+	Descender	Descendente
+	Flip	Voltear
 	Inverted Round	Redondeada invertida
 	Radius:	Radio:
 	Round	Redondeada
@@ -924,6 +929,7 @@
 	Fit Headline	Ajustar titular
 	Decrease Font Size	Reducir tamaño de fuente
 	Increase Font Size	Aumentar tamaño de fuente
+	Spacing	Espaciado
 	Step Type	Ajustar texto por incrementos
 	Fit in View	Encajar en la vista
 	Fit in Window	Encajar en la ventana
@@ -2708,6 +2714,7 @@
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	El texto se convierte en contornos, y los trazos que una línea CAD no puede dibujar se convierten en formas rellenas.
 	Type Object Selection by Path Only	Selección de objetos de texto solo por trazado
 	Type on a Path	Texto en trazado
+	Type on a Path Options	Opciones de texto en trazado
 	Type on a Path Options…	Opciones de texto en trazado…
 	Type on a Path Tool	Herramienta Texto en trazado
 	Type Orientation	Orientación del texto

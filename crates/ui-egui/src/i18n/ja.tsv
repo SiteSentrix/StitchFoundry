@@ -11,13 +11,18 @@
 	About VectorCraft	VectorCraft について
 	All Scripts	すべての文字
 	Any Kind	すべての種類
+	Ascender	アセンダ
+	Baseline	ベースライン
 	Bottom-to-Bottom Leading	欧文ベースライン基準の行送り
+	Center	中央
 	Character Alignment	文字揃え
 	Decorative	装飾
+	Descender	ディセンダ
 	Em Box Bottom/Left	仮想ボディの下 / 左
 	Em Box Center	仮想ボディの中央
 	Em Box Top/Right	仮想ボディの上 / 右
 	Favorites	お気に入り
+	Flip	反転
 	Japanese	日本語
 	Join Our Discord	Discord に参加
 	Line-end Punctuation Half Width	行末約物半角
@@ -31,7 +36,9 @@
 	Serif / Mincho	明朝・セリフ
 	Settings…	環境設定…
 	Language	表示言語
+	Spacing	間隔
 	Top-to-Top Leading	仮想ボディの上基準の行送り
+	Type on a Path Options	パス上文字オプション
 	UI Brightness	UI の明るさ
 	Dark	暗い
 	Medium Dark	やや暗い

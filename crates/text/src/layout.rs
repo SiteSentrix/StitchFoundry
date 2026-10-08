@@ -2,9 +2,10 @@
 
 use std::ops::Range;
 
-use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen, PathEl, PathSeg, Point, Rect, Shape, Vec2};
+use kurbo::{Affine, BezPath, PathEl, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
-use vectorcraft_doc::{CharStyle, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathEffect, TextKind, TextObject};
+use vectorcraft_doc::{CharStyle, Justify, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject};
+use vectorcraft_geom::{ArcPath, PathData};
 
 use crate::composer::{Breakpoint, compose};
 use crate::fontdb::FontDb;
@@ -184,7 +185,7 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
             cx.out.frames = regions.iter().map(|r| line_xf.transform_rect_bbox(r.cell)).collect();
             flow(&mut cx, &paras, &t.para, Some(&regions));
         }
-        TextKind::OnPath { path, start } => on_path(&mut cx, &paras, &t.para, &path.to_bezpath(), *start, path.is_closed(), t.path_effect),
+        TextKind::OnPath { path, .. } => on_path(&mut cx, &paras, t, path),
     }
     if vertical && !is_on_path {
         // Glyph origins, outlines and transforms to text space (lines stay in line space).
@@ -1168,43 +1169,31 @@ fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, regions: Opt
     }
 }
 
-/// Arc-length parameterised path.
-struct ArcPath {
-    segs: Vec<(PathSeg, f64, f64)>,
-    len: f64,
-}
-
-impl ArcPath {
-    fn new(p: &BezPath) -> Self {
-        let mut segs = Vec::new();
-        let mut cum = 0.0;
-        for s in p.segments() {
-            let l = s.arclen(1e-4);
-            if l > 1e-9 {
-                segs.push((s, cum, l));
-                cum += l;
+/// The distance along type on a path each glyph takes: its advance measured `spacing` points above
+/// the path (Type on a Path Options › Spacing), so glyphs close up round the outside of a curve and
+/// open up round the inside; just the advances without spacing. Glyphs start `from` along the path.
+fn path_steps(ap: &ArcPath, glyphs: &[SGlyph], from: f64, spacing: f64) -> Vec<f64> {
+    let mut s = from;
+    glyphs
+        .iter()
+        .map(|g| {
+            let mut step = g.adv;
+            if spacing != 0.0 && g.adv > 1e-9 {
+                // How far the path turns across the glyph: positive bending away from its top.
+                let ((_, a), (_, b)) = (ap.at(s), ap.at(s + g.adv));
+                let curvature = a.cross(b).atan2(a.dot(b)) / g.adv;
+                step = g.adv / (1.0 + curvature * spacing).clamp(0.25, 4.0);
             }
-        }
-        Self { segs, len: cum }
-    }
-
-    /// Point and unit tangent at arc length `s`.
-    fn at(&self, s: f64) -> (Point, Vec2) {
-        let s = s.clamp(0.0, self.len);
-        let i = self.segs.partition_point(|(_, c, _)| *c <= s).saturating_sub(1);
-        let (seg, c, l) = self.segs[i];
-        let t = seg.inv_arclen((s - c).min(l), 1e-4).clamp(0.0, 1.0);
-        let p = seg.eval(t);
-        let (t0, t1) = ((t - 1e-4).max(0.0), (t + 1e-4).min(1.0));
-        let d = seg.eval(t1) - seg.eval(t0);
-        let len = d.hypot();
-        (p, if len > 1e-12 { d / len } else { Vec2::new(1.0, 0.0) })
-    }
+            s += step;
+            step
+        })
+        .collect()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &BezPath, start: f64, closed: bool, effect: PathEffect) {
+/// Lay type on a path out along `path` (text space), between its brackets.
+fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
+    let para = &t.para;
     let mut sg = Vec::new();
     // The first paragraph's direction aligns the line (Auto) and sets the caret's.
     let mut rtl = None;
@@ -1226,7 +1215,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
         (s.0, s.1)
     });
     let text_len = cx.text.len();
-    if ap.segs.is_empty() {
+    if ap.is_empty() {
         cx.out.overflow = !sg.is_empty();
         cx.out.lines.push(LineInfo {
             rtl,
@@ -1243,32 +1232,43 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
         });
         return;
     }
-    let centre = path.bounding_box().center();
-    let s_start = start.clamp(0.0, 1.0) * ap.len;
-    let avail = if closed { ap.len } else { ap.len - s_start };
-    let w: f64 = sg.iter().map(|g| g.adv).sum();
+    let centre = path.bounds().unwrap_or_default().center();
+    let (from, to) = t.kind.path_span().unwrap_or((0.0, 1.0));
+    let s_start = from * ap.len();
+    let avail = (to - from) * ap.len();
+    let spacing = if t.path_spacing.is_finite() { t.path_spacing } else { 0.0 };
+    let mut steps = path_steps(&ap, &sg, s_start, spacing);
+    let w: f64 = steps.iter().sum();
     let s0 = match para.justify {
         Justify::Auto if rtl => s_start + (avail - w).max(0.0),
         Justify::Center | Justify::JustifyCenter => s_start + ((avail - w) * 0.5).max(0.0),
         Justify::Right | Justify::JustifyRight => s_start + (avail - w).max(0.0),
         _ => s_start,
     };
+    if spacing != 0.0 && s0 != s_start {
+        // Spaced from where the alignment puts them, the curve under them is another.
+        steps = path_steps(&ap, &sg, s0, spacing);
+    }
+    // Align to Path: how far down (glyph space) the type moves to run its ascender, centre or
+    // descender along the path instead of its baseline.
+    let rise = match t.path_align {
+        PathAlign::Baseline => 0.0,
+        PathAlign::Ascender => m.0,
+        PathAlign::Descender => -m.1,
+        PathAlign::Center => (m.0 - m.1) * 0.5,
+    };
     let mut x = 0.0;
-    for g in &sg {
+    for (g, &step) in sg.iter().zip(&steps) {
         let s = s0 + x;
-        if s + g.adv - s_start > avail + 1e-6 {
+        if s + step - s_start > avail + 1e-6 {
             cx.out.overflow = true;
             break;
         }
-        let mut mid = s + g.adv * 0.5;
-        if closed {
-            mid = mid.rem_euclid(ap.len);
-        }
-        let (p, dir) = ap.at(mid);
+        let (p, dir) = ap.at(s + step * 0.5);
         let angle = dir.y.atan2(dir.x);
-        let half = Affine::translate((-g.adv * 0.5, 0.0));
+        let half = Affine::translate((-g.adv * 0.5, rise));
         // Glyph space: x along the advance, y down from the baseline; `pre` maps it onto the path.
-        let pre = match effect {
+        let pre = match t.path_effect {
             PathEffect::Rainbow => Affine::translate(p.to_vec2()) * Affine::rotate(angle) * half,
             // x axis along the tangent, y axis stays vertical.
             PathEffect::Skew => Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, 0.0, 1.0, 0.0, 0.0]) * half,
@@ -1277,10 +1277,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
                 let sx = if dir.x < 0.0 { -1.0 } else { 1.0 };
                 Affine::translate(p.to_vec2()) * Affine::new([sx, 0.0, -dir.y * sx, dir.x * sx, 0.0, 0.0]) * half
             }
-            PathEffect::StairStep => {
-                let s_left = if closed { s.rem_euclid(ap.len) } else { s };
-                Affine::translate(ap.at(s_left).0.to_vec2())
-            }
+            PathEffect::StairStep => Affine::translate(ap.at(s).0.to_vec2()) * Affine::translate((0.0, rise)),
             // x axis along the tangent; vertical edges point at the path's centre (kept on the glyph's
             // up side, and never closer than ~17° to the baseline so glyphs stay legible).
             PathEffect::Gravity => {
@@ -1291,17 +1288,19 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
                     up = -up;
                 }
                 if up.dot(n) < 0.3 {
-                    let t = up - n * up.dot(n);
-                    up = n * 0.3 + t / t.hypot().max(1e-9) * (1.0 - 0.09f64).sqrt();
+                    let along = up - n * up.dot(n);
+                    up = n * 0.3 + along / along.hypot().max(1e-9) * (1.0 - 0.09f64).sqrt();
                 }
                 Affine::translate(p.to_vec2()) * Affine::new([dir.x, dir.y, -up.x, -up.y, 0.0, 0.0]) * half
             }
         };
-        cx.emit(g, pre, p - dir * (g.adv * 0.5), angle, g.adv, 0);
-        x += g.adv;
+        // The caret's baseline moves with the type.
+        let origin = p - dir * (g.adv * 0.5) + Vec2::new(-dir.y, dir.x) * rise;
+        cx.emit(g, pre, origin, angle, g.adv, 0);
+        x += step;
     }
-    let (ps, _) = ap.at(if closed { s0.rem_euclid(ap.len) } else { s0 });
-    let (pe, _) = ap.at(if closed { (s0 + x).rem_euclid(ap.len) } else { s0 + x });
+    let (ps, _) = ap.at(s0);
+    let (pe, _) = ap.at(s0 + x);
     cx.out.lines.push(LineInfo {
         rtl,
         baseline: ps.y,
@@ -1313,7 +1312,7 @@ fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], para: &ParaStyle, path: &Be
         end: text_len,
         glyph_start: 0,
         glyph_end: cx.out.glyphs.len(),
-        avail: (0.0, ap.len),
+        avail: (0.0, ap.len()),
     });
 }
 

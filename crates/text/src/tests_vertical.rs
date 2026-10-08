@@ -76,7 +76,7 @@ fn area_type_starts_at_the_right_edge_and_wraps_to_the_left() {
 #[test]
 fn type_on_a_path_stays_horizontal() {
     let mut t = vertical("ab");
-    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (100.0, 0.0)).to_path(0.1)), start: 0.0 };
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&kurbo::Line::new((0.0, 0.0), (100.0, 0.0)).to_path(0.1)), start: 0.0, end: None };
     assert!(!layout(FontDb::global(), &t).vertical);
 }
 

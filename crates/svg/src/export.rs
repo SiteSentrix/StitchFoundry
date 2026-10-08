@@ -1665,7 +1665,13 @@ impl Writer<'_> {
             self.warn("bidirectional text is outlined to preserve shaping and visual order");
             return self.text_outlines(n, t);
         }
-        if let TextKind::OnPath { path, start } = &t.kind {
+        if let TextKind::OnPath { path, start, end } = &t.kind {
+            // `<textPath>` has a start offset only: an end bracket, Align to Path and Spacing
+            // keep their look as outlines.
+            if end.is_some() || t.path_align != vectorcraft_doc::PathAlign::Baseline || t.path_spacing != 0.0 {
+                self.warn("type on a path with an end bracket, Align to Path or Spacing is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             return self.text_on_path(n, t, path, *start);
         }
         self.note_fonts(t, &lay);

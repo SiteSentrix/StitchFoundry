@@ -20,6 +20,7 @@ pub mod guides;
 pub mod meshblend;
 pub mod meshedit;
 pub mod params;
+pub mod pathtype;
 pub mod pen;
 pub mod place;
 pub mod printtiling;
@@ -409,6 +410,8 @@ pub enum Cursor {
     BlendObject,
     /// The Blend tool over an anchor point (the blend starts there): a crosshair with a target.
     BlendAnchor,
+    /// Over a bracket of selected type on a path (a drag moves it): the arrow with a bracket.
+    PathBracket,
 }
 
 impl Cursor {
@@ -565,6 +568,21 @@ pub(crate) mod testutil {
         let id = d.alloc_id();
         let mut t = vectorcraft_doc::TextObject::point(Point::new(300.0, 300.0), "Some words", Default::default());
         t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 40.0)) };
+        d.insert(Some(l), 1, Node::new(id, vectorcraft_doc::NodeKind::Text(Box::new(t)))).unwrap();
+        (d, id)
+    }
+
+    /// [`doc_with_rect`] plus type on a 300 pt path from (100, 300) to the right, from 20 % on.
+    pub fn doc_with_path_type() -> (Document, NodeId) {
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut t = vectorcraft_doc::TextObject::point(Point::ZERO, "Path type", Default::default());
+        let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+            vectorcraft_geom::PathEl::MoveTo(Point::new(100.0, 300.0)),
+            vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+        ]));
+        t.kind = vectorcraft_doc::TextKind::OnPath { path, start: 0.2, end: None };
         d.insert(Some(l), 1, Node::new(id, vectorcraft_doc::NodeKind::Text(Box::new(t)))).unwrap();
         (d, id)
     }

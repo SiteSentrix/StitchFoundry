@@ -1399,6 +1399,8 @@ mod tests_panelcmds;
 #[cfg(test)]
 mod tests_pathops;
 #[cfg(test)]
+mod tests_pathtype;
+#[cfg(test)]
 mod tests_pattern;
 #[cfg(test)]
 mod tests_pdffidelity;
