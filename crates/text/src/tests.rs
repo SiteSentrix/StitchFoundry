@@ -658,7 +658,10 @@ fn character_alignment_on_the_icf_lines_small_characters_up_with_the_largest_fac
         let st = |size: f64| CharStyle { font_family: family.into(), ..style(size) };
         let mut t = point("", st(40.0));
         t.vertical = vertical_type;
-        t.runs = vec![TextRun { text: "大".into(), style: st(40.0) }, TextRun { text: "小".into(), style: CharStyle { char_align: a, ..st(20.0) } }];
+        t.runs = vec![
+            TextRun { text: "大".into(), style: st(40.0), inline: None },
+            TextRun { text: "小".into(), style: CharStyle { char_align: a, ..st(20.0) }, inline: None },
+        ];
         let l = layout(db(), &t);
         let (big, small) = (l.glyphs[0].origin, l.glyphs[1].origin);
         if vertical_type { small.x - big.x } else { big.y - small.y }
