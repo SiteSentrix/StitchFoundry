@@ -761,10 +761,15 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
     let mut j = i;
     while j < g.len() {
         let gl = &g[j];
-        if j > i && !gl.is_space() && x + gl.adv > width + EPS {
+        let mut cluster_end = j + 1;
+        while g.get(cluster_end).is_some_and(|next| next.byte == gl.byte) {
+            cluster_end += 1;
+        }
+        let cluster_width: f64 = g[j..cluster_end].iter().map(|glyph| glyph.adv).sum();
+        if j > i && !gl.is_space() && x + cluster_width > width + EPS {
             // It ends the line with the spaces after it.
-            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, j) && g.get(j + 1).is_none_or(|n| n.byte != gl.byte) {
-                let mut end = j + 1;
+            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1) {
+                let mut end = cluster_end;
                 while g.get(end).is_some_and(SGlyph::is_space) {
                     end += 1;
                 }
@@ -772,17 +777,18 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
             }
             break;
         }
-        x += gl.adv;
-        if gl.break_after() && kinsoku_allows(g, j) {
-            if gl.is_soft_hyphen() {
-                if x + hyphen_glyph(gl).adv <= width + EPS {
-                    last_break = Some((j + 1, true));
+        x += cluster_width;
+        let last = &g[cluster_end - 1];
+        if last.break_after() && kinsoku_allows(g, cluster_end - 1) {
+            if last.is_soft_hyphen() {
+                if x + hyphen_glyph(last).adv <= width + EPS {
+                    last_break = Some((cluster_end, true));
                 }
             } else {
-                last_break = Some((j + 1, false));
+                last_break = Some((cluster_end, false));
             }
         }
-        j += 1;
+        j = cluster_end;
     }
     if j >= g.len() {
         return (g.len(), false);
@@ -805,14 +811,12 @@ fn break_line(text: &str, g: &[SGlyph], i: usize, width: f64, hyphenate: bool, b
             }
         }
     }
-    // Don't separate a cluster's glyphs.
-    let (mut end, hy) = match last_break {
+    // Break candidates and greedy overflow are cluster boundaries; hyphenation also returns only
+    // cluster starts, so the resulting end always keeps each source cluster together.
+    let (end, hy) = match last_break {
         Some(b) if b.0 > i => b,
         _ => (j, false),
     };
-    while end > i + 1 && end < g.len() && g[end].byte == g[end - 1].byte {
-        end -= 1;
-    }
     (end, hy)
 }
 
@@ -833,6 +837,123 @@ fn kinsoku_allows(g: &[SGlyph], j: usize) -> bool {
 /// Kinsoku for a break between `before` and `after` (none: the end of the paragraph).
 fn kinsoku_between(before: char, after: Option<char>) -> bool {
     !no_line_end(before) && after.is_none_or(|c| !no_line_start(c))
+}
+
+#[cfg(test)]
+mod wrapping_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
+        // The face is only a required SGlyph field here; advances and cluster boundaries below are
+        // entirely synthetic, so the regressions don't depend on a particular font's shaping.
+        static DB: std::sync::OnceLock<FontDb> = std::sync::OnceLock::new();
+        let db = DB.get_or_init(|| FontDb::with_font_dirs(vec![]));
+        let face = db.face("Source Sans 3", "Regular").expect("bundled test face");
+        specs
+            .iter()
+            .map(|&(byte, len, adv, ch)| SGlyph {
+                face: Arc::clone(&face),
+                gid: 0,
+                byte,
+                len,
+                run: 0,
+                adv,
+                dx: 0.0,
+                dy: 0.0,
+                sx: 1.0,
+                sy: 1.0,
+                bshift: 0.0,
+                rotation: 0.0,
+                ascent: 8.0,
+                descent: 2.0,
+                leading: 0.0,
+                cap: 6.0,
+                xh: 4.0,
+                ch,
+                tcy: None,
+                lead: 0.0,
+                level: unicode_bidi::Level::ltr(),
+            })
+            .collect()
+    }
+
+    fn source_range(glyphs: &[SGlyph], start: usize, end: usize) -> Range<usize> {
+        let first = glyphs.get(start).expect("nonempty source range");
+        let last = glyphs.get(end - 1).expect("nonempty source range");
+        first.byte..last.byte + last.len
+    }
+
+    #[test]
+    fn greedy_wrap_keeps_an_oversized_first_cluster_and_its_source_range() {
+        let text = "بَت";
+        let glyphs = synthetic_glyphs(&[(0, 4, 2.0, 'ب'), (0, 4, 2.0, 'ب'), (4, 2, 1.0, 'ت')]);
+
+        let (end, hyphenated) = break_line(text, &glyphs, 0, 3.0, false, Burasagari::None);
+
+        assert!(!hyphenated);
+        assert_eq!(end, 2, "oversized base-plus-mark cluster must stay together");
+        assert_eq!(source_range(&glyphs, 0, end), 0..4);
+        assert_eq!(glyphs.get(end).map(|g| g.byte), Some(4));
+    }
+
+    #[test]
+    fn greedy_wrap_keeps_an_oversized_cluster_after_a_line_start_atomic() {
+        let text = "بَتَث";
+        let glyphs = synthetic_glyphs(&[(0, 4, 1.0, 'ب'), (4, 4, 2.0, 'ت'), (4, 4, 2.0, 'ت'), (8, 2, 1.0, 'ث')]);
+
+        let (first_end, _) = break_line(text, &glyphs, 0, 3.0, false, Burasagari::None);
+        assert_eq!(first_end, 1);
+        assert_eq!(source_range(&glyphs, 0, first_end), 0..4);
+
+        let (second_end, hyphenated) = break_line(text, &glyphs, first_end, 3.0, false, Burasagari::None);
+
+        assert!(!hyphenated);
+        assert_eq!(second_end, 3, "oversized cluster at the next line start must stay together");
+        assert_eq!(source_range(&glyphs, first_end, second_end), 4..8);
+        assert_eq!(glyphs.get(second_end).map(|g| g.byte), Some(8));
+    }
+
+    #[test]
+    fn narrow_arabic_area_wrap_keeps_base_and_mark_together_when_supported() {
+        let db = FontDb::global();
+        let Some(face) = db.face_covering('ب').filter(|face| face.covers('َ')) else {
+            // Arabic integration coverage depends on an installed font; synthetic tests above are
+            // the font-independent regression oracle.
+            return;
+        };
+        let text = "بَت";
+        let style = CharStyle { font_family: face.family.clone(), font_style: face.style.clone(), size: 20.0, ..CharStyle::default() };
+        let bidi = para_bidi(text, None);
+        let levels = bidi.as_ref().map_or(&[][..], |info| &info.levels);
+        let mut shaped = Vec::new();
+        shape_range(db, text, 0..text.len(), &[(0..text.len(), &style)], &OtFeatures::default(), levels, &mut shaped);
+        let Some(first) = shaped.first() else { return };
+        let first_end = shaped.iter().take_while(|g| g.byte == first.byte).count();
+        if first.byte != 0 || first_end < 2 || first_end >= shaped.len() {
+            return;
+        }
+        // Pick a narrow width that fits glyphs before one positive-advance glyph but not that next
+        // glyph. This ensures the old per-glyph loop would have returned inside the first cluster.
+        let mut prefix = shaped.first().map_or(0.0, |g| g.adv);
+        let width = (1..first_end).find_map(|k| {
+            let advance = shaped.get(k)?.adv;
+            if prefix > EPS && advance > EPS {
+                Some(prefix)
+            } else {
+                prefix += advance;
+                None
+            }
+        });
+        let Some(width) = width else { return };
+
+        let mut object = TextObject::point(Point::ZERO, text, style);
+        object.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, width, 100.0).to_path(0.1)) };
+        let result = layout_with(db, &object, &LayoutOptions::default());
+
+        let next_cluster_byte = shaped.get(first_end).map(|g| g.byte);
+        assert_eq!(result.lines.first().map(|line| line.end), next_cluster_byte);
+    }
 }
 
 #[cfg(test)]

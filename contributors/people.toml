@@ -28,3 +28,6 @@ sync_github_name = false
 
 [people.mo0kid]
 sync_github_name = true
+
+[people.omd0]
+sync_github_name = true
