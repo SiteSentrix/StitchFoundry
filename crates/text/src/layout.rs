@@ -281,7 +281,10 @@ fn is_japanese_letter(c: char) -> bool {
         return true;
     }
     is_cjk(c)
-        && !matches!(c as u32, 0x3000..=0x303F | 0xAC00..=0xD7AF | 0xFF01..=0xFF0F | 0xFF1A..=0xFF20 | 0xFF3B..=0xFF40 | 0xFF5B..=0xFF65)
+        && !matches!(
+            c as u32,
+            0x3000..=0x303F | 0x3130..=0x318F | 0xAC00..=0xD7AF | 0xFF01..=0xFF0F | 0xFF1A..=0xFF20 | 0xFF3B..=0xFF40 | 0xFF5B..=0xFF65 | 0xFFA0..=0xFFDC
+        )
         && c != '・'
         && punct(c).is_none()
 }
@@ -818,7 +821,8 @@ fn japanese_letters_for_the_latin_space_are_kana_kanji_and_marks_not_hangul_or_p
     for c in ['あ', 'カ', '漢', '々', '〆', '〇', 'Ａ'] {
         assert!(is_japanese_letter(c), "{c}");
     }
-    for c in ['한', '。', '「', '・', '、', 'a'] {
+    // Hangul in every form: syllables, compatibility jamo (ㄱ ㅏ), half-width jamo (ﾡ).
+    for c in ['한', 'ㄱ', 'ㅏ', '\u{FFA1}', '。', '「', '・', '、', 'a'] {
         assert!(!is_japanese_letter(c), "{c}");
     }
 }
