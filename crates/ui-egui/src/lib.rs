@@ -17,6 +17,7 @@ pub mod background;
 mod brand;
 pub mod canvas;
 pub mod chrome;
+mod clipboard_probe;
 pub mod community;
 pub mod control;
 pub mod credits;
@@ -24,6 +25,7 @@ pub mod cursors;
 pub mod dialogs;
 pub mod dock;
 pub mod find_font;
+pub mod floating;
 pub mod font_menu;
 pub mod graphics;
 pub mod i18n;
@@ -128,6 +130,8 @@ mod tests_sysclip;
 #[cfg(test)]
 mod tests_sysclip_emf;
 #[cfg(test)]
+mod tests_sysclip_probe;
+#[cfg(test)]
 mod tests_transparencygrid;
 #[cfg(test)]
 mod tests_widthtool;
@@ -141,7 +145,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse};
 pub use state::{UiState, View};
-pub use sysclip::SystemClipboard;
+pub use sysclip::{ClipboardProbeFactory, SystemClipboard};
 
 /// What a file dialog shows: a suggested file name (save dialogs), the folder to start in and the
 /// file-type filters.
@@ -204,6 +208,10 @@ pub struct Services {
     /// Paste takes SVG, PDF, text and bitmaps from other apps. Without it, SVG text only (through
     /// egui and `clipboard_read`).
     pub system_clipboard: Option<Box<dyn SystemClipboard>>,
+    /// A second system-clipboard handle, for checking whether Paste has something to take on a
+    /// background thread (Linux: an X11 clipboard owner that never answers would freeze the UI).
+    /// Taken on the first frame. Without it the check runs on the UI thread.
+    pub clipboard_probe: Option<ClipboardProbeFactory>,
     /// File → Show in Folder: select a file in the system file manager (desktop).
     pub reveal: Option<RevealFn>,
     /// Write a file from any thread (desktop): lets Background Save and Export write off the UI
@@ -326,8 +334,11 @@ pub struct VectorcraftApp {
     /// (SVG without a `system_clipboard`) while the internal clipboard is empty. It enables the
     /// Paste menu items.
     pub(crate) system_paste: bool,
-    /// When `system_paste` was last checked (app time, s; at most once per frame).
+    /// When `system_paste` was last checked in line (app time, s; at most once per frame).
     system_paste_at: f64,
+    /// The thread that checks the system clipboard for `system_paste` instead
+    /// ([`Services::clipboard_probe`]).
+    clipboard_probe: Option<clipboard_probe::Probe>,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
@@ -403,6 +414,7 @@ impl VectorcraftApp {
             place: Default::default(),
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
+            clipboard_probe: None,
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
@@ -539,28 +551,14 @@ impl VectorcraftApp {
 
     /// Select a tool (also used by the toolbar and shortcuts).
     pub fn select_tool(&mut self, id: &str) {
-        self.change_tool(id, true);
-    }
-
-    /// Go back to tool `id` after a temporary one, without choosing it afresh
-    /// ([`vectorcraft_engine::Session::switch_tool`]).
-    pub fn restore_tool(&mut self, id: &str) {
-        self.change_tool(id, false);
-    }
-
-    fn change_tool(&mut self, id: &str, choose: bool) {
         let v = self.view_info();
-        let r = if choose { self.session.select_tool(id, v) } else { self.session.switch_tool(id, v) };
-        if let Err(e) = r {
+        if let Err(e) = self.session.select_tool(id, v) {
             self.ui.status = e.to_string();
         }
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {
             *slot = id.to_string();
-        }
-        if canvas::is_selection_tool(id) {
-            self.ui.last_selection_tool = id.to_string();
         }
         toolbar::remember(self, id);
         self.ui.flyout = None;
@@ -742,11 +740,20 @@ impl VectorcraftApp {
         }
         self.last_time = now;
         self.sync_views();
-        // Read the system clipboard only when that alone decides whether Paste is enabled, and at
-        // most a few times a second (opening it locks it against other apps on some systems).
-        if !(0.0..SYSTEM_CLIPBOARD_POLL).contains(&(now - self.system_paste_at)) {
+        // Read the system clipboard only when that alone decides whether Paste is enabled. A
+        // background thread reads it where the host installs one (an unresponsive owner must never
+        // stall the frame loop); otherwise, or once that thread is gone, it is read here, at most a
+        // few times a second (opening it locks it against other apps on some systems).
+        let wanted = self.session.clipboard.is_empty() && self.session.active().is_some();
+        if let Some(make) = self.services.clipboard_probe.take() {
+            self.clipboard_probe = clipboard_probe::Probe::start(make, ctx.clone());
+        }
+        if let Some(pasteable) = self.clipboard_probe.as_mut().and_then(|p| p.pasteable(wanted)) {
+            self.system_paste = pasteable;
+        } else if !(0.0..SYSTEM_CLIPBOARD_POLL).contains(&(now - self.system_paste_at)) {
+            self.clipboard_probe = None;
             self.system_paste_at = now;
-            self.system_paste = self.session.clipboard.is_empty() && self.session.active().is_some() && self.system_clipboard_pasteable();
+            self.system_paste = wanted && self.system_clipboard_pasteable();
         }
         background::poll(self);
         if !self.background.jobs.is_empty() {
@@ -895,6 +902,7 @@ impl VectorcraftApp {
         let t0 = now_ms();
         scrub::begin_frame(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
+        floating::track(self, &ctx);
         let t = theme::Tokens::get(&ctx);
         if self.ui.screen_mode < 2 {
             chrome::app_bar(self, ui);
@@ -919,6 +927,7 @@ impl VectorcraftApp {
             canvas::show(self, ui);
         });
         dock::floating_panel(self, &ctx);
+        floating::show(self, &ctx);
         panels::library_panel::show_window(self, &ctx);
         dialogs::show(self, &ctx);
         palette::show(self, &ctx);

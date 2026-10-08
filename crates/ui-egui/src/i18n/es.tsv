@@ -3053,6 +3053,12 @@ axis	Both	Ambos
 	Drag to move	Arrastrar para mover
 	Drag to float as a toolbar	Arrastrar para flotar como barra de herramientas
 	Put back in the toolbar	Devolver a la barra de herramientas
+	Float Panel	Hacer flotar el panel
+	Dock Panel	Anclar panel
+	Drag to float the panel group	Arrastrar para hacer flotar el grupo de paneles
+	Put back in the dock	Devolver al área de paneles
+	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
+	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas
 
 # Status and error messages (`@msg`), translated where the status bar shows them; the message itself
@@ -3565,6 +3571,7 @@ axis	Both	Ambos
 @msg	Sent to {_1}	Se envió a {_1}
 @msg	{_1} files	{_1} archivos
 @msg	The graphics were lost and have been restarted	Se perdieron los gráficos y se reiniciaron
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}	El procesador gráfico probado primero no pudo mostrar la ventana, así que VectorCraft se inició de nuevo con {summary}
 @msg	Loading VectorCraft…	Cargando VectorCraft…
 @msg	VectorCraft failed to start: {e}	VectorCraft no pudo iniciarse: {e}
 @msg	A browser with WebGPU or WebGL2 is required.	Se necesita un navegador con WebGPU o WebGL2.
@@ -3573,3 +3580,5 @@ axis	Both	Ambos
 @msg	Reload the page to go on (changes not saved yet may be lost).	Vuelve a cargar la página para continuar (los cambios que aún no se guardaron podrían perderse).
 @msg	tool (a tool id) is required	se requiere tool (un id de herramienta)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no está en un grupo de la barra de herramientas con varias herramientas
+@msg	onto must name a panel floating in another group	onto debe nombrar un panel que flote en otro grupo
+@msg	x and y must both be numbers	x e y deben ser números

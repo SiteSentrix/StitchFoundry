@@ -89,146 +89,168 @@ pub fn remember(app: &mut VectorcraftApp, id: &str) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let all = slots(app);
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
     let w = if cols == 2 { 76.0 } else { WIDTH };
-    egui::Panel::left("toolbar")
-        .resizable(false)
-        .exact_size(w)
-        .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).stroke(Stroke::new(1.5, t.border)))
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            // Dock header with » and a grip strip.
-            let (hdr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::click());
-            ui.painter().rect_filled(hdr, 0.0, t.tab_strip);
-            icons::paint(
-                ui,
-                if cols == 2 { "chevrons-left" } else { "chevrons-right" },
-                egui::Rect::from_min_size(hdr.left_top() + vec2(3.0, 2.0), vec2(10.0, 10.0)),
-                if hresp.hovered() { t.text_strong } else { t.text },
-            );
-            if hresp.on_hover_text(tl!("Toggle single/double column")).clicked()
-                // It only fails on bad params, which this never sends; show it all the same.
-                && let Err(e) = app.run("window.toolbarColumns", json!({ "double": cols == 1 }))
-            {
-                app.ui.status = e;
-            }
-            let (grip, _) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::hover());
-            for k in 0..6 {
-                ui.painter().line_segment(
-                    [pos2(grip.center().x - 9.0, grip.top() + 1.5 + k as f32 * 0.6), pos2(grip.center().x + 9.0, grip.top() + 1.5 + k as f32 * 0.6)],
-                    Stroke::new(0.4, t.text_disabled),
-                );
-            }
-            // The tools and the controls under them scroll in a window too short for them.
-            widgets::strip_scroll(ui, "toolbar", |ui| {
-                let active = app.session.tool_id();
-                // The tool button whose long press opened its flyout, until the next press.
-                let held_id = egui::Id::new("toolbar-held");
-                if ui.input(|inp| inp.pointer.any_pressed()) {
-                    ui.data_mut(|d| d.remove::<egui::Id>(held_id));
-                }
-                let held: Option<egui::Id> = ui.data(|d| d.get_temp(held_id));
-                let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
-                // A group torn off into a floating flyout is raised instead of opening its flyout.
-                let mut raise: Option<&'static str> = None;
-                let mut i = 0;
-                while i < all.len() {
-                    if let Some(cat) = all[i].0 {
-                        let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
-                        // A long name is cut to its first four characters in the single column.
-                        let cat = tl!(cat);
-                        let label = if cols == 1 && cat.chars().count() > 6 {
-                            format!("{}...", cat.chars().take(4).collect::<String>())
-                        } else {
-                            cat.to_string()
-                        };
-                        ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
-                    }
-                    // One row = `cols` slots (a category label always starts a new row).
-                    let mut row = vec![i];
-                    while row.len() < cols && i + row.len() < all.len() && all[i + row.len()].0.is_none() {
-                        row.push(i + row.len());
-                    }
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        if cols == 1 {
-                            ui.add_space((WIDTH - 36.0) / 2.0);
-                        } else {
-                            ui.add_space(2.0);
-                        }
-                        for &k in &row {
-                            let slot = &all[k].1;
-                            let shown_id = if slot.contains(&active) {
-                                active.to_string()
-                            } else {
-                                app.ui.slot_tool.get(slot[0]).cloned().unwrap_or_else(|| slot[0].to_string())
-                            };
-                            let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
-                            let is_active = slot.contains(&active);
-                            let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
-                            let well = egui::Rect::from_center_size(rect.center(), vec2(35.5, 27.5));
-                            if is_active {
-                                ui.painter().rect_filled(well, CornerRadius::same(1), t.tool_active);
-                            } else if resp.hovered() {
-                                ui.painter().rect_filled(well, CornerRadius::same(1), t.hover);
-                            }
-                            let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
-                            icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
-                            if slot.len() > 1 {
-                                let c = rect.center() + vec2(12.5, 10.0);
-                                ui.painter().add(egui::Shape::convex_polygon(
-                                    vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)],
-                                    t.icon,
-                                    Stroke::NONE,
-                                ));
-                            }
-                            let press = if slot.len() > 1 { flyout_press(ui, &resp, rect) } else { None };
-                            let alt = ui.input(|inp| inp.modifiers.alt);
-                            if press.is_some() {
-                                if is_floating(app, slot[0]) {
-                                    raise = Some(slot[0]);
-                                } else {
-                                    open_flyout = Some((slot.clone(), rect));
-                                }
-                                if press == Some(FlyoutPress::Primary) {
-                                    ui.data_mut(|d| d.insert_temp(held_id, resp.id));
-                                }
-                            } else if resp.clicked() && held == Some(resp.id) {
-                                // Releasing the long press that opened the flyout leaves it open.
-                            } else if resp.clicked() && alt && slot.len() > 1 {
-                                let idx = slot.iter().position(|x| *x == shown.id).unwrap_or(0);
-                                app.select_tool(slot[(idx + 1) % slot.len()]);
-                            } else if resp.double_clicked() {
-                                app.select_tool(shown.id);
-                                app.run("tool.options", json!({ "tool": shown.id })).ok();
-                            } else if resp.clicked() {
-                                app.select_tool(shown.id);
-                            }
-                            resp.on_hover_text(tip(shown));
-                        }
-                    });
-                    i += row.len();
-                }
-                if let Some(key) = raise {
-                    raise_floating(ui.ctx(), key);
-                }
-                if let Some((slot, rect)) = open_flyout {
-                    app.ui.flyout = Some(0);
-                    ui.data_mut(|d| {
-                        d.insert_temp(egui::Id::new("flyout-anchor"), rect);
-                        d.insert_temp(egui::Id::new("flyout-tools"), slot.iter().map(|s| s.to_string()).collect::<Vec<String>>());
-                    });
-                }
-                ui.add_space(8.0);
-                bottom_controls(app, ui, &t);
+    // Where the panel docks: along the window's left edge, under the bars.
+    let edge = ui.available_rect_before_wrap();
+    ui.ctx().data_mut(|d| d.insert_temp(crate::floating::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
+    let frame =
+        egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).stroke(Stroke::new(1.5, t.border));
+    match app.ui.toolbar_pos {
+        None => {
+            egui::Panel::left("toolbar").resizable(false).exact_size(w).frame(frame).show(ui, |ui| body(app, ui, cols, None));
+        }
+        Some(pos) => {
+            // Floating, kept inside the window, its tools scrolling when they don't fit under it.
+            let ctx = ui.ctx().clone();
+            let id = egui::Id::new("toolbar-floating");
+            let screen = ctx.content_rect();
+            // Kept on screen by its title bar and first tools: the rest scrolls.
+            let size = ctx.memory(|m| m.area_rect(id)).map_or(vec2(w, 160.0), |r| vec2(r.width(), r.height().min(160.0)));
+            let at = crate::floating::clamp(pos, size, screen);
+            egui::Area::new(id).order(egui::Order::Middle).fixed_pos(at).show(&ctx, |ui| {
+                flyout_frame(&t, false).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).show(ui, |ui| {
+                    ui.set_width(w);
+                    ui.set_max_height(screen.bottom() - at.y - 12.0);
+                    body(app, ui, cols, Some(at));
+                });
             });
-        });
+        }
+    }
     // Before the flyout: one torn off this frame floats from the next (its bar mustn't be in two
     // layers in one frame).
     floating(app, ui.ctx());
     flyout(app, ui.ctx());
+}
+
+/// The Tools panel's contents, docked or floating at `floating`.
+fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egui::Pos2>) {
+    let t = Tokens::get(ui.ctx());
+    let all = slots(app);
+    let bounds = ui.max_rect();
+    ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+    // Title bar with » and a grip strip: a drag on either floats the panel or moves it.
+    let (hdr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::click_and_drag());
+    ui.painter().rect_filled(hdr, 0.0, t.tab_strip);
+    icons::paint(
+        ui,
+        if cols == 2 { "chevrons-left" } else { "chevrons-right" },
+        egui::Rect::from_min_size(hdr.left_top() + vec2(3.0, 2.0), vec2(10.0, 10.0)),
+        if hresp.hovered() { t.text_strong } else { t.text },
+    );
+    let (grip, gresp) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::drag());
+    for k in 0..6 {
+        ui.painter().line_segment(
+            [pos2(grip.center().x - 9.0, grip.top() + 1.5 + k as f32 * 0.6), pos2(grip.center().x + 9.0, grip.top() + 1.5 + k as f32 * 0.6)],
+            Stroke::new(0.4, t.text_disabled),
+        );
+    }
+    crate::floating::drag_tools(app, ui.ctx(), &hresp.union(gresp.clone()), bounds, floating);
+    if hresp.on_hover_text(tl!("Toggle single/double column")).clicked()
+        // It only fails on bad params, which this never sends; show it all the same.
+        && let Err(e) = app.run("window.toolbarColumns", json!({ "double": cols == 1 }))
+    {
+        app.ui.status = e;
+    }
+    let grip_tip = if floating.is_some() { tl!("Drag to the window's left edge to dock") } else { tl!("Drag to float the toolbar") };
+    gresp.on_hover_cursor(egui::CursorIcon::Grab).on_hover_text(grip_tip);
+    // The tools and the controls under them scroll in a window too short for them.
+    widgets::strip_scroll(ui, "toolbar", |ui| {
+        let active = app.session.tool_id();
+        // The tool button whose long press opened its flyout, until the next press.
+        let held_id = egui::Id::new("toolbar-held");
+        if ui.input(|inp| inp.pointer.any_pressed()) {
+            ui.data_mut(|d| d.remove::<egui::Id>(held_id));
+        }
+        let held: Option<egui::Id> = ui.data(|d| d.get_temp(held_id));
+        let mut open_flyout: Option<(Vec<&'static str>, egui::Rect)> = None;
+        // A group torn off into a floating flyout is raised instead of opening its flyout.
+        let mut raise: Option<&'static str> = None;
+        let mut i = 0;
+        while i < all.len() {
+            if let Some(cat) = all[i].0 {
+                let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
+                // A long name is cut to its first four characters in the single column.
+                let cat = tl!(cat);
+                let label =
+                    if cols == 1 && cat.chars().count() > 6 { format!("{}...", cat.chars().take(4).collect::<String>()) } else { cat.to_string() };
+                ui.painter().text(r.center() + vec2(0.0, 2.0), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(11.0), t.text);
+            }
+            // One row = `cols` slots (a category label always starts a new row).
+            let mut row = vec![i];
+            while row.len() < cols && i + row.len() < all.len() && all[i + row.len()].0.is_none() {
+                row.push(i + row.len());
+            }
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                if cols == 1 {
+                    ui.add_space((WIDTH - 36.0) / 2.0);
+                } else {
+                    ui.add_space(2.0);
+                }
+                for &k in &row {
+                    let slot = &all[k].1;
+                    let shown_id = if slot.contains(&active) {
+                        active.to_string()
+                    } else {
+                        app.ui.slot_tool.get(slot[0]).cloned().unwrap_or_else(|| slot[0].to_string())
+                    };
+                    let Some(shown) = tool_info(&shown_id).or_else(|| tool_info(slot[0])) else { continue };
+                    let is_active = slot.contains(&active);
+                    let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
+                    let well = egui::Rect::from_center_size(rect.center(), vec2(35.5, 27.5));
+                    if is_active {
+                        ui.painter().rect_filled(well, CornerRadius::same(1), t.tool_active);
+                    } else if resp.hovered() {
+                        ui.painter().rect_filled(well, CornerRadius::same(1), t.hover);
+                    }
+                    let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
+                    icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
+                    if slot.len() > 1 {
+                        let c = rect.center() + vec2(12.5, 10.0);
+                        ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)], t.icon, Stroke::NONE));
+                    }
+                    let press = if slot.len() > 1 { flyout_press(ui, &resp, rect) } else { None };
+                    let alt = ui.input(|inp| inp.modifiers.alt);
+                    if press.is_some() {
+                        if is_floating(app, slot[0]) {
+                            raise = Some(slot[0]);
+                        } else {
+                            open_flyout = Some((slot.clone(), rect));
+                        }
+                        if press == Some(FlyoutPress::Primary) {
+                            ui.data_mut(|d| d.insert_temp(held_id, resp.id));
+                        }
+                    } else if resp.clicked() && held == Some(resp.id) {
+                        // Releasing the long press that opened the flyout leaves it open.
+                    } else if resp.clicked() && alt && slot.len() > 1 {
+                        let idx = slot.iter().position(|x| *x == shown.id).unwrap_or(0);
+                        app.select_tool(slot[(idx + 1) % slot.len()]);
+                    } else if resp.double_clicked() {
+                        app.select_tool(shown.id);
+                        app.run("tool.options", json!({ "tool": shown.id })).ok();
+                    } else if resp.clicked() {
+                        app.select_tool(shown.id);
+                    }
+                    resp.on_hover_text(tip(shown));
+                }
+            });
+            i += row.len();
+        }
+        if let Some(key) = raise {
+            raise_floating(ui.ctx(), key);
+        }
+        if let Some((slot, rect)) = open_flyout {
+            app.ui.flyout = Some(0);
+            ui.data_mut(|d| {
+                d.insert_temp(egui::Id::new("flyout-anchor"), rect);
+                d.insert_temp(egui::Id::new("flyout-tools"), slot.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+            });
+        }
+        ui.add_space(8.0);
+        bottom_controls(app, ui, &t);
+    });
 }
 
 /// How a press on a tool group's button opens its flyout.
@@ -278,7 +300,7 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         "hand" => app.run("view.fitArtboard", json!({})),
         "zoom" => app.run("view.actualSize", json!({})),
         "rotate" | "scale" | "reflect" | "shear" | "selection" | "directSelection" | "groupSelection" => {
-            let dialog = if crate::canvas::is_selection_tool(tool) { "move" } else { tool };
+            let dialog = if vectorcraft_tools::catalog::is_selection_tool(tool) { "move" } else { tool };
             let id = format!("object.{dialog}");
             if let Some(c) = vectorcraft_engine::find_command(&id) {
                 (c.enabled)(&app.session)?;
@@ -631,9 +653,7 @@ fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
         // Kept on screen (a smaller window, or a position saved on a bigger one).
         let size = ctx.memory(|m| m.area_rect(id)).map_or(vec2(strip_width(&f.tools), PITCH), |r| r.size());
-        let [x, y] = f.pos;
-        let (x, y) = if x.is_finite() && y.is_finite() { (x, y) } else { (screen.left() + 60.0, screen.top() + 100.0) };
-        let pos = pos2(x.min(screen.right() - size.x).max(screen.left()), y.min(screen.bottom() - size.y).max(screen.top()));
+        let pos = crate::floating::clamp(f.pos, size, screen);
         let mut input = FlyoutInput::default();
         egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
             flyout_frame(&t, flash).show(ui, |ui| input = flyout_body(ui, &t, active, &f.tools, true));

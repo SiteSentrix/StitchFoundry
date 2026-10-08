@@ -66,7 +66,7 @@ pub(super) fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
     app.run(id, p).unwrap_or_else(|e| panic!("{id}: {e}"))
 }
 
-fn copy_rect(app: &mut VectorcraftApp) {
+pub(super) fn copy_rect(app: &mut VectorcraftApp) {
     let id = run(app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
     run(app, "paint.setFill", json!({"color": "#ff0000"}));
     run(app, "select.set", json!({"ids": [id]}));

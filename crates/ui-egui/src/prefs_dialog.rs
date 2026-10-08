@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
-use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
+use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
 
 use crate::state::Dialog;
 use crate::theme::{self, Brightness, Tokens};
@@ -68,6 +68,11 @@ pub fn restore(app: &mut VectorcraftApp) {
         && crate::i18n::Lang::from_code(&code).is_some()
     {
         p.interface_language = code;
+    }
+    // 0.5.0 saved its default, `powerSaving`, which Automatic replaced (#502): any value this
+    // version doesn't offer reads as the default, as the desktop app reads it at startup.
+    if !GPU_PREFERENCES.iter().any(|(v, _)| *v == p.gpu_preference) {
+        p.gpu_preference = Prefs::default().gpu_preference;
     }
     app.session.apply_prefs(p);
 }
@@ -454,8 +459,8 @@ mod tests {
         assert_eq!(a.session.prefs.ui_brightness, "light");
     }
 
-    /// Performance › Graphics Processor (#306): shown with its restart note, applied by OK and
-    /// saved with the UI state under the key the desktop app reads before the window opens.
+    /// Performance › Graphics Processor (#306, #502): shown with its restart note, applied by OK
+    /// and saved with the UI state under the key the desktop app reads before the window opens.
     #[test]
     fn graphics_processor_preference_shows_and_persists() {
         fn texts(s: &egui::Shape, out: &mut Vec<String>) {
@@ -477,7 +482,7 @@ mod tests {
         let mut shown = vec![];
         out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
         assert!(shown.iter().any(|t| t.starts_with("Graphics Processor")), "{shown:?}");
-        assert!(shown.iter().any(|t| t == "Power Saving (integrated)"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "Automatic"), "{shown:?}");
         assert!(shown.iter().any(|t| t == "Applies the next time VectorCraft starts."), "{shown:?}");
         a.ui.dialog.as_mut().unwrap().fields.insert("gpuPreference".into(), json!("highPerformance"));
         confirm(&mut a).unwrap();
@@ -512,6 +517,19 @@ mod tests {
         assert!(!picas_in_use(d), "dimmed in points");
         d.fields.insert("unitsStroke".into(), json!("picas"));
         assert!(picas_in_use(d), "enabled with a unit in picas");
+    }
+
+    /// 0.5.0 saved `powerSaving` for everyone (its default): it reads as Automatic, while the
+    /// choices this version offers are kept (#502).
+    #[test]
+    fn a_graphics_processor_this_version_does_not_offer_reads_as_automatic() {
+        for (saved, read) in [("powerSaving", "automatic"), ("turbo", "automatic"), ("lowPower", "lowPower"), ("highPerformance", "highPerformance")]
+        {
+            let mut a = app();
+            a.ui.engine_prefs = json!({"gpuPreference": saved});
+            restore(&mut a);
+            assert_eq!(a.session.prefs.gpu_preference, read, "{saved}");
+        }
     }
 
     #[test]

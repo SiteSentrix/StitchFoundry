@@ -701,13 +701,16 @@ fn reshape_segment(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(EngineError::Other("no such segment".into()));
         }
         let n = sp.anchors.len();
-        // Moving both inner control points by v moves B(t) by 3t(1-t)·v.
+        // Moving both inner control points by v moves B(t) by 3t(1-t)·v. A smooth anchor stays
+        // smooth: its other handle turns with the moved one.
         let v = dv / (3.0 * t * (1.0 - t));
         let (i0, i1) = (seg % n, (seg + 1) % n);
-        let a = sp.anchors[i0];
-        sp.anchors[i0] = Anchor::with_handles(a.p, a.h_in, a.h_out + v);
-        let b = sp.anchors[i1];
-        sp.anchors[i1] = Anchor::with_handles(b.p, b.h_in + v, b.h_out);
+        if let Some(a) = sp.anchors.get_mut(i0) {
+            a.set_handle(true, a.h_out + v, false);
+        }
+        if let Some(b) = sp.anchors.get_mut(i1) {
+            b.set_handle(false, b.h_in + v, false);
+        }
         Ok(())
     })?;
     ok()

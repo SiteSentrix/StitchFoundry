@@ -552,6 +552,10 @@ fn arb_rich_op() -> impl Strategy<Value = String> {
             "/Sh0 sh",
             "/Sh1 sh",
             "BT /F1 12 Tf 10 10 Td (Hi there) Tj [(a) -900 (b)] TJ ET",
+            // Lines wrapped in a frame, digits set apart by gaps, glyph outlines stroked (#508).
+            "BT /F1 10 Tf 10 80 Td (Wrapped line ) Tj 0 -12 Td (and its next ) Tj 0 -12 Td (end.) Tj ET",
+            "BT /F1 10 Tf 10 40 Td (3) Tj 20 0 Td (5331) Tj 40 0 Td (0106) Tj ET",
+            "0.5 w 10 10 m 14 18 l 18 10 l h S",
             "7 Tr",
             "q 10 10 50 50 re W n",
             "Q",

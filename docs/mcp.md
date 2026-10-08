@@ -402,11 +402,14 @@ their stop opacity and stop where the shading doesn't extend. Text becomes point
 the file's font (by name; fonts that aren't available are listed in `warnings` and show in the fallback font, and
 every export that draws that type — PDF, EPS, EMF/WMF, raster images, SVG with outlined or embedded fonts — says in
 its `warnings` that it wrote the fallback font) — `textAs: "outlines"` keeps the glyph outlines the file draws instead
-(its embedded fonts, installed or not). Strokes stay live strokes (width, cap, join, miter limit, dash and paint), and
+(its embedded fonts, installed or not). Lines wrapped in a frame (each wrapped line ending in a space, sharing a left
+edge, font and leading) come back as one area type object, left aligned or justified, where laying it out breaks the
+lines where the file does; a stroke written as each glyph's outline stroked is the type object's stroke; glyphs set
+apart by gaps wider than a space keep their places. Strokes stay live strokes (width, cap, join, miter limit, dash and paint), and
 an object written as a fill and then a stroke of the same outline is one path with both. Optional content groups (the
 layers of PDF and PDF-compatible `.ai` files) become layers with their name, visibility (the default configuration's,
-or a view state that is off), print state and lock, nested as sublayers the way the file's layer order nests them; art
-that is off comes in as a hidden layer. Art outside them goes to a layer per page (except the opaque white page a `.ai`
+or a view state that is off), print state and lock, nested as sublayers the way the file's layer order nests them, stacked as the pages mark them
+(layers with no art come in empty); art that is off comes in as a hidden layer. Art outside them goes to a layer per page (except the opaque white page a `.ai`
 paints under its layers, which isn't art). `layers: false` gives one layer per page of only what shows:
 
 ```json
@@ -1049,7 +1052,20 @@ on top of each other, and an open path becomes one path per piece. Each cut leav
 so `path.moveAnchors {dx, dy}` (or a Direct Selection drag) pulls the path apart there; `path.join {}` (Connect
 Selected End Points) joins the ends again. `path.convertAnchor {id, subpath?, anchor, to, x?, y?}` and
 `path.split {id, subpath?, anchor}` do the same to one anchor (the Anchor Point and Scissors tools); the Pen with Alt
-held over a selected path's handle or anchor works as the Anchor Point tool.
+held over a selected path's handle, anchor or segment works as the Anchor Point tool. `path.reshapeSegment {id,
+subpath?, segment, t, dx, dy}` (a segment dragged with Direct Selection or the Anchor Point tool) moves the segment's
+point at `t` by `dx`, `dy`: a smooth anchor at either end stays smooth, its other handle turning with the moved one.
+
+A `pointer_gesture` with `mods: {cmd: true}` held at the press, with any tool but the selection tools (Command on
+macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`), or Direct Selection with the Pen,
+Curvature and anchor tools until one is chosen; the release gives the tool back as it was, so the Pen goes on drawing
+the path it had begun while that stays selected. Its reply's `tool` is the tool given back.
+
+```json
+{"name":"pointer_gesture","arguments":{"tool":"pen","events":[{"kind":"down","x":100,"y":300},{"kind":"up","x":100,"y":300},{"kind":"down","x":200,"y":300},{"kind":"drag","x":250,"y":300},{"kind":"up","x":250,"y":300}]}}
+{"name":"pointer_gesture","arguments":{"mods":{"cmd":true},"events":[{"kind":"down","x":250,"y":300},{"kind":"drag","x":250,"y":260},{"kind":"up","x":250,"y":260}]}}
+{"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":300,"y":350},{"kind":"up","x":300,"y":350}]}}
+```
 
 ```json
 {"name":"run_command","arguments":{"command":"select.anchors","params":{"id":12,"anchors":[[0,2]]}}}
@@ -1153,8 +1169,9 @@ Effects off a 100 pt wide rectangle with a 10 pt stroke set to `width: 220` gets
 
 The Selection & Anchor Display and General preferences apply to `pointer_gesture` as they do to the mouse:
 
-- `selectionTolerance` (1–8 px, 3 by default): how near a click must be to a path to pick it, and to an anchor or
-  handle for Direct Selection.
+- `selectionTolerance` (1–8 px, 3 by default): how near a click must be to a path to pick it, and to an anchor,
+  handle or segment for Direct Selection, the Anchor Point, Add and Delete Anchor Point and Scissors tools, and the
+  Pen with Alt. A handle shorter than that leaves its anchor to be picked when pressed nearer the anchor.
 - `objectSelectionByPathOnly`: a click inside a filled path or compound path doesn't select it, one on its path does.
 - `ctrlClickSelectsBehind` (on by default): a Selection tool click with `mods: {cmd: true}` (Command on macOS, Ctrl
   elsewhere) selects the object under the selected one there, the next such click the one under that, then the
@@ -1168,8 +1185,9 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   hidden art with the artboard too; off (the default) it stays where it is.
 - `penRubberBand`, `curvatureRubberBand` (on by default): off, the Pen and Curvature tools draw no preview segment to
   the pointer.
-- `showHandlesMultipleAnchors` (on by default): off, Direct Selection shows and drags direction handles only while a
-  single anchor is selected. `handleStyle` (`solid`, `hollow`, `large`) draws their ends (desktop app).
+- `showHandlesMultipleAnchors` (on by default): off, Direct Selection (and the Anchor Point tool, and the Pen with Alt)
+  shows and drags direction handles only while a single anchor is selected. On, the handles of the direct-selected
+  anchors, or of every anchor of a path selected as a whole, show and drag. `handleStyle` (`solid`, `hollow`, `large`) draws their ends (desktop app).
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,

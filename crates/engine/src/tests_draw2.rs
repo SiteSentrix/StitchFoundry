@@ -57,6 +57,20 @@ fn click(s: &mut Session, tool: &str, x: f64, y: f64) -> Vec<UiRequest> {
     drag(s, tool, &[(x, y)], Mods::default())
 }
 
+/// A gesture of the active tool, `m` held throughout: press at the first point, drag through the
+/// others, release at the last. The undo steps it made.
+fn gesture(s: &mut Session, pts: &[(f64, f64)], m: Mods) -> usize {
+    let v = view();
+    let undo = undo_steps(s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m), v).unwrap();
+    for &(x, y) in &pts[1..] {
+        s.pointer(&PointerEvent::new(PointerKind::Drag, x, y).with_mods(m), v).unwrap();
+    }
+    let l = pts[pts.len() - 1];
+    s.pointer(&PointerEvent::new(PointerKind::Up, l.0, l.1).with_mods(m), v).unwrap();
+    undo_steps(s) - undo
+}
+
 /// A wavy stroke sampled every 2 pt.
 fn wave(x0: f64, x1: f64, y: f64) -> Vec<(f64, f64)> {
     let n = ((x1 - x0) / 2.0) as usize;
@@ -622,16 +636,6 @@ fn pen_with_alt_moves_one_handle_and_converts_anchors() {
     let anchors = json!([{"x": 100, "y": 200}, {"x": 200, "y": 100, "in": [150, 100], "out": [250, 100]}, {"x": 300, "y": 200}]);
     let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
     s.select_tool("pen", v).unwrap();
-    let gesture = |s: &mut Session, pts: &[(f64, f64)], m: Mods| {
-        let undo = undo_steps(s);
-        s.pointer(&PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m), v).unwrap();
-        for &(x, y) in &pts[1..] {
-            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y).with_mods(m), v).unwrap();
-        }
-        let l = pts[pts.len() - 1];
-        s.pointer(&PointerEvent::new(PointerKind::Up, l.0, l.1).with_mods(m), v).unwrap();
-        undo_steps(s) - undo
-    };
     // Alt-drag the out handle: it moves alone, the in handle stays.
     assert_eq!(gesture(&mut s, &[(250.0, 100.0), (260.0, 130.0), (275.0, 165.0)], alt), 1);
     assert!(!s.in_interaction());
@@ -658,4 +662,131 @@ fn pen_with_alt_moves_one_handle_and_converts_anchors() {
     gesture(&mut s, &[(300.0, 450.0)], Mods::default());
     assert_eq!(path(&s, new).subpaths[0].anchors.len(), 3);
     assert_eq!(paths(&s).len(), 2);
+}
+
+/// The anchor's handles point opposite ways.
+fn smooth(a: vectorcraft_geom::Anchor) -> bool {
+    let (i, o) = (a.h_in - a.p, a.h_out - a.p);
+    (i.x * o.y - i.y * o.x).abs() < 1e-6 && i.x * o.x + i.y * o.y < 0.0
+}
+
+#[test]
+fn pen_with_cmd_borrows_direct_selection_and_goes_on_drawing() {
+    // #494: Cmd (Ctrl) held with the Pen drags with the selection tool used last (Direct Selection
+    // until one is chosen): handles, segments and anchors of the path being drawn; released, the
+    // Pen goes on drawing that path. Through pointer events, so agents reach it too.
+    let (none, cmd) = (Mods::default(), Mods { cmd: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    s.select_tool("pen", v).unwrap();
+    gesture(&mut s, &[(100.0, 300.0)], none);
+    gesture(&mut s, &[(200.0, 300.0), (250.0, 300.0)], none);
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(s.cursor(Point::new(250.0, 300.0), none, v), vectorcraft_tools::Cursor::Pen);
+    assert_eq!(s.cursor(Point::new(250.0, 300.0), cmd, v), vectorcraft_tools::Cursor::ArrowHollow, "Direct Selection's");
+    // The new anchor's outgoing handle: it moves, its incoming one turning with it.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 300.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 260.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 260.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "pen");
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert!(a.h_out == Point::new(250.0, 260.0) && smooth(a), "{a:?}");
+    // The segment between the two anchors bends, the smooth anchor staying smooth.
+    let before = path(&s, id).subpaths[0].anchors[1].h_in;
+    gesture(&mut s, &[(120.0, 300.0), (120.0, 270.0)], cmd);
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert!(a.h_in != before && smooth(a), "{a:?}");
+    assert_eq!(s.tool_id(), "pen");
+    // A plain click goes on drawing the same path.
+    gesture(&mut s, &[(300.0, 350.0)], none);
+    assert_eq!((paths(&s).len(), path(&s, id).subpaths[0].anchors.len()), (1, 3));
+    // A Cmd-click away from the art deselects: the path is done, the next click starts another.
+    gesture(&mut s, &[(600.0, 100.0)], cmd);
+    gesture(&mut s, &[(400.0, 500.0)], none);
+    assert_eq!(paths(&s).len(), 2);
+    assert_eq!(path(&s, id).subpaths[0].anchors.len(), 3);
+    // With the Selection tool chosen last, Cmd lends it.
+    s.select_tool("selection", v).unwrap();
+    s.select_tool("pen", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 600.0, 100.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 600.0, 100.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "pen");
+    // Choosing a tool mid-gesture keeps it: the Pen doesn't come back over it.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 600.0, 100.0).with_mods(cmd), v).unwrap();
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 600.0, 100.0), v).unwrap();
+    assert_eq!(s.tool_id(), "rectangle");
+}
+
+#[test]
+fn reshaping_a_segment_keeps_smooth_anchors_smooth() {
+    // #494: the anchors at the ends of a dragged segment keep their kind: a smooth one's other
+    // handle turns with the moved one (at its length), a corner's stays.
+    let mut s = session();
+    let anchors = json!([{"x": 100, "y": 300}, {"x": 200, "y": 300, "in": [160, 300], "out": [240, 300]}, {"x": 300, "y": 300}]);
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap());
+    s.execute("path.reshapeSegment", &json!({"id": id.0, "segment": 0, "t": 0.5, "dx": 0, "dy": -30})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    let a = sp.anchors[1];
+    assert!(near(a.h_in, Point::new(160.0, 260.0)) && smooth(a), "{a:?}");
+    assert!((a.h_out.distance(a.p) - 40.0).abs() < 1e-9, "its length kept");
+    assert!(near(sp.anchors[0].h_out, Point::new(100.0, 260.0)) && !sp.anchors[0].has_in(), "the corner end: {:?}", sp.anchors[0]);
+}
+
+#[test]
+fn pen_drag_from_the_first_anchor_closes_the_path() {
+    // #501: closing a path by dragging out of its first anchor flickered between a close and a new
+    // path, and released at the wrong moment left the shape open. The press decides: the drag
+    // shapes the closing curve, symmetric, and the release closes the path wherever it ends.
+    let none = Mods::default();
+    let v = view();
+    let mut s = session();
+    s.select_tool("pen", v).unwrap();
+    for (x, y) in [(100.0, 300.0), (200.0, 300.0), (200.0, 400.0)] {
+        gesture(&mut s, &[(x, y)], none);
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    let pts: Vec<(f64, f64)> = (0..=12).map(|i| (100.0 + 5.0 * f64::from(i), 300.0 - 4.0 * f64::from(i))).collect();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+    for &(x, y) in &pts[1..] {
+        s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        let p = path(&s, id);
+        assert!(p.subpaths[0].closed && paths(&s).len() == 1, "closed throughout the drag, at ({x}, {y})");
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Up, 160.0, 252.0), v).unwrap();
+    assert!(!s.in_interaction());
+    let sp = &path(&s, id).subpaths[0];
+    assert!(sp.closed && sp.anchors.len() == 3, "{sp:?}");
+    let a = sp.anchors[0];
+    assert_eq!((a.h_in, a.h_out), (Point::new(40.0, 348.0), Point::new(160.0, 252.0)), "symmetric");
+    assert_eq!(paths(&s).len(), 1);
+    // The next click starts a new path.
+    gesture(&mut s, &[(500.0, 500.0)], none);
+    assert_eq!(paths(&s).len(), 2);
+}
+
+#[test]
+fn pen_with_alt_converts_the_anchors_of_the_path_being_drawn() {
+    // #504: while drawing, Alt-click on a smooth anchor of the path makes it a corner and Alt-drag
+    // on a corner one pulls out smooth handles; the next click goes on drawing the path.
+    let (none, alt) = (Mods::default(), Mods { alt: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    s.select_tool("pen", v).unwrap();
+    gesture(&mut s, &[(100.0, 300.0)], none);
+    gesture(&mut s, &[(200.0, 300.0), (240.0, 300.0)], none);
+    gesture(&mut s, &[(300.0, 400.0)], none);
+    gesture(&mut s, &[(400.0, 300.0)], none);
+    let id = s.doc().unwrap().selection.objects[0];
+    assert!(smooth(path(&s, id).subpaths[0].anchors[1]));
+    assert_eq!(gesture(&mut s, &[(200.0, 300.0)], alt), 1);
+    let a = path(&s, id).subpaths[0].anchors[1];
+    assert!(!a.has_in() && !a.has_out(), "a corner: {a:?}");
+    assert_eq!(gesture(&mut s, &[(300.0, 400.0), (320.0, 400.0), (340.0, 400.0)], alt), 1);
+    let a = path(&s, id).subpaths[0].anchors[2];
+    assert!(smooth(a) && a.h_out == Point::new(340.0, 400.0), "smooth: {a:?}");
+    gesture(&mut s, &[(500.0, 400.0)], none);
+    assert_eq!((paths(&s).len(), path(&s, id).subpaths[0].anchors.len()), (1, 5));
 }

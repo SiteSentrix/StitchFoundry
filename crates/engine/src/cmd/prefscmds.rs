@@ -82,8 +82,11 @@ pub const UNITS: &[(&str, &str)] = &[
     ("feet", "Feet"),
 ];
 const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
-/// Performance › Graphics Processor (`gpuPreference`), read by the desktop app at startup.
-pub const GPU_PREFERENCES: &[(&str, &str)] = &[("powerSaving", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
+/// Performance › Graphics Processor (`gpuPreference`), read by the desktop app at startup. The
+/// values are WebGPU's power preferences plus `automatic`; 0.5.0's default, `powerSaving`, reads as
+/// `automatic` (#502).
+pub const GPU_PREFERENCES: &[(&str, &str)] =
+    &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
 const BLACK: &[(&str, &str)] = &[("accurate", "Display All Blacks Accurately"), ("rich", "Display All Blacks as Rich Black")];
 const BLACK_OUT: &[(&str, &str)] = &[("accurate", "Output All Blacks Accurately"), ("rich", "Output All Blacks as Rich Black")];
 

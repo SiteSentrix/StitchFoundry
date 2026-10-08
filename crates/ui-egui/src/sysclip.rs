@@ -24,6 +24,11 @@ pub trait SystemClipboard {
     fn has(&mut self, mimes: &[&'static str]) -> bool;
 }
 
+/// Makes a second system-clipboard handle, to check off the UI thread whether Paste has something
+/// to take ([`Services::clipboard_probe`](crate::Services::clipboard_probe)). It is called on that
+/// thread and the handle lives and dies there, so the handle needn't be `Send`.
+pub type ClipboardProbeFactory = Box<dyn FnOnce() -> Box<dyn SystemClipboard> + Send>;
+
 /// The command (and its params) that loads `f` into the internal clipboard, centred on `center`.
 pub(crate) fn import_command(f: &Flavour, center: Option<[f64; 2]>) -> (&'static str, Value) {
     let b64 = || vectorcraft_format::base64_encode(&f.data);

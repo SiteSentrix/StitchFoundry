@@ -553,25 +553,35 @@ impl PointSnap {
     }
 }
 
-/// Where a dragged direction handle of anchor `ai` of subpath `si` of path `id` goes for the
-/// pointer at `p`: with Shift at a multiple of 45° (from the Constrain Angle) round its anchor,
-/// else snapped as a drawn point is (smart guides, the grid, pixels).
-pub fn snap_handle(cx: &ToolContext, (id, si, ai): (NodeId, usize, usize), p: Point, shift: bool) -> (Point, Vec<Overlay>) {
-    let path = cx.doc.node(id).and_then(|n| n.path_data());
-    if shift && let Some(a) = path.and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)) {
-        return (a.p + vectorcraft_geom::constrain_angle_from(p - a.p, 45.0, cx.constrain_angle), vec![]);
-    }
-    snap_with(cx, p, || {
-        // The path's bounds move with the handle, so they would chase it: its anchors (which stay
-        // put) are the targets instead, the handle lining up with them too.
-        let mut t = Targets::collect(cx.doc, &[id], None);
-        for (_, _, a) in path.into_iter().flat_map(|pd| pd.anchors()).take(20_000) {
-            t.points.push((a.p, Kind::Anchor));
-            t.xs.push((a.p.x, a.p, Kind::Anchor));
-            t.ys.push((a.p.y, a.p, Kind::Anchor));
+/// Snapping for a dragged direction handle: Shift keeps it at 45° steps round its anchor, else it
+/// snaps as a drawn point does. The targets are gathered on the first move that needs them and
+/// kept for the rest of the drag (gathering them takes as long as the document is big).
+#[derive(Default)]
+pub struct HandleSnap(Option<PointSnap>);
+
+impl HandleSnap {
+    /// Where the handle of anchor `ai` of subpath `si` of path `id` goes with the pointer at `p`,
+    /// and the guides showing why.
+    pub fn snap(&mut self, cx: &ToolContext, (id, si, ai): (NodeId, usize, usize), p: Point, shift: bool) -> (Point, Vec<Overlay>) {
+        let path = cx.doc.node(id).and_then(|n| n.path_data());
+        if shift && let Some(a) = path.and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai)) {
+            return (a.p + vectorcraft_geom::constrain_angle_from(p - a.p, 45.0, cx.constrain_angle), vec![]);
         }
-        t
-    })
+        let snap = self.0.get_or_insert_with(|| {
+            PointSnap::new(cx, || {
+                // The path's bounds move with the handle, so they would chase it: its anchors
+                // (which stay put) are the targets instead, the handle lining up with them too.
+                let mut t = Targets::collect(cx.doc, &[id], None);
+                for (_, _, a) in path.into_iter().flat_map(|pd| pd.anchors()).take(20_000) {
+                    t.points.push((a.p, Kind::Anchor));
+                    t.xs.push((a.p.x, a.p, Kind::Anchor));
+                    t.ys.push((a.p.y, a.p, Kind::Anchor));
+                }
+                t
+            })
+        });
+        snap.snap(cx, p)
+    }
 }
 
 /// Snap a picked point (a transform tool's reference point) to the nearest anchor or centre of the

@@ -16,7 +16,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let n_sel = st.selection.len();
-    let anchor_mode = !st.selection.anchors.is_empty();
+    let anchors = crate::chrome::anchor_controls(app);
     let first = first_selected(app);
     let label = match (&first, n_sel) {
         (None, _) => tl!("Document").to_string(),
@@ -85,10 +85,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    if anchor_mode {
+    if anchors != crate::chrome::AnchorControls::None {
         divider(ui);
         section_header(ui, tl!("Anchor Point"));
-        crate::chrome::anchor_buttons(app, ui);
+        crate::chrome::anchor_buttons(app, ui, anchors);
     }
     divider(ui);
     section_header(ui, tl!("Quick Actions"));

@@ -268,6 +268,13 @@ pub struct UiState {
     /// Tool flyouts torn off the toolbar into floating panels.
     #[serde(default)]
     pub floating_flyouts: Vec<FloatingFlyout>,
+    /// Panels dragged out of the dock: each group floats as its own stack of tabs.
+    #[serde(default)]
+    pub floating_panels: Vec<FloatingPanels>,
+    /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
+    /// docked at the window's left edge.
+    #[serde(default)]
+    pub toolbar_pos: Option<[f32; 2]>,
     pub status_bar: bool,
     pub dock: bool,
     pub view: ViewFlags,
@@ -276,9 +283,6 @@ pub struct UiState {
     pub flyout: Option<usize>,
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
-    /// The selection tool used last (Selection, Direct Selection or Group Selection): a Cmd press
-    /// with any other tool drags with it.
-    pub last_selection_tool: String,
     pub status: String,
     pub palette_open: bool,
     pub palette_query: String,
@@ -411,6 +415,34 @@ pub struct TaskBarPlace {
     pub offset: Option<(u64, egui::Vec2)>,
 }
 
+/// A group of panels dragged out of the dock: it floats as a stack of tabs, one panel shown.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FloatingPanels {
+    /// Panel ids (`window.panel`), in tab order.
+    pub panels: Vec<String>,
+    /// The tab shown.
+    #[serde(default)]
+    pub active: usize,
+    /// Top-left corner in screen points.
+    pub pos: [f32; 2],
+}
+
+impl FloatingPanels {
+    /// Keep known panels, each in one group, drop the groups left empty and the toolbar position
+    /// that isn't a number (a hand-edited preferences file or workspace).
+    pub fn sanitize(groups: &mut Vec<FloatingPanels>, toolbar_pos: &mut Option<[f32; 2]>) {
+        let mut seen = std::collections::BTreeSet::new();
+        groups.retain_mut(|g| {
+            g.panels.retain(|id| all_panels().any(|(p, _)| p == id) && seen.insert(id.clone()));
+            g.active = g.active.min(g.panels.len().saturating_sub(1));
+            !g.panels.is_empty()
+        });
+        if toolbar_pos.is_some_and(|p| !p.iter().all(|v| v.is_finite())) {
+            *toolbar_pos = None;
+        }
+    }
+}
+
 impl UiState {
     /// Clear transient state after loading saved preferences.
     pub fn sanitized(mut self) -> Self {
@@ -429,6 +461,7 @@ impl UiState {
             f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
             f.tools.first().is_some_and(|k| seen.insert(k.clone()))
         });
+        FloatingPanels::sanitize(&mut self.floating_panels, &mut self.toolbar_pos);
         // Overrides that can't fire (modifier-only chords recorded by older versions, #487) give
         // the default back.
         self.shortcut_overrides.retain(|_, c| c.is_empty() || crate::shortcut_editor::normalize(c).is_some());
@@ -452,13 +485,14 @@ impl Default for UiState {
             task_bar_place: TaskBarPlace::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],
+            floating_panels: vec![],
+            toolbar_pos: None,
             status_bar: true,
             dock: true,
             view: ViewFlags::default(),
             dialog: None,
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
-            last_selection_tool: "selection".into(),
             status: String::new(),
             palette_open: false,
             palette_query: String::new(),
