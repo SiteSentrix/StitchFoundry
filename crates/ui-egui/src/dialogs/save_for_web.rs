@@ -646,8 +646,8 @@ fn colors_row(ui: &mut egui::Ui, d: &mut Dialog) {
             n = c.parse().unwrap_or(n);
             d.fields.insert("colors".into(), json!(n));
         }
-        if ui.add(egui::DragValue::new(&mut n).range(2..=256)).changed() {
-            d.fields.insert("colors".into(), json!(n));
+        if let Some(n) = widgets::range_field(ui, "sfw-colors-n", f64::from(n), 2.0..=256.0, "", 0, 52.0) {
+            d.fields.insert("colors".into(), json!(n as u16));
         }
     });
 }

@@ -169,11 +169,11 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
         }
     } else {
         let integer = o.ty == "integer";
-        let mut x = value.as_f64().unwrap_or(0.0);
-        let drag =
-            egui::DragValue::new(&mut x).range(0.0..=f64::MAX).speed(if integer { 1.0 } else { 0.1 }).max_decimals(if integer { 0 } else { 2 });
-        if ui.add(drag).on_hover_text(o.description).changed() {
-            d.fields.insert(o.name.into(), if integer { json!(x.round() as i64) } else { json!(x) });
+        let x = value.as_f64().unwrap_or(0.0);
+        let field = ui.scope(|ui| widgets::range_field(ui, ("save-option", o.name), x, 0.0..=f64::MAX, "", if integer { 0 } else { 2 }, 80.0));
+        field.response.on_hover_text(o.description);
+        if let Some(x) = field.inner {
+            d.fields.insert(o.name.into(), if integer { json!(x as i64) } else { json!(x) });
         }
     }
     ui.end_row();
