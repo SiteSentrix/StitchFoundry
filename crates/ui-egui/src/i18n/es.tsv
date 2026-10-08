@@ -3086,7 +3086,7 @@ axis	Both	Ambos
 @msg	PDF writer error: {0}	error del escritor de PDF: {0}
 @msg	Packaged {n} file(s) in {folder}{note}	Se empaquetaron {n} archivo(s) en {folder}{note}
 @msg	Packaged {n} file(s){note}	Se empaquetaron {n} archivo(s){note}
-@msg	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la app de escritorio (en la web, los archivos se descargan)
+@msg	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
 @msg	Release Guides: no guides	Soltar guías: no hay guías
 @msg	Release: no layer to put the rectangle in	Soltar: no hay ninguna capa donde poner el rectángulo
 @msg	Replace Spine: select a blend and a path	Reemplazar eje: selecciona una fusión y un trazado
@@ -3096,7 +3096,7 @@ axis	Both	Ambos
 @msg	Saved recovery data for {title}	Se guardaron los datos de recuperación de {title}
 @msg	Saved to User Defined: {_1}	Se guardó en Definido por el usuario: {_1}
 @msg	Saved {path}	Se guardó {path}
-@msg	Select text or click into text with the Type tool to insert glyphs	Selecciona texto o haz clic dentro de un texto con la herramienta Texto para insertar glifos
+@msg	Select text or click into text with the Type tool to insert glyphs	Selecciona texto o haz clic dentro del texto con la herramienta Texto para insertar glifos
 @msg	Shape Builder: no region under the pointer	Generador de formas: no hay ninguna región bajo el puntero
 @msg	Shape Builder: select paths or compound paths	Generador de formas: selecciona trazados o trazados compuestos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos los atributos ocultos: no hay nada oculto
@@ -3237,7 +3237,7 @@ axis	Both	Ambos
 @msg	no active document	no hay ningún documento activo
 @msg	no active perspective plane	no hay ningún plano de perspectiva activo
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
-@msg	no app to open files here	aquí no hay ninguna app para abrir archivos
+@msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo
 @msg	no artboard {i} (0-based; the document has {_1})	no existe la mesa de trabajo {i} (contando desde 0; el documento tiene {_1})
 @msg	no artboard {i} (0-based; the document has {count})	no existe la mesa de trabajo {i} (contando desde 0; el documento tiene {count})
@@ -3451,9 +3451,9 @@ axis	Both	Ambos
 @msg	the {tool} tool has no options	la herramienta {tool} no tiene opciones
 @msg	there are no objects to release	no hay objetos que soltar
 @msg	there are no printer settings to open here	aquí no hay ajustes de impresora que abrir
-@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	no se puede leer este archivo PostScript ({_1}): guárdalo como PDF o SVG en la app que lo creó
+@msg	this PostScript file can't be read ({_1}): save it as PDF or SVG in the app that made it	no se puede leer este archivo PostScript ({_1}): guárdalo como PDF o SVG en la aplicación que lo creó
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	este formato admite una sola mesa de trabajo: exporta varias como PDF o con document.exportForScreens
-@msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	este es un dibujo DWG, que no se puede leer: guárdalo desde la app de CAD como DXF ASCII y abre ese archivo
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	este es un dibujo DWG, que no se puede leer: guárdalo desde la aplicación de CAD como DXF ASCII y abre ese archivo
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	este es un archivo PostScript (un .ai guardado en un formato antiguo o sin compatibilidad con PDF, o un archivo EPS), que todavía no se puede abrir: guárdalo como PDF, .ai compatible con PDF o SVG
 @msg	this is not a PostScript file	este no es un archivo PostScript
 @msg	tool shortcuts must be a single key (optionally with Shift)	los atajos de herramientas deben ser una sola tecla (opcionalmente con Shift)
