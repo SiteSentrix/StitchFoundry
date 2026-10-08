@@ -29,7 +29,7 @@ mod window;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
-use vectorcraft_ui_egui::{FilePick, Services, VectorcraftApp};
+use vectorcraft_ui_egui::{ClipboardProbeFactory, FilePick, Services, VectorcraftApp};
 
 struct App {
     app: VectorcraftApp,
@@ -256,6 +256,10 @@ fn services() -> Services {
         write_shared: Some(std::sync::Arc::new(write_file)),
         // Every format Copy offers and Paste reads (menu-bar Paste never sees egui's Paste event).
         system_clipboard: Some(clipboard::system_clipboard()),
+        // Linux checks whether Paste has something to take on a background thread: an X11 clipboard
+        // owner that never answers holds a read for up to 4 s. Windows only asks which formats the
+        // clipboard holds and macOS asks the pasteboard server, so they check in line.
+        clipboard_probe: cfg!(target_os = "linux").then(|| Box::new(clipboard::system_clipboard) as ClipboardProbeFactory),
         // Help → Discord / website / GitHub, the Discord button, About and Home links.
         open_url: Some(Box::new(|url: &str| {
             let _ = webbrowser::open(url);
