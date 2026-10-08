@@ -255,6 +255,9 @@ pub struct UiState {
     /// Last tool shown in each toolbar slot (keyed by the slot's first tool id).
     #[serde(default)]
     pub slot_tool: std::collections::BTreeMap<String, String>,
+    /// Tool flyouts torn off the toolbar into floating panels.
+    #[serde(default)]
+    pub floating_flyouts: Vec<FloatingFlyout>,
     pub status_bar: bool,
     pub dock: bool,
     pub view: ViewFlags,
@@ -368,6 +371,15 @@ pub struct WindowGeometry {
     pub maximized: bool,
 }
 
+/// A tool group's flyout torn off the toolbar: it floats as its own panel until its × puts it back.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FloatingFlyout {
+    /// The group's tools in flyout order; the first one names the toolbar slot.
+    pub tools: Vec<String>,
+    /// Top-left corner in screen points.
+    pub pos: [f32; 2],
+}
+
 impl UiState {
     /// Clear transient state after loading saved preferences.
     pub fn sanitized(mut self) -> Self {
@@ -380,6 +392,12 @@ impl UiState {
         if self.group_tool.len() != vectorcraft_tools::TOOL_GROUPS.len() {
             self.group_tool = UiState::default().group_tool;
         }
+        // One strip per group, of known tools (a hand-edited preferences file).
+        let mut seen = std::collections::BTreeSet::new();
+        self.floating_flyouts.retain_mut(|f| {
+            f.tools.retain(|id| vectorcraft_tools::tool_info(id).is_some());
+            f.tools.first().is_some_and(|k| seen.insert(k.clone()))
+        });
         self
     }
 }
@@ -398,6 +416,7 @@ impl Default for UiState {
             toolbar_advanced: false,
             task_bar: true,
             slot_tool: Default::default(),
+            floating_flyouts: vec![],
             status_bar: true,
             dock: true,
             view: ViewFlags::default(),
