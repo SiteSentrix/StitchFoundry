@@ -464,7 +464,13 @@ pub(crate) struct Exporter<'a> {
     pub overprint: bool,
     /// An overprinting fill or stroke was drawn so.
     pub overprinted: bool,
+    /// Inline graphics being drawn inside inline graphics (text in a symbol shown inline in
+    /// text…): deeper ones are left out.
+    inline_depth: u32,
 }
+
+/// How deep inline graphics nest before they are left out.
+const MAX_INLINE_DEPTH: u32 = 4;
 
 impl<'a> Exporter<'a> {
     /// An exporter of `doc` writing images as `set` says; layers whose Print option is off are
@@ -491,6 +497,7 @@ impl<'a> Exporter<'a> {
             in_layer: 0,
             overprint: false,
             overprinted: false,
+            inline_depth: 0,
         }
     }
 
@@ -1280,7 +1287,14 @@ impl Exporter<'_> {
         true
     }
 
+    ///
+    /// Inline graphics ([`vectorcraft_doc::TextRun::inline`]) are drawn as their symbols' art
+    /// (vector paths, like symbol instances) where the layout placed them; their characters
+    /// write no glyph.
     fn text(&mut self, s: &mut Surface, n: &Node, t: &TextObject, page: Rect) {
+        let doc = self.doc;
+        let resolved = doc.inline_resolved(t);
+        let t = &*resolved;
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         let tb = t.xf.transform_rect_bbox(layout.bounds);
         // The object's own fills and strokes paint the whole outline: those below the Characters
@@ -1331,6 +1345,18 @@ impl Exporter<'_> {
         s.set_fill(None);
         s.set_stroke(None);
         s.pop();
+        if self.inline_depth < MAX_INLINE_DEPTH {
+            self.inline_depth += 1;
+            for ig in &layout.inlines {
+                let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref()) else { continue };
+                let Some(sym) = doc.symbols.iter().find(|x| x.name == art.symbol) else { continue };
+                let mut node = (*sym.art).clone();
+                // Strokes scale with the art, as on the canvas.
+                node.transform(t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol), true);
+                self.node(s, &node, page, true);
+            }
+            self.inline_depth -= 1;
+        }
         if let Some((bp, path)) = &all {
             self.text_items(s, above, bp, path, page, tb);
         }

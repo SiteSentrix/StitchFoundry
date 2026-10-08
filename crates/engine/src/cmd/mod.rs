@@ -29,6 +29,7 @@ pub(crate) mod gradient;
 pub(crate) mod graph;
 mod halftone;
 pub mod help;
+pub(crate) mod inline;
 mod layer;
 mod layerpanel;
 pub mod links;
@@ -218,6 +219,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(colormgmt::specs());
         v.extend(typemenu::specs());
         v.extend(textedit::specs());
+        v.extend(inline::specs());
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
         v.extend(help::specs());

@@ -219,7 +219,7 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
             let first_para = paras.first().cloned().unwrap_or_default();
             for id in &out {
                 if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
-                    t.runs = vec![TextRun { text: String::new(), style: style.clone() }];
+                    t.runs = vec![TextRun { text: String::new(), style: style.clone(), inline: None }];
                     t.set_all_paras(first_para.clone());
                     refresh_bounds(t);
                 }

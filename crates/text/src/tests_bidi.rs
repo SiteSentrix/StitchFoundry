@@ -148,9 +148,9 @@ fn identical_style_arabic_run_splits_keep_joining_and_source_attribution() {
     let text = "بب";
 
     let mut single = TextObject::point(Point::ZERO, text, style.clone());
-    single.runs = vec![TextRun { text: text.to_string(), style: style.clone() }];
+    single.runs = vec![TextRun { text: text.to_string(), style: style.clone(), inline: None }];
     let mut split = TextObject::point(Point::ZERO, text, style.clone());
-    split.runs = vec![TextRun { text: "ب".into(), style: style.clone() }, TextRun { text: "ب".into(), style }];
+    split.runs = vec![TextRun { text: "ب".into(), style: style.clone(), inline: None }, TextRun { text: "ب".into(), style, inline: None }];
 
     let single = layout(db, &single);
     let split = layout(db, &split);
@@ -173,8 +173,10 @@ fn different_style_arabic_boundary_receives_joining_context() {
     assert!(joined.glyphs.iter().any(|glyph| glyph.gid != face.glyph_for('ب')), "reference must use contextual beh forms");
 
     let mut split = TextObject::point(Point::ZERO, text, style.clone());
-    split.runs =
-        vec![TextRun { text: "ب".into(), style: style.clone() }, TextRun { text: "ب".into(), style: CharStyle { size: style.size * 1.5, ..style } }];
+    split.runs = vec![
+        TextRun { text: "ب".into(), style: style.clone(), inline: None },
+        TextRun { text: "ب".into(), style: CharStyle { size: style.size * 1.5, ..style }, inline: None },
+    ];
     let split = layout(db, &split);
     assert_eq!(joined.glyphs.len(), 2);
     assert_eq!(split.glyphs.len(), 2);
@@ -194,12 +196,12 @@ fn shape_range_handles_empty_runs_and_selected_utf8_subranges() {
     let runs = [(0..text.len(), &style)];
     let mut glyphs = Vec::new();
 
-    shape::shape_range(db, text, 0..0, &runs, &OtFeatures::default(), &[], &mut glyphs);
-    shape::shape_range(db, text, 0..text.len(), &[], &OtFeatures::default(), &[], &mut glyphs);
-    shape::shape_range(db, text, 1..2, &runs, &OtFeatures::default(), &[], &mut glyphs);
+    shape::shape_range(db, text, 0..0, &runs, &[], &OtFeatures::default(), &[], &mut glyphs);
+    shape::shape_range(db, text, 0..text.len(), &[], &[], &OtFeatures::default(), &[], &mut glyphs);
+    shape::shape_range(db, text, 1..2, &runs, &[], &OtFeatures::default(), &[], &mut glyphs);
     assert!(glyphs.is_empty());
 
-    shape::shape_range(db, text, 1..text.len(), &runs, &OtFeatures::default(), &[], &mut glyphs);
+    shape::shape_range(db, text, 1..text.len(), &runs, &[], &OtFeatures::default(), &[], &mut glyphs);
     assert!(!glyphs.is_empty());
     assert!(glyphs.iter().all(|g| (1..text.len()).contains(&g.byte)));
 }

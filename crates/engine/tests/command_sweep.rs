@@ -501,3 +501,81 @@ fn envelope_commands_with_junk_params_on_envelopes() {
     failures.dedup();
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.iter().take(40).cloned().collect::<Vec<_>>().join("\n"));
 }
+
+/// Inline graphics in text (a symbol set in a run of type): text commands with `{}`, junk and
+/// structured junk (bad symbol names, offsets inside or past the graphic's character, malformed
+/// inline runs) never panic, leave an interaction open or break the tree, and the document still
+/// round-trips and exports.
+#[test]
+fn text_commands_with_junk_params_on_inline_graphics() {
+    use vectorcraft_testkit::fixtures::{ellipse, exec, id_of, select};
+    let path = safe_path();
+    let setup = || {
+        let mut s = Fixture::Multi.session();
+        let e = ellipse(&mut s, 400.0, 300.0, 20.0, 20.0);
+        select(&mut s, &[e]);
+        exec(&mut s, "symbol.new", json!({"name": "Dot"}));
+        let t = id_of(&exec(&mut s, "text.create", json!({"x": 20, "y": 200, "text": "ab cd", "size": 20})));
+        exec(&mut s, "text.insertInline", json!({"id": t.0, "at": 2, "symbol": "Dot", "scale": 2}));
+        select(&mut s, &[t]);
+        (s, t)
+    };
+    let (_, t) = setup();
+    let t = t.0;
+    let style = json!({"font_family": "Source Sans 3", "size": 12, "fill": {"type": "none"}});
+    let structured = [
+        ("text.insertInline", json!({"id": t, "at": u64::MAX, "symbol": "Dot", "scale": 100})),
+        ("text.insertInline", json!({"id": t, "at": 3, "symbol": "Dot", "scale": 1e-300, "shift": -1e5})),
+        ("text.insertInline", json!({"id": t, "at": 3, "symbol": "\u{0}", "scale": 1})),
+        ("text.insertInline", json!({"id": t, "at": 3, "symbol": "", "scale": f64::MAX})),
+        ("text.insertInline", json!({"id": u64::MAX, "symbol": "Dot"})),
+        ("text.insertInline", json!({"id": t, "at": "3", "symbol": ["Dot"], "scale": "big", "shift": null})),
+        ("text.editRange", json!({"id": t, "start": 3, "end": 4, "insert": "x"})),
+        ("text.editRange", json!({"id": t, "start": 4, "end": 3})),
+        (
+            "text.editRange",
+            json!({"id": t, "start": 0, "end": 0, "runs": [{"text": "\u{FFFC}\u{FFFC}x", "style": style, "inline": {"symbol": "Dot", "scale": 1e308, "baseline_shift": -1e308}}]}),
+        ),
+        ("text.editRange", json!({"id": t, "start": 0, "end": 0, "runs": [{"text": "\u{FFFC}", "style": style, "inline": {"symbol": "Missing"}}]})),
+        ("text.editRange", json!({"id": t, "start": 0, "end": 0, "runs": [{"text": "", "style": style, "inline": {"symbol": "Dot", "scale": -5}}]})),
+        ("text.editRange", json!({"id": t, "runs": [{"text": "\u{FFFC}", "style": style, "inline": {"symbol": 5}}]})),
+        ("text.setRangeStyle", json!({"id": t, "start": 3, "end": 4, "size": 1e308, "tracking": -1e308})),
+        ("text.getRange", json!({"id": t, "start": 3, "end": 4})),
+        ("type.insert", json!({"text": "\u{FFFC}"})),
+        ("type.changeCase", json!({"case": "upper"})),
+        ("type.smartPunctuation", json!({"quotes": true, "dashes": true, "ellipsis": true, "scope": "selection"})),
+        ("type.convertToAreaType", json!({})),
+        ("type.createOutlines", json!({})),
+        ("symbol.delete", json!({"name": "Dot"})),
+        ("symbol.delete", json!({"name": "Dot", "expandInstances": false})),
+        ("symbol.update", json!({"name": "Dot"})),
+    ];
+    let mut failures = vec![];
+    let mut run = |id: &str, p: &Value| {
+        let (mut s, _) = setup();
+        match catch_quiet(|| s.execute(id, p)) {
+            Err(msg) => failures.push(format!("PANIC {id} {p}: {msg}")),
+            Ok(r) => {
+                if s.in_interaction() {
+                    failures.push(format!("{id} {p}: left an interaction open"));
+                } else if let Err(e) = check_session(&s) {
+                    failures.push(format!("{id} {p}: {e}"));
+                } else if r.is_ok()
+                    && let Err(e) = catch_quiet(|| check_all(&mut s)).unwrap_or_else(|m| Err(format!("panic in checks: {m}")))
+                {
+                    failures.push(format!("{id} {p}: {e}"));
+                }
+            }
+        }
+    };
+    for (id, p) in &structured {
+        run(id, p);
+    }
+    for id in ["text.insertInline", "text.editRange", "text.getRange", "text.setRangeStyle", "type.insert"] {
+        let spec = command_specs().iter().find(|c| c.id == id).unwrap();
+        for p in std::iter::once(json!({})).chain(junk_params(spec.params, &path)) {
+            run(id, &p);
+        }
+    }
+    assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+}

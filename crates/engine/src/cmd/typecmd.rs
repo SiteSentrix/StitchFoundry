@@ -216,7 +216,16 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             let NodeKind::Text(t) = &n.kind else { continue };
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
             let mut children = vec![];
-            for g in &lay.glyphs {
+            for (gi, g) in lay.glyphs.iter().enumerate() {
+                // Inline graphics become instances of their symbols, in place.
+                if let Some(ig) = lay.inlines.iter().find(|i| i.glyph == gi)
+                    && let Some(art) = t.runs.get(ig.run).and_then(|r| r.inline.as_ref())
+                {
+                    let id = d.alloc_id();
+                    let xf = t.xf * ig.xf * d.symbol_natural_xf(&art.symbol);
+                    children.push(Arc::new(Node::new(id, NodeKind::SymbolInstance { symbol: art.symbol.clone(), xf })));
+                    continue;
+                }
                 let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
                 if path.is_empty() {
                     continue;
@@ -320,7 +329,7 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
             let style = t.first_style();
             // Every paragraph of the new text takes the first paragraph's attributes.
             t.splice_paras(0, vectorcraft_text::edit::runs_len(&t.runs), &text);
-            t.runs = vec![vectorcraft_doc::TextRun { text: text.clone(), style }];
+            t.runs = vec![vectorcraft_doc::TextRun { text: text.clone(), style, inline: None }];
             refresh_bounds(t);
         }
         Ok(())
@@ -629,7 +638,7 @@ mod area_tests {
             NodeKind::Text(t) => t.para.clone(),
             _ => panic!("text"),
         };
-        // New type: Standard, as in Illustrator.
+        // New type: Standard.
         assert_eq!(para(&s).burasagari, Burasagari::Standard);
         s.execute("select.set", &json!({"ids": [id]})).unwrap();
         assert!(s.execute("text.setFormat", &json!({"burasagari": "strong"})).is_err());

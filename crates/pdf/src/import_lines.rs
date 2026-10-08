@@ -199,7 +199,7 @@ fn laid_out(texts: &[(&TextObject, &LineFacts)], b: &Block, justify: Justify, wi
             style.leading = explicit.then_some((b.leading * 1000.0).round() / 1000.0);
             match runs.last_mut() {
                 Some(last) if last.style == style => last.text.push_str(&r.text),
-                _ => runs.push(TextRun { text: r.text.clone(), style }),
+                _ => runs.push(TextRun { text: r.text.clone(), style, inline: None }),
             }
         }
         // A wrapped line's space, or the end of a paragraph.

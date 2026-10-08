@@ -140,7 +140,8 @@ fn edit_runs<S: Default>(s: &mut Session, label: &str, ids: &[NodeId], f: impl F
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let mut st = S::default();
             let mut any = false;
-            for r in &mut t.runs {
+            // Inline graphics are art, not characters to rewrite.
+            for r in t.runs.iter_mut().filter(|r| r.inline.is_none()) {
                 let n = f(&r.text, &mut st);
                 if n != r.text {
                     r.text = n;
@@ -323,7 +324,18 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 } else if let Some((ri, bi)) = locate(&t.runs, b) {
                     t.splice_paras(b, b, "\n");
-                    t.runs[ri].text.insert(bi, '\n');
+                    // Never inside an inline graphic's run: at the end of the run before it, or a
+                    // run of its own.
+                    match t.runs.get(ri) {
+                        Some(r) if r.inline.is_some() => match ri.checked_sub(1).and_then(|p| t.runs.get_mut(p)) {
+                            Some(prev) if prev.inline.is_none() => prev.text.push('\n'),
+                            _ => {
+                                let style = t.runs.get(ri).map(|r| r.style.clone()).unwrap_or_default();
+                                t.runs.insert(ri, TextRun::new("\n", style));
+                            }
+                        },
+                        _ => t.runs[ri].text.insert(bi, '\n'),
+                    }
                 }
             }
             // The point origin sits where the alignment anchors the first line.
@@ -481,7 +493,7 @@ pub(crate) fn fill_with_placeholder(t: &mut TextObject) {
         }
         _ => PLACEHOLDER.split(". ").next().unwrap_or(PLACEHOLDER).to_string() + ".",
     };
-    t.runs = vec![TextRun { text, style }];
+    t.runs = vec![TextRun { text, style, inline: None }];
     refresh_bounds(t);
 }
 
@@ -531,8 +543,13 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             match t.runs.last_mut() {
-                Some(r) => r.text.push_str(&text),
-                None => t.runs.push(TextRun { text: text.clone(), style: CharStyle::default() }),
+                Some(r) if r.inline.is_none() => r.text.push_str(&text),
+                // After an inline graphic: a run of its own, in its style.
+                Some(r) => {
+                    let style = r.style.clone();
+                    t.runs.push(TextRun::new(text.clone(), style));
+                }
+                None => t.runs.push(TextRun { text: text.clone(), style: CharStyle::default(), inline: None }),
             }
             refresh_bounds(t);
         }
@@ -647,7 +664,7 @@ fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
 fn strip_formatting(n: &mut vectorcraft_doc::Node) {
     if let NodeKind::Text(t) = &mut n.kind {
         let text = t.plain_text();
-        t.runs = vec![TextRun { text, style: CharStyle::default() }];
+        t.runs = vec![TextRun { text, style: CharStyle::default(), inline: None }];
         t.set_all_paras(Default::default());
         refresh_bounds(t);
     }
