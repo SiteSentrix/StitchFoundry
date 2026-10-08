@@ -4335,7 +4335,7 @@ dependencies = [
 
 [[package]]
 name = "vectorcraft-affinity"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "crc32fast",
  "flate2",

@@ -57,7 +57,7 @@ fn preview_opens_with_a_warning_and_never_saves_to_the_source() {
     }
     let f = format("affinity").unwrap();
     assert!(f.read && !f.write);
-    for ext in ["af", "afdesign", "afphoto", "afpub"] {
+    for ext in ["af", "afdesign", "afpub"] {
         assert!(OPEN_EXTS.contains(&ext) && PLACE_EXTS.contains(&ext), "{ext}");
     }
     assert!(!SAVE_FORMATS.contains(&"affinity"));
@@ -271,6 +271,8 @@ mod native {
             let mut s = Session::new();
             let r = open_bytes(&mut s, "native.af", &document(method), Some("/source/native.af".into())).unwrap();
             assert_eq!(r["format"], "affinity");
+            // Affinity Photo's extension isn't listed, but its documents still open by their content.
+            assert_eq!(open_bytes(&mut Session::new(), "native.afphoto", &document(method), None).unwrap()["format"], "affinity");
             assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("preview")), "{r}");
             let st = s.doc().unwrap();
             assert!(st.path.is_none(), "Save must not write back over the Affinity file");

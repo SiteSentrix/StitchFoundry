@@ -556,7 +556,9 @@ pub const FORMATS: &[Format] = &[
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "tga", label: "Targa", extensions: &["tga"], mime: "image/x-tga", read: false, write: true, raster: true, options: TGA_OPTIONS },
     Format { id: "psd", label: "PSD", extensions: &["psd"], mime: "image/x-psd", read: false, write: true, raster: true, options: PSD_OPTIONS },
-    reader("affinity", "Affinity", &["af", "afdesign", "afphoto", "afpub"], "application/vnd.affinity", false),
+    // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
+    // vector app for a raster editor's documents.
+    reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/vnd.affinity", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -583,7 +585,6 @@ pub const OPEN_EXTS: &[&str] = &[
     "eps",
     "af",
     "afdesign",
-    "afphoto",
     "afpub",
 ];
 
@@ -626,7 +627,6 @@ pub const PLACE_EXTS: &[&str] = &[
     "eps",
     "af",
     "afdesign",
-    "afphoto",
     "afpub",
     "txt",
 ];
