@@ -446,10 +446,13 @@ pub struct Prefs {
     pub gpu_performance: bool,
     pub animated_zoom: bool,
     /// Which graphics processor the desktop app asks for at startup (it takes effect after a
-    /// restart): `powerSaving` (the integrated GPU on hybrid-graphics laptops) or `highPerformance`
-    /// (the discrete one). The canvas is rasterized on the CPU and only composited on the GPU, so
-    /// the integrated GPU is plenty; presenting from the discrete GPU through the integrated one
-    /// made some hybrid laptops flicker (#306). Single-GPU machines are unaffected.
+    /// restart): `automatic`, `lowPower` (the integrated GPU on hybrid-graphics machines) or
+    /// `highPerformance` (the discrete one). The canvas is rasterized on the CPU and only
+    /// composited on the GPU, so the integrated GPU is plenty; presenting from the discrete GPU
+    /// through the integrated one made some hybrid laptops flicker (#306). Automatic is power
+    /// saving on Windows and macOS and the system's default GPU elsewhere, the one the desktop
+    /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
+    /// machines are unaffected.
     pub gpu_preference: String,
     pub history_states: u32,
     pub real_time_drawing: bool,
@@ -653,7 +656,7 @@ impl Default for Prefs {
             interface_language: s("auto"),
             gpu_performance: true,
             animated_zoom: true,
-            gpu_preference: s("powerSaving"),
+            gpu_preference: s("automatic"),
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
