@@ -166,6 +166,10 @@ On laptops with two graphics processors, VectorCraft uses the power-saving (inte
 To use the discrete one, choose **Preferences › Performance › Graphics Processor › High Performance**
 and restart, or start the app with `WGPU_POWER_PREF=high` (see [`docs/development.md`](docs/development.md#desktop-graphics-processor)).
 
+On Linux under KDE Plasma 6.3 or later with Wayland, a drawing tablet's pen moves the cursor but VectorCraft doesn't
+respond to it yet (#491). Start the app under XWayland instead: `WAYLAND_DISPLAY= vectorcraft` (see
+[`docs/development.md`](docs/development.md#linux-wayland-and-x11)).
+
 ### Use it from Claude Code and other agents
 
 Register the MCP server with Claude Code:
