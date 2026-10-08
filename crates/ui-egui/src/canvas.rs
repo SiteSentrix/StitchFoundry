@@ -232,6 +232,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ppp,
         hidden: vec![],
         rot: v.rotation,
+        anti_alias: app.session.prefs.anti_aliased_artwork,
     };
     if !app.canvas.worker_started {
         app.canvas.worker_started = true;
@@ -264,6 +265,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }),
             mask_view,
             highlight_substitutions: true,
+            // General › Anti-aliased Artwork: off, edges are hard on screen (raster effects and
+            // pattern tiles stay smooth), as in Illustrator.
+            anti_alias: if app.session.prefs.anti_aliased_artwork { vectorcraft_render::AntiAlias::Art } else { vectorcraft_render::AntiAlias::None },
             ..opts
         };
         // Light documents render synchronously (no lag vs overlays); heavy ones go to the worker.
@@ -1941,6 +1945,14 @@ mod tests {
 
     /// One headless canvas frame → the shapes drawn, `Shape::Vec`s flattened.
     fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
+        let (shapes, mut delta) = frame_output(app, ctx);
+        delta.clear();
+        shapes
+    }
+
+    /// One headless canvas frame → the shapes drawn (`Shape::Vec`s flattened) and the textures
+    /// uploaded by it (the art's raster among them, when it was re-rendered).
+    fn frame_output(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Vec<Shape>, egui::TexturesDelta) {
         fn flat(s: Shape, out: &mut Vec<Shape>) {
             match s {
                 Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
@@ -1948,11 +1960,44 @@ mod tests {
             }
         }
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
-        out.textures_delta.clear();
+        let out = ctx.run_ui(raw, |ui| show(app, ui));
         let mut v = vec![];
         out.shapes.into_iter().for_each(|c| flat(c.shape, &mut v));
-        v
+        (v, out.textures_delta)
+    }
+
+    /// General › Anti-aliased Artwork (#394): on (the default), the art's edges are smoothed on
+    /// screen; off, every pixel is either painted or not, and turning it either way re-renders.
+    #[test]
+    fn anti_aliased_artwork_preference_smooths_the_canvas() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        // Render on this thread: the worker's frame would land later than the test looks.
+        app.canvas.worker_started = true;
+        // A disc: its edge crosses pixels at every angle.
+        app.session.execute("shape.ellipse", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        // The alphas of the art's raster uploaded by one frame, None when it was not re-rendered.
+        let alphas = |app: &mut VectorcraftApp| -> Option<Vec<u8>> {
+            let (_, mut delta) = frame_output(app, &ctx);
+            let art = app.canvas.texture.as_ref().unwrap().id();
+            let alphas = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+                let egui::ImageData::Color(img) = &d.image;
+                img.pixels.iter().map(|c| c.a()).collect()
+            });
+            delta.clear();
+            alphas
+        };
+        let partial = |a: &[u8]| a.iter().filter(|&&a| a != 0 && a != 255).count();
+        let on = alphas(&mut app).expect("the first frame renders the art");
+        assert!(partial(&on) > 50, "anti-aliased: edge pixels partly covered ({} of them)", partial(&on));
+        assert!(alphas(&mut app).is_none(), "nothing changed: no re-render");
+        app.session.execute("prefs.set", &json!({"key": "antiAliasedArtwork", "value": false})).unwrap();
+        let off = alphas(&mut app).expect("the preference change re-renders");
+        assert_eq!(partial(&off), 0, "hard edges: every pixel painted or not");
+        assert!(off.iter().filter(|&&a| a == 255).count() > 1000, "the disc is still painted");
+        app.session.execute("prefs.set", &json!({"key": "antiAliasedArtwork", "value": true})).unwrap();
+        assert!(partial(&alphas(&mut app).expect("re-rendered")) > 50, "smooth again");
     }
 
     /// Guides & Grid (#394): the grid in Grid Color, behind the art or, with Grids In Back off,
