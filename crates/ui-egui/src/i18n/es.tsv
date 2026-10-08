@@ -3117,6 +3117,7 @@ axis	Both	Ambos
 @msg	Release Guides: no guides	Soltar guías: no hay guías
 @msg	Release: no layer to put the rectangle in	Soltar: no hay ninguna capa donde poner el rectángulo
 @msg	Replace Spine: select a blend and a path	Reemplazar eje: selecciona una fusión y un trazado
+@msg	select two or more objects to distribute	selecciona dos o más objetos para distribuir
 @msg	select paths or anchor points	selecciona trazados o puntos de ancla
 @msg	SVG parse error: {0}	error al analizar el SVG: {0}
 @msg	Save for Web: the image is empty	Guardar para web: la imagen está vacía
