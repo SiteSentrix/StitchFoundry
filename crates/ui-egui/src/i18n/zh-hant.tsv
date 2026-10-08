@@ -524,6 +524,7 @@
 	Created:	建立時間：
 	Crop	裁切
 	Crop Image	裁切影像
+	Mask	遮色片
 	Crop Marks	裁切標記
 	Crop To	裁切至
 	Crystallize Tool	結晶化工具
@@ -1158,6 +1159,8 @@
 	Image Map:	影像地圖：
 	Image Size	影像尺寸
 	Image Trace	影像描圖
+	Image Tracing	影像描圖物件
+	Tracing Presets	描圖預設集
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：
@@ -2688,6 +2691,7 @@
 	Total Width:	總寬度：
 	Touch Type Tool	觸控文字工具
 	Trace	描圖
+	Trace the image with the Default preset	使用「預設」預設集描圖影像
 	Tracing	描圖中
 	Tracking	字距
 	Trademark Symbol	商標符號

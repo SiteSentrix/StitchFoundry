@@ -10,7 +10,7 @@ use vectorcraft_engine::cmd::fileio;
 use vectorcraft_geom::Point;
 
 use crate::theme::{self, Tokens};
-use crate::{VectorcraftApp, io};
+use crate::{VectorcraftApp, io, widgets};
 
 /// The loaded place cursor's thumbnail size (px on the longer side).
 const THUMB: u32 = 64;
@@ -386,14 +386,41 @@ pub fn image_summary(i: &Value) -> (String, String) {
     (name, format!("{}   PPI: {}", i["colorMode"].as_str().unwrap_or("RGB"), fmt_ppi(ppi)))
 }
 
-/// The Control bar's details for the one selected image: Linked File or Embedded, its file name,
-/// colour mode and effective resolution.
-pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    let Some(i) = selected_image_info(app) else { return };
+/// The Control bar for the one selected image: Linked File or Embedded, its file name, colour mode
+/// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask and
+/// Crop Image. Whether one image is selected.
+pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
+    let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
+    let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return false };
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(name).size(12.0).color(t.text_strong));
+    ui.label(egui::RichText::new(&name).size(12.0).color(t.text_strong));
     ui.separator();
     ui.label(egui::RichText::new(details).size(12.0).color(t.text_dim));
     ui.separator();
+    link_buttons(app, ui, id, linked, &name, None);
+    crate::panels::image_trace::trace_button(app, ui, crate::panels::image_trace::TRACE_BUTTON_W);
+    for (label, cmd, w) in [(tl!("Mask"), "object.maskImage", 52.0), (tl!("Crop Image"), "object.cropImage", 84.0)] {
+        if widgets::flat_button(ui, label, w).clicked() {
+            crate::menus::invoke(app, cmd, json!({}));
+        }
+    }
+    ui.separator();
+    true
+}
+
+/// Embed (and Edit Original) for linked image `id`, Unembed… for an embedded one named `name`
+/// (Control bar, Properties). The buttons are `width` wide, or fit their labels.
+pub fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool, name: &str, width: Option<f32>) {
+    let w = |fit: f32| width.unwrap_or(fit);
+    if linked {
+        if widgets::flat_button(ui, tl!("Embed"), w(60.0)).clicked() {
+            app.run("links.embed", json!({ "ids": [id] })).ok();
+        }
+        if widgets::flat_button(ui, tl!("Edit Original"), w(92.0)).clicked() {
+            crate::menus::invoke(app, "links.editOriginal", json!({ "id": id }));
+        }
+    } else if widgets::flat_button(ui, tl!("Unembed…"), w(80.0)).clicked() {
+        crate::panels::links::unembed(app, id, name);
+    }
 }

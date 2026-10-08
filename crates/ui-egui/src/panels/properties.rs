@@ -21,6 +21,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let label = match (&first, n_sel) {
         (None, _) => tl!("Document").to_string(),
         (_, n) if n > 1 => crate::i18n::tn(n as u64, "{n} Object", "{n} Objects"),
+        (Some(n), _) if crate::panels::image_trace::is_trace(n) => tl!("Image Tracing").to_string(),
         (Some(n), _) => tl!(n.kind_label()).to_string(),
     };
     ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
@@ -31,8 +32,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     transform_section(app, ui);
     divider(ui);
-    if n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Image(_))) {
+    let is_image = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Image(_)));
+    if is_image {
         image_section(app, ui);
+        divider(ui);
+    }
+    if let Some(preset) = crate::panels::image_trace::selected_preset(app) {
+        trace_section(app, ui, &preset);
         divider(ui);
     }
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
@@ -102,6 +108,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if anchor_mode && widgets::flat_button(ui, "Remove Anchor Points", ui.available_width()).clicked() {
         crate::menus::invoke(app, "path.removeAnchors", json!({}));
     }
+    if is_image {
+        crate::panels::image_trace::trace_button(app, ui, ui.available_width());
+        actions.push((tl!("Crop Image"), "object.cropImage"));
+        actions.push((tl!("Mask"), "object.maskImage"));
+    }
     actions.push((tl!("Offset Path"), "object.path.offsetPath"));
     actions.push((tl!("Simplify"), "object.path.simplify"));
     actions.push((tl!("Arrange: Bring to Front"), "object.arrange.bringToFront"));
@@ -131,29 +142,31 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     let links = crate::panels::links::ID;
-    ui.horizontal(|ui| {
-        if linked {
-            if widgets::flat_button(ui, tl!("Embed"), w).clicked() {
-                app.run("links.embed", json!({ "ids": [id] })).ok();
-            }
-            if widgets::flat_button(ui, tl!("Edit Original"), w).clicked() {
-                crate::menus::invoke(app, "links.editOriginal", json!({ "id": id }));
-            }
-        } else {
-            if widgets::flat_button(ui, tl!("Unembed…"), w).clicked() {
-                crate::panels::links::unembed(app, id, &name);
-            }
-            if widgets::flat_button(ui, tl!("Image Trace"), w).clicked() {
-                app.ui.open_panel = Some("imageTrace".into());
-            }
-        }
-    });
+    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
     ui.horizontal(|ui| {
         if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Relink…"), w).clicked() {
             crate::panels::links::relink(app, vec![id]);
         }
         if widgets::flat_button(ui, tl!("Links"), w).clicked() {
             app.ui.open_panel = Some(links.into());
+        }
+    });
+}
+
+/// The one selected Image Trace object: its preset (choosing another traces it again with that
+/// one), Expand and Release.
+fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str) {
+    section_header(ui, tl!("Image Trace"));
+    ui.horizontal(|ui| {
+        dim_label(ui, tl!("Preset:"));
+        crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
+    });
+    let w = (ui.available_width() - 6.0) / 2.0;
+    ui.horizontal(|ui| {
+        for (label, id) in [(tl!("Expand"), "imageTrace.expand"), (tl!("Release"), "imageTrace.release")] {
+            if widgets::flat_button(ui, label, w).clicked() {
+                app.run(id, json!({})).ok();
+            }
         }
     });
 }

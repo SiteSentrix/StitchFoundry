@@ -235,6 +235,30 @@ fn crop_image_disabled_without_image() {
 }
 
 #[test]
+fn mask_image_clips_it_to_its_outline_and_selects_the_clipping_path() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 100.0, 50.0);
+    sel(&mut s, &[a]);
+    let img = id_of(&s.execute("object.rasterize", &json!({"ppi": 72})).unwrap());
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let ib = bounds(&s, img);
+    let r = s.execute("object.maskImage", &json!({})).unwrap();
+    let (g, p) = (id_of(&r), NodeId(r["path"].as_u64().unwrap()));
+    let group = node(&s, g);
+    assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }));
+    assert_eq!(group.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), [p, img]);
+    // The clipping path follows the rotated image's outline, so nothing is cut off yet.
+    assert!(matches!(node(&s, p).kind, NodeKind::Path { clipping: true, .. }));
+    let pb = bounds(&s, p);
+    assert!(close(pb.x0, ib.x0) && close(pb.y0, ib.y0) && close(pb.x1, ib.x1) && close(pb.y1, ib.y1), "{pb:?} {ib:?}");
+    assert_eq!(s.doc().unwrap().selection.objects, [p]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(g).is_none() && s.doc().unwrap().doc.node(img).is_some());
+    sel(&mut s, &[]);
+    assert!(matches!(s.execute("object.maskImage", &json!({})), Err(EngineError::Disabled(..))));
+}
+
+#[test]
 fn trim_marks_around_selection() {
     let mut s = session();
     let a = rect(&mut s, 100.0, 100.0, 200.0, 100.0);

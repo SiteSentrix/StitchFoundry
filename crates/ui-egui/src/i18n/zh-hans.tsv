@@ -509,6 +509,7 @@
 	Created:	创建时间：
 	Crop	裁剪
 	Crop Image	裁剪图像
+	Mask	蒙版
 	Crop Marks	裁切标记
 	Crop To	裁剪到
 	Crystallize Tool	晶格化工具
@@ -1129,6 +1130,8 @@
 	Image Map:	图像映射：
 	Image Size	图像大小
 	Image Trace	图像描摹
+	Image Tracing	图像描摹对象
+	Tracing Presets	描摹预设
 	Image Trace Presets	图像描摹预设
 	Image:	图像：
 	Images:	图像：
@@ -2605,6 +2608,7 @@
 	Total Width:	总宽度：
 	Touch Type Tool	修饰文字工具
 	Trace	描摹
+	Trace the image with the Default preset	使用“默认”预设描摹图像
 	Tracing	描摹
 	Tracking	字距
 	Trademark Symbol	商标符号

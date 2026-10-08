@@ -29,11 +29,7 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
-    if resp.is_pointer_button_down_on() {
-        ui.painter().rect_filled(rect, CornerRadius::same(2), t.tool_active);
-    } else if resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(2), t.hover);
-    }
+    flat_fill(ui, rect, &resp);
     ui.painter().rect_stroke(
         rect,
         CornerRadius::same(2),
@@ -42,6 +38,46 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     );
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp
+}
+
+/// Width of a [`split_button`]'s arrow.
+pub const SPLIT_ARROW: f32 = 18.0;
+
+/// A [`flat_button`] `width` wide whose right end is a menu arrow (Image Trace ▾) → the
+/// responses of the button and of its arrow.
+pub fn split_button(ui: &mut Ui, text: &str, width: f32) -> (Response, Response) {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 24.0), Sense::hover());
+    let rect = rect.shrink2(vec2(0.0, 0.5));
+    let split = rect.right() - SPLIT_ARROW;
+    let main_rect = Rect::from_min_max(rect.min, pos2(split, rect.bottom()));
+    let arrow_rect = Rect::from_min_max(pos2(split, rect.top()), rect.max);
+    let main = ui.interact(main_rect, ui.id().with((text, "split")), Sense::click());
+    let arrow = ui.interact(arrow_rect, ui.id().with((text, "split-arrow")), Sense::click());
+    flat_fill(ui, main_rect, &main);
+    flat_fill(ui, arrow_rect, &arrow);
+    let border = if main.hovered() || arrow.hovered() { t.text } else { t.button_border };
+    ui.painter().rect_stroke(rect, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
+    ui.painter().vline(split, rect.y_range().shrink(4.0), Stroke::new(1.0, t.button_border));
+    ui.painter().with_clip_rect(main_rect).text(
+        main_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        tl!(text),
+        egui::FontId::proportional(12.5),
+        t.text_strong,
+    );
+    icons::paint(ui, "chevron-down", Rect::from_center_size(arrow_rect.center(), vec2(12.0, 12.0)), t.text_dim);
+    (main, arrow)
+}
+
+/// The pressed or hovered fill of a flat button part.
+fn flat_fill(ui: &Ui, rect: Rect, resp: &Response) {
+    let t = Tokens::get(ui.ctx());
+    if resp.is_pointer_button_down_on() {
+        ui.painter().rect_filled(rect, CornerRadius::same(2), t.tool_active);
+    } else if resp.hovered() {
+        ui.painter().rect_filled(rect, CornerRadius::same(2), t.hover);
+    }
 }
 
 /// Blue call-to-action pill (dialog OK/Create).

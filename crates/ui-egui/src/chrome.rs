@@ -135,6 +135,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                             tl!("Embedded")
                         }
                     }
+                    Some(n) if sel.len() == 1 && crate::panels::image_trace::is_trace(n) => tl!("Image Tracing"),
                     _ => tl!(crate::panels::appearance::object_label(app)),
                 };
                 ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
@@ -142,24 +143,27 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     crate::menus::invoke(app, "path.removeAnchors", json!({}));
                 }
                 ui.add_space(6.0);
-                crate::place::control_bar_details(app, ui);
+                // An image or an Image Trace object shows its own controls in place of Fill and Stroke.
+                let image = crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui);
                 crate::toolbar::control_bar_options(app, ui);
                 crate::dialogs::envelope::control_bar(app, ui);
-                let shown_stroke = crate::panels::current_stroke(app);
-                let mixed = crate::panels::stroke_mixed(app, ui.ctx());
-                let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
                 let opacity = if first.is_some() { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
-                crate::panels::paint_chip(app, ui, false, 22.0, true);
-                crate::panels::paint_chip(app, ui, true, 22.0, true);
-                // The link opens the Stroke panel as a popover under it; then the weight spinner
-                // (with presets) and the width profile.
-                stroke_panel::link(app, ui, tl!("Stroke:"));
-                stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
-                if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
-                    app.run("stroke.set", json!({"profile": id})).ok();
+                if !image {
+                    let shown_stroke = crate::panels::current_stroke(app);
+                    let mixed = crate::panels::stroke_mixed(app, ui.ctx());
+                    let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
+                    crate::panels::paint_chip(app, ui, false, 22.0, true);
+                    crate::panels::paint_chip(app, ui, true, 22.0, true);
+                    // The link opens the Stroke panel as a popover under it; then the weight spinner
+                    // (with presets) and the width profile.
+                    stroke_panel::link(app, ui, tl!("Stroke:"));
+                    stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
+                    if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
+                        app.run("stroke.set", json!({"profile": id})).ok();
+                    }
+                    ui.add_space(4.0);
+                    ui.separator();
                 }
-                ui.add_space(4.0);
-                ui.separator();
                 if ui.link(egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
                     app.ui.open_panel = Some("transparency".into());
                 }

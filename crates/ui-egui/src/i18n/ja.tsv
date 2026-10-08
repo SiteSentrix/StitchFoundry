@@ -158,6 +158,7 @@
 	Expand…	分割・拡張…
 	Expand Appearance	アピアランスを分割
 	Crop Image	画像の切り抜き
+	Mask	マスク
 	Rasterize…	ラスタライズ…
 	Create Gradient Mesh…	グラデーションメッシュを作成…
 	Create Object Mosaic…	モザイクオブジェクトを作成…
@@ -222,6 +223,8 @@
 	Merge	結合
 	Gap Options…	間隔オプション…
 	Image Trace	画像トレース
+	Image Tracing	画像トレースオブジェクト
+	Tracing Presets	トレースプリセット
 	Make…	作成…
 	Make and Expand…	作成して拡張…
 	Text Wrap	テキストの回り込み
@@ -2419,6 +2422,7 @@
 	Total Width:	合計幅:
 	Touch Type Tool	文字タッチツール
 	Trace	トレース
+	Trace the image with the Default preset	「デフォルト」プリセットで画像をトレース
 	Tracking	トラッキング
 	Transform Both	両方を変形
 	Transform Each	個別に変形

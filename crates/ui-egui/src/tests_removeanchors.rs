@@ -49,14 +49,14 @@ fn shapes_text(shapes: &[Shape]) -> Vec<(String, Rect)> {
     v
 }
 
-fn control_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+pub(crate) fn control_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 900.0));
     let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| chrome::control_bar(app, ui));
     out.textures_delta.clear();
     shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
 }
 
-fn click_control(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2) {
+pub(crate) fn click_control(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2) {
     let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     control_frame(app, ctx, vec![Event::PointerMoved(at), press(true)]);
     control_frame(app, ctx, vec![press(false)]);
@@ -78,7 +78,7 @@ fn click_canvas(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, button:
     canvas_frame(app, ctx, vec![])
 }
 
-fn properties_frame(app: &mut VectorcraftApp, width: f32) -> Vec<(String, Rect)> {
+pub(crate) fn properties_frame(app: &mut VectorcraftApp, width: f32) -> Vec<(String, Rect)> {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 900.0));
@@ -89,11 +89,11 @@ fn properties_frame(app: &mut VectorcraftApp, width: f32) -> Vec<(String, Rect)>
     shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
 }
 
-fn has(texts: &[(String, Rect)], label: &str) -> bool {
+pub(crate) fn has(texts: &[(String, Rect)], label: &str) -> bool {
     texts.iter().any(|(t, _)| t == label)
 }
 
-fn at(texts: &[(String, Rect)], label: &str) -> Pos2 {
+pub(crate) fn at(texts: &[(String, Rect)], label: &str) -> Pos2 {
     texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}`"))
 }
 
