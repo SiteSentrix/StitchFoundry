@@ -2299,6 +2299,19 @@ undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}
 ```
 
+## Character Alignment
+
+`text.setFormat {charAlign}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end, charAlign}` (a range)
+set where characters smaller than the largest on their line line up with it: `romanBaseline` (the default), the em box's
+`emBoxTop`, `emBoxCenter` or `emBoxBottom`, or the ideographic character face's (ICF) `icfTop` or `icfBottom`. In
+vertical type top and bottom are the right and left of the column. The ICF comes from the font's BASE table (`icfb`,
+`icft`, as the OpenType baseline tags define them), else from the average ink box of some ideographs and kana; a font
+without ideographs uses its em box. One undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"charAlign":"icfTop"}}}
+```
+
 ## New type in a Japanese interface
 
 While the interface is in Japanese (VectorCraft › Language, or `auto` on a Japanese system), new type starts with em

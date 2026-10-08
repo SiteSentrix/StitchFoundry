@@ -789,6 +789,12 @@ mod area_tests {
         s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "charAlign": "emBoxTop"})).unwrap();
         let aligns: Vec<_> = runs(&s).iter().map(|r| (r.text.clone(), r.style.char_align)).collect();
         assert_eq!(aligns, [("雅".to_string(), CharAlign::RomanBaseline), ("楽".to_string(), CharAlign::EmBoxTop)]);
+        // The ideographic character face's top and bottom.
+        for (key, want) in [("icfTop", CharAlign::IcfTop), ("icfBottom", CharAlign::IcfBottom)] {
+            s.execute("text.setFormat", &json!({"charAlign": key})).unwrap();
+            assert!(runs(&s).iter().all(|r| r.style.char_align == want));
+            assert_eq!(serde_json::to_value(&runs(&s)[0].style).unwrap()["charAlign"], key);
+        }
     }
 
     #[test]

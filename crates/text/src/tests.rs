@@ -647,6 +647,42 @@ fn character_alignment_lines_small_characters_up_with_the_largest_em_box() {
     }
 }
 
+/// Character Alignment on the ICF: a 20 pt character next to a 40 pt one lines its ideographic
+/// character face's top (right, vertical) or bottom (left) up with the big one's, which lies inside
+/// the em box by the face's ICF margins. A face without ideographs has none (the ICF is the em
+/// box). The Japanese faces need craft-fonts (skipped without them).
+#[test]
+fn character_alignment_on_the_icf_lines_small_characters_up_with_the_largest_face() {
+    use vectorcraft_doc::{CharAlign, TextRun};
+    let place = |family: &str, a: CharAlign, vertical_type: bool| {
+        let st = |size: f64| CharStyle { font_family: family.into(), ..style(size) };
+        let mut t = point("", st(40.0));
+        t.vertical = vertical_type;
+        t.runs = vec![TextRun { text: "大".into(), style: st(40.0) }, TextRun { text: "小".into(), style: CharStyle { char_align: a, ..st(20.0) } }];
+        let l = layout(db(), &t);
+        let (big, small) = (l.glyphs[0].origin, l.glyphs[1].origin);
+        if vertical_type { small.x - big.x } else { big.y - small.y }
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 0.01;
+    // No ideographs: the ICF is the em box.
+    assert_eq!(db().face("Source Sans 3", "Regular").unwrap().icf_margins(), crate::IcfMargins::default());
+    let Some(face) = db().face("Shippori Mincho", "Regular").filter(|f| f.family == "Shippori Mincho") else {
+        return; // no Japanese font here
+    };
+    let m = face.icf_margins();
+    assert!([m.top, m.bottom, m.right, m.left].iter().all(|x| *x > 0.01 && *x < 0.2), "{m:?}");
+    for vertical_type in [false, true] {
+        let (top, bottom) = if vertical_type { (m.right, m.left) } else { (m.top, m.bottom) };
+        // The big character's ICF top is `top` ems below its em box top: 20 pt of difference.
+        let em_top = place("Shippori Mincho", CharAlign::EmBoxTop, vertical_type);
+        let icf_top = place("Shippori Mincho", CharAlign::IcfTop, vertical_type);
+        assert!(near(em_top - icf_top, top * 20.0), "vertical {vertical_type}: {em_top} {icf_top} {m:?}");
+        let em_bottom = place("Shippori Mincho", CharAlign::EmBoxBottom, vertical_type);
+        let icf_bottom = place("Shippori Mincho", CharAlign::IcfBottom, vertical_type);
+        assert!(near(icf_bottom - em_bottom, bottom * 20.0), "vertical {vertical_type}: {em_bottom} {icf_bottom} {m:?}");
+    }
+}
+
 /// Burasagari leaves Latin punctuation alone: in a measure of exactly "abcd", the full stop of
 /// "abcd. ef" doesn't hang with Standard or Forced (the line breaks as it does with None), and a
 /// Latin line ending in a full stop isn't shortened by Forced.

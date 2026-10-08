@@ -58,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, vertical?: bool = false, size?: pt, font?: family, style?, color?, area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),

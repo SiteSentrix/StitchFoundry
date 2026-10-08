@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"} style a character range (runs are split at the range ends) → {id, runs}",
+            "{id, start?: byte, end?: byte (default: all text), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, fill?: colour|\"none\", stroke?: colour|\"none\", strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\"} style a character range (runs are split at the range ends) → {id, runs}",
             has_doc,
             set_range_style
         ),
@@ -198,7 +198,7 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
     Ok(Some(vectorcraft_text::OtFeatures::default().with_tags(tags).to_tags()))
 }
 
-/// `charAlign: "romanBaseline"|"emBoxTop"|"emBoxCenter"|"emBoxBottom"` (Character Alignment).
+/// `charAlign: "romanBaseline"|"emBoxTop"|"emBoxCenter"|"emBoxBottom"|"icfTop"|"icfBottom"` (Character Alignment).
 pub(crate) fn char_align_param(p: &Value, cmd: &str) -> Result<Option<vectorcraft_doc::CharAlign>> {
     use vectorcraft_doc::CharAlign;
     let Some(v) = p.get("charAlign").filter(|v| !v.is_null()) else { return Ok(None) };
@@ -207,7 +207,14 @@ pub(crate) fn char_align_param(p: &Value, cmd: &str) -> Result<Option<vectorcraf
         Some("emBoxTop") => CharAlign::EmBoxTop,
         Some("emBoxCenter") => CharAlign::EmBoxCenter,
         Some("emBoxBottom") => CharAlign::EmBoxBottom,
-        _ => return Err(bad(cmd, "`charAlign` must be \"romanBaseline\", \"emBoxTop\", \"emBoxCenter\" or \"emBoxBottom\"")),
+        Some("icfTop") => CharAlign::IcfTop,
+        Some("icfBottom") => CharAlign::IcfBottom,
+        _ => {
+            return Err(bad(
+                cmd,
+                "`charAlign` must be \"romanBaseline\", \"emBoxTop\", \"emBoxCenter\", \"emBoxBottom\", \"icfTop\" or \"icfBottom\"",
+            ));
+        }
     }))
 }
 
