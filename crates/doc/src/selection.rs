@@ -1,4 +1,4 @@
-//! Selection state (objects and, for direct selection, individual anchors).
+//! Selection state (objects and, for direct selection, individual anchors; ruler guides).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,11 +29,19 @@ pub struct Selection {
     /// clears them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub slices: Vec<NodeId>,
+    /// Ruler guides selected with a selection tool, as indexes into [`Document::guides`]. They are
+    /// selected on their own: any change to the object selection clears them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guides: Vec<usize>,
 }
 
 impl Selection {
     pub fn is_empty(&self) -> bool {
         self.objects.is_empty()
+    }
+    /// Is anything selected that Delete and the arrow keys act on: objects or ruler guides?
+    pub fn has_objects_or_guides(&self) -> bool {
+        !self.objects.is_empty() || !self.guides.is_empty()
     }
     pub fn len(&self) -> usize {
         self.objects.len()
@@ -47,6 +55,7 @@ impl Selection {
         self.key = None;
         self.target = None;
         self.slices.clear();
+        self.guides.clear();
     }
     pub fn set(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();
@@ -57,6 +66,7 @@ impl Selection {
     pub fn add(&mut self, id: NodeId) {
         self.target = None;
         self.slices.clear();
+        self.guides.clear();
         if !self.objects.contains(&id) {
             self.objects.push(id);
         }
@@ -64,6 +74,7 @@ impl Selection {
     pub fn remove(&mut self, id: NodeId) {
         self.target = None;
         self.slices.clear();
+        self.guides.clear();
         self.objects.retain(|x| *x != id);
         self.anchors.remove(&id);
         if self.key == Some(id) {
@@ -76,6 +87,15 @@ impl Selection {
         for id in ids {
             if !self.slices.contains(&id) {
                 self.slices.push(id);
+            }
+        }
+    }
+    /// Select ruler guides `indexes` (see [`Selection::guides`]) and nothing else.
+    pub fn set_guides(&mut self, indexes: impl IntoIterator<Item = usize>) {
+        self.clear();
+        for i in indexes {
+            if !self.guides.contains(&i) {
+                self.guides.push(i);
             }
         }
     }
@@ -97,6 +117,7 @@ impl Selection {
             self.target = None;
         }
         self.slices.retain(|id| doc.is_slice(*id));
+        self.guides.retain(|i| *i < doc.guides.len());
     }
     /// Target `id` (see [`Selection::target`]): a layer gets its visible, unlocked art selected
     /// (the art of its sublayers too), anything else is selected itself.
@@ -136,6 +157,23 @@ mod tests {
         assert_eq!(s.objects, vec![NodeId(2)]);
         s.clear();
         assert!(s.is_empty());
+    }
+
+    #[test]
+    fn guides_are_selected_on_their_own() {
+        let mut s = Selection::default();
+        s.add(NodeId(1));
+        s.set_guides([2, 0, 2]);
+        assert_eq!((s.objects.clone(), s.guides.clone()), (vec![], vec![2, 0]));
+        assert!(s.has_objects_or_guides() && s.is_empty());
+        s.add(NodeId(1));
+        assert!(s.guides.is_empty());
+        // Pruning drops guides the document no longer has.
+        let mut d = Document::new(100.0, 100.0);
+        d.guides.push(crate::Guide { vertical: true, pos: 10.0 });
+        s.set_guides([0, 1]);
+        s.prune(&d);
+        assert_eq!(s.guides, vec![0]);
     }
 
     #[test]

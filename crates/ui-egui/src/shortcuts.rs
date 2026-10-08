@@ -386,12 +386,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let arrows = [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)];
     for (k, dx, dy) in arrows {
         let m = ctx.input(|i| i.modifiers);
-        if ctx.input_mut(|i| i.consume_key(m, k)) && app.session.active().is_some_and(|d| !d.selection.is_empty()) {
+        if ctx.input_mut(|i| i.consume_key(m, k)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
             let _ = app.run("object.nudge", json!({"dx": dx, "dy": dy, "big": m.shift, "copy": m.alt}));
         }
     }
     // Delete / Backspace clear the selection.
-    if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace)) && app.session.active().is_some_and(|d| !d.selection.is_empty()) {
+    if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides())
+    {
         let _ = app.run("edit.clear", json!({}));
     }
     // Single-key tool shortcuts (no Cmd/Ctrl/Alt).

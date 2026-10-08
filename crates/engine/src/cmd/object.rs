@@ -68,8 +68,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Nudge",
             [],
             None,
-            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), copy?: bool} arrow-key nudge by the keyboard increment",
-            has_selection,
+            "{dx: -1|0|1, dy: -1|0|1, big?: bool (×10), copy?: bool} arrow-key nudge by the keyboard increment (the selected anchors, else objects, else ruler guides)",
+            has_selection_or_guides,
             nudge
         ),
         cmd!("object.arrange.bringToFront", "Bring to Front", ["Object", "Arrange"], Some("Cmd+Shift+]"), "{}", has_selection, |s, _| arrange(
@@ -267,6 +267,9 @@ fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
     let dy = f64_or(p, "dy", 0.0) * k;
     if !s.doc()?.selection.anchors.is_empty() {
         return super::path::move_anchors(s, &json!({ "dx": dx, "dy": dy }));
+    }
+    if s.doc()?.selection.is_empty() {
+        return super::docmenu::guide_move(s, &json!({ "dx": dx, "dy": dy, "copy": bool_or(p, "copy", false) }));
     }
     let ids = selected_roots(s)?;
     apply_transform(s, "Move", ids, Affine::translate((dx, dy)), p)

@@ -144,6 +144,11 @@ pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
 }
+/// Objects or ruler guides are selected (what Delete and the arrow keys act on).
+pub fn has_selection_or_guides(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if st.selection.has_objects_or_guides() { Ok(()) } else { Err("nothing selected".into()) }
+}
 pub fn has_anchors(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.anchors.values().all(|a| a.is_empty()) { Err("no anchor points selected".into()) } else { Ok(()) }

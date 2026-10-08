@@ -96,7 +96,7 @@ impl ArtboardTool {
             return Point::new(p.x.round(), p.y.round());
         }
         if cx.snap_to_grid {
-            return vectorcraft_geom::snap::snap_point_to_grid(p, grid_step(cx));
+            return vectorcraft_geom::snap::snap_point_to_grid(p, cx.grid_step());
         }
         let Some(t) = &self.targets else { return p };
         let offsets: &[Vec2] = if bleed == Vec2::ZERO { &[] } else { &[bleed] };
@@ -114,7 +114,7 @@ impl ArtboardTool {
             return Vec2::new((tl.x + d.x).round() - tl.x, (tl.y + d.y).round() - tl.y);
         }
         if cx.snap_to_grid {
-            return vectorcraft_geom::snap::snap_point_to_grid(tl + d, grid_step(cx)) - tl;
+            return vectorcraft_geom::snap::snap_point_to_grid(tl + d, cx.grid_step()) - tl;
         }
         let Some(t) = (if copy { &self.copy_targets } else { &self.targets }) else { return d };
         let moved = rect + d;
@@ -144,10 +144,6 @@ fn bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle) -> Vec2 {
 }
 
 /// The grid's snapping step (gridline spacing over subdivisions), as `guides::snap_draw` uses.
-fn grid_step(cx: &ToolContext) -> f64 {
-    cx.doc.grid.spacing / cx.doc.grid.subdivisions.max(1) as f64
-}
-
 impl Tool for ArtboardTool {
     fn id(&self) -> &'static str {
         "artboard"

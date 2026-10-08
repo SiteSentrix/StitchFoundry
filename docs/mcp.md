@@ -549,6 +549,29 @@ names must stay unique. In the desktop app the saved selections are listed at th
 (`select.recall1` … `select.recall25`). A file's saved selections are checked when it opens: past 25, blank or
 repeated names, and ids the document doesn't have are dropped.
 
+## Ruler guides
+
+Ruler guides are numbered in the order they were made. `guide.add {vertical, pos}` makes one (the x of a vertical
+guide, the y of a horizontal one, in points) → `{index}`; `guide.list` → `[{index, vertical, pos, selected}…]`.
+`guide.select {indexes: [index…], toggle?}` selects guides on their own (the art is deselected; `toggle` adds or
+removes them) → `{selected}`. `guide.move {index, pos}` puts one guide somewhere, `guide.move {dx?, dy?, copy?}`
+moves the selected ones (vertical guides by `dx`, horizontal ones by `dy`; `copy` leaves them and selects the
+moved copies), and `guide.remove {index?}` deletes one guide or the selected ones → `{count}`; each is one undo
+step. With guides selected, `edit.clear` (Delete) deletes them and `object.nudge` (the arrow keys) nudges them.
+View › Guides › Lock Guides (`view.guides.lock`) deselects them and refuses these commands until unlocked.
+
+The Selection, Direct Selection and Group Selection tools pick a guide within the selection tolerance, over the art
+(an anchor on it comes first with Direct Selection), and drag the selected guides: `mods.alt` copies them,
+`mods.shift` snaps the dragged guide to the ruler's ticks, and otherwise it snaps to whole pixels, the grid or, with
+Smart Guides, the art's edges, centres and anchors. In the desktop app a guide dropped off the canvas onto its
+ruler is deleted, and hidden guides (View › Guides › Hide Guides) can't be picked.
+
+```json
+{"name":"run_command","arguments":{"command":"guide.add","params":{"vertical":true,"pos":100}}}
+{"name":"pointer_gesture","arguments":{"tool":"selection","events":[{"kind":"down","x":100,"y":50},{"kind":"drag","x":140,"y":50},{"kind":"up","x":140,"y":50}]}}
+{"name":"run_command","arguments":{"command":"guide.list","params":{}}}
+```
+
 ## Graphic styles
 
 A graphic style holds an appearance (fills, strokes, effects) plus opacity, blend mode, isolate and knockout.

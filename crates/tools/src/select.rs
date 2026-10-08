@@ -2,7 +2,8 @@
 //! bounding-box scale (Shift proportional, Alt from centre) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's corner widget to round its corners (Alt-click cycles their kind,
 //! double-click opens the Corners dialog), double-click to enter isolation mode (Double Click To
-//! Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind).
+//! Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
+//! click or drag a ruler guide ([`crate::rulerguide`]).
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
@@ -14,6 +15,7 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag, over_widget};
+use crate::rulerguide::GuideEdit;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, json_ids};
 
 #[derive(Clone, Debug, Default)]
@@ -54,6 +56,7 @@ pub struct SelectionTool {
     guides: Vec<Overlay>,
     targets: Option<crate::guides::Targets>,
     start_bounds: Option<Rect>,
+    guide: GuideEdit,
 }
 
 pub fn matrix_json(a: Affine) -> Value {
@@ -101,10 +104,13 @@ impl Tool for SelectionTool {
     }
 
     fn busy(&self) -> bool {
-        !matches!(self.state, State::Idle)
+        !matches!(self.state, State::Idle) || self.guide.busy()
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
+        if let Some(out) = self.guide.pointer(cx, ev) {
+            return out;
+        }
         let p = ev.pos;
         let m = ev.mods;
         match (ev.kind, self.state.clone()) {
@@ -112,6 +118,9 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 if let Some(a) = corners::double_click(cx, p) {
                     return vec![a];
+                }
+                if crate::rulerguide::guide_at(cx, p).is_some() {
+                    return vec![];
                 }
                 if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
                     let top = h.top_object(cx.isolation);
@@ -153,7 +162,12 @@ impl Tool for SelectionTool {
                         None => {}
                     }
                 }
-                // 2. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
+                // 2. Ruler guides (over the art, as they are drawn).
+                if let Some(out) = self.guide.press(cx, ev) {
+                    self.state = State::Idle;
+                    return out;
+                }
+                // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
                 if m.cmd
                     && cx.select_behind
                     && let Some(behind) = object_behind(cx, p)
@@ -293,6 +307,7 @@ impl Tool for SelectionTool {
             _ => {}
         }
         o.extend(self.guides.iter().cloned());
+        o.extend(self.guide.overlays(cx));
         if let Some((p, t)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: t.clone() });
         }
@@ -307,6 +322,9 @@ impl Tool for SelectionTool {
             State::Corner(_) => return Cursor::CornerRadius,
             _ => {}
         }
+        if self.guide.busy() {
+            return self.guide.cursor(cx, p).unwrap_or_default();
+        }
         if over_widget(cx, p) {
             return Cursor::CornerRadius;
         }
@@ -318,6 +336,9 @@ impl Tool for SelectionTool {
                 Some(BoxHit::Rotate) => return Cursor::Rotate,
                 None => {}
             }
+        }
+        if let Some(c) = self.guide.cursor(cx, p) {
+            return c;
         }
         if let Some(h) = hit_test(cx.doc, p, cx.hit_options()) {
             if cx.selection.contains(h.top_object(cx.isolation)) || m.alt {
@@ -376,6 +397,27 @@ mod tests {
         let a = t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
         assert_eq!(a, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 150.0, 150.0)).is_empty());
+    }
+
+    /// #414: a press on a ruler guide picks it over the art, and drags it.
+    #[test]
+    fn a_press_on_a_ruler_guide_picks_it_over_the_art() {
+        let (mut d, _) = doc_with_rect();
+        d.guides.push(vectorcraft_doc::Guide { vertical: false, pos: 150.0 });
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert_eq!(t.cursor(&cx, Point::new(160.0, 151.0), Mods::default()), Cursor::ResizeV);
+        let a = t.pointer(&cx, &ev(PointerKind::Down, 160.0, 151.0));
+        assert_eq!(a, vec![Action::Exec("guide.select".into(), json!({"indexes": [0]}))]);
+        assert!(t.busy());
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 171.0));
+        assert_eq!(a[1], Action::Preview("guide.move".into(), json!({"dx": 0.0, "dy": 20.0, "copy": false})));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 160.0, 171.0)), vec![Action::Commit]);
+        assert!(!t.busy());
+        // A double-click there doesn't go through to the art.
+        assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 160.0, 150.0)).is_empty());
     }
 
     #[test]
