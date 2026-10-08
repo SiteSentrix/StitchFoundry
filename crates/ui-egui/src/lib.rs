@@ -347,6 +347,9 @@ pub struct VectorcraftApp {
     /// The thread that checks the system clipboard for `system_paste` instead
     /// ([`Services::clipboard_probe`]).
     clipboard_probe: Option<clipboard_probe::Probe>,
+    /// The look for fonts installed or removed while the app was in the background, running
+    /// ([`Self::refresh_installed_fonts`]): whether they were.
+    font_check: Option<std::sync::mpsc::Receiver<bool>>,
     /// Keyboard pastes of something other than text (see [`shortcuts::PasteChord`]).
     pub(crate) paste_chord: shortcuts::PasteChord,
     /// Saves and exports running in the background (Preferences → File Handling).
@@ -423,6 +426,7 @@ impl VectorcraftApp {
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
             clipboard_probe: None,
+            font_check: None,
             paste_chord: Default::default(),
             background: Default::default(),
             recovery: Default::default(),
@@ -785,6 +789,7 @@ impl VectorcraftApp {
             self.system_paste_at = now;
             self.system_paste = wanted && self.system_clipboard_pasteable();
         }
+        self.poll_font_check(ctx);
         background::poll(self);
         if !self.background.jobs.is_empty() {
             // Keep the status bar's progress moving and pick the result up when it arrives.
@@ -858,10 +863,38 @@ impl VectorcraftApp {
 
     /// Fonts installed or removed while the app was in the background are listed when it comes
     /// back (Refresh Font List by itself): a look at the font folders, a scan only when they changed.
+    /// The look runs on another thread (asking DirectWrite for the fonts font services loaded
+    /// meanwhile takes tens of milliseconds on Windows, #579), [`Self::poll_font_check`] scans.
     fn refresh_installed_fonts(&mut self) {
-        if vectorcraft_text::FontDb::global().installed_fonts_changed() {
-            // A failure shows in the status bar, as the menu item's does.
-            let _ = self.run("text.rescanFonts", json!({}));
+        if self.font_check.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let look = move || {
+            // The UI gone meanwhile has nothing to refresh.
+            let _ = tx.send(vectorcraft_text::FontDb::global().installed_fonts_changed());
+        };
+        let spawned =
+            if cfg!(target_arch = "wasm32") { None } else { std::thread::Builder::new().name("font-check".into()).spawn(look.clone()).ok() };
+        if spawned.is_none() {
+            look();
+        }
+        self.font_check = Some(rx);
+    }
+
+    /// Rescan the fonts once [`Self::refresh_installed_fonts`]'s look says they changed.
+    fn poll_font_check(&mut self, ctx: &egui::Context) {
+        let Some(check) = &self.font_check else { return };
+        match check.try_recv() {
+            Ok(changed) => {
+                self.font_check = None;
+                if changed {
+                    // A failure shows in the status bar, as the menu item's does.
+                    let _ = self.run("text.rescanFonts", json!({}));
+                }
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(50)),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.font_check = None,
         }
     }
 
