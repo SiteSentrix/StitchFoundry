@@ -91,11 +91,15 @@ that shows fewer children than it has reports their total as `childCount`, so tr
 nothing truncated the reply is the plain summary. Both must be non-negative integers and need `summary: true`
 (the full object JSON is never truncated); anything else is an error.
 
-On a large document, drill instead of dumping: `run_command document.inspect {depth: 0}` is the skeleton
-(artboards with top layers and counts), `run_command document.find {name?|kind?|text?, limit?}` locates nodes
-across the whole tree (at least one filter is required; answers `{matches: [{id, name, kind, path}], total}`),
-and `document.node` reads the interesting ones sliced. `document.json` stays whole: it is the fidelity path,
-not the way to look around.
+On a large document, drill instead of dumping: `inspect_document {depth: 0}` (or `run_command document.inspect
+{depth?, childLimit?}`, same rules) is the skeleton (artboards with top layers and counts), `run_command
+document.find {name?, kind?, text?, limit?}` locates nodes across the whole tree, and `document.node` reads the
+interesting ones sliced. `document.find` needs at least one filter and all given filters must match; matching
+ignores case, `name` is a substring of the Layers panel name, `text` a substring of type content and `kind` the
+exact panel label (`Layer`, `Group`, `Clip Group`, `Path`, `Compound Path`, `Type`, `Image`, `Rectangle`, ...).
+It answers `{matches: [{id, name, kind, path}], total}` top of the stack first, where `path` is the ancestor
+chain (layer first) and `limit` caps `matches` (default 100; `0` only counts). `document.json` stays whole: it is
+the fidelity path, not the way to look around.
 
 ### Completions
 
@@ -162,7 +166,7 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 |---|---|---|
 | `list_commands` | `{filter?, enabledOnly?}` | The command catalogue: id, label, menu, shortcut, params doc, enablement. |
 | `run_command` | `{command, params?}` | Runs any command. Use it for everything without a dedicated tool. |
-| `inspect_document` | `{}` | Artboards, layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
+| `inspect_document` | `{depth?, childLimit?}` | Artboards, layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
 | `pointer_gesture` | `{events:[{kind,x,y,mods?}], tool?, mods?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. Events go through the same path as the mouse. |

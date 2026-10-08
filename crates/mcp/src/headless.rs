@@ -271,7 +271,7 @@ impl Backend for Headless {
                 self.exec(&id, &params)
             }
             "engine.commands" => Ok(self.commands()),
-            "document.inspect" => self.exec("document.inspect", &json!({})),
+            "document.inspect" => self.exec("document.inspect", p),
             "document.node" => self.exec("document.node", p),
             "document.json" => self.exec("document.json", &json!({})),
             "ui.tool.select" => self.select_tool(p),

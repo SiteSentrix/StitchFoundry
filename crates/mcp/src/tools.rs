@@ -100,8 +100,14 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "inspect_document",
             "Inspect document",
-            "Summary of the active document: artboards, layer tree (ids, names, kinds, bounds, fill/stroke), selection, undo history, current tool and default paint.",
-            empty(),
+            "Summary of the active document: artboards, layer tree (ids, names, kinds, bounds, fill/stroke), selection, undo history, current tool and default paint. On a large document pass depth: 0 for the layer skeleton (truncated levels report childCount), then locate objects with run_command document.find and read them with document.node.",
+            obj(
+                json!({
+                    "depth": {"type": "integer", "minimum": 0, "description": "Child levels of the layer tree to include (default all; 0 = top layers with counts)"},
+                    "childLimit": {"type": "integer", "minimum": 0, "description": "Children shown per node (default all; a level that shows fewer reports childCount)"}
+                }),
+                &[],
+            ),
             true,
         ),
         tool(
@@ -683,7 +689,12 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             let method = if name == "invoke_menu" && b.has_ui() { "ui.menu.invoke" } else { "engine.execute" };
             j(b.call(method, json!({"command": cmd, "params": params}))?)
         }
-        "inspect_document" => j(b.call("document.inspect", json!({}))?),
+        "inspect_document" => {
+            // Only the slicing options reach the command, which validates them.
+            let slice: Map<String, Value> =
+                a.iter().filter(|(k, _)| matches!(k.as_str(), "depth" | "childLimit")).map(|(k, v)| (k.clone(), v.clone())).collect();
+            j(b.call("document.inspect", Value::Object(slice))?)
+        }
         "inspect_ui" => {
             need_ui(b, name)?;
             j(b.call("ui.inspect", json!({}))?)

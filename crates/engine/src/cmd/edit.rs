@@ -126,26 +126,31 @@ fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// `depth` / `childLimit` for a summary read: absent (or null) means no limit.
-/// A present value that is not a non-negative integer is rejected rather than
-/// silently reinterpreted.
 fn slice_opts(p: &Value, cmd: &str) -> Result<inspect::SummaryOpts> {
-    let opt = |key: &str| match p.get(key) {
+    Ok(inspect::SummaryOpts { depth: opt_u64(p, cmd, "depth")?, child_limit: opt_u64(p, cmd, "childLimit")? })
+}
+
+/// An optional count: absent (or null) is `None`; a present value that is not a
+/// non-negative integer is rejected rather than silently reinterpreted.
+fn opt_u64(p: &Value, cmd: &str, key: &str) -> Result<Option<u64>> {
+    match p.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_u64().map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a non-negative integer"))),
-    };
-    Ok(inspect::SummaryOpts { depth: opt("depth")?, child_limit: opt("childLimit")? })
+    }
 }
 
 fn doc_find(s: &mut Session, p: &Value) -> Result<Value> {
-    let substring = |key: &str| str_param(p, key).filter(|v| !v.is_empty()).map(|v| v.to_lowercase());
-    let filter = inspect::FindFilter { name: substring("name"), kind: substring("kind"), text: substring("text") };
+    // A filter of the wrong type is an error, not dropped: dropping it would widen the search.
+    let needle = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(v)) => Ok(Some(v.to_lowercase()).filter(|v| !v.is_empty())),
+        Some(_) => Err(bad("document.find", format!("`{key}` must be a string"))),
+    };
+    let filter = inspect::FindFilter { name: needle("name")?, kind: needle("kind")?, text: needle("text")? };
     if filter.is_empty() {
         return Err(bad("document.find", "give at least one of `name`, `kind`, `text`"));
     }
-    let limit = match p.get("limit") {
-        None | Some(Value::Null) => 100,
-        Some(v) => v.as_u64().ok_or_else(|| bad("document.find", "`limit` must be a non-negative integer"))?,
-    };
+    let limit = opt_u64(p, "document.find", "limit")?.unwrap_or(100);
     let (matches, total) = inspect::find_nodes(&s.doc()?.doc, &filter, limit);
     Ok(json!({"matches": matches, "total": total}))
 }

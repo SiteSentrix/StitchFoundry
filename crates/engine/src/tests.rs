@@ -465,6 +465,8 @@ fn document_find_searches_names_kinds_and_text() {
     assert!(s.execute("document.find", &json!({})).is_err());
     assert!(s.execute("document.find", &json!({"name": ""})).is_err());
     assert!(s.execute("document.find", &json!({"name": "hero", "limit": "many"})).is_err());
+    // A filter of the wrong type is rejected, not dropped (dropping it would widen the search).
+    assert!(s.execute("document.find", &json!({"kind": "group", "name": 5})).is_err());
     assert_eq!(s.execute("document.find", &json!({"kind": "nope"})).unwrap()["total"], 0);
 }
 

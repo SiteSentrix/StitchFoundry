@@ -175,6 +175,15 @@ fn headless_end_to_end() {
     assert_eq!(rect["fill"], "#ff0000", "{rect}");
     assert_eq!(rect["stroke"], "None");
 
+    // A depth-0 inspect is the skeleton: top layers with counts, nothing below them;
+    // a bad slice is a tool error, not a full dump.
+    let r = call(&mut s, 41, "inspect_document", json!({"depth": 0}));
+    let skel: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert!(skel["layers"][0].get("children").is_none(), "{skel}");
+    assert_eq!(skel["layers"][0]["childCount"], layer["children"].as_array().unwrap().len());
+    assert_eq!(skel["artboards"], doc["artboards"]);
+    assert_eq!(call(&mut s, 42, "inspect_document", json!({"depth": -1}))["isError"], true);
+
     // Screenshot returns image content (base64 PNG) and text.
     let shot_path = tmp("shot.png");
     let r = call(&mut s, 5, "screenshot", json!({"path": shot_path.to_str().unwrap()}));
