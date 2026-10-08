@@ -1,11 +1,12 @@
-//! The browser shell: web `Services`, drag-and-drop, the eframe web runner, and starting again
-//! with new graphics when the page loses them (#369).
+//! The browser shell: web `Services`, drag-and-drop, pasted pictures and files, the eframe web
+//! runner, and starting again with new graphics when the page loses them (#369).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use vectorcraft_engine::Session;
+use vectorcraft_engine::cmd::clipboard::{FILE_HEAD, Flavour, PASTE_ORDER, file_flavour};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::cmd::recovery::{self, Hold, RecoveryStore};
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
@@ -23,6 +24,14 @@ type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 /// whether Shift was held: where dropped files land.
 type DragPos = Rc<Cell<Option<(f32, f32, bool)>>>;
 
+/// A picture or file pasted into the page, read and waiting for the next frame with the modifiers
+/// held at the paste, and the context to wake for it (the current runner's).
+#[derive(Default)]
+struct Pasted {
+    flavour: Option<(Flavour, egui::Modifiers)>,
+    ctx: Option<egui::Context>,
+}
+
 const CANVAS_ID: &str = "vectorcraft_canvas";
 const LOADING_ID: &str = "vectorcraft_loading";
 
@@ -37,6 +46,7 @@ struct Host {
     inbox: Inbox,
     place_inbox: PlaceInbox,
     drag: DragPos,
+    pasted: Rc<RefCell<Pasted>>,
     /// The page's Web Locks for Data Recovery, started once before the first frame: a graphics
     /// restart keeps them, so the tab stays the owner of its recovery area.
     locks: Option<WebLocks>,
@@ -59,9 +69,11 @@ pub fn start() {
             inbox: Arc::default(),
             place_inbox: Arc::default(),
             drag: DragPos::default(),
+            pasted: Rc::default(),
             locks,
             restarts: 0,
         };
+        track_paste(&host.pasted);
         run(host, canvas, None).await;
     });
 }
@@ -94,6 +106,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                     let (loss, ctx) = (loss.clone(), ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
+                host.pasted.borrow_mut().ctx = Some(ctx.clone());
                 let services = services(host.inbox.clone(), host.place_inbox.clone(), ctx.clone(), host.locks.clone());
                 let app = match taken.borrow_mut().take() {
                     Some(mut app) => {
@@ -176,6 +189,50 @@ fn track_drag(canvas: &web_sys::HtmlCanvasElement, pos: &DragPos) {
     }
     // The listener lives as long as the canvas.
     on_drag.forget();
+}
+
+/// Take pictures and files pasted into the page (egui reads a paste's text only): a paste without
+/// text hands the first of its files that is art (a bitmap, SVG, PDF, a metafile) to the next
+/// frame. Text, SVG markup among it, is left to egui.
+fn track_paste(pasted: &Rc<RefCell<Pasted>>) {
+    let Some(window) = web_sys::window() else { return };
+    let pasted = pasted.clone();
+    let on_paste = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::ClipboardEvent)>::new(move |e: web_sys::ClipboardEvent| {
+        let Some(data) = e.clipboard_data() else { return };
+        let Some(files) = data.files().filter(|f| f.length() > 0) else { return };
+        if data.get_data("text").is_ok_and(|t| !t.is_empty()) {
+            return;
+        }
+        e.prevent_default();
+        let held = pasted.borrow().ctx.as_ref().map(|c| c.input(|i| i.modifiers)).unwrap_or_default();
+        let files: Vec<web_sys::File> = (0..files.length()).filter_map(|i| files.get(i)).collect();
+        let pasted = pasted.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            for file in files {
+                let bytes = match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
+                    Ok(buf) => js_sys::Uint8Array::new(&buf).to_vec(),
+                    Err(e) => {
+                        log::error!("couldn't read the pasted file {}: {}", file.name(), js_err(e));
+                        continue;
+                    }
+                };
+                if let Some(mime) = file_flavour(&file.name(), bytes.get(..FILE_HEAD).unwrap_or(&bytes), &PASTE_ORDER) {
+                    let mut p = pasted.borrow_mut();
+                    p.flavour = Some((Flavour { mime, data: bytes }, held));
+                    if let Some(ctx) = &p.ctx {
+                        ctx.request_repaint();
+                    }
+                    return;
+                }
+            }
+        });
+    });
+    // Captured before eframe's own listener, which stops the event.
+    if let Err(e) = window.add_event_listener_with_callback_and_bool("paste", on_paste.as_ref().unchecked_ref(), true) {
+        log::error!("couldn't follow paste events: {e:?}");
+    }
+    // The listener lives as long as the page.
+    on_paste.forget();
 }
 
 /// Report the loss of `canvas`'s WebGL context to `loss` (WebGPU devices report theirs through
@@ -284,6 +341,10 @@ impl eframe::App for WebShell {
             self.restart(&why);
         }
         let Some(app) = &mut self.app else { return };
+        let pasted = self.host.pasted.borrow_mut().flavour.take();
+        if let Some((f, held)) = pasted {
+            app.paste_from_host(ctx, f, held);
+        }
         let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
         if !dropped.is_empty() {
             let at = self.host.drag.take();

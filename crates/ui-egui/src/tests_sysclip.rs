@@ -224,3 +224,29 @@ fn without_the_service_plain_text_is_still_not_pasted() {
     frame(&mut app, vec![egui::Event::Paste("hello".into())]);
     assert_eq!(count(&app), 0);
 }
+
+#[test]
+fn a_picture_the_host_read_from_a_paste_pastes_without_the_service() {
+    // The web: the page's paste event carries the picture, egui's Paste event no text.
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": 400, "height": 300}));
+    let v = app.view_mut().unwrap();
+    (v.center, v.fitted) = (Point::new(250.0, 180.0), true);
+    let ctx = egui::Context::default();
+    app.paste_from_host(&ctx, Flavour { mime: PNG, data: blue_png() }, egui::Modifiers::COMMAND);
+    let n = &pasted(&app)[0];
+    let NodeKind::Image(im) = &n.kind else { panic!("not an image: {:?}", n.kind) };
+    assert!(im.link.is_none() && (im.width, im.height) == (4, 2));
+    assert!((n.geometric_bounds().unwrap().center() - Point::new(250.0, 180.0)).hypot() < 1e-6);
+    // Cmd+Shift+V held: Paste in Place, where the picture was put (the view's centre) again.
+    app.paste_from_host(&ctx, Flavour { mime: PNG, data: blue_png() }, egui::Modifiers::COMMAND | egui::Modifiers::SHIFT);
+    assert_eq!(count(&app), 2);
+    // A picture that isn't one pastes nothing, the stale internal clipboard neither.
+    app.paste_from_host(&ctx, Flavour { mime: PNG, data: b"not a picture".to_vec() }, egui::Modifiers::COMMAND);
+    assert_eq!(count(&app), 2);
+    assert!(app.ui.status.starts_with("Couldn't paste"), "{}", app.ui.status);
+    // A copied SVG file pastes as art.
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>"#;
+    app.paste_from_host(&ctx, Flavour { mime: SVG, data: svg.as_bytes().to_vec() }, egui::Modifiers::COMMAND);
+    assert!(matches!(pasted(&app)[0].kind, NodeKind::Path { .. }));
+}
