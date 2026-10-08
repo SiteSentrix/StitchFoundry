@@ -1369,7 +1369,6 @@
 	Make a theme on Create and save it.	Crea un tema nella scheda Crea e salvalo.
 	Make all bleed settings the same	Usa lo stesso valore per tutte le abbondanze
 	Make and Expand	Crea ed espandi
-	Make and Expand…	Crea ed espandi…
 	Make Clipping Mask	Crea maschera di ritaglio
 	Make Compound Shape	Crea forma composta
 	Make Envelope	Crea involucro
@@ -1382,7 +1381,6 @@
 	Make with Top Object	Crea con oggetto superiore
 	Make with Warp…	Crea con alterazione…
 	Make/Release Clipping Mask	Crea/rilascia maschera di ritaglio
-	Make…	Crea…
 	Manage Workspaces	Gestisci aree di lavoro
 	Manage Workspaces…	Gestisci aree di lavoro…
 	Manually	Manualmente
@@ -2546,6 +2544,7 @@
 	Character:	Carattere:
 	Character options	Opzioni carattere
 	Stroke options	Opzioni traccia
+	Transform options	Opzioni di trasformazione
 	Stroke Weight	Spessore traccia
 	Stroke:	Traccia:
 	Stroke: click for swatches, Shift-click for the color mixer	Traccia: fai clic per i campioni, Shift+clic per il miscelatore colori
