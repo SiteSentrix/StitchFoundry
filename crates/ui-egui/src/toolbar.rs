@@ -1,5 +1,7 @@
 //! The Tools panel. Default: Illustrator 2026's categorized single-column toolbar (Select, Shapes,
-//! Draw, Modify, Type, Navigate, Color). Window → Toolbars → Advanced shows every tool group.
+//! Draw, Modify, Type, Navigate, Color). Window → Toolbars → Advanced shows every tool group; the
+//! double arrow at the top (or Window → Toolbars → Double Column, `window.toolbarColumns`) lays the
+//! tools out in one or two columns.
 //! Bottom: fill/stroke proxy, colour/gradient/none, drawing modes, screen mode, Edit Toolbar.
 
 use egui::{Color32, CornerRadius, Sense, Stroke, Ui, pos2, vec2};
@@ -88,10 +90,8 @@ pub fn remember(app: &mut VectorcraftApp, id: &str) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let all = slots(app);
-    let avail = ui.available_height();
-    let labels = all.iter().filter(|s| s.0.is_some()).count() as f32 * 20.0;
-    let need = all.len() as f32 * PITCH + labels + 190.0;
-    let cols = if app.ui.toolbar_double || avail < need { 2 } else { 1 };
+    // The user's choice alone: a window too short for the tools scrolls them.
+    let cols = if app.ui.toolbar_double { 2 } else { 1 };
     let w = if cols == 2 { 76.0 } else { WIDTH };
     egui::Panel::left("toolbar")
         .resizable(false)
@@ -108,8 +108,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 egui::Rect::from_min_size(hdr.left_top() + vec2(3.0, 2.0), vec2(10.0, 10.0)),
                 if hresp.hovered() { t.text_strong } else { t.text },
             );
-            if hresp.on_hover_text(tl!("Toggle single/double column")).clicked() {
-                app.ui.toolbar_double = !app.ui.toolbar_double;
+            if hresp.on_hover_text(tl!("Toggle single/double column")).clicked()
+                // It only fails on bad params, which this never sends; show it all the same.
+                && let Err(e) = app.run("window.toolbarColumns", json!({ "double": cols == 1 }))
+            {
+                app.ui.status = e;
             }
             let (grip, _) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::hover());
             for k in 0..6 {
@@ -982,10 +985,52 @@ pub(crate) mod tests {
 
     /// A click at `at`.
     fn click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2, button: PointerButton) {
+        click_in(app, ctx, time, at, button, 1200.0);
+    }
+
+    /// [`click`] in a window `height` points tall; returns the tool buttons' rects after it.
+    fn click_in(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2, button: PointerButton, height: f32) -> Vec<egui::Rect> {
         let b = |pressed| Event::PointerButton { pos: at, button, pressed, modifiers: Default::default() };
-        frame(app, ctx, time, vec![Event::PointerMoved(at), b(true)]);
-        frame(app, ctx, time + 0.05, vec![b(false)]);
-        frame(app, ctx, time + 0.1, vec![]);
+        frame_in(app, ctx, time, vec![Event::PointerMoved(at), b(true)], height);
+        frame_in(app, ctx, time + 0.05, vec![b(false)], height);
+        frame_in(app, ctx, time + 0.1, vec![], height)
+    }
+
+    /// How many columns of tool buttons `rects` make.
+    fn columns(rects: &[egui::Rect]) -> usize {
+        let mut lefts: Vec<i32> = rects.iter().map(|r| r.left().round() as i32).collect();
+        lefts.sort_unstable();
+        lefts.dedup();
+        lefts.len()
+    }
+
+    #[test]
+    fn the_double_arrow_toggles_one_and_two_columns_in_a_short_window() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        // 700 pt: too short for the single column, which scrolls instead of turning into two.
+        assert_eq!(columns(&frame_in(&mut app, &ctx, 0.0, vec![], 700.0)), 1);
+        let arrow = pos2(8.0, 7.0);
+        assert_eq!(columns(&click_in(&mut app, &ctx, 1.0, arrow, PointerButton::Primary, 700.0)), 2);
+        assert!(app.ui.toolbar_double && crate::menus::checked(&app, "window.toolbarColumns", &json!({})) == Some(true));
+        assert_eq!(columns(&click_in(&mut app, &ctx, 2.0, arrow, PointerButton::Primary, 700.0)), 1);
+        assert!(!app.ui.toolbar_double);
+    }
+
+    #[test]
+    fn the_columns_command_toggles_or_sets_the_toolbar_columns() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        assert_eq!(app.run("window.toolbarColumns", json!({})).unwrap(), json!(true));
+        assert_eq!(columns(&frame_in(&mut app, &ctx, 0.0, vec![], 700.0)), 2);
+        assert_eq!(app.run("window.toolbarColumns", json!({"double": true})).unwrap(), json!(true));
+        assert_eq!(app.run("window.toolbarColumns", json!({})).unwrap(), json!(false));
+        assert_eq!(crate::menus::checked(&app, "window.toolbarColumns", &json!({})), Some(false));
+        assert_eq!(columns(&frame_in(&mut app, &ctx, 1.0, vec![], 700.0)), 1);
+        assert!(app.run("window.toolbarColumns", json!({"double": "yes"})).is_err());
+        // Advanced (every tool group) is taller still and keeps the column the user chose too.
+        app.run("window.toolbarAdvanced", json!({})).unwrap();
+        assert_eq!(columns(&frame_in(&mut app, &ctx, 2.0, vec![], 700.0)), 1);
     }
 
     #[test]
