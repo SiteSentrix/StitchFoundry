@@ -260,6 +260,8 @@ pub struct CacheKey {
     pub ppp: f32,
     pub hidden: Vec<u64>,
     pub rot: f64,
+    /// General › Anti-aliased Artwork.
+    pub anti_alias: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
