@@ -79,6 +79,7 @@ struct Applied {
     threads: i32,
     tool_tips: bool,
     scrub: bool,
+    bare_points: bool,
 }
 
 /// Per frame: push UI-side preferences into egui / the renderer when they change.
@@ -95,6 +96,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         threads: p.render_threads,
         tool_tips: p.show_tool_tips,
         scrub: p.scrub_numeric_fields,
+        bare_points: p.numbers_without_units_are_points,
     };
     let id = egui::Id::new("dc-applied-prefs");
     let prev: Option<Applied> = ctx.data(|d| d.get_temp::<Option<Applied>>(id)).flatten();
@@ -105,6 +107,7 @@ pub fn apply_runtime(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let delay = if want.tool_tips { egui::style::Interaction::default().tooltip_delay } else { f32::INFINITY };
         ctx.global_style_mut(|s| s.interaction.tooltip_delay = delay);
         crate::scrub::set_enabled(ctx, want.scrub);
+        crate::widgets::set_bare_numbers_are_points(ctx, want.bare_points);
         if want.white_canvas {
             let mut t = Tokens::get(ctx);
             t.pasteboard = egui::Color32::WHITE;
@@ -231,6 +234,11 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
         first = false;
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
         match sp.kind {
+            // Units › Numbers Without Units Are Points only tells points from picas: dimmed
+            // unless a unit is Picas.
+            PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
+                ui.add_enabled_ui(picas_in_use(d), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {
                 labeled(ui, sp.label, |ui| {
@@ -317,6 +325,11 @@ fn category_fields(ui: &mut egui::Ui, d: &mut Dialog, cat: &str) {
             }
         }
     }
+}
+
+/// Is one of the dialog's Units (General, Stroke, Type, East Asian Type) Picas?
+fn picas_in_use(d: &Dialog) -> bool {
+    ["unitsGeneral", "unitsStroke", "unitsType", "unitsAsianType"].iter().any(|k| d.str(k) == vectorcraft_doc::Unit::Picas.key())
 }
 
 fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
@@ -471,6 +484,34 @@ mod tests {
         assert_eq!(a.session.prefs.gpu_preference, "highPerformance");
         let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
         assert_eq!(saved["engine_prefs"]["gpuPreference"], json!("highPerformance"));
+    }
+
+    /// Units › Numbers Without Units Are Points (#394): the preference reaches the fields when it
+    /// changes, and its checkbox is dimmed unless a unit is Picas.
+    #[test]
+    fn numbers_without_units_are_points_reaches_the_fields_and_dims_without_picas() {
+        let mut a = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let frame = |a: &mut VectorcraftApp| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                apply_runtime(a, ui.ctx());
+                show(a, ui.ctx());
+            });
+            out.textures_delta.clear();
+        };
+        let read = |ctx: &egui::Context| widgets::typed_unit(ctx, vectorcraft_doc::Unit::Picas);
+        frame(&mut a);
+        assert_eq!(read(&ctx), vectorcraft_doc::Unit::Points, "on by default");
+        a.run("prefs.set", json!({"key": "numbersWithoutUnitsArePoints", "value": false})).unwrap();
+        frame(&mut a);
+        assert_eq!(read(&ctx), vectorcraft_doc::Unit::Picas, "off");
+        // The checkbox: dimmed with every unit in points, enabled once a unit is Picas.
+        open(&mut a, Some("Units"));
+        let d = a.ui.dialog.as_mut().unwrap();
+        assert!(!picas_in_use(d), "dimmed in points");
+        d.fields.insert("unitsStroke".into(), json!("picas"));
+        assert!(picas_in_use(d), "enabled with a unit in picas");
     }
 
     #[test]

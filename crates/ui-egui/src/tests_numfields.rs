@@ -132,6 +132,31 @@ fn plain_fields_do_math_with_their_suffix() {
     assert_eq!(f.frame(vec![enter()], &draw), Some(90.0));
 }
 
+/// Preferences › Units › Numbers Without Units Are Points (#394): on (the default), a number typed
+/// with no unit into a field in picas is read in points; a typed unit still wins (`2p6`, `1in`);
+/// off, it is in picas. A field in any other unit reads it in its unit either way.
+#[test]
+fn bare_numbers_in_picas_fields_are_points_when_the_preference_says_so() {
+    let mut f = Field::new();
+    let typed = |f: &mut Field, u: Unit, text: &str| {
+        let pt = Cell::new(u.to_pt(4.0));
+        let draw = |ui: &mut egui::Ui| widgets::num_field(ui, "f", Some(pt.get()), u, 80.0).inspect(|&v| pt.set(v));
+        f.frame(vec![], &draw);
+        f.frame(f.click(1), &draw);
+        f.frame(vec![Event::Text(text.into())], &draw);
+        f.frame(vec![enter()], &draw)
+    };
+    let (pc, mm) = (Unit::Picas, Unit::Millimeters);
+    assert_eq!(typed(&mut f, pc, "12"), Some(12.0), "on by default: points in a picas field");
+    assert_eq!(typed(&mut f, pc, "2p6"), Some(30.0), "picas and points as typed");
+    assert_eq!(typed(&mut f, pc, "1in"), Some(72.0), "a typed unit wins");
+    assert_eq!(typed(&mut f, pc, "10+5"), Some(15.0), "arithmetic in points too");
+    assert_eq!(typed(&mut f, mm, "12"), Some(mm.to_pt(12.0)), "a millimetre field keeps millimetres");
+    widgets::set_bare_numbers_are_points(&f.ctx, false);
+    assert_eq!(typed(&mut f, pc, "12"), Some(pc.to_pt(12.0)), "off: picas");
+    assert_eq!(typed(&mut f, mm, "12"), Some(mm.to_pt(12.0)));
+}
+
 /// ↑/↓ step a focused numeric field by one of its unit (Shift: ten, Ctrl/Cmd: a tenth) and apply it
 /// at once, the new value selected so typing replaces it; an unfocused field leaves the arrows to
 /// the canvas (nudge).

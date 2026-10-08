@@ -397,6 +397,8 @@ pub struct Prefs {
     pub units_stroke: String,
     pub units_type: String,
     pub units_asian_type: String,
+    /// Numbers Without Units Are Points: a number typed with no unit into a length field in picas
+    /// is read in points (on by default; the reference app dims it unless a unit is Picas).
     pub numbers_without_units_are_points: bool,
     pub identify_objects_by: String,
     // Guides & Grid
