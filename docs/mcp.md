@@ -1946,7 +1946,11 @@ dictionaries (the standard ones are values in `systemdict`; `dictstack`, `intern
 intervals share storage, resources (categories made from `Generic`, `resourceforall`), executable filters (`cvx exec`
 runs their data; `flushfile` skips it), axial and radial shadings and shading patterns (gradients), images and image
 masks (data in the file through ASCII85, hex, run-length, Flate, LZW or DCT filters, or from procedures), and type as
-point type in the font the file names (embedded font programs are skipped). The artboard is the `%%HiResBoundingBox`
+point type in the font the file names (embedded font programs are skipped). In a file in Illustrator's own format
+(Illustrator 3–8 `.ai` and their EPS, written with the prolog that defines its operators) the groups it writes (`u` …
+`U`) come in as groups, nested as they were; clips and groups nest at most 128 deep. A PDF-compatible `.ai` doesn't
+mark its plain groups (only layers, clipping groups and groups with opacity, blending or a mask), so they open
+ungrouped. The artboard is the `%%HiResBoundingBox`
 (else `%%BoundingBox`; a letter page without one). A program the interpreter can't run (an operator it doesn't know,
 an error, a runaway loop) or that draws nothing comes in as its TIFF preview (palette previews with an alpha channel
 too) with a warning; without a preview, the art drawn up to the error is kept with a warning, and a file with none is

@@ -52,6 +52,9 @@ pub(crate) struct Interp<'a> {
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
+    /// The program is an Illustrator file's: its `u` … `U` (written at the top level, whatever
+    /// its prolog defines them as) are groups.
+    pub illustrator: bool,
 }
 
 fn new_dict() -> DictRef {
@@ -128,6 +131,7 @@ impl<'a> Interp<'a> {
             g,
             saved: vec![],
             out,
+            illustrator: false,
         }
     }
 
@@ -135,9 +139,25 @@ impl<'a> Interp<'a> {
     pub fn run(&mut self) -> Res {
         loop {
             let Some(o) = self.lex.next()? else { return Ok(()) };
+            // An Illustrator group begins before its `u` runs (`Some(true)`) and ends after its `U`
+            // has (`Some(false)`).
+            let group = match &o {
+                Obj::Exec(name) if self.illustrator => match &**name {
+                    "u" => Some(true),
+                    "U" => Some(false),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if group == Some(true) {
+                self.out.begin_group();
+            }
             match self.exec_token(o) {
                 Err(PsError::Quit) => return Ok(()),
                 r => r?,
+            }
+            if group == Some(false) {
+                self.out.end_group();
             }
         }
     }
