@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::*;
+use crate::fontdb::fonts_outside;
 
 const FAMILY: &str = "Sysfont Sans3";
 
@@ -183,4 +184,56 @@ fn installed_faces_are_found_by_postscript_name() {
     assert_eq!(db.by_postscript_name("SourceSans3-Bold"), Some((FAMILY.to_string(), "Bold".to_string())));
     assert_eq!(db.by_postscript_name("sourcesans3-regular"), Some((FAMILY.to_string(), "Regular".to_string())), "any case");
     assert_eq!(db.by_postscript_name("Rounded-X-Mplus-1c-black"), None);
+}
+
+/// Windows lists fonts installed as shortcuts, or by programs into their own folders, by their
+/// files' full paths: those files are scanned too (#443).
+#[test]
+fn a_font_file_named_by_itself_is_scanned() {
+    let dir = font_dir("file");
+    let db = FontDb::with_font_dirs(vec![dir.join("Sub/Sysfont-Bold.TTF"), dir.join("No Such Font.ttf")]);
+    assert_eq!(db.styles(FAMILY), ["Bold"]);
+    assert_eq!(db.load_system_fonts(), 1);
+}
+
+#[test]
+fn registered_fonts_outside_the_font_folders_are_their_full_paths() {
+    let dir = std::env::temp_dir().join("Fonts");
+    let elsewhere = std::env::temp_dir().join("Downloads").join("Montserrat-Regular.ttf");
+    let registered = [
+        // A file in the Windows font folder, by name.
+        "arial.ttf".into(),
+        // A file in a font folder (ignoring case).
+        dir.join("Lato-Regular.ttf").to_string_lossy().to_uppercase(),
+        elsewhere.to_string_lossy().into_owned(),
+        elsewhere.to_string_lossy().into_owned(),
+    ];
+    assert_eq!(fonts_outside(registered, &[dir]), [elsewhere]);
+}
+
+/// Fonts installed while the app runs are found when it comes back to the front, without
+/// scanning every time (#443).
+#[test]
+fn the_database_tells_when_fonts_were_installed_or_removed_since_its_scan() {
+    let dir = font_dir("changed");
+    let db = FontDb::with_font_dirs(vec![dir.clone(), dir.join("Later")]);
+    assert!(!db.installed_fonts_changed(), "nothing to compare with before the first scan");
+    assert!(!db.has_family("Other Sans 33"));
+    assert!(!db.installed_fonts_changed());
+    // Past the file system's clock tick, so the folders' times differ from the scan's.
+    let tick = || std::thread::sleep(std::time::Duration::from_millis(50));
+    tick();
+    std::fs::write(dir.join("Sub/Other.ttf"), renamed_to("SourceSans3-Regular.ttf", "Other Sans 33")).unwrap();
+    assert!(db.installed_fonts_changed(), "a font installed into a subfolder");
+    assert_eq!(db.load_system_fonts(), 3);
+    assert!(db.has_family("Other Sans 33") && !db.installed_fonts_changed());
+    tick();
+    std::fs::create_dir_all(dir.join("Later")).unwrap();
+    assert!(db.installed_fonts_changed(), "a font folder that didn't exist");
+    db.load_system_fonts();
+    tick();
+    std::fs::remove_file(dir.join("Sysfont-Regular.ttf")).unwrap();
+    assert!(db.installed_fonts_changed(), "a font removed");
+    assert_eq!(db.load_system_fonts(), 2);
+    assert_eq!(db.styles(FAMILY), ["Bold"]);
 }
