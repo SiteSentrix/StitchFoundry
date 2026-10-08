@@ -97,7 +97,8 @@ fn weight_presets_display_cleanly_in_their_native_unit() {
         (Unit::Millimeters, ["0.1", "0.25", "0.35", "0.5", "0.75", "1", "30"].as_slice()),
         (Unit::Centimeters, ["0.01", "0.05", "0.1", "0.5", "1", "5"].as_slice()),
         (Unit::Pixels, ["1", "10", "20", "40"].as_slice()),
-        (Unit::Points, ["0.25", "0.5", "1", "12", "100"].as_slice()),
+        (Unit::Inches, ["0.0078", "0.0313", "0.375", "1", "5"].as_slice()),
+        (Unit::Points, ["0.25", "0.5", "1", "50", "100"].as_slice()),
     ] {
         let presets = stroke::weight_presets(unit);
         let shown: Vec<String> = presets.iter().map(|pt| unit.number(*pt)).collect();
@@ -105,10 +106,9 @@ fn weight_presets_display_cleanly_in_their_native_unit() {
             assert!(shown.iter().any(|s| s == w), "{unit:?} preset {w:?} missing from {shown:?}");
         }
     }
-    // Picas round-trip to exact pt values (Illustrator's 0p1=1pt, 1p=12pt, 5p=60pt): display
-    // formatting is a separate concern, but the underlying weight must be right.
+    // Picas are exact pt weights (0p1 = 1 pt, 1p = 12 pt, 5p = 60 pt).
     let pc = stroke::weight_presets(Unit::Picas);
-    for want_pt in [1.0, 12.0, 60.0] {
-        assert!(pc.iter().any(|pt| (pt - want_pt).abs() < 1e-9), "pica preset {want_pt} pt missing from {pc:?}");
-    }
+    assert!([1.0, 12.0, 60.0].iter().all(|w| pc.contains(w)), "{pc:?}");
+    // Units no stroke is measured in keep the pt ladder, in points.
+    assert_eq!(stroke::weight_presets(Unit::Meters), stroke::weight_presets(Unit::Points));
 }
