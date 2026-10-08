@@ -325,7 +325,7 @@ pub fn drop_files(app: &mut VectorcraftApp, files: Vec<(String, Option<String>, 
             }),
         };
         if let Err(e) = r {
-            app.status(format!("Couldn't {} {name}: {e}", if target == DropTarget::Open { "open" } else { "place" }));
+            app.status(if target == DropTarget::Open { format!("Couldn't open {name}: {e}") } else { format!("Couldn't place {name}: {e}") });
         }
     }
 }

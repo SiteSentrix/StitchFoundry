@@ -601,3 +601,150 @@ fn a_language_saved_by_an_older_version_carries_over() {
     crate::prefs_dialog::restore(&mut app);
     assert_eq!(app.session.prefs.interface_language, "cs");
 }
+
+#[test]
+fn messages_translate_by_template_and_their_parts() {
+    let c = Catalog::parse(concat!(
+        "@msg\tnothing selected\tnada seleccionado\n",
+        "@msg\t{path}: {e}\t{path}: {e}\n",
+        "@msg\tCouldn't open {name}: {e}\tNo se pudo abrir {name}: {e}\n",
+        "@msg\tcommand `{0}` is not available right now: {1}\tel comando `{0}` no está disponible ahora: {1}\n",
+        "@msg\t{a}{b}\tnever\n",
+        "@msg\t{n} of {total}\t{total} contiene {n}\n",
+    ));
+    assert_eq!(c.message("nothing selected").map(|m| m.0), Some("nada seleccionado"));
+    // The template with the most literal text wins over the generic `{path}: {e}`.
+    let (tr, caps) = c.message("Couldn't open a: b.svg: damaged").unwrap();
+    assert_eq!(tr, "No se pudo abrir {name}: {e}");
+    assert_eq!(caps, [("name", "a"), ("e", "b.svg: damaged")], "a placeholder takes the shortest text that lets the rest match");
+    assert_eq!(c.message("x of y").unwrap().1, [("n", "x"), ("total", "y")]);
+    assert!(c.message("of y").is_none(), "a placeholder is never empty");
+    assert!(c.message("something else").is_none());
+    assert!(c.message(&"x".repeat(5000)).is_none());
+
+    let es = Lang::from_code("es").unwrap();
+    assert_eq!(message(es, "no such message"), "no such message");
+    // A reason inside a message is translated too, and parts without entries stay as they are.
+    let nested = "command `object.group` is not available right now: nothing selected";
+    let shown = message(es, nested);
+    assert!(shown.contains("`object.group`") && !shown.contains("nothing selected") && !shown.contains("not available"), "{shown}");
+    assert_eq!(message(Lang::EN, nested), nested);
+}
+
+/// Each language that translates status and error messages ([`COMPLETE_MESSAGES`]) has an `@msg`
+/// row for every message in the sources that reach the status bar, so a new one can't ship
+/// untranslated by accident (`VECTORCRAFT_I18N_DUMP_MESSAGES=<file>` lists them).
+#[test]
+fn complete_languages_translate_every_message() {
+    let messages = message_literals();
+    assert!(messages.len() > 300, "scan found only {} messages", messages.len());
+    if let Ok(path) = std::env::var("VECTORCRAFT_I18N_DUMP_MESSAGES") {
+        std::fs::write(path, messages.iter().map(|m| format!("{m}\n")).collect::<String>()).expect("write dump");
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: std::collections::HashSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        let missing: Vec<_> = messages.iter().filter(|m| !rows.contains(m.as_str())).collect();
+        assert!(missing.is_empty(), "{code}: {} untranslated messages: {missing:#?}", missing.len());
+    }
+}
+
+/// Languages whose catalogs cover every status and error message.
+const COMPLETE_MESSAGES: &[&str] = &["es"];
+
+/// Crates whose error and status messages reach the status bar.
+const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad"];
+
+/// Where a message literal starts: a status, an error value, a `thiserror` message.
+const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Other(", "Err(", "ok_or(", "ok_or_else(|| ", "#[error("];
+
+/// Messages that are signals, not text for people.
+const NOT_MESSAGES: &[&str] = &["quit", "cancelled"];
+
+/// Every status and error message literal in [`MESSAGE_CRATES`] (test modules aside), as catalog
+/// templates: `{}` becomes `{_1}`, `{_2}` … and format specs are dropped (`{n:?}` → `{n}`).
+pub fn message_literals() -> std::collections::BTreeSet<String> {
+    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut out = std::collections::BTreeSet::new();
+    let mut stack: Vec<_> = MESSAGE_CRATES.iter().map(|c| crates.join(c).join("src")).collect();
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if path.is_dir() {
+                if name != "tests" {
+                    stack.push(path);
+                }
+            } else if name.ends_with(".rs") && !name.starts_with("tests") {
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                let code = without_test_module(&text);
+                for marker in MESSAGE_MARKERS {
+                    for (at, _) in code.match_indices(marker) {
+                        let rest = code[at + marker.len()..].trim_start();
+                        let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
+                        let Some(lit) = rest.strip_prefix('"').and_then(string_literal) else { continue };
+                        let has_word = lit.as_bytes().windows(3).any(|w| w.iter().all(u8::is_ascii_lowercase));
+                        if has_word && !NOT_MESSAGES.contains(&lit.as_str()) {
+                            out.insert(as_template(&lit));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Source up to its inline test module (`#[cfg(test)] mod tests {`); declarations of test files
+/// (`#[cfg(test)] mod tests_x;`) don't end it.
+fn without_test_module(text: &str) -> &str {
+    for (at, m) in text.match_indices("#[cfg(test)]") {
+        let after = text[at + m.len()..].trim_start();
+        if let Some(rest) = after.strip_prefix("mod ")
+            && rest.trim_start_matches(|c: char| c.is_alphanumeric() || c == '_').trim_start().starts_with('{')
+        {
+            return &text[..at];
+        }
+    }
+    text
+}
+
+/// The text of a string literal whose opening quote was just read, escapes resolved.
+fn string_literal(s: &str) -> Option<String> {
+    let mut out = String::new();
+    let mut it = s.chars();
+    loop {
+        match it.next()? {
+            '"' => return Some(out),
+            '\\' => match it.next()? {
+                'n' => out.push('\n'),
+                't' => out.push('\t'),
+                c => out.push(c),
+            },
+            c => out.push(c),
+        }
+    }
+}
+
+/// A format string as a catalog template (see [`message_literals`]).
+fn as_template(s: &str) -> String {
+    let mut out = String::new();
+    let mut unnamed = 0;
+    let mut rest = s;
+    while let Some(a) = rest.find('{') {
+        out.push_str(&rest[..a]);
+        let after = &rest[a + 1..];
+        let Some(b) = after.find('}') else { break };
+        let name = after[..b].split(':').next().unwrap_or("");
+        if name.is_empty() {
+            unnamed += 1;
+            out.push_str(&format!("{{_{unnamed}}}"));
+        } else {
+            out.push_str(&format!("{{{name}}}"));
+        }
+        rest = &after[b + 1..];
+    }
+    out.push_str(rest);
+    out
+}

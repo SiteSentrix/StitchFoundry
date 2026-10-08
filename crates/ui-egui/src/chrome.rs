@@ -422,11 +422,13 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     // Background saves and exports in progress, else the last message.
                     if let Some(job) = app.background.jobs.first() {
                         let more = app.background.jobs.len() - 1;
-                        let text = if more > 0 { format!("{}… (+{more})", job.label) } else { format!("{}…", job.label) };
+                        let label = crate::i18n::msg(&job.label);
+                        let text = if more > 0 { format!("{label}… (+{more})") } else { format!("{label}…") };
                         ui.label(egui::RichText::new(text).size(11.0).color(t.text));
                         ui.add(egui::Spinner::new().size(12.0).color(t.accent));
                     } else if !app.ui.status.is_empty() {
-                        ui.label(egui::RichText::new(&app.ui.status).size(11.0).color(t.text));
+                        // The message stays English in `ui.status` (agents and tests read it).
+                        ui.label(egui::RichText::new(crate::i18n::msg(&app.ui.status)).size(11.0).color(t.text));
                     }
                 });
             });

@@ -109,8 +109,8 @@ international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or 
 - The language is VectorCraft › Language (the `app.language` UI command, `{lang: auto|<code>}`) or Edit ›
   Preferences › User Interface › Language; both set the `interfaceLanguage` preference (`auto` or a language
   code; `auto` follows the system locale: `VECTORCRAFT_LOCALE`, then `LC_ALL`/`LC_MESSAGES`/`LANG`/`LANGUAGE`,
-  the macOS preferred languages, the Windows user locale). The web build has no locale detection yet and
-  starts in English. The Preferences dialog previews the chosen language before OK.
+  the macOS preferred languages, the Windows user locale; on the web, `?lang=<code>` in the address, then
+  the browser's `navigator.languages`). The Preferences dialog previews the chosen language before OK.
 - To add a language: add `<code>.tsv` and one row in `i18n::LANGUAGES` (code, native name, catalog, plural
   rule). The Language menu, the dropdown, locale matching and the catalog tests (well-formed, no duplicates,
   placeholders and ellipses agree, command ids exist, every row of a partial catalog is a string the UI
@@ -119,9 +119,19 @@ international Spanish; every `es-*` locale such as `es-ES`, `es-MX`, `es-AR` or 
   (`VECTORCRAFT_I18N_DUMP=strings.txt cargo test -p vectorcraft-ui-egui dump_source_strings` lists them).
 - Translations are clean-room: written from the meaning of the English text in ordinary vocabulary, never
   from another product's localisation resources. Product and technology names stay in Latin letters.
-- Not translated on purpose: status-bar messages and errors (agents and tests read them), names that are
-  user data (layers, swatches, fonts, documents), the tab title's colour mode. Not done yet: locale-aware
-  number and date formats, right-to-left layout, locale detection on the web. Chinese and Japanese UI text
+- Status-bar messages and errors stay English where they are made (`app.ui.status`, `EngineError`: the
+  control channel, MCP and tests read them) and are translated only where the status bar draws them
+  (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
+  `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). Spanish covers every
+  message literal the test scan finds (`complete_languages_translate_every_message`, languages listed in
+  `COMPLETE_MESSAGES`): a new `Err("…")`, `Other(…)`, `#[error(…)]` or `status(…)` message needs an `es.tsv`
+  row (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui
+  complete_languages_translate_every_message` lists them all). Other languages show messages in English
+  until they add `@msg` rows.
+- Not translated on purpose: names that are user data (layers, swatches, fonts, documents), the tab
+  title's colour mode, command ids and parameter names inside messages. Not done yet: locale-aware number
+  and date formats, right-to-left layout. Chinese and Japanese UI text
   is drawn with craft-fonts' BIZ UDPGothic when the build embeds it (see Fonts above), else with an installed
   system font; the glyph test checks Latin-script catalogs always and the CJK ones only with craft-fonts.
   A Traditional Chinese UI font is still to be added to craft-fonts for the web build.
