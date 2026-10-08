@@ -178,7 +178,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
     if let Some(mode) = opts.color_mode.filter(|m| *m != doc.color_mode) {
-        super::super::colormgmt::set_color_mode(&mut doc, mode, true, None);
+        super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, opts.grays);
     }
     // Imports are named after the file; a native document keeps its own title (the tab shows the
     // file name once it has a path).

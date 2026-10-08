@@ -1,7 +1,7 @@
 //! Menu long-tail commands (Object/Edit/Select/Type/View/File), driven through `Session::execute`.
 
 use serde_json::{Value, json};
-use vectorcraft_color::Color;
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{ColorMode, LiveShape, Node, NodeKind, TextKind};
 use vectorcraft_geom::Rect;
 
@@ -857,6 +857,122 @@ fn document_color_mode_converts_colours() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc.color_mode, ColorMode::Rgb);
     assert!(s.execute("file.documentColorMode", &json!({"mode": "lab"})).is_err());
+}
+
+/// Four RGB greys (#000000, #333333, #808080, #e6e6e6, as in issue #421) and a red, a 40% tint of a
+/// grey global swatch, a gradient to grey and a pattern of a grey tile → (session, the five
+/// rectangles, the tinted one, the gradient one).
+fn greys_document() -> (Session, Vec<NodeId>, NodeId, NodeId) {
+    let mut s = session();
+    let ids: Vec<NodeId> = ["#000000", "#333333", "#808080", "#e6e6e6", "#ff0000"]
+        .iter()
+        .map(|hex| {
+            let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+            fill(&mut s, id, hex);
+            id
+        })
+        .collect();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#808080", "global": true})).unwrap();
+    let tint = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [tint.0], "swatch": "Ink", "tint": 40})).unwrap();
+    let grad = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#333333"}]);
+    s.execute("paint.setFill", &json!({"ids": [grad.0], "gradient": {"kind": "linear", "stops": stops}})).unwrap();
+    let tile = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    fill(&mut s, tile, "#808080");
+    s.execute("object.pattern.make", &json!({"ids": [tile.0], "name": "Grey Tile", "edit": false})).unwrap();
+    (s, ids, tint, grad)
+}
+
+/// The colour of pattern `name`'s first tile object.
+fn pattern_fill(s: &Session, name: &str) -> Color {
+    s.doc().unwrap().doc.pattern(name).unwrap().art[0].appearance.fill_paint().color().unwrap()
+}
+
+/// K of a colour that prints on the black plate only.
+fn k_only(c: Color) -> f32 {
+    match c {
+        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k } => k,
+        other => panic!("not K only: {other:?}"),
+    }
+}
+
+#[test]
+fn document_color_mode_separates_rgb_greys_through_the_profile() {
+    let (mut s, ids, _, _) = greys_document();
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    // As Illustrator converts them: four-colour greys and a rich black.
+    let Color::Cmyk { c, m, y, k } = fill_of(&s, ids[2]) else { panic!("not CMYK") };
+    assert!(c > 0.05 && m > 0.05 && y > 0.05 && k > 0.0, "a four-colour mid grey: {c} {m} {y} {k}");
+    let Color::Cmyk { c, k, .. } = fill_of(&s, ids[0]) else { panic!("not CMYK") };
+    assert!(k > 0.9 && c > 0.3, "rich black: {c} {k}");
+    // Pattern tiles are swatches too: their art converts with the rest.
+    assert!(matches!(pattern_fill(&s, "Grey Tile"), Color::Cmyk { .. }), "{:?}", pattern_fill(&s, "Grey Tile"));
+    // Gray colours stay Gray.
+    let mut g = session();
+    let a = rect(&mut g, 0.0, 0.0, 10.0, 10.0);
+    g.execute("paint.setFill", &json!({"ids": [a.0], "color": {"gray": 0.3}})).unwrap();
+    g.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    assert_eq!(fill_of(&g, a), Color::gray(0.3));
+}
+
+#[test]
+fn document_color_mode_can_put_rgb_greys_on_the_black_plate() {
+    let (mut profile, pids, ..) = greys_document();
+    profile.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let (mut s, ids, tint, grad) = greys_document();
+    let e = s.execute("file.documentColorMode", &json!({"mode": "cmyk", "grays": "rich"})).unwrap_err().to_string();
+    assert!(e.contains("grays"), "{e}");
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk", "grays": "black"})).unwrap();
+    let close = |a: f32, b: f32| (a - b).abs() < 0.005;
+    for (id, want) in ids.iter().zip([1.0, 0.8, 0.498, 0.098]) {
+        let k = k_only(fill_of(&s, *id));
+        assert!(close(k, want), "K {k}, want {want}");
+    }
+    // Other colours convert through the profile as before.
+    assert_eq!(fill_of(&s, ids[4]), fill_of(&profile, pids[4]));
+    // Swatches, their tints, gradient stops and pattern tiles follow the same rule.
+    let d = &s.doc().unwrap().doc;
+    assert!(close(k_only(d.swatch("Ink").unwrap().paint.color().unwrap()), 0.498));
+    let Paint::Solid { color, swatch, tint: t } = node(&s, tint).appearance.fill_paint() else { panic!("not solid") };
+    assert!(close(k_only(color), 0.498 * 0.4) && swatch.as_deref() == Some("Ink") && t == 0.4, "{color:?} {swatch:?} {t}");
+    let Paint::Gradient(g) = node(&s, grad).appearance.fill_paint() else { panic!("not a gradient") };
+    let ks: Vec<f32> = g.gradient.stops.iter().map(|st| k_only(st.color)).collect();
+    assert!(close(ks[0], 0.0) && close(ks[1], 0.8), "{ks:?}");
+    assert!(close(k_only(pattern_fill(&s, "Grey Tile")), 0.498));
+    // To RGB, `grays` changes nothing.
+    s.execute("file.documentColorMode", &json!({"mode": "rgb", "grays": "black"})).unwrap();
+    let rgb = s.doc().unwrap().doc.layers.clone();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("file.documentColorMode", &json!({"mode": "rgb"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.layers, rgb);
+}
+
+#[test]
+fn opening_in_cmyk_can_put_rgb_greys_on_the_black_plate() {
+    let mut s = session();
+    for hex in ["#000000", "#333333", "#808080", "#e6e6e6", "#ff0000"] {
+        let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        fill(&mut s, id, hex);
+    }
+    let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap()["text"].as_str().unwrap().to_string();
+    let data = vectorcraft_format::base64_encode(svg.as_bytes());
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "greys.svg", "dataBase64": data, "colorMode": "cmyk", "grays": "black"})).unwrap();
+    let d = &o.doc().unwrap().doc;
+    assert_eq!(d.color_mode, ColorMode::Cmyk);
+    let mut fills = vec![];
+    for l in &d.layers {
+        l.walk(&mut |n| fills.extend(n.children().is_none().then(|| n.appearance.fill_paint().color()).flatten()));
+    }
+    assert_eq!(fills.len(), 5, "{fills:?}");
+    for (c, want) in fills.iter().zip([1.0, 0.8, 0.498, 0.098]) {
+        let k = k_only(*c);
+        assert!((k - want).abs() < 0.005, "K {k}, want {want}");
+    }
+    assert!(matches!(fills[4], Color::Cmyk { m, y, .. } if m > 0.8 && y > 0.8), "red separates as usual: {:?}", fills[4]);
+    let e = Session::new().execute("document.open", &json!({"name": "greys.svg", "dataBase64": data, "grays": "k"})).unwrap_err().to_string();
+    assert!(e.contains("grays"), "{e}");
 }
 
 #[test]
