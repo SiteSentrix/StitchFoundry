@@ -423,6 +423,8 @@ document exactly (`restored: true`); when another app changed the pages, or the 
 imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Save to a `.ai`
 path (`document.save {path: "art.ai"}` or `{format: "ai"}`) writes a PDF-compatible file that always carries the
 document, takes the PDF options and keeps its path when reopened, so Save writes `.ai` again; a `.ait` opens untitled.
+`document.export` / `serialize` to `.ai` (and the CLI's `run --export x.ai` and `convert in.svg out.ai`) write the same file
+without giving the document a path.
 
 Drive a tool like a mouse:
 
